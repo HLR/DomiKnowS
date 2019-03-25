@@ -1,57 +1,66 @@
-from collections import Iterable, defaultdict, namedtuple
-from .base import AutoNamed
+from collections import defaultdict
+from .base import AutoNamed, local_names_and_objs
 from .backend import Backend, NumpyBackend
+from .graph import Graph
 
-isa = namedtuple('isa', ('src', 'dst', 'offset', 'name'))
 
-
+@local_names_and_objs
 class Entity(AutoNamed):
-    default_graph = None
     default_backend = NumpyBackend()
+    _rel_types = dict()  # relation name (to be call): relation class
+
+    @classmethod
+    def update_rel_types(cls, Rel, name=None):
+        if name is None:
+            name = Rel.suggest_name()
+        cls._rel_types[name] = Rel
+
+    @classmethod
+    def register_rel_types(cls, name=None):
+        return lambda Rel, name=None: cls.update_rel_types(Rel, name)
 
     '''
     Declare an entity.
     '''
 
-    def __init__(self, blf=None, rpt=None, name=None, backend=None):
+    def __init__(self, name=None, backend=None):
         AutoNamed.__init__(self, name)
-        if Entity.default_graph is not None:
-            Entity.default_graph.append(self)
 
-        self._blf = blf
-        self._rpt = rpt
+        if Graph.default_graph is not None:  # use base class Graph as the global environment
+            Graph.default_graph.ent.append(self)
 
-        # in
-        self._in_isa = defaultdict(list)
-        self._in_hasa = defaultdict(list)
-        # out
-        self._out_isa = defaultdict(list)
-        self._out_hasa = defaultdict(list)
-
+        self._prop = defaultdict(set)  # name : set of binding values
+        self._in = defaultdict(set)  # src entity : set of relation instances
+        self._out = defaultdict(set)  # dst entity : set of relation instances
         self._b = backend
 
+    def what(self):
+        return {'rels': dict(self._out), }
+
+    '''
+    Create relation by registered relation types
+    '''
+
+    def __getattr__(self, prop):
+        cls = type(self)  # bind to the real class
+        Rel = cls._rel_types[prop]
+
+        def create_rel(dst, *args, **kwargs):
+            rel = Rel(self, dst, *args, **kwargs)
+            for _, v in rel.dst:
+                self._out[v].add(rel)
+                v._in[self].add(rel)
+        return create_rel
+
+    '''
+    Backend, possible to fallback to class default
+    '''
     @property
     def b(self):
         if isinstance(self._b, Backend):
             return self._b
         else:
-            return self.__class__.default_backend
-
-    @property
-    def blf(self):
-        if self._blf is not None:
-            return self._blf
-        else:
-            # TODO: any fallback?
-            return None
-
-    @property
-    def rpt(self):
-        if self._rpt is not None:
-            return self._rpt
-        else:
-            # TODO: any fallback?
-            return None
+            return type(self).default_backend
 
     @property
     def rank(self):
@@ -65,10 +74,13 @@ class Entity(AutoNamed):
         return self.b.prod(self.b.shape(self.blf))
 
     '''
-    The 'distance' used in this entity. Lower value indicates better consistency.
+    The "distance" used in this entity.
+    Lower value indicates better consistency.
+    Feature(s) of one instance is always on only the last axis.
+    p, q - (nval, batch * len, prop_dim)
     '''
 
-    def distance(self, p, q):
+    def distances(self, p, q):
         # inner product
         #q = self.b.reshape(q, (-1, 1))
         #val = self.b.sum(self.b.matmul(p, q))
@@ -76,57 +88,28 @@ class Entity(AutoNamed):
         #q = self.b.reshape(q, (1, -1))
         #val = self.b.sum(p * self.b.log( p / q ))
         # mse
-        q = self.b.reshape(q, (1, -1))
-        val = self.b.norm(p - q)
-        return val
+        fdim = 1  # TODO how to get fdim?
+        p = self.b.reshape(p, (-1, fdim))
+        q = self.b.reshape(q, (fdim, -1))
+
+        vals = p - q
+        return vals
 
     '''
-    Declare 'is-a' relationship.
+    Properties: get an evaluated property
     '''
 
-    def isa(self, entity, offset=1, rel_name=None):
-        if isinstance(entity, Entity):
-            # really add it when it is an Entity
-            rel = isa(self, entity, offset, rel_name)
-            # in
-            entity._in_isa[self].append(rel)
-            # out
-            self._out_isa[entity].append(rel)
-        elif isinstance(entity, Iterable):
-            # more than one relation, break down and add each
-            entities = entity
-            if isinstance(entities, dict):
-                name_fmt = '{}'
-                enum = entities.items()
-            else:
-                name_fmt = 'arg-{}'
-                enum = enumerate(entities)
+    def vals(self, prop):
+        prop_vals = []
+        # check all self._prop[prop]
+        prop_vals.extend(self._prop[prop])
 
-            offset = 1  # 0 for batch
-            for key, entity in enum:
-                if rel_name:
-                    name = ('{}-' + name_fmt).format(rel_name, key)
-                else:
-                    name = name_fmt.format(key)
-                self.isa(entity, offset, name)
-                offset += entity.rank  # TODO: what if the fallback not yet work at that time?
-        else:
-            raise NotImplementedError(
-                'Unsupported type of is-a relation target: {}'.format(entity))
+        # if no constant value assigned! the look around
+        # check all [entity._prop[prop] * rel for entity, rel in self._in if prop in entity._prop]
+        for src, rels in self._in.items():
+            for rel in rels:
+                vals = rel(self, prop)
 
-    '''
-    Declare 'has-a' relationship.
-    '''
-
-    def hasa(self, entity, rel=None):
-        pass
-
-    '''
-    Evaluate 'is-a' relationship.
-    '''
-
-    def eval_isa(self):
-        distances = []
         for src, rels in self._in_isa.items():
             for rel in rels:
                 # always leave the calculation to the last axis, because matmul do that way
@@ -144,32 +127,44 @@ class Entity(AutoNamed):
                 p = self.b.reshape(self.b.transpose(
                     a, newaxes), (-1, self.fdim))
                 q = self.b.flatten(b)
-                print('evaluating {}({},{}):{} ---is-a--> {}:{}'.format(rel.src.name,
-                                                                        rel.name,
-                                                                        axis,
-                                                                        self.b.shape(p),
-                                                                        rel.dst.name,
-                                                                        self.b.shape(q)))
+                print('evaluating {}({},{}):{} ---is-a--> {}:{}'
+                      .format(rel.src.name,
+                              rel.name,
+                              axis,
+                              self.b.shape(p),
+                              rel.dst.name,
+                              self.b.shape(q)))
                 distance = self.distance(p, q)
                 print('    distance = {}'.format(distance))
                 distances.append(distance)
-        distance = self.b.sum(distances)
-        return distance
+        return prop_vals
 
     '''
-    Evaluate 'has-a' relationship.
+    Properties: get an average value to represent the property
     '''
 
-    def eval_hasa(self):
-        return 0
-
-    def what(self):
-        return {'is-a': dict(self._out_isa),
-                'has-a': dict(self._out_hasa), }
+    def __getitem__(self, prop):
+        return self.b.mean(self.vals(prop))
 
     '''
-    Evaluate
+    Properties: set an value to populate the graph
+    '''
+
+    def __setitem__(self, prop, value):
+        self._prop[prop].add(value)
+
+    '''
+    Evaluate on one property
+    '''
+
+    def evaluate(self, prop):
+        vals = self.vals(prop)
+        return self.b.norm(self.distances(vals, vals))
+
+    '''
+    Evaluate all properties
     '''
 
     def __call__(self):
-        return self.eval_isa() + self.eval_hasa()
+        # sum up all properties
+        return self.b.sum([self.evaluate(prop) for prop in self._prop])
