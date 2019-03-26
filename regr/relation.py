@@ -1,14 +1,14 @@
-from collections import Iterable, OrderedDict
+from collections import OrderedDict
 from .base import AutoNamed, local_names_and_objs
-from .entity import Entity
+from .entity import Entity, enum
 
 
 @local_names_and_objs
 class Relation(AutoNamed):
     def __init__(self, src, dst, T=None, name=None):
         AutoNamed.__init__(self, name)
-        self._src = src
-        self._dst = dst
+        self.src = src
+        self.dst = dst
         self.T = T
 
     @property
@@ -25,38 +25,11 @@ class Relation(AutoNamed):
 
     @property
     def dst(self):
-        if isinstance(self._dst, Entity):
-            enum = {0: self._dst}.items()
-        elif isinstance(self._dst, Iterable):
-            if isinstance(self._dst, dict):
-                enum = self._dst.items()
-            else:
-                enum = enumerate(self._dst)
-        else:
-            raise TypeError(
-                'Unsupported type of relation dst {} in relation {}. Supported types are Entity or Iterable (including dict).'
-                .format(type(self._dst), self, ))
-
-        for k, v in enum:
-            yield (k, v)
+        return enum(self._dst)
 
     @dst.setter
     def dst(self, dst):
-        if isinstance(dst, Entity):
-            self._dst = OrderedDict({0: dst})
-        elif isinstance(dst, OrderedDict):
-            self._dst = dst
-        elif isinstance(dst, dict):
-            self._dst = OrderedDict(dst)
-            raise UserWarning(
-                'Please use OrderedDict rather than dict to prevent unpredictable order of arguments in the relationship. For this instance, {} is used.'
-                .format(self._dst))
-        elif isinstance(self._dst, Iterable):
-            self._dst = OrderedDict(enumerate(dst))
-        else:
-            raise TypeError(
-                'Unsupported type of relation dst {} in relation {}. Supported types are Entity or Iterable (including dict but please use OrderedDict for consistence argument order).'
-                .format(type(dst), self, ))
+        self._dst = OrderedDict(enum(dst))
 
     @property
     def T(self):

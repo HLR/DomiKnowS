@@ -5,7 +5,7 @@ class Backend(object):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def array(self, a): pass
+    def __call__(self, a): pass
 
     @abc.abstractmethod
     def matmul(self, a1, a2): pass

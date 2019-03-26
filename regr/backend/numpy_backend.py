@@ -4,7 +4,7 @@ from .base import Backend
 
 class NumpyBackend(Backend):
 
-    def array(self, a):
+    def __call__(self, a):
         return np.array(a)
 
     def matmul(self, a1, a2):

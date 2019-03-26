@@ -1,7 +1,30 @@
-from collections import defaultdict
+from collections import defaultdict, Iterable, OrderedDict
 from .base import AutoNamed, local_names_and_objs
 from .backend import Backend, NumpyBackend
 from .graph import Graph
+import warnings
+
+
+def enum(entities):
+    if isinstance(entities, Entity):
+        enum = {0: entities}.items()
+    elif isinstance(entities, OrderedDict):
+        enum = entities.items()
+    elif isinstance(entities, dict):
+        enum = entities.items()
+        warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
+                      'For this instance, {} is used.'
+                      .format(entities),
+                      UserWarning, stacklevel=3)
+    elif isinstance(entities, Iterable):
+        enum = enumerate(entities)
+    else:
+        raise TypeError('Unsupported type of entity. Use Entity, OrderedDict or other Iterable.'
+                        .format(type(entities)))
+
+    # for k, v in enum:
+    #    yield (k, v)
+    return enum
 
 
 @local_names_and_objs
@@ -29,10 +52,12 @@ class Entity(AutoNamed):
         if Graph.default_graph is not None:  # use base class Graph as the global environment
             Graph.default_graph.ent.append(self)
 
-        self._prop = defaultdict(set)  # name : set of binding values
+        self._prop = defaultdict(list)  # name : list of binding values
         self._in = defaultdict(set)  # src entity : set of relation instances
         self._out = defaultdict(set)  # dst entity : set of relation instances
-        self._b = backend
+        self._backend = backend
+        # if true, relation value will be include when calculating a property
+        self.transparent = False
 
     def what(self):
         return {'rels': dict(self._out), }
@@ -46,7 +71,10 @@ class Entity(AutoNamed):
         Rel = cls._rel_types[prop]
 
         def create_rel(dst, *args, **kwargs):
-            rel = Rel(self, dst, *args, **kwargs)
+            dst_name = ','.join(['{}:{}'.format(i, ent.name)
+                                 for i, ent in enum(dst)])
+            name = '({})-{}-({})'.format(self.name, prop, dst_name)
+            rel = Rel(self, dst, name=name, *args, **kwargs)
             for _, v in rel.dst:
                 self._out[v].add(rel)
                 v._in[self].add(rel)
@@ -57,8 +85,8 @@ class Entity(AutoNamed):
     '''
     @property
     def b(self):
-        if isinstance(self._b, Backend):
-            return self._b
+        if isinstance(self._backend, Backend):
+            return self._backend
         else:
             return type(self).default_backend
 
@@ -74,13 +102,13 @@ class Entity(AutoNamed):
         return self.b.prod(self.b.shape(self.blf))
 
     '''
-    The "distance" used in this entity.
+    The "distance" used in this entity to measure the consistency.
     Lower value indicates better consistency.
     Feature(s) of one instance is always on only the last axis.
     p, q - (nval, batch * len, prop_dim)
     '''
 
-    def distances(self, p, q):
+    def distance(self, p, q):
         # inner product
         #q = self.b.reshape(q, (-1, 1))
         #val = self.b.sum(self.b.matmul(p, q))
@@ -96,21 +124,50 @@ class Entity(AutoNamed):
         return vals
 
     '''
-    Properties: get an evaluated property
+    The aggregation used in this entity to reduce the inconsistent values.
     '''
 
-    def vals(self, prop):
-        prop_vals = []
-        # check all self._prop[prop]
-        prop_vals.extend(self._prop[prop])
+    def aggregate(sefl, vals, confs):
+        # inverse logistic
+        def logit(z): return - self.b.log(self.b(1.) / z - self.b(1.))
+        logits = logit(confs)
 
+        # thermodynamic softmax
+        def t_softmax(z, beta=-1):  # beta = 1/(k_B*T) - Coldness, the lower, the more concentrated
+            z = self.b.exp(- beta * z)
+            inf = (z == self.b.inf)
+            if self.b.any(inf):
+                return inf * 1  # just convert type
+            else:
+                return z / self.b.sum(z)
+
+        return self.b.sum(softmax(logits) * vals)
+
+    '''
+    Properties: get all binded values
+    '''
+
+    def bvals(self, prop):
+        vals = []
+        confs = []
+        # check all self._prop[prop]
+        for val, conf in self._prop[prop]:
+            vals.append(prop)
+            confs.append(conf)
+        return vals, confs
+
+    '''
+    Properties: get all values from relations
+    '''
+
+    def rvals(self, prop):
+        # TODO: not yet clean up this part
         # if no constant value assigned! the look around
         # check all [entity._prop[prop] * rel for entity, rel in self._in if prop in entity._prop]
         for src, rels in self._in.items():
             for rel in rels:
                 vals = rel(self, prop)
-
-        for src, rels in self._in_isa.items():
+        for src, rels in self._in.items():
             for rel in rels:
                 # always leave the calculation to the last axis, because matmul do that way
                 a = rel.src.blf  # src
@@ -124,8 +181,8 @@ class Entity(AutoNamed):
                 newaxes += range(axis, axis + self.rank)  # match
                 # print(a)
                 # print(newaxes)
-                p = self.b.reshape(self.b.transpose(
-                    a, newaxes), (-1, self.fdim))
+                p = self.b.reshape(self.b.transpose(a, newaxes),
+                                   (-1, self.fdim))
                 q = self.b.flatten(b)
                 print('evaluating {}({},{}):{} ---is-a--> {}:{}'
                       .format(rel.src.name,
@@ -137,34 +194,38 @@ class Entity(AutoNamed):
                 distance = self.distance(p, q)
                 print('    distance = {}'.format(distance))
                 distances.append(distance)
-        return prop_vals
+        return vals, probs
 
     '''
-    Properties: get an average value to represent the property
+    Properties: get an value for the property
     '''
 
     def __getitem__(self, prop):
-        return self.b.mean(self.vals(prop))
+        vals, confs = self.bvals()
+        if self.transparent:
+            rvals, rconfs = self.rvals()
+            vals.extend(rvals)
+            confs.extend(rconfs)
+        vals = self.b.concatenate(vals, axis=0)
+        confs = self.b.concatenate(confs, axis=0)
+        return self.aggregate(vals, confs)
 
     '''
     Properties: set an value to populate the graph
     '''
 
-    def __setitem__(self, prop, value):
-        self._prop[prop].add(value)
+    def __setitem__(self, prop, value, confidence=None):
+        # TODO: revent multiple assignment?
+        self._prop[prop].append((value, confidence))
 
     '''
-    Evaluate on one property
+    Evaluate on property
     '''
 
-    def evaluate(self, prop):
+    def __call__(self, prop=None):
+        if prop is None:
+            # sum up all properties
+            return self.b.sum([self(prop) for prop in self._prop])
+
         vals = self.vals(prop)
-        return self.b.norm(self.distances(vals, vals))
-
-    '''
-    Evaluate all properties
-    '''
-
-    def __call__(self):
-        # sum up all properties
-        return self.b.sum([self.evaluate(prop) for prop in self._prop])
+        return self.b.norm(self.distance(vals, vals))
