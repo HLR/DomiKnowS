@@ -5,22 +5,22 @@ from .graph import Graph
 import warnings
 
 
-def enum(entities):
-    if isinstance(entities, Entity):
-        enum = {0: entities}.items()
-    elif isinstance(entities, OrderedDict):
-        enum = entities.items()
-    elif isinstance(entities, dict):
-        enum = entities.items()
+def enum(concepts):
+    if isinstance(concepts, Concept):
+        enum = {0: concepts}.items()
+    elif isinstance(concepts, OrderedDict):
+        enum = concepts.items()
+    elif isinstance(concepts, dict):
+        enum = concepts.items()
         warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
                       'For this instance, {} is used.'
-                      .format(entities),
+                      .format(concepts),
                       UserWarning, stacklevel=3)
-    elif isinstance(entities, Iterable):
-        enum = enumerate(entities)
+    elif isinstance(concepts, Iterable):
+        enum = enumerate(concepts)
     else:
-        raise TypeError('Unsupported type of entity. Use Entity, OrderedDict or other Iterable.'
-                        .format(type(entities)))
+        raise TypeError('Unsupported type of concepts. Use Concept, OrderedDict or other Iterable.'
+                        .format(type(concepts)))
 
     # for k, v in enum:
     #    yield (k, v)
@@ -28,7 +28,7 @@ def enum(entities):
 
 
 @local_names_and_objs
-class Entity(AutoNamed):
+class Concept(AutoNamed):
     default_backend = NumpyBackend()
     _rel_types = dict()  # relation name (to be call): relation class
 
@@ -43,18 +43,18 @@ class Entity(AutoNamed):
         return lambda Rel, name=None: cls.update_rel_types(Rel, name)
 
     '''
-    Declare an entity.
+    Declare an concept.
     '''
 
     def __init__(self, name=None, backend=None):
         AutoNamed.__init__(self, name)
 
         if Graph.default_graph is not None:  # use base class Graph as the global environment
-            Graph.default_graph.ent.append(self)
+            Graph.default_graph.concept.append(self)
 
         self._prop = defaultdict(list)  # name : list of binding values
-        self._in = defaultdict(set)  # src entity : set of relation instances
-        self._out = defaultdict(set)  # dst entity : set of relation instances
+        self._in = defaultdict(set)  # src concepts : set of relation instances
+        self._out = defaultdict(set)  # dst concepts : set of relation instances
         self._backend = backend
         # if true, relation value will be include when calculating a property
         self.transparent = False
@@ -71,8 +71,8 @@ class Entity(AutoNamed):
         Rel = cls._rel_types[prop]
 
         def create_rel(dst, *args, **kwargs):
-            dst_name = ','.join(['{}:{}'.format(i, ent.name)
-                                 for i, ent in enum(dst)])
+            dst_name = ','.join(['{}:{}'.format(i, concept.name)
+                                 for i, concept in enum(dst)])
             name = '({})-{}-({})'.format(self.name, prop, dst_name)
             rel = Rel(self, dst, name=name, *args, **kwargs)
             for _, v in rel.dst:
@@ -102,7 +102,7 @@ class Entity(AutoNamed):
         return self.b.prod(self.b.shape(self.blf))
 
     '''
-    The "distance" used in this entity to measure the consistency.
+    The "distance" used in this concept to measure the consistency.
     Lower value indicates better consistency.
     Feature(s) of one instance is always on only the last axis.
     p, q - (nval, batch * len, prop_dim)
@@ -124,7 +124,7 @@ class Entity(AutoNamed):
         return vals
 
     '''
-    The aggregation used in this entity to reduce the inconsistent values.
+    The aggregation used in this concept to reduce the inconsistent values.
     '''
 
     def aggregate(sefl, vals, confs):

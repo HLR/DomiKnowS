@@ -2,7 +2,7 @@ from collections import Counter
 from .base import AutoNamed, local_names_and_objs
 
 '''
-A graph contains entities
+A graph contains concepts
 '''
 
 
@@ -15,7 +15,7 @@ class Graph(AutoNamed):
 
     def __init__(self, name=None):
         AutoNamed.__init__(self, name)
-        self._ent = []
+        self._concept = []
         self._sub = []
         self._super = None
 
@@ -25,8 +25,8 @@ class Graph(AutoNamed):
         return self
 
     @property
-    def ent(self):
-        return self._ent
+    def concept(self):
+        return self._concept
 
     @property
     def sub(self):
@@ -55,13 +55,13 @@ class Graph(AutoNamed):
 
     def what(self):
         return {'supergraph': self.super,
-                'entities': self.ent,
+                'concepts': self.concept,
                 'subgraphs': self.sub}
 
     def __call__(self, depth=float('inf')):
         cost = 0
-        for entity in self.ent:
-            cost += entity()
+        for concepts in self.ent:
+            cost += concepts()
         if depth > 0:
             for sub in self.sub:
                 cost += sub(depth=depth - 1)

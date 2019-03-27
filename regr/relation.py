@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from .base import AutoNamed, local_names_and_objs
-from .entity import Entity, enum
+from .concept import Concept, enum
 
 
 @local_names_and_objs
@@ -17,10 +17,10 @@ class Relation(AutoNamed):
 
     @src.setter
     def src(self, src):
-        if isinstance(src, Entity):
+        if isinstance(src, Concept):
             self._src = src
         else:
-            raise TypeError('Unsupported type of relation src {} in relation {}. Supported types is Entity.'
+            raise TypeError('Unsupported type of relation src {} in relation {}. Supported types is Concept.'
                             .format(type(src), self, ))
 
     @property
@@ -46,13 +46,13 @@ class Relation(AutoNamed):
         }
 
 
-@Entity.register_rel_types('be')
+@Concept.register_rel_types('be')
 class Be(Relation):
     def __init__(self, src, dst, name=None):
         # force T=None as identical
         Relation.__init__(self, src, dst, T=None, name=name)
 
 
-@Entity.register_rel_types('have')
+@Concept.register_rel_types('have')
 class Have(Relation):
     pass
