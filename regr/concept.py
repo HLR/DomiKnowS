@@ -33,28 +33,30 @@ class Concept(AutoNamed):
     _rel_types = dict()  # relation name (to be call): relation class
 
     @classmethod
-    def update_rel_types(cls, Rel, name=None):
+    def update_rel_type(cls, Rel, name=None):
         if name is None:
             name = Rel.suggest_name()
         cls._rel_types[name] = Rel
 
     @classmethod
-    def register_rel_types(cls, name=None):
-        return lambda Rel, name=None: cls.update_rel_types(Rel, name)
+    def register_rel_type(cls, name=None):
+        return lambda Rel, name=None: cls.update_rel_type(Rel, name)
 
-    '''
-    Declare an concept.
-    '''
-
-    def __init__(self, name=None, backend=None):
+    def __init__(self, rank=None, name=None, backend=None):
+        '''
+        Declare an concept.
+        '''
         AutoNamed.__init__(self, name)
 
         if Graph.default_graph is not None:  # use base class Graph as the global environment
             Graph.default_graph.concept.append(self)
 
+        # TODO: deal with None here? or when it can be infer? or some other occasion?
+        self._rank = rank
         self._prop = defaultdict(list)  # name : list of binding values
         self._in = defaultdict(set)  # src concepts : set of relation instances
-        self._out = defaultdict(set)  # dst concepts : set of relation instances
+        # dst concepts : set of relation instances
+        self._out = defaultdict(set)
         self._backend = backend
         # if true, relation value will be include when calculating a property
         self.transparent = False
@@ -62,11 +64,10 @@ class Concept(AutoNamed):
     def what(self):
         return {'rels': dict(self._out), }
 
-    '''
-    Create relation by registered relation types
-    '''
-
     def __getattr__(self, prop):
+        '''
+        Create relation by registered relation types
+        '''
         cls = type(self)  # bind to the real class
         Rel = cls._rel_types[prop]
 
@@ -74,41 +75,39 @@ class Concept(AutoNamed):
             dst_name = ','.join(['{}:{}'.format(i, concept.name)
                                  for i, concept in enum(dst)])
             name = '({})-{}-({})'.format(self.name, prop, dst_name)
+            # TODO: should check the rank of src and dst? or in the constructor? or some other occasion?
             rel = Rel(self, dst, name=name, *args, **kwargs)
             for _, v in rel.dst:
                 self._out[v].add(rel)
                 v._in[self].add(rel)
         return create_rel
 
-    '''
-    Backend, possible to fallback to class default
-    '''
+    @property
+    def rank(self):
+        return self._rank
+
+    @property
+    def vshape(self, prop):
+        # TODO: just how?
+        return
+
     @property
     def b(self):
+        '''
+        Backend shortcut, possible to fallback to class default
+        '''
         if isinstance(self._backend, Backend):
             return self._backend
         else:
             return type(self).default_backend
 
-    @property
-    def rank(self):
-        # remove the first axis for batch
-        return len(self.b.shape(self.blf)) - 1
-
-    @property
-    def fdim(self):
-        # including batch # TODO: this semantic is not consistent with self.rank
-        # (batch, dim(s),) -> (batch * dim(s),)
-        return self.b.prod(self.b.shape(self.blf))
-
-    '''
-    The "distance" used in this concept to measure the consistency.
-    Lower value indicates better consistency.
-    Feature(s) of one instance is always on only the last axis.
-    p, q - (nval, batch * len, prop_dim)
-    '''
-
-    def distance(self, p, q):
+    def distances(self, p, q):
+        '''
+        The "distance" used in this concept to measure the consistency.
+        Lower value indicates better consistency.
+        Feature(s) of one instance is always on only the last axis.
+        p, q - [(batch, vdim(s...)),...] * nval
+        '''
         # inner product
         #q = self.b.reshape(q, (-1, 1))
         #val = self.b.sum(self.b.matmul(p, q))
@@ -116,18 +115,23 @@ class Concept(AutoNamed):
         #q = self.b.reshape(q, (1, -1))
         #val = self.b.sum(p * self.b.log( p / q ))
         # mse
-        fdim = 1  # TODO how to get fdim?
-        p = self.b.reshape(p, (-1, fdim))
-        q = self.b.reshape(q, (fdim, -1))
 
-        vals = p - q
+        nval = len(p)
+        assert len(p) == len(q)
+        p = self.b.reshape(self.b.concatenete(p, axis=0), (nval, -1, 1))
+        q = self.b.reshape(self.b.concatenete(q, axis=0), (1, -1, nval))
+        vals = self.b.norm(p - q, axis=1)
         return vals
 
-    '''
-    The aggregation used in this concept to reduce the inconsistent values.
-    '''
-
     def aggregate(sefl, vals, confs):
+        '''
+        The aggregation used in this concept to reduce the inconsistent values.
+        '''
+        vals = self.b.concatenate(vals, axis=0)
+        confs = self.b.concatenate(confs, axis=0)
+        # TODO: deal with None value in confs. The following is not yet a good solution
+        confs[confs==None] = self.b.mean(confs[confs!=None])
+
         # inverse logistic
         def logit(z): return - self.b.log(self.b(1.) / z - self.b(1.))
         logits = logit(confs)
@@ -141,91 +145,78 @@ class Concept(AutoNamed):
             else:
                 return z / self.b.sum(z)
 
-        return self.b.sum(softmax(logits) * vals)
+        weight = softmax(logits)
 
-    '''
-    Properties: get all binded values
-    '''
-
-    def bvals(self, prop):
-        vals = []
-        confs = []
-        # check all self._prop[prop]
-        for val, conf in self._prop[prop]:
-            vals.append(prop)
-            confs.append(conf)
+        # TODO: should via the same approach as dealing with None values
+        vals = self.b.sum(weight * vals)
+        confs = self.b.sum(weight * confs)
         return vals, confs
 
-    '''
-    Properties: get all values from relations
-    '''
+    def bvals(self, prop):
+        '''
+        Properties: get all binded values
 
-    def rvals(self, prop):
-        # TODO: not yet clean up this part
-        # if no constant value assigned! the look around
-        # check all [entity._prop[prop] * rel for entity, rel in self._in if prop in entity._prop]
+        :param prop: property name
+        :type prop: str
+
+        :returns: Return `vals` and `confs` where `vals` is a list of values binded to the property
+                  and `confs` is a list of values representing the confidence of each binded value.
+                  An element of `vals` should have the shape:
+                  ( batch, vdim(s...) )
+                  Return `None` is if never binded to this property.
+        :rtype: [barray,...], [barray,...]
+        '''
+        if prop not in self._prop or not self._prop[prop]:
+            return [(None, 0)]
+        #vals = []
+        #confs = []
+        # for val, conf in self._prop[prop]:
+        #    vals.append(prop)
+        #    confs.append(conf)
+        vals, confs = zip(*self._prop[prop])
+        return vals, confs
+
+    def rvals(self, prop, hops=1):
+        '''
+        Properties: get all values from relations
+        '''
+        vals = []
+        confs = []
         for src, rels in self._in.items():
             for rel in rels:
-                vals = rel(self, prop)
-        for src, rels in self._in.items():
-            for rel in rels:
-                # always leave the calculation to the last axis, because matmul do that way
-                a = rel.src.blf  # src
-                b = rel.dst.blf  # self
-                axis = rel.offset
-                # the first axis is batch! and axis has +1 already
-                # put batch axis and correpsonding axes to the last part
-                newaxes = range(1, axis) + range(axis + self.rank,
-                                                 len(self.b.shape(a)))  # anything else
-                newaxes += [0, ]  # batch
-                newaxes += range(axis, axis + self.rank)  # match
-                # print(a)
-                # print(newaxes)
-                p = self.b.reshape(self.b.transpose(a, newaxes),
-                                   (-1, self.fdim))
-                q = self.b.flatten(b)
-                print('evaluating {}({},{}):{} ---is-a--> {}:{}'
-                      .format(rel.src.name,
-                              rel.name,
-                              axis,
-                              self.b.shape(p),
-                              rel.dst.name,
-                              self.b.shape(q)))
-                distance = self.distance(p, q)
-                print('    distance = {}'.format(distance))
-                distances.append(distance)
-        return vals, probs
+                rvals, rconfs = rel.T(self, prop, hops - 1)
+                vals.extend(rvals)
+                confs.extend(rconfs)
+        return vals, confs
 
-    '''
-    Properties: get an value for the property
-    '''
-
-    def __getitem__(self, prop):
-        vals, confs = self.bvals()
-        if self.transparent:
-            rvals, rconfs = self.rvals()
+    def vals(self, prop, hops=1):
+        vals, confs = self.bvals(prop)
+        if hops > 0:
+            rvals, rconfs = self.rvals(prop, hops)
             vals.extend(rvals)
             confs.extend(rconfs)
-        vals = self.b.concatenate(vals, axis=0)
-        confs = self.b.concatenate(confs, axis=0)
-        return self.aggregate(vals, confs)
+        return vals, confs
 
-    '''
-    Properties: set an value to populate the graph
-    '''
+    def __getitem__(self, prop, hops=1):
+        '''
+        Properties: get an value for the property
+        '''
+        return self.aggregate(*self.vals(prop, hops))
 
     def __setitem__(self, prop, value, confidence=None):
-        # TODO: revent multiple assignment?
+        '''
+        Properties: bind an value to populate the graph
+        '''
+        # TODO: prevent multiple assignment?
         self._prop[prop].append((value, confidence))
 
-    '''
-    Evaluate on property
-    '''
-
     def __call__(self, prop=None):
+        '''
+        Evaluate on property
+        '''
         if prop is None:
             # sum up all properties
             return self.b.sum([self(prop) for prop in self._prop])
 
-        vals = self.vals(prop)
-        return self.b.norm(self.distance(vals, vals))
+        vals, confs = self.vals(prop, 1)
+        return self.b.norm(self.distances(vals, vals))
