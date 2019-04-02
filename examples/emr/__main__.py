@@ -47,8 +47,8 @@ def main():
         device = -1
 
     # prepare optimizer
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    iterator = BucketIterator(batch_size=128, sorting_keys=[
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    iterator = BucketIterator(batch_size=16, sorting_keys=[
                               ("sentence", "num_tokens")])
     iterator.index_with(vocab)
     trainer = Trainer(model=model,
@@ -56,8 +56,8 @@ def main():
                       iterator=iterator,
                       train_dataset=train_dataset,
                       validation_dataset=validation_dataset,
-                      patience=100,
-                      num_epochs=5000,
+                      patience=10,
+                      num_epochs=500,
                       cuda_device=device)
 
     # do the training
