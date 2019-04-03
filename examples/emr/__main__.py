@@ -1,28 +1,28 @@
 import os
 from allennlp.data.vocabulary import Vocabulary
-from allennlp.data.iterators import BucketIterator
-from allennlp.modules.token_embedders import Embedding
-from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-from allennlp.training.trainer import Trainer
 import torch
-import torch.optim as optim
 
 from .conll04reader import Conll04DatasetReader
-from .model import LstmTagger
+from .model import get_model, get_trainer
 
 
 work_dir = "emr"
 relative_path = "data/EntityMentionRelation"
 
-EMBEDDING_DIM = 12
-HIDDEN_DIM = 16
+EMBEDDING_DIM = 16
+HIDDEN_DIM = 8
+LR = 0.1
+BATCH = 16
+EPOCH = 1000
+PATIENCE = 10
 
 #import logging
 #logging.basicConfig(level=logging.INFO)
 
+torch.manual_seed(1)
+
+
 def main():
-    torch.manual_seed(1)
     # prepare data
     reader = Conll04DatasetReader()
     train_dataset = reader.read(os.path.join(
@@ -31,36 +31,14 @@ def main():
         work_dir, relative_path, 'conll04_test.corp'))
     vocab = Vocabulary.from_instances(train_dataset + validation_dataset)
 
-    # prepare model
-    token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                                embedding_dim=EMBEDDING_DIM)
-    word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
-    lstm = PytorchSeq2SeqWrapper(torch.nn.LSTM(
-        EMBEDDING_DIM, HIDDEN_DIM, batch_first=True))
-    model = LstmTagger(word_embeddings, lstm, vocab)
+    # get model
+    model = get_model(vocab, EMBEDDING_DIM, HIDDEN_DIM)
 
-    # prepare GPU
-    if torch.cuda.is_available():
-        device = 0
-        model = model.cuda(device)
-    else:
-        device = -1
+    # get trainer
+    trainer = get_trainer(model, vocab, train_dataset, validation_dataset,
+                          LR, BATCH, EPOCH, PATIENCE)
 
-    # prepare optimizer
-    optimizer = optim.SGD(model.parameters(), lr=0.1)
-    iterator = BucketIterator(batch_size=16, sorting_keys=[
-                              ("sentence", "num_tokens")])
-    iterator.index_with(vocab)
-    trainer = Trainer(model=model,
-                      optimizer=optimizer,
-                      iterator=iterator,
-                      train_dataset=train_dataset,
-                      validation_dataset=validation_dataset,
-                      patience=10,
-                      num_epochs=500,
-                      cuda_device=device)
-
-    # do the training
+    # train the model
     trainer.train()
 
     # save model
