@@ -4,7 +4,8 @@ import torch
 
 from .conll04reader import Conll04DatasetReader
 from .model import get_model, get_trainer
-
+from .model import sequence_cross_entropy_with_logits_loss_func as loss_func
+# NB: the loss_func will be replace by graph
 
 relative_path = "data/EntityMentionRelation"
 
@@ -16,7 +17,7 @@ EPOCH = 1000
 PATIENCE = 10
 
 #import logging
-#logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 torch.manual_seed(1)
 
@@ -33,8 +34,14 @@ def main():
     # get model
     model = get_model(vocab, EMBEDDING_DIM, HIDDEN_DIM)
 
+    # TODO:
+    # bind the output of model to the graph
+    # and
+    # get a loss_func out of a graph
+    # loss_func = ...
+
     # get trainer
-    trainer = get_trainer(model, vocab, train_dataset, validation_dataset,
+    trainer = get_trainer(model, loss_func, vocab, train_dataset, validation_dataset,
                           LR, BATCH, EPOCH, PATIENCE)
 
     # train the model
