@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Pre-reqiurement: CUDA 10, cuDNN 7
+# Will be install: python 3.7, pip for python 3.7, requirements in requirements.txt, corrected version of pytorch
+# Additional: setup regr's path for python
+
 python=python3.7
 apt update
 apt install -y $python $python-dev $python-distutils

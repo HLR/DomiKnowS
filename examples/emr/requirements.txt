@@ -1,3 +1,4 @@
 #regr
+#torch
 allennlp
 tqdm

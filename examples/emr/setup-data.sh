@@ -5,7 +5,7 @@ relative_path="data/EntityMentionRelation"
 
 if [ ! -d "$relative_path" ]; then
     wget "$data_url"
-    unzip "$(basename "$data_url")"
+    unzip "$(basename "$data_url")" "$relative_path/*"
 else
     echo 'Data already extracted.'
 fi

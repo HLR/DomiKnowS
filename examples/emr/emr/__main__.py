@@ -6,7 +6,6 @@ from .conll04reader import Conll04DatasetReader
 from .model import get_model, get_trainer
 
 
-work_dir = "emr"
 relative_path = "data/EntityMentionRelation"
 
 EMBEDDING_DIM = 16
@@ -26,9 +25,9 @@ def main():
     # prepare data
     reader = Conll04DatasetReader()
     train_dataset = reader.read(os.path.join(
-        work_dir, relative_path, 'conll04_train.corp'))
+        relative_path, 'conll04_train.corp'))
     validation_dataset = reader.read(os.path.join(
-        work_dir, relative_path, 'conll04_test.corp'))
+        relative_path, 'conll04_test.corp'))
     vocab = Vocabulary.from_instances(train_dataset + validation_dataset)
 
     # get model
