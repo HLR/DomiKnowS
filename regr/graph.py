@@ -58,11 +58,17 @@ class Graph(AutoNamed):
                 'concepts': self.concept,
                 'subgraphs': self.sub}
 
-    def __call__(self, depth=float('inf')):
+    def release(self, prop=None):
+        for concept in self.concept:
+            concept.release(prop)
+        for graph in self.sub:
+            graph.release(prop)
+
+    def __call__(self, prop=None, depth=float('inf')):
         cost = 0
-        for concepts in self.ent:
-            cost += concepts()
-        if depth > 0:
+        for concept in self.concept:
+            cost += concept(prop)
+        if depth > 0:  # TODO: why would I need depth?
             for sub in self.sub:
-                cost += sub(depth=depth - 1)
+                cost += sub(prop, depth=depth - 1)
         return cost

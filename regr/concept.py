@@ -173,7 +173,7 @@ class Concept(AutoNamed):
         # for val, conf in self._prop[prop]:
         #    vals.append(prop)
         #    confs.append(conf)
-        vals, confs = zip(*self._prop[prop])
+        vals, confs = zip(*self.prop[prop])
         return vals, confs
 
     def rvals(self, prop, hops=1):
@@ -197,6 +197,10 @@ class Concept(AutoNamed):
             confs.extend(rconfs)
         return vals, confs
 
+    @property
+    def prop(self):
+        return self._prop
+
     def __getitem__(self, prop, hops=1):
         '''
         Properties: get an value for the property
@@ -208,7 +212,16 @@ class Concept(AutoNamed):
         Properties: bind an value to populate the graph
         '''
         # TODO: prevent multiple assignment?
-        self._prop[prop].append((value, confidence))
+        self.prop[prop].append((value, confidence))
+
+    def __delitem__(self, prop):
+        del self.prop[prop]
+
+    def release(self, prop=None):
+        if prop is None:
+            for prop in self.prop:
+                self.release(prop)
+        del self[prop]
 
     def __call__(self, prop=None):
         '''
@@ -216,7 +229,7 @@ class Concept(AutoNamed):
         '''
         if prop is None:
             # sum up all properties
-            return self.b.sum([self(prop) for prop in self._prop])
+            return self.b.sum([self(prop) for prop in self.prop])
 
         vals, confs = self.vals(prop, 1)
         return self.b.norm(self.distances(vals, vals))

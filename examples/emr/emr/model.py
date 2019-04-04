@@ -19,39 +19,38 @@ class BaseTagger(Model):
         super().__init__(vocab)
 
     @abc.abstractmethod
-    def _forward(self,
-                 sentence: Dict[str, torch.Tensor],
-                 mask: torch.Tensor): pass
+    def _forward(self, **data): pass
 
-    def _update_metrics(self, output, labels, mask):
+    def _update_metrics(self, **data):
         for metric_name, metric in self.metrics.items():
-            metric(output['logits'], labels, mask)
-            output[metric_name] = metric.get_metric(False)
+            metric(data['logits'], data['labels'], data['metric_mask'])
+            data[metric_name] = metric.get_metric(False) # no reset
+        return data
 
-    def _update_loss(self, output, labels, mask):
+    def _update_loss(self, **data):
         if self.loss_func is not None:
-            output['loss'] = self.loss_func(output["logits"], labels, mask)
+            data['loss'] = self.loss_func(**data)
+        return data
 
-    def forward(self,
-                sentence: Dict[str, torch.Tensor],
-                labels: torch.Tensor = None,
-                labels_mask: List[torch.LongTensor] = None,
-                ) -> Dict[str, torch.Tensor]:
-        text_mask = get_text_field_mask(sentence)
+    def forward(self, **data) -> Dict[str, torch.Tensor]:
+        text_mask = get_text_field_mask(data['sentence'])
         self.logger.debug(text_mask)
+        data['text_mask'] = text_mask
 
-        output = self._forward(sentence, text_mask)
+        data = self._forward(**data)
 
-        if labels is not None:
+        if 'labels' in data and data['labels'] is not None:
+            labels_mask = data['labels_mask']
             self.logger.debug(labels_mask)
             # label mask apply to metric and loss
             metric_mask = text_mask & labels_mask.type_as(text_mask)
             self.logger.debug(metric_mask)
+            data['metric_mask'] = metric_mask
 
-            self._update_metrics(output, labels, metric_mask)
-            self._update_loss(output, labels, metric_mask)
+            data = self._update_metrics(**data)
+            data = self._update_loss(**data)
 
-        return output
+        return data
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         output = {}
@@ -71,24 +70,27 @@ class Tagger(BaseTagger):
         self.hidden2tag = torch.nn.Linear(
             in_features=encoder.get_output_dim(),
             out_features=vocab.get_vocab_size('labels'))
-        self.metrics = {"accuracy": CategoricalAccuracy()}
+        self.metrics = {'accuracy': CategoricalAccuracy()}
 
-    def _forward(self,
-                 sentence: Dict[str, torch.Tensor],
-                 mask: torch.Tensor,
-                 ) -> Dict[str, torch.Tensor]:
+    def _forward(self, **data) -> Dict[str, torch.Tensor]:
+        sentence = data['sentence']
+        mask = data['text_mask']
+        
         embeddings = self.word_embeddings(sentence)
         encoder_out = self.encoder(embeddings, mask)
         logits = self.hidden2tag(encoder_out)
-        output = {'logits': logits}
-        return output
+        data['logits'] = logits
+        return data
 
 
 # loss function
 from allennlp.nn.util import sequence_cross_entropy_with_logits
 
 
-def sequence_cross_entropy_with_logits_loss_func(logits, labels, mask):
+def sequence_cross_entropy_with_logits_loss_func(**data):
+    logits = data['logits']
+    labels = data['labels']
+    mask = data['metric_mask']
     return sequence_cross_entropy_with_logits(logits, labels, mask)
 
 
@@ -101,7 +103,7 @@ from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
 def get_model(vocab, emb_dim, hid_dim):
     token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
                                 embedding_dim=emb_dim)
-    word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
+    word_embeddings = BasicTextFieldEmbedder({'tokens': token_embedding})
     lstm = PytorchSeq2SeqWrapper(torch.nn.LSTM(
         emb_dim, hid_dim, batch_first=True))
     model = Tagger(word_embeddings, lstm, vocab)
@@ -127,7 +129,7 @@ def get_trainer(model, loss_func, vocab, train_dataset, validation_dataset, lr=0
     # prepare optimizer
     optimizer = optim.SGD(model.parameters(), lr=lr)
     iterator = BucketIterator(batch_size=batch, sorting_keys=[
-                              ("sentence", "num_tokens")])
+                              ('sentence', 'num_tokens')])
     iterator.index_with(vocab)
     trainer = Trainer(model=model,
                       optimizer=optimizer,
