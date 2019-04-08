@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 data_url="http://www.cs.tulane.edu/~pkordjam/data/data.zip"
 relative_path="data/EntityMentionRelation"
