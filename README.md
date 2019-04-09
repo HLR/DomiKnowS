@@ -14,11 +14,11 @@ This adds a relational overlay over elements in a network that relates physical 
 
 ## Related
 
-The project is inspired by (DeLBP (Declarative Learning based Programming))[http://www.cs.tulane.edu/~pkordjam/delbp.htm],
-closely related to (Saul programing language)[https://github.com/HLR/HetSaul].
-(Workshop of DeLBP)[http://delbp.github.io/] is held annually to communicate the idea about combining learning models with declarative programming or reasoning.
-(DeLBP 2019)[http://delbp.github.io/] will be held in conjunction with IJCAI-2019, August 10-16, 2019, Macao, China.
-At a wider scope, the project is related to (OntologyBasedLearning)[https://github.com/HLR/OntologyBasedLearning], which can provide a source of domain knowledge as the graph (ontology) in this project.
+The project is inspired by [DeLBP (Declarative Learning based Programming)](http://www.cs.tulane.edu/~pkordjam/delbp.htm),
+closely related to [Saul programing language](https://github.com/HLR/HetSaul).
+[Workshop of DeLBP](http://delbp.github.io/) is held annually to communicate the idea about combining learning models with declarative programming or reasoning.
+[DeLBP 2019](http://delbp.github.io/) will be held in conjunction with IJCAI-2019, August 10-16, 2019, Macao, China.
+At a wider scope, the project is related to [OntologyBasedLearning](https://github.com/HLR/OntologyBasedLearning), which can provide a source of domain knowledge as the graph (ontology) in this project.
 
 ## Contributing
 

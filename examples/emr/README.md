@@ -19,7 +19,7 @@ The following tools are needed to set up the EMR example.
 Most of them are pre-installed.
 If you don't have in some case, install them with default package management tools.
 For example, on Debian Linux (Ubuntu) you use `sudo apt install <package_name>`.
-On MacOS you need (`homebrew`)[https://brew.sh] and use `sudo brew install <package_name>`.
+On MacOS you need [`homebrew`](https://brew.sh) and use `sudo brew install <package_name>`.
 
 * `wget`: to download the dataset.
 * `unzip`: to extract data from a zipped file.
@@ -29,9 +29,9 @@ On MacOS you need (`homebrew`)[https://brew.sh] and use `sudo brew install <pack
 Other tools that are unlikely to be pre-installed. May need various commands to have them on your system.
 
 * `python` 3.7: Python 3 is required by `allennlp`. Install by package management. Remember to mention the version in installation.
-* `pip`: to install other required python packages. Follow the (installation instruction)[https://pip.pypa.io/en/stable/installing/] and make sure you install it with your `python` 3.7.
+* `pip`: to install other required python packages. Follow the [installation instruction](https://pip.pypa.io/en/stable/installing/) and make sure you install it with your `python` 3.7.
 * `pytorch`: model calculation behind `allennlp`. There is a bunch of selection other than the standard pip package.
-Follow the (installation instruction)[https://pytorch.org/get-started/locally/] and select the correct CUDA version if any available to you.
+Follow the [installation instruction](https://pytorch.org/get-started/locally/) and select the correct CUDA version if any available to you.
 * Anything else will be installed properly with `pip` (including `allennlp`). No worry here.
 
 #### Setup
