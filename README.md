@@ -12,7 +12,7 @@ This project is under heavy development and not yet ready to use.
 
 - [ ] `emr` example: a simple NLP task that has some structural relation, which shows how the graph should weave everything together.
 - [ ] `make_model`: graph should be aware of all data and connecting them to the model.
-- [ ] Sequence: should have a clear way to define sequence/set/... or any union of basic concepts.
+- [ ] Collection: should have a clear way to define sequence/set/... or any collection of basic concepts. The has-a relation holds such semantic but should be made more clear and some detail implementation should be carried out. They should be related to the Rank of each concept.
 - [ ] `ComposeConcept` : a clear definition (a class?) of compositional concepts in the graph.
 
 
