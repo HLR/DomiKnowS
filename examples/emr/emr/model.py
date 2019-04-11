@@ -116,7 +116,7 @@ from allennlp.data.iterators import BucketIterator
 import torch.optim as optim
 
 
-def get_trainer(model, loss_func, vocab, train_dataset, validation_dataset, lr=0.1, batch=16, epoch=1000, patience=10):
+def get_trainer(model, loss_func, train_dataset, validation_dataset, lr=0.1, batch=16, epoch=1000, patience=10):
     model.loss_func = loss_func
 
     # prepare GPU
@@ -130,7 +130,7 @@ def get_trainer(model, loss_func, vocab, train_dataset, validation_dataset, lr=0
     optimizer = optim.SGD(model.parameters(), lr=lr)
     iterator = BucketIterator(batch_size=batch, sorting_keys=[
                               ('sentence', 'num_tokens')])
-    iterator.index_with(vocab)
+    iterator.index_with(model.vocab)
     trainer = Trainer(model=model,
                       optimizer=optimizer,
                       iterator=iterator,

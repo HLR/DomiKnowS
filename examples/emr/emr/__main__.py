@@ -76,7 +76,7 @@ def main():
     loss_func = get_graph_loss_func(model)
 
     # get trainer
-    trainer = get_trainer(model, loss_func, vocab, train_dataset, validation_dataset,
+    trainer = get_trainer(model, loss_func, train_dataset, validation_dataset,
                           LR, BATCH, EPOCH, PATIENCE)
 
     # train the model
