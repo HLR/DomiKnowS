@@ -28,7 +28,7 @@ def enum(concepts):
 
 
 @local_names_and_objs
-class Concept(AutoNamed):
+class Concept(Scorable, Propertied):
     default_backend = NumpyBackend()
     _rel_types = dict()  # relation name (to be call): relation class
 
@@ -46,14 +46,15 @@ class Concept(AutoNamed):
         '''
         Declare an concept.
         '''
-        AutoNamed.__init__(self, name)
+        Scorable.__init__(self, name)
+        Propertied.__init__(self, name)
 
-        if Graph.default_graph is not None:  # use base class Graph as the global environment
-            Graph.default_graph.concept.append(self)
+        # register myself
+        if Graph.default is not None:  # use base class Graph as the global environment
+            Graph.default.concept.append(self)
 
         # TODO: deal with None here? or when it can be infer? or some other occasion?
         self._rank = rank
-        self._prop = defaultdict(list)  # name : list of binding values
         self._in = defaultdict(set)  # src concepts : set of relation instances
         # dst concepts : set of relation instances
         self._out = defaultdict(set)
@@ -130,7 +131,7 @@ class Concept(AutoNamed):
         vals = self.b.concatenate(vals, axis=0)
         confs = self.b.concatenate(confs, axis=0)
         # TODO: deal with None value in confs. The following is not yet a good solution
-        confs[confs==None] = self.b.mean(confs[confs!=None])
+        confs[confs == None] = self.b.mean(confs[confs != None])
 
         # inverse logistic
         def logit(z): return - self.b.log(self.b(1.) / z - self.b(1.))
@@ -197,39 +198,9 @@ class Concept(AutoNamed):
             confs.extend(rconfs)
         return vals, confs
 
-    @property
-    def prop(self):
-        return self._prop
-
-    def __getitem__(self, prop, hops=1):
-        '''
-        Properties: get an value for the property
-        '''
-        return self.aggregate(*self.vals(prop, hops))
-
-    def __setitem__(self, prop, value, confidence=None):
-        '''
-        Properties: bind an value to populate the graph
-        '''
-        # TODO: prevent multiple assignment?
-        self.prop[prop].append((value, confidence))
-
-    def __delitem__(self, prop):
-        del self.prop[prop]
-
-    def release(self, prop=None):
-        if prop is None:
-            for prop in self.prop:
-                self.release(prop)
-        del self[prop]
-
-    def __call__(self, prop=None):
-        '''
-        Evaluate on property
-        '''
-        if prop is None:
-            # sum up all properties
-            return self.b.sum([self(prop) for prop in self.prop])
-
-        vals, confs = self.vals(prop, 1)
+    def score(self, values):
+        # TODO: some clean up here, focus on only these values
+        # Problem: the interface behind this should not need prop?
+        #vals, confs = self.vals(prop, 1)
+        vals, confs = zip(*values)
         return self.b.norm(self.distances(vals, vals))
