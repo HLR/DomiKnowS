@@ -1,5 +1,5 @@
 from collections import defaultdict, Iterable, OrderedDict
-from .base import AutoNamed, local_names_and_objs
+from .base import Scorable, Propertied, local_names_and_objs
 from .backend import Backend, NumpyBackend
 from .graph import Graph
 import warnings
@@ -82,6 +82,10 @@ class Concept(Scorable, Propertied):
                 self._out[v].add(rel)
                 v._in[self].add(rel)
         return create_rel
+
+    def __setitem__(self, prop, value):
+        # TODO: prevent multiple assignment or recursive assignment?
+        self.props[prop].append(value)
 
     @property
     def rank(self):
@@ -204,3 +208,34 @@ class Concept(Scorable, Propertied):
         #vals, confs = self.vals(prop, 1)
         vals, confs = zip(*values)
         return self.b.norm(self.distances(vals, vals))
+
+
+class ComposeConcept(Concept):
+
+    def enum(concepts):
+        if isinstance(concepts, Concept):
+            enum = {0: concepts}.items()
+        elif isinstance(concepts, OrderedDict):
+            enum = concepts.items()
+        elif isinstance(concepts, dict):
+            enum = concepts.items()
+            warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
+                          'For this instance, {} is used.'
+                          .format(concepts),
+                          UserWarning, stacklevel=3)
+        elif isinstance(concepts, Iterable):
+            enum = enumerate(concepts)
+        else:
+            raise TypeError('Unsupported type of concepts. Use Concept, OrderedDict or other Iterable.'
+                            .format(type(concepts)))
+
+        # for k, v in enum:
+        #    yield (k, v)
+        return enum
+
+    def __init__(self, concepts):
+        name = ','.join(['{}:{}'.format(i, concept.name)
+                         for i, concept in enum(dst)])
+        Concept.__init__(self, name)
+
+    pass

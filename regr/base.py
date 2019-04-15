@@ -80,6 +80,15 @@ def local_names_and_objs(cls):
     return cls
 
 
+def named_singleton(cls):
+    class singleton():
+        def __new__(cls_, name):
+            if name in cls._objs:
+                return cls.get()
+            cls.__new__(cls, name)
+    return cls
+
+
 @local_names_and_objs
 class AutoNamed(Named):
     @classmethod
@@ -89,7 +98,7 @@ class AutoNamed(Named):
 
     @classmethod
     def get(cls, name, value=None):
-        return _objs.get(name, value)
+        return cls._objs.get(name, value)
 
     @classmethod
     def suggest_name(cls):
@@ -116,7 +125,7 @@ class AutoNamed(Named):
         self.assign_suggest_name(name)
 
 
-class Scorable(AutoNamed, Callable):
+class Scorable(AutoNamed):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
@@ -145,7 +154,7 @@ class Tree(AutoNamed):
     def sup(self):
         return self._sup
 
-    @super.setter
+    @sup.setter
     def sup(self, sup):
         # TODO: resolve and prevent recursive definition
         if sup is not None:
@@ -193,11 +202,10 @@ class Propertied(AutoNamed):
         return self.props[prop]
 
     def __setitem__(self, prop, value):
-        # TODO: prevent multiple assignment or recursive assignment?
-        self.props[prop].append(value)
+        self.props[prop] = value
 
     def __delitem__(self, prop):
-        del self._props[prop]
+        del self.props[prop]
 
     def __len__(self, prop):
         return len(self.props)
@@ -207,3 +215,52 @@ class Propertied(AutoNamed):
             for prop, _ in self.props:
                 self.release(prop)
         del self[prop]
+
+
+def singleton(cls, getter=None, setter=None):
+    if getter is None:
+        def getter(*args, **kwargs):
+            if hasattr(cls, '__singleton__'):
+                return cls.__singleton__
+            return None
+    if setter is None:
+        def setter(obj):
+            cls.__singleton__ = obj
+
+    __old_new__ = cls.__new__
+
+    def __new__(cls, *args, **kwargs):
+        obj = getter(*args, **kwargs)
+        if obj is None:
+            obj = __old_new__(cls, *args, **kwargs)
+            obj.__i_am_the_new_singoton__ = True
+            setter(obj)
+            return obj
+        else:
+            return obj
+
+    __old_init__ = cls.__init__
+
+    def __init__(self, *args, **kwargs):
+        if hasattr(self, '__i_am_the_new_singoton__') and self.__i_am_the_new_singoton__:
+            del self.__i_am_the_new_singoton__
+            __old_init__(self, *args, **kwargs)
+
+    cls.__new__ = staticmethod(__new__)
+    cls.__init__ = __init__
+    return cls
+
+
+def named_singleton(cls):
+    if not issubclass(cls, AutoNamed):
+        raise TypeError('named_singleton can be applied to subclasses of AutoNamed,' +
+                        ' but MRO of {} is given.'.format(cls.mro()))
+
+    def getter(name=None):
+        return cls.get(name, None)
+
+    def setter(obj):
+        pass  # AutoNamed save them already
+
+    cls = singleton(cls, getter, setter)
+    return cls
