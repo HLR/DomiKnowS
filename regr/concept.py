@@ -51,7 +51,7 @@ class Concept(Scorable, Propertied):
 
         # register myself
         if Graph.default is not None:  # use base class Graph as the global environment
-            Graph.default.concept.append(self)
+            Graph.default.concepts.append(self)
 
         # TODO: deal with None here? or when it can be infer? or some other occasion?
         self._rank = rank

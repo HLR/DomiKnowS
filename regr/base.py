@@ -151,6 +151,10 @@ class Tree(AutoNamed):
         return self
 
     @property
+    def subs(self):
+        return self._subs
+    
+    @property
     def sup(self):
         return self._sup
 
@@ -170,8 +174,8 @@ class Tree(AutoNamed):
         type(self).default = self.sup
 
     def what(self):
-        return {'sup': self.super,
-                'sub': self.sub}
+        return {'sup': self.sup,
+                'subs': self.subs}
 
 
 class SubScorable(Scorable, Tree):
