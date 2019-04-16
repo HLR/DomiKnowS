@@ -1,5 +1,5 @@
 import abc
-from collections import Counter, defaultdict, Iterable
+from collections import Counter, defaultdict, OrderedDict
 from contextlib import contextmanager
 from threading import Lock
 import pprint
@@ -137,13 +137,19 @@ class Scorable(AutoNamed):
         return self.score(prop, *args, **kwargs)
 
 
-class Tree(AutoNamed):
+class NamedTree(Named):
     default = None
 
     def __init__(self, name=None):
-        AutoNamed.__init__(self, name)
-        self._subs = []
+        Named.__init__(self, name)
+        self._subs = OrderedDict()
         self._sup = None
+
+    def add(self, obj):
+        if isinstance(obj, NamedTree):
+            self.subs[obj.name] = obj
+        else:
+            raise TypeError('Add Tree instance, {} instance given.'.format(type(obj)))
 
     @property
     def scope_key(self):
@@ -163,25 +169,27 @@ class Tree(AutoNamed):
         # TODO: resolve and prevent recursive definition
         if sup is not None:
             self._sup = sup
-            sup._subs.append(self)
+            sup.add(self)
 
     def __enter__(self):
-        self.sup = type(self).default
-        type(self).default = self
+        cls = type(self)
+        self.sup = cls.default
+        cls.default = self
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        type(self).default = self.sup
+        cls = type(self)
+        cls.default = self.sup
 
     def what(self):
         return {'sup': self.sup,
-                'subs': self.subs}
+                'subs': dict(self.subs)}
 
 
-class SubScorable(Scorable, Tree):
+class SubScorable(Scorable, NamedTree):
     def __init__(self, name=None):
         Scorable.__init__(self, name)
-        Tree.__init__(self, name)
+        NamedTree.__init__(self, name)
 
     def score(self, prop, depth=float('inf')):
         score = 0
@@ -190,9 +198,8 @@ class SubScorable(Scorable, Tree):
         return score
 
 
-class Propertied(AutoNamed):
-    def __init__(self, name=None):
-        AutoNamed.__init__(self, name)
+class Propertied(object):
+    def __init__(self):
         self._props = defaultdict(list)
 
     @property

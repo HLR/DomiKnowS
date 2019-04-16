@@ -1,7 +1,6 @@
 from collections import defaultdict, Iterable, OrderedDict
 from .base import Scorable, Propertied, local_names_and_objs
 from .backend import Backend, NumpyBackend
-from .graph import Graph
 import warnings
 
 
@@ -47,11 +46,12 @@ class Concept(Scorable, Propertied):
         Declare an concept.
         '''
         Scorable.__init__(self, name)
-        Propertied.__init__(self, name)
+        Propertied.__init__(self)
 
         # register myself
-        if Graph.default is not None:  # use base class Graph as the global environment
-            Graph.default.concepts.append(self)
+        from . import graph
+        if graph.Graph.default is not None:  # use base class Graph as the global environment
+            graph.Graph.default.add(self)
 
         # TODO: deal with None here? or when it can be infer? or some other occasion?
         self._rank = rank
@@ -63,7 +63,7 @@ class Concept(Scorable, Propertied):
         self.transparent = False
 
     def what(self):
-        return {'rels': dict(self._out), }
+        return {'out_rels': dict(self._out), }
 
     def __getattr__(self, prop):
         '''
@@ -210,6 +210,7 @@ class Concept(Scorable, Propertied):
         return self.b.norm(self.distances(vals, vals))
 
 
+# TODO: compose concept implement to replace the emum function and complicated details there
 class ComposeConcept(Concept):
 
     def enum(concepts):

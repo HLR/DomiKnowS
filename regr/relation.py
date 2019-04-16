@@ -33,7 +33,7 @@ class Relation(AutoNamed):
         self._dst = OrderedDict(enum(dst))
 
     def what(self):
-        return {'src': self._src, 'dst': self._dst}
+        return {'src': self.src, 'dst': dict(self.dst)}
 
     def T(self, dst, prop, hops=0):  # default to no more hop because this is a hop already
         src = self.src

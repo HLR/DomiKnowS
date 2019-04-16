@@ -1,5 +1,6 @@
 from regr import Graph, Concept
 
+
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:
         word = Concept(name='word')
