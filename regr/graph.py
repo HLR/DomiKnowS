@@ -1,74 +1,47 @@
 from collections import Counter
-from .base import AutoNamed, local_names_and_objs
-
-'''
-A graph contains concepts
-'''
+from .base import SubScorable, local_names_and_objs
 
 
 @local_names_and_objs
-class Graph(AutoNamed):
-    default_graph = None
-
-    '''
-    '''
+class Graph(SubScorable):
+    # local tree structure
+    default = None
 
     def __init__(self, name=None):
-        AutoNamed.__init__(self, name)
-        self._concept = []
-        self._sub = []
-        self._super = None
+        SubScorable.__init__(self, name)
+        self._concepts = []
 
     @property
-    def scope_key(self):
-        # claim recursive check at instance level
-        return self
-
-    @property
-    def concept(self):
-        return self._concept
-
-    @property
-    def sub(self):
-        return self._sub
-
-    @property
-    def super(self):
-        return self._super
-
-    @super.setter
-    def super(self, super):
-        # TODO resolve and prevent recursive definition
-        if super is not None:
-            super._sub.append(self)
-            self._super = super
-
-    def __enter__(self):
-        self.super = Graph.default_graph
-        Graph.default_graph = self
-        if self.super is not None:
-            self.super
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        Graph.default_graph = self._super
+    def concepts(self):
+        return self._concepts
 
     def what(self):
-        return {'supergraph': self.super,
-                'concepts': self.concept,
-                'subgraphs': self.sub}
+        wht = SubScorable.what(self)
+        wht.extend({'concepts': self.concept})
+        return wht
 
     def release(self, prop=None):
         for concept in self.concept:
             concept.release(prop)
-        for graph in self.sub:
-            graph.release(prop)
+        for sub in self.subs:
+            sub.release(prop)
 
-    def __call__(self, prop=None, depth=float('inf')):
-        cost = 0
-        for concept in self.concept:
-            cost += concept(prop)
-        if depth > 0:  # TODO: why would I need depth?
-            for sub in self.sub:
-                cost += sub(prop, depth=depth - 1)
-        return cost
+    def score(self, val):
+        return sum([concept(prop) for concept in self.concept])
+
+    def __getattr__(self, name):
+        for sub in self.subs:
+            if sub.name == name:
+                return sub
+        for concept in self.concepts:
+            if concept.name == name:
+                return concept
+
+    def __getitem__(self, name):
+        tokens = name.split('/', 2)
+        if len(tokens) > 1:
+            return self.subs[tokens[0]].retrieve(tokens[1])
+        for concept in self.concepts:
+            if concept.name == tokens[0]:
+                return concept
+        return None
