@@ -153,7 +153,7 @@ class Tree(AutoNamed):
     @property
     def subs(self):
         return self._subs
-    
+
     @property
     def sup(self):
         return self._sup

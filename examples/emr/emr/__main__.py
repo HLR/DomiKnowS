@@ -2,13 +2,24 @@ import os
 from allennlp.data.vocabulary import Vocabulary
 import torch
 
-from .data import Conll04DatasetReader
-from .model import get_model, get_trainer
-# NB: the loss_func will be replace by graph
-from .graph import graph
-from .graph import phrase
-from .graph import people, organization, location, other, o
-from .graph import work_for, located_in, live_in, orgbase_on
+if __package__ is None or __package__ == '':
+    # uses current directory visibility
+    from data import Conll04DatasetReader
+    from model import get_model, get_trainer
+    # NB: the loss_func will be replace by graph
+    from graph import graph
+    from graph import phrase
+    from graph import people, organization, location, other, o
+    from graph import work_for, located_in, live_in, orgbase_on
+else:
+    # uses current package visibility
+    from .data import Conll04DatasetReader
+    from .model import get_model, get_trainer
+    # NB: the loss_func will be replace by graph
+    from .graph import graph
+    from .graph import phrase
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on
 
 relative_path = "data/EntityMentionRelation"
 
