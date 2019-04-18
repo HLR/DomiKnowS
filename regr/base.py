@@ -125,16 +125,44 @@ class AutoNamed(Named):
         self.assign_suggest_name(name)
 
 
+class Propertied(object):
+    def __init__(self):
+        self._props = defaultdict(list)
+
+    @property
+    def props(self):
+        return self._props
+
+    def __iter__(self):
+        return self.props.items()
+
+    def __getitem__(self, prop):
+        return self.props[prop]
+
+    def __setitem__(self, prop, value):
+        self.props[prop] = value
+
+    def __delitem__(self, prop):
+        del self.props[prop]
+
+    def __len__(self, prop):
+        return len(self.props)
+
+    def release(self, prop=None):
+        if prop is None:
+            for prop, _ in self.props:
+                self.release(prop)
+        del self[prop]
+
+
 class Scorable(AutoNamed):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def score(self, prop): pass
+    def score(self, *args, **kwargs): pass
 
-    def __call__(self, prop=None, *args, **kwargs):
-        if prop is None:
-            return sum([self(prop) for prop, _ in self])
-        return self.score(prop, *args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        return self.score(*args, **kwargs)
 
 
 class NamedTree(Named):
@@ -191,42 +219,11 @@ class SubScorable(Scorable, NamedTree):
         Scorable.__init__(self, name)
         NamedTree.__init__(self, name)
 
-    def score(self, prop, depth=float('inf')):
+    def score(self, depth=float('inf'), *args, **kwargs):
         score = 0
         if depth > 0:
-            score += sum([sub(prop, depth - 1) for sub in self._subs])
+            score += sum([sub(depth - 1, *args, **kwargs) for sub in self._subs])
         return score
-
-
-class Propertied(object):
-    def __init__(self):
-        self._props = defaultdict(list)
-
-    @property
-    def props(self):
-        return self._props
-
-    def __iter__(self):
-        return self.props.items()
-
-    def __getitem__(self, prop):
-        return self.props[prop]
-
-    def __setitem__(self, prop, value):
-        self.props[prop] = value
-
-    def __delitem__(self, prop):
-        del self.props[prop]
-
-    def __len__(self, prop):
-        return len(self.props)
-
-    def release(self, prop=None):
-        if prop is None:
-            for prop, _ in self.props:
-                self.release(prop)
-        del self[prop]
-
 
 def singleton(cls, getter=None, setter=None):
     if getter is None:
