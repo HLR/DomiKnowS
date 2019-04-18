@@ -30,13 +30,14 @@ class Graph(SubScorable):
         return wht
 
     def release(self, prop=None):
-        for concept in self.concept:
+        for concept in self.concepts.values():
             concept.release(prop)
-        for sub in self.subs:
+        for sub in self.subs.values():
             sub.release(prop)
 
-    def score(self, val):
-        return sum([concept(prop) for concept in self.concept])
+    def score(self, *args, **kwargs):
+        subscore = SubScorable.score(self, *args, **kwargs)
+        return subscore + sum([concept(*args, **kwargs) for concept in self.concepts.values()])
 
     def __getattr__(self, name):
         if name in self.subs:

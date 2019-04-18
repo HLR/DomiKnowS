@@ -13,7 +13,6 @@ with Graph('global') as graph:
         #nn.is(phrase)
         # ...
 
-
     with Graph('application') as app_graph:
         entity = Concept(name='entity')
         entity.be(phrase)

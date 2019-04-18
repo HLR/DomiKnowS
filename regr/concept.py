@@ -202,12 +202,17 @@ class Concept(Scorable, Propertied):
             confs.extend(rconfs)
         return vals, confs
 
-    def score(self, values):
+    def score_(self, prop):
         # TODO: some clean up here, focus on only these values
         # Problem: the interface behind this should not need prop?
-        #vals, confs = self.vals(prop, 1)
-        vals, confs = zip(*values)
+        vals, confs = self.vals(prop, 1)
+        #vals, confs = zip(*values)
         return self.b.norm(self.distances(vals, vals))
+
+    def score(self, prop=None):
+        if prop is None:
+            return sum([self(prop) for prop, _ in self.props.items()])
+        return self.score_(prop)
 
 
 # TODO: compose concept implement to replace the emum function and complicated details there
