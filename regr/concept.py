@@ -52,6 +52,7 @@ class Concept(Scorable, Propertied):
         from . import graph
         if graph.Graph.default is not None:  # use base class Graph as the global environment
             graph.Graph.default.add(self)
+        self._graph = graph.Graph.default
 
         # TODO: deal with None here? or when it can be infer? or some other occasion?
         self._rank = rank
@@ -64,6 +65,12 @@ class Concept(Scorable, Propertied):
 
     def what(self):
         return {'out_rels': dict(self._out), }
+
+    @property
+    def fullname(self):
+        if self._graph is None:
+            return self.name
+        return self._graph.fullname + '/' + self.name
 
     def __getattr__(self, prop):
         '''
@@ -85,16 +92,20 @@ class Concept(Scorable, Propertied):
 
     def __setitem__(self, prop, value):
         # TODO: prevent multiple assignment or recursive assignment?
-        self.props[prop].append(value)
+        def func(data):
+            tensor = value(data)
+            data[self.fullname+'[\'{}\']'.format(prop)] = tensor
+            return tensor
+        self.props[prop].append(func)
+
+    def get_multiassign(self):
+        for prop, value in self.props.items():
+            if len(value) > 1:
+                yield prop, value
 
     @property
     def rank(self):
         return self._rank
-
-    @property
-    def vshape(self, prop):
-        # TODO: just how?
-        return
 
     @property
     def b(self):
@@ -171,14 +182,14 @@ class Concept(Scorable, Propertied):
                   Return `None` is if never binded to this property.
         :rtype: [barray,...], [barray,...]
         '''
-        if prop not in self._prop or not self._prop[prop]:
+        if prop not in self.props or not self.props[prop]:
             return [(None, 0)]
         #vals = []
         #confs = []
-        # for val, conf in self._prop[prop]:
+        # for val, conf in self.props[prop]:
         #    vals.append(prop)
         #    confs.append(conf)
-        vals, confs = zip(*self.prop[prop])
+        vals, confs = zip(*self.props[prop])
         return vals, confs
 
     def rvals(self, prop, hops=1):

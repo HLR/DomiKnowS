@@ -152,7 +152,8 @@ class Propertied(object):
         if prop is None:
             for prop, _ in self.props:
                 self.release(prop)
-        del self[prop]
+        else:
+            del self[prop]
 
 
 class Scorable(AutoNamed):
