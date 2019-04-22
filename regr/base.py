@@ -150,7 +150,7 @@ class Propertied(object):
 
     def release(self, prop=None):
         if prop is None:
-            for prop, _ in self.props:
+            for prop in list(self.props.keys()):
                 self.release(prop)
         else:
             del self[prop]
