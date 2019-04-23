@@ -90,13 +90,18 @@ class Concept(Scorable, Propertied):
                 v._in[self].add(rel)
         return create_rel
 
+    def __getitem__(self, prop):
+        if prop not in self.props:
+            return None
+        if len(self.props[prop]) == 1:
+            return self.props[prop][0]
+        return self.props[prop]
+        # TODO: shouldn't need above lines. have them to avoid aggr in current dirty version
+        return self.aggregate(*self.vals(prop, 0))
+
     def __setitem__(self, prop, value):
         # TODO: prevent multiple assignment or recursive assignment?
-        def func(data):
-            tensor = value(data)
-            data[self.fullname+'[\'{}\']'.format(prop)] = tensor
-            return tensor
-        self.props[prop].append(func)
+        self.props[prop].append(value)
 
     def get_multiassign(self):
         for prop, value in self.props.items():
@@ -139,7 +144,7 @@ class Concept(Scorable, Propertied):
         vals = self.b.norm(p - q, axis=1)
         return vals
 
-    def aggregate(sefl, vals, confs):
+    def aggregate(self, vals, confs):
         '''
         The aggregation used in this concept to reduce the inconsistent values.
         '''
