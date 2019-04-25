@@ -120,6 +120,14 @@ class Conll04Reader():
 
 conll04_reader = Conll04Reader()
 
+from emr.data import Conll04Reader
+from typing import Iterable, List, Tuple
+from allennlp.data.dataset_readers import DatasetReader
+from allennlp.data.tokenizers import Token
+from allennlp.data.token_indexers import SingleIdTokenIndexer
+from allennlp.data import Instance
+from allennlp.data.fields import TextField, SequenceLabelField, AdjacencyField
+
 
 class Conll04DatasetReader(DatasetReader):
     def __init__(self, token_indexers: Dict[str, TokenIndexer] = None) -> None:
@@ -145,3 +153,130 @@ class Conll04DatasetReader(DatasetReader):
         sentences, relations = conll04_reader(file_path)
         for (sentence, pos, label), relation in zip(sentences, relations):
             yield self.text_to_instance([Token(word) for word in sentence], label)
+
+
+class NERPeopReader(DatasetReader):
+    def __init__(self) -> None:
+        super().__init__(lazy=False)
+        # 'tokens' could be just any name, and I don't know where it is need again
+        # checkout modules used in word2vec, they need this name there
+        self.token_indexers = {'tokens': SingleIdTokenIndexer()}
+
+    def word_to_instance(
+        self,
+        word: str,
+        label: str=None
+    ) -> Instance:
+        fields = {}
+        fields['sentence'] = TextField([Token(word), ], self.token_indexers)
+        if label is not None:
+            # ['Other', 'Loc', 'Peop', 'Org', 'O']
+            fields['label'] = SequenceLabelField(
+                [str(label == 'Peop'), ], fields['sentence'])
+        return Instance(fields)
+
+    def _read(
+        self,
+        file_path: str
+    ) -> Iterable[Instance]:
+        sentences, relations = conll04_reader(file_path)
+        for (sentence, pos, labels), relation in zip(sentences, relations):
+            for word, label in zip(sentence, labels):
+                yield self.word_to_instance(word, label)
+
+
+class EMRPeopWorkforOrgReader(DatasetReader):
+    def __init__(self) -> None:
+        super().__init__(lazy=False)
+        # 'tokens' could be just any name, and I don't know where it is need again
+        # checkout modules used in word2vec, they need this name there
+        self.token_indexers = {'tokens': SingleIdTokenIndexer()}
+
+    def to_instance(
+        self,
+        sentence: Tuple[List[str], List[str]],
+        relations=None,
+    ) -> Instance:
+        fields = {}
+
+        texts = sentence[0]
+        labels = sentence[1]
+        fields['sentence'] = TextField(
+            [Token(word) for word in texts],
+            self.token_indexers)
+        if labels is not None:
+            '''
+            # ['Other', 'Loc', 'Peop', 'Org', 'O']
+            fields['labels'] = SequenceLabelField(
+                [(label if label in ['Peop', 'Org'] else 'O')
+                 for label in labels],
+                fields['sentence'])
+                '''
+            fields['Peop_labels'] = SequenceLabelField(
+                [str(label == 'Peop') for label in labels],
+                fields['sentence'])
+            fields['Org_labels'] = SequenceLabelField(
+                [str(label == 'Org') for label in labels],
+                fields['sentence'])
+
+        if relations is not None:
+            # ['Live_In', 'OrgBased_In', 'Located_In', 'Work_For']
+            relation_indices = []
+            relation_labels = []
+            for rel in relations:
+                head_index = rel[1][0]
+                tail_index = rel[2][0]
+                label = (rel[0] == 'Work_For')
+                if label:
+                    relation_indices.append((head_index, tail_index))
+                    relation_labels.append(str(label))
+            fields['relation_labels'] = AdjacencyField(
+                relation_indices,
+                fields['sentence'],
+                # relation_labels # label is no need int binary case
+            )
+
+        return Instance(fields)
+
+    def _read(
+        self,
+        file_path: str
+    ) -> Iterable[Instance]:
+        sentences, relations = conll04_reader(file_path)
+        for (sentence, pos, labels), relation in zip(sentences, relations):
+            yield self.to_instance((sentence, labels), relation)
+
+
+from torch import Tensor
+DataSource = List[Dict[str, Tensor]]
+# should be consistent with the one in library
+from allennlp.data.vocabulary import Vocabulary
+
+
+class Data(object):
+    def __init__(
+        self,
+        train_dataset: DataSource=None,
+        valid_dataset: DataSource=None,
+        test_dataset: DataSource=None,
+    ) -> None:
+        instances = []
+        self.train_dataset = train_dataset
+        if train_dataset is not None:
+            instances += train_dataset
+
+        self.valid_dataset = valid_dataset
+        if valid_dataset is not None:
+            instances += valid_dataset
+
+        self.test_dataset = test_dataset
+        if test_dataset is not None:
+            instances += test_dataset
+
+        vocab = Vocabulary.from_instances(instances)
+
+        self.vocab = vocab
+
+    def __getitem__(self, name: str) -> str:
+        # return an identifier the module can use in forward function to get the data
+        return name
