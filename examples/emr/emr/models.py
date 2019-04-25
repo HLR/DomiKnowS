@@ -94,10 +94,16 @@ def fc_sm(
 from regr import Graph
 from regr.scaffold import Scaffold
 from regr.scaffold.allennlp import BaseModel
-from emr.data import Data
 from allennlp.training.trainer import Trainer
 from allennlp.data.iterators import BucketIterator
 from torch.optim import Adam
+
+if __package__ is None or __package__ == '':
+    # uses current directory visibility
+    from data import Data
+else:
+    # uses current package visibility
+    from .data import Data
 
 
 DEBUG_TRAINING = False

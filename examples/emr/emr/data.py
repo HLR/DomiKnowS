@@ -120,7 +120,6 @@ class Conll04Reader():
 
 conll04_reader = Conll04Reader()
 
-from emr.data import Conll04Reader
 from typing import Iterable, List, Tuple
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.tokenizers import Token
