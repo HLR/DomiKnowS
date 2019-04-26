@@ -58,6 +58,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPrhase):
         myOnto = loadOntology(graph.ontology)
         
         # Add constraints based on concept disjoint statments in ontology
+        foundDisjoint = dict()
         for conceptName in conceptNames:
             currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
             
@@ -65,9 +66,18 @@ def calculateIPLSelection(phrase, graph, graphResultsForPrhase):
                 for d in currentConcept.disjoints():
                     disjointConcept = d.entities[1]._name
                     
+                    if disjointConcept in foundDisjoint:
+                        if conceptName in foundDisjoint[disjointConcept] :
+                            continue
+                        
                     for token in tokens:
                         constrainName = 'c_%s_%sDisjoint%s'%(token, currentConcept, disjointConcept)
                         m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
+                        
+                    if not (conceptName in foundDisjoint):
+                        foundDisjoint[conceptName] = {disjointConcept}
+                    else :
+                        foundDisjoint[conceptName].add(disjointConcept)
                     
         # Token is associated with a single concept
         #for token in tokens:
