@@ -37,7 +37,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPrhase):
         # Create a new Gurobi model
         m = Model("decideOnClassificationResult")
         
-        # get list of tokens and concepts from panada dataframe graphResultsForPrhase
+        # get list of tokens and concepts from panda dataframe graphResultsForPrhase
         tokens = graphResultsForPrhase.index.tolist()
         conceptNames = graphResultsForPrhase.columns.tolist()
         
@@ -57,23 +57,18 @@ def calculateIPLSelection(phrase, graph, graphResultsForPrhase):
         # -- Add constraints
         myOnto = loadOntology(graph.ontology)
         
-        # add constraints based on concept disjoint statments in ontology
+        # Add constraints based on concept disjoint statments in ontology
         for conceptName in conceptNames:
             currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
             
-            if not currentConcept is None:
+            if not (currentConcept is None):
                 for d in currentConcept.disjoints():
                     disjointConcept = d.entities[1]._name
                     
-                    if disjointConcept in conceptNames:
-                         for token in tokens:
-                             for token1 in tokens :
-                                if token == token1 :
-                                    continue
-                                 
-                                constrainName = 'c_%sDisjoint%s'%(token, token1)
-                                m.addConstr(x[token, conceptName] + x[token1, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-        
+                    for token in tokens:
+                        constrainName = 'c_%s_%sDisjoint%s'%(token, currentConcept, disjointConcept)
+                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
+                    
         # Token is associated with a single concept
         #for token in tokens:
         #   constrainName = 'c_%s'%(token)
