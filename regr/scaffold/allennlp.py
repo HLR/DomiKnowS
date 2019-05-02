@@ -22,7 +22,7 @@ class BaseModel(Model):
     def _update_metrics(self, data: Dict[str, Tensor]):
         for metric_name, metric in self.meta.items():
             metric(data)
-            
+
         for metric_name, (metric, module_funcs) in self.metrics.items():
             vals = []
             for (module, func), conf in module_funcs:
@@ -31,34 +31,37 @@ class BaseModel(Model):
                 vals.append(tensor)
 
             from .allennlp_metrics import Auc, AP, PRAuc
-            label = vals[0] # FIXME: how to determine? check loss implement too.
+            # FIXME: how to determine? check loss implement too.
+            label = vals[0]
             pred = vals[1]
-            size = label.size() # (b,l,) or (b,l1,l2)
+            size = label.size()  # (b,l,) or (b,l1,l2)
             mask = data[self.field_name['mask']].float()
             ms = mask.size()
             if len(size) == 3:
-                mask = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+                mask = mask.view(ms[0], ms[1], 1).matmul(
+                    mask.view(ms[0], 1, ms[1]))  # (b,l,l)
             else:
                 pass
-            
-            if isinstance(metric, (Auc, AP, PRAuc)): # FIXME: bad to have cases here!
+
+            if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
                 from torch.nn import Softmax
-                softmax = Softmax(dim=2) # (0:batch, 1:len, 2:class)
+                softmax = Softmax(dim=2)  # (0:batch, 1:len, 2:class)
                 # AUC has problem using GPU
                 if len(size) == 2:
-                    metric(softmax(pred)[:,:,1].reshape(-1).cpu(), # (b,l,c) -> (b,l) -> (b*l)
-                           label.reshape(-1).cpu(), # (b,l) -> (b*l）
-                           ) # FIXME: some problem here
+                    metric(softmax(pred)[:, :, 1].reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
+                           label.reshape(-1).cpu(),  # (b,l) -> (b*l）
+                           )  # FIXME: some problem here
                 elif len(size) == 3:
-                    metric(softmax(pred)[:,:,:,1].reshape(-1).cpu(), # (b,l,l,c) -> (b,l,l) -> (b*l*l)
-                           label.reshape(-1).cpu(), # (b,l,l) -> (b*l*l）
-                           ) # FIXME: some problem here
+                    metric(softmax(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
+                           label.reshape(-1).cpu(),  # (b,l,l) -> (b*l*l）
+                           )  # FIXME: some problem here
             else:
                 metric(pred, label, mask)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
         output = {}
+
         def add(metric_name, metric):
             out = metric.get_metric(reset)
             import numpy as np
@@ -68,7 +71,7 @@ class BaseModel(Model):
                     output['{}[{}]'.format(metric_name, i)] = out_item
             else:
                 output[metric_name] = out
-                
+
         for metric_name, metric in self.meta.items():
             add(metric_name, metric)
         for metric_name, (metric, _) in self.metrics.items():
@@ -126,16 +129,18 @@ class AllennlpScaffold(Scaffold):
         else:
             pos = 0
         # FIXME: pos is not safe when doing threading, but we don't have that currently
-        
+
         def wrap_func(data: DataInstance) -> Tensor:
-            fullname = '{}[{}]-{}'.format(concept.fullname, prop, pos) # TODO: the generation of this string is tricky now
+            # TODO: the generation of this string is tricky now
+            fullname = '{}[{}]-{}'.format(concept.fullname, prop, pos)
             if fullname in data:
                 return data[fullname]
             tensor = func(data)
             data[fullname] = tensor
             return tensor
 
-        if module is None or len(list(module.parameters()))==0:  # no parameter, trusted source
+        # no parameter, trusted source
+        if module is None or len(list(module.parameters())) == 0:
             conf = 1
         else:
             conf = 0
@@ -156,9 +161,10 @@ class AllennlpScaffold(Scaffold):
                 BaseModel.__init__(model, vocab)
 
                 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-                F1MeasureProxy = lambda : F1Measure(1)
+
+                def F1MeasureProxy(): return F1Measure(1)
                 from .allennlp_metrics import Epoch, Auc, AP, PRAuc
-                model.meta = { 'epoch': Epoch() }
+                model.meta = {'epoch': Epoch()}
                 model.metrics = {}
                 metrics = {
                     #'Accuracy': CategoricalAccuracy,
@@ -167,13 +173,15 @@ class AllennlpScaffold(Scaffold):
                     'PR-AUC': PRAuc,
                     #'AP': AP,
                 }
-                
+
                 for _, concept, prop, _ in graph.get_multiassign():
                     for metric_name, metric_class in metrics.items():
-                        fullname = '{}[{}]-{}'.format(concept.fullname, prop, metric_name)
-                        model.metrics[fullname] = (metric_class(), concept[prop])
+                        fullname = '{}[{}]-{}'.format(concept.fullname,
+                                                      prop, metric_name)
+                        model.metrics[fullname] = (
+                            metric_class(), concept[prop])
 
-                i = 0 # TODO: this looks too bad
+                i = 0  # TODO: this looks too bad
                 for _, _, _, module_funcs in graph.get_multiassign():
                     for (module, _), _ in module_funcs:
                         model.add_module(str(i), module)
@@ -189,7 +197,7 @@ class AllennlpScaffold(Scaffold):
                 # I used to have topological-sorting over the module graph in my old frameworks
 
                 data[model.field_name['mask']] = get_text_field_mask(
-                    data['sentence']) # FIXME: calculate mask for evert concept
+                    data['sentence'])  # FIXME: calculate mask for evert concept
 
                 #tensor = graph.people['label'][1][0](data)
                 # make sure every node needed are calculated
@@ -226,7 +234,7 @@ class AllennlpScaffold(Scaffold):
                 label = vals[0]
                 pred = vals[1]
                 size = label.size()
-                
+
                 bfactor = 1.  # 0 - no balance, 1 - balance
                 if len(size) == 2:  # (b,l,)
                     mask = data[model.field_name['mask']].clone().float()
@@ -234,14 +242,16 @@ class AllennlpScaffold(Scaffold):
                     target = (label > 0)
                     pos = (target).sum().float()
                     neg = (1 - target).sum().float()
-                    mask[target] *= (neg + pos * (1-bfactor)) / (pos + neg)
-                    mask[1 - target] *= (pos + neg * (1-bfactor)) / (pos + neg)
+                    mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
+                    mask[1 - target] *= (pos + neg *
+                                         (1 - bfactor)) / (pos + neg)
 
                     # NB: the order!
                     loss += sequence_cross_entropy_with_logits(
                         pred, label, mask)
                 elif len(size) == 3:  # (b,l1,l2,)
-                    mask = data[model.field_name['mask']].clone().float()  # (b,l,)
+                    mask = data[model.field_name['mask']
+                                ].clone().float()  # (b,l,)
                     ms = mask.size()
                     # TODO: this is only self relation mask since we have only one input mask
                     # TODO: mask should be generated somewhere else automatically
@@ -254,8 +264,9 @@ class AllennlpScaffold(Scaffold):
                     # class balance weighted
                     pos = (target).sum().float()
                     neg = (1 - target).sum().float()
-                    mask[target] *= (neg + pos * (1-bfactor)) / (pos + neg)
-                    mask[1 - target] *= (pos + neg * (1-bfactor)) / (pos + neg)
+                    mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
+                    mask[1 - target] *= (pos + neg *
+                                         (1 - bfactor)) / (pos + neg)
                     #
                     # reshape(ts[0], ts[1]*ts[2]) # (b,l1*l2)
                     pred = (pred)  # (b,l1,l2,c)
@@ -263,10 +274,11 @@ class AllennlpScaffold(Scaffold):
                     loss += sequence_cross_entropy_with_logits(
                         pred.view(ts[0], ts[1] * ts[2], -1),
                         target.view(ts[0], ts[1] * ts[2]),
-                        mask.view(ms[0], ms[1] * ms[1]) # *0. # mute out the relation to see peop+org result
+                        # *0. # mute out the relation to see peop+org result
+                        mask.view(ms[0], ms[1] * ms[1])
                     )  # NB: the order!
                 else:
-                    pass # TODO: no idea, but we are not yet there
+                    pass  # TODO: no idea, but we are not yet there
 
             return loss
 
