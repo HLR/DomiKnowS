@@ -37,19 +37,19 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         # Create a new Gurobi model
         m = Model("decideOnClassificationResult")
         
-        # get list of tokens and concepts from panda dataframe graphResultsForPhraseToken
+        # Get list of tokens, concepts and relations from panda dataframe graphResultsForPhraseToken
         tokens = graphResultsForPhraseToken.index.tolist()
         conceptNames = graphResultsForPhraseToken.columns.tolist()
         relationNames = graphResultsForPhraseRelation.keys()
         
-        # Create Gurobi variables
+        # Create Gurobi variables for concept - token
         x={}
         
         for token in tokens:            
             for conceptName in conceptNames: 
                 x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
                 
-        # Create Gurobi variables
+        # Create Gurobi variables for relation - token, token
         y={}
         
         for relationName in relationNames:            
@@ -69,7 +69,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         myOnto = loadOntology(graph.ontology)
         
         # Add constraints based on concept disjoint statments in ontology
-        foundDisjoint = dict()
+        foundDisjoint = dict() # too eliminate duplicates
         for conceptName in conceptNames:
             currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
             
@@ -78,7 +78,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                     disjointConcept = d.entities[1]._name
                     
                     if disjointConcept in foundDisjoint:
-                        if conceptName in foundDisjoint[disjointConcept] :
+                        if conceptName in foundDisjoint[disjointConcept]:
                             continue
                         
                     for token in tokens:
@@ -87,7 +87,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                         
                     if not (conceptName in foundDisjoint):
                         foundDisjoint[conceptName] = {disjointConcept}
-                    else :
+                    else:
                         foundDisjoint[conceptName].add(disjointConcept)
                         
         # Add constraints based on relations domain and range
@@ -98,21 +98,19 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                 currentRelationDomain = currentRelation.get_domain() # domains_indirect()
                 currentRelationRange = currentRelation.get_range()
                 
-                for domain in currentRelationDomain :
-                    if domain._name not in conceptNames :
+                for domain in currentRelationDomain:
+                    if domain._name not in conceptNames:
                         continue
                     
-                    for range in currentRelationRange :
-                        if range.name not in conceptNames :
+                    for range in currentRelationRange:
+                        if range.name not in conceptNames:
                             continue
                         
-                        for token in tokens :
+                        for token in tokens:
                             for token1 in tokens:
-                                
                                 constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
                                 m.addConstr(y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name], GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
                 
-
         # Token is associated with a single concept
         #for token in tokens:
         #   constrainName = 'c_%s'%(token)
