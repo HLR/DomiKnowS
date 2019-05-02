@@ -14,6 +14,7 @@ class Auc(Metric):
     The AUC Metric measures the area under the receiver-operating characteristic
     (ROC) curve for binary classification problems.
     """
+
     def __init__(self, positive_label=1):
         super(Auc, self).__init__()
         self._positive_label = positive_label
@@ -37,7 +38,8 @@ class Auc(Metric):
             A one-dimensional label tensor of shape (batch_size).
         """
 
-        predictions, gold_labels = self.unwrap_to_tensors(predictions, gold_labels)
+        predictions, gold_labels = self.unwrap_to_tensors(
+            predictions, gold_labels)
 
         # Sanity checks.
         if gold_labels.dim() != 1:
@@ -52,7 +54,8 @@ class Auc(Metric):
             raise ConfigurationError("AUC can be used for binary tasks only. gold_labels has {} unique labels, "
                                      "expected at maximum 2.".format(unique_gold_labels.numel()))
 
-        gold_labels_is_binary = list(torch.sort(unique_gold_labels)[0].numpy()) <= [0, 1]
+        gold_labels_is_binary = list(torch.sort(
+            unique_gold_labels)[0].numpy()) <= [0, 1]
         if not gold_labels_is_binary and self._positive_label not in unique_gold_labels:
             raise ConfigurationError("gold_labels should be binary with 0 and 1 or initialized positive_label "
                                      "{} should be present in gold_labels".format(self._positive_label))
@@ -70,7 +73,7 @@ class Auc(Metric):
     def get_metric(self, reset: bool = False):
         if self._all_gold_labels.shape[0] == 0:
             return 0.5
-        if not any(self._all_gold_labels==self._positive_label):
+        if not any(self._all_gold_labels == self._positive_label):
             return float('nan')
         false_positive_rates, true_positive_rates, _ = metrics.roc_curve(self._all_gold_labels.numpy(),
                                                                          self._all_predictions.numpy(),
@@ -84,12 +87,14 @@ class Auc(Metric):
     def reset(self):
         self._all_predictions = torch.FloatTensor()
         self._all_gold_labels = torch.LongTensor()
-        
+
+
 @Metric.register("ap")
 class AP(Metric):
     """
     The Average Presision measurement for binary classification problems.
     """
+
     def __init__(self):
         super(AP, self).__init__()
         self._all_predictions = torch.FloatTensor()
@@ -112,7 +117,8 @@ class AP(Metric):
             A one-dimensional label tensor of shape (batch_size).
         """
 
-        predictions, gold_labels = self.unwrap_to_tensors(predictions, gold_labels)
+        predictions, gold_labels = self.unwrap_to_tensors(
+            predictions, gold_labels)
 
         # Sanity checks.
         if gold_labels.dim() != 1:
@@ -127,7 +133,8 @@ class AP(Metric):
             raise ConfigurationError("AUC can be used for binary tasks only. gold_labels has {} unique labels, "
                                      "expected at maximum 2.".format(unique_gold_labels.numel()))
 
-        gold_labels_is_binary = list(torch.sort(unique_gold_labels)[0].numpy()) <= [0, 1]
+        gold_labels_is_binary = list(torch.sort(
+            unique_gold_labels)[0].numpy()) <= [0, 1]
         if not gold_labels_is_binary and self._positive_label not in unique_gold_labels:
             raise ConfigurationError("gold_labels should be binary with 0 and 1 or initialized positive_label "
                                      "{} should be present in gold_labels".format(self._positive_label))
@@ -147,7 +154,7 @@ class AP(Metric):
             return 0.5
         if sum(self._all_gold_labels) == 0:
             return float('nan')
-        
+
         ap = metrics.average_precision_score(self._all_gold_labels.numpy(),
                                              self._all_predictions.numpy())
         if reset:
@@ -158,13 +165,14 @@ class AP(Metric):
     def reset(self):
         self._all_predictions = torch.FloatTensor()
         self._all_gold_labels = torch.LongTensor()
-        
-        
+
+
 @Metric.register("pr_auc")
 class PRAuc(Metric):
     """
     The Average Presision measurement for binary classification problems.
     """
+
     def __init__(self):
         super(PRAuc, self).__init__()
         self._all_predictions = torch.FloatTensor()
@@ -187,7 +195,8 @@ class PRAuc(Metric):
             A one-dimensional label tensor of shape (batch_size).
         """
 
-        predictions, gold_labels = self.unwrap_to_tensors(predictions, gold_labels)
+        predictions, gold_labels = self.unwrap_to_tensors(
+            predictions, gold_labels)
 
         # Sanity checks.
         if gold_labels.dim() != 1:
@@ -202,7 +211,8 @@ class PRAuc(Metric):
             raise ConfigurationError("AUC can be used for binary tasks only. gold_labels has {} unique labels, "
                                      "expected at maximum 2.".format(unique_gold_labels.numel()))
 
-        gold_labels_is_binary = list(torch.sort(unique_gold_labels)[0].numpy()) <= [0, 1]
+        gold_labels_is_binary = list(torch.sort(
+            unique_gold_labels)[0].numpy()) <= [0, 1]
         if not gold_labels_is_binary and self._positive_label not in unique_gold_labels:
             raise ConfigurationError("gold_labels should be binary with 0 and 1 or initialized positive_label "
                                      "{} should be present in gold_labels".format(self._positive_label))
@@ -221,9 +231,9 @@ class PRAuc(Metric):
         if sum(self._all_gold_labels) == 0:
             return float('nan')
         p, r, t = metrics.precision_recall_curve(self._all_gold_labels.numpy(),
-                                            self._all_predictions.numpy())
+                                                 self._all_predictions.numpy())
         auc = metrics.auc(r, p)
-        
+
         if reset:
             self.reset()
         return auc
@@ -232,15 +242,16 @@ class PRAuc(Metric):
     def reset(self):
         self._all_predictions = torch.FloatTensor()
         self._all_gold_labels = torch.LongTensor()
-        
+
+
 @Metric.register("epoch")
 class Epoch(Metric):
     def __init__(self):
         super(Epoch, self).__init__()
         self.epoch_num = None
-        
+
     def __call__(self, data):
-        self.epoch_num = data['epoch_num'][0] # (batch,) there are copies
+        self.epoch_num = data['epoch_num'][0]  # (batch,) there are copies
 
     def get_metric(self, reset: bool = False):
         return self.epoch_num

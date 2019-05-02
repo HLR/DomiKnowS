@@ -1,9 +1,12 @@
 import abc
 from collections import OrderedDict
 from itertools import chain
-from .base import AutoNamed, local_names_and_objs
-from .concept import Concept, enum
-
+if __package__ is None or __package__ == '':
+    from base import AutoNamed, local_names_and_objs
+    from concept import Concept, enum
+else:
+    from .base import AutoNamed, local_names_and_objs
+    from .concept import Concept, enum
 
 @local_names_and_objs
 class Relation(AutoNamed):

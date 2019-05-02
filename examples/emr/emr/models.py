@@ -33,7 +33,7 @@ def word2vec(
     token_name: str,
 ) -> Tuple[Module, ModuleFunc]:
     (module, input_func), conf = input_func
-    
+
     # token_name='tokens' is from data reader, name of TokenIndexer
     # seq_name='sentence' is from data reader, name of TextField
     # quite confusing, TODO: real want to get rid of them
@@ -68,12 +68,12 @@ class Cpcat(Module):
         yy = y.view(ys[0], 1, ys[1], ys[2]).repeat(1, xs[1], 1, 1)
         return torch.cat([xx, yy], dim=3)
 
-    
+
 def cartesianprod_concat(
     input_func: ModuleFunc
 ) -> Tuple[Module, ModuleFunc]:
     (module, input_func), conf = input_func
-    
+
     cpcat = Cpcat()
     if module is not None:
         # add submodule
@@ -94,7 +94,7 @@ def fullyconnected(
     label_dim: int,
 ) -> Tuple[Module, ModuleFunc]:
     (module, input_func), conf = input_func
-    
+
     fc = torch.nn.Linear(
         in_features=input_dim,
         out_features=label_dim)
