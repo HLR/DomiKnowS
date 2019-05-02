@@ -16,26 +16,63 @@ class BaseModel(Model):
                            'label': 'label',
                            'mask': 'mask'
                            }
+        self.meta = {}
         self.metrics = {}
 
     def _update_metrics(self, data: Dict[str, Tensor]):
-        for metric_name, metric in self.metrics.items():
-            # TODO: consider when there are multiple output
-            metric(data[self.field_name['output']],
-                   data[self.field_name['label']],
-                   data[self.field_name['mask']])
-            data[metric_name] = metric.get_metric(False)  # no reset
+        for metric_name, metric in self.meta.items():
+            metric(data)
+            
+        for metric_name, (metric, module_funcs) in self.metrics.items():
+            vals = []
+            for (module, func), conf in module_funcs:
+                # TODO: consider the order, consider the confidence (and module?)
+                tensor = func(data)
+                vals.append(tensor)
+
+            from .allennlp_metrics import Auc, AP, PRAuc
+            label = vals[0] # FIXME: how to determine? check loss implement too.
+            pred = vals[1]
+            size = label.size() # (b,l,) or (b,l1,l2)
+            mask = data[self.field_name['mask']].float()
+            ms = mask.size()
+            if len(size) == 3:
+                mask = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+            else:
+                pass
+            
+            if isinstance(metric, (Auc, AP, PRAuc)): # FIXME: bad to have cases here!
+                from torch.nn import Softmax
+                softmax = Softmax(dim=2) # (0:batch, 1:len, 2:class)
+                # AUC has problem using GPU
+                if len(size) == 2:
+                    metric(softmax(pred)[:,:,1].reshape(-1).cpu(), # (b,l,c) -> (b,l) -> (b*l)
+                           label.reshape(-1).cpu(), # (b,l) -> (b*l）
+                           ) # FIXME: some problem here
+                elif len(size) == 3:
+                    metric(softmax(pred)[:,:,:,1].reshape(-1).cpu(), # (b,l,l,c) -> (b,l,l) -> (b*l*l)
+                           label.reshape(-1).cpu(), # (b,l,l) -> (b*l*l）
+                           ) # FIXME: some problem here
+            else:
+                metric(pred, label, mask)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
         output = {}
-        for metric_name, metric in self.metrics.items():
+        def add(metric_name, metric):
             out = metric.get_metric(reset)
+            import numpy as np
+            import numbers
             if isinstance(out, Iterable):
                 for i, out_item in enumerate(out):
                     output['{}[{}]'.format(metric_name, i)] = out_item
             else:
                 output[metric_name] = out
+                
+        for metric_name, metric in self.meta.items():
+            add(metric_name, metric)
+        for metric_name, (metric, _) in self.metrics.items():
+            add(metric_name, metric)
         return output
 
     def _update_loss(self, data):
@@ -76,28 +113,33 @@ class AllennlpScaffold(Scaffold):
         self
     ) -> None:
         Scaffold.__init__(self)
-        self.modules = []
 
     def assign(
         self,
         concept: Concept,
         prop: str,
-        module: Module,
-        func: ModuleFunc
+        module_func: ModuleFunc
     ) -> None:
-        self.modules.append(module)
-
+        module, func = module_func
+        if prop in concept.props:
+            pos = len(concept[prop])
+        else:
+            pos = 0
+        # FIXME: pos is not safe when doing threading, but we don't have that currently
+        
         def wrap_func(data: DataInstance) -> Tensor:
-            # TODO: add cache to avoid repeat computation of same function
+            fullname = '{}[{}]-{}'.format(concept.fullname, prop, pos) # TODO: the generation of this string is tricky now
+            if fullname in data:
+                return data[fullname]
             tensor = func(data)
-            data[concept.fullname + '[{}]'.format(prop)] = tensor
+            data[fullname] = tensor
             return tensor
 
-        if Module is None:  # no parameter, trusted source
+        if module is None or len(list(module.parameters()))==0:  # no parameter, trusted source
             conf = 1
         else:
             conf = 0
-        concept[prop] = wrap_func, conf
+        concept[prop] = (module, wrap_func), conf
 
     def build(
         self,
@@ -114,13 +156,28 @@ class AllennlpScaffold(Scaffold):
                 BaseModel.__init__(model, vocab)
 
                 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-                model.metrics = {
-                    'accuracy': CategoricalAccuracy(),
-                    'p/r/f1': F1Measure(1)
+                F1MeasureProxy = lambda : F1Measure(1)
+                from .allennlp_metrics import Epoch, Auc, AP, PRAuc
+                model.meta = { 'epoch': Epoch() }
+                model.metrics = {}
+                metrics = {
+                    #'Accuracy': CategoricalAccuracy,
+                    'P/R/F1': F1MeasureProxy,
+                    #'ROC-AUC': Auc,
+                    'PR-AUC': PRAuc,
+                    #'AP': AP,
                 }
+                
+                for _, concept, prop, _ in graph.get_multiassign():
+                    for metric_name, metric_class in metrics.items():
+                        fullname = '{}[{}]-{}'.format(concept.fullname, prop, metric_name)
+                        model.metrics[fullname] = (metric_class(), concept[prop])
 
-                for i, (module) in enumerate(scaffold.modules):
-                    model.add_module(str(i), module)
+                i = 0 # TODO: this looks too bad
+                for _, _, _, module_funcs in graph.get_multiassign():
+                    for (module, _), _ in module_funcs:
+                        model.add_module(str(i), module)
+                        i += 1
 
             def forward(
                 self_,
@@ -132,9 +189,13 @@ class AllennlpScaffold(Scaffold):
                 # I used to have topological-sorting over the module graph in my old frameworks
 
                 data[model.field_name['mask']] = get_text_field_mask(
-                    data['sentence'])
+                    data['sentence']) # FIXME: calculate mask for evert concept
 
-                tensor = graph.people['label'][1][0](data)
+                #tensor = graph.people['label'][1][0](data)
+                # make sure every node needed are calculated
+                for _, _, _, module_funcs in graph.get_multiassign():
+                    for (_, func), _ in module_funcs:
+                        func(data)
 
                 data = model._update_metrics(data)
                 data = model._update_loss(data)
@@ -156,52 +217,56 @@ class AllennlpScaffold(Scaffold):
         ) -> DataInstance:
             from allennlp.nn.util import sequence_cross_entropy_with_logits
             loss = 0
-            for name, funcs in mapr:
+            for _, _, _, module_funcs in mapr:
                 vals = []
-                for func, conf in funcs:
+                for (module, func), conf in module_funcs:
+                    # TODO: consider the order, consider the confidence (and module?)
                     tensor = func(data)
                     vals.append(tensor)
-
-                bfactor = float(1)  # [1 - no balance, 0 - balance]
-                if len(vals[1].size()) == 3:  # (b,l,c)
-                    mask = data[model.field_name['mask']].clone()
+                label = vals[0]
+                pred = vals[1]
+                size = label.size()
+                
+                bfactor = 1.  # 0 - no balance, 1 - balance
+                if len(size) == 2:  # (b,l,)
+                    mask = data[model.field_name['mask']].clone().float()
                     # class balance weighted
-                    target = (vals[0] > 0)
+                    target = (label > 0)
                     pos = (target).sum().float()
                     neg = (1 - target).sum().float()
-                    mask[target] *= (neg + pos * bfactor) / (pos + neg)
-                    mask[1 - target] *= (pos + neg * bfactor) / (pos + neg)
+                    mask[target] *= (neg + pos * (1-bfactor)) / (pos + neg)
+                    mask[1 - target] *= (pos + neg * (1-bfactor)) / (pos + neg)
 
                     # NB: the order!
                     loss += sequence_cross_entropy_with_logits(
-                        vals[1], vals[0], mask)
-                elif len(vals[1].size()) == 4:  # (b,l1,l2,c)
-                    mask = data[model.field_name['mask']].clone()  # (b,l,)
+                        pred, label, mask)
+                elif len(size) == 3:  # (b,l1,l2,)
+                    mask = data[model.field_name['mask']].clone().float()  # (b,l,)
                     ms = mask.size()
                     # TODO: this is only self relation mask since we have only one input mask
-                    mask = mask.float()
+                    # TODO: mask should be generated somewhere else automatically
                     mask = mask.view(ms[0], ms[1], 1).matmul(
                         mask.view(ms[0], 1, ms[1]))  # (b,l,l)
-                    # vals[0] -> (b,l1,l2,), elements are -1 (padding) and 1 (label)
+                    # label -> (b,l1,l2,), elements are -1 (padding) and 1 (label)
                     # TODO: nosure how to retrieve padding correctly
-                    target = (vals[0] > 0)
+                    target = (label > 0)
                     ts = target.size()
                     # class balance weighted
                     pos = (target).sum().float()
                     neg = (1 - target).sum().float()
-                    mask[target] *= (neg + pos * bfactor) / (pos + neg)
-                    mask[1 - target] *= (pos + neg * bfactor) / (pos + neg)
+                    mask[target] *= (neg + pos * (1-bfactor)) / (pos + neg)
+                    mask[1 - target] *= (pos + neg * (1-bfactor)) / (pos + neg)
                     #
                     # reshape(ts[0], ts[1]*ts[2]) # (b,l1*l2)
-                    pred = (vals[1])  # (b,l1,l2,c)
+                    pred = (pred)  # (b,l1,l2,c)
                     # reshape(ts[0], ts[1]*ts[2], -1) # (b,l1*l2,c)
-                    loss += 1. * sequence_cross_entropy_with_logits(
+                    loss += sequence_cross_entropy_with_logits(
                         pred.view(ts[0], ts[1] * ts[2], -1),
                         target.view(ts[0], ts[1] * ts[2]),
-                        mask.view(ms[0], ms[1] * ms[1])
+                        mask.view(ms[0], ms[1] * ms[1]) # *0. # mute out the relation to see peop+org result
                     )  # NB: the order!
                 else:
-                    pass
+                    pass # TODO: no idea, but we are not yet there
 
             return loss
 
