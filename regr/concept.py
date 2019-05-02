@@ -1,6 +1,10 @@
 from collections import defaultdict, Iterable, OrderedDict
-from .base import Scorable, Propertied, local_names_and_objs
-from .backend import Backend, NumpyBackend
+if __package__ is None or __package__ == '':
+    from base import Scorable, Propertied, local_names_and_objs
+    from backend import Backend, NumpyBackend
+else:
+    from .base import Scorable, Propertied, local_names_and_objs
+    from .backend import Backend, NumpyBackend
 import warnings
 
 
@@ -49,7 +53,10 @@ class Concept(Scorable, Propertied):
         Propertied.__init__(self)
 
         # register myself
-        from . import graph
+        if __package__ is None or __package__ == '':
+            import graph
+        else:
+            from . import graph
         if graph.Graph.default is not None:  # use base class Graph as the global environment
             graph.Graph.default.add(self)
         self._graph = graph.Graph.default

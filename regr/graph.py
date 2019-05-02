@@ -1,18 +1,25 @@
 from collections import OrderedDict
-from .base import SubScorable, local_names_and_objs
-
+if __package__ is None or __package__ == '':
+    from base import SubScorable, local_names_and_objs
+else:
+    from .base import SubScorable, local_names_and_objs
 
 @local_names_and_objs
 class Graph(SubScorable):
     # local tree structure
     default = None
-
+    ontology = None
+    
     def __init__(self, name=None):
         SubScorable.__init__(self, name)
         self._concepts = OrderedDict()
 
     def add(self, obj):
-        from . import concept
+        if __package__ is None or __package__ == '':
+            import concept
+        else:
+            from . import concept
+
         if isinstance(obj, Graph):
             self.subs[obj.name] = obj
         elif isinstance(obj, concept.Concept):
