@@ -45,7 +45,7 @@ The implement of the example is in package `emr`. The example can be run by usin
 ```bash
 python3.7 -m emr
 ```
-Or run the `ner` example, which is a subset of the original problem concerning not compositional concepts by the following command.
+Or run the `ner` example, which is a subset of the original problem, where only one non-composed concept is considered, by the following command.
 ```bash
 python3.7 -m emr.ner
 ```
