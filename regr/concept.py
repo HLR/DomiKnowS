@@ -82,7 +82,7 @@ class Concept(Scorable, Propertied):
         def create_rel(dst, *args, **kwargs):
             dst_name = ','.join(['{}:{}'.format(i, concept.name)
                                  for i, concept in enum(dst)])
-            name = '({})-{}-({})'.format(self.name, prop, dst_name)
+            name = '{}-{}-({})'.format(self.name, prop, dst_name)
             # TODO: should check the rank of src and dst? or in the constructor? or some other occasion?
             rel = Rel(self, dst, name=name, *args, **kwargs)
             for _, v in rel.dst:
@@ -106,7 +106,7 @@ class Concept(Scorable, Propertied):
     def get_multiassign(self):
         for prop, value in self.props.items():
             if len(value) > 1:
-                yield prop, value
+                yield self, prop, value
 
     @property
     def rank(self):

@@ -43,11 +43,11 @@ class Graph(SubScorable):
 
     def get_multiassign(self):
         for concept in self.concepts.values():
-            for prop, value in concept.get_multiassign():
-                yield prop, value
+            for _, prop, value in concept.get_multiassign():
+                yield self, concept, prop, value
         for sub in self.subs.values():
-            for prop, value in sub.get_multiassign():
-                yield prop, value
+            for _, concept, prop, value in sub.get_multiassign():
+                yield sub, concept, prop, value
 
     def score(self, *args, **kwargs):
         subscore = SubScorable.score(self, *args, **kwargs)

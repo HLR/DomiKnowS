@@ -154,12 +154,13 @@ class Conll04DatasetReader(DatasetReader):
             yield self.text_to_instance([Token(word) for word in sentence], label)
 
 
-class NERPeopReader(DatasetReader):
-    def __init__(self) -> None:
+class NEREntityReader(DatasetReader):
+    def __init__(self, entity) -> None:
         super().__init__(lazy=False)
         # 'tokens' could be just any name, and I don't know where it is need again
         # checkout modules used in word2vec, they need this name there
         self.token_indexers = {'tokens': SingleIdTokenIndexer()}
+        self.entity = entity
 
     def word_to_instance(
         self,
@@ -171,7 +172,7 @@ class NERPeopReader(DatasetReader):
         if label is not None:
             # ['Other', 'Loc', 'Peop', 'Org', 'O']
             fields['label'] = SequenceLabelField(
-                [str(label == 'Peop'), ], fields['sentence'])
+                [str(label == self.entity), ], fields['sentence'])
         return Instance(fields)
 
     def _read(
