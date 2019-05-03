@@ -1,5 +1,6 @@
 import os
 import torch
+from typing import List
 from allennlp.models.model import Model
 from regr import Graph
 from regr.scaffold import Scaffold, AllennlpScaffold
@@ -7,14 +8,21 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 if __package__ is None or __package__ == '':
     # uses current directory visibility
     from data import Data, EMRPeopWorkforOrgReader
-    from models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from models import get_trainer, datainput, word2vec, fullyconnected
     from graph import graph
 else:
     # uses current package visibility
     from .data import Data, EMRPeopWorkforOrgReader
-    from .models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from .models import get_trainer, datainput, word2vec, fullyconnected
     from .graph import graph
 
+
+# App setting
+entity_label_configs = {'people': {'entity_name': 'people',
+                                   'label_name': 'Peop'},
+                        'organization': {'entity_name': 'organization',
+                                         'label_name': 'Org'},
+                        }
 
 # data setting
 relative_path = "data/EntityMentionRelation"
@@ -28,32 +36,24 @@ EMBEDDING_DIM = 64
 LR = 0.001
 WD = 0.0001
 BATCH = 128
-EPOCH = 200
+EPOCH = 1000
 PATIENCE = None
 
 
 # develop by an ML programmer to wire nodes in the graph and ML Models
 def make_model(graph: Graph,
                data: Data,
-               scaffold: Scaffold
+               scaffold: Scaffold,
+               entities: List[str]
                ) -> Model:
+    # initialization
+    graph.release()  # release anything binded before new assignment
+    
     # get concepts from graph
     word = graph.word
-    people = graph.people
-    organization = graph.organization
-    workfor = graph.workfor
-    pair = graph.pair
-
-    # binding
-    graph.release()  # release anything binded before new assignment
-
     # filling in data and label
     scaffold.assign(word, 'index', datainput(data['sentence']))
-    scaffold.assign(people, 'label', datainput(data['Peop_labels']))
-    scaffold.assign(organization, 'label', datainput(data['Org_labels']))
-    scaffold.assign(workfor, 'label', datainput(data['relation_labels']))
-
-    # building model
+    # building feature
     scaffold.assign(word, 'emb',
                     word2vec(
                         word['index'],
@@ -61,32 +61,21 @@ def make_model(graph: Graph,
                         EMBEDDING_DIM,
                         'tokens'
                     ))
-    scaffold.assign(people, 'label',
-                    fullyconnected(
-                        word['emb'],
-                        EMBEDDING_DIM,
-                        2
-                    ))
-    scaffold.assign(organization, 'label',
-                    fullyconnected(
-                        word['emb'],
-                        EMBEDDING_DIM,
-                        2
-                    ))
-    # TODO: pair['emb'] should be infer from word['emb'] according to their relationship
-    # but we specify it here to make it a bit easier for implementation
-    scaffold.assign(pair, 'emb',
-                    cartesianprod_concat(
-                        word['emb']
-                    ))
-    scaffold.assign(workfor, 'label',
-                    fullyconnected(
-                        pair['emb'],
-                        EMBEDDING_DIM * 2,
-                        2
-                    ))
-    # now people['label'] has multiple assignment,
-    # and the loss should come from the inconsistency here
+    
+    for entity in entities:
+        entity_name = entity_label_configs[entity]['entity_name']
+        label_name = entity_label_configs[entity]['label_name'] + '_labels'
+        
+        entity = graph[entity_name]
+        scaffold.assign(entity, 'label', datainput(data[label_name]))
+        scaffold.assign(entity, 'label',
+                        fullyconnected(
+                            word['emb'],
+                            EMBEDDING_DIM,
+                            2
+                        ))
+        # now entity['label'] has multiple assignment,
+        # and the loss should come from the inconsistency here
 
     # get the model
     ModelCls = scaffold.build(graph)  # or should it be model = graph.build()
@@ -118,6 +107,9 @@ seed1()
 
 
 def main():
+    # config
+    entities = ['people', 'organization']
+
     # data
     reader = EMRPeopWorkforOrgReader()
     train_dataset = reader.read(os.path.join(relative_path, train_path))
@@ -127,19 +119,20 @@ def main():
     scaffold = AllennlpScaffold()
 
     # model from graph
-    model = make_model(graph, data, scaffold)
+    model = make_model(graph, data, scaffold, entities)
 
     # trainer for model
+    batch = BATCH * 24  # multiply by average len, so compare to sentence level experiments
     trainer = get_trainer(graph, model, data, scaffold,
-                          lr=LR, wd=WD, batch=BATCH, epoch=EPOCH, patience=PATIENCE)
+                          lr=LR, wd=WD, batch=batch, epoch=EPOCH, patience=PATIENCE)
 
     # train the model
     trainer.train()
 
     # save the model
-    with open("/tmp/model_emr.th", 'wb') as fout:
+    with open("/tmp/model_ner.th", 'wb') as fout:
         torch.save(model.state_dict(), fout)
-    data.vocab.save_to_files("/tmp/vocab_emr")
+    data.vocab.save_to_files("/tmp/vocab_ner")
 
 
 if __name__ == '__main__':

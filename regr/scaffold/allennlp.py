@@ -1,4 +1,5 @@
 from .. import Graph
+from .inference import inference
 from .base import Scaffold
 from typing import Dict, List, Callable, Iterable
 from regr import Concept
@@ -76,6 +77,7 @@ class BaseModel(Model):
             add(metric_name, metric)
         for metric_name, (metric, _) in self.metrics.items():
             add(metric_name, metric)
+
         return output
 
     def _update_loss(self, data):
@@ -92,6 +94,9 @@ class BaseModel(Model):
         # This is an identical stub
         # something happen here to take the input to the output
         ##
+
+        data = self._update_metrics(data)
+        data = self._update_loss(data)
 
         return data
 
@@ -161,20 +166,23 @@ class AllennlpScaffold(Scaffold):
                 BaseModel.__init__(model, vocab)
 
                 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-
+                from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
                 def F1MeasureProxy(): return F1Measure(1)
-                from .allennlp_metrics import Epoch, Auc, AP, PRAuc
+                def PrecisionProxy(): return Precision(1)
                 model.meta = {'epoch': Epoch()}
                 model.metrics = {}
                 metrics = {
                     #'Accuracy': CategoricalAccuracy,
+                    #'Precision': PrecisionProxy,
                     'P/R/F1': F1MeasureProxy,
                     #'ROC-AUC': Auc,
-                    'PR-AUC': PRAuc,
+                    #'PR-AUC': PRAuc,
                     #'AP': AP,
                 }
 
                 for _, concept, prop, _ in graph.get_multiassign():
+                    #if concept == graph.organization: # just don't print too much
+                    #    continue
                     for metric_name, metric_class in metrics.items():
                         fullname = '{}[{}]-{}'.format(concept.fullname,
                                                       prop, metric_name)
@@ -186,6 +194,17 @@ class AllennlpScaffold(Scaffold):
                     for (module, _), _ in module_funcs:
                         model.add_module(str(i), module)
                         i += 1
+
+            def _inference(
+                self_,
+                data: DataInstance
+            ) -> DataInstance:
+                # variables in the closure 
+                # scafold - the scafold object
+                # graph - the graph object
+                model = self_
+                
+                return inference(graph, data)
 
             def forward(
                 self_,
@@ -205,8 +224,9 @@ class AllennlpScaffold(Scaffold):
                     for (_, func), _ in module_funcs:
                         func(data)
 
-                data = model._update_metrics(data)
                 data = model._update_loss(data)
+                data = model._inference(data)
+                data = model._update_metrics(data)
 
                 return data
 

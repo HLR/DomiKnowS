@@ -29,13 +29,14 @@ train_path = "conll04_train.corp"
 valid_path = "conll04_test.corp"
 
 # model setting
-EMBEDDING_DIM = 16
+EMBEDDING_DIM = 64
 
 # training setting
-LR = 1
+LR = 0.001
+WD = 0.0001
 BATCH = 128
-EPOCH = 1000
-PATIENCE = 10
+EPOCH = 200
+PATIENCE = None
 
 
 # develop by an ML programmer to wire nodes in the graph and ML Models
@@ -56,7 +57,7 @@ def make_model(graph: Graph,
     scaffold.assign(entity, 'label', datainput(data['label']))
 
     # building model
-    scaffold.assign(word, 'w2v',
+    scaffold.assign(word, 'emb',
                     word2vec(
                         word['index'],
                         data.vocab.get_vocab_size('tokens'),
@@ -65,7 +66,7 @@ def make_model(graph: Graph,
                     ))
     scaffold.assign(entity, 'label',
                     fullyconnected(
-                        word['w2v'],
+                        word['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
@@ -120,7 +121,7 @@ def main():
     # trainer for model
     batch = BATCH * 24  # multiply by average len, so compare to sentence level experiments
     trainer = get_trainer(graph, model, data, scaffold,
-                          lr=LR, batch=batch, epoch=EPOCH, patience=PATIENCE)
+                          lr=LR, wd=WD, batch=batch, epoch=EPOCH, patience=PATIENCE)
 
     # train the model
     trainer.train()

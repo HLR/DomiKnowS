@@ -5,7 +5,7 @@ import torch
 from sklearn import metrics
 
 from allennlp.common.checks import ConfigurationError
-from allennlp.training.metrics.metric import Metric
+from allennlp.training.metrics import Metric, F1Measure
 
 
 @Metric.register("auc_fixed")
@@ -242,7 +242,18 @@ class PRAuc(Metric):
     def reset(self):
         self._all_predictions = torch.FloatTensor()
         self._all_gold_labels = torch.LongTensor()
+from typing import Tuple
 
+
+@Metric.register("precision")
+class Precision(F1Measure):
+    """
+    Extract Precision from F1Measure.
+    """
+
+    def get_metric(self, reset: bool = False) -> float:
+        metric = super().get_metric(reset=reset)
+        return metric[0]
 
 @Metric.register("epoch")
 class Epoch(Metric):
