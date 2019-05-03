@@ -45,7 +45,14 @@ The implement of the example is in package `emr`. The example can be run by usin
 ```bash
 python3.7 -m emr
 ```
-Or run the `ner` example, which is a subset of the original problem, where only one non-composed concept is considered, by the following command.
+There are two sub-examples.
+`ner` example concider only one non-composed concept.
+Run it by the following command.
 ```bash
 python3.7 -m emr.ner
+```
+`ners` example concider multiple non-composed concept. They are independent classifiers, sharing the same word embedding.
+Run it by the following command.
+```bash
+python3.7 -m emr.ners
 ```
