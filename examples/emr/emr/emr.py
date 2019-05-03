@@ -22,13 +22,14 @@ train_path = "conll04_train.corp"
 valid_path = "conll04_test.corp"
 
 # model setting
-EMBEDDING_DIM = 16
+EMBEDDING_DIM = 64
 
 # training setting
-LR = 1
+LR = 0.001
+WD = 0.0001
 BATCH = 128
-EPOCH = 1000
-PATIENCE = 10
+EPOCH = 200
+PATIENCE = None
 
 
 # develop by an ML programmer to wire nodes in the graph and ML Models
@@ -53,7 +54,7 @@ def make_model(graph: Graph,
     scaffold.assign(workfor, 'label', datainput(data['relation_labels']))
 
     # building model
-    scaffold.assign(word, 'w2v',
+    scaffold.assign(word, 'emb',
                     word2vec(
                         word['index'],
                         data.vocab.get_vocab_size('tokens'),
@@ -62,25 +63,25 @@ def make_model(graph: Graph,
                     ))
     scaffold.assign(people, 'label',
                     fullyconnected(
-                        word['w2v'],
+                        word['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(organization, 'label',
                     fullyconnected(
-                        word['w2v'],
+                        word['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
-    # TODO: pair['w2v'] should be infer from word['w2v'] according to their relationship
+    # TODO: pair['emb'] should be infer from word['emb'] according to their relationship
     # but we specify it here to make it a bit easier for implementation
-    scaffold.assign(pair, 'w2v',
+    scaffold.assign(pair, 'emb',
                     cartesianprod_concat(
-                        word['w2v']
+                        word['emb']
                     ))
     scaffold.assign(workfor, 'label',
                     fullyconnected(
-                        pair['w2v'],
+                        pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
@@ -129,7 +130,8 @@ def main():
     model = make_model(graph, data, scaffold)
 
     # trainer for model
-    trainer = get_trainer(graph, model, data, scaffold)
+    trainer = get_trainer(graph, model, data, scaffold,
+                          lr=LR, wd=WD, batch=BATCH, epoch=EPOCH, patience=PATIENCE)
 
     # train the model
     trainer.train()
