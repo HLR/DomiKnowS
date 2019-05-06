@@ -5,6 +5,8 @@ Graph.clear()
 Concept.clear()
 
 with Graph('global') as graph:
+    graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+
     with Graph('linguistic') as ling_graph:
         word = Concept(name='word')
         phrase = Concept(name='phrase')
