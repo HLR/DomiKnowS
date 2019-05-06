@@ -6,12 +6,12 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, EMRPeopWorkforOrgReader
+    from data import Data, EMRBinaryReader
     from models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, EMRPeopWorkforOrgReader
+    from .data import Data, EMRBinaryReader
     from .models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
     from .graph import graph
 
@@ -37,55 +37,104 @@ def make_model(graph: Graph,
                data: Data,
                scaffold: Scaffold
                ) -> Model:
-    # get concepts from graph
-    word = graph.word
-    people = graph.people
-    organization = graph.organization
-    workfor = graph.workfor
-    pair = graph.pair
-
-    # binding
+    # initialize the graph
     graph.release()  # release anything binded before new assignment
 
-    # filling in data and label
-    scaffold.assign(word, 'index', datainput(data['sentence']))
-    scaffold.assign(people, 'label', datainput(data['Peop_labels']))
-    scaffold.assign(organization, 'label', datainput(data['Org_labels']))
-    scaffold.assign(workfor, 'label', datainput(data['relation_labels']))
+    # get concepts from graph
+    phrase = graph.linguistic.phrase
+    # concepts
+    people = graph.application.people
+    organization = graph.application.organization
+    location = graph.application.location
+    other = graph.application.other
+    # composed
+    pair = graph.linguistic.pair
+    # composed concepts
+    work_for = graph.application.work_for
+    live_in = graph.application.live_in
+    located_in = graph.application.located_in
+    orgbase_on = graph.application.orgbase_on
+
+    # data
+    scaffold.assign(phrase, 'index', datainput(data['sentence']))
+    # concept labels
+    scaffold.assign(people, 'label', datainput(data['Peop']))
+    scaffold.assign(organization, 'label', datainput(data['Org']))
+    scaffold.assign(location, 'label', datainput(data['Loc']))
+    scaffold.assign(other, 'label', datainput(data['Other']))
+    # composed concept labels
+    scaffold.assign(work_for, 'label', datainput(data['Work_For']))
+    scaffold.assign(live_in, 'label', datainput(data['Live_In']))
+    scaffold.assign(located_in, 'label', datainput(data['Located_In']))
+    scaffold.assign(orgbase_on, 'label', datainput(data['OrgBased_In']))
 
     # building model
-    scaffold.assign(word, 'emb',
+    # embedding
+    scaffold.assign(phrase, 'emb',
                     word2vec(
-                        word['index'],
+                        phrase['index'],
                         data.vocab.get_vocab_size('tokens'),
                         EMBEDDING_DIM,
-                        'tokens'
+                        'tokens' # token name related to data reader
                     ))
+    # predictor
     scaffold.assign(people, 'label',
                     fullyconnected(
-                        word['emb'],
+                        phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(organization, 'label',
                     fullyconnected(
-                        word['emb'],
+                        phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
-    # TODO: pair['emb'] should be infer from word['emb'] according to their relationship
+    scaffold.assign(location, 'label',
+                    fullyconnected(
+                        phrase['emb'],
+                        EMBEDDING_DIM,
+                        2
+                    ))
+    scaffold.assign(other, 'label',
+                    fullyconnected(
+                        phrase['emb'],
+                        EMBEDDING_DIM,
+                        2
+                    ))
+    # TODO: pair['emb'] should be infer from phrase['emb'] according to their relationship
     # but we specify it here to make it a bit easier for implementation
+    # composed embedding
     scaffold.assign(pair, 'emb',
                     cartesianprod_concat(
-                        word['emb']
+                        phrase['emb']
                     ))
-    scaffold.assign(workfor, 'label',
+    # composed predictor
+    scaffold.assign(work_for, 'label',
                     fullyconnected(
                         pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
-    # now people['label'] has multiple assignment,
+    scaffold.assign(live_in, 'label',
+                    fullyconnected(
+                        pair['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    scaffold.assign(located_in, 'label',
+                    fullyconnected(
+                        pair['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    scaffold.assign(orgbase_on, 'label',
+                    fullyconnected(
+                        pair['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    # now every ['label'] has multiple assignment,
     # and the loss should come from the inconsistency here
 
     # get the model
@@ -119,7 +168,7 @@ seed1()
 
 def main():
     # data
-    reader = EMRPeopWorkforOrgReader()
+    reader = EMRBinaryReader()
     train_dataset = reader.read(os.path.join(relative_path, train_path))
     valid_dataset = reader.read(os.path.join(relative_path, valid_path))
     data = Data(train_dataset, valid_dataset)

@@ -185,6 +185,63 @@ class NEREntityReader(DatasetReader):
                 yield self.word_to_instance(word, label)
 
 
+class EMRBinaryReader(DatasetReader):
+    def __init__(self) -> None:
+        super().__init__(lazy=False)
+        # 'tokens' could be just any name, and I don't know where it is need again
+        # checkout modules used in word2vec, they need this name there
+        self.token_indexers = {'tokens': SingleIdTokenIndexer()}
+
+    def to_instance(
+        self,
+        sentence: Tuple[List[str], List[str]],
+        relations=None,
+    ) -> Instance:
+        fields = {}
+
+        texts = sentence[0]
+        labels = sentence[1]
+        fields['sentence'] = TextField(
+            [Token(word) for word in texts],
+            self.token_indexers)
+
+        if labels is not None:
+            # ['Other', 'Loc', 'Peop', 'Org', 'O']
+            all_labels = {'Other', 'Loc', 'Peop', 'Org', 'O'}
+            for label in all_labels:
+                fields[label] = SequenceLabelField(
+                    [str(sample_label == label) for sample_label in labels],
+                    fields['sentence'])
+
+        if relations is not None:
+            # ['Live_In', 'OrgBased_In', 'Located_In', 'Work_For']
+            all_labels = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+            for label in all_labels:
+                relation_indices = []
+                relation_labels = []
+                for rel in relations:
+                    src_index = rel[1][0]
+                    dst_index = rel[2][0]
+                    if rel[0] == label:
+                        relation_indices.append((src_index, dst_index))
+                        relation_labels.append(label)
+                fields[label] = AdjacencyField(
+                    relation_indices,
+                    fields['sentence'],
+                    # relation_labels # label is no need int binary case
+                )
+
+        return Instance(fields)
+
+    def _read(
+        self,
+        file_path: str
+    ) -> Iterable[Instance]:
+        sentences, relations = conll04_reader(file_path)
+        for (sentence, pos, labels), relation in zip(sentences, relations):
+            yield self.to_instance((sentence, labels), relation)
+
+
 class EMRPeopWorkforOrgReader(DatasetReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)

@@ -8,12 +8,12 @@ if __package__ is None or __package__ == '':
     # uses current directory visibility
     from data import Data, NEREntityReader
     from models import get_trainer, datainput, word2vec, fullyconnected
-    from graph import graph
+    from graph_simple import graph
 else:
     # uses current package visibility
     from .data import Data, NEREntityReader
     from .models import get_trainer, datainput, word2vec, fullyconnected
-    from .graph import graph
+    from .graph_simple import graph
 
 
 # App setting
