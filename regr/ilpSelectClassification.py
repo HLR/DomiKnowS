@@ -31,7 +31,6 @@ def loadOntology(ontologyURL):
     return myOnto
         
 def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation):
-    result = dict()
 
     try:
         # Create a new Gurobi model
@@ -130,6 +129,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
             print('%s %g' % (v.varName, v.x))
           
         # Collect results
+        result = pd.DataFrame(0, index=tokens, columns=conceptNames)
         if m.status == GRB.Status.OPTIMAL:
             solution = m.getAttr('x', x)
             
@@ -138,7 +138,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                     if solution[token, conceptName] == 1:
                         #print("The  %s is classified as %s" % (token, conceptName))
                         
-                        result[token] = conceptName
+                        result[conceptName][token] = 1
                 
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
