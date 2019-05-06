@@ -7,12 +7,12 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, EMRPeopWorkforOrgReader
+    from data import Data, Conll04TokenBinaryReader
     from models import get_trainer, datainput, word2vec, fullyconnected
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, EMRPeopWorkforOrgReader
+    from .data import Data, Conll04TokenBinaryReader
     from .models import get_trainer, datainput, word2vec, fullyconnected
     from .graph import graph
 
@@ -22,6 +22,10 @@ entity_label_configs = {'people': {'entity_name': 'people',
                                    'label_name': 'Peop'},
                         'organization': {'entity_name': 'organization',
                                          'label_name': 'Org'},
+                        'location': {'entity_name': 'location',
+                                     'label_name': 'Loc'},
+                        'other': {'entity_name': 'other',
+                                  'label_name': 'Other'},
                         }
 
 # data setting
@@ -36,7 +40,7 @@ EMBEDDING_DIM = 64
 LR = 0.001
 WD = 0.0001
 BATCH = 128
-EPOCH = 1000
+EPOCH = 200
 PATIENCE = None
 
 
@@ -50,13 +54,13 @@ def make_model(graph: Graph,
     graph.release()  # release anything binded before new assignment
     
     # get concepts from graph
-    word = graph.word
+    phrase = graph.linguistic.phrase
     # filling in data and label
-    scaffold.assign(word, 'index', datainput(data['sentence']))
+    scaffold.assign(phrase, 'index', datainput(data['sentence']))
     # building feature
-    scaffold.assign(word, 'emb',
+    scaffold.assign(phrase, 'emb',
                     word2vec(
-                        word['index'],
+                        phrase['index'],
                         data.vocab.get_vocab_size('tokens'),
                         EMBEDDING_DIM,
                         'tokens'
@@ -64,13 +68,13 @@ def make_model(graph: Graph,
     
     for entity in entities:
         entity_name = entity_label_configs[entity]['entity_name']
-        label_name = entity_label_configs[entity]['label_name'] + '_labels'
+        label_name = entity_label_configs[entity]['label_name']
         
-        entity = graph[entity_name]
+        entity = graph.application[entity_name]
         scaffold.assign(entity, 'label', datainput(data[label_name]))
         scaffold.assign(entity, 'label',
                         fullyconnected(
-                            word['emb'],
+                            phrase['emb'],
                             EMBEDDING_DIM,
                             2
                         ))
@@ -111,7 +115,7 @@ def main():
     entities = ['people', 'organization']
 
     # data
-    reader = EMRPeopWorkforOrgReader()
+    reader = Conll04TokenBinaryReader({entity_label_configs[entity]['label_name'] for entity in entities})
     train_dataset = reader.read(os.path.join(relative_path, train_path))
     valid_dataset = reader.read(os.path.join(relative_path, valid_path))
     data = Data(train_dataset, valid_dataset)

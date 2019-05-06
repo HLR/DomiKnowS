@@ -6,12 +6,12 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, EMRBinaryReader
+    from data import Data, Conll04BinaryReader
     from models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, EMRBinaryReader
+    from .data import Data, Conll04BinaryReader
     from .models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
     from .graph import graph
 
@@ -168,7 +168,7 @@ seed1()
 
 def main():
     # data
-    reader = EMRBinaryReader()
+    reader = Conll04BinaryReader()
     train_dataset = reader.read(os.path.join(relative_path, train_path))
     valid_dataset = reader.read(os.path.join(relative_path, valid_path))
     data = Data(train_dataset, valid_dataset)
