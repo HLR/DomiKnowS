@@ -22,7 +22,7 @@ else:
 
 def loadOntology(ontologyURL):
     # Check if ontology path is correct
-    ontologyPath = Path(os.path.normpath("./examples/emr"))
+    ontologyPath = Path(os.path.normpath("./"))
     if not os.path.isdir(ontologyPath.resolve()):
         print("Path to load ontology:", ontologyPath.resolve(), "does not exists")
         exit()
@@ -40,6 +40,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
     try:
         # Create a new Gurobi model
         m = Model("decideOnClassificationResult")
+        m.params.outputflag = 0
         
         # Get list of tokens, concepts and relations from panda dataframe graphResultsForPhraseToken
         tokens = graphResultsForPhraseToken.index.tolist()
@@ -80,6 +81,8 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
             if not (currentConcept is None):
                 for d in currentConcept.disjoints():
                     disjointConcept = d.entities[1]._name
+                    if disjointConcept not in graphResultsForPhraseToken.columns:
+                        continue
                     
                     if disjointConcept in foundDisjoint:
                         if conceptName in foundDisjoint[disjointConcept]:
@@ -122,16 +125,16 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         
         m.update()
           
-        print(m)
-        print(m.getObjective())
-        print(m.getConstrs())
+        #print(m)
+        #print(m.getObjective())
+        #print(m.getConstrs())
         
         m.optimize()
         
-        print('Obj: %g' % m.objVal)
+        #print('Obj: %g' % m.objVal)
 
-        for v in m.getVars():
-            print('%s %g' % (v.varName, v.x))
+        #for v in m.getVars():
+        #    print('%s %g' % (v.varName, v.x))
           
         # Collect results
         result = pd.DataFrame(0, index=tokens, columns=conceptNames)

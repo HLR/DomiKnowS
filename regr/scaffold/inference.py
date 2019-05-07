@@ -108,7 +108,7 @@ def inference(
         # iplResults is a dictionary of {token: conceptName}
 
         # convert back
-        for i, (updated_batch, (names, values, props)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
+        for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
             # values: tensor (len, ..., ncls)
             # updated_batch: list of batches of result of tensor (len, ..., ncls)
             #updated = torch.zeros(values.size())
@@ -136,7 +136,7 @@ def inference(
     # put it back into one piece
     # we want List(tables)[List(ncls)[Tensor(batch, len, ..., 2)]]
     # be careful of that the 2 need extra manuplication
-    for updated_batch, (names, values, props) in zip(updated_valuetables_batch, inference_tables):
+    for updated_batch, (names, props, values) in zip(updated_valuetables_batch, inference_tables):
         # updated_batch: List(batch_size)[Tensor(len, ..., ncls)]
         # List(batch_size)[Tensor(1, len, ..., ncls)]
         updated_batch = [updated.unsqueeze(dim=0) for updated in updated_batch]

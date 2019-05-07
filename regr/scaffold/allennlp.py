@@ -203,7 +203,8 @@ class AllennlpScaffold(Scaffold):
                 # scafold - the scafold object
                 # graph - the graph object
                 model = self_
-                
+                #return data # TODO: working on somewhere else, should remove before serious commit
+
                 return inference(graph, data)
 
             def forward(
