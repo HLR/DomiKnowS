@@ -25,6 +25,29 @@ closely related to [Saul programing language](https://github.com/HLR/HetSaul).
 At a wider scope, the project is related to [OntologyBasedLearning](https://github.com/HLR/OntologyBasedLearning), which can provide a source of domain knowledge as the graph (ontology) in this project.
 
 
+## Prerequirements and setups
+
+Python 3 is required currently while we did considered (very limited) support for Python 2.
+[Gurobi](http://www.gurobi.com) is required to solve the constrained optimization problems.
+Make sure you have install the Python interface of Gurobi.
+If not, the following commands may help you.
+```bash
+cd GUROBI_HOME
+sudo python3 setup.py install
+```
+
+Install all python dependency specified in `requirements.txt` by
+```bash
+sudo python3 -m pip install -r requirements.txt
+```
+If make sure the check out if there is any additional prerequirements or setup steps in specific `README`, if you want to run an example.
+
+Last but not least, add `regr` to you `PYTHONPATH` environment variables,
+```bash
+export PYTHONPATH=$PYTHONPATH:$(cd regr && pwd)
+```
+and you are ready to go!
+
 ## Examples
 
 We started some [examples](examples) to see if the design really work.
