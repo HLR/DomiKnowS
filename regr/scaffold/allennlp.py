@@ -63,13 +63,14 @@ class BaseModel(Model):
 
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
                 from torch.nn import Softmax
-                softmax = Softmax(dim=2)  # (0:batch, 1:len, 2:class)
                 # AUC has problem using GPU
                 if len(size) == 2:
+                    softmax = Softmax(dim=2)  # (b, l, c)
                     metric(softmax(pred)[:, :, 1].reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
                            label.reshape(-1).cpu(),  # (b,l) -> (b*l）
                            )  # FIXME: some problem here
                 elif len(size) == 3:
+                    softmax = Softmax(dim=3)  # (b, l, l, c)
                     metric(softmax(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
                            label.reshape(-1).cpu(),  # (b,l,l) -> (b*l*l）
                            )  # FIXME: some problem here

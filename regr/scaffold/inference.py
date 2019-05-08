@@ -51,6 +51,17 @@ def inference(
         for column in table:
             concept, prop, func = column
             value = func(data)  # (batch, len, ..., t/f)
+            from torch.nn import Softmax
+            if len(value.size()) == 3: # (b, l, c)
+                softmax = Softmax(dim=2)
+                value = softmax(value)
+            elif len(value.size()) == 4: # (b, l, l, c)
+                softmax = Softmax(dim=3)
+                value = softmax(value)
+            else:
+                # should not be here
+                pass
+                
             # at t/f dim, 0 for 1-p, 1 for p
             pindex = torch.tensor(1, device=value.device).long()
             # (batch, len, ..., 1) # need tailing 1 for cat
@@ -86,6 +97,7 @@ def inference(
         phrase = None  # TODO: since it not using now. if it is needed later, will pass it somewhere else
 
         phrasetable = inference_tables[0][2].clone().cpu().detach().numpy()
+        #print(phrasetable)
         graphResultsForPhraseToken = pd.DataFrame(
             phrasetable,
             index=[str(i) for i in range(inference_tables[0][2].size()[0])],
@@ -103,6 +115,7 @@ def inference(
 
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
+        #print(graphResultsForPhraseToken)
         iplResults = calculateIPLSelection(
             phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation)
         # iplResults is a dictionary of {token: conceptName}
