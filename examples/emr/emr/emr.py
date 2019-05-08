@@ -3,6 +3,7 @@ import torch
 from allennlp.models.model import Model
 from regr import Graph
 from regr.scaffold import Scaffold, AllennlpScaffold
+from regr.ilpSelectClassification import addOntoPath
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
@@ -164,6 +165,9 @@ def seed1():
 
 
 seed1()
+
+
+addOntoPath("./")
 
 
 def main():

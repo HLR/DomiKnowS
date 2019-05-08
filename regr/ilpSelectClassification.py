@@ -20,15 +20,16 @@ else:
     from .graph import Graph
     from .relation import Relation, Be, Have
 
-def loadOntology(ontologyURL):
+def addOntoPath(path):
     # Check if ontology path is correct
-    ontologyPath = Path(os.path.normpath("./"))
+    ontologyPath = Path(os.path.normpath(path))
     if not os.path.isdir(ontologyPath.resolve()):
         print("Path to load ontology:", ontologyPath.resolve(), "does not exists")
         exit()
 
     onto_path.append(ontologyPath) # the folder with the ontology
 
+def loadOntology(ontologyURL):
     # Load ontology
     myOnto = get_ontology(ontologyURL)
     myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
@@ -195,6 +196,7 @@ with Graph('global') as graph:
         located_in.be((organization, location))
 
 def main() :
+    addOntoPath("../examples/emr")
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
 
     test_graph = app_graph
