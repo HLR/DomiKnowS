@@ -116,8 +116,10 @@ def inference(
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
         #print(graphResultsForPhraseToken)
-        iplResults = calculateIPLSelection(
-            phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation)
+        iplResults = calculateIPLSelection(phrase, graph, 
+                                           graphResultsForPhraseToken, 
+                                           graphResultsForPhraseRelation,
+                                           ontologyPathname='./')
         # iplResults is a dictionary of {token: conceptName}
         #print(iplResults)
 
