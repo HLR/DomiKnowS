@@ -20,11 +20,12 @@ else:
     from .graph import Graph
     from .relation import Relation, Be, Have
 
-def loadOntology(ontologyURL):
+def loadOntology(ontologyURL, ontologyPathname = "./"):
     # Check if ontology path is correct
-    ontologyPath = Path(os.path.normpath("./"))
-    if not os.path.isdir(ontologyPath.resolve()):
-        print("Path to load ontology:", ontologyPath.resolve(), "does not exists")
+    ontologyPath = Path(os.path.normpath(ontologyPathname))
+    ontologyPath = ontologyPath.resolve()
+    if not os.path.isdir(ontologyPath):
+        print("Path to load ontology:", ontologyPath, "does not exists")
         exit()
 
     onto_path.append(ontologyPath) # the folder with the ontology
@@ -35,7 +36,7 @@ def loadOntology(ontologyURL):
     
     return myOnto
         
-def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation):
+def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation, ontologyPathname = "./"):
 
     try:
         # Create a new Gurobi model
@@ -71,7 +72,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         m.setObjective(X_Q + Y_Q, GRB.MAXIMIZE)
             
         # -- Add constraints
-        myOnto = loadOntology(graph.ontology)
+        myOnto = loadOntology(graph.ontology, ontologyPathname)
         
         # Add constraints based on concept disjoint statments in ontology
         foundDisjoint = dict() # too eliminate duplicates
@@ -210,7 +211,7 @@ def main() :
         current_graphResultsForPhraseRelation = pd.DataFrame(np.random.random_sample((len(tokenList), len(tokenList))), index=tokenList, columns=tokenList)
         test_graphResultsForPhraseRelation[relationName] = current_graphResultsForPhraseRelation
     
-    iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="../examples/emr/")
     print("\nResults - ", iplResults)
     
 if __name__ == '__main__' :
