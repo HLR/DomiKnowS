@@ -27,7 +27,7 @@ EMBEDDING_DIM = 64
 # training setting
 LR = 0.001
 WD = 0.0001
-BATCH = 128
+BATCH = 8
 EPOCH = 200
 PATIENCE = None
 

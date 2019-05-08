@@ -10,6 +10,22 @@ from allennlp.models import Model
 from allennlp.nn.util import get_text_field_mask
 
 
+
+DataInstance = Dict[str, Tensor]
+DataSource = List[DataInstance]
+# NB: list of Instance(dict of str to data format use in module)
+#     For allen nlp, Instance is Dict of str:Field,
+#     and real tensor will be there in forward function
+ModelFunc = Callable[[DataInstance], DataInstance]
+ModuleFunc = Callable[[DataInstance], Tensor]
+# NB: modules are transform from Dict of str:Tensor to updated Dict
+#     module objects in AllenNLP have the forward function of this setting
+# NB 2: torch.nn.Module = Callable[[Any], Tensor]
+#     We should use them in the way that, we construct them in make_model,
+#     preciecely in Library, put them into callback function, and call them
+#     when the real data come and the callback functions are called.
+
+
 class BaseModel(Model):
     def __init__(self, vocab: Vocabulary) -> None:
         super().__init__(vocab)
@@ -19,8 +35,19 @@ class BaseModel(Model):
                            }
         self.meta = {}
         self.metrics = {}
+        self.metrics_inferenced = {}
 
-    def _update_metrics(self, data: Dict[str, Tensor]):
+    def _inference(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        # pass through
+        return data
+
+    def _update_metrics(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
         for metric_name, metric in self.meta.items():
             metric(data)
 
@@ -101,21 +128,6 @@ class BaseModel(Model):
         return data
 
 
-DataInstance = Dict[str, Tensor]
-DataSource = List[DataInstance]
-# NB: list of Instance(dict of str to data format use in module)
-#     For allen nlp, Instance is Dict of str:Field,
-#     and real tensor will be there in forward function
-ModelFunc = Callable[[DataInstance], DataInstance]
-ModuleFunc = Callable[[DataInstance], Tensor]
-# NB: modules are transform from Dict of str:Tensor to updated Dict
-#     module objects in AllenNLP have the forward function of this setting
-# NB 2: torch.nn.Module = Callable[[Any], Tensor]
-#     We should use them in the way that, we construct them in make_model,
-#     preciecely in Library, put them into callback function, and call them
-#     when the real data come and the callback functions are called.
-
-
 class AllennlpScaffold(Scaffold):
     def __init__(
         self
@@ -169,8 +181,7 @@ class AllennlpScaffold(Scaffold):
                 from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
                 def F1MeasureProxy(): return F1Measure(1)
                 def PrecisionProxy(): return Precision(1)
-                model.meta = {'epoch': Epoch()}
-                model.metrics = {}
+                model.meta['epoch'] = Epoch()
                 metrics = {
                     #'Accuracy': CategoricalAccuracy,
                     #'Precision': PrecisionProxy,
@@ -184,9 +195,12 @@ class AllennlpScaffold(Scaffold):
                     #if concept == graph.organization: # just don't print too much
                     #    continue
                     for metric_name, metric_class in metrics.items():
-                        fullname = '{}[{}]-{}'.format(concept.fullname,
-                                                      prop, metric_name)
-                        model.metrics[fullname] = (
+                        #fullname = '\n{}[{}]-{}'.format(concept.fullname,
+                        #                              prop, metric_name)
+                        shortname = '\n{}-{}'.format(concept.name, metric_name)
+                        model.metrics[shortname] = (
+                            metric_class(), concept[prop])
+                        model.metrics_inferenced[shortname] = (
                             metric_class(), concept[prop])
 
                 i = 0  # TODO: this looks too bad
@@ -194,18 +208,6 @@ class AllennlpScaffold(Scaffold):
                     for (module, _), _ in module_funcs:
                         model.add_module(str(i), module)
                         i += 1
-
-            def _inference(
-                self_,
-                data: DataInstance
-            ) -> DataInstance:
-                # variables in the closure 
-                # scafold - the scafold object
-                # graph - the graph object
-                model = self_
-                #return data # TODO: working on somewhere else, should remove before serious commit
-
-                return inference(graph, data)
 
             def forward(
                 self_,
@@ -230,6 +232,18 @@ class AllennlpScaffold(Scaffold):
                 data = model._update_metrics(data)
 
                 return data
+
+            def _inference(
+                self_,
+                data: DataInstance
+            ) -> DataInstance:
+                # variables in the closure 
+                # scafold - the scafold object
+                # graph - the graph object
+                model = self_
+                #return data # TODO: working on somewhere else, should remove before serious commit
+
+                return inference(graph, data)
 
         return ScaffoldedModel
 

@@ -136,7 +136,11 @@ def inference(
     # put it back into one piece
     # we want List(tables)[List(ncls)[Tensor(batch, len, ..., 2)]]
     # be careful of that the 2 need extra manuplication
-    for updated_batch, (names, props, values) in zip(updated_valuetables_batch, inference_tables):
+    for updated_batch, table in zip(updated_valuetables_batch, tables):
+        # no update then continue
+        if len(updated_batch) == 0:
+            continue
+
         # updated_batch: List(batch_size)[Tensor(len, ..., ncls)]
         # List(batch_size)[Tensor(1, len, ..., ncls)]
         updated_batch = [updated.unsqueeze(dim=0) for updated in updated_batch]
@@ -145,13 +149,13 @@ def inference(
         # for each class in ncls
         size = updated_batch_tensor.size()
 
-        for icls, name, prop in zip(torch.arange(size[-1], device=updated_batch_tensor.device), names, props):
+        for icls, (concept, prop, _) in zip(torch.arange(size[-1], device=updated_batch_tensor.device), table):
             value = updated_batch_tensor.index_select(
                 0, icls)  # Tensor(batch, len, ...,)
             value = value.unsqueeze(dim=-1)  # Tensor(batch, len, ..., 1)
             # Tensor(batch, len, ..., 2)
             value = torch.cat([1 - value, value], dim=-1)
-            fullname = '{}[{}]-{}'.format(graph[name].fullname, prop, 1)
+            fullname = '{}[{}]-{}'.format(concept.fullname, prop, 1)
             # put it back finally
             data[fullname] = value
 
