@@ -106,6 +106,7 @@ def inference(
         iplResults = calculateIPLSelection(
             phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation)
         # iplResults is a dictionary of {token: conceptName}
+        #print(iplResults)
 
         # convert back
         for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
@@ -136,27 +137,45 @@ def inference(
     # put it back into one piece
     # we want List(tables)[List(ncls)[Tensor(batch, len, ..., 2)]]
     # be careful of that the 2 need extra manuplication
+    #print('updated_valuetables_batch=', printablesize(updated_valuetables_batch))
     for updated_batch, table in zip(updated_valuetables_batch, tables):
         # no update then continue
         if len(updated_batch) == 0:
             continue
 
         # updated_batch: List(batch_size)[Tensor(len, ..., ncls)]
+        #print('updated_batch=', printablesize(updated_batch))
         # List(batch_size)[Tensor(1, len, ..., ncls)]
         updated_batch = [updated.unsqueeze(dim=0) for updated in updated_batch]
+        #print('updated_batch=', printablesize(updated_batch))
         # Tensor(batch, len, ..., ncls)
         updated_batch_tensor = torch.cat(updated_batch, dim=0)
-        # for each class in ncls
-        size = updated_batch_tensor.size()
+        #print('updated_batch_tensor=', printablesize(updated_batch_tensor))
 
-        for icls, (concept, prop, _) in zip(torch.arange(size[-1], device=updated_batch_tensor.device), table):
-            value = updated_batch_tensor.index_select(
-                0, icls)  # Tensor(batch, len, ...,)
-            value = value.unsqueeze(dim=-1)  # Tensor(batch, len, ..., 1)
+        # for each class in ncls
+        ncls = updated_batch_tensor.size()[-1]
+        for icls, (concept, prop, _) in zip(torch.arange(ncls, device=updated_batch_tensor.device), table):
+            # Tensor(batch, len, ..., 1)
+            value = updated_batch_tensor.index_select(-1, icls)
+            #print('value=', printablesize(value))
             # Tensor(batch, len, ..., 2)
             value = torch.cat([1 - value, value], dim=-1)
-            fullname = '{}[{}]-{}'.format(concept.fullname, prop, 1)
+            #print('value=', printablesize(value))
+
+            fullname = '{}[{}]-{}'.format(concept.fullname, prop, 1) # TODO: pos=1 here! figure out a way
             # put it back finally
             data[fullname] = value
 
     return data
+
+from typing import Iterable
+def printablesize(ni):
+    if isinstance(ni, Tensor):
+        return 'Tensor'+str(tuple(ni.size()))+''
+    elif isinstance(ni, Iterable):
+        if len(ni) > 0:
+            return 'iterable('+str(len(ni))+')' + '[' + printablesize(ni[0]) + ']'
+        else:
+            return 'iterable('+str(len(ni))+')[]'
+    else:
+        return str(type(ni))

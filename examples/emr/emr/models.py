@@ -32,7 +32,7 @@ def word2vec(
     embedding_dim: int,
     token_name: str,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     # token_name='tokens' is from data reader, name of TokenIndexer
     # seq_name='sentence' is from data reader, name of TextField
@@ -61,7 +61,7 @@ def word2vec_lstm(
     embedding_dim: int,
     token_name: str,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     # token_name='tokens' is from data reader, name of TokenIndexer
     # seq_name='sentence' is from data reader, name of TextField
@@ -104,7 +104,7 @@ class Cpcat(Module):
 def cartesianprod_concat(
     input_func: ModuleFunc
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     cpcat = Cpcat()
     if module is not None:
@@ -125,7 +125,7 @@ def fullyconnected(
     input_dim: int,
     label_dim: int,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     fc = torch.nn.Linear(
         in_features=input_dim,

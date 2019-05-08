@@ -1,14 +1,13 @@
 from .. import Graph
 from .inference import inference
 from .base import Scaffold
-from typing import Dict, List, Callable, Iterable
+from typing import Dict, List, Callable, Iterable, Tuple
 from regr import Concept
 from torch import Tensor
 from torch.nn import Module
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models import Model
 from allennlp.nn.util import get_text_field_mask
-
 
 
 DataInstance = Dict[str, Tensor]
@@ -37,21 +36,12 @@ class BaseModel(Model):
         self.metrics = {}
         self.metrics_inferenced = {}
 
-    def _inference(
+    def _update_metrics_base(
         self,
-        data: DataInstance
+        data: DataInstance,
+        metrics: Dict[str, Tuple[callable, Tuple[Tuple[Module, callable], float]]]
     ) -> DataInstance:
-        # pass through
-        return data
-
-    def _update_metrics(
-        self,
-        data: DataInstance
-    ) -> DataInstance:
-        for metric_name, metric in self.meta.items():
-            metric(data)
-
-        for metric_name, (metric, module_funcs) in self.metrics.items():
+        for metric_name, (metric, module_funcs) in metrics.items():
             vals = []
             for (module, func), conf in module_funcs:
                 # TODO: consider the order, consider the confidence (and module?)
@@ -87,8 +77,33 @@ class BaseModel(Model):
                 metric(pred, label, mask)
         return data
 
+    def _update_metrics_metrics(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        return self._update_metrics_base(data, self.metrics)
+
+    def _update_metrics_metrics_inferenced(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        return self._update_metrics_base(data, self.metrics_inferenced)
+
+    def _update_metrics(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        for metric_name, metric in self.meta.items():
+            metric(data)
+        data = self._update_metrics_metrics(data)
+        data = self._inference(data)
+        data = self._update_metrics_metrics_inferenced(data)
+        return data
+
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
-        output = {}
+        from collections import OrderedDict
+
+        metrics = {}
 
         def add(metric_name, metric):
             out = metric.get_metric(reset)
@@ -96,16 +111,19 @@ class BaseModel(Model):
             import numbers
             if isinstance(out, Iterable):
                 for i, out_item in enumerate(out):
-                    output['{}[{}]'.format(metric_name, i)] = out_item
+                    metrics['{}[{}]'.format(metric_name, i)] = out_item
             else:
-                output[metric_name] = out
+                metrics[metric_name] = out
 
         for metric_name, metric in self.meta.items():
             add(metric_name, metric)
         for metric_name, (metric, _) in self.metrics.items():
             add(metric_name, metric)
+        for metric_name, (metric, _) in self.metrics_inferenced.items():
+            add(metric_name + '_i', metric)
 
-        return output
+        metrics = OrderedDict(sorted(metrics.items()))
+        return metrics
 
     def _update_loss(self, data):
         if self.loss_func is not None:
@@ -114,17 +132,24 @@ class BaseModel(Model):
 
     def forward(
         self,
-        **data: Dict[str, Tensor]
-    ) -> Dict[str, Tensor]:
+        **data: DataInstance
+    ) -> DataInstance:
 
         ##
         # This is an identical stub
         # something happen here to take the input to the output
         ##
 
-        data = self._update_metrics(data)
         data = self._update_loss(data)
+        data = self._update_metrics(data)
 
+        return data
+
+    def _inference(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        # pass through
         return data
 
 
@@ -150,7 +175,7 @@ class AllennlpScaffold(Scaffold):
         def wrap_func(data: DataInstance) -> Tensor:
             # TODO: the generation of this string is tricky now
             fullname = '{}[{}]-{}'.format(concept.fullname, prop, pos)
-            if fullname in data:
+            if fullname in data: # lookup to avoid repeated calculation
                 return data[fullname]
             tensor = func(data)
             data[fullname] = tensor
@@ -179,7 +204,9 @@ class AllennlpScaffold(Scaffold):
 
                 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
                 from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
+
                 def F1MeasureProxy(): return F1Measure(1)
+
                 def PrecisionProxy(): return Precision(1)
                 model.meta['epoch'] = Epoch()
                 metrics = {
@@ -192,15 +219,16 @@ class AllennlpScaffold(Scaffold):
                 }
 
                 for _, concept, prop, _ in graph.get_multiassign():
-                    #if concept == graph.organization: # just don't print too much
+                    # if concept == graph.organization: # just don't print too much
                     #    continue
                     for metric_name, metric_class in metrics.items():
-                        #fullname = '\n{}[{}]-{}'.format(concept.fullname,
-                        #                              prop, metric_name)
+                        fullname = '\n{}[{}]-{}'.format(concept.fullname,
+                                                        prop, metric_name)
                         shortname = '\n{}-{}'.format(concept.name, metric_name)
-                        model.metrics[shortname] = (
+                        name = shortname
+                        model.metrics[name] = (
                             metric_class(), concept[prop])
-                        model.metrics_inferenced[shortname] = (
+                        model.metrics_inferenced[name] = (
                             metric_class(), concept[prop])
 
                 i = 0  # TODO: this looks too bad
@@ -228,7 +256,6 @@ class AllennlpScaffold(Scaffold):
                         func(data)
 
                 data = model._update_loss(data)
-                data = model._inference(data)
                 data = model._update_metrics(data)
 
                 return data
@@ -237,13 +264,15 @@ class AllennlpScaffold(Scaffold):
                 self_,
                 data: DataInstance
             ) -> DataInstance:
-                # variables in the closure 
+                # variables in the closure
                 # scafold - the scafold object
                 # graph - the graph object
                 model = self_
-                #return data # TODO: working on somewhere else, should remove before serious commit
 
-                return inference(graph, data)
+                #print(data['global/application/other[label]-1'])
+                data = inference(graph, data)
+                #print(data['global/application/other[label]-1'])
+                return data
 
         return ScaffoldedModel
 

@@ -100,8 +100,8 @@ class Concept(Scorable, Propertied):
     def __getitem__(self, prop):
         if prop not in self.props:
             return None
-        if len(self.props[prop]) == 1:
-            return self.props[prop][0]
+        #if len(self.props[prop]) == 1:
+        #    return self.props[prop][0]
         return self.props[prop]
         # TODO: shouldn't need above lines. have them to avoid aggr in current dirty version
         return self.aggregate(*self.vals(prop, 0))
