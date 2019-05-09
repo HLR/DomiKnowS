@@ -79,20 +79,14 @@
     >EMR ontology O.</rdfs:comment>
   </owl:Class>
   <owl:ObjectProperty rdf:ID="orgbase_on">
-    <rdfs:domain rdf:resource="#organization"/>
-    <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="located_in">
-    <rdfs:domain rdf:resource="#organization"/>
-    <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="work_for">
     <rdfs:domain rdf:resource="#people"/>
     <rdfs:range rdf:resource="#organization"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="live_in">
-    <rdfs:domain rdf:resource="#people"/>
-    <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
 </rdf:RDF>
 
