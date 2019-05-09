@@ -90,6 +90,17 @@ class BaseModel(Model):
     ) -> DataInstance:
         return self._update_metrics_base(data, self.metrics_inferenced)
 
+    def _need_inference(
+        self,
+        data: DataInstance
+    ) -> bool:
+        epoch_key = 'epoch_num' # TODO: this key... is from Allennlp doc
+        if epoch_key not in data:
+            return True # no epoch record, then always inference
+        epoch = min(data[epoch_key])
+        need =  epoch != 0 and (epoch % 10) == 0 # inference every 10 epoch
+        return need
+    
     def _update_metrics(
         self,
         data: DataInstance
@@ -97,8 +108,9 @@ class BaseModel(Model):
         for metric_name, metric in self.meta.items():
             metric(data)
         data = self._update_metrics_metrics(data)
-        data = self._inference(data)
-        data = self._update_metrics_metrics_inferenced(data)
+        if self._need_inference(data):
+            data = self._inference(data)
+            data = self._update_metrics_metrics_inferenced(data)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
