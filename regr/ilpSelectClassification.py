@@ -36,6 +36,119 @@ def loadOntology(ontologyURL, ontologyPathname = "./"):
     
     return myOnto
         
+def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseToken):
+        
+    for token in tokens:            
+        for conceptName in conceptNames: 
+            x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
+            
+    m.update()
+     
+    # Add constraints based on concept disjoint statments in ontology
+    foundDisjoint = dict() # too eliminate duplicates
+    for conceptName in conceptNames:
+        
+        currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
+            
+        if currentConcept is None :
+            continue
+            
+        for d in currentConcept.disjoints():
+            disjointConcept = d.entities[1]._name
+                
+            if currentConcept._name == disjointConcept:
+                disjointConcept = d.entities[0]._name
+                    
+                if currentConcept._name == disjointConcept:
+                    continue
+                    
+            if disjointConcept not in graphResultsForPhraseToken.columns:
+                 continue
+                    
+            if conceptName in foundDisjoint:
+                if disjointConcept in foundDisjoint[conceptName]:
+                    continue
+            
+            if disjointConcept in foundDisjoint:
+                if conceptName in foundDisjoint[disjointConcept]:
+                    continue
+                        
+            for token in tokens:
+                constrainName = 'c_%s_%sDisjoint%s'%(token, currentConcept, disjointConcept)
+                m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
+                  
+            #print("disjointConcept %s %s"%(currentConcept._name, disjointConcept))   
+                   
+            if not (conceptName in foundDisjoint):
+                foundDisjoint[conceptName] = {disjointConcept}
+            else:
+                foundDisjoint[conceptName].add(disjointConcept)
+        
+    m.update()
+            
+    X_Q = None
+    for token in tokens :
+        for conceptName in conceptNames :
+            X_Q += graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
+    
+    return X_Q
+    
+def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseRelation):
+    
+    relationNames = graphResultsForPhraseRelation.keys()
+
+    # Create Gurobi variables for relation - token, token
+    y={}
+        
+    for relationName in relationNames:            
+        for token in tokens: 
+            for token1 in tokens:
+                if token == token1:
+                    continue
+
+                y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
+          
+    m.update()
+
+    # Add constraints based on relations domain and range
+    for relationName in graphResultsForPhraseRelation :
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue
+
+        currentRelationDomain = currentRelation.get_domain() # domains_indirect()
+        currentRelationRange = currentRelation.get_range()
+                
+        for domain in currentRelationDomain:
+            if domain._name not in conceptNames:
+                continue
+                    
+            for range in currentRelationRange:
+                if range.name not in conceptNames:
+                    continue
+                        
+                for token in tokens:
+                    for token1 in tokens:
+                        if token == token1 :
+                            continue
+                                
+                        constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
+                        m.addConstr(y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name], GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
+        
+    m.update()     
+       
+    Y_Q  = None
+    for relationName in relationNames:
+        for token in tokens:
+            for token1 in tokens:
+                if token == token1 :
+                    continue
+
+                Y_Q += graphResultsForPhraseRelation[relationName][token][token1]*y[relationName, token, token1]
+    
+    return Y_Q
+    
 def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation, ontologyPathname = "./"):
 
     try:
@@ -43,82 +156,26 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         m = Model("decideOnClassificationResult")
         m.params.outputflag = 0
         
+        myOnto = loadOntology(graph.ontology, ontologyPathname)
+
         # Get list of tokens, concepts and relations from panda dataframe graphResultsForPhraseToken
         tokens = graphResultsForPhraseToken.index.tolist()
         conceptNames = graphResultsForPhraseToken.columns.tolist()
-        relationNames = graphResultsForPhraseRelation.keys()
         
         # Create Gurobi variables for concept - token
         x={}
+            
+        # -- Set objective - maximize 
+        Q = None
         
-        for token in tokens:            
-            for conceptName in conceptNames: 
-                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
-                
-        # Create Gurobi variables for relation - token, token
-        y={}
+        X_Q = addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseToken)
+        Q += X_Q
         
-        for relationName in relationNames:            
-            for token in tokens: 
-                for token1 in tokens:
-                    y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
-          
-        m.update()
-            
-        # -- Set objective
-        # maximize 
-        X_Q = quicksum(quicksum(graphResultsForPhraseToken[conceptName][token]*x[token, conceptName] for conceptName in conceptNames)for token in tokens)
-        Y_Q = quicksum(quicksum(quicksum(graphResultsForPhraseRelation[relationName][token][token1]*y[relationName, token, token1] for relationName in relationNames)for token in tokens)for token in tokens)
-        m.setObjective(X_Q + Y_Q, GRB.MAXIMIZE)
-            
-        # -- Add constraints
-        myOnto = loadOntology(graph.ontology, ontologyPathname)
+        Y_Q = addRelationsConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseRelation)
+        Q += Y_Q
         
-        # Add constraints based on concept disjoint statments in ontology
-        foundDisjoint = dict() # too eliminate duplicates
-        for conceptName in conceptNames:
-            currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
-            
-            if not (currentConcept is None):
-                for d in currentConcept.disjoints():
-                    disjointConcept = d.entities[1]._name
-                    if disjointConcept not in graphResultsForPhraseToken.columns:
-                        continue
-                    
-                    if disjointConcept in foundDisjoint:
-                        if conceptName in foundDisjoint[disjointConcept]:
-                            continue
-                        
-                    for token in tokens:
-                        constrainName = 'c_%s_%sDisjoint%s'%(token, currentConcept, disjointConcept)
-                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-                        
-                    if not (conceptName in foundDisjoint):
-                        foundDisjoint[conceptName] = {disjointConcept}
-                    else:
-                        foundDisjoint[conceptName].add(disjointConcept)
-                        
-        # Add constraints based on relations domain and range
-        for relationName in graphResultsForPhraseRelation :
-            currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
-            
-            if not (currentRelation is None):
-                currentRelationDomain = currentRelation.get_domain() # domains_indirect()
-                currentRelationRange = currentRelation.get_range()
-                
-                for domain in currentRelationDomain:
-                    if domain._name not in conceptNames:
-                        continue
-                    
-                    for range in currentRelationRange:
-                        if range.name not in conceptNames:
-                            continue
-                        
-                        for token in tokens:
-                            for token1 in tokens:
-                                constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
-                                m.addConstr(y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name], GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
-                
+        m.setObjective(Q, GRB.MAXIMIZE)
+
         # Token is associated with a single concept
         #for token in tokens:
         #   constrainName = 'c_%s'%(token)
@@ -211,7 +268,7 @@ def main() :
         current_graphResultsForPhraseRelation = pd.DataFrame(np.random.random_sample((len(tokenList), len(tokenList))), index=tokenList, columns=tokenList)
         test_graphResultsForPhraseRelation[relationName] = current_graphResultsForPhraseRelation
     
-    iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="../examples/emr/")
+    iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
     print("\nResults - ", iplResults)
     
 if __name__ == '__main__' :
