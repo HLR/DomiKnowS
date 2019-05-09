@@ -108,3 +108,5 @@ venv.bak/
 /.project
 /.pydevproject
 /.vscode/
+/data/
+/EMR.owl

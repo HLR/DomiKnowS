@@ -31,9 +31,12 @@ def loadOntology(ontologyURL, ontologyPathname = "./"):
     onto_path.append(ontologyPath) # the folder with the ontology
 
     # Load ontology
-    myOnto = get_ontology(ontologyURL)
-    myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
-    
+    try :
+        myOnto = get_ontology(ontologyURL)
+        myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
+    except FileNotFoundError as e:
+        print('Error when loading - ' + ontologyURL + " from: %s"%(ontologyPath))
+
     return myOnto
         
 def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseToken):
