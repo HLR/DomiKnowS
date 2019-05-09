@@ -172,10 +172,12 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         Q = None
         
         X_Q = addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseToken)
-        Q += X_Q
+        if X_Q is not None:
+            Q += X_Q
         
         Y_Q = addRelationsConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseRelation)
-        Q += Y_Q
+        if Y_Q is not None:
+            Q += Y_Q
         
         m.setObjective(Q, GRB.MAXIMIZE)
 

@@ -133,10 +133,20 @@ def inference(
         from ..ilpSelectClassification import calculateIPLSelection
         #print(graphResultsForPhraseToken)
         #print(graphResultsForPhraseRelation)
-        iplResults = calculateIPLSelection(phrase, graph, 
-                                           graphResultsForPhraseToken, 
-                                           graphResultsForPhraseRelation,
-                                           ontologyPathname='./')
+        try:
+            iplResults = calculateIPLSelection(phrase, graph,
+                                               graphResultsForPhraseToken,
+                                               graphResultsForPhraseRelation,
+                                               ontologyPathname='./')
+        except:
+            print('-'*40)
+            print(phrasetable)
+            print(tokens)
+            print(concept_names)
+            print(graphResultsForPhraseToken)
+            print(graphResultsForPhraseRelation)
+            print(iplResults)
+            print('-'*40)
         # iplResults is a dictionary of {token: conceptName}
         #print(iplResults)
 
