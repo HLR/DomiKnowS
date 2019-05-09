@@ -105,15 +105,19 @@ def inference(
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
-            tokens = [vocab.get_token_from_index(int(sentence[batch_index,i]))
+            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i])))
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]
+        concept_names = [concept.name for concept, prop, _ in tables[0]]
+        #print(phrasetable)
         #print(tokens)
+        #print(concept_names)
         graphResultsForPhraseToken = pd.DataFrame(
             phrasetable,
             index=tokens,
-            columns=[concept.name for concept, prop, _ in tables[0]])
+            columns=concept_names)
+        #print(graphResultsForPhraseToken[17:18]['people'])
 
         graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
         graphResultsForPhraseRelation = dict()
@@ -128,6 +132,7 @@ def inference(
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
         #print(graphResultsForPhraseToken)
+        #print(graphResultsForPhraseRelation)
         iplResults = calculateIPLSelection(phrase, graph, 
                                            graphResultsForPhraseToken, 
                                            graphResultsForPhraseRelation,
