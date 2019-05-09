@@ -271,7 +271,7 @@ class AllennlpScaffold(Scaffold):
                 model = self_
 
                 #print(data['global/application/other[label]-1'])
-                data = inference(graph, data)
+                data = inference(graph, data, model.vocab)
                 #print(data['global/application/other[label]-1'])
                 return data
 

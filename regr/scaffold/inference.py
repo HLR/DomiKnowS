@@ -10,12 +10,17 @@ DataInstance = Dict[str, Tensor]
 
 def inference(
     graph: Graph,
-    data: DataInstance
+    data: DataInstance,
+    vocab=None
 ) -> DataInstance:
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         ['people', 'organization', 'location', 'other', 'o'],
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
+
+    mask = data['mask'] # (b, l) # FIXME: the key mask is problem
+    mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
+    sentence = data['sentence']['tokens'] # (b, l) # FIXME: the key mask is problem
 
     # table columns, as many table columns as groups
     tables = [[] for _ in groups]
@@ -97,10 +102,17 @@ def inference(
         phrase = None  # TODO: since it not using now. if it is needed later, will pass it somewhere else
 
         phrasetable = inference_tables[0][2].clone().cpu().detach().numpy()
-        #print(phrasetable)
+        # apply mask for phrase
+        phrasetable = phrasetable[:mask_len[batch_index], :]
+        if vocab:
+            tokens = [vocab.get_token_from_index(int(sentence[batch_index,i]))
+                      for i in torch.arange(phrasetable.shape[0], device=values.device)]
+        else:
+            tokens = [str(j) for j in range(phrasetable.shape[0])]
+        #print(tokens)
         graphResultsForPhraseToken = pd.DataFrame(
             phrasetable,
-            index=[str(i) for i in range(inference_tables[0][2].size()[0])],
+            index=tokens,
             columns=[concept.name for concept, prop, _ in tables[0]])
 
         graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
@@ -108,10 +120,10 @@ def inference(
         for i, (composed_concept, _, _) in enumerate(tables[1]):
             # each relation
             graphResultsForPhraseRelation[composed_concept.name] = pd.DataFrame(
-                graphtable[:, :, i],
-                index=[str(i)
-                       for i in range(inference_tables[0][2].size()[0])],
-                columns=[str(i) for i in range(inference_tables[0][2].size()[0])])
+                graphtable[:mask_len[batch_index], :mask_len[batch_index], i], # apply mask
+                index=tokens,
+                columns=tokens,
+            )
 
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
@@ -127,14 +139,16 @@ def inference(
         for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
             # values: tensor (len, ..., ncls)
             # updated_batch: list of batches of result of tensor (len, ..., ncls)
-            #updated = torch.zeros(values.size())
+            #updated = torch.zeros(values.size(), device=values.device)
             # do something to query iplResults to fill updated
             #
             # implement below
             #
             if i == 0:
-                updated = torch.tensor(
+                updated = torch.zeros(values.size(), device=values.device)
+                result = torch.tensor(
                     iplResults.to_numpy(), device=values.device).float()
+                updated[:result.size()[0],:] = result
             elif i == 1:
                 # skip compose since it is not return for now
                 continue
