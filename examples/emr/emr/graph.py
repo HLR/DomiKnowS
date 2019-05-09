@@ -43,12 +43,12 @@ with Graph('global') as graph:
 
         located_in = Concept(name='located_in')
         located_in.be(pair)
-        located_in.be((organization, location))
+        #located_in.be((organization, location))
 
         live_in = Concept(name='live_in')
         live_in.be(pair)
-        live_in.be((people, location))
+        #live_in.be((people, location))
 
         orgbase_on = Concept(name='orgbase_on')
         orgbase_on.be(pair)
-        orgbase_on.be((organization, location))
+        #orgbase_on.be((organization, location))
