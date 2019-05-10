@@ -266,11 +266,25 @@ def main() :
     conceptNamesList = ["people", "organization", "other", "location", "O"]
     relationNamesList = ["work_for", "live_in", "located_in"]
     
-    test_graphResultsForPhraseToken = pd.DataFrame(np.random.random_sample((len(tokenList), len(conceptNamesList))), index=tokenList, columns=conceptNamesList)
+    phrase_table = np.random.random_sample((len(tokenList), len(conceptNamesList)))
+                            # peop  org   other loc   O
+    phrase_table = np.array([[0.98, 0.92, 0.95, 0.02, 0.00], # John
+                             [0.00, 0.50, 0.40, 0.60, 0.90], # works
+                             [0.02, 0.03, 0.05, 0.10, 0.90], # for
+                             [0.96, 0.93, 0.85, 0.90, 0.00], # IBM
+                            ])
+    test_graphResultsForPhraseToken = pd.DataFrame(phrase_table, index=tokenList, columns=conceptNamesList)
     
     test_graphResultsForPhraseRelation = dict()
     for relationName in relationNamesList :
-        current_graphResultsForPhraseRelation = pd.DataFrame(np.random.random_sample((len(tokenList), len(tokenList))), index=tokenList, columns=tokenList)
+        relation_table = np.random.random_sample((len(tokenList), len(tokenList)))
+                                  # John  works for   IBM
+        relation_table = np.array([[0.10, 0.20, 0.20, 0.96], # John
+                                   [0.00, 0.00, 0.40, 0.30], # works
+                                   [0.02, 0.03, 0.05, 0.10], # for
+                                   [0.93, 0.20, 0.10, 0.00], # IBM
+                                  ])
+        current_graphResultsForPhraseRelation = pd.DataFrame(relation_table, index=tokenList, columns=tokenList)
         test_graphResultsForPhraseRelation[relationName] = current_graphResultsForPhraseRelation
     
     iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
