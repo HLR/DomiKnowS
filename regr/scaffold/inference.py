@@ -59,6 +59,13 @@ def inference(
             # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
             softmax = Softmax(dim=len(value.size())-1)
             value = softmax(value)
+            #######
+            #print('0-'*40)
+            #print(concept.name)
+            #print('1-'*40)
+            #print(value)
+            #print('2-'*40)
+            #######
                 
             # at t/f dim, 0 for 1-p, 1 for p
             pindex = torch.tensor(1, device=value.device).long()
@@ -110,7 +117,6 @@ def inference(
             phrasetable,
             index=tokens,
             columns=concept_names)
-        #print(graphResultsForPhraseToken[17:18]['people'])
 
         graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
         graphResultsForPhraseRelation = dict()
@@ -124,8 +130,11 @@ def inference(
 
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
+        #print('3-'*40)
         #print(graphResultsForPhraseToken)
+        #print('4-'*40)
         #print(graphResultsForPhraseRelation)
+        #print('5-'*40)
         try:
             tokenResult, relationsResult = calculateIPLSelection(
                 phrase, graph,
@@ -141,6 +150,11 @@ def inference(
             print(graphResultsForPhraseRelation)
             print(tokenResult, relationsResult)
             print('-'*40)
+        #print('6-'*40)
+        #print(tokenResult)
+        #print('7-'*40)
+        #print(relationsResult)
+        #print('8-'*40)
 
         # convert back
         for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
@@ -160,7 +174,7 @@ def inference(
                 # relationsResult: dict(ncls)[len, len], order of len should not be changed
                 # updated: tensor(len, len, ncls)
                 for i, name in zip(torch.arange(len(names)), names):
-                    result = relationsResult[name].to_numpy()
+                    result = relationsResult[name][tokens].to_numpy() # use the tokens to enforce the order
                     updated[:mask_len[batch_index],:mask_len[batch_index],i] = torch.from_numpy(result)
             else:
                 # should be nothing here
@@ -204,6 +218,12 @@ def inference(
             fullname = '{}[{}]-{}'.format(concept.fullname, prop, 1) # TODO: pos=1 here! figure out a way
             # put it back finally
             data[fullname] = value
+
+            #print('9-'*40)
+            #print(fullname)
+            #print('10-'*40)
+            #print(value)
+            #print('11-'*40)
 
     return data
 

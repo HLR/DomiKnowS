@@ -98,7 +98,7 @@ class BaseModel(Model):
         if epoch_key not in data:
             return True # no epoch record, then always inference
         epoch = min(data[epoch_key])
-        need =  epoch != 0 and (epoch % 10) == 0 # inference every 10 epoch
+        need =  ((epoch+1) % 10) == 0 # inference every 10 epoch
         return need # or True
     
     def _update_metrics(
@@ -139,7 +139,7 @@ class BaseModel(Model):
         return metrics
 
     def _update_loss(self, data):
-        if self.loss_func is not None:
+        if hasattr(self, 'loss_func') and self.loss_func is not None:
             data['loss'] = self.loss_func(data)
         return data
 
