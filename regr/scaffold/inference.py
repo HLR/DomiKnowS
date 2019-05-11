@@ -134,10 +134,11 @@ def inference(
         #print(graphResultsForPhraseToken)
         #print(graphResultsForPhraseRelation)
         try:
-            iplResults = calculateIPLSelection(phrase, graph,
-                                               graphResultsForPhraseToken,
-                                               graphResultsForPhraseRelation,
-                                               ontologyPathname='./')
+            tokenResult, relationsResult = calculateIPLSelection(
+                phrase, graph,
+                graphResultsForPhraseToken,
+                graphResultsForPhraseRelation,
+                ontologyPathname='./')
         except:
             print('-'*40)
             print(phrasetable)
@@ -162,7 +163,7 @@ def inference(
             if i == 0:
                 updated = torch.zeros(values.size(), device=values.device)
                 result = torch.tensor(
-                    iplResults.to_numpy(), device=values.device).float()
+                    tokenResult.to_numpy(), device=values.device).float()
                 updated[:result.size()[0],:] = result
             elif i == 1:
                 # skip compose since it is not return for now
