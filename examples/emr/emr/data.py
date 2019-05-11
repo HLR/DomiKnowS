@@ -171,6 +171,7 @@ class Conll04Reader(DatasetReader):
     def to_instance(
         self,
         sentence: List[str],
+        pos: Optional[List[str]],
         labels: Optional[List[str]],
         relations: Optional[List[Tuple[str, Tuple[int, tuple], Tuple[int, tuple]]]]=None,
     ) -> Instance:
@@ -199,7 +200,7 @@ class Conll04Reader(DatasetReader):
     ) -> Iterable[Instance]:
         sentences, relations = corpus_reader(file_path)
         for (sentence, pos, labels), relation in zip(sentences, relations):
-            yield self.to_instance(sentence, labels, relation)
+            yield self.to_instance(sentence, pos, labels, relation)
 
 
 class Conll04TokenReader(Conll04Reader):
@@ -209,8 +210,8 @@ class Conll04TokenReader(Conll04Reader):
     ) -> Iterable[Instance]:
         sentences, relations = corpus_reader(file_path)
         for (sentence, pos, labels), relation in zip(sentences, relations):
-            for word, label in zip(sentence, labels):
-                yield self.to_instance([word, ], [label, ], None)
+            for word, p, label in zip(sentence, pos, labels):
+                yield self.to_instance([word, ], [p,], [label, ], None)
 
 
 class Conll04TokenBinaryReader(Conll04TokenReader):
@@ -264,6 +265,91 @@ class Conll04BinaryReader(Conll04Reader):
                 # relation_labels # label is no need int binary case
             )
         return fields
+
+class Conll04CandidateReader(Conll04Reader):
+    def _is_candidate(
+        self,
+        word,
+        p,
+        label,
+        i,
+        relation
+    ) -> bool:
+        # return (label != 'O') # this is too good and too strong ...
+        candidate_p = {'NN', 'NNS', 'NNP', 'NNPS'}
+        p_list = p.split('/')
+        for cp in candidate_p:
+            if cp in p_list:
+                return True
+        # also possible to add non-'O' not in candidate_p
+        #   but it will be another strong bias that 
+        #   those not in candidate_p are something important
+        return False
+
+    def update_candidate(
+        self,
+        fields: Dict,
+        sentence,
+        pos,
+        labels,
+        relation
+    ) -> Dict:
+        fields['candidate'] = SequenceLabelField(
+                [str(self._is_candidate(word, p, label, i, relation))
+                 for i, (word, p, label) in enumerate(zip(sentence, pos, labels))],
+                fields['sentence'])
+        return fields
+
+    def to_instance(
+        self,
+        sentence: List[str],
+        pos: Optional[List[str]],
+        labels: Optional[List[str]],
+        relation: Optional[List[Tuple[str, Tuple[int, tuple], Tuple[int, tuple]]]]=None,
+    ) -> Instance:
+        instance = super().to_instance(sentence, pos, labels, relation)
+        fields = instance.fields
+        fields = self.update_candidate(fields, sentence, pos, labels, relation)
+        for field_name, field in fields.items():
+            instance.add_field(field_name, field)
+        return instance
+
+class Conll04CandidateFilteredReader(Conll04CandidateReader):
+    def _read(
+        self,
+        file_path: str
+    ) -> Iterable[Instance]:
+        sentences, relations = corpus_reader(file_path)
+        for (sentence, pos, labels), relation in zip(sentences, relations):
+            select = [self._is_candidate(word, p, label, i, relation)
+                      for i, (word, p, label) in enumerate(zip(sentence, pos, labels))]
+            select = np.array(select)
+            if select.sum() == 0:
+                # skip blank sentence after filter
+                continue
+
+            sentence = [val for val, sel in zip(sentence, select) if sel]
+            pos = [val for val, sel in zip(pos, select) if sel]
+            labels = [val for val, sel in zip(labels, select) if sel]
+            new_relation = []
+            for rel, (src, src_val), (dst, dst_val) in relation:
+                if not select[src] or not select[dst]:
+                    # skip the relation with filtered word
+                    continue
+                new_src = select[:src].sum()
+                new_dst = select[:dst].sum()
+                new_relation.append((rel, (new_src, src_val), (new_dst, dst_val)))
+            relation = new_relation
+
+            yield self.to_instance(sentence, pos, labels, relation)
+
+
+class Conll04CandidateBinaryReader(Conll04CandidateReader, Conll04BinaryReader):
+    pass
+
+
+class Conll04CandidateFilteredBinaryReader(Conll04CandidateFilteredReader, Conll04BinaryReader):
+    pass
 
 
 from torch import Tensor
