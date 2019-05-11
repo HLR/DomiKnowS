@@ -294,10 +294,10 @@ def main() :
     relationNamesList = ["work_for", "live_in", "located_in"]
     
     #                         peop  org   other loc   O
-    phrase_table = np.array([[0.98, 0.92, 0.95, 0.02, 0.00], # John
+    phrase_table = np.array([[0.98, 0.98, 0.95, 0.02, 0.00], # John
                              [0.00, 0.50, 0.40, 0.60, 0.90], # works
                              [0.02, 0.03, 0.05, 0.10, 0.90], # for
-                             [0.92, 0.93, 0.85, 0.90, 0.00], # IBM
+                             [0.92, 0.93, 0.93, 0.90, 0.00], # IBM
                             ])
     test_graphResultsForPhraseToken = pd.DataFrame(phrase_table, index=tokenList, columns=conceptNamesList)
     
