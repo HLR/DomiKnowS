@@ -99,7 +99,7 @@ class BaseModel(Model):
             return True # no epoch record, then always inference
         epoch = min(data[epoch_key])
         need =  epoch != 0 and (epoch % 10) == 0 # inference every 10 epoch
-        return need
+        return need # or True
     
     def _update_metrics(
         self,
@@ -314,7 +314,7 @@ class AllennlpScaffold(Scaffold):
                 pred = vals[1]
                 size = label.size()
 
-                bfactor = 1.  # 0 - no balance, 1 - balance
+                bfactor = 0.  # 0 - no balance, 1 - balance
                 if len(size) == 2:  # (b,l,)
                     mask = data[model.field_name['mask']].clone().float()
                     # class balance weighted

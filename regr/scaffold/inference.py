@@ -14,6 +14,7 @@ def inference(
     vocab=None
 ) -> DataInstance:
     groups = [  # TODO: replace by constraint in graph, or group discover, later
+        # order of table follows order of group
         ['people', 'organization', 'location', 'other', 'o'],
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
@@ -26,20 +27,18 @@ def inference(
     tables = [[] for _ in groups]
     wild = []  # for those not in any group
     # for each subgraph.concept[prop] that has multiple assignment
-    for subgraph, concept, prop, module_funcs in graph.get_multiassign():
+    for subgraph, concept, prop, module_funcs in graph.get_multiassign(): # order? always check with table
         # find the group it goes to
         # TODO: update later with group discover?
         for group, table in zip(groups, tables):
             if concept.name in group:
                 # for each assignment, [0] for label, [1] for pred
-                for i, ((module, func), conf) in enumerate(module_funcs):
-                    # consider only prediction here
-                    # TODO: use a non-label aggregated prediction
-                    if i == 1:
-                        # add the concept (might useful) and function handle to the table (column)
-                        table.append((concept, prop, func))
-                        break  # TODO: if aggregated, no need to break
-        else:  # for group, table
+                # consider only prediction here
+                (module, func), conf = module_funcs[1]
+                # how about conf?
+                table.append((concept, prop, func))
+                break
+        else:  # for group, table, no break
             # belongs to no group
             # still do something, differently
             wild.append((concept, prop, func))
@@ -57,15 +56,9 @@ def inference(
             concept, prop, func = column
             value = func(data)  # (batch, len, ..., t/f)
             from torch.nn import Softmax
-            if len(value.size()) == 3: # (b, l, c)
-                softmax = Softmax(dim=2)
-                value = softmax(value)
-            elif len(value.size()) == 4: # (b, l, l, c)
-                softmax = Softmax(dim=3)
-                value = softmax(value)
-            else:
-                # should not be here
-                pass
+            # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
+            softmax = Softmax(dim=len(value.size())-1)
+            value = softmax(value)
                 
             # at t/f dim, 0 for 1-p, 1 for p
             pindex = torch.tensor(1, device=value.device).long()
@@ -146,28 +139,29 @@ def inference(
             print(concept_names)
             print(graphResultsForPhraseToken)
             print(graphResultsForPhraseRelation)
-            print(iplResults)
+            print(tokenResult, relationsResult)
             print('-'*40)
-        # iplResults is a dictionary of {token: conceptName}
-        #print(iplResults)
 
         # convert back
         for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
             # values: tensor (len, ..., ncls)
             # updated_batch: list of batches of result of tensor (len, ..., ncls)
-            #updated = torch.zeros(values.size(), device=values.device)
+            updated = torch.zeros(values.size(), device=values.device)
             # do something to query iplResults to fill updated
             #
             # implement below
             #
             if i == 0:
-                updated = torch.zeros(values.size(), device=values.device)
-                result = torch.tensor(
-                    tokenResult.to_numpy(), device=values.device).float()
-                updated[:result.size()[0],:] = result
+                # tokenResult: [len, ncls], notice the order of ncls
+                # updated: tensor(len, ncls)
+                result = tokenResult[list(names)].to_numpy() # use the names to control the order
+                updated[:mask_len[batch_index],:] = torch.from_numpy(result)
             elif i == 1:
-                # skip compose since it is not return for now
-                continue
+                # relationsResult: dict(ncls)[len, len], order of len should not be changed
+                # updated: tensor(len, len, ncls)
+                for i, name in zip(torch.arange(len(names)), names):
+                    result = relationsResult[name].to_numpy()
+                    updated[:mask_len[batch_index],:mask_len[batch_index],i] = torch.from_numpy(result)
             else:
                 # should be nothing here
                 pass
