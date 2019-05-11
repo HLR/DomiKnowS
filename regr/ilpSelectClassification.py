@@ -134,7 +134,9 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                             continue
                                 
                         constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
-                        m.addConstr(y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name], GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
+                        currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
+                        #print(currentConstrain)
+                        m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
         
     m.update()     
        
@@ -151,6 +153,9 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
     
 def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation, ontologyPathname = "./"):
 
+    tokenResult = None
+    relationsResult = None
+    
     try:
         # Create a new Gurobi model
         m = Model("decideOnClassificationResult")
@@ -201,29 +206,37 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
           
         # Collect results
         tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
-        if m.status == GRB.Status.OPTIMAL:
-            solution = m.getAttr('x', x)
-            
-            for token in tokens :
-                for conceptName in conceptNames:
-                    if solution[token, conceptName] == 1:
-                        #print("The  %s is classified as %s" % (token, conceptName))
-                        
-                        tokenResult[conceptName][token] = 1
+        if x :
+            if m.status == GRB.Status.OPTIMAL:
+                solution = m.getAttr('x', x)
+                
+                for token in tokens :
+                    for conceptName in conceptNames:
+                        if solution[token, conceptName] == 1:
+                            #print("The  %s is classified as %s" % (token, conceptName))
+                            
+                            tokenResult[conceptName][token] = 1
 
         relationsResult = {}
-        if m.status == GRB.Status.OPTIMAL:
-            solution = m.getAttr('x', y)
-            relationNames = graphResultsForPhraseRelation.keys()
-            for relationName in relationNames:
-                relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
-                for token in tokens :
-                    for token1 in tokens:
-                        if token == token1:
-                            continue
-                        if solution[relationName, token, token1] == 1:
-                            relationResult[token][token1] = 1
-                relationsResult[relationName] = relationResult
+        if y :
+            if m.status == GRB.Status.OPTIMAL:
+                solution = m.getAttr('x', y)
+                relationNames = graphResultsForPhraseRelation.keys()
+                
+                for relationName in relationNames:
+                    relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
+                    
+                    for token in tokens :
+                        for token1 in tokens:
+                            if token == token1:
+                                continue
+                            
+                            if solution[relationName, token, token1] == 1:
+                                relationResult[token][token1] = 1
+                                
+                    relationsResult[relationName] = relationResult
+
+        print(m)
 
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
@@ -231,7 +244,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
     except AttributeError:
         print('Encountered an attribute error')
        
-    # return results of ipl optimization
+    # return results of IPL optimization
     return tokenResult, relationsResult
 
 # --------- Testing
@@ -280,31 +293,53 @@ def main() :
     conceptNamesList = ["people", "organization", "other", "location", "O"]
     relationNamesList = ["work_for", "live_in", "located_in"]
     
-    phrase_table = np.random.random_sample((len(tokenList), len(conceptNamesList)))
-                            # peop  org   other loc   O
+    #                         peop  org   other loc   O
     phrase_table = np.array([[0.98, 0.92, 0.95, 0.02, 0.00], # John
                              [0.00, 0.50, 0.40, 0.60, 0.90], # works
                              [0.02, 0.03, 0.05, 0.10, 0.90], # for
-                             [0.96, 0.93, 0.85, 0.90, 0.00], # IBM
+                             [0.92, 0.93, 0.85, 0.90, 0.00], # IBM
                             ])
     test_graphResultsForPhraseToken = pd.DataFrame(phrase_table, index=tokenList, columns=conceptNamesList)
     
     test_graphResultsForPhraseRelation = dict()
-    for relationName in relationNamesList :
-        relation_table = np.random.random_sample((len(tokenList), len(tokenList)))
-                                  # John  works for   IBM
-        relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
-                                   [0.00, 0.00, 0.40, 0.30], # works
-                                   [0.02, 0.03, 0.05, 0.10], # for
-                                   [0.93, 0.20, 0.10, 0.00], # IBM
-                                  ])
-        current_graphResultsForPhraseRelation = pd.DataFrame(relation_table, index=tokenList, columns=tokenList)
-        test_graphResultsForPhraseRelation[relationName] = current_graphResultsForPhraseRelation
     
+    # work_for
+    #                                    John  works for   IBM
+    work_for_relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
+                                        [0.00, 0.00, 0.40, 0.30], # works
+                                        [0.02, 0.03, 0.05, 0.10], # for
+                                        [0.93, 0.20, 0.10, 0.90], # IBM
+                                       ])
+    work_for_current_graphResultsForPhraseRelation = pd.DataFrame(work_for_relation_table, index=tokenList, columns=tokenList)
+    test_graphResultsForPhraseRelation["work_for"] = work_for_current_graphResultsForPhraseRelation
+    
+    # live_in
+    #                                   John  works for   IBM
+    live_in_relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
+                                       [0.00, 0.00, 0.20, 0.10], # works
+                                       [0.02, 0.03, 0.05, 0.10], # for
+                                       [0.10, 0.20, 0.10, 0.00], # IBM
+                                       ])
+    live_in_current_graphResultsForPhraseRelation = pd.DataFrame(live_in_relation_table, index=tokenList, columns=tokenList)
+    test_graphResultsForPhraseRelation["live_in"] = live_in_current_graphResultsForPhraseRelation
+        
+    # located_in
+    #                                      John  works for   IBM
+    located_in_relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
+                                          [0.00, 0.00, 0.00, 0.00], # works
+                                          [0.02, 0.03, 0.05, 0.10], # for
+                                          [0.03, 0.20, 0.10, 0.00], # IBM
+                                         ])
+    located_in_current_graphResultsForPhraseRelation = pd.DataFrame(located_in_relation_table, index=tokenList, columns=tokenList)
+    test_graphResultsForPhraseRelation["located_in"] = located_in_current_graphResultsForPhraseRelation
+        
     tokenResult, relationsResult = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
+    
     print("\nResults - ")
     print(tokenResult)
+    
     for name, result in relationsResult.items():
+        print("\n")
         print(name)
         print(result)
     
