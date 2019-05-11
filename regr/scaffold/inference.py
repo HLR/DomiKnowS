@@ -173,9 +173,22 @@ def inference(
             elif i == 1:
                 # relationsResult: dict(ncls)[len, len], order of len should not be changed
                 # updated: tensor(len, len, ncls)
-                for i, name in zip(torch.arange(len(names)), names):
-                    result = relationsResult[name][tokens].to_numpy() # use the tokens to enforce the order
-                    updated[:mask_len[batch_index],:mask_len[batch_index],i] = torch.from_numpy(result)
+                for j, name in zip(torch.arange(len(names)), names):
+                    try:
+                        result = relationsResult[name][tokens].to_numpy() # use the tokens to enforce the order
+                    except:
+                        print('-'*40)
+                        print(tokens)
+                        print(graphResultsForPhraseToken)
+                        print(graphResultsForPhraseRelation)
+                        print(tokenResult)
+                        print(relationsResult)
+                        print(i)
+                        print(name)
+                        print('-'*40)
+                        raise
+
+                    updated[:mask_len[batch_index],:mask_len[batch_index],j] = torch.from_numpy(result)
             else:
                 # should be nothing here
                 pass

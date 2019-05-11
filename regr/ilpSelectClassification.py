@@ -206,7 +206,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
           
         # Collect results
         tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
-        if x :
+        if x or True:
             if m.status == GRB.Status.OPTIMAL:
                 solution = m.getAttr('x', x)
                 
@@ -218,7 +218,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                             tokenResult[conceptName][token] = 1
 
         relationsResult = {}
-        if y :
+        if y or True:
             if m.status == GRB.Status.OPTIMAL:
                 solution = m.getAttr('x', y)
                 relationNames = graphResultsForPhraseRelation.keys()
@@ -236,7 +236,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                                 
                     relationsResult[relationName] = relationResult
 
-        print(m)
+        #print(m)
 
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
@@ -244,7 +244,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
     except AttributeError:
         print('Encountered an attribute error')
        
-    # return results of IPL optimization
+    # return results of ILP optimization
     return tokenResult, relationsResult
 
 # --------- Testing
