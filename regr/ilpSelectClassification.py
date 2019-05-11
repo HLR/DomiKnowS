@@ -96,12 +96,9 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
     
     return X_Q
     
-def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseRelation):
+def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsForPhraseRelation):
     
     relationNames = graphResultsForPhraseRelation.keys()
-
-    # Create Gurobi variables for relation - token, token
-    y={}
         
     for relationName in relationNames:            
         for token in tokens: 
@@ -167,6 +164,9 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         
         # Create Gurobi variables for concept - token
         x={}
+
+        # Create Gurobi variables for relation - token, token
+        y={}
             
         # -- Set objective - maximize 
         Q = None
@@ -175,7 +175,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         if X_Q is not None:
             Q += X_Q
         
-        Y_Q = addRelationsConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhraseRelation)
+        Y_Q = addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsForPhraseRelation)
         if Y_Q is not None:
             Q += Y_Q
         
@@ -200,7 +200,7 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         #    print('%s %g' % (v.varName, v.x))
           
         # Collect results
-        result = pd.DataFrame(0, index=tokens, columns=conceptNames)
+        tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
         if m.status == GRB.Status.OPTIMAL:
             solution = m.getAttr('x', x)
             
@@ -209,16 +209,30 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                     if solution[token, conceptName] == 1:
                         #print("The  %s is classified as %s" % (token, conceptName))
                         
-                        result[conceptName][token] = 1
-                
+                        tokenResult[conceptName][token] = 1
+
+        relationsResult = {}
+        if m.status == GRB.Status.OPTIMAL:
+            solution = m.getAttr('x', y)
+            relationNames = graphResultsForPhraseRelation.keys()
+            for relationName in relationNames:
+                relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
+                for token in tokens :
+                    for token1 in tokens:
+                        if token == token1:
+                            continue
+                        if solution[relationName, token, token1] == 1:
+                            relationResult[token][token1] = 1
+                relationsResult[relationName] = relationResult
+
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
     
     except AttributeError:
         print('Encountered an attribute error')
        
-    # return results of ipl optimization 
-    return result
+    # return results of ipl optimization
+    return tokenResult, relationsResult
 
 # --------- Testing
 
@@ -279,7 +293,7 @@ def main() :
     for relationName in relationNamesList :
         relation_table = np.random.random_sample((len(tokenList), len(tokenList)))
                                   # John  works for   IBM
-        relation_table = np.array([[0.10, 0.20, 0.20, 0.96], # John
+        relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
                                    [0.00, 0.00, 0.40, 0.30], # works
                                    [0.02, 0.03, 0.05, 0.10], # for
                                    [0.93, 0.20, 0.10, 0.00], # IBM
@@ -287,8 +301,12 @@ def main() :
         current_graphResultsForPhraseRelation = pd.DataFrame(relation_table, index=tokenList, columns=tokenList)
         test_graphResultsForPhraseRelation[relationName] = current_graphResultsForPhraseRelation
     
-    iplResults = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
-    print("\nResults - ", iplResults)
+    tokenResult, relationsResult = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
+    print("\nResults - ")
+    print(tokenResult)
+    for name, result in relationsResult.items():
+        print(name)
+        print(result)
     
 if __name__ == '__main__' :
     main()
