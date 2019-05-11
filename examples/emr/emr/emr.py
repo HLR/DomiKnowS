@@ -47,6 +47,7 @@ def make_model(graph: Graph,
     organization = graph.application.organization
     location = graph.application.location
     other = graph.application.other
+    O = graph.application.O
     # composed
     pair = graph.linguistic.pair
     # composed concepts
@@ -62,6 +63,7 @@ def make_model(graph: Graph,
     scaffold.assign(organization, 'label', datainput(data['Org']))
     scaffold.assign(location, 'label', datainput(data['Loc']))
     scaffold.assign(other, 'label', datainput(data['Other']))
+    scaffold.assign(O, 'label', datainput(data['O']))
     # composed concept labels
     scaffold.assign(work_for, 'label', datainput(data['Work_For']))
     scaffold.assign(live_in, 'label', datainput(data['Live_In']))
@@ -97,6 +99,12 @@ def make_model(graph: Graph,
                         2
                     ))
     scaffold.assign(other, 'label',
+                    fullyconnected(
+                        phrase['emb'],
+                        EMBEDDING_DIM,
+                        2
+                    ))
+    scaffold.assign(O, 'label',
                     fullyconnected(
                         phrase['emb'],
                         EMBEDDING_DIM,
