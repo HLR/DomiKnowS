@@ -294,7 +294,7 @@ def main() :
     relationNamesList = ["work_for", "live_in", "located_in"]
     
     #                         peop  org   other loc   O
-    phrase_table = np.array([[0.98, 0.98, 0.95, 0.02, 0.00], # John
+    phrase_table = np.array([[0.70, 0.98, 0.95, 0.02, 0.00], # John
                              [0.00, 0.50, 0.40, 0.60, 0.90], # works
                              [0.02, 0.03, 0.05, 0.10, 0.90], # for
                              [0.92, 0.93, 0.93, 0.90, 0.00], # IBM
@@ -305,10 +305,10 @@ def main() :
     
     # work_for
     #                                    John  works for   IBM
-    work_for_relation_table = np.array([[0.10, 0.20, 0.20, 0.06], # John
+    work_for_relation_table = np.array([[0.50, 0.20, 0.20, 0.26], # John
                                         [0.00, 0.00, 0.40, 0.30], # works
                                         [0.02, 0.03, 0.05, 0.10], # for
-                                        [0.93, 0.20, 0.10, 0.90], # IBM
+                                        [0.63, 0.20, 0.10, 0.90], # IBM
                                        ])
     work_for_current_graphResultsForPhraseRelation = pd.DataFrame(work_for_relation_table, index=tokenList, columns=tokenList)
     test_graphResultsForPhraseRelation["work_for"] = work_for_current_graphResultsForPhraseRelation
