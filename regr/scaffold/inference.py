@@ -15,7 +15,7 @@ def inference(
 ) -> DataInstance:
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         # order of table follows order of group
-        ['people', 'organization', 'location', 'other', 'o'],
+        ['people', 'organization', 'location', 'other', 'O'],
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
 
@@ -55,10 +55,8 @@ def inference(
         for column in table:
             concept, prop, func = column
             value = func(data)  # (batch, len, ..., t/f)
-            from torch.nn import Softmax
             # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
-            softmax = Softmax(dim=len(value.size())-1)
-            value = softmax(value)
+            value = torch.exp(value)
             #######
             #print('0-'*40)
             #print(concept.name)

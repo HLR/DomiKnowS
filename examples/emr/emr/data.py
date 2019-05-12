@@ -161,10 +161,15 @@ class Conll04Reader(DatasetReader):
         relation_labels: Optional[List[str]]=None
     ) -> Dict:
         # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        if relation_labels is None:
+            # giving none for label because user do not want label
+            # return directly
+            return fields
         fields['relation'] = AdjacencyField(
             relation_indices,
             fields['sentence'],
-            relation_labels
+            relation_labels,
+            padding_value=-1 # multi-class label, use -1 for null class
         )
         return fields
 
@@ -258,11 +263,20 @@ class Conll04BinaryReader(Conll04Reader):
         relation_labels: Optional[List[str]]=None
     ) -> Dict:
         # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        if relation_labels is None:
+            # giving none for label because user do not want label
+            # return directly
+            return fields
         for relation_name in self.relation_names:
+            cur_indices = []
+            for index, label in zip(relation_indices, relation_labels):
+                if label == relation_name:
+                    cur_indices.append(index)
+
             fields[relation_name] = AdjacencyField(
-                relation_indices,
+                cur_indices,
                 fields['sentence'],
-                # relation_labels # label is no need int binary case
+                padding_value=0
             )
         return fields
 
