@@ -107,6 +107,7 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                     continue
 
                 y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
+                y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
           
     m.update()
 
@@ -137,9 +138,12 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                         currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                         #print(currentConstrain)
                         m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
+
+                        constrainName = 'c_%s_%s_%sselfDisjoint'%(token, token1, currentRelation)
+                        m.addConstr(y[currentRelation._name, token, token1] + y[currentRelation._name+'-neg', token, token1], GRB.LESS_EQUAL, 1, name=constrainName)
         
-    m.update()     
-       
+    m.update()
+
     Y_Q  = None
     for relationName in relationNames:
         for token in tokens:
@@ -147,7 +151,8 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                 if token == token1 :
                     continue
 
-                Y_Q += graphResultsForPhraseRelation[relationName][token][token1]*y[relationName, token, token1]
+                Y_Q += graphResultsForPhraseRelation[relationName][token1][token]*y[relationName, token, token1]
+                Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
     
     return Y_Q
     
@@ -232,11 +237,13 @@ def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                                 continue
                             
                             if solution[relationName, token, token1] == 1:
-                                relationResult[token][token1] = 1
+                                relationResult[token1][token] = 1
                                 
                     relationsResult[relationName] = relationResult
 
         #print(m)
+        #print(m.getObjective())
+        #print(m.getConstrs())
 
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
