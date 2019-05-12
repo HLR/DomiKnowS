@@ -78,7 +78,7 @@ def word2vec_lstm(
     if module is not None:
         # add submodule
         # TODO: move to wrapper or concept assignment?
-        lstm.add_module('sub', module)
+        word_embeddings.add_module('sub', module)
 
     def func(data: DataInstance) -> Tensor:
         tensor = input_func(data)  # input_func is tuple(func, conf)
@@ -142,6 +142,30 @@ def fullyconnected(
 
     return fc, func
 
+def logsm(
+    input_func: ModuleFunc,
+    input_dim: int,
+    label_dim: int,
+) -> Tuple[Module, ModuleFunc]:
+    (module, input_func), conf = input_func[0]
+
+    fc = torch.nn.Linear(
+        in_features=input_dim,
+        out_features=label_dim)
+    sm = torch.nn.LogSoftmax(dim=-1)
+
+    sm.add_module('sub', fc)
+    if module is not None:
+        # add submodule
+        # TODO: move to wrapper or concept assignment?
+        fc.add_module('sub', module)
+
+    def func(data: DataInstance) -> Tensor:
+        tensor = input_func(data)
+        tensor = sm(fc(tensor))
+        return tensor
+
+    return sm, func
 
 from regr import Graph
 from regr.scaffold import Scaffold

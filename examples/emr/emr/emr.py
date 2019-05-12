@@ -7,12 +7,12 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 if __package__ is None or __package__ == '':
     # uses current directory visibility
     from data import Data, Conll04CandidateFilteredBinaryReader as Reader
-    from models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from models import get_trainer, datainput, word2vec, word2vec_lstm, fullyconnected, cartesianprod_concat, logsm
     from graph import graph
 else:
     # uses current package visibility
     from .data import Data, Conll04CandidateFilteredBinaryReader as Reader
-    from .models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from .models import get_trainer, datainput, word2vec, word2vec_lstm, fullyconnected, cartesianprod_concat, logsm
     from .graph import graph
 
 
@@ -81,31 +81,31 @@ def make_model(graph: Graph,
                     ))
     # predictor
     scaffold.assign(people, 'label',
-                    fullyconnected(
+                    logsm(
                         phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(organization, 'label',
-                    fullyconnected(
+                    logsm(
                         phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(location, 'label',
-                    fullyconnected(
+                    logsm(
                         phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(other, 'label',
-                    fullyconnected(
+                    logsm(
                         phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
     scaffold.assign(O, 'label',
-                    fullyconnected(
+                    logsm(
                         phrase['emb'],
                         EMBEDDING_DIM,
                         2
@@ -119,25 +119,25 @@ def make_model(graph: Graph,
                     ))
     # composed predictor
     scaffold.assign(work_for, 'label',
-                    fullyconnected(
+                    logsm(
                         pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(live_in, 'label',
-                    fullyconnected(
+                    logsm(
                         pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(located_in, 'label',
-                    fullyconnected(
+                    logsm(
                         pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(orgbase_on, 'label',
-                    fullyconnected(
+                    logsm(
                         pair['emb'],
                         EMBEDDING_DIM * 2,
                         2
