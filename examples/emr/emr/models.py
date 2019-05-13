@@ -42,6 +42,8 @@ def word2vec(
         embedding_dim=embedding_dim)
     word_embeddings = BasicTextFieldEmbedder({
         token_name: token_embedding})
+    dropout = torch.nn.Dropout(0.5)
+    dropout.add_module('emb', word_embeddings)
     if module is not None:
         # add submodule
         # TODO: move to wrapper or concept assignment?
@@ -49,13 +51,13 @@ def word2vec(
 
     def func(data: DataInstance) -> Tensor:
         tensor = input_func(data)  # input_func is tuple(func, conf)
-        tensor = word_embeddings(tensor)
+        tensor = dropout(word_embeddings(tensor))
         return tensor
 
-    return word_embeddings, func
+    return dropout, func
 
 
-def word2vec_lstm(
+def word2vec_rnn(
     input_func: ModuleFunc,
     num_embeddings: int,
     embedding_dim: int,
@@ -72,9 +74,10 @@ def word2vec_lstm(
     word_embeddings = BasicTextFieldEmbedder({
         token_name: token_embedding})
     from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-    lstm = PytorchSeq2SeqWrapper(torch.nn.LSTM(embedding_dim, embedding_dim, batch_first=True))
-
-    lstm.add_module('emb', word_embeddings)
+    rnn = PytorchSeq2SeqWrapper(torch.nn.GRU(embedding_dim, embedding_dim, batch_first=True, dropout=0.5, bidirectional=True))
+    dropout = torch.nn.Dropout(0.5)
+    rnn.add_module('emb', word_embeddings)
+    dropout.add_module('rnn', rnn)
     if module is not None:
         # add submodule
         # TODO: move to wrapper or concept assignment?
@@ -82,10 +85,10 @@ def word2vec_lstm(
 
     def func(data: DataInstance) -> Tensor:
         tensor = input_func(data)  # input_func is tuple(func, conf)
-        tensor = lstm(word_embeddings(tensor), data['mask'])
+        tensor = dropout(rnn(word_embeddings(tensor), data['mask']))
         return tensor
 
-    return lstm, func
+    return dropout, func
 
 class Cpcat(Module):
     def __init__(self):

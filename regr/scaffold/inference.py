@@ -50,6 +50,8 @@ def inference(
     valuetables = []
     batch_size = None
     for table in tables:
+        if len(table) == 0:
+            continue
         # assume all of them give same dims of output: (batch, len, ..., t/f)
         values = []
         for column in table:
@@ -116,15 +118,16 @@ def inference(
             index=tokens,
             columns=concept_names)
 
-        graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
         graphResultsForPhraseRelation = dict()
-        for i, (composed_concept, _, _) in enumerate(tables[1]):
-            # each relation
-            graphResultsForPhraseRelation[composed_concept.name] = pd.DataFrame(
-                graphtable[:mask_len[batch_index], :mask_len[batch_index], i], # apply mask
-                index=tokens,
-                columns=tokens,
-            )
+        if len(tables[1]) > 0:
+            graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
+            for i, (composed_concept, _, _) in enumerate(tables[1]):
+                # each relation
+                graphResultsForPhraseRelation[composed_concept.name] = pd.DataFrame(
+                    graphtable[:mask_len[batch_index], :mask_len[batch_index], i], # apply mask
+                    index=tokens,
+                    columns=tokens,
+                )
 
         # do inference
         from ..ilpSelectClassification import calculateIPLSelection
@@ -204,7 +207,7 @@ def inference(
     #print('updated_valuetables_batch=', printablesize(updated_valuetables_batch))
     for updated_batch, table in zip(updated_valuetables_batch, tables):
         # no update then continue
-        if len(updated_batch) == 0:
+        if len(table) == 0 or len(updated_batch) == 0:
             continue
 
         # updated_batch: List(batch_size)[Tensor(len, ..., ncls)]

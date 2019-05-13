@@ -6,13 +6,13 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, Conll04CandidateFilteredBinaryReader as Reader
-    from models import get_trainer, datainput, word2vec, word2vec_lstm, fullyconnected, cartesianprod_concat, logsm
+    from data import Data, Conll04BinaryReader as Reader
+    from models import get_trainer, datainput, word2vec, word2vec_rnn, fullyconnected, cartesianprod_concat, logsm
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, Conll04CandidateFilteredBinaryReader as Reader
-    from .models import get_trainer, datainput, word2vec, word2vec_lstm, fullyconnected, cartesianprod_concat, logsm
+    from .data import Data, Conll04BinaryReader as Reader
+    from .models import get_trainer, datainput, word2vec, word2vec_rnn, fullyconnected, cartesianprod_concat, logsm
     from .graph import graph
 
 
@@ -22,13 +22,13 @@ train_path = "conll04_train.corp"
 valid_path = "conll04_test.corp"
 
 # model setting
-EMBEDDING_DIM = 64
+EMBEDDING_DIM = 8
 
 # training setting
 LR = 0.001
 WD = 0.0001
 BATCH = 8
-EPOCH = 200
+EPOCH = 50
 PATIENCE = None
 
 
@@ -73,7 +73,7 @@ def make_model(graph: Graph,
     # building model
     # embedding
     scaffold.assign(phrase, 'emb',
-                    word2vec(
+                    word2vec_rnn(
                         phrase['index'],
                         data.vocab.get_vocab_size('tokens'),
                         EMBEDDING_DIM,
@@ -83,31 +83,31 @@ def make_model(graph: Graph,
     scaffold.assign(people, 'label',
                     logsm(
                         phrase['emb'],
-                        EMBEDDING_DIM,
+                        EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(organization, 'label',
                     logsm(
                         phrase['emb'],
-                        EMBEDDING_DIM,
+                        EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(location, 'label',
                     logsm(
                         phrase['emb'],
-                        EMBEDDING_DIM,
+                        EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(other, 'label',
                     logsm(
                         phrase['emb'],
-                        EMBEDDING_DIM,
+                        EMBEDDING_DIM * 2,
                         2
                     ))
     scaffold.assign(O, 'label',
                     logsm(
                         phrase['emb'],
-                        EMBEDDING_DIM,
+                        EMBEDDING_DIM * 2,
                         2
                     ))
     # TODO: pair['emb'] should be infer from phrase['emb'] according to their relationship
@@ -121,25 +121,25 @@ def make_model(graph: Graph,
     scaffold.assign(work_for, 'label',
                     logsm(
                         pair['emb'],
-                        EMBEDDING_DIM * 2,
+                        EMBEDDING_DIM * 4,
                         2
                     ))
     scaffold.assign(live_in, 'label',
                     logsm(
                         pair['emb'],
-                        EMBEDDING_DIM * 2,
+                        EMBEDDING_DIM * 4,
                         2
                     ))
     scaffold.assign(located_in, 'label',
                     logsm(
                         pair['emb'],
-                        EMBEDDING_DIM * 2,
+                        EMBEDDING_DIM * 4,
                         2
                     ))
     scaffold.assign(orgbase_on, 'label',
                     logsm(
                         pair['emb'],
-                        EMBEDDING_DIM * 2,
+                        EMBEDDING_DIM * 4,
                         2
                     ))
     # now every ['label'] has multiple assignment,

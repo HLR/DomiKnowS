@@ -311,7 +311,7 @@ class AllennlpScaffold(Scaffold):
                 pred = vals[1]
                 size = label.size()
 
-                bfactor = 0.  # 0 - no balance, 1 - balance
+                bfactor = 1.  # 0 - no balance, 1 - balance
                 if len(size) == 2:  # (b,l,)
                     mask = data[model.field_name['mask']].clone().float()
                     # class balance weighted
