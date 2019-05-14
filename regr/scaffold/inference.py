@@ -130,14 +130,14 @@ def inference(
                 )
 
         # do inference
-        from ..ilpSelectClassification import calculateIPLSelection
+        from ..ilpSelectClassification import calculateILPSelection
         #print('3-'*40)
         #print(graphResultsForPhraseToken)
         #print('4-'*40)
         #print(graphResultsForPhraseRelation)
         #print('5-'*40)
         try:
-            tokenResult, relationsResult = calculateIPLSelection(
+            tokenResult, relationsResult = calculateILPSelection(
                 phrase, graph,
                 graphResultsForPhraseToken,
                 graphResultsForPhraseRelation,

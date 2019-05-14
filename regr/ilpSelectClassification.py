@@ -156,7 +156,7 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
     
     return Y_Q
     
-def calculateIPLSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation, ontologyPathname = "./"):
+def calculateILPSelection(phrase, graph, graphResultsForPhraseToken, graphResultsForPhraseRelation, ontologyPathname = "./"):
 
     tokenResult = None
     relationsResult = None
@@ -340,7 +340,7 @@ def main() :
     located_in_current_graphResultsForPhraseRelation = pd.DataFrame(located_in_relation_table, index=tokenList, columns=tokenList)
     test_graphResultsForPhraseRelation["located_in"] = located_in_current_graphResultsForPhraseRelation
         
-    tokenResult, relationsResult = calculateIPLSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
+    tokenResult, relationsResult = calculateILPSelection(test_phrase, test_graph, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, ontologyPathname="./examples/emr/")
     
     print("\nResults - ")
     print(tokenResult)
