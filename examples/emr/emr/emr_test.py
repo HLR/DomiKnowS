@@ -19,15 +19,15 @@ def main():
 
     scaffold = AllennlpScaffold()
     model = make_model(graph, data, scaffold)
-    
+
     with open(saved_path + '/model_emr.th', 'rb') as fin:
         model.load_state_dict(torch.load(fin))
     data.vocab = Vocabulary.from_files(saved_path + '/vocab_emr')
-    
+
     iterator = BucketIterator(batch_size=2, sorting_keys=[('sentence', 'num_tokens')], track_epoch=True)
     iterator.index_with(data.vocab)
     gen = iter(iterator(train_dataset, 1, shuffle=False))
-    
+
     for _ in range(256): next(gen) # skip some samples
     for instance in gen:
         if instance['Work_For'].sum() == 0: continue # skip unwanted samples
