@@ -32,7 +32,7 @@ def word2vec(
     embedding_dim: int,
     token_name: str,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     # token_name='tokens' is from data reader, name of TokenIndexer
     # seq_name='sentence' is from data reader, name of TextField
@@ -42,6 +42,8 @@ def word2vec(
         embedding_dim=embedding_dim)
     word_embeddings = BasicTextFieldEmbedder({
         token_name: token_embedding})
+    dropout = torch.nn.Dropout(0.5)
+    dropout.add_module('emb', word_embeddings)
     if module is not None:
         # add submodule
         # TODO: move to wrapper or concept assignment?
@@ -49,19 +51,19 @@ def word2vec(
 
     def func(data: DataInstance) -> Tensor:
         tensor = input_func(data)  # input_func is tuple(func, conf)
-        tensor = word_embeddings(tensor)
+        tensor = dropout(word_embeddings(tensor))
         return tensor
 
-    return word_embeddings, func
+    return dropout, func
 
 
-def word2vec_lstm(
+def word2vec_rnn(
     input_func: ModuleFunc,
     num_embeddings: int,
     embedding_dim: int,
     token_name: str,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     # token_name='tokens' is from data reader, name of TokenIndexer
     # seq_name='sentence' is from data reader, name of TextField
@@ -72,20 +74,21 @@ def word2vec_lstm(
     word_embeddings = BasicTextFieldEmbedder({
         token_name: token_embedding})
     from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-    lstm = PytorchSeq2SeqWrapper(torch.nn.LSTM(embedding_dim, embedding_dim, batch_first=True))
-
-    lstm.add_module('emb', word_embeddings)
+    rnn = PytorchSeq2SeqWrapper(torch.nn.GRU(embedding_dim, embedding_dim, batch_first=True, dropout=0.5, bidirectional=True))
+    dropout = torch.nn.Dropout(0.5)
+    rnn.add_module('emb', word_embeddings)
+    dropout.add_module('rnn', rnn)
     if module is not None:
         # add submodule
         # TODO: move to wrapper or concept assignment?
-        lstm.add_module('sub', module)
+        word_embeddings.add_module('sub', module)
 
     def func(data: DataInstance) -> Tensor:
         tensor = input_func(data)  # input_func is tuple(func, conf)
-        tensor = lstm(word_embeddings(tensor), data['mask'])
+        tensor = dropout(rnn(word_embeddings(tensor), data['mask']))
         return tensor
 
-    return lstm, func
+    return dropout, func
 
 class Cpcat(Module):
     def __init__(self):
@@ -104,7 +107,7 @@ class Cpcat(Module):
 def cartesianprod_concat(
     input_func: ModuleFunc
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     cpcat = Cpcat()
     if module is not None:
@@ -125,7 +128,7 @@ def fullyconnected(
     input_dim: int,
     label_dim: int,
 ) -> Tuple[Module, ModuleFunc]:
-    (module, input_func), conf = input_func
+    (module, input_func), conf = input_func[0]
 
     fc = torch.nn.Linear(
         in_features=input_dim,
@@ -142,6 +145,30 @@ def fullyconnected(
 
     return fc, func
 
+def logsm(
+    input_func: ModuleFunc,
+    input_dim: int,
+    label_dim: int,
+) -> Tuple[Module, ModuleFunc]:
+    (module, input_func), conf = input_func[0]
+
+    fc = torch.nn.Linear(
+        in_features=input_dim,
+        out_features=label_dim)
+    sm = torch.nn.LogSoftmax(dim=-1)
+
+    sm.add_module('sub', fc)
+    if module is not None:
+        # add submodule
+        # TODO: move to wrapper or concept assignment?
+        fc.add_module('sub', module)
+
+    def func(data: DataInstance) -> Tensor:
+        tensor = input_func(data)
+        tensor = sm(fc(tensor))
+        return tensor
+
+    return sm, func
 
 from regr import Graph
 from regr.scaffold import Scaffold

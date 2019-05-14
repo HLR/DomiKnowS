@@ -1,13 +1,28 @@
 from .. import Graph
 from .inference import inference
 from .base import Scaffold
-from typing import Dict, List, Callable, Iterable
+from typing import Dict, List, Callable, Iterable, Tuple
 from regr import Concept
 from torch import Tensor
 from torch.nn import Module
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models import Model
 from allennlp.nn.util import get_text_field_mask
+
+
+DataInstance = Dict[str, Tensor]
+DataSource = List[DataInstance]
+# NB: list of Instance(dict of str to data format use in module)
+#     For allen nlp, Instance is Dict of str:Field,
+#     and real tensor will be there in forward function
+ModelFunc = Callable[[DataInstance], DataInstance]
+ModuleFunc = Callable[[DataInstance], Tensor]
+# NB: modules are transform from Dict of str:Tensor to updated Dict
+#     module objects in AllenNLP have the forward function of this setting
+# NB 2: torch.nn.Module = Callable[[Any], Tensor]
+#     We should use them in the way that, we construct them in make_model,
+#     preciecely in Library, put them into callback function, and call them
+#     when the real data come and the callback functions are called.
 
 
 class BaseModel(Model):
@@ -19,12 +34,14 @@ class BaseModel(Model):
                            }
         self.meta = {}
         self.metrics = {}
+        self.metrics_inferenced = {}
 
-    def _update_metrics(self, data: Dict[str, Tensor]):
-        for metric_name, metric in self.meta.items():
-            metric(data)
-
-        for metric_name, (metric, module_funcs) in self.metrics.items():
+    def _update_metrics_base(
+        self,
+        data: DataInstance,
+        metrics: Dict[str, Tuple[callable, Tuple[Tuple[Module, callable], float]]]
+    ) -> DataInstance:
+        for metric_name, (metric, module_funcs) in metrics.items():
             vals = []
             for (module, func), conf in module_funcs:
                 # TODO: consider the order, consider the confidence (and module?)
@@ -45,23 +62,58 @@ class BaseModel(Model):
                 pass
 
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
-                from torch.nn import Softmax
-                softmax = Softmax(dim=2)  # (0:batch, 1:len, 2:class)
                 # AUC has problem using GPU
                 if len(size) == 2:
-                    metric(softmax(pred)[:, :, 1].reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
+                    metric(torch.exp(pred)[:, :, 1].reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
                            label.reshape(-1).cpu(),  # (b,l) -> (b*l）
                            )  # FIXME: some problem here
                 elif len(size) == 3:
-                    metric(softmax(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
+                    metric(torch.exp(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
                            label.reshape(-1).cpu(),  # (b,l,l) -> (b*l*l）
                            )  # FIXME: some problem here
             else:
                 metric(pred, label, mask)
         return data
 
+    def _update_metrics_metrics(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        return self._update_metrics_base(data, self.metrics)
+
+    def _update_metrics_metrics_inferenced(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        return self._update_metrics_base(data, self.metrics_inferenced)
+
+    def _need_inference(
+        self,
+        data: DataInstance
+    ) -> bool:
+        epoch_key = 'epoch_num' # TODO: this key... is from Allennlp doc
+        if epoch_key not in data:
+            return True # no epoch record, then always inference
+        epoch = min(data[epoch_key])
+        need =  ((epoch+1) % 10) == 0 # inference every 10 epoch
+        return need # or True
+    
+    def _update_metrics(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        for metric_name, metric in self.meta.items():
+            metric(data)
+        data = self._update_metrics_metrics(data)
+        if self._need_inference(data):
+            data = self._inference(data)
+            data = self._update_metrics_metrics_inferenced(data)
+        return data
+
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
-        output = {}
+        from collections import OrderedDict
+
+        metrics = {}
 
         def add(metric_name, metric):
             out = metric.get_metric(reset)
@@ -69,51 +121,46 @@ class BaseModel(Model):
             import numbers
             if isinstance(out, Iterable):
                 for i, out_item in enumerate(out):
-                    output['{}[{}]'.format(metric_name, i)] = out_item
+                    metrics['{}[{}]'.format(metric_name, i)] = out_item
             else:
-                output[metric_name] = out
+                metrics[metric_name] = out
 
         for metric_name, metric in self.meta.items():
             add(metric_name, metric)
         for metric_name, (metric, _) in self.metrics.items():
             add(metric_name, metric)
+        for metric_name, (metric, _) in self.metrics_inferenced.items():
+            add(metric_name + '_i', metric)
 
-        return output
+        metrics = OrderedDict(sorted(metrics.items()))
+        return metrics
 
     def _update_loss(self, data):
-        if self.loss_func is not None:
+        if hasattr(self, 'loss_func') and self.loss_func is not None:
             data['loss'] = self.loss_func(data)
         return data
 
     def forward(
         self,
-        **data: Dict[str, Tensor]
-    ) -> Dict[str, Tensor]:
+        **data: DataInstance
+    ) -> DataInstance:
 
         ##
         # This is an identical stub
         # something happen here to take the input to the output
         ##
 
-        data = self._update_metrics(data)
         data = self._update_loss(data)
+        data = self._update_metrics(data)
 
         return data
 
-
-DataInstance = Dict[str, Tensor]
-DataSource = List[DataInstance]
-# NB: list of Instance(dict of str to data format use in module)
-#     For allen nlp, Instance is Dict of str:Field,
-#     and real tensor will be there in forward function
-ModelFunc = Callable[[DataInstance], DataInstance]
-ModuleFunc = Callable[[DataInstance], Tensor]
-# NB: modules are transform from Dict of str:Tensor to updated Dict
-#     module objects in AllenNLP have the forward function of this setting
-# NB 2: torch.nn.Module = Callable[[Any], Tensor]
-#     We should use them in the way that, we construct them in make_model,
-#     preciecely in Library, put them into callback function, and call them
-#     when the real data come and the callback functions are called.
+    def _inference(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        # pass through
+        return data
 
 
 class AllennlpScaffold(Scaffold):
@@ -138,7 +185,7 @@ class AllennlpScaffold(Scaffold):
         def wrap_func(data: DataInstance) -> Tensor:
             # TODO: the generation of this string is tricky now
             fullname = '{}[{}]-{}'.format(concept.fullname, prop, pos)
-            if fullname in data:
+            if fullname in data: # lookup to avoid repeated calculation
                 return data[fullname]
             tensor = func(data)
             data[fullname] = tensor
@@ -167,10 +214,11 @@ class AllennlpScaffold(Scaffold):
 
                 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
                 from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
+
                 def F1MeasureProxy(): return F1Measure(1)
+
                 def PrecisionProxy(): return Precision(1)
-                model.meta = {'epoch': Epoch()}
-                model.metrics = {}
+                model.meta['epoch'] = Epoch()
                 metrics = {
                     #'Accuracy': CategoricalAccuracy,
                     #'Precision': PrecisionProxy,
@@ -181,12 +229,16 @@ class AllennlpScaffold(Scaffold):
                 }
 
                 for _, concept, prop, _ in graph.get_multiassign():
-                    #if concept == graph.organization: # just don't print too much
+                    # if concept == graph.organization: # just don't print too much
                     #    continue
                     for metric_name, metric_class in metrics.items():
-                        fullname = '{}[{}]-{}'.format(concept.fullname,
-                                                      prop, metric_name)
-                        model.metrics[fullname] = (
+                        fullname = '\n{}[{}]-{}'.format(concept.fullname,
+                                                        prop, metric_name)
+                        shortname = '\n{}-{}'.format(concept.name, metric_name)
+                        name = shortname
+                        model.metrics[name] = (
+                            metric_class(), concept[prop])
+                        model.metrics_inferenced[name] = (
                             metric_class(), concept[prop])
 
                 i = 0  # TODO: this looks too bad
@@ -194,17 +246,6 @@ class AllennlpScaffold(Scaffold):
                     for (module, _), _ in module_funcs:
                         model.add_module(str(i), module)
                         i += 1
-
-            def _inference(
-                self_,
-                data: DataInstance
-            ) -> DataInstance:
-                # variables in the closure 
-                # scafold - the scafold object
-                # graph - the graph object
-                model = self_
-                
-                return inference(graph, data)
 
             def forward(
                 self_,
@@ -225,9 +266,24 @@ class AllennlpScaffold(Scaffold):
                         func(data)
 
                 data = model._update_loss(data)
-                data = model._inference(data)
                 data = model._update_metrics(data)
 
+                return data
+
+            def _inference(
+                self_,
+                data: DataInstance
+            ) -> DataInstance:
+                # variables in the closure
+                # scafold - the scafold object
+                # graph - the graph object
+                model = self_
+
+                #print(data['global/application/other[label]-1'])
+                data = inference(graph, data,
+                                 model.vocab
+                                )
+                #print(data['global/application/other[label]-1'])
                 return data
 
         return ScaffoldedModel

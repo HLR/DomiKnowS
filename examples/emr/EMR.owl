@@ -83,7 +83,7 @@
     <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="located_in">
-    <rdfs:domain rdf:resource="#organization"/>
+    <rdfs:domain rdf:resource="#location"/>
     <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="work_for">

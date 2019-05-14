@@ -1,7 +1,12 @@
 from regr import Graph, Concept
 
 
+Graph.clear()
+Concept.clear()
+
 with Graph('global') as graph:
+    graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+
     with Graph('linguistic') as ling_graph:
         word = Concept(name='word')
         phrase = Concept(name='phrase')
@@ -9,9 +14,13 @@ with Graph('global') as graph:
         phrase.have(word)
         sentence.have(phrase)
 
+        # if we need POS tags, for example, we can have
         #nn = Concept(name='NN')
-        # nn.is(phrase)
+        #nn.is(phrase)
         # ...
+
+        pair = Concept(name='pair')
+        pair.be((phrase, phrase))
 
     with Graph('application') as app_graph:
         entity = Concept(name='entity')
@@ -27,33 +36,19 @@ with Graph('global') as graph:
         location.be(entity)
         other.be(entity)
         o.be(entity)
-        #entity.be(people or ororganization or location or other or o)
 
         work_for = Concept(name='work_for')
+        work_for.be(pair)
         work_for.be((people, organization))
 
         located_in = Concept(name='located_in')
-        located_in.be((organization, location))
+        located_in.be(pair)
+        located_in.be((location, location))
 
         live_in = Concept(name='live_in')
+        live_in.be(pair)
         live_in.be((people, location))
 
         orgbase_on = Concept(name='orgbase_on')
-        orgbase_on.be((organization, location))
-
-Graph.clear()
-Concept.clear()
-
-# simpler example just fit the case
-with Graph('global') as graph:
-    word = Concept(name='word')
-
-    people = Concept(name='people')
-    organization = Concept(name='organization')
-    people.be(word)
-    organization.be(word)
-
-    pair = Concept(name='pair')
-    pair.be((word, word))
-    workfor = Concept(name='workfor')
-    workfor.be({'employee': people, 'employer': organization})
+        orgbase_on.be(pair)
+        #orgbase_on.be((organization, location))

@@ -6,12 +6,12 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, NEREntityReader
+    from data import Data, Conll04TokenBinaryReader
     from models import get_trainer, datainput, word2vec, fullyconnected
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, NEREntityReader
+    from .data import Data, Conll04TokenBinaryReader
     from .models import get_trainer, datainput, word2vec, fullyconnected
     from .graph import graph
 
@@ -21,6 +21,10 @@ entity_label_configs = {'people': {'entity_name': 'people',
                                    'label_name': 'Peop'},
                         'organization': {'entity_name': 'organization',
                                          'label_name': 'Org'},
+                        'location': {'entity_name': 'location',
+                                     'label_name': 'Loc'},
+                        'other': {'entity_name': 'other',
+                                  'label_name': 'Other'},
                         }
 
 # data setting
@@ -43,30 +47,32 @@ PATIENCE = None
 def make_model(graph: Graph,
                data: Data,
                scaffold: Scaffold,
-               entity_name: str
+               entity_name: str,
+               label_name: str
                ) -> Model:
-    # get concepts from graph
-    word = graph.word
-    entity = graph[entity_name] # graph.people / graph.organization
-
-    # binding
+    # initialize the graph
     graph.release()  # release anything binded before new assignment
 
+    # get concepts from graph
+    phrase = graph.linguistic.phrase
+    # graph.people / graph.organization
+    entity = graph.application[entity_name]
+
     # filling in data and label
-    scaffold.assign(word, 'index', datainput(data['sentence']))
-    scaffold.assign(entity, 'label', datainput(data['label']))
+    scaffold.assign(phrase, 'index', datainput(data['sentence']))
+    scaffold.assign(entity, 'label', datainput(data[label_name]))
 
     # building model
-    scaffold.assign(word, 'emb',
+    scaffold.assign(phrase, 'emb',
                     word2vec(
-                        word['index'],
+                        phrase['index'],
                         data.vocab.get_vocab_size('tokens'),
                         EMBEDDING_DIM,
                         'tokens'
                     ))
     scaffold.assign(entity, 'label',
                     fullyconnected(
-                        word['emb'],
+                        phrase['emb'],
                         EMBEDDING_DIM,
                         2
                     ))
@@ -108,7 +114,7 @@ def main():
     config = entity_label_configs[entity]
 
     # data
-    reader = NEREntityReader(config['label_name'])
+    reader = Conll04TokenBinaryReader({config['label_name'],})
     train_dataset = reader.read(os.path.join(relative_path, train_path))
     valid_dataset = reader.read(os.path.join(relative_path, valid_path))
     data = Data(train_dataset, valid_dataset)
@@ -116,7 +122,7 @@ def main():
     scaffold = AllennlpScaffold()
 
     # model from graph
-    model = make_model(graph, data, scaffold, config['entity_name'])
+    model = make_model(graph, data, scaffold, config['entity_name'], config['label_name'])
 
     # trainer for model
     batch = BATCH * 24  # multiply by average len, so compare to sentence level experiments

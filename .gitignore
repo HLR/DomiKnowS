@@ -107,3 +107,6 @@ venv.bak/
 .mypy_cache/
 /.project
 /.pydevproject
+/.vscode/
+/data/
+/EMR.owl

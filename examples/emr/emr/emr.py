@@ -6,13 +6,13 @@ from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from data import Data, EMRPeopWorkforOrgReader
-    from models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from data import Data, Conll04BinaryReader as Reader
+    from models import get_trainer, datainput, word2vec, word2vec_rnn, fullyconnected, cartesianprod_concat, logsm
     from graph import graph
 else:
     # uses current package visibility
-    from .data import Data, EMRPeopWorkforOrgReader
-    from .models import get_trainer, datainput, word2vec, fullyconnected, cartesianprod_concat
+    from .data import Data, Conll04BinaryReader as Reader
+    from .models import get_trainer, datainput, word2vec, word2vec_rnn, fullyconnected, cartesianprod_concat, logsm
     from .graph import graph
 
 
@@ -22,13 +22,13 @@ train_path = "conll04_train.corp"
 valid_path = "conll04_test.corp"
 
 # model setting
-EMBEDDING_DIM = 64
+EMBEDDING_DIM = 8
 
 # training setting
 LR = 0.001
 WD = 0.0001
-BATCH = 128
-EPOCH = 200
+BATCH = 8
+EPOCH = 50
 PATIENCE = None
 
 
@@ -37,55 +37,112 @@ def make_model(graph: Graph,
                data: Data,
                scaffold: Scaffold
                ) -> Model:
-    # get concepts from graph
-    word = graph.word
-    people = graph.people
-    organization = graph.organization
-    workfor = graph.workfor
-    pair = graph.pair
-
-    # binding
+    # initialize the graph
     graph.release()  # release anything binded before new assignment
 
-    # filling in data and label
-    scaffold.assign(word, 'index', datainput(data['sentence']))
-    scaffold.assign(people, 'label', datainput(data['Peop_labels']))
-    scaffold.assign(organization, 'label', datainput(data['Org_labels']))
-    scaffold.assign(workfor, 'label', datainput(data['relation_labels']))
+    # get concepts from graph
+    phrase = graph.linguistic.phrase
+    # concepts
+    people = graph.application.people
+    organization = graph.application.organization
+    location = graph.application.location
+    other = graph.application.other
+    O = graph.application.O
+    # composed
+    pair = graph.linguistic.pair
+    # composed concepts
+    work_for = graph.application.work_for
+    live_in = graph.application.live_in
+    located_in = graph.application.located_in
+    orgbase_on = graph.application.orgbase_on
+
+    # data
+    scaffold.assign(phrase, 'index', datainput(data['sentence']))
+    # concept labels
+    scaffold.assign(people, 'label', datainput(data['Peop']))
+    scaffold.assign(organization, 'label', datainput(data['Org']))
+    scaffold.assign(location, 'label', datainput(data['Loc']))
+    scaffold.assign(other, 'label', datainput(data['Other']))
+    scaffold.assign(O, 'label', datainput(data['O']))
+    # composed concept labels
+    scaffold.assign(work_for, 'label', datainput(data['Work_For']))
+    scaffold.assign(live_in, 'label', datainput(data['Live_In']))
+    scaffold.assign(located_in, 'label', datainput(data['Located_In']))
+    scaffold.assign(orgbase_on, 'label', datainput(data['OrgBased_In']))
 
     # building model
-    scaffold.assign(word, 'emb',
-                    word2vec(
-                        word['index'],
+    # embedding
+    scaffold.assign(phrase, 'emb',
+                    word2vec_rnn(
+                        phrase['index'],
                         data.vocab.get_vocab_size('tokens'),
                         EMBEDDING_DIM,
-                        'tokens'
+                        'tokens' # token name related to data reader
                     ))
+    # predictor
     scaffold.assign(people, 'label',
-                    fullyconnected(
-                        word['emb'],
-                        EMBEDDING_DIM,
-                        2
-                    ))
-    scaffold.assign(organization, 'label',
-                    fullyconnected(
-                        word['emb'],
-                        EMBEDDING_DIM,
-                        2
-                    ))
-    # TODO: pair['emb'] should be infer from word['emb'] according to their relationship
-    # but we specify it here to make it a bit easier for implementation
-    scaffold.assign(pair, 'emb',
-                    cartesianprod_concat(
-                        word['emb']
-                    ))
-    scaffold.assign(workfor, 'label',
-                    fullyconnected(
-                        pair['emb'],
+                    logsm(
+                        phrase['emb'],
                         EMBEDDING_DIM * 2,
                         2
                     ))
-    # now people['label'] has multiple assignment,
+    scaffold.assign(organization, 'label',
+                    logsm(
+                        phrase['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    scaffold.assign(location, 'label',
+                    logsm(
+                        phrase['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    scaffold.assign(other, 'label',
+                    logsm(
+                        phrase['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    scaffold.assign(O, 'label',
+                    logsm(
+                        phrase['emb'],
+                        EMBEDDING_DIM * 2,
+                        2
+                    ))
+    # TODO: pair['emb'] should be infer from phrase['emb'] according to their relationship
+    # but we specify it here to make it a bit easier for implementation
+    # composed embedding
+    scaffold.assign(pair, 'emb',
+                    cartesianprod_concat(
+                        phrase['emb']
+                    ))
+    # composed predictor
+    scaffold.assign(work_for, 'label',
+                    logsm(
+                        pair['emb'],
+                        EMBEDDING_DIM * 4,
+                        2
+                    ))
+    scaffold.assign(live_in, 'label',
+                    logsm(
+                        pair['emb'],
+                        EMBEDDING_DIM * 4,
+                        2
+                    ))
+    scaffold.assign(located_in, 'label',
+                    logsm(
+                        pair['emb'],
+                        EMBEDDING_DIM * 4,
+                        2
+                    ))
+    scaffold.assign(orgbase_on, 'label',
+                    logsm(
+                        pair['emb'],
+                        EMBEDDING_DIM * 4,
+                        2
+                    ))
+    # now every ['label'] has multiple assignment,
     # and the loss should come from the inconsistency here
 
     # get the model
@@ -119,7 +176,7 @@ seed1()
 
 def main():
     # data
-    reader = EMRPeopWorkforOrgReader()
+    reader = Reader()
     train_dataset = reader.read(os.path.join(relative_path, train_path))
     valid_dataset = reader.read(os.path.join(relative_path, valid_path))
     data = Data(train_dataset, valid_dataset)
