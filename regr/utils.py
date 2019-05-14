@@ -2,6 +2,7 @@ import inspect
 import keyword
 
 from collections import OrderedDict
+from typing import Iterable
 
 
 def extract_args(*args, **kwargs):
@@ -32,3 +33,15 @@ def log(*args, **kwargs):
             print('{}:\n{}'.format(k, v))
         else:
             print('{}: {}'.format(k, v))
+
+
+def printablesize(ni):
+    if hasattr(ni, 'shape'):
+        return 'tensor'+str(tuple(ni.shape))+''
+    elif isinstance(ni, Iterable):
+        if len(ni) > 0:
+            return 'iterable('+str(len(ni))+')' + '[' + printablesize(ni[0]) + ']'
+        else:
+            return 'iterable('+str(len(ni))+')[]'
+    else:
+        return str(type(ni))

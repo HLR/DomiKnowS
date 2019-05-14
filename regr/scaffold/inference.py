@@ -3,6 +3,7 @@ from typing import Dict
 from torch import Tensor
 import torch
 import pandas as pd
+from ..utils import printablesize
 
 
 DataInstance = Dict[str, Tensor]
@@ -240,15 +241,3 @@ def inference(
             #print('11-'*40)
 
     return data
-
-from typing import Iterable
-def printablesize(ni):
-    if isinstance(ni, Tensor):
-        return 'Tensor'+str(tuple(ni.size()))+''
-    elif isinstance(ni, Iterable):
-        if len(ni) > 0:
-            return 'iterable('+str(len(ni))+')' + '[' + printablesize(ni[0]) + ']'
-        else:
-            return 'iterable('+str(len(ni))+')[]'
-    else:
-        return str(type(ni))
