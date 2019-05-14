@@ -152,7 +152,7 @@ def main():
     # save the model
     with open("/tmp/model_ners.th", 'wb') as fout:
         torch.save(model.state_dict(), fout)
-    data.vocab.save_to_files("/tmp/vocab_ner")
+    data.vocab.save_to_files("/tmp/vocab_ners")
 
 
 if __name__ == '__main__':
