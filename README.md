@@ -10,10 +10,44 @@ This project is under heavy development and not yet ready to use.
 
 ## TODO
 
-- [ ] `emr` example: a simple NLP task that has some structural relation, which shows how the graph should weave everything together.
-- [ ] `make_model`: graph should be aware of all data and connecting them to the model.
+- [x] `emr` example: a simple NLP task that has some structural relation, which shows how the graph should weave everything together.
+- [x] `make_model`: graph should be aware of all data and connecting them to the model.
 - [ ] Collection: should have a clear way to define sequence/set/... or any collection of basic concepts. The has-a relation holds such semantic but should be made more clear and some detail implementation should be carried out. They should be related to the Rank of each concept.
 - [ ] `ComposeConcept` : a clear definition (a class?) of compositional concepts in the graph.
+- [ ] `Property`: Properties that are needed, as domain knowledge.
+- [ ] Decompose graph with computation further. Take them off from `Concept`.
+- [ ] Update inference interface.
+- [ ] Documentation
+- [ ] CI / Testing ...
+
+
+## Outline
+
+Relational Graph is a learning-based program.
+We propose the pipeline bridging ontologie to a relational graph as a learning-base program.
+There are three major steps in the pipeline: 1) ontology declaration, 2) model declaration, and 3) inference.
+To fullfill this pipeline, there are several components in this library:
+
+1. compiler
+
+   Compile the ontology in conventional file formats, e.g. OWL, etc.
+
+1. graph
+
+   The internal representation of ontology in our pipeline as the output of compiler.
+   A language to communicate in.
+   Also the body of the learning-based program, referred to as partial program.
+
+1. module
+
+   The interface to data and computation.
+   
+   1. sensor
+   2. learner
+   
+1. solver
+
+   Inference by solving constrained optimization problems.
 
 
 ## Related
