@@ -64,3 +64,6 @@ Since we focus on Natural Language Processing (NLP) examples at the current stag
 
 `numpydoc`: https://github.com/numpy/numpydoc
 We plan to use document the code use `doc string` base on `numpydoc`.
+
+Semaphore CI: https://semaphoreci.com/
+We use Semaphore CI to manage code changes.
