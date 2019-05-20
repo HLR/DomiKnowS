@@ -1,8 +1,7 @@
-from .. import Graph
-from .inference import inference
+from ..graph import Graph, Concept
+from ..solver.inference import inference
 from .base import Scaffold
 from typing import Dict, List, Callable, Iterable, Tuple
-from regr import Concept
 from torch import Tensor
 from torch.nn import Module
 from allennlp.data.vocabulary import Vocabulary

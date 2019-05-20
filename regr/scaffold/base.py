@@ -1,4 +1,4 @@
-from .. import Graph, Concept
+from ..graph import Graph, Concept
 import abc
 from typing import Callable
 

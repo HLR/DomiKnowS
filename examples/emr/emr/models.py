@@ -11,7 +11,7 @@ from torch import Tensor
 from torch.nn import Module
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from regr import Graph, Concept
+from regr.graph import Graph, Concept
 
 from regr.scaffold.allennlp import ModuleFunc, DataInstance
 
@@ -170,7 +170,7 @@ def logsm(
 
     return sm, func
 
-from regr import Graph
+from regr.graph import Graph
 from regr.scaffold import Scaffold
 from regr.scaffold.allennlp import BaseModel
 from allennlp.training.trainer import Trainer

@@ -1,7 +1,7 @@
 import os
 import torch
 from allennlp.models.model import Model
-from regr import Graph
+from regr.graph import Graph
 from regr.scaffold import Scaffold, AllennlpScaffold
 
 if __package__ is None or __package__ == '':

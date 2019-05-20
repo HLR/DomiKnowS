@@ -11,14 +11,9 @@ from gurobipy import *
 from owlready2 import *
 from pathlib import Path
 
-if __package__ is None or __package__ == '':
-    from regr.concept import Concept, enum
-    from regr.graph import Graph
-    from regr.relation import Relation, Be, Have
-else:
-    from .concept import Concept, enum
-    from .graph import Graph
-    from .relation import Relation, Be, Have
+from ..graph.concept import Concept, enum
+from ..graph.graph import Graph
+from ..graph.relation import Relation, Be, Have
 
 def loadOntology(ontologyURL, ontologyPathname = "./"):
     # Check if ontology path is correct

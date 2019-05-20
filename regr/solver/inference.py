@@ -1,9 +1,10 @@
-from .. import Graph
+from ..graph import Graph
 from typing import Dict
 from torch import Tensor
 import torch
 import pandas as pd
 from ..utils import printablesize
+from .ilpSelectClassification import calculateILPSelection
 
 
 DataInstance = Dict[str, Tensor]
@@ -131,7 +132,6 @@ def inference(
                 )
 
         # do inference
-        from ..ilpSelectClassification import calculateILPSelection
         #print('3-'*40)
         #print(graphResultsForPhraseToken)
         #print('4-'*40)

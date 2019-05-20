@@ -1,4 +1,4 @@
-from regr import Graph, Concept
+from regr.graph import Graph, Concept
 
 
 Graph.clear()
