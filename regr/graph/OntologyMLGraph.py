@@ -3,6 +3,9 @@ from string import Template
 from pathlib import Path
 from owlready2 import *
 
+# path to Meta Graph ontology
+graphMetaOntologyPathname = "./regr/graph/ontology/ML/"
+
 class OntologyMLGraphCreator :
     'Class building graph based on ontology'
     
@@ -18,15 +21,23 @@ class OntologyMLGraphCreator :
         self.name = name
     
     def loadOntology(self, ontologyURL, ontologyPathname = "./"):
+        
+        # Check if Graph Meta ontology path is correct
+        graphMetaOntologyPath = Path(os.path.normpath(graphMetaOntologyPathname))
+        graphMetaOntologyPath = graphMetaOntologyPath.resolve()
+        if not os.path.isdir(graphMetaOntologyPath):
+            print("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
+            exit()
+        
         # Check if ontology path is correct
         ontologyPath = Path(os.path.normpath(ontologyPathname))
         ontologyPath = ontologyPath.resolve()
         if not os.path.isdir(ontologyPath):
-            print("Path to load ontology:", ontologyPath, "does not exists")
+            print("Path to load ontology: %s does not exists in current directory %s"%(ontologyPath,currentPath))
             exit()
 
+        onto_path.append(graphMetaOntologyPath)
         onto_path.append(ontologyPath) # the folder with the ontology
-        onto_path.append("./ontology/ML/") # the folder with the ML ontology
 
         # Load ontology
         try :
@@ -133,10 +144,12 @@ class OntologyMLGraphCreator :
     
 # --------- Testing
 
+emrExamplePath = "examples/emr/"
+
 def main() :
      #-- EMR
     emrOntologyMLGraphCreator = OntologyMLGraphCreator("EMR")
-    emrGraphFileName = emrOntologyMLGraphCreator.buildGraph("http://ontology.ihmc.us/ML/EMR.owl", "EMRGraph.py",  ontologyPathname = "examples/emr/")
+    emrGraphFileName = emrOntologyMLGraphCreator.buildGraph("http://ontology.ihmc.us/ML/EMR.owl", "EMRGraph.py",  ontologyPathname = emrExamplePath)
     
     emrGraphFile = open(emrGraphFileName, 'r')
     print("\nGraph build based on ontology - Python source code - %s\n\n" %emrGraphFileName, emrGraphFile.read())
