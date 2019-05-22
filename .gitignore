@@ -110,3 +110,4 @@ venv.bak/
 /.vscode/
 /data/
 /EMR.owl
+/EMRGraph.py
