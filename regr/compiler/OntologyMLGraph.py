@@ -4,7 +4,7 @@ from pathlib import Path
 from owlready2 import *
 
 # path to Meta Graph ontology
-graphMetaOntologyPathname = "./regr/graph/ontology/ML/"
+graphMetaOntologyPathname = "./ontology/ML/"
 
 class OntologyMLGraphCreator :
     'Class building graph based on ontology'

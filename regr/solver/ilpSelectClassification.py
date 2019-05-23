@@ -11,7 +11,7 @@ from gurobipy import *
 from owlready2 import *
 
 # path to Meta Graph ontology
-graphMetaOntologyPathname = "./regr/graph/ontology/ML/"
+graphMetaOntologyPathname = "./ontology/ML/"
 
 # path
 from pathlib import Path
