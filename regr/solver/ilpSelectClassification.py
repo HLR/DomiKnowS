@@ -9,20 +9,41 @@ from gurobipy import *
 
 # ontology
 from owlready2 import *
+
+# path to Meta Graph ontology
+graphMetaOntologyPathname = "./regr/graph/ontology/ML/"
+
+# path
 from pathlib import Path
 
-from ..graph.concept import Concept, enum
-from ..graph.graph import Graph
-from ..graph.relation import Relation, Be, Have
+if __package__ is None or __package__ == '':
+    from regr.graph.concept import Concept, enum
+    from regr.graph.graph import Graph
+    from regr.graph.relation import Relation, Be, Have
+else:
+    from ..graph.concept import Concept, enum
+    from ..graph.graph import Graph
+    from ..graph.relation import Relation, Be, Have
 
 def loadOntology(ontologyURL, ontologyPathname = "./"):
+    
+    currentPath = Path(os.path.normpath("./")).resolve()
+    
+    # Check if Graph Meta ontology path is correct
+    graphMetaOntologyPath = Path(os.path.normpath(graphMetaOntologyPathname))
+    graphMetaOntologyPath = graphMetaOntologyPath.resolve()
+    if not os.path.isdir(graphMetaOntologyPath):
+        print("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
+        exit()
+        
     # Check if ontology path is correct
     ontologyPath = Path(os.path.normpath(ontologyPathname))
     ontologyPath = ontologyPath.resolve()
     if not os.path.isdir(ontologyPath):
-        print("Path to load ontology:", ontologyPath, "does not exists")
+        print("Path to load ontology: %s does not exists in current directory %s"%(ontologyPath,currentPath))
         exit()
 
+    onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
     onto_path.append(ontologyPath) # the folder with the ontology
 
     # Load ontology

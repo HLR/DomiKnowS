@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:mlgraph="http://ontology.ihmc.us/ML/MLGraph.owl#"
+  xml:base="http://ontology.ihmc.us/ML/MLGraph.owl">
+  <owl:Ontology rdf:about="">
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >This ontology contains Machine Learning Graph concepts. Created by Andrzej Uszok (auszok@ihmc.us).</rdfs:comment>
+  </owl:Ontology>
+  
+  <owl:AnnotationProperty rdf:ID="graphType"/>
+  <owl:AnnotationProperty rdf:ID="graphName"/>
+</rdf:RDF>
+
+<!-- Created with TopBraid -->
