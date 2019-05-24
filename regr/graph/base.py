@@ -175,10 +175,10 @@ class NamedTree(Named):
         self._sup = None
 
     def add(self, obj):
-        if isinstance(obj, NamedTree):
+        if isinstance(obj, Named):
             self.subs[obj.name] = obj
         else:
-            raise TypeError('Add Tree instance, {} instance given.'.format(type(obj)))
+            raise TypeError('Add Named instance, {} instance given.'.format(type(obj)))
 
     @property
     def scope_key(self):
@@ -200,6 +200,25 @@ class NamedTree(Named):
             self._sup = sup
             sup.add(self)
 
+    def __iter__(self):
+        return self.subs.items()
+
+    def __setitem__(self, name, obj):
+        self.subs[name] = obj
+
+    def __delitem__(self, name):
+        del self.subs[name] # TODO
+
+    def release(self):
+        for sub in self.subs.values():
+            if isinstance(sub, NamedTree):
+                sub.release()
+            else:
+                del self.subs[sub.name] # TODO
+
+    def __len__(self):
+        return len(self.subs)
+
     def __enter__(self):
         cls = type(self)
         self.sup = cls.default
@@ -209,6 +228,23 @@ class NamedTree(Named):
     def __exit__(self, exc_type, exc_value, traceback):
         cls = type(self)
         cls.default = self.sup
+
+    def __getattr__(self, name):
+        return self.subs[name]
+
+    def __getitem__(self, name, delim='/', trim=True):
+        tokens = name.split(delim, 1)
+        if trim:
+            tokens = [token.trim() for token in tokens]
+        if len(tokens) > 1:
+            return self.subs[tokens[0]][tokens[1]]
+        return self.subs[tokens[0]]
+
+    @property
+    def fullname(self):
+        if self.sup is None:
+            return self.name
+        return self.sup.fullname + '/' + self.name
 
     def what(self):
         return {'sup': self.sup,

@@ -113,7 +113,7 @@ class Concept(Scorable, Propertied):
     def get_multiassign(self):
         for prop, value in self.props.items():
             if len(value) > 1:
-                yield self, prop, value
+                yield self._graph, self, prop, value
 
     @property
     def rank(self):

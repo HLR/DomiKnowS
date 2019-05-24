@@ -89,6 +89,13 @@ class Be(Relation):
         return src_view
 
 
+@Concept.register_rel_type('not')
+class Disjoint(Relation):
+    def _T(self, src_view):
+        # identical transform
+        return not src_view
+
+
 @Concept.register_rel_type('have')
 class Have(Relation):
     def __init__(self, src, dst, have=None, name=None):
