@@ -1,6 +1,6 @@
 import abc
 
-class Module(object):
+class Sensor(object):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod

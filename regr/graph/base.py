@@ -2,7 +2,48 @@ import abc
 from collections import Counter, defaultdict, OrderedDict
 from contextlib import contextmanager
 from threading import Lock
+from itertools import chain
 import pprint
+
+
+def entuple(args):
+    if isinstance(args, tuple):
+        return args
+    return (args,)
+
+
+def singleton(cls, getter=None, setter=None):
+    if getter is None:
+        def getter(*args, **kwargs):
+            if hasattr(cls, '__singleton__'):
+                return cls.__singleton__
+            return None
+    if setter is None:
+        def setter(obj):
+            cls.__singleton__ = obj
+
+    __old_new__ = cls.__new__
+
+    def __new__(cls, *args, **kwargs):
+        obj = getter(*args, **kwargs)
+        if obj is None:
+            obj = __old_new__(cls, *args, **kwargs)
+            obj.__i_am_the_new_singoton__ = True
+            setter(obj)
+            return obj
+        else:
+            return obj
+
+    __old_init__ = cls.__init__
+
+    def __init__(self, *args, **kwargs):
+        if hasattr(self, '__i_am_the_new_singoton__') and self.__i_am_the_new_singoton__:
+            del self.__i_am_the_new_singoton__
+            __old_init__(self, *args, **kwargs)
+
+    cls.__new__ = staticmethod(__new__)
+    cls.__init__ = __init__
+    return cls
 
 
 class Scoped(object):
@@ -42,7 +83,7 @@ class Scoped(object):
     def scope(self, blocking=None):
         if blocking is None:
             blocking = self._blocking
-        lock = self.__context.__locks[self.scope_key]
+        lock = type(self).__context.__locks[self.scope_key]
         try:
             yield lock.acquire(self._blocking)
         finally:
@@ -51,6 +92,21 @@ class Scoped(object):
     @property
     def scope_key(self):
         return type(self)
+
+    @staticmethod
+    def class_scope(cls_):
+        # cls_ is not caller (Scoped) class! This is a static function
+        cls_.scope_key = Scoped.scope_key
+        return cls_
+
+    @staticmethod
+    def instance_scope(cls_):
+        # cls_ is not caller (Scoped) class! This is a static function
+        def scope_key(self_):
+            # claim recursive check at instance level so it is possible to show properties of the same type
+            return self_
+        cls_.scope_key = property(scope_key)
+        return cls_
 
 
 Scoped._Scoped__context = Scoped
@@ -63,38 +119,32 @@ class Named(Scoped):
 
     def __repr__(self):
         cls = type(self)
-        with self.scope() as need_detail:
-            if need_detail and callable(getattr(self, 'what', None)):
-                repr_str = '{class_name}(name=\'{name}\', what={what})'.format(class_name=cls.__name__,
+        with self.scope() as detailed:
+            if detailed and callable(getattr(self, 'what', None)):
+                repr_str = '{class_name}(name=\'{name}\', what={what!r})'.format(class_name=cls.__name__,
                                                                                name=self.name,
-                                                                               what=pprint.pformat(self.what(), width=8))
+                                                                               what=self.what())
             else:
                 repr_str = '{class_name}(name=\'{name}\')'.format(class_name=cls.__name__,
                                                                   name=self.name)
         return repr_str
 
 
-def local_names_and_objs(cls):
-    cls._names = Counter()
-    cls._objs = dict()
-    return cls
-
-
-def named_singleton(cls):
-    class singleton():
-        def __new__(cls_, name):
-            if name in cls._objs:
-                return cls.get()
-            cls.__new__(cls, name)
-    return cls
-
-
-@local_names_and_objs
 class AutoNamed(Named):
+    _names = Counter()
+    _objs = dict()
+
     @classmethod
     def clear(cls):
         cls._names.clear()
         cls._objs.clear()
+
+    @staticmethod
+    def localize_namespace(cls_):
+        # cls_ is not caller (AutoNamed) class! This is a static function
+        cls_._names = Counter()
+        cls_._objs = dict()
+        return cls_
 
     @classmethod
     def get(cls, name, value=None):
@@ -123,6 +173,22 @@ class AutoNamed(Named):
     def __init__(self, name=None):
         Named.__init__(self, name)  # temporary name may apply
         self.assign_suggest_name(name)
+
+    @staticmethod
+    def named_singleton(cls_):
+        # cls_ is not caller (AutoNamed) class! This is a static function
+        if not issubclass(cls_, AutoNamed):
+            raise TypeError('named_singleton can be applied to subclasses of AutoNamed,' +
+                            ' but MRO of {} is given.'.format(cls_.mro()))
+
+        def getter(name=None):
+            return cls_.get(name, None)
+
+        def setter(obj):
+            pass  # AutoNamed save them already
+
+        cls_ = singleton(cls_, getter, setter)
+        return cls_
 
 
 class Propertied(object):
@@ -166,28 +232,28 @@ class Scorable(AutoNamed):
         return self.score(*args, **kwargs)
 
 
-class NamedTree(Named):
-    default = None
-
+class NamedTreeNode(Named):
     def __init__(self, name=None):
         Named.__init__(self, name)
-        self._subs = OrderedDict()
-        self._sup = None
+        cls = type(self)
+        self.sup = cls.context
 
-    def add(self, obj):
-        if isinstance(obj, Named):
-            self.subs[obj.name] = obj
-        else:
-            raise TypeError('Add Named instance, {} instance given.'.format(type(obj)))
+    context = None
 
-    @property
-    def scope_key(self):
-        # claim recursive check at instance level so it is possible to show children
+    @staticmethod
+    def localize_context(cls_):
+        # cls_ is not caller (NamedTree) class! This is a static function
+        cls_.context = None
+        return cls_
+
+    def __enter__(self):
+        cls = type(self)
+        cls.context = self
         return self
 
-    @property
-    def subs(self):
-        return self._subs
+    def __exit__(self, exc_type, exc_value, traceback):
+        cls = type(self)
+        cls.context = self.sup
 
     @property
     def sup(self):
@@ -195,60 +261,102 @@ class NamedTree(Named):
 
     @sup.setter
     def sup(self, sup):
-        # TODO: resolve and prevent recursive definition
-        if sup is not None:
-            self._sup = sup
-            sup.add(self)
-
-    def __iter__(self):
-        return self.subs.items()
-
-    def __setitem__(self, name, obj):
-        self.subs[name] = obj
-
-    def __delitem__(self, name):
-        del self.subs[name] # TODO
-
-    def release(self):
-        for sub in self.subs.values():
-            if isinstance(sub, NamedTree):
-                sub.release()
-            else:
-                del self.subs[sub.name] # TODO
-
-    def __len__(self):
-        return len(self.subs)
-
-    def __enter__(self):
-        cls = type(self)
-        self.sup = cls.default
-        cls.default = self
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        cls = type(self)
-        cls.default = self.sup
-
-    def __getattr__(self, name):
-        return self.subs[name]
-
-    def __getitem__(self, name, delim='/', trim=True):
-        tokens = name.split(delim, 1)
-        if trim:
-            tokens = [token.trim() for token in tokens]
-        if len(tokens) > 1:
-            return self.subs[tokens[0]][tokens[1]]
-        return self.subs[tokens[0]]
+        if sup is None:
+            self._sup = None
+            return
+        sup.attach(self)
 
     @property
-    def fullname(self):
+    def sups(self):
+        yield self.sup
+        if self.sup is not None:
+            yield self.sup.sup
+
+    @property
+    def fullname(self, delim='/'):
         if self.sup is None:
             return self.name
-        return self.sup.fullname + '/' + self.name
+        return self.sup.fullname + delim + self.name
 
     def what(self):
-        return {'sup': self.sup,
-                'subs': dict(self.subs)}
+        return {'sup': self.sup}
+
+
+@Scoped.instance_scope
+class NamedTree(NamedTreeNode, OrderedDict):
+    def __hash__(self):
+        return hash((type(self), self.name))
+
+    def __init__(self, name=None):
+        NamedTreeNode.__init__(self, name)
+        OrderedDict.__init__(self)
+
+    def attach(self, sub):
+        # TODO: resolve and prevent recursive definition
+        if sub in self.sups:
+            raise ValueError('Recursive definition detected for attaching {} to {} with sups {}'.format(
+                sub.name, self.name, list(self.sups)))
+        if isinstance(sub, NamedTreeNode):
+            sub.detach(sub)
+            sub._sup = self
+        if isinstance(sub, Named):
+            self[sub.name] = sub
+        else:
+            raise TypeError(
+                'Attach Named instance to NamedTree, {} instance given.'.format(type(obj)))
+
+    def detach(self, sub=None, all=False):
+        if sub is None:
+            if all:
+                return self.clear()
+            # detach all leaves
+            for sub in self.values():
+                if isinstance(sub, NamedTree):
+                    sub.detach()
+                else:
+                    self.detach(sub)
+            return
+        # detach specific sub
+        if sub.name in self:
+            del self[sub.name]
+
+    def traverse_apply(self, names, func):
+        if len(names) > 1:
+            return self[names[0]].traverse_apply(names[1:], func)
+        # this is only one layer above the leaf layer
+        return func(self, names[0])
+
+    def parse_traverse_apply(self, names, func, delim='/', trim=True):
+        names = list(chain(*(name.split(delim) for name in names)))
+        if trim:
+            names = [name.strip() for name in names]
+        return self.traverse_apply(names, func)
+
+    def get_sub(self, *names, delim='/', trim=True):
+        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__getitem__(d, k), delim, trim)
+
+    def set_sub(self, *names, sub, delim='/', trim=True):
+        # NB: obj is keyword arg because it is after a list arg
+        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__setitem__(d, k, sub), delim, trim)
+
+    def del_sub(self, *names, delim='/', trim=True):
+        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__delitem__(d, k), delim, trim)
+
+    def __getitem__(self, name):
+        return self.get_sub(*entuple(name))
+
+    def __setitem__(self, name, obj):
+        return self.set_sub(*entuple(name), sub=obj)
+
+    def __delitem__(self, name):
+        return self.del_sub(*entuple(name))
+
+    def what(self):
+        wht = NamedTreeNode.what(self)
+        #wht['subs'] = self.keys()
+        #import pdb
+        #pdb.set_trace()
+        return wht
 
 
 class SubScorable(Scorable, NamedTree):
@@ -259,53 +367,6 @@ class SubScorable(Scorable, NamedTree):
     def score(self, depth=float('inf'), *args, **kwargs):
         score = 0
         if depth > 0:
-            score += sum([sub(depth - 1, *args, **kwargs) for sub in self._subs])
+            score += sum([sub(depth - 1, *args, **kwargs)
+                          for sub in self._subs])
         return score
-
-def singleton(cls, getter=None, setter=None):
-    if getter is None:
-        def getter(*args, **kwargs):
-            if hasattr(cls, '__singleton__'):
-                return cls.__singleton__
-            return None
-    if setter is None:
-        def setter(obj):
-            cls.__singleton__ = obj
-
-    __old_new__ = cls.__new__
-
-    def __new__(cls, *args, **kwargs):
-        obj = getter(*args, **kwargs)
-        if obj is None:
-            obj = __old_new__(cls, *args, **kwargs)
-            obj.__i_am_the_new_singoton__ = True
-            setter(obj)
-            return obj
-        else:
-            return obj
-
-    __old_init__ = cls.__init__
-
-    def __init__(self, *args, **kwargs):
-        if hasattr(self, '__i_am_the_new_singoton__') and self.__i_am_the_new_singoton__:
-            del self.__i_am_the_new_singoton__
-            __old_init__(self, *args, **kwargs)
-
-    cls.__new__ = staticmethod(__new__)
-    cls.__init__ = __init__
-    return cls
-
-
-def named_singleton(cls):
-    if not issubclass(cls, AutoNamed):
-        raise TypeError('named_singleton can be applied to subclasses of AutoNamed,' +
-                        ' but MRO of {} is given.'.format(cls.mro()))
-
-    def getter(name=None):
-        return cls.get(name, None)
-
-    def setter(obj):
-        pass  # AutoNamed save them already
-
-    cls = singleton(cls, getter, setter)
-    return cls

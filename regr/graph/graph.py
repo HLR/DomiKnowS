@@ -1,10 +1,10 @@
 from collections import OrderedDict
 if __package__ is None or __package__ == '':
-    from base import SubScorable, local_names_and_objs
+    from base import SubScorable
 else:
-    from .base import SubScorable, local_names_and_objs
+    from .base import SubScorable
 
-@local_names_and_objs
+@SubScorable.localize_namespace
 class Graph(SubScorable):
     # local tree structure
     default = None

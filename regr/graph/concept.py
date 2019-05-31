@@ -1,9 +1,9 @@
 from collections import defaultdict, Iterable, OrderedDict
 if __package__ is None or __package__ == '':
-    from base import Scorable, Propertied, local_names_and_objs
+    from base import Scorable, Propertied
     from backend import Backend, NumpyBackend
 else:
-    from .base import Scorable, Propertied, local_names_and_objs
+    from .base import Scorable, Propertied
     from .backend import Backend, NumpyBackend
 import warnings
 
@@ -30,7 +30,7 @@ def enum(concepts):
     return enum
 
 
-@local_names_and_objs
+@Scorable.localize_namespace
 class Concept(Scorable, Propertied):
     default_backend = NumpyBackend()
     _rel_types = dict()  # relation name (to be call): relation class
