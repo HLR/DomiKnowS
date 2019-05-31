@@ -374,12 +374,13 @@ class NamedTreeNode(Named):
 @Scoped.instance_scope
 class NamedTree(NamedTreeNode, OrderedDict):
     def __repr__(self):
-        with hide_inheritance(NamedTree, dict, hidesub=False):
+        with hide_inheritance(NamedTree, dict):
+            # prevent pprint over optimize OrderedDict(dict) on NamedTree instance
             return NamedTreeNode.__repr__(self)
-        
+
     def __hash__(self): # NB: OrderedDict is unhashable. We want NamedTree hashable, by name
         return hash((type(self), self.name))
-    
+
     #def __eq__(self): # TODO: OrderedDict has __eq__, what do we want for Tree?
     #    return ...
 
@@ -388,7 +389,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
         OrderedDict.__init__(self)
 
     def attach(self, sub):
-        # TODO: resolve and prevent recursive definition
+        # resolve and prevent recursive definition
         if sub is self or sub in self.sups:
             raise ValueError('Recursive definition detected for attaching {} to {} with sups {}'.format(
                 sub.name, self.name, list(self.sups)))
