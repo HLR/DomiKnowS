@@ -8,6 +8,7 @@ else:
     from .base import AutoNamed
     from .concept import Concept, enum
 
+
 @AutoNamed.localize_namespace
 class Relation(AutoNamed):
     def __init__(self, src, dst, name=None):

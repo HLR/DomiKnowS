@@ -1,9 +1,9 @@
 from collections import defaultdict, Iterable, OrderedDict
 if __package__ is None or __package__ == '':
-    from base import Scorable, Propertied
+    from base import Scorable, BaseGraphTree, Scoped
     from backend import Backend, NumpyBackend
 else:
-    from .base import Scorable, Propertied
+    from .base import Scorable, BaseGraphTree, Scoped
     from .backend import Backend, NumpyBackend
 import warnings
 
@@ -17,7 +17,7 @@ def enum(concepts):
         enum = concepts.items()
         warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
                       'For this instance, {} is used.'
-                      .format(concepts),
+                      .format(concepts.keys()),
                       UserWarning, stacklevel=3)
     elif isinstance(concepts, Iterable):
         enum = enumerate(concepts)
@@ -30,8 +30,9 @@ def enum(concepts):
     return enum
 
 
-@Scorable.localize_namespace
-class Concept(Scorable, Propertied):
+@Scoped.class_scope
+@BaseGraphTree.localize_namespace
+class Concept(Scorable, BaseGraphTree):
     default_backend = NumpyBackend()
     _rel_types = dict()  # relation name (to be call): relation class
 
@@ -49,17 +50,7 @@ class Concept(Scorable, Propertied):
         '''
         Declare an concept.
         '''
-        Scorable.__init__(self, name)
-        Propertied.__init__(self)
-
-        # register myself
-        if __package__ is None or __package__ == '':
-            import graph
-        else:
-            from . import graph
-        if graph.Graph.default is not None:  # use base class Graph as the global environment
-            graph.Graph.default.add(self)
-        self._graph = graph.Graph.default
+        BaseGraphTree.__init__(self, name)
 
         # TODO: deal with None here? or when it can be infer? or some other occasion?
         self._rank = rank
@@ -70,37 +61,44 @@ class Concept(Scorable, Propertied):
         # if true, relation value will be include when calculating a property
         self.transparent = False
 
+    # disable context for Concept
+    def __enter__(self):
+        raise AttributeError(
+            '{} object has no attribute __enter__'.format(type(self).__name__))
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        raise AttributeError(
+            '{} object has no attribute __exit__'.format(type(self).__name__))
+
     def what(self):
-        return {'out_rels': dict(self._out), }
+        wht = BaseGraphTree.what(self)
+        wht['rels'] = dict(self._out)
+        return wht
 
-    @property
-    def fullname(self):
-        if self._graph is None:
-            return self.name
-        return self._graph.fullname + '/' + self.name
-
-    def __getattr__(self, prop):
+    def __getattr__(self, rel):
         '''
         Create relation by registered relation types
         '''
         cls = type(self)  # bind to the real class
-        Rel = cls._rel_types[prop]
+        if rel not in cls._rel_types:
+            return BaseGraphTree.__getattr__(self, rel)
+        Rel = cls._rel_types[rel]
 
         def create_rel(dst, *args, **kwargs):
             dst_name = ','.join(['{}:{}'.format(i, concept.name)
                                  for i, concept in enum(dst)])
-            name = '{}-{}-({})'.format(self.name, prop, dst_name)
+            name = '{}-{}-({})'.format(self.name, rel, dst_name)
             # TODO: should check the rank of src and dst? or in the constructor? or some other occasion?
-            rel = Rel(self, dst, name=name, *args, **kwargs)
-            for _, v in rel.dst:
-                self._out[v].add(rel)
-                v._in[self].add(rel)
+            rel_inst = Rel(self, dst, name=name, *args, **kwargs)
+            for _, v in rel_inst.dst:
+                self._out[v].add(rel_inst)
+                v._in[self].add(rel_inst)
         return create_rel
 
     def __getitem__(self, prop):
         if prop not in self.props:
             return None
-        #if len(self.props[prop]) == 1:
+        # if len(self.props[prop]) == 1:
         #    return self.props[prop][0]
         return self.props[prop]
         # TODO: shouldn't need above lines. have them to avoid aggr in current dirty version

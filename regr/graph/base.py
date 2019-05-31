@@ -29,12 +29,12 @@ def hide_class(inst, clsinfo, sub=True):  # clsinfo is a type of a tuple of type
                 if isinstance_orig(clsinfo_, type):
                     clsinfo_ = (clsinfo_,)
                 clsinfo_ = [cls_
-                           for cls_ in clsinfo_
-                           if not (
-                               sub and issubclass(cls_, clsinfo)
-                           ) and not (
-                               not sub and cls_ in clsinfo
-                           )]
+                            for cls_ in clsinfo_
+                            if not (
+                                sub and issubclass(cls_, clsinfo)
+                            ) and not (
+                                not sub and cls_ in clsinfo
+                            )]
                 clsinfo_ = tuple(clsinfo_)
                 # NB: isinstance(inst, ()) == False
             return isinstance_orig(inst_, clsinfo_)
@@ -322,28 +322,37 @@ class Scorable(AutoNamed):
 
 
 class NamedTreeNode(Named):
-    def __init__(self, name=None):
-        Named.__init__(self, name)
-        cls = type(self)
-        self.sup = cls.context
-
-    context = None
+    _context = []
 
     @staticmethod
     def localize_context(cls_, default=None):
         # cls_ is not caller (NamedTree) class! This is a static function
-        cls_.context = default
+        cls_._context = []
         return cls_
+
+    def __init__(self, name=None):
+        Named.__init__(self, name)
+        cls = type(self)
+        self.attach_to_context()
+
+    def attach_to_context(self):
+        cls = type(self)
+        if len(cls._context) == 0:
+            self.sup = None
+        else:
+            self.sup = cls._context[-1]
 
     def __enter__(self):
         cls = type(self)
-        self.sup = cls.context # TODO: this could lead to switching sup to context
-        cls.context = self
+        #self.sup = cls._context
+        self.attach_to_context()  # TODO: this could lead to switching sup to context
+        cls._context.append(self)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         cls = type(self)
-        cls.context = self.sup
+        last = cls._context.pop()
+        assert last is self
 
     @property
     def sup(self):
@@ -351,7 +360,7 @@ class NamedTreeNode(Named):
 
     @sup.setter
     def sup(self, sup):
-        self._sup = None # NB: sup.attach will check _sup, so keep this line here
+        self._sup = None  # NB: sup.attach will check _sup, so keep this line here
         if sup is not None:
             sup.attach(self)
 
@@ -378,10 +387,10 @@ class NamedTree(NamedTreeNode, OrderedDict):
             # prevent pprint over optimize OrderedDict(dict) on NamedTree instance
             return NamedTreeNode.__repr__(self)
 
-    def __hash__(self): # NB: OrderedDict is unhashable. We want NamedTree hashable, by name
+    def __hash__(self):  # NB: OrderedDict is unhashable. We want NamedTree hashable, by name
         return hash((type(self), self.name))
 
-    #def __eq__(self): # TODO: OrderedDict has __eq__, what do we want for Tree?
+    # def __eq__(self): # TODO: OrderedDict has __eq__, what do we want for Tree?
     #    return ...
 
     def __init__(self, name=None):
@@ -464,14 +473,8 @@ class NamedTree(NamedTreeNode, OrderedDict):
         return wht
 
 
-class SubScorable(Scorable, NamedTree):
-    def __init__(self, name=None):
-        Scorable.__init__(self, name)
-        NamedTree.__init__(self, name)
-
-    def score(self, depth=float('inf'), *args, **kwargs):
-        score = 0
-        if depth > 0:
-            score += sum([sub(depth - 1, *args, **kwargs)
-                          for sub in self._subs])
-        return score
+@NamedTree.localize_context
+class BaseGraphTree(AutoNamed, NamedTree):
+    def __init__(self, name=None, ontology=None):
+        AutoNamed.__init__(self, name)  # name may be update
+        NamedTree.__init__(self, self.name)
