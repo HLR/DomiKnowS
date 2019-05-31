@@ -12,6 +12,95 @@ def entuple(args):
     return (args,)
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def hide_class(inst, clsinfo, sub=True):  # clsinfo is a type of a tuple of types
+    if isinstance(inst, clsinfo):
+        if isinstance(clsinfo, type):
+            clsinfo = (clsinfo,)
+
+        from six.moves import builtins
+        isinstance_orig = builtins.isinstance
+
+        def _isinstance(inst_, clsinfo_):  # clsinfo_ is a type of a tuple of types
+            if inst_ is inst:
+                if isinstance_orig(clsinfo_, type):
+                    clsinfo_ = (clsinfo_,)
+                clsinfo_ = [cls_
+                           for cls_ in clsinfo_
+                           if not (
+                               sub and issubclass(cls_, clsinfo)
+                           ) and not (
+                               not sub and cls_ in clsinfo
+                           )]
+                clsinfo_ = tuple(clsinfo_)
+                # NB: isinstance(inst, ()) == False
+            return isinstance_orig(inst_, clsinfo_)
+
+        builtins.isinstance = _isinstance
+
+        try:
+            yield inst
+        finally:
+            builtins.isinstance = isinstance_orig
+    else:
+        yield inst
+
+
+@contextmanager
+# clsinfo is a type of a tuple of types
+def hide_inheritance(cls, clsinfo, sub=True, hidesub=True):
+    if issubclass(cls, clsinfo):
+        if isinstance(clsinfo, type):
+            clsinfo = (clsinfo,)
+
+        from six.moves import builtins
+        isinstance_orig = builtins.isinstance
+        issubclass_orig = builtins.issubclass
+
+        def _isinstance(inst, clsinfo_):
+            if (hidesub and isinstance_orig(inst, cls)
+                ) or (
+                not hidesub and type(inst) is cls
+            ):
+                # not sure would this hurt somewhere?
+                # the following issubclass is dynamic!
+                return any(issubclass(cls_, clsinfo_) for cls_ in {type(inst), inst.__class__})
+            return isinstance_orig(inst, clsinfo_)
+
+        def _issubclass(cls_, clsinfo_):  # clsinfo_ is a type of a tuple of types
+            if (hidesub and issubclass_orig(cls_, cls)
+                ) or (
+                not hidesub and cls_ is cls
+            ):
+                if isinstance_orig(clsinfo_, type):
+                    clsinfo_ = (clsinfo_,)
+                clsinfo_ = [cls__
+                            for cls__ in clsinfo_
+                            if not (
+                                sub and issubclass_orig(cls__, clsinfo)
+                            ) and not (
+                                not sub and cls__ in clsinfo
+                            )]
+                clsinfo_ = tuple(clsinfo_)
+            return issubclass_orig(cls_, clsinfo_)
+
+        builtins.isinstance = _isinstance
+        builtins.issubclass = _issubclass
+
+        try:
+            yield
+        finally:
+            builtins.isinstance = isinstance_orig
+            builtins.issubclass = issubclass_orig
+    else:
+        yield
+
+        from contextlib import contextmanager
+
+
 def singleton(cls, getter=None, setter=None):
     if getter is None:
         def getter(*args, **kwargs):
@@ -121,9 +210,9 @@ class Named(Scoped):
         cls = type(self)
         with self.scope() as detailed:
             if detailed and callable(getattr(self, 'what', None)):
-                repr_str = '{class_name}(name=\'{name}\', what={what!r})'.format(class_name=cls.__name__,
+                repr_str = '{class_name}(name=\'{name}\', what={what})'.format(class_name=cls.__name__,
                                                                                name=self.name,
-                                                                               what=self.what())
+                                                                               what=pprint.pformat(self.what(), width=8))
             else:
                 repr_str = '{class_name}(name=\'{name}\')'.format(class_name=cls.__name__,
                                                                   name=self.name)
@@ -241,13 +330,14 @@ class NamedTreeNode(Named):
     context = None
 
     @staticmethod
-    def localize_context(cls_):
+    def localize_context(cls_, default=None):
         # cls_ is not caller (NamedTree) class! This is a static function
-        cls_.context = None
+        cls_.context = default
         return cls_
 
     def __enter__(self):
         cls = type(self)
+        self.sup = cls.context # TODO: this could lead to switching sup to context
         cls.context = self
         return self
 
@@ -261,16 +351,15 @@ class NamedTreeNode(Named):
 
     @sup.setter
     def sup(self, sup):
-        if sup is None:
-            self._sup = None
-            return
-        sup.attach(self)
+        self._sup = None # NB: sup.attach will check _sup, so keep this line here
+        if sup is not None:
+            sup.attach(self)
 
     @property
     def sups(self):
-        yield self.sup
         if self.sup is not None:
-            yield self.sup.sup
+            yield self.sup
+            yield from self.sup.sups
 
     @property
     def fullname(self, delim='/'):
@@ -284,8 +373,15 @@ class NamedTreeNode(Named):
 
 @Scoped.instance_scope
 class NamedTree(NamedTreeNode, OrderedDict):
-    def __hash__(self):
+    def __repr__(self):
+        with hide_inheritance(NamedTree, dict, hidesub=False):
+            return NamedTreeNode.__repr__(self)
+        
+    def __hash__(self): # NB: OrderedDict is unhashable. We want NamedTree hashable, by name
         return hash((type(self), self.name))
+    
+    #def __eq__(self): # TODO: OrderedDict has __eq__, what do we want for Tree?
+    #    return ...
 
     def __init__(self, name=None):
         NamedTreeNode.__init__(self, name)
@@ -293,11 +389,12 @@ class NamedTree(NamedTreeNode, OrderedDict):
 
     def attach(self, sub):
         # TODO: resolve and prevent recursive definition
-        if sub in self.sups:
+        if sub is self or sub in self.sups:
             raise ValueError('Recursive definition detected for attaching {} to {} with sups {}'.format(
                 sub.name, self.name, list(self.sups)))
         if isinstance(sub, NamedTreeNode):
-            sub.detach(sub)
+            if sub._sup is not None:
+                sub._sup.detach(sub)
             sub._sup = self
         if isinstance(sub, Named):
             self[sub.name] = sub
@@ -320,27 +417,36 @@ class NamedTree(NamedTreeNode, OrderedDict):
         if sub.name in self:
             del self[sub.name]
 
-    def traverse_apply(self, names, func):
+    def query_apply(self, names, func):
         if len(names) > 1:
-            return self[names[0]].traverse_apply(names[1:], func)
+            return self[names[0]].query_apply(names[1:], func)
         # this is only one layer above the leaf layer
-        return func(self, names[0])
+        return func(names[0])
 
-    def parse_traverse_apply(self, names, func, delim='/', trim=True):
+    def parse_query_apply(self, names, func, delim='/', trim=True):
         names = list(chain(*(name.split(delim) for name in names)))
         if trim:
             names = [name.strip() for name in names]
-        return self.traverse_apply(names, func)
+        return self.query_apply(names, func)
+
+    def get_apply(self, name):
+        return OrderedDict.__getitem__(self, name)
 
     def get_sub(self, *names, delim='/', trim=True):
-        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__getitem__(d, k), delim, trim)
+        return self.parse_query_apply(names, self.get_apply, delim, trim)
+
+    def set_apply(self, name, sub):
+        OrderedDict.__setitem__(self, name, sub)
 
     def set_sub(self, *names, sub, delim='/', trim=True):
-        # NB: obj is keyword arg because it is after a list arg
-        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__setitem__(d, k, sub), delim, trim)
+        # NB: sub is keyword arg because it is after a list arg
+        return self.parse_query_apply(names, lambda k: self.set_apply(k, sub), delim, trim)
+
+    def del_apply(self, name):
+        return OrderedDict.__delitem__(self, name)
 
     def del_sub(self, *names, delim='/', trim=True):
-        return self.parse_traverse_apply(names, lambda d, k: OrderedDict.__delitem__(d, k), delim, trim)
+        return self.parse_query_apply(names, self.del_apply, delim, trim)
 
     def __getitem__(self, name):
         return self.get_sub(*entuple(name))
@@ -353,9 +459,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
 
     def what(self):
         wht = NamedTreeNode.what(self)
-        #wht['subs'] = self.keys()
-        #import pdb
-        #pdb.set_trace()
+        wht['subs'] = dict(self)
         return wht
 
 
