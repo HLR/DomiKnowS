@@ -1,35 +1,12 @@
 from collections import defaultdict, Iterable, OrderedDict
 from itertools import chain
 if __package__ is None or __package__ == '':
-    from base import Scorable, BaseGraphTree, Scoped
+    from base import BaseGraphTree, Scoped
     from backend import Backend, NumpyBackend
 else:
-    from .base import Scorable, BaseGraphTree, Scoped
+    from .base import BaseGraphTree, Scoped
     from .backend import Backend, NumpyBackend
-import warnings
-
-
-def enum(concepts, offset=0):
-    if isinstance(concepts, Concept):
-        enum = {offset: concepts}.items()
-    elif isinstance(concepts, OrderedDict):
-        enum = concepts.items()
-    elif isinstance(concepts, dict):
-        enum = concepts.items()
-        warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
-                      'For this instance, {} is used.'
-                      .format({k: v.name for k, v in concepts.items()}),
-                      UserWarning, stacklevel=3)
-    elif isinstance(concepts, Iterable):
-        enum = enumerate(concepts, offset)
-    else:
-        raise TypeError('Unsupported type of concepts. Use Concept, OrderedDict or other Iterable.'
-                        .format(type(concepts)))
-
-    # for k, v in enum:
-    #    yield (k, v)
-    return enum
-
+from ..utils import enum
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -45,7 +22,7 @@ class Concept(BaseGraphTree):
 
             def create(src, *args, **kwargs):
                 # add one-by-one
-                for rel_name, dst in chain(enum(args, offset=len(src._out)), enum(kwargs)):
+                for rel_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     rel_inst_name = '{}-{}-{}-{}'.format(
                         src.name, nn, rel_name, dst.name)
                     # will be added to _in and _out in constructor
