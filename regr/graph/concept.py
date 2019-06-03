@@ -16,20 +16,20 @@ class Concept(BaseGraphTree):
     @classmethod
     def relation_type(cls, name=None):
         def update(Rel):
-            nn = name
-            if nn is None:
-                nn = Rel.__name__  # Rel.suggest_name()
+            rel_name = name
+            if rel_name is None:
+                rel_name = Rel.__name__  # Rel.suggest_name()
 
             def create(src, *args, **kwargs):
                 # add one-by-one
-                for rel_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
+                for rel_src_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     rel_inst_name = '{}-{}-{}-{}'.format(
-                        src.name, nn, rel_name, dst.name)
+                        src.name, rel_name, rel_src_name, dst.name)
                     # will be added to _in and _out in constructor
                     rel_inst = Rel(src, dst, name=rel_inst_name,
-                                   catogrory_name=name)
+                                   catogrory_name=rel_name)
 
-            cls._rels[name] = create
+            cls._rels[rel_name] = create
             return Rel
 
         return update
