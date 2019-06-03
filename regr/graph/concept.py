@@ -1,4 +1,5 @@
 from collections import defaultdict, Iterable, OrderedDict
+from itertools import chain
 if __package__ is None or __package__ == '':
     from base import Scorable, BaseGraphTree, Scoped
     from backend import Backend, NumpyBackend
@@ -8,19 +9,19 @@ else:
 import warnings
 
 
-def enum(concepts):
+def enum(concepts, offset=0):
     if isinstance(concepts, Concept):
-        enum = {0: concepts}.items()
+        enum = {offset: concepts}.items()
     elif isinstance(concepts, OrderedDict):
         enum = concepts.items()
     elif isinstance(concepts, dict):
         enum = concepts.items()
         warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
                       'For this instance, {} is used.'
-                      .format(concepts.keys()),
+                      .format({k: v.name for k, v in concepts.items()}),
                       UserWarning, stacklevel=3)
     elif isinstance(concepts, Iterable):
-        enum = enumerate(concepts)
+        enum = enumerate(concepts, offset)
     else:
         raise TypeError('Unsupported type of concepts. Use Concept, OrderedDict or other Iterable.'
                         .format(type(concepts)))
@@ -32,33 +33,42 @@ def enum(concepts):
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
-class Concept(Scorable, BaseGraphTree):
-    default_backend = NumpyBackend()
-    _rel_types = dict()  # relation name (to be call): relation class
+class Concept(BaseGraphTree):
+    _rels = {}  # catogrory_name : creation callback
 
     @classmethod
-    def update_rel_type(cls, Rel, name=None):
-        if name is None:
-            name = Rel.suggest_name()
-        cls._rel_types[name] = Rel
+    def relation_type(cls, name=None):
+        def update(Rel):
+            nn = name
+            if nn is None:
+                nn = Rel.__name__  # Rel.suggest_name()
 
-    @classmethod
-    def register_rel_type(cls, name=None):
-        return lambda Rel, name=None: cls.update_rel_type(Rel, name)
+            def create(src, *args, **kwargs):
+                # add one-by-one
+                for rel_name, dst in chain(enum(args, offset=len(src._out)), enum(kwargs)):
+                    rel_inst_name = '{}-{}-{}-{}'.format(
+                        src.name, nn, rel_name, dst.name)
+                    # will be added to _in and _out in constructor
+                    rel_inst = Rel(src, dst, name=rel_inst_name,
+                                   catogrory_name=name)
 
-    def __init__(self, rank=None, name=None, backend=None):
+            cls._rels[name] = create
+            return Rel
+
+        return update
+
+    def __init__(self, name=None):
         '''
         Declare an concept.
         '''
         BaseGraphTree.__init__(self, name)
 
-        # TODO: deal with None here? or when it can be infer? or some other occasion?
-        self._rank = rank
-        self._in = defaultdict(set)  # src concepts : set of relation instances
-        # dst concepts : set of relation instances
-        self._out = defaultdict(set)
-        self._backend = backend
-        # if true, relation value will be include when calculating a property
+        self._in = OrderedDict()  # relation catogrory_name : list of relation inst
+        self._in.setdefault(list)
+        self._out = OrderedDict()  # relation catogrory_name : list of relation inst
+        self._out.setdefault(list)
+
+        # FIXME: need this? if true, relation value will be include when calculating a property
         self.transparent = False
 
     # disable context for Concept
@@ -70,9 +80,24 @@ class Concept(Scorable, BaseGraphTree):
         raise AttributeError(
             '{} object has no attribute __exit__'.format(type(self).__name__))
 
+    def query_apply(self, names, func):
+        if len(names) > 1:
+            raise ValueError(
+                'Concept cannot have nested elements. Access properties using property name directly. Query of names {} is not possibly applied.'.format(names))
+        # this is only one layer above the leaf layer
+        return func(names[0])
+
+    def get_apply(self, name):
+        return BaseGraphTree.get_apply(self, name)[0]
+
+    def set_apply(self, name, sub):
+        if name not in self:
+            OrderedDict.__setitem__(self, name, list)
+        BaseGraphTree.get_apply(self, name).append(sub)
+
     def what(self):
         wht = BaseGraphTree.what(self)
-        wht['rels'] = dict(self._out)
+        wht['relations'] = dict(self._out)
         return wht
 
     def __getattr__(self, rel):
@@ -80,52 +105,17 @@ class Concept(Scorable, BaseGraphTree):
         Create relation by registered relation types
         '''
         cls = type(self)  # bind to the real class
-        if rel not in cls._rel_types:
-            return BaseGraphTree.__getattr__(self, rel)
-        Rel = cls._rel_types[rel]
 
-        def create_rel(dst, *args, **kwargs):
-            dst_name = ','.join(['{}:{}'.format(i, concept.name)
-                                 for i, concept in enum(dst)])
-            name = '{}-{}-({})'.format(self.name, rel, dst_name)
-            # TODO: should check the rank of src and dst? or in the constructor? or some other occasion?
-            rel_inst = Rel(self, dst, name=name, *args, **kwargs)
-            for _, v in rel_inst.dst:
-                self._out[v].add(rel_inst)
-                v._in[self].add(rel_inst)
-        return create_rel
-
-    def __getitem__(self, prop):
-        if prop not in self.props:
-            return None
-        # if len(self.props[prop]) == 1:
-        #    return self.props[prop][0]
-        return self.props[prop]
-        # TODO: shouldn't need above lines. have them to avoid aggr in current dirty version
-        return self.aggregate(*self.vals(prop, 0))
-
-    def __setitem__(self, prop, value):
-        # TODO: prevent multiple assignment or recursive assignment?
-        self.props[prop].append(value)
+        def handle(*args, **kwargs):
+            if not args and not kwargs:
+                return cls._out[rel]
+            return cls._rels[rel](self, *args, **kwargs)
+        return handle
 
     def get_multiassign(self):
-        for prop, value in self.props.items():
+        for prop, value in self.items():
             if len(value) > 1:
                 yield self._graph, self, prop, value
-
-    @property
-    def rank(self):
-        return self._rank
-
-    @property
-    def b(self):
-        '''
-        Backend shortcut, possible to fallback to class default
-        '''
-        if isinstance(self._backend, Backend):
-            return self._backend
-        else:
-            return type(self).default_backend
 
     def distances(self, p, q):
         '''
@@ -192,14 +182,14 @@ class Concept(Scorable, BaseGraphTree):
                   Return `None` is if never binded to this property.
         :rtype: [barray,...], [barray,...]
         '''
-        if prop not in self.props or not self.props[prop]:
-            return [(None, 0)]
+        if prop not in self or not self[prop]:
+            return [(None, 0), ]
         #vals = []
         #confs = []
-        # for val, conf in self.props[prop]:
+        # for val, conf in self[prop]:
         #    vals.append(prop)
         #    confs.append(conf)
-        vals, confs = zip(*self.props[prop])
+        vals, confs = zip(*self[prop])
         return vals, confs
 
     def rvals(self, prop, hops=1):
@@ -222,47 +212,3 @@ class Concept(Scorable, BaseGraphTree):
             vals.extend(rvals)
             confs.extend(rconfs)
         return vals, confs
-
-    def score_(self, prop):
-        # TODO: some clean up here, focus on only these values
-        # Problem: the interface behind this should not need prop?
-        vals, confs = self.vals(prop, 1)
-        #vals, confs = zip(*values)
-        return self.b.norm(self.distances(vals, vals))
-
-    def score(self, prop=None):
-        if prop is None:
-            return sum([self(prop) for prop, _ in self.props.items()])
-        return self.score_(prop)
-
-
-# TODO: compose concept implement to replace the emum function and complicated details there
-class ComposeConcept(Concept):
-
-    def enum(concepts):
-        if isinstance(concepts, Concept):
-            enum = {0: concepts}.items()
-        elif isinstance(concepts, OrderedDict):
-            enum = concepts.items()
-        elif isinstance(concepts, dict):
-            enum = concepts.items()
-            warnings.warn('Please use OrderedDict rather than dict to prevent unpredictable order of arguments.' +
-                          'For this instance, {} is used.'
-                          .format(concepts),
-                          UserWarning, stacklevel=3)
-        elif isinstance(concepts, Iterable):
-            enum = enumerate(concepts)
-        else:
-            raise TypeError('Unsupported type of concepts. Use Concept, OrderedDict or other Iterable.'
-                            .format(type(concepts)))
-
-        # for k, v in enum:
-        #    yield (k, v)
-        return enum
-
-    def __init__(self, concepts):
-        name = ','.join(['{}:{}'.format(i, concept.name)
-                         for i, concept in enum(dst)])
-        Concept.__init__(self, name)
-
-    pass

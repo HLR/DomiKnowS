@@ -3,18 +3,22 @@ from collections import OrderedDict
 from itertools import chain
 if __package__ is None or __package__ == '':
     from base import AutoNamed
-    from concept import Concept, enum
+    from concept import Concept
 else:
     from .base import AutoNamed
-    from .concept import Concept, enum
+    from .concept import Concept
 
 
 @AutoNamed.localize_namespace
 class Relation(AutoNamed):
-    def __init__(self, src, dst, name=None):
-        AutoNamed.__init__(self, name)
+    def __init__(self, src, dst, name=None, catogrory_name=None):
+        AutoNamed.__init__(self, name)  # name could be changed
+        if catogrory_name is None:
+            catogrory_name = type(self).__name__
         self.src = src
         self.dst = dst
+        src._out.setdefault(catogrory_name, []).append(self)
+        src._in.setdefault(catogrory_name, []).append(self)
 
     @property
     def src(self):
@@ -30,14 +34,14 @@ class Relation(AutoNamed):
 
     @property
     def dst(self):
-        return enum(self._dst)
+        return self._dst
 
     @dst.setter
     def dst(self, dst):
-        self._dst = OrderedDict(enum(dst))
+        self._dst = dst
 
     def what(self):
-        return {'src': self.src, 'dst': dict(self.dst)}
+        return {'src': self.src, 'dst': self.dst}
 
     def T(self, dst, prop, hops=0):  # default to no more hop because this is a hop already
         src = self.src
@@ -83,26 +87,33 @@ class Relation(AutoNamed):
     def _T(self, src_view): pass
 
 
-@Concept.register_rel_type('be')
-class Be(Relation):
+class OTORelation(Relation):
+    pass
+
+
+class OTMRelation(Relation):
+    pass
+
+
+@Concept.relation_type('is_a')
+class IsA(OTORelation):
     def _T(self, src_view):
         # identical transform
         return src_view
 
 
-@Concept.register_rel_type('not')
-class Disjoint(Relation):
+@Concept.relation_type('not_a')
+class NotA(OTORelation):
     def _T(self, src_view):
         # identical transform
         return not src_view
 
 
-@Concept.register_rel_type('have')
-class Have(Relation):
-    def __init__(self, src, dst, have=None, name=None):
-        Relation.__init__(self, src, dst, name=name)
-        self._have = have
+@Concept.relation_type('has_a')
+class HasA(OTORelation):
+    pass
 
-    def _T(self, src_view):
-        # TODO: apply have relation?
-        return self.src.b.matmul(have, src_view)
+
+@Concept.relation_type('has_many')
+class HasMany(OTMRelation):
+    pass
