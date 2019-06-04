@@ -235,7 +235,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
         NamedTreeNode.__init__(self, name)
         OrderedDict.__init__(self)
 
-    def attach(self, sub):
+    def attach(self, sub, name=None):
         # resolve and prevent recursive definition
         if sub is self or sub in self.sups:
             raise ValueError('Recursive definition detected for attaching {} to {} with sups {}'.format(
@@ -245,10 +245,12 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 sub._sup.detach(sub)
             sub._sup = self
         if isinstance(sub, Named):
-            self[sub.name] = sub
+            if name is None:
+                name = sub.name
+            self[name] = sub
         else:
             raise TypeError(
-                'Attach Named instance to NamedTree, {} instance given.'.format(type(obj)))
+                'Attach Named instance to NamedTree, {} instance given.'.format(type(sub)))
 
     def detach(self, sub=None, all=False):
         if sub is None:

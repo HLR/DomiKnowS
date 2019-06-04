@@ -1,6 +1,6 @@
 import abc
 from typing import Any
-from .module import Module
+from . import Sensor
 
 class Learner(Sensor):
     __metaclass__ = abc.ABCMeta

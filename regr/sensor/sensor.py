@@ -1,3 +1,4 @@
+from typing import Dict
 import abc
 
 class Sensor(object):

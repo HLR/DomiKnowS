@@ -1,14 +1,18 @@
 from collections import defaultdict, Iterable, OrderedDict
 from itertools import chain
 if __package__ is None or __package__ == '':
-    from base import BaseGraphShallowTree
+    from base import Scoped, BaseGraphTree
+    from property import Property
 else:
-    from .base import BaseGraphShallowTree
+    from .base import Scoped, BaseGraphTree
+    from .property import Property
+from ..sensor import Sensor
 from ..utils import enum
 
 
-@BaseGraphShallowTree.localize_namespace
-class Concept(BaseGraphShallowTree):
+@Scoped.class_scope
+@BaseGraphTree.localize_namespace
+class Concept(BaseGraphTree):
     _rels = {}  # catogrory_name : creation callback
 
     @classmethod
@@ -32,23 +36,24 @@ class Concept(BaseGraphShallowTree):
         '''
         Declare an concept.
         '''
-        BaseGraphShallowTree.__init__(self, name)
+        BaseGraphTree.__init__(self, name)
 
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
     @staticmethod
-    def get_apply(self, name):
-        return BaseGraphTree.get_apply(self, name)[0]
-
-    @staticmethod
     def set_apply(self, name, sub):
-        if name not in self:
-            BaseGraphTree.set_apply(self, name, [])
-        BaseGraphTree.get_apply(self, name).append(sub)
+        if isinstance(sub, Property):
+            # call usually come from attach, further from constructor of property
+            BaseGraphTree.set_apply(self, name, sub)
+        elif isinstance(sub, Sensor):
+            if name not in self:
+                with self:
+                    prop = Property(prop_name=name)
+            self.get_apply(self, name).attach(sub)
 
     def what(self):
-        wht = BaseGraphShallowTree.what(self)
+        wht = BaseGraphTree.what(self)
         wht['relations'] = dict(self._out)
         return wht
 
