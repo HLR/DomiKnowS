@@ -27,6 +27,9 @@ class Graph(BaseGraphTree):
             BaseGraphTree.set_apply(self, name, sub)
         elif isinstance(sub, Concept):
             self.concepts[name] = sub
+        else:
+            # FIXME: known issue is that relation goes here
+            pass
 
     @property
     def concepts(self):

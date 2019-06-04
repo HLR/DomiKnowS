@@ -2,23 +2,28 @@ import abc
 from collections import OrderedDict
 from itertools import chain
 if __package__ is None or __package__ == '':
-    from base import AutoNamed
+    from base import BaseGraphShallowTree
     from concept import Concept
 else:
-    from .base import AutoNamed
+    from .base import BaseGraphShallowTree
     from .concept import Concept
 
 
-@AutoNamed.localize_namespace
-class Relation(AutoNamed):
-    def __init__(self, src, dst, name=None, catogrory_name=None):
-        AutoNamed.__init__(self, name)  # name could be changed
-        if catogrory_name is None:
-            catogrory_name = type(self).__name__
+@BaseGraphShallowTree.localize_namespace
+class Relation(BaseGraphShallowTree):
+    @classmethod
+    def name(cls):  # complicated to use class property, just function
+        return cls.__name__
+
+    def __init__(self, src, dst, argument_name):
+        cls = type(self)
+        name = '{}-{}-{}-{}'.format(src.name,
+                                    cls.name(), argument_name, dst.name)
+        BaseGraphShallowTree.__init__(self, name)
         self.src = src
         self.dst = dst
-        src._out.setdefault(catogrory_name, []).append(self)
-        src._in.setdefault(catogrory_name, []).append(self)
+        src._out.setdefault(cls.name(), []).append(self)
+        dst._in.setdefault(cls.name(), []).append(self)
 
     @property
     def src(self):

@@ -1,35 +1,29 @@
 from collections import defaultdict, Iterable, OrderedDict
 from itertools import chain
 if __package__ is None or __package__ == '':
-    from base import BaseGraphTree, Scoped
-    from backend import Backend, NumpyBackend
+    from base import BaseGraphShallowTree
 else:
-    from .base import BaseGraphTree, Scoped
-    from .backend import Backend, NumpyBackend
+    from .base import BaseGraphShallowTree
 from ..utils import enum
 
-@Scoped.class_scope
-@BaseGraphTree.localize_namespace
-class Concept(BaseGraphTree):
+
+@BaseGraphShallowTree.localize_namespace
+class Concept(BaseGraphShallowTree):
     _rels = {}  # catogrory_name : creation callback
 
     @classmethod
     def relation_type(cls, name=None):
         def update(Rel):
-            rel_name = name
-            if rel_name is None:
-                rel_name = Rel.__name__  # Rel.suggest_name()
+            if name is not None:
+                Rel.name = classmethod(lambda cls: name)
 
             def create(src, *args, **kwargs):
                 # add one-by-one
-                for rel_src_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
-                    rel_inst_name = '{}-{}-{}-{}'.format(
-                        src.name, rel_name, rel_src_name, dst.name)
-                    # will be added to _in and _out in constructor
-                    rel_inst = Rel(src, dst, name=rel_inst_name,
-                                   catogrory_name=rel_name)
+                for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
+                    # will be added to _in and _out in Rel constructor
+                    rel_inst = Rel(src, dst, argument_name=argument_name)
 
-            cls._rels[rel_name] = create
+            cls._rels[Rel.name()] = create
             return Rel
 
         return update
@@ -38,42 +32,21 @@ class Concept(BaseGraphTree):
         '''
         Declare an concept.
         '''
-        BaseGraphTree.__init__(self, name)
+        BaseGraphShallowTree.__init__(self, name)
 
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
-        self._in.setdefault(list)
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
-        self._out.setdefault(list)
-
-        # FIXME: need this? if true, relation value will be include when calculating a property
-        self.transparent = False
-
-    # disable context for Concept
-    def __enter__(self):
-        raise AttributeError(
-            '{} object has no attribute __enter__'.format(type(self).__name__))
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        raise AttributeError(
-            '{} object has no attribute __exit__'.format(type(self).__name__))
-
-    def query_apply(self, names, func):
-        if len(names) > 1:
-            raise ValueError(
-                'Concept cannot have nested elements. Access properties using property name directly. Query of names {} is not possibly applied.'.format(names))
-        # this is only one layer above the leaf layer
-        return func(names[0])
 
     def get_apply(self, name):
         return BaseGraphTree.get_apply(self, name)[0]
 
     def set_apply(self, name, sub):
         if name not in self:
-            OrderedDict.__setitem__(self, name, list)
+            BaseGraphTree.set_apply(self, name, [])
         BaseGraphTree.get_apply(self, name).append(sub)
 
     def what(self):
-        wht = BaseGraphTree.what(self)
+        wht = BaseGraphShallowTree.what(self)
         wht['relations'] = dict(self._out)
         return wht
 
@@ -85,7 +58,7 @@ class Concept(BaseGraphTree):
 
         def handle(*args, **kwargs):
             if not args and not kwargs:
-                return cls._out[rel]
+                return self._out[rel]
             return cls._rels[rel](self, *args, **kwargs)
         return handle
 
