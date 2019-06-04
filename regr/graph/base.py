@@ -171,14 +171,16 @@ class NamedTreeNode(Named):
     def __init__(self, name=None):
         Named.__init__(self, name)
         cls = type(self)
+        self._sup = None
         self.attach_to_context()
 
-    def attach_to_context(self):
+    def attach_to_context(self, name=None):
         cls = type(self)
         if len(cls._context) == 0:
-            self.sup = None
+            context = None
         else:
-            self.sup = cls._context[-1]
+            context = cls._context[-1]
+            context.attach(self, name)
 
     def __enter__(self):
         cls = type(self)
@@ -195,12 +197,6 @@ class NamedTreeNode(Named):
     @property
     def sup(self):
         return self._sup
-
-    @sup.setter
-    def sup(self, sup):
-        self._sup = None  # NB: sup.attach will check _sup, so keep this line here
-        if sup is not None:
-            sup.attach(self)
 
     @property
     def sups(self):
@@ -225,11 +221,11 @@ class NamedTree(NamedTreeNode, OrderedDict):
             # prevent pprint over optimize OrderedDict(dict) on NamedTree instance
             return NamedTreeNode.__repr__(self)
 
-    def __hash__(self):  # NB: OrderedDict is unhashable. We want NamedTree hashable, by name
-        return hash((type(self), self.name))
+    def __hash__(self):  # NB: OrderedDict is unhashable.
+        return NamedTreeNode.__hash__(self)
 
-    # def __eq__(self): # TODO: OrderedDict has __eq__, what do we want for Tree?
-    #    return ...
+    def __eq__(self, other): # NB: OrderedDict has __eq__, empty == empty, which is not what we expected
+        return NamedTreeNode.__eq__(self, other)
 
     def __init__(self, name=None):
         NamedTreeNode.__init__(self, name)
@@ -239,11 +235,11 @@ class NamedTree(NamedTreeNode, OrderedDict):
         # resolve and prevent recursive definition
         if sub is self or sub in self.sups:
             raise ValueError('Recursive definition detected for attaching {} to {} with sups {}'.format(
-                sub.name, self.name, list(self.sups)))
+                sub.name, self.name, [sup.name for sup in self.sups]))
         if isinstance(sub, NamedTreeNode):
-            if sub._sup is not None:
-                sub._sup.detach(sub)
-            sub._sup = self
+            if sub.sup is not None:
+                sub.sup.detach(sub)
+            sub._sup = self # FIXME: using private method
         if isinstance(sub, Named):
             if name is None:
                 name = sub.name

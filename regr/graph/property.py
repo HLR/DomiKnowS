@@ -14,11 +14,8 @@ class Property(BaseGraphShallowTree):
         name = '{}-{}'.format(context.name, prop_name)
         BaseGraphShallowTree.__init__(self, name)
 
-    @BaseGraphShallowTree.sup.setter
-    def sup(self, sup):
-        self._sup = None  # NB: sup.attach will check _sup, so keep this line here
-        if sup is not None:
-            sup.attach(self, self.prop_name)
+    def attach_to_context(self, name=None):
+        BaseGraphShallowTree.attach_to_context(self, self.prop_name)
 
     def attach(self, sub):
         if isinstance(sub, Sensor):
