@@ -269,7 +269,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
         if len(names) > 1:
             return self[names[0]].query_apply(names[1:], func)
         # this is only one layer above the leaf layer
-        return func(names[0])
+        return func(self, names[0])
 
     def parse_query_apply(self, names, func, delim='/', trim=True):
         names = list(chain(*(name.split(delim) for name in names)))
@@ -277,21 +277,24 @@ class NamedTree(NamedTreeNode, OrderedDict):
             names = [name.strip() for name in names]
         return self.query_apply(names, func)
 
-    def get_apply(self, name):
-        return OrderedDict.__getitem__(self, name)
+    @staticmethod
+    def get_apply(self_, name):
+        return OrderedDict.__getitem__(self_, name)
 
     def get_sub(self, *names, delim='/', trim=True):
         return self.parse_query_apply(names, self.get_apply, delim, trim)
 
-    def set_apply(self, name, sub):
-        OrderedDict.__setitem__(self, name, sub)
+    @staticmethod
+    def set_apply(self_, name, sub):
+        OrderedDict.__setitem__(self_, name, sub)
 
     def set_sub(self, *names, sub, delim='/', trim=True):
         # NB: sub is keyword arg because it is after a list arg
-        return self.parse_query_apply(names, lambda k: self.set_apply(k, sub), delim, trim)
+        return self.parse_query_apply(names, lambda s, k: self.set_apply(s, k, sub), delim, trim)
 
-    def del_apply(self, name):
-        return OrderedDict.__delitem__(self, name)
+    @staticmethod
+    def del_apply(self_, name):
+        return OrderedDict.__delitem__(self_, name)
 
     def del_sub(self, *names, delim='/', trim=True):
         return self.parse_query_apply(names, self.del_apply, delim, trim)
@@ -343,4 +346,4 @@ class BaseGraphShallowTree(BaseGraphTree):
             raise ValueError(
                 'Concept cannot have nested elements. Access properties using property name directly. Query of names {} is not possibly applied.'.format(names))
         # this is only one layer above the leaf layer
-        return func(names[0])
+        return func(self, names[0])

@@ -37,9 +37,11 @@ class Concept(BaseGraphShallowTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
+    @staticmethod
     def get_apply(self, name):
         return BaseGraphTree.get_apply(self, name)[0]
 
+    @staticmethod
     def set_apply(self, name, sub):
         if name not in self:
             BaseGraphTree.set_apply(self, name, [])

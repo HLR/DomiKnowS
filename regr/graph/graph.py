@@ -12,11 +12,13 @@ class Graph(BaseGraphTree):
         self.ontology = ontology
         self._concepts = OrderedDict()
 
+    @staticmethod
     def get_apply(self, name):
         if name in self.concepts:
             return self.concepts[name]
         return BaseGraphTree.get_apply(self, name)
 
+    @staticmethod
     def set_apply(self, name, sub):
         if __package__ is None or __package__ == '':
             from concept import Concept
