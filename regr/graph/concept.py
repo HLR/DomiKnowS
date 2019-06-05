@@ -1,4 +1,5 @@
-from collections import defaultdict, Iterable, OrderedDict
+from collections import OrderedDict
+from collections.abc import Iterable
 from itertools import chain
 if __package__ is None or __package__ == '':
     from base import Scoped, BaseGraphTree

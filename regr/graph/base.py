@@ -251,17 +251,26 @@ class NamedTree(NamedTreeNode, OrderedDict):
     def detach(self, sub=None, all=False):
         if sub is None:
             if all:
-                return self.clear()
-            # detach all leaves
-            for sub in self.values():
-                if isinstance(sub, NamedTree):
-                    sub.detach()
-                else:
+                for sub in dict(self).values():
+                    # dict() makes a shallow copy to avoid runtime error of change
                     self.detach(sub)
+                #return self.clear()
+            else:
+                # detach all leaves
+                for sub in dict(self).values():
+                    # dict() makes a shallow copy to avoid runtime error of change
+                    if isinstance(sub, NamedTree):
+                        sub.detach()
+                    else:
+                        self.detach(sub)
             return
         # detach specific sub
-        if sub.name in self:
-            del self[sub.name]
+        # NB: sub.name is not reliable!
+        for key, value in dict(self).items():
+            # dict() makes a shallow copy to avoid runtime error of change
+            if value == sub:
+                del self[key]
+                sub._sup = None # TODO: what else to have?
 
     def query_apply(self, names, func):
         if len(names) > 1:
