@@ -13,20 +13,7 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ### Prepare
 
-#### Basic tools
-
-The following tools are needed to set up the EMR example.
-Most of them are pre-installed.
-If you don't have in some case, install them with default package management tools.
-For example, on Debian Linux (Ubuntu) you use `sudo apt install <package_name>`.
-On MacOS you need [`homebrew`](https://brew.sh) and use `sudo brew install <package_name>`.
-
-* `wget`: to download the dataset.
-* `unzip`: to extract data from a zipped file.
-
 #### Tools
-
-Other tools that are unlikely to be pre-installed. May need various commands to have them on your system.
 
 * Python 3: Python 3 is required by `allennlp`. Install by package management. Remember to mention the version in installation.
 * `pip`: to install other required python packages. Follow the [installation instruction](https://pip.pypa.io/en/stable/installing/) and make sure you install it with your Python 3.
@@ -36,26 +23,28 @@ Follow the [installation instruction](https://pytorch.org/get-started/locally/) 
 
 #### Setup
 
-Follow instructions of the project to have `regr` ready.
+Follow [instructions](../../README.md#prerequirements-and-setups) of the project to have `regr` ready.
 Install all python dependency specified in `requirements.txt` by
 ```bash
 sudo python3 -m pip install -r requirements.txt
 ```
-Use `setup-data.sh` to prepare the data needed by the example.
 
 ### The example
 
-The implement of the example is in package `emr`. The example can be run by using the following command.
+The implement of the example is in package `emr`. Involved data is included in [`data/EntityMentionRelation`](data/EntityMentionRelation).
 
+The example can be run by using the following command.
 ```bash
 python3.7 -m emr
 ```
+
 There are two sub-examples.
 `ner` example concider only one non-composed concept.
 Run it by the following command.
 ```bash
 python3.7 -m emr.ner
 ```
+
 `ners` example concider multiple non-composed concept. They are independent classifiers, sharing the same word embedding.
 Run it by the following command.
 ```bash
