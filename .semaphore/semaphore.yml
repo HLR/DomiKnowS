@@ -10,7 +10,7 @@ blocks:
       prologue:
         commands:
           - checkout
-          - export PYTHONPATH=.;$PYTHONPATH
+          - export PYTHONPATH=.:$PYTHONPATH
       jobs:
       - name: pytest
         commands:
