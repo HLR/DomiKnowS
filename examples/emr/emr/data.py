@@ -399,3 +399,20 @@ class Data(object):
     def __getitem__(self, name: str) -> str:
         # return an identifier the module can use in forward function to get the data
         return name
+
+
+from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
+
+
+class Conll04SensorReader(Conll04BinaryReader):
+    def read(self, path):
+        pass
+
+    def get_phrase_sensor(self):
+        return TokenSequenceSensor()
+
+    def get_pos_tag_sensor(self):
+        return LabelSequenceSensor()
+
+    def get_label_sensor(self, label):
+        return LabelSequenceSensor()
