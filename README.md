@@ -18,7 +18,7 @@ This project is under heavy development and not yet ready to use.
 - [ ] Decompose graph with computation further. Take them off from `Concept`.
 - [ ] Update inference interface.
 - [ ] Documentation
-- [ ] CI / Testing ...
+- [x] CI / Testing ...
 
 
 ## Outline
