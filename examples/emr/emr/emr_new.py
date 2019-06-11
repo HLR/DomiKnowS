@@ -1,4 +1,6 @@
+import os
 from regr.graph import Graph, Concept, Relation
+from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
 from regr.sensor.allennlp.learner import W2VLearner, LSTMLearner, LRLearner
 from emr.data import Conll04SensorReader as Reader
 
@@ -20,23 +22,24 @@ def seed1():
 seed1()
 
 
-def main():
-    with Graph('global') as graph:
-        with Graph('linguistic') as ling_graph:
-            phrase = Concept(name='phrase')
-            pair = Concept(name='pair')
-            pair.has_a(phrase, phrase)
-        with Graph('application') as app_graph:
-            people = Concept(name='people')
-            organization = Concept(name='organization')
-            people.is_a(phrase)
-            organization.is_a(phrase)
-            people.not_a(organization)
-            organization.not_a(people)
-            work_for = Concept(name='work_for')
-            work_for.is_a(pair)
-            work_for.has_a(employee=people, employer=organization)
+with Graph('global') as graph:
+    with Graph('linguistic') as ling_graph:
+        phrase = Concept(name='phrase')
+        pair = Concept(name='pair')
+        pair.has_a(phrase, phrase)
+    with Graph('application') as app_graph:
+        people = Concept(name='people')
+        organization = Concept(name='organization')
+        people.is_a(phrase)
+        organization.is_a(phrase)
+        people.not_a(organization)
+        organization.not_a(people)
+        work_for = Concept(name='work_for')
+        work_for.is_a(pair)
+        work_for.has_a(employee=people, employer=organization)
 
+
+def main():
     graph.detach()
 
     phrase = graph['linguistic/phrase']
@@ -45,13 +48,13 @@ def main():
 
     reader = Reader()
 
-    phrase['tokens'] = reader.get_phrase_sensor()
-    phrase['pos_tag'] = reader.get_pos_tag_sensor()
+    phrase['tokens'] = TokenSequenceSensor(reader, 'tokens')
+    phrase['pos_tag'] = LabelSequenceSensor(reader, 'pos')
     phrase['w2v'] = W2VLearner(phrase['tokens'])
     phrase['emb'] = LSTMLearner(phrase['w2v'])
 
-    people['label'] = reader.get_label_sensor('Peop')
-    organization['label'] = reader.get_label_sensor('Org')
+    people['label'] = LabelSequenceSensor(reader, 'Peop')
+    organization['label'] = LabelSequenceSensor(reader, 'Org')
 
     people['label'] = LRLearner()
     organization['label'] = LRLearner()
@@ -64,6 +67,8 @@ def main():
     reader.read(os.path.join(relative_path, train_path))
 
     # ...
+    print('-' * 40)
+    print(graph)
 
 
 if __name__ == '__main__':

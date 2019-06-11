@@ -19,7 +19,7 @@ class Property(BaseGraphShallowTree):
 
     def attach(self, sub):
         if isinstance(sub, Sensor):
-            self[str(len(self))] = sub # key must be string, and what else?
+            BaseGraphShallowTree.attach(self, sub)
         else:
             raise TypeError(
                 'Attach Sensor instance to Property, {} instance given.'.format(type(sub)))

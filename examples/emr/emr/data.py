@@ -405,14 +405,4 @@ from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
 
 
 class Conll04SensorReader(Conll04BinaryReader):
-    def read(self, path):
-        pass
-
-    def get_phrase_sensor(self):
-        return TokenSequenceSensor()
-
-    def get_pos_tag_sensor(self):
-        return LabelSequenceSensor()
-
-    def get_label_sensor(self, label):
-        return LabelSequenceSensor()
+    pass
