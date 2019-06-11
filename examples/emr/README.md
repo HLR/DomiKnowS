@@ -4,7 +4,8 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ## Problem description
 
-...
+Given a sentence like "Washington works for Associated Press." the task is to extract entities, and their relationships. 
+We are given a predefined set of entities and relationships. 
 
 [//]: # (description of the problem to be added here)
 
