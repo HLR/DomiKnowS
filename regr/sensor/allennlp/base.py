@@ -1,5 +1,6 @@
-from typing import List, Dict, NoReturn, Any
+from typing import List, Dict, NoReturn, Any, Optional
 from allennlp.data.dataset_readers import DatasetReader
+from torch.nn import Module
 from .. import Sensor, Learner
 
 
@@ -20,12 +21,16 @@ class BaseAllenNlpSensor(Sensor):
         context[self.fullname] = context[self.fieldname]
         return context
 
+
 class BaseAllenNlpLearner(BaseAllenNlpSensor, Learner):
     def __init__(
         self,
-        *pres: List[Sensor]
+        *pres: List[Sensor],
+        module: Optional[Module]=None
     ) -> NoReturn: 
         Learner.__init__(self)
+        self.pres = pres
+        self.module = module
 
     def update_context(
         self,
