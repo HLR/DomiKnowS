@@ -4,7 +4,15 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ## Problem description
 
-...
+To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](https://www.clips.uantwerpen.be/conll2003/ner/).
+The task is as follow:
+> **given** an input text such as 
+>> *"Washington works for Associated Press."*,
+>
+> **find** a model that is able to extract the semantic entity types *(e.g., people, organizations, and locations)* as well as relations between them *(e.g., works for, lives in)*, and
+>
+> **generate** the following output:
+>> *[Washington]*<sub>people</sub> *[works for]*<sub>worksFor</sub> *[Associated Press]*<sub>organization</sub>.
 
 [//]: # (description of the problem to be added here)
 
