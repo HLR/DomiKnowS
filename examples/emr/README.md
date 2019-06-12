@@ -16,16 +16,28 @@ The task is as follow:
 
 [//]: # (description of the problem to be added here)
 
+## Pipeline
+
+This example follows the pipeline we discussed in our preliminary paper.
+1. Ontology Declaration
+2. Model Declaration
+3. Explicit inference
+
+The steps are broken down into parts of the program.
+
 ## Composition
 
 The example consists of several parts.
 
-1. **Data reader** [`emr/data.py`](emr/data.py): raw data from CoNLL data set is located [`data/EntityMentionRelation`](data/EntityMentionRelation).
+1. **Data reader** [`emr/data.py`](emr/data.py): raw data from CoNLL data set is located [`data/EntityMentionRelation`](data/EntityMentionRelation). We build on the top of AllenNLP in this example. So the reader presents as a [`allennlp.data.DatasetReader`](emr/data.py#L132) finally.
 
-2. **Graph**:
+2. **Graph** [`emr/graph.py`](emr/graph.py): domain knowledge is presented as a graph. This is know as the **Ontology Declaration** step of the pipeline.
+Concepts are nodes in the graph and relations are the edges of the nodes. The graph can be compiled from OWL format.
+[`emr/graph.py`](emr/graph.py) is the graph used in EMR example showing concepts and relations, such as `work_for` (`people`, `organization`), which means when there is a work for relation, the first argument should be a people and the second argument should be an organization. 
 
-3. ...
+3. **Main** [`emr/emr.py`](emr/emr.py): the main entrance of the program, where the components are [put into one piece](emr/emr.py#L177). [`scaffold`](emr/emr.py#L184) is a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. [`model`](emr/emr.py#L187) is constructed in [`make_model`](emr/emr.py#L36) by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
 
+**Explicit inference**, is not present explicitly?! They are done in [`scaffold`](../../regr/scaffold/allennlp.py#L273) automatically. Cheers!
 
 ## Run the example
 
