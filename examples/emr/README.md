@@ -4,10 +4,46 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ## Problem description
 
-Given a sentence like "Washington works for Associated Press." the task is to extract entities, and their relationships. 
-We are given a predefined set of entities and relationships. 
+To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](https://www.clips.uantwerpen.be/conll2003/ner/).
+The task is as follow:
+> **given** an input text such as 
+>> *"Washington works for Associated Press."*,
+>
+> **find** a model that is able to extract the semantic entity types *(e.g., people, organizations, and locations)* as well as relations between them *(e.g., works for, lives in)*, and
+>
+> **generate** the following output:
+>> *[Washington]*<sub>people</sub> *[works for]*<sub>worksFor</sub> *[Associated Press]*<sub>organization</sub>.
+
 
 [//]: # (description of the problem to be added here)
+
+## Pipeline
+
+This example follows the pipeline we discussed in our preliminary paper.
+1. Ontology Declaration
+2. Model Declaration
+3. Explicit inference
+
+The steps are broken down into parts of the program.
+
+## Composition
+
+The example consists of several parts.
+
+1. **Data reader** [`emr/data.py`](emr/data.py): raw data from CoNLL data set is located [`data/EntityMentionRelation`](data/EntityMentionRelation). We build on the top of AllenNLP in this example. So the reader presents as a [`allennlp.data.DatasetReader`](emr/data.py#L132) finally.
+
+2. **Graph** [`emr/graph.py`](emr/graph.py): domain knowledge is presented as a graph. This is know as the **Ontology Declaration** step of the pipeline.
+Concepts are nodes in the graph and relations are the edges of the nodes. The graph can be compiled from OWL format.
+[`emr/graph.py`](emr/graph.py) is the graph used in EMR example showing concepts and relations, such as `work_for` (`people`, `organization`), which means when there is a work for relation, the first argument should be a people and the second argument should be an organization. 
+
+3. **Main** [`emr/emr.py`](emr/emr.py): the main entrance of the program, where the components are [put into one piece](emr/emr.py#L177). [`scaffold`](emr/emr.py#L184) is a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. [`model`](emr/emr.py#L187) is constructed in [`make_model`](emr/emr.py#L36) by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
+
+4. **Solver** [`../../regr/ilpSelectClassification.py`](../../regr/ilpSelectClassification.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
+They are done in [`scaffold`](../../regr/scaffold/allennlp.py#L273) automatically. Cheers!
+We convert the inference into an integer linear programming (ILP) problem and maximize the overall confidence of the truth values of all concepts while satisfying the global constraints.
+We derive constraints from the input ontology.
+Two types of constraints are considered: the [disjoint constraints for the concepts](../../regr/ilpSelectClassification.py#L42) and [the composed-of constraints for the ralation](../../regr/ilpSelectClassification.py#L99).
+By [solving the generated ILP problem](../../regr/ilpSelectClassification.py#L159), we can obtain a set of predictions that considers the structure of the data and the knowledge that is expressed in the domain ontology.
 
 
 ## Run the example
