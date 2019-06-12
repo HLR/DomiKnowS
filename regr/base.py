@@ -272,6 +272,38 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 del self[key]
                 sub._sup = None # TODO: what else to have?
 
+    def traversal_apply(self, func, order='pre', first='depth'):
+        if order.lower() not in ['pre', 'post']:
+            raise ValueError('Options for order are pre or post, {} given.'.format(order))
+        if first.lower() not in ['depth', 'breadth']:
+            raise ValueError('Options for first are depth or breadth, {} given.'.format(first))
+
+        to_traversal = [self, ]
+        to_apply = []
+
+        while to_traversal:
+            if first.lower() == 'depth':
+                current = to_traversal.pop()
+            else:
+                current = to_traversal.pop(0)
+            to_apply.append(current)
+
+            if order.lower() == 'pre':
+                current_apply = to_apply.pop()
+                retval = func(current_apply)
+
+            subs = list(current.values())
+            if (first.lower() == 'depth' and order.lower() == 'pre') or (
+                first.lower() == 'breadth' and order.lower() == 'post'):
+                subs = reversed(subs)
+
+            to_traversal.extend(subs)
+
+        if order.lower() == 'post':
+            while to_apply:
+                current_apply = to_apply.pop()
+                retval = func(current_apply)
+
     def query_apply(self, names, func):
         if len(names) > 1:
             return self[names[0]].query_apply(names[1:], func)

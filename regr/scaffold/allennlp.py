@@ -96,7 +96,7 @@ class BaseModel(Model):
         epoch = min(data[epoch_key])
         need =  ((epoch+1) % 10) == 0 # inference every 10 epoch
         return need # or True
-    
+
     def _update_metrics(
         self,
         data: DataInstance
