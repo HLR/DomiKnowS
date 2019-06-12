@@ -73,12 +73,15 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
      
     # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
     foundDisjoint = dict() # too eliminate duplicates
+    print("\n")
     for conceptName in conceptNames:
         
         currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
-            
+        
         if currentConcept is None :
             continue
+        
+        print("Found concept \"%s\" in ontology for concept name \"%s\" in data set"%(currentConcept.name, conceptName))
             
         for d in currentConcept.disjoints():
             disjointConcept = d.entities[1]._name
@@ -110,6 +113,8 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
                 foundDisjoint[conceptName] = {disjointConcept}
             else:
                 foundDisjoint[conceptName].add(disjointConcept)
+    
+    print("\n")
        
     # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
     foundEquivalent = dict() # too eliminate duplicates
@@ -275,6 +280,8 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
         if currentRelation is None:
             continue
 
+        print("Found relation \"%s\" in ontology for relation name \"%s\" in data set"%(currentRelation.name, relationName))
+
         currentRelationDomain = currentRelation.get_domain() # domains_indirect()
         currentRelationRange = currentRelation.get_range()
                 
@@ -294,6 +301,8 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                         constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
                         currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                         m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
+
+    print("\n")
 
     # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
     for relationName in graphResultsForPhraseRelation:
@@ -357,6 +366,9 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
             continue   
         
         currentRelationInverse = currentRelation.get_inverse_property()
+        
+        if not currentRelationInverse:
+            continue
         
         if currentRelationInverse.name not in graphResultsForPhraseRelation:
             continue
@@ -632,7 +644,7 @@ with Graph('global') as graph:
         phrase = Concept(name='phrase')
             
     with Graph('application') as app_graph:
-        # app_graph.ontology='http://trips.ihmc.us/ont'
+        #app_graph.ontology='http://trips.ihmc.us/ont'
         app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
 
 def main() :
