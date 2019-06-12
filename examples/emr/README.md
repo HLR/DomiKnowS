@@ -14,6 +14,7 @@ The task is as follow:
 > **generate** the following output:
 >> *[Washington]*<sub>people</sub> *[works for]*<sub>worksFor</sub> *[Associated Press]*<sub>organization</sub>.
 
+
 [//]: # (description of the problem to be added here)
 
 ## Pipeline
