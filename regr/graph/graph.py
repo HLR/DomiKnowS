@@ -12,6 +12,10 @@ class Graph(BaseGraphTree):
         self.ontology = ontology
         self._concepts = OrderedDict()
 
+    def __iter__(self):
+        yield from BaseGraphTree.__iter__(self)
+        yield from self._concepts
+
     @staticmethod
     def get_apply(self, name):
         if name in self.concepts:

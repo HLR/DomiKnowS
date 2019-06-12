@@ -292,12 +292,13 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
 
-            subs = list(current.values())
-            if (first.lower() == 'depth' and order.lower() == 'pre') or (
-                first.lower() == 'breadth' and order.lower() == 'post'):
-                subs = reversed(subs)
+            if isinstance(current, NamedTree):
+                subs = [current[name] for name in current] # compatible to subclasses that override the iterator
+                if (first.lower() == 'depth' and order.lower() == 'pre') or (
+                    first.lower() == 'breadth' and order.lower() == 'post'):
+                    subs = reversed(subs)
 
-            to_traversal.extend(subs)
+                to_traversal.extend(subs)
 
         if order.lower() == 'post':
             while to_apply:
