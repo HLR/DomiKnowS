@@ -37,7 +37,13 @@ Concepts are nodes in the graph and relations are the edges of the nodes. The gr
 
 3. **Main** [`emr/emr.py`](emr/emr.py): the main entrance of the program, where the components are [put into one piece](emr/emr.py#L177). [`scaffold`](emr/emr.py#L184) is a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. [`model`](emr/emr.py#L187) is constructed in [`make_model`](emr/emr.py#L36) by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
 
-**Explicit inference**, is not present explicitly?! They are done in [`scaffold`](../../regr/scaffold/allennlp.py#L273) automatically. Cheers!
+4. **Solver** [`../../regr/ilpSelectClassification.py`](../../regr/ilpSelectClassification.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
+They are done in [`scaffold`](../../regr/scaffold/allennlp.py#L273) automatically. Cheers!
+We convert the inference into an integer linear programming (ILP) problem and maximize the overall confidence of the truth values of all concepts while satisfying the global constraints.
+We derive constraints from the input ontology.
+Two types of constraints are considered: the [disjoint constraints for the concepts](../../regr/ilpSelectClassification.py#L42) and [the composed-of constraints for the ralation](../../regr/ilpSelectClassification.py#L99).
+By [solving the generated ILP problem](../../regr/ilpSelectClassification.py#L159), we can obtain a set of predictions that considers the structure of the data and the knowledge that is expressed in the domain ontology.
+
 
 ## Run the example
 
