@@ -111,7 +111,7 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
             else:
                 foundDisjoint[conceptName].add(disjointConcept)
        
-    # -- Add constraints based on concept equivalent (sameAs) statements in ontology - and(var1, av2)
+    # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
     foundEquivalent = dict() # too eliminate duplicates
     for conceptName in conceptNames:
         
@@ -173,7 +173,6 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
             if type(conceptConstruct) is And :
                 
                 for token in tokens:
-                    
                     constrainName = 'c_%s_%s_Intersection'%(token, conceptName)
                     _varAnd = m.addVar(name="andVar_%s"%(constrainName))
     
@@ -198,7 +197,6 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
             if type(conceptConstruct) is Or :
                 
                 for token in tokens:
-                    
                     constrainName = 'c_%s_%s_Union'%(token, conceptName)
                     _varOr = m.addVar(name="orVar_%s"%(constrainName))
     
@@ -223,14 +221,16 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
             if type(conceptConstruct) is Not :
                 
                 for token in tokens:                    
-                    for currentClass in conceptConstruct.Classes :
-                        constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, currentClass)
-                        
-                        m.addConstr(x[token, conceptName] + x[token, currentClass], GRB.EQUAL, 1, name=constrainName)
+                    currentClass = conceptConstruct.Class
+                    
+                    constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, currentClass.name)
+                    m.addConstr(x[token, conceptName] + x[token, currentClass.name], GRB.EQUAL, 1, name=constrainName)
+                    
+    # ---- No supported yet
 
-    # -- Add constraints based on concept disjonitUnion statements in ontology - 
+        # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
     
-    # -- Add constraints based on concept oneOf statements in ontology - 
+        # -- Add constraints based on concept oneOf statements in ontology - ?
 
     m.update()
             
@@ -257,7 +257,7 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                 y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
           
     # Add constraints forcing decision between variable and negative variables 
-    for relationName in relationNames :
+    for relationName in relationNames:
         for token in tokens: 
             for token1 in tokens:
                 if token == token1:
@@ -268,8 +268,8 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
 
     m.update()
 
-    # -- Add constraints based on property domain and range statements in ontology
-    for relationName in graphResultsForPhraseRelation :
+    # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
+    for relationName in graphResultsForPhraseRelation:
         currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
             
         if currentRelation is None:
@@ -288,60 +288,227 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                         
                 for token in tokens:
                     for token1 in tokens:
-                        if token == token1 :
+                        if token == token1:
                             continue
                                 
                         constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
                         currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                         m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
 
-    # -- Add constraints based on property subProperty statements in ontology
+    # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        for superProperty in currentRelation.is_a:
+            if superProperty.name not in graphResultsForPhraseRelation:
+                continue
+            
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token, token1, relationName, superProperty.name)
+                    m.addGenConstrIndicator(y[relationName, token, token1], True, y[superProperty.name, token, token1], GRB.EQUAL, 1)
+        
+    # -- Add constraints based on property equivalentProperty statements in ontology -  and(var1, av2)
+    foundEquivalent = dict() # too eliminate duplicates
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue
+            
+        for equivalentProperty in currentRelation.equivalent_to:
+            if equivalentProperty.name not in graphResultsForPhraseRelation:
+                 continue
+                    
+            if relationName in foundEquivalent:
+                if equivalentProperty.name in foundEquivalent[relationName]:
+                    continue
+            
+            if equivalentProperty.name in foundEquivalent:
+                if relationName in foundEquivalent[equivalentProperty.name]:
+                    continue
+                        
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                
+                    constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token, token1, relationName, equivalentProperty.name)
+                    _varAnd = m.addVar(name="andVar_%s"%(constrainName))
+    
+                    m.addGenConstrAnd(_varAnd, [y[relationName, token, token1], y[equivalentProperty.name, token, token1]], constrainName)
+                                         
+                if not (relationName in foundEquivalent):
+                    foundEquivalent[relationName] = {equivalentProperty.name}
+                else:
+                    foundEquivalent[relationName].add(equivalentProperty.name)
+    
+    # -- Add constraints based on property inverseProperty statements in ontology - S(x,y) -> P(y,x)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        currentRelationInverse = currentRelation.get_inverse_property()
+        
+        if currentRelationInverse.name not in graphResultsForPhraseRelation:
+            continue
+             
+        if currentRelationInverse is not None:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    constrainName = 'c_%s_%s_%s_InverseProperty'%(token, token1, relationName)
+                    m.addGenConstrIndicator(y[relationName, token, token1], True, y[currentRelationInverse.name, token1, token], GRB.EQUAL, 1)
+                        
+    # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        functionalLinExpr =  LinExpr()
 
+        if FunctionalProperty in currentRelation.is_a:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    functionalLinExpr += y[relationName, token, token1]
+            
+            constrainName = 'c_%s_%s_%s_FunctionalProperty'%(token, token1, relationName)
+            m.addConstr(newLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+    
+     # -- Add constraints based on property inverseFunctionaProperty statements in ontology - at most one P(x,y) for y
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if InverseFunctionalProperty in currentRelation.is_a:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    functionalLinExpr += y[relationName, token1, token]
+
+            constrainName = 'c_%s_%s_%s_InverseFunctionalProperty'%(token, token1, relationName)
+            m.addConstr(newLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+    
+    # -- Add constraints based on property reflexiveProperty statements in ontology - P(x,x)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if ReflexiveProperty in currentRelation.is_a:
+            for token in tokens: 
+                constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
+                m.addConstr(y[relationName, token, token], GRB.EQUAL, 1, name=constrainName)  
+                    
+    # -- Add constraints based on property irreflexiveProperty statements in ontology - not P(x,x)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if IrreflexiveProperty in currentRelation.is_a:
+            for token in tokens: 
+                constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
+                m.addConstr(y[relationName, token, token], GRB.EQUAL, 0, name=constrainName)  
+                
+    # -- Add constraints based on property symetricProperty statements in ontology - R(x, y) -> R(y,x)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if SymmetricProperty in currentRelation.is_a:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token, token1, relationName)
+                    m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 1)
+    
+    # -- Add constraints based on property asymetricProperty statements in ontology - not R(x, y) -> R(y,x)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if AsymmetricProperty in currentRelation.is_a:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token, token1, relationName)
+                    m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 0)  
+                    
+    # -- Add constraints based on property transitiveProperty statements in ontology - P(x,y) and P(y,z) - > P(x,z)
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
+        
+        if TransitiveProperty in currentRelation.is_a:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token == token1:
+                        continue
+                    
+                    constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token, token1, relationName)
+                    #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 1)  
+                           
     # -- Add constraints based on property allValueFrom statements in ontology
 
     # -- Add constraints based on property hasValueFrom statements in ontology
 
     # -- Add constraints based on property objectHasSelf statements in ontology
+    
+    # -- Add constraints based on property disjointProperty statements in ontology
+
+    # -- Add constraints based on property key statements in ontology
+
+
+    # -- Add constraints based on property exactCardinality statements in ontology
 
     # -- Add constraints based on property minCardinality statements in ontology
     
     # -- Add constraints based on property maxCardinality statements in ontology
+    for relationName in graphResultsForPhraseRelation:
+        currentRelation = myOnto.search_one(iri = "*%s"%(relationName))
+            
+        if currentRelation is None:
+            continue   
 
-    # -- Add constraints based on property exactCardinality statements in ontology
+    # ---- Related to DataType properties - not sure yet if we needto support them
     
-    # -- Add constraints based on property dataSomeValuesFrom statements in ontology
+        # -- Add constraints based on property dataSomeValuesFrom statements in ontology
     
-    # -- Add constraints based on property dataHasValue statements in ontology
+        # -- Add constraints based on property dataHasValue statements in ontology
 
-    # -- Add constraints based on property dataAllValuesFrom statements in ontology
-
-    # -- Add constraints based on property allValueFrom statements in ontology
-
-    # -- Add constraints based on property equivalentProperty statements in ontology
-    
-    # -- Add constraints based on property disjointProperty statements in ontology
-
-    # -- Add constraints based on property inverseProperty statements in ontology
-    
-    # -- Add constraints based on property functionalProperty statements in ontology
-    
-    # -- Add constraints based on property inverseProperty statements in ontology
-
-    # -- Add constraints based on property inverseFunctiona;Property statements in ontology
-
-    # -- Add constraints based on property reflexiveProperty statements in ontology
-
-    # -- Add constraints based on property irreflexiveProperty statements in ontology
-
-    # -- Add constraints based on property symetricProperty statements in ontology
-
-    # -- Add constraints based on property asymetricProperty statements in ontology
-    
-    # -- Add constraints based on property transitiveProperty statements in ontology
-
-    # -- Add constraints based on property symetricProperty statements in ontology
-
-    # -- Add constraints based on property key statements in ontology
+        # -- Add constraints based on property dataAllValuesFrom statements in ontology
 
     m.update()
 
@@ -411,10 +578,12 @@ def calculateILPSelection(phrase, graph, graphResultsForPhraseToken, graphResult
         #for v in m.getVars():
         #    print('%s %g' % (v.varName, v.x))
           
-        # Collect results for concepts
-        tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
+        # Collect results for tokens
+        tokenResult = None
         if x or True:
             if m.status == GRB.Status.OPTIMAL:
+                tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
+
                 solution = m.getAttr('x', x)
                 
                 for token in tokens :
@@ -463,6 +632,7 @@ with Graph('global') as graph:
         phrase = Concept(name='phrase')
             
     with Graph('application') as app_graph:
+        # app_graph.ontology='http://trips.ihmc.us/ont'
         app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
 
 def main() :
