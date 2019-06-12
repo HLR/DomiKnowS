@@ -1,4 +1,4 @@
-from regr.graph.base import NamedTree, NamedTreeNode
+from regr.base import NamedTree, NamedTreeNode
 
 
 class TestNamedTree(object):
