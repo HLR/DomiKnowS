@@ -1,7 +1,7 @@
 import os
 from regr.graph import Graph, Concept, Relation
 from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
-from regr.sensor.allennlp.learner import W2VLearner, LSTMLearner, LRLearner
+from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LRLearner
 from emr.data import Conll04SensorReader as Reader
 
 
@@ -50,14 +50,14 @@ def main():
 
     phrase['tokens'] = TokenSequenceSensor(reader, 'tokens')
     phrase['pos_tag'] = LabelSequenceSensor(reader, 'pos')
-    phrase['w2v'] = W2VLearner(phrase['tokens'])
-    phrase['emb'] = LSTMLearner(phrase['w2v'])
+    phrase['w2v'] = W2VLearner(16, 32, 'tokens', phrase['tokens'])
+    phrase['emb'] = RNNLearner(32, phrase['w2v'])
 
     people['label'] = LabelSequenceSensor(reader, 'Peop')
     organization['label'] = LabelSequenceSensor(reader, 'Org')
 
-    people['label'] = LRLearner()
-    organization['label'] = LRLearner()
+    people['label'] = LRLearner(64, phrase['emb'])
+    organization['label'] = LRLearner(64, phrase['emb'])
 
     # data setting
     relative_path = "data/EntityMentionRelation"
