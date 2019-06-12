@@ -1,8 +1,12 @@
 import os
 from regr.graph import Graph, Concept, Relation
+from regr.graph.allennlp import AllenNlpGraph
 from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
 from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LRLearner
 from emr.data import Conll04SensorReader as Reader
+from allennlp.data import Vocabulary
+
+
 
 
 Graph.clear()
@@ -40,35 +44,37 @@ with Graph('global') as graph:
 
 
 def main():
+    # data setting
+    relative_path = "data/EntityMentionRelation"
+    train_path = "conll04_train.corp"
+    valid_path = "conll04_test.corp"
+
+    reader = Reader()
+    train_dataset = reader.read(os.path.join(relative_path, train_path))
+    valid_dataset = reader.read(os.path.join(relative_path, valid_path))
+    vocab = Vocabulary.from_instances(train_dataset + valid_dataset)
+
     graph.detach()
 
     phrase = graph['linguistic/phrase']
     people = graph['application/people']
     organization = graph['application/organization']
 
-    reader = Reader()
-
-    phrase['tokens'] = TokenSequenceSensor(reader, 'tokens')
+    phrase['sentence'] = TokenSequenceSensor(reader, 'sentence')
     phrase['pos_tag'] = LabelSequenceSensor(reader, 'pos')
-    phrase['w2v'] = W2VLearner(16, 32, 'tokens', phrase['tokens'])
+    phrase['w2v'] = W2VLearner(vocab.get_vocab_size('tokens'), 32, 'tokens', phrase['sentence']) # 'tokens' is from reader
     phrase['emb'] = RNNLearner(32, phrase['w2v'])
 
-    people['label'] = LabelSequenceSensor(reader, 'Peop')
-    organization['label'] = LabelSequenceSensor(reader, 'Org')
+    people['label'] = LabelSequenceSensor(reader, 'Peop', output_only=True)
+    organization['label'] = LabelSequenceSensor(reader, 'Org', output_only=True)
 
     people['label'] = LRLearner(64, phrase['emb'])
     organization['label'] = LRLearner(64, phrase['emb'])
 
-    # data setting
-    relative_path = "data/EntityMentionRelation"
-    train_path = "conll04_train.corp"
-    valid_path = "conll04_test.corp"
+    lbp = AllenNlpGraph.cast(graph, vocab)
 
-    reader.read(os.path.join(relative_path, train_path))
-
-    # ...
-    print('-' * 40)
-    print(graph)
+    lbp.train(train_dataset, valid_dataset)
+    lbp.save('/tmp/emr')
 
 
 if __name__ == '__main__':

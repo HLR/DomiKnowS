@@ -1,5 +1,22 @@
-from .. import Graph
-import copy
+from typing import Dict, Tuple, Iterable
+import torch
+from torch import Tensor
+from torch.nn import Module
+from allennlp.models import Model
+from allennlp.data import Vocabulary
+from allennlp.data.iterators import BucketIterator
+from allennlp.training import Trainer
+from allennlp.nn.util import get_text_field_mask
+
+from .. import Graph, Property
+from ...sensor.allennlp import AllenNlpLearner
+from ...solver.inference import inference
+
+
+DEBUG_TRAINING = True
+
+
+DataInstance = Dict[str, Tensor]
 
 
 class BaseModel(Model):
@@ -18,15 +35,14 @@ class BaseModel(Model):
         data: DataInstance,
         metrics: Dict[str, Tuple[callable, Tuple[Tuple[Module, callable], float]]]
     ) -> DataInstance:
-        for metric_name, (metric, module_funcs) in metrics.items():
+        for metric_name, (metric, prop) in metrics.items():
             vals = []
-            for (module, func), conf in module_funcs:
+            for name, sensor in prop.items():
                 # TODO: consider the order, consider the confidence (and module?)
-                tensor = func(data)
+                sensor(data)
+                tensor = data[sensor.fullname]
                 vals.append(tensor)
 
-            from .allennlp_metrics import Auc, AP, PRAuc
-            # FIXME: how to determine? check loss implement too.
             label = vals[0]
             pred = vals[1]
             size = label.size()  # (b,l,) or (b,l1,l2)
@@ -38,6 +54,7 @@ class BaseModel(Model):
             else:
                 pass
 
+            from .allennlp_metrics import Auc, AP, PRAuc
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
                 # AUC has problem using GPU
                 if len(size) == 2:
@@ -52,28 +69,16 @@ class BaseModel(Model):
                 metric(pred, label, mask)
         return data
 
-    def _update_metrics_metrics(
-        self,
-        data: DataInstance
-    ) -> DataInstance:
-        return self._update_metrics_base(data, self.metrics)
-
-    def _update_metrics_metrics_inferenced(
-        self,
-        data: DataInstance
-    ) -> DataInstance:
-        return self._update_metrics_base(data, self.metrics_inferenced)
-
     def _need_inference(
         self,
         data: DataInstance
     ) -> bool:
-        epoch_key = 'epoch_num' # TODO: this key... is from Allennlp doc
+        epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
         if epoch_key not in data:
-            return True # no epoch record, then always inference
+            return True  # no epoch record, then always inference
         epoch = min(data[epoch_key])
-        need =  ((epoch+1) % 10) == 0 # inference every 10 epoch
-        return need # or True
+        need = ((epoch + 1) % 10) == 0  # inference every 10 epoch
+        return need  # or True
 
     def _update_metrics(
         self,
@@ -81,10 +86,10 @@ class BaseModel(Model):
     ) -> DataInstance:
         for metric_name, metric in self.meta.items():
             metric(data)
-        data = self._update_metrics_metrics(data)
+        data = self._update_metrics_base(data, self.metrics)
         if self._need_inference(data):
             data = self._inference(data)
-            data = self._update_metrics_metrics_inferenced(data)
+            data = self._update_metrics_base(data, self.metrics_inferenced)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
@@ -93,7 +98,14 @@ class BaseModel(Model):
         metrics = {}
 
         def add(metric_name, metric):
-            out = metric.get_metric(reset)
+            try:
+                out = metric.get_metric(reset)
+            except RuntimeError:
+                # in case inferenced ones are not called
+                # RuntimeError("You never call this metric before.")
+                # then pass
+                return
+
             import numpy as np
             import numbers
             if isinstance(out, Iterable):
@@ -142,11 +154,12 @@ class BaseModel(Model):
 
 class ScaffoldedModel(BaseModel):
     def __init__(
-        self_,
+        self,
+        graph: Graph,
         vocab: Vocabulary
     ) -> None:
-        model = self_
-        BaseModel.__init__(model, vocab)
+        BaseModel.__init__(self, vocab)
+        self.graph = graph
 
         from allennlp.training.metrics import CategoricalAccuracy, F1Measure
         from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
@@ -154,7 +167,7 @@ class ScaffoldedModel(BaseModel):
         def F1MeasureProxy(): return F1Measure(1)
 
         def PrecisionProxy(): return Precision(1)
-        model.meta['epoch'] = Epoch()
+        self.meta['epoch'] = Epoch()
         metrics = {
             #'Accuracy': CategoricalAccuracy,
             #'Precision': PrecisionProxy,
@@ -164,81 +177,183 @@ class ScaffoldedModel(BaseModel):
             #'AP': AP,
         }
 
-        for _, concept, prop, _ in graph.get_multiassign():
+        for prop in self.graph.get_multiassign():
             # if concept == graph.organization: # just don't print too much
             #    continue
-            for metric_name, metric_class in metrics.items():
-                fullname = '\n{}[{}]-{}'.format(concept.fullname,
-                                                prop, metric_name)
-                shortname = '\n{}-{}'.format(concept.name, metric_name)
+            for metric_name, MetricClass in metrics.items():
+                fullname = '\n{}-{}'.format(prop.fullname, metric_name)
+                shortname = '\n{}-{}'.format(prop.sup.name, metric_name)
                 name = shortname
-                model.metrics[name] = (
-                    metric_class(), concept[prop])
-                model.metrics_inferenced[name] = (
-                    metric_class(), concept[prop])
+                self.metrics[name] = (MetricClass(), prop)
+                self.metrics_inferenced[name] = (MetricClass(), prop)
 
         i = 0  # TODO: this looks too bad
-        for _, _, _, module_funcs in graph.get_multiassign():
-            for (module, _), _ in module_funcs:
-                model.add_module(str(i), module)
-                i += 1
+        for prop in self.graph.get_multiassign():
+            for name, sensor in prop.items():
+                if isinstance(sensor, AllenNlpLearner) and sensor.module is not None:
+                    self.add_module(str(i), sensor.module)
+                    i += 1
 
     def forward(
-        self_,
+        self,
         **data: DataInstance
     ) -> DataInstance:
-        model = self_
         # just prototype
         # TODO: how to retieve the sequence properly?
         # I used to have topological-sorting over the module graph in my old frameworks
 
-        data[model.field_name['mask']] = get_text_field_mask(
+        data[self.field_name['mask']] = get_text_field_mask(
             data['sentence'])  # FIXME: calculate mask for evert concept
 
         #tensor = graph.people['label'][1][0](data)
         # make sure every node needed are calculated
-        for _, _, _, module_funcs in graph.get_multiassign():
-            for (_, func), _ in module_funcs:
-                func(data)
+        for prop in self.graph.get_multiassign():
+            for name, sensor in prop.items():
+                sensor(data)
 
-        data = model._update_loss(data)
-        data = model._update_metrics(data)
+        data = self._update_loss(data)
+        data = self._update_metrics(data)
 
         return data
 
     def _inference(
-        self_,
+        self,
         data: DataInstance
     ) -> DataInstance:
         # variables in the closure
         # scafold - the scafold object
-        # graph - the graph object
-        model = self_
 
-        #print(data['global/application/other[label]-1'])
-        data = inference(graph, data,
-                         model.vocab
-                        )
-        #print(data['global/application/other[label]-1'])
+        # print(data['global/application/other[label]-1'])
+        data = inference(self.graph, data, self.vocab)
+        # print(data['global/application/other[label]-1'])
         return data
 
-class AllenNlpGraph(Graph, ScaffoldedModel):
+    def loss_func(
+        self,
+        data: DataInstance
+    ) -> DataInstance:
+        from allennlp.nn.util import sequence_cross_entropy_with_logits
+        loss = 0
+        for prop in self.graph.get_multiassign():
+            vals = []
+            for name, sensor in prop.items():
+                sensor(data)
+                tensor = data[sensor.fullname]
+                vals.append(tensor)
+            label = vals[0]  # TODO: from readersensor
+            pred = vals[1]  # TODO: from learner
+            size = label.size()
+
+            bfactor = 0.  # 0 - no balance, 1 - balance
+            if len(size) == 2:  # (b,l,)
+                mask = data[self.field_name['mask']].clone().float()
+                # class balance weighted
+                target = (label > 0)
+                pos = (target).sum().float()
+                neg = (1 - target).sum().float()
+                mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
+                mask[1 - target] *= (pos + neg * (1 - bfactor)) / (pos + neg)
+
+                # NB: the order!
+                loss += sequence_cross_entropy_with_logits(
+                    pred, label, mask)
+            elif len(size) == 3:  # (b,l1,l2,)
+                mask = data[self.field_name['mask']
+                            ].clone().float()  # (b,l,)
+                ms = mask.size()
+                # TODO: this is only self relation mask since we have only one input mask
+                # TODO: mask should be generated somewhere else automatically
+                mask = mask.view(ms[0], ms[1], 1).matmul(
+                    mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+                # label -> (b,l1,l2,), elements are -1 (padding) and 1 (label)
+                # TODO: nosure how to retrieve padding correctly
+                target = (label > 0)
+                ts = target.size()
+                # class balance weighted
+                pos = (target).sum().float()
+                neg = (1 - target).sum().float()
+                mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
+                mask[1 - target] *= (pos + neg * (1 - bfactor)) / (pos + neg)
+                #
+                # reshape(ts[0], ts[1]*ts[2]) # (b,l1*l2)
+                pred = (pred)  # (b,l1,l2,c)
+                # reshape(ts[0], ts[1]*ts[2], -1) # (b,l1*l2,c)
+                loss += sequence_cross_entropy_with_logits(
+                    pred.view(ts[0], ts[1] * ts[2], -1),
+                    target.view(ts[0], ts[1] * ts[2]),
+                    # *0. # mute out the relation to see peop+org result
+                    mask.view(ms[0], ms[1] * ms[1])
+                )  # NB: the order!
+            else:
+                pass  # TODO: no idea, but we are not yet there
+
+        return loss
+
+
+class AllenNlpGraph(Graph):
     def __init__(self, *args, **kwargs):
-        raise RuntimeError('Do not construct from {}. Use cast to cast from Graph only.'.format(type(self)))
+        raise RuntimeError(
+            'Do not construct from {}. Use cast to cast from Graph only.'.format(type(self)))
 
     @classmethod
-    def cast(cls, inst):
+    def cast(cls, inst, vocab):
         """Cast an A into a MyA."""
         if not isinstance(inst, Graph):
-            raise TypeError('Only cast from Graph. {} given.'.format(type(inst)))
+            raise TypeError(
+                'Only cast from Graph. {} given.'.format(type(inst)))
         inst.__class__ = cls  # now mymethod() is available
+        inst.model = ScaffoldedModel(inst, vocab)
         assert isinstance(inst, AllenNlpGraph)
         return inst
 
     def get_multiassign(self):
-        multiassign = []
+        ma = []
+
         def func(node):
-             if isinstance(node, Property) and len(node) > 1:
-                    multiassign.append(x)
+            # use a closure to collect multi-assignments
+            if isinstance(node, Property) and len(node) > 1:
+                ma.append(node)
         self.traversal_apply(func)
-        return multiassign
+        return ma
+
+    def save(self, path):
+        with open(os.path.join(path, 'model.th'), 'wb') as fout:
+            torch.save(self.model.state_dict(), fout)
+        self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
+
+    def train(self, *args, **kwargs):
+        trainer = self.get_trainer(*args, **kwargs)
+        return trainer.train()
+
+    def get_trainer(
+        self,
+        train_dataset,
+        valid_dataset,
+        lr=1., wd=0.003, batch=64, epoch=1000, patience=50
+    ) -> Trainer:
+        # prepare GPU
+        if torch.cuda.is_available() and not DEBUG_TRAINING:
+            device = 0
+            model = self.model.cuda()
+        else:
+            device = -1
+
+        # prepare optimizer
+        #print([p.size() for p in model.parameters()])
+        # options for optimizor: SGD, Adam, Adadelta, Adagrad, Adamax, RMSprop
+        from torch.optim import Adam
+        optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
+        iterator = BucketIterator(batch_size=batch,
+                                  sorting_keys=[('sentence', 'num_tokens')],
+                                  track_epoch=True)
+        iterator.index_with(self.model.vocab)
+        trainer = Trainer(model=self.model,
+                          optimizer=optimizer,
+                          iterator=iterator,
+                          train_dataset=train_dataset,
+                          validation_dataset=valid_dataset,
+                          patience=patience,
+                          num_epochs=epoch,
+                          cuda_device=device)
+
+        return trainer
