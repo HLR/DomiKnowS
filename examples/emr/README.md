@@ -16,6 +16,16 @@ The task is as follow:
 
 [//]: # (description of the problem to be added here)
 
+## Composition
+
+The example consists of several parts.
+
+1. **Data reader** [`emr/data.py`](emr/data.py): raw data from CoNLL data set is located [`data/EntityMentionRelation`](data/EntityMentionRelation).
+
+2. **Graph**:
+
+3. ...
+
 
 ## Run the example
 
