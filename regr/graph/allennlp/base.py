@@ -9,6 +9,7 @@ from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
 from allennlp.nn.util import get_text_field_mask
 
+from ...utils import WrapperMetaClass
 from .. import Graph, Property
 from ...sensor.allennlp import AllenNlpLearner
 from ...solver.inference import inference
@@ -55,7 +56,7 @@ class BaseModel(Model):
             else:
                 pass
 
-            from .allennlp_metrics import Auc, AP, PRAuc
+            from .metrics import Auc, AP, PRAuc
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
                 # AUC has problem using GPU
                 if len(size) == 2:
@@ -163,7 +164,7 @@ class ScaffoldedModel(BaseModel):
         self.graph = graph
 
         from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-        from .allennlp_metrics import Epoch, Auc, AP, PRAuc, Precision
+        from .metrics import Epoch, Auc, AP, PRAuc, Precision
 
         def F1MeasureProxy(): return F1Measure(1)
 
@@ -291,21 +292,12 @@ class ScaffoldedModel(BaseModel):
         return loss
 
 
-class AllenNlpGraph(Graph):
-    def __init__(self, *args, **kwargs):
-        raise RuntimeError(
-            'Do not construct from {}. Use cast to cast from Graph only.'.format(type(self)))
+class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
+    __metaclass__ = WrapperMetaClass
 
-    @classmethod
-    def cast(cls, inst, vocab):
-        """Cast an A into a MyA."""
-        if not isinstance(inst, Graph):
-            raise TypeError(
-                'Only cast from Graph. {} given.'.format(type(inst)))
-        inst.__class__ = cls  # now mymethod() is available
-        inst.model = ScaffoldedModel(inst, vocab)
-        assert isinstance(inst, AllenNlpGraph)
-        return inst
+    def __init__(self, vocab):
+        self.model = ScaffoldedModel(self, vocab)
+        # do not invoke super().__init__() here
 
     def get_multiassign(self):
         ma = []
@@ -318,6 +310,8 @@ class AllenNlpGraph(Graph):
         return ma
 
     def save(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
         with open(os.path.join(path, 'model.th'), 'wb') as fout:
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))

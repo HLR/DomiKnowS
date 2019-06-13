@@ -72,7 +72,7 @@ def main():
     people['label'] = LRLearner(64, phrase['emb'])
     organization['label'] = LRLearner(64, phrase['emb'])
 
-    lbp = AllenNlpGraph.cast(graph, vocab)
+    lbp = AllenNlpGraph(graph, vocab)
 
     lbp.train(train_dataset, valid_dataset)
     lbp.save('/tmp/emr')

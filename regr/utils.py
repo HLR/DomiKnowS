@@ -199,3 +199,15 @@ def singleton(cls, getter=None, setter=None):
     cls.__new__ = staticmethod(__new__)
     cls.__init__ = __init__
     return cls
+
+
+class WrapperMetaClass(type):
+    def __call__(cls, inst, *args, **kwargs):
+        if not isinstance(inst, cls.__bases__):
+            raise TypeError(
+                'Only cast from {}, while {} is given.'.format(super(cls), type(inst)))
+
+        inst.__class__ = cls
+        # no need to call cls.__new__ because we do not need new instance
+        inst.__init__(*args, **kwargs)
+        return inst
