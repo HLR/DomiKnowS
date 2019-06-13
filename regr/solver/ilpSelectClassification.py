@@ -73,7 +73,7 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
      
     # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
     foundDisjoint = dict() # too eliminate duplicates
-    print("\n")
+    #print("\n")
     for conceptName in conceptNames:
         
         currentConcept = myOnto.search_one(iri = "*%s"%(conceptName))
@@ -81,7 +81,7 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
         if currentConcept is None :
             continue
         
-        print("Found concept \"%s\" in ontology for concept name \"%s\" in data set"%(currentConcept.name, conceptName))
+        #print("Found concept \"%s\" in ontology for concept name \"%s\" in data set"%(currentConcept.name, conceptName))
             
         for d in currentConcept.disjoints():
             disjointConcept = d.entities[1]._name
@@ -114,7 +114,7 @@ def addTokenConstrains(m, myOnto, tokens, conceptNames, x, graphResultsForPhrase
             else:
                 foundDisjoint[conceptName].add(disjointConcept)
     
-    print("\n")
+    #print("\n")
        
     # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
     foundEquivalent = dict() # too eliminate duplicates
@@ -280,7 +280,7 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
         if currentRelation is None:
             continue
 
-        print("Found relation \"%s\" in ontology for relation name \"%s\" in data set"%(currentRelation.name, relationName))
+        #print("Found relation \"%s\" in ontology for relation name \"%s\" in data set"%(currentRelation.name, relationName))
 
         currentRelationDomain = currentRelation.get_domain() # domains_indirect()
         currentRelationRange = currentRelation.get_range()
@@ -302,7 +302,7 @@ def addRelationsConstrains(m, myOnto, tokens, conceptNames, x, y, graphResultsFo
                         currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                         m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
 
-    print("\n")
+    #print("\n")
 
     # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
     for relationName in graphResultsForPhraseRelation:
@@ -627,9 +627,11 @@ def calculateILPSelection(phrase, graph, graphResultsForPhraseToken, graphResult
                     
     except GurobiError as e:
         print('Error code ' + str(e.errno) + ": " + str(e))
+        raise
     
     except AttributeError:
         print('Encountered an attribute error')
+        raise
        
     # return results of ILP optimization
     return tokenResult, relationsResult

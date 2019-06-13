@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Tuple, Iterable
 import torch
 from torch import Tensor
@@ -13,7 +14,7 @@ from ...sensor.allennlp import AllenNlpLearner
 from ...solver.inference import inference
 
 
-DEBUG_TRAINING = True
+DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
 DataInstance = Dict[str, Tensor]
@@ -78,7 +79,7 @@ class BaseModel(Model):
             return True  # no epoch record, then always inference
         epoch = min(data[epoch_key])
         need = ((epoch + 1) % 10) == 0  # inference every 10 epoch
-        return need  # or True
+        return need or DEBUG_TRAINING
 
     def _update_metrics(
         self,

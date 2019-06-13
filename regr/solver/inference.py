@@ -29,21 +29,21 @@ def inference(
     tables = [[] for _ in groups]
     wild = []  # for those not in any group
     # for each subgraph.concept[prop] that has multiple assignment
-    for subgraph, concept, prop, module_funcs in graph.get_multiassign(): # order? always check with table
+    for prop in graph.get_multiassign(): # order? always check with table
         # find the group it goes to
         # TODO: update later with group discover?
         for group, table in zip(groups, tables):
-            if concept.name in group:
+            if prop.sup.name in group:
                 # for each assignment, [0] for label, [1] for pred
                 # consider only prediction here
-                (module, func), conf = module_funcs[1]
+                sensor = list(prop.values())[1]
                 # how about conf?
-                table.append((concept, prop, func))
+                table.append(sensor)
                 break
         else:  # for group, table, no break
             # belongs to no group
             # still do something, differently
-            wild.append((concept, prop, func))
+            wild.append(sensor)
 
     # now we have (batch, ) in predictions, but inference may process one item at a time
     # should organize in this way (batch, len, ..., t/f, column), then we can iter through batches
@@ -56,9 +56,9 @@ def inference(
             continue
         # assume all of them give same dims of output: (batch, len, ..., t/f)
         values = []
-        for column in table:
-            concept, prop, func = column
-            value = func(data)  # (batch, len, ..., t/f)
+        for sensor in table:
+            sensor(data)  # (batch, len, ..., t/f)
+            value = data[sensor.fullname]
             # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
             value = torch.exp(value)
             #######
@@ -94,16 +94,14 @@ def inference(
             # 0 for batch, resulting (len, ..., ncls)
             values = values.index_select(0, batch_index)
             values = values.squeeze(dim=0)
-            names, props = zip(*[(concept.name, prop)
-                                 for concept, prop, _ in table])
             # now values is the table we need
             # and names is the list of grouped concepts (name of the columns)
-            inference_tables.append((names, props, values))
+            inference_tables.append((table, values))
 
         # data structure convert
         phrase = None  # TODO: since it not using now. if it is needed later, will pass it somewhere else
 
-        phrasetable = inference_tables[0][2].clone().cpu().detach().numpy()
+        phrasetable = inference_tables[0][1].clone().cpu().detach().numpy()
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
@@ -111,7 +109,7 @@ def inference(
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]
-        concept_names = [concept.name for concept, prop, _ in tables[0]]
+        concept_names = [sensor.sup.sup.name for sensor in tables[0]]
         #print(phrasetable)
         #print(tokens)
         #print(concept_names)
@@ -122,10 +120,10 @@ def inference(
 
         graphResultsForPhraseRelation = dict()
         if len(tables[1]) > 0:
-            graphtable = inference_tables[1][2].clone().cpu().detach().numpy()
-            for i, (composed_concept, _, _) in enumerate(tables[1]):
+            graphtable = inference_tables[1][1].clone().cpu().detach().numpy()
+            for i, sensor in enumerate(tables[1]):
                 # each relation
-                graphResultsForPhraseRelation[composed_concept.name] = pd.DataFrame(
+                graphResultsForPhraseRelation[sensor.sup.sup.name] = pd.DataFrame(
                     graphtable[:mask_len[batch_index], :mask_len[batch_index], i], # apply mask
                     index=tokens,
                     columns=tokens,
@@ -133,6 +131,8 @@ def inference(
 
         # do inference
         #print('3-'*40)
+        #print(phrase)
+        #print(graph)
         #print(graphResultsForPhraseToken)
         #print('4-'*40)
         #print(graphResultsForPhraseRelation)
@@ -143,6 +143,8 @@ def inference(
                 graphResultsForPhraseToken,
                 graphResultsForPhraseRelation,
                 ontologyPathname='./')
+            if tokenResult is None and relationsResult is None:
+                raise RuntimeError('No result from solver. Check any log from the solver.')
         except:
             print('-'*40)
             print(phrasetable)
@@ -152,6 +154,7 @@ def inference(
             print(graphResultsForPhraseRelation)
             print(tokenResult, relationsResult)
             print('-'*40)
+            raise
         #print('6-'*40)
         #print(tokenResult)
         #print('7-'*40)
@@ -159,7 +162,7 @@ def inference(
         #print('8-'*40)
 
         # convert back
-        for i, (updated_batch, (names, props, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
+        for i, (updated_batch, (table, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
             # values: tensor (len, ..., ncls)
             # updated_batch: list of batches of result of tensor (len, ..., ncls)
             updated = torch.zeros(values.size(), device=values.device)
@@ -170,14 +173,14 @@ def inference(
             if i == 0:
                 # tokenResult: [len, ncls], notice the order of ncls
                 # updated: tensor(len, ncls)
-                result = tokenResult[list(names)].to_numpy() # use the names to control the order
+                result = tokenResult[[sensor.sup.sup.name for sensor in table]].to_numpy() # use the names to control the order
                 updated[:mask_len[batch_index],:] = torch.from_numpy(result)
             elif i == 1:
                 # relationsResult: dict(ncls)[len, len], order of len should not be changed
                 # updated: tensor(len, len, ncls)
-                for j, name in zip(torch.arange(len(names)), names):
+                for j, sensor in zip(torch.arange(len(tabel)), table):
                     try:
-                        result = relationsResult[name][tokens].to_numpy() # use the tokens to enforce the order
+                        result = relationsResult[sensor.sup.sup.name][tokens].to_numpy() # use the tokens to enforce the order
                     except:
                         print('-'*40)
                         print(tokens)
@@ -222,7 +225,7 @@ def inference(
 
         # for each class in ncls
         ncls = updated_batch_tensor.size()[-1]
-        for icls, (concept, prop, _) in zip(torch.arange(ncls, device=updated_batch_tensor.device), table):
+        for icls, sensor in zip(torch.arange(ncls, device=updated_batch_tensor.device), table):
             # Tensor(batch, len, ..., 1)
             value = updated_batch_tensor.index_select(-1, icls)
             #print('value=', printablesize(value))
@@ -230,7 +233,7 @@ def inference(
             value = torch.cat([1 - value, value], dim=-1)
             #print('value=', printablesize(value))
 
-            fullname = '{}[{}]-{}'.format(concept.fullname, prop, 1) # TODO: pos=1 here! figure out a way
+            fullname = '{}[{}]-{}'.format(sensor.sup.sup.fullname, prop, 1) # TODO: pos=1 here! figure out a way
             # put it back finally
             data[fullname] = value
 
