@@ -23,7 +23,7 @@ PATIENCE = None
 
 
 def ontology_declaration():
-    from .graph import graph
+    from .graph_simple import graph
     return graph
 
 
@@ -36,14 +36,7 @@ def model_declaration(graph, reader, vocab):
 
     people = graph['application/people']
     organization = graph['application/organization']
-    location = graph['application/location']
-    other = graph['application/other']
-    o = graph['application/O']
-
     work_for = graph['application/work_for']
-    located_in = graph['application/located_in']
-    live_in = graph['application/live_in']
-    orgbase_on = graph['application/orgbase_on']
 
     # connect sensors and learners
     # features
@@ -55,28 +48,16 @@ def model_declaration(graph, reader, vocab):
     # concept label
     people['label'] = LabelSequenceSensor(reader, 'Peop', output_only=True)
     organization['label'] = LabelSequenceSensor(reader, 'Org', output_only=True)
-    location['label'] = LabelSequenceSensor(reader, 'Loc', output_only=True)
-    other['label'] = LabelSequenceSensor(reader, 'Other', output_only=True)
-    o['label'] = LabelSequenceSensor(reader, 'O', output_only=True)
 
     # concept prediction
     people['label'] = LRLearner(EMBEDDING_DIM * 2, phrase['emb'])
     organization['label'] = LRLearner(EMBEDDING_DIM * 2, phrase['emb'])
-    location['label'] = LRLearner(EMBEDDING_DIM * 2, phrase['emb'])
-    other['label'] = LRLearner(EMBEDDING_DIM * 2, phrase['emb'])
-    o['label'] = LRLearner(EMBEDDING_DIM * 2, phrase['emb'])
 
     # composed-concept label
     work_for['label'] = LabelSequenceSensor(reader, 'Work_For', output_only=True)
-    live_in['label'] = LabelSequenceSensor(reader, 'Live_In', output_only=True)
-    located_in['label'] = LabelSequenceSensor(reader, 'Located_In', output_only=True)
-    orgbase_on['label'] = LabelSequenceSensor(reader, 'OrgBased_In', output_only=True)
 
     # composed-concept prediction
     work_for['label'] = LRLearner(EMBEDDING_DIM * 4, pair['emb'])
-    live_in['label'] = LRLearner(EMBEDDING_DIM * 4, pair['emb'])
-    located_in['label'] = LRLearner(EMBEDDING_DIM * 4, pair['emb'])
-    orgbase_on['label'] = LRLearner(EMBEDDING_DIM * 4, pair['emb'])
 
     return graph
 

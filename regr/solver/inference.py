@@ -178,7 +178,7 @@ def inference(
             elif i == 1:
                 # relationsResult: dict(ncls)[len, len], order of len should not be changed
                 # updated: tensor(len, len, ncls)
-                for j, sensor in zip(torch.arange(len(tabel)), table):
+                for j, sensor in zip(torch.arange(len(table)), table):
                     try:
                         result = relationsResult[sensor.sup.sup.name][tokens].to_numpy() # use the tokens to enforce the order
                     except:

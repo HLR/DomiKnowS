@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Any, NoReturn
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+import torch
 from torch.nn import Module, Dropout, Sequential, GRU, Linear, LogSoftmax
 from .. import Learner, Sensor
 from . import AllenNlpSensor
@@ -135,3 +136,26 @@ class LRLearner(MaskedSinglePreLearner):
     ) -> NoReturn:
         module = LRLearner.MaskedSequenceLRModule(input_dim)
         MaskedSinglePreLearner.__init__(self, module, *pres)
+
+
+class CPCatLearner(SinglePreLearner):
+    class Cpcat(Module):
+        def forward(self, x, y):  # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, f1+f2)
+            xs = x.size()
+            ys = y.size()
+            assert xs[0] == ys[0]
+            # torch cat is not broadcasting, do repeat manually
+            xx = x.view(xs[0], xs[1], 1, xs[2]).repeat(1, 1, ys[1], 1)
+            yy = y.view(ys[0], 1, ys[1], ys[2]).repeat(1, xs[1], 1, 1)
+            return torch.cat([xx, yy], dim=3)
+
+    class SelfCpcat(Cpcat):
+        def forward(self, x):
+            return CPCatLearner.Cpcat.forward(self, x, x)
+
+    def __init__(
+        self,
+        *pres: List[Sensor]
+    ) -> NoReturn:
+        module = CPCatLearner.SelfCpcat()
+        SinglePreLearner.__init__(self, module, *pres)
