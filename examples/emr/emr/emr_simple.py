@@ -2,8 +2,8 @@ import os
 from regr.graph.allennlp import AllenNlpGraph
 from regr.sensor.allennlp.sensor import TokenSequenceSensor, LabelSequenceSensor
 from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LRLearner, CPCatLearner
-from emr.data import Conll04SensorReader as Reader
 from allennlp.data import Vocabulary
+from .data import Conll04SensorReader as Reader
 
 
 # data setting
@@ -96,8 +96,4 @@ def main():
 
     # 2.5/3. Train and save the model (Explicit inference done automatically)
     lbp.train(train_dataset, valid_dataset)
-    lbp.save('/tmp/emr')
-
-
-if __name__ == '__main__':
-    main()
+    lbp.save('/tmp/emr_simple')
