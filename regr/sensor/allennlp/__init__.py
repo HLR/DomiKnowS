@@ -1,2 +1,1 @@
-from .sensor import AllenNlpSensor
-from .learner import AllenNlpLearner
+from .base import AllenNlpSensor, AllenNlpLearner
