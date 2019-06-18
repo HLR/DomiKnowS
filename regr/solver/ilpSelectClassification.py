@@ -607,7 +607,10 @@ class iplOntSolver:
     
         start = datetime.datetime.now()
         self.logger.info('Start for phrase %s'%(phrase))
-        
+        self.logger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
+        for relation in graphResultsForPhraseRelation:
+            self.logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
+
         tokenResult = None
         relationsResult = None
         
