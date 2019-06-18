@@ -3,7 +3,9 @@ import torch
 from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
 from ...utils import WrapperMetaClass
+from ...solver.ilpSelectClassification import iplOntSolver
 from .. import Graph, Property
+
 
 from .model import ScaffoldedModel
 
@@ -16,6 +18,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def __init__(self, vocab):
         self.model = ScaffoldedModel(self, vocab)
+        self.solver = iplOntSolver.getInstance(self, ontologyPathname='./')
         # do not invoke super().__init__() here
 
     def get_multiassign(self):

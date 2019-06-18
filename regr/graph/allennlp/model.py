@@ -222,7 +222,7 @@ class ScaffoldedModel(BaseModel):
         # scafold - the scafold object
 
         # print(data['global/application/other[label]-1'])
-        data = inference(self.graph, data, self.vocab)
+        data = inference(self.graph, self.graph.solver, data, self.vocab)
         # print(data['global/application/other[label]-1'])
         return data
 
