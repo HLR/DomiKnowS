@@ -35,8 +35,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
-    def train(self, *args, **kwargs):
-        trainer = self.get_trainer(*args, **kwargs)
+    def train(self, train_dataset, valid_dataset, config):
+        trainer = self.get_trainer(train_dataset, valid_dataset, **config)
         return trainer.train()
 
     def get_trainer(

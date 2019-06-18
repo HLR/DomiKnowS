@@ -21,9 +21,13 @@ def inference(
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
 
+    basefield = 'sentence' # FIXME: findout field
+    basenamespace = 'phrase' # FIXME: findout namespace
+
     mask = data['mask'] # (b, l) # FIXME: the key mask is problem
     mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
-    sentence = data['sentence']['tokens'] # (b, l) # FIXME: the key mask is problem
+
+    sentence = data[basefield][basenamespace] # (b, l)
 
     # table columns, as many table columns as groups
     tables = [[] for _ in groups]
@@ -105,7 +109,7 @@ def inference(
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
-            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i])))
+            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=basenamespace))
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]
