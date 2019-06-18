@@ -207,8 +207,8 @@ class iplOntSolver:
                 else:
                     foundEquivalent[conceptName].add(equivalentConcept.name)
            
-            if conceptName in foundDisjoint:
-                self.logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+            if conceptName in foundEquivalent:
+                self.logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
     
         # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
         for conceptName in conceptNames :
