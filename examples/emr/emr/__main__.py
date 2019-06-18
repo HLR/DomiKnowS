@@ -5,7 +5,7 @@ if len(__package__) == 0:
     __package__ = 'emr'
 
 from .emr_full import main as emr_main
-from .emr_simple import main as emr_simple_main
+#from .emr_simple import main as emr_simple_main
 
 
 parser = ArgumentParser(description='Entity-Mention-Relation example using `regr`.')
