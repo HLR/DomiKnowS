@@ -1,4 +1,5 @@
 from typing import List, Dict, NoReturn, Any, Optional
+import torch
 from torch.nn import Module
 from ...graph import Property
 from .. import Sensor
@@ -53,6 +54,15 @@ class AllenNlpReaderSensor(AllenNlpSensor):
 
 
 class AllenNlpModuleSensor(AllenNlpSensor):
+    class WrapperModule(Module):
+        # use a wrapper to keep pre-requireds and avoid side-effect of sequencial or other modules
+        def __init__(self, module):
+            super(AllenNlpModuleSensor.WrapperModule, self).__init__()
+            self.main_module = module
+
+        def forward(self, *args, **kwargs):
+            return self.main_module(*args, **kwargs)
+
     def __init__(
         self,
         module: Module,
@@ -60,11 +70,11 @@ class AllenNlpModuleSensor(AllenNlpSensor):
         output_only: Optional[bool]=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, *pres, output_only=output_only)
-        self.module = module
+        self.module = AllenNlpModuleSensor.WrapperModule(module)
         for pre in pres:
             for name, sensor in pre.items():
                 if isinstance(sensor, AllenNlpModuleSensor) and not sensor.output_only:
-                    module.add_module(sensor.fullname, sensor.module)
+                    self.module.add_module(sensor.fullname, sensor.module)
 
 
 class SentenceSensor(AllenNlpReaderSensor):
@@ -93,3 +103,36 @@ class LabelSensor(AllenNlpSensor):
 
 class LabelSequenceSensor(AllenNlpReaderSensor):
     pass
+
+
+class CartesianProductSensor(AllenNlpModuleSensor):
+    class CP(Module):
+        def forward(self, x, y):  # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, f1+f2)
+            xs = x.size()
+            ys = y.size()
+            assert xs[0] == ys[0]
+            # torch cat is not broadcasting, do repeat manually
+            xx = x.view(xs[0], xs[1], 1, xs[2]).repeat(1, 1, ys[1], 1)
+            yy = y.view(ys[0], 1, ys[1], ys[2]).repeat(1, xs[1], 1, 1)
+            return torch.cat([xx, yy], dim=3)
+
+    class SelfCP(CP):
+        def forward(self, x):
+            return CartesianProductSensor.CP.forward(self, x, x)
+
+    def __init__(
+        self,
+        *pres: List[Property]
+    ) -> NoReturn:
+        if len(pres) != 1:
+            raise ValueError(
+                '{} take one pre-required sensor, {} given.'.format(type(self), len(pres)))
+        module = CartesianProductSensor.SelfCP()
+        AllenNlpModuleSensor.__init__(self, module, *pres)
+        self.pre = self.pres[0]
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        return self.module(context[self.pre.fullname])

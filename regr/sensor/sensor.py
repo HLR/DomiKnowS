@@ -11,7 +11,11 @@ class Sensor(BaseGraphTreeNode):
         if self.fullname in context:
             # context cached results by sensor name. override if forced recalc is needed
             return context
-        context = self.update_context(context)
+        try:
+            context = self.update_context(context)
+        except:
+            print('Error during updating context with sensor {}'.format(self.fullname))
+            raise
         return context
 
     def update_context(
