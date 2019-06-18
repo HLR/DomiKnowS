@@ -27,25 +27,33 @@ else:
     from ..graph.concept import Concept, enum
     from ..graph.graph import Graph
     #from ..graph.relation import Relation, IsA, HasA
-    
+
+import logging
+import datetime
+
 class iplOntSolver:
     __instance= None
     
-    myGrpah = None
+    myGraph = None
     myOnto = None
+    logger = None
     
     @staticmethod
     def getInstance(graph, ontologyPathname):
         if iplOntSolver.__instance == None:
-            myGrpah = graph
+            myGraph = graph
             iplOntSolver(graph.ontology, ontologyPathname)
+        else:
+            iplOntSolver.__instance.logger.info("Returning existing iplOntSolver for %s"%(graph.ontology))
         
         return iplOntSolver.__instance
        
     def loadOntology(self, ontologyURL, ontologyPathname = "./"):
-        
         if self.myOnto is not None:
             return self.myOnto
+        
+        start = datetime.datetime.now()
+        self.logger.info('Start')
         
         currentPath = Path(os.path.normpath("./")).resolve()
         
@@ -53,14 +61,14 @@ class iplOntSolver:
         graphMetaOntologyPath = Path(os.path.normpath(graphMetaOntologyPathname))
         graphMetaOntologyPath = graphMetaOntologyPath.resolve()
         if not os.path.isdir(graphMetaOntologyPath):
-            print("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
+            self.logger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
             exit()
             
         # Check if specific ontology path is correct
         ontologyPath = Path(os.path.normpath(ontologyPathname))
         ontologyPath = ontologyPath.resolve()
         if not os.path.isdir(ontologyPath):
-            print("Path to load ontology: %s does not exists in current directory %s"%(ontologyPath,currentPath))
+            self.logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
             exit()
     
         onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
@@ -71,17 +79,40 @@ class iplOntSolver:
             self.myOnto = get_ontology(ontologyURL)
             self.myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
         except FileNotFoundError as e:
-            print("Error when loading - %s from: %s"%(ontologyURL,ontologyURL,ontologyPath))
+            self.logger.warning("Error when loading - %s from: %s"%(ontologyURL,ontologyPath))
     
+        end = datetime.datetime.now()
+        elapsed = end - start
+        self.logger.info('End - elapsed time: %ims'%(elapsed.microseconds))
+        
         return self.myOnto
 
     def __init__(self, ontologyURL, ontologyPathname):
         if iplOntSolver.__instance != None:
              pass
-        else:
-            iplOntSolver.__instance = self 
-            self.loadOntology(ontologyURL, ontologyPathname)
+        else:  
+            # create logger
+            self.logger = logging.getLogger('iplOntSolver')
+            self.logger.setLevel(logging.DEBUG)
+
+            # create console handler and set level to debug
+            ch = logging.FileHandler('iplOntSolver.log')
+            ch.setLevel(logging.INFO)
+
+            # create formatter
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+
+            # add formatter to ch
+            ch.setFormatter(formatter)
+
+            # add ch to logger
+            self.logger.addHandler(ch)
             
+            self.logger.info("Creating new iplOntSolver for ontology: %s"%(ontologyURL))
+
+            self.loadOntology(ontologyURL, ontologyPathname)
+            iplOntSolver.__instance = self 
+
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
             
         # Create variables for token - concept and negative variables
@@ -98,9 +129,10 @@ class iplOntSolver:
                 
         m.update()
          
+        self.logger.info("Created %i ipl variables for tokens"%(len(x)))
+        
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
         foundDisjoint = dict() # too eliminate duplicates
-        print(" ")
         for conceptName in conceptNames:
             
             currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
@@ -108,7 +140,7 @@ class iplOntSolver:
             if currentConcept is None :
                 continue
             
-            print("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
+            self.logger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
                 
             for d in currentConcept.disjoints():
                 disjointConcept = d.entities[1]._name
@@ -133,16 +165,15 @@ class iplOntSolver:
                 for token in tokens:
                     constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
                     m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-                      
-                #print("disjointConcept %s %s"%(currentConcept._name, disjointConcept))   
-                            
+                                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
                 else:
                     foundDisjoint[conceptName].add(disjointConcept)
-        
-        print("")
-           
+                           
+            if conceptName in foundDisjoint:
+                self.logger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+
         # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
         foundEquivalent = dict() # too eliminate duplicates
         for conceptName in conceptNames:
@@ -176,6 +207,8 @@ class iplOntSolver:
                 else:
                     foundEquivalent[conceptName].add(equivalentConcept.name)
            
+            if conceptName in foundDisjoint:
+                self.logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
     
         # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
         for conceptName in conceptNames :
@@ -192,7 +225,9 @@ class iplOntSolver:
                 for token in tokens:
                     constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
                     m.addGenConstrIndicator(x[token, conceptName], True, x[token, ancestorConcept.name], GRB.EQUAL, 1)
-           
+                
+                self.logger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+
         # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
         for conceptName in conceptNames :
             
@@ -252,11 +287,13 @@ class iplOntSolver:
             for conceptConstruct in currentConcept.constructs(Prop = None) :
                 if type(conceptConstruct) is Not :
                     
+                    complementClass = conceptConstruct.Class
+
                     for token in tokens:                    
-                        currentClass = conceptConstruct.Class
+                        constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name)
+                        m.addConstr(x[token, conceptName] + x[token, complementClass.name], GRB.EQUAL, 1, name=constrainName)
                         
-                        constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, currentClass.name)
-                        m.addConstr(x[token, conceptName] + x[token, currentClass.name], GRB.EQUAL, 1, name=constrainName)
+                    self.logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
         # ---- No supported yet
     
@@ -300,6 +337,8 @@ class iplOntSolver:
     
         m.update()
     
+        self.logger.info("Created %i ipl variables for relations"%(len(y)))
+
         # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
         for relationName in graphResultsForPhraseRelation:
             currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
@@ -307,7 +346,7 @@ class iplOntSolver:
             if currentRelation is None:
                 continue
     
-            print("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
+            self.logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
     
             currentRelationDomain = currentRelation.get_domain() # domains_indirect()
             currentRelationRange = currentRelation.get_range()
@@ -328,7 +367,9 @@ class iplOntSolver:
                             constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
                             currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                             m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
-    
+                    
+                    self.logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+
           # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
         for relationName in graphResultsForPhraseRelation:
             currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
@@ -564,6 +605,9 @@ class iplOntSolver:
         
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation):
     
+        start = datetime.datetime.now()
+        self.logger.info('Start for phrase %s'%(phrase))
+        
         tokenResult = None
         relationsResult = None
         
@@ -602,17 +646,21 @@ class iplOntSolver:
             
             m.update()
               
-            #print(m)
-            #print(m.getObjective())
-            #print(m.getConstrs())
-            
+            self.logger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
+
             m.optimize()
             
-            #print('Obj: %g' % m.objVal)
-    
-            #for v in m.getVars():
-            #    print('%s %g' % (v.varName, v.x))
-              
+            if m.status == GRB.Status.OPTIMAL:
+                self.logger.info('Optimal solution was found.')
+            elif m.status == GRB.Status.INFEASIBLE:
+                 self.logger.warning('Model was proven to be infeasible.')
+            elif m.status == GRB.Status.INF_OR_UNBD:
+                 self.logger.warning('Model was proven to be infeasible or unbound.')
+            elif m.status == GRB.Status.UNBOUNDED:
+                 self.logger.warning('Model was proven to be unbound.')
+            else:
+                 self.logger.warning('Optimal solution not was found - error code %i'%(m.status))
+                 
             # Collect results for tokens
             tokenResult = None
             if x or True:
@@ -627,6 +675,9 @@ class iplOntSolver:
                                 #print("The  %s is classified as %s" % (token, conceptName))
                                 
                                 tokenResult[conceptName][token] = 1
+                                
+                                self.logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+
     
             # Collect results for relations
             relationsResult = {}
@@ -646,37 +697,43 @@ class iplOntSolver:
                                 if solution[relationName, token, token1] == 1:
                                     relationResult[token1][token] = 1
                                     
+                                    self.logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+
                         relationsResult[relationName] = relationResult
                         
         except GurobiError as e:
-            print('Error code ' + str(e.errno) + ": " + str(e))
+            self.logger.error('GurobiError')
             raise
         
         except AttributeError:
-            print('Encountered an attribute error')
+            self.logger.error('Gurobi AttributeError')
             raise
            
+        end = datetime.datetime.now()
+        elapsed = end - start
+        self.logger.info('End - elapsed time: %ims'%(elapsed.microseconds))
+        
         # return results of ILP optimization
         return tokenResult, relationsResult
 
 # --------- Testing
 
-with Graph('global') as graph:
-    graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
-        
-    with Graph('linguistic') as ling_graph:
-        ling_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
-        phrase = Concept(name='phrase')
-            
-    with Graph('application') as app_graph:
-        #app_graph.ontology='http://trips.ihmc.us/ont'
-        app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
-
 def main() :
+    with Graph('global') as graph:
+        graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+            
+        with Graph('linguistic') as ling_graph:
+            ling_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+            phrase = Concept(name='phrase')
+                
+        with Graph('application') as app_graph:
+            #app_graph.ontology='http://trips.ihmc.us/ont'
+            app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+        
+    test_graph = app_graph
+        
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
 
-    test_graph = app_graph
-    
     tokenList = ["John", "works", "for", "IBM"]
     conceptNamesList = ["people", "organization", "other", "location", "O"]
     relationNamesList = ["work_for", "live_in", "located_in"]
@@ -721,6 +778,8 @@ def main() :
     located_in_current_graphResultsForPhraseRelation = pd.DataFrame(located_in_relation_table, index=tokenList, columns=tokenList)
     test_graphResultsForPhraseRelation["located_in"] = located_in_current_graphResultsForPhraseRelation
         
+    # ------Call solver -------
+    
     myiplOntSolver = iplOntSolver.getInstance(test_graph, ontologyPathname="./examples/emr/")
     tokenResult, relationsResult = myiplOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
 
