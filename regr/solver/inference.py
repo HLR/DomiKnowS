@@ -12,6 +12,7 @@ DataInstance = Dict[str, Tensor]
 
 def inference(
     graph: Graph,
+    solver: iplOntSolver,
     data: DataInstance,
     vocab=None
 ) -> DataInstance:
@@ -142,8 +143,7 @@ def inference(
         #print(graphResultsForPhraseRelation)
         #print('5-'*40)
         try:
-            myIplOntSolver = iplOntSolver.getInstance(graph, ontologyPathname='./')
-            tokenResult, relationsResult = myIplOntSolver.calculateILPSelection(
+            tokenResult, relationsResult = solver.calculateILPSelection(
                 phrase, 
                 graphResultsForPhraseToken,
                 graphResultsForPhraseRelation)
