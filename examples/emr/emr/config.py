@@ -19,4 +19,4 @@ config = {
     }
 }
 
-Config = Namespace(**config)
+Config = Namespace(config)
