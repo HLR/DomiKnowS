@@ -4,7 +4,7 @@ from torch import Tensor
 import torch
 import pandas as pd
 from ..utils import printablesize
-from .ilpSelectClassification import calculateILPSelection
+from .ilpSelectClassification import iplOntSolver
 
 
 DataInstance = Dict[str, Tensor]
@@ -138,11 +138,11 @@ def inference(
         #print(graphResultsForPhraseRelation)
         #print('5-'*40)
         try:
-            tokenResult, relationsResult = calculateILPSelection(
-                phrase, graph,
+            myIplOntSolver = iplOntSolver.getInstance(graph, ontologyPathname='./')
+            tokenResult, relationsResult = myIplOntSolver.calculateILPSelection(
+                phrase, 
                 graphResultsForPhraseToken,
-                graphResultsForPhraseRelation,
-                ontologyPathname='./')
+                graphResultsForPhraseRelation)
             if tokenResult is None and relationsResult is None:
                 raise RuntimeError('No result from solver. Check any log from the solver.')
         except:
