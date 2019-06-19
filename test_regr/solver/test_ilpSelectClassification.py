@@ -1,23 +1,27 @@
-import numpy as np
-import pandas as pd
-from regr.graph import Graph, Concept
-from regr.solver.ilpSelectClassification import ilpOntSolver
 import pytest
 
 
+from regr.graph import Graph, Concept
+
+
+with Graph('global') as graph:
+    graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+
+    with Graph('linguistic') as ling_graph:
+        ling_graph.ontology='http://trips.ihmc.us/ont'
+        phrase = Concept(name='phrase')
+
+    with Graph('application') as app_graph:
+        #app_graph.ontology='http://trips.ihmc.us/ont'
+        app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
+
+
 @pytest.mark.gurobi
-def test_main() :
-    with Graph('global') as graph:
-        graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
-            
-        with Graph('linguistic') as ling_graph:
-            ling_graph.ontology='http://trips.ihmc.us/ont'
-            phrase = Concept(name='phrase')
-                
-        with Graph('application') as app_graph:
-            #app_graph.ontology='http://trips.ihmc.us/ont'
-            app_graph.ontology='http://ontology.ihmc.us/ML/EMR.owl'
-        
+def test_main():
+    import numpy as np
+    import pandas as pd
+    from regr.solver.ilpSelectClassification import ilpOntSolver
+
     test_graph = app_graph
         
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
