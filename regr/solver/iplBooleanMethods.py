@@ -10,14 +10,14 @@ def notVar(m, _var):
 def andVar(m, _var1, _var2):
     _andVar = m.addVar(vtype=GRB.BINARY, name="and_%s_%s" % (_var1, _var2))
     
-    m.addConstr(_andVar, GRB.LESS_EQUAL, _var1)
-    m.addConstr(_andVar, GRB.LESS_EQUAL, _var2)
+    m.addConstr(_andVar - _var1, GRB.LESS_EQUAL, 0)
+    m.addConstr(_andVar - _var2, GRB.LESS_EQUAL, 0)
     
-    m.addConstr(_var1 + _var2, GRB.LESS_EQUAL, _andVar + 1)
+    m.addConstr(_var1 + _var2 - _andVar - 1, GRB.LESS_EQUAL, 0)
 
     return _andVar
 
-def andVar(m, *_var):
+def andVar1(m, *_var):
     if len(_var) < 1:
         return None
     
@@ -179,7 +179,8 @@ def epqVar(m, _var1, _var2):
 def main() :
     # Create a new Gurobi model
     m = Model("andVarTest")
-    m.params.outputflag = 0
+    m.Params.InfUnbdInfo = 1
+    m.params.outputflag = 1
     
     _var1 = m.addVar(vtype=GRB.BINARY, name="_var1")
     _var2 = m.addVar(vtype=GRB.BINARY, name="_var2")
@@ -188,15 +189,36 @@ def main() :
     m.addConstr(_var2, GRB.EQUAL, 2)
 
     _andVar = andVar(m, _var1, _var2)
+    m.update()
 
-    Q = _andVar
+    Q = LinExpr()
+    Q += _andVar
     m.setObjective(Q, GRB.MAXIMIZE)
 
-    m.update()
+    print(m.getObjective()) 
+    for const in m.getConstrs():
+        print(m.getConstrByName(const.ConstrName))
+        
     m.optimize()
-    m.update()
-
+       
     print(m.printStats())
+
+    if m.status == GRB.Status.OPTIMAL:
+        print('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
+    elif m.status == GRB.Status.INFEASIBLE:
+        print('Model was proven to be infeasible.')
+        exit()
+    elif m.status == GRB.Status.INF_OR_UNBD:
+        print('Model was proven to be infeasible or unbound.')
+        exit()
+    elif m.status == GRB.Status.UNBOUNDED:
+        print('Model was proven to be unbound.')
+        exit()
+    else:
+        print('Optimal solution not was found - error code %i'%(m.status))
+        exit()
+
+    m.printAttr('x') 
     
     #print(_andVar.getAttr(GRB.Attr.X))
 

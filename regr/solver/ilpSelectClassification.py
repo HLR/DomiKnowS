@@ -31,7 +31,7 @@ else:
 import logging
 import datetime
 
-class iplOntSolver:
+class ilpOntSolver:
     __instances = {}
     __logger = None
     
@@ -40,17 +40,17 @@ class iplOntSolver:
     @staticmethod
     def getInstance(graph, ontologyPathname):    
         if (graph is not None) and (graph.ontology is not None):
-            if graph.ontology not in iplOntSolver.__instances:
-                iplOntSolver(graph.ontology, ontologyPathname)
-                iplOntSolver.__instances[graph.ontology].myGraph = graph
+            if graph.ontology not in ilpOntSolver.__instances:
+                ilpOntSolver(graph.ontology, ontologyPathname)
+                ilpOntSolver.__instances[graph.ontology].myGraph = graph
             else:
-                iplOntSolver.__logger.info("Returning existing iplOntSolver for %s"%(graph.ontology))
+                ilpOntSolver.__logger.info("Returning existing ilpOntSolver for %s"%(graph.ontology))
             
-        return iplOntSolver.__instances[graph.ontology]
+        return ilpOntSolver.__instances[graph.ontology]
        
     def loadOntology(self, ontologyURL, ontologyPathname = "./"):
         start = datetime.datetime.now()
-        iplOntSolver.__logger.info('Start')
+        ilpOntSolver.__logger.info('Start')
         
         currentPath = Path(os.path.normpath("./")).resolve()
         
@@ -58,14 +58,14 @@ class iplOntSolver:
         graphMetaOntologyPath = Path(os.path.normpath(graphMetaOntologyPathname))
         graphMetaOntologyPath = graphMetaOntologyPath.resolve()
         if not os.path.isdir(graphMetaOntologyPath):
-            iplOntSolver.__logger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
+            ilpOntSolver.__logger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
             exit()
             
         # Check if specific ontology path is correct
         ontologyPath = Path(os.path.normpath(ontologyPathname))
         ontologyPath = ontologyPath.resolve()
         if not os.path.isdir(ontologyPath):
-            iplOntSolver.__logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
+            ilpOntSolver.__logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
             exit()
     
         onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
@@ -76,22 +76,22 @@ class iplOntSolver:
             self.myOnto = get_ontology(ontologyURL)
             self.myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
         except FileNotFoundError as e:
-            iplOntSolver.__logger.warning("Error when loading - %s from: %s"%(ontologyURL,ontologyPath))
+            ilpOntSolver.__logger.warning("Error when loading - %s from: %s"%(ontologyURL,ontologyPath))
     
         end = datetime.datetime.now()
         elapsed = end - start
-        iplOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
+        ilpOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         return self.myOnto
 
     def __init__(self, ontologyURL, ontologyPathname):
-        if iplOntSolver.__logger == None:
+        if ilpOntSolver.__logger == None:
             # create logger
-            iplOntSolver.__logger = logging.getLogger('iplOntSolver')
-            iplOntSolver.__logger.setLevel(logging.DEBUG)
+            ilpOntSolver.__logger = logging.getLogger('ilpOntSolver')
+            ilpOntSolver.__logger.setLevel(logging.DEBUG)
 
             # create console handler and set level to debug
-            ch = logging.FileHandler('iplOntSolver.log')
+            ch = logging.FileHandler('ilpOntSolver.log')
             ch.setLevel(logging.INFO)
 
             # create formatter
@@ -101,15 +101,15 @@ class iplOntSolver:
             ch.setFormatter(formatter)
 
             # add ch to logger
-            iplOntSolver.__logger.addHandler(ch)
+            ilpOntSolver.__logger.addHandler(ch)
             
-        if ontologyURL in iplOntSolver.__instances:
+        if ontologyURL in ilpOntSolver.__instances:
              pass
         else:  
-            iplOntSolver.__logger.info("Creating new iplOntSolver for ontology: %s"%(ontologyURL))
+            ilpOntSolver.__logger.info("Creating new ilpOntSolver for ontology: %s"%(ontologyURL))
 
             self.loadOntology(ontologyURL, ontologyPathname)
-            iplOntSolver.__instances[ontologyURL] = self 
+            ilpOntSolver.__instances[ontologyURL] = self 
         
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
             
@@ -118,7 +118,7 @@ class iplOntSolver:
             for conceptName in conceptNames: 
                 x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
                 
-                if graphResultsForPhraseToken[conceptName][token] < iplOntSolver.__negVarTrashhold:
+                if graphResultsForPhraseToken[conceptName][token] < ilpOntSolver.__negVarTrashhold:
                     x[token, conceptName+'-neg']=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName+'-neg'))
     
         # Add constraints forcing decision between variable and negative variables 
@@ -130,7 +130,7 @@ class iplOntSolver:
                 
         m.update()
          
-        iplOntSolver.__logger.info("Created %i ipl variables for tokens"%(len(x)))
+        ilpOntSolver.__logger.info("Created %i ilp variables for tokens"%(len(x)))
         
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
         foundDisjoint = dict() # too eliminate duplicates
@@ -141,7 +141,7 @@ class iplOntSolver:
             if currentConcept is None :
                 continue
             
-            iplOntSolver.__logger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
+            ilpOntSolver.__logger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
                 
             for d in currentConcept.disjoints():
                 disjointConcept = d.entities[1]._name
@@ -173,7 +173,7 @@ class iplOntSolver:
                     foundDisjoint[conceptName].add(disjointConcept)
                            
             if conceptName in foundDisjoint:
-                iplOntSolver.__logger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+                ilpOntSolver.__logger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
 
         # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
         foundEquivalent = dict() # too eliminate duplicates
@@ -209,7 +209,7 @@ class iplOntSolver:
                     foundEquivalent[conceptName].add(equivalentConcept.name)
            
             if conceptName in foundEquivalent:
-                iplOntSolver.__logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
+                ilpOntSolver.__logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
     
         # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
         for conceptName in conceptNames :
@@ -227,7 +227,7 @@ class iplOntSolver:
                     constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
                     m.addGenConstrIndicator(x[token, conceptName], True, x[token, ancestorConcept.name], GRB.EQUAL, 1)
                 
-                iplOntSolver.__logger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+                ilpOntSolver.__logger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
 
         # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
         for conceptName in conceptNames :
@@ -294,7 +294,7 @@ class iplOntSolver:
                         constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name)
                         m.addConstr(x[token, conceptName] + x[token, complementClass.name], GRB.EQUAL, 1, name=constrainName)
                         
-                    iplOntSolver.__logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
+                    ilpOntSolver.__logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
         # ---- No supported yet
     
@@ -327,7 +327,7 @@ class iplOntSolver:
     
                     y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
                     
-                    if graphResultsForPhraseRelation[relationName][token1][token] < iplOntSolver.__negVarTrashhold:
+                    if graphResultsForPhraseRelation[relationName][token1][token] < ilpOntSolver.__negVarTrashhold:
                         y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
               
         # Add constraints forcing decision between variable and negative variables 
@@ -343,7 +343,7 @@ class iplOntSolver:
     
         m.update()
     
-        iplOntSolver.__logger.info("Created %i ipl variables for relations"%(len(y)))
+        ilpOntSolver.__logger.info("Created %i ilp variables for relations"%(len(y)))
 
         # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
         for relationName in graphResultsForPhraseRelation:
@@ -352,7 +352,7 @@ class iplOntSolver:
             if currentRelation is None:
                 continue
     
-            iplOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
+            ilpOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
     
             currentRelationDomain = currentRelation.get_domain() # domains_indirect()
             currentRelationRange = currentRelation.get_range()
@@ -374,7 +374,7 @@ class iplOntSolver:
                             currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
                             m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
                     
-                    iplOntSolver.__logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+                    ilpOntSolver.__logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
           # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
         for relationName in graphResultsForPhraseRelation:
@@ -614,10 +614,10 @@ class iplOntSolver:
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation):
     
         start = datetime.datetime.now()
-        iplOntSolver.__logger.info('Start for phrase %s'%(phrase))
-        iplOntSolver.__logger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
+        ilpOntSolver.__logger.info('Start for phrase %s'%(phrase))
+        ilpOntSolver.__logger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
         for relation in graphResultsForPhraseRelation:
-            iplOntSolver.__logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
+            ilpOntSolver.__logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
 
         tokenResult = None
         relationsResult = None
@@ -658,22 +658,22 @@ class iplOntSolver:
             m.update()
             
             startOptimize = datetime.datetime.now()
-            iplOntSolver.__logger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
+            ilpOntSolver.__logger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
 
             m.optimize()
             endOptimize = datetime.datetime.now()
             elapsedOptimize = endOptimize - startOptimize
 
             if m.status == GRB.Status.OPTIMAL:
-                iplOntSolver.__logger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
+                ilpOntSolver.__logger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
             elif m.status == GRB.Status.INFEASIBLE:
-                 iplOntSolver.__logger.warning('Model was proven to be infeasible.')
+                 ilpOntSolver.__logger.warning('Model was proven to be infeasible.')
             elif m.status == GRB.Status.INF_OR_UNBD:
-                 iplOntSolver.__logger.warning('Model was proven to be infeasible or unbound.')
+                 ilpOntSolver.__logger.warning('Model was proven to be infeasible or unbound.')
             elif m.status == GRB.Status.UNBOUNDED:
-                 iplOntSolver.__logger.warning('Model was proven to be unbound.')
+                 ilpOntSolver.__logger.warning('Model was proven to be unbound.')
             else:
-                 iplOntSolver.__logger.warning('Optimal solution not was found - error code %i'%(m.status))
+                 ilpOntSolver.__logger.warning('Optimal solution not was found - error code %i'%(m.status))
                  
             # Collect results for tokens
             tokenResult = None
@@ -690,7 +690,7 @@ class iplOntSolver:
                                 
                                 tokenResult[conceptName][token] = 1
                                 
-                                iplOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+                                ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
 
     
             # Collect results for relations
@@ -711,21 +711,21 @@ class iplOntSolver:
                                 if solution[relationName, token, token1] == 1:
                                     relationResult[token1][token] = 1
                                     
-                                    iplOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+                                    ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
 
                         relationsResult[relationName] = relationResult
                         
         except GurobiError as e:
-            iplOntSolver.__logger.error('GurobiError')
+            ilpOntSolver.__logger.error('GurobiError')
             raise
         
         except AttributeError:
-            iplOntSolver.__logger.error('Gurobi AttributeError')
+            ilpOntSolver.__logger.error('Gurobi AttributeError')
             raise
            
         end = datetime.datetime.now()
         elapsed = end - start
-        iplOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
+        ilpOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         # return results of ILP optimization
         return tokenResult, relationsResult
@@ -794,11 +794,11 @@ def main() :
         
     # ------Call solver -------
     
-    myiplOntSolver = iplOntSolver.getInstance(test_graph, ontologyPathname="./examples/emr/")
-    tokenResult, relationsResult = myiplOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    myilpOntSolver = ilpOntSolver.getInstance(test_graph, ontologyPathname="./examples/emr/")
+    tokenResult, relationsResult = myilpOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
 
-    myiplOntSolver2 = iplOntSolver.getInstance(ling_graph, ontologyPathname="./examples/emr/")
-    tokenResult, relationsResult = myiplOntSolver2.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    myilpOntSolver2 = ilpOntSolver.getInstance(ling_graph, ontologyPathname="./examples/emr/")
+    tokenResult, relationsResult = myilpOntSolver2.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
     
     print("\nResults - ")
     print(tokenResult)

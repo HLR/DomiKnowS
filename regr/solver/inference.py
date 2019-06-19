@@ -4,7 +4,7 @@ from torch import Tensor
 import torch
 import pandas as pd
 from ..utils import printablesize
-from .ilpSelectClassification import iplOntSolver
+from .ilpSelectClassification import ilpOntSolver
 
 
 DataInstance = Dict[str, Tensor]
@@ -12,7 +12,7 @@ DataInstance = Dict[str, Tensor]
 
 def inference(
     graph: Graph,
-    solver: iplOntSolver,
+    solver: ilpOntSolver,
     data: DataInstance,
     vocab=None
 ) -> DataInstance:
