@@ -32,18 +32,18 @@ The example consists of several parts.
 
 1. **Data reader** [`emr/data.py`](emr/data.py): raw data from CoNLL data set is located [`data/EntityMentionRelation`](data/EntityMentionRelation). We build on the top of AllenNLP in this example. So the reader presents as a [`allennlp.data.DatasetReader`](emr/data.py#L132) finally.
 
-2. **Graph** [`emr/graph.py`](emr/graph.py): domain knowledge is presented as a graph. This is know as the **Ontology Declaration** step of the pipeline.
+2. **Graph** [`emr/graph.py`](emr/graph.py): domain knowledge is presented as a graph. This is known as the **Ontology Declaration** step of the pipeline.
 Concepts are nodes in the graph and relations are the edges of the nodes. The graph can be compiled from OWL format.
 [`emr/graph.py`](emr/graph.py) is the graph used in EMR example showing concepts and relations, such as `work_for` (`people`, `organization`), which means when there is a work for relation, the first argument should be a people and the second argument should be an organization. 
 
-3. **Main** [`emr/emr.py`](emr/emr.py): the main entrance of the program, where the components are [put into one piece](emr/emr.py#L177). [`scaffold`](emr/emr.py#L184) is a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. [`model`](emr/emr.py#L187) is constructed in [`make_model`](emr/emr.py#L36) by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
+3. **Main** [`emr/emr_full.py`](emr/emr_full.py): the main entrance of the program, where the components are [put into one piece](emr/emr_full.py#L80-L93). [`AllenNlpGraph`](emr/emr_full.py#L76) is a wrapper class providing a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. Learning based program [`lbp`](emr/emr_full.py#L88) is constructed in [`model_declaration`](emr/emr_full.py#L23-L77) by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
 
-4. **Solver** [`../../regr/ilpSelectClassification.py`](../../regr/ilpSelectClassification.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
-They are done in [`scaffold`](../../regr/scaffold/allennlp.py#L273) automatically. Cheers!
+4. **Solver** [`../../regr/ilpSelectClassification.py`](../../regr/solver/ilpSelectClassification.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
+They are done in `AllenNlpGraph` with help of a [base model](../../regr/graph/allennlp/model.py#L225) automatically. Cheers!
 We convert the inference into an integer linear programming (ILP) problem and maximize the overall confidence of the truth values of all concepts while satisfying the global constraints.
 We derive constraints from the input ontology.
-Two types of constraints are considered: the [disjoint constraints for the concepts](../../regr/ilpSelectClassification.py#L42) and [the composed-of constraints for the ralation](../../regr/ilpSelectClassification.py#L99).
-By [solving the generated ILP problem](../../regr/ilpSelectClassification.py#L159), we can obtain a set of predictions that considers the structure of the data and the knowledge that is expressed in the domain ontology.
+Two types of constraints are considered: the [disjoint constraints for the concepts](../../regr/solver/ilpSelectClassification.py#L114-L316) and [the composed-of constraints for the ralation](../../regr/solver/ilpSelectClassification.py#L318-L613).
+By [solving the generated ILP problem](../../regr/solver/ilpSelectClassification.py#L663), we can obtain a set of predictions that considers the structure of the data and the knowledge that is expressed in the domain ontology.
 
 
 ## Run the example
