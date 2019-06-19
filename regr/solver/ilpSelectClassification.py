@@ -35,6 +35,8 @@ class iplOntSolver:
     __instances = {}
     __logger = None
     
+    __negVarTrashhold = 0.3
+    
     @staticmethod
     def getInstance(graph, ontologyPathname):    
         if (graph is not None) and (graph.ontology is not None):
@@ -108,20 +110,23 @@ class iplOntSolver:
 
             self.loadOntology(ontologyURL, ontologyPathname)
             iplOntSolver.__instances[ontologyURL] = self 
-
+        
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
             
         # Create variables for token - concept and negative variables
         for token in tokens:            
             for conceptName in conceptNames: 
                 x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
-                x[token, conceptName+'-neg']=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName+'-neg'))
+                
+                if graphResultsForPhraseToken[conceptName][token] < iplOntSolver.__negVarTrashhold:
+                    x[token, conceptName+'-neg']=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName+'-neg'))
     
         # Add constraints forcing decision between variable and negative variables 
         for conceptName in conceptNames:
             for token in tokens:
-                constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)
-                m.addConstr(x[token, conceptName] + x[token, conceptName+'-neg'], GRB.LESS_EQUAL, 1, name=constrainName)
+                if (token, conceptName+'-neg') in x: 
+                    constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)
+                    m.addConstr(x[token, conceptName] + x[token, conceptName+'-neg'], GRB.LESS_EQUAL, 1, name=constrainName)
                 
         m.update()
          
@@ -304,7 +309,9 @@ class iplOntSolver:
         for token in tokens :
             for conceptName in conceptNames :
                 X_Q += graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
-                X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
+                
+                if (token, conceptName+'-neg') in x: 
+                    X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
     
         return X_Q
         
@@ -319,7 +326,9 @@ class iplOntSolver:
                         continue
     
                     y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
-                    y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
+                    
+                    if graphResultsForPhraseRelation[relationName][token1][token] < iplOntSolver.__negVarTrashhold:
+                        y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
               
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
@@ -328,8 +337,9 @@ class iplOntSolver:
                     if token == token1:
                         continue
                     
-                    constrainName = 'c_%s_%s_%sselfDisjoint'%(token, token1, relationName)
-                    m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1], GRB.LESS_EQUAL, 1, name=constrainName)
+                    if (relationName+'-neg', token, token1) in y: 
+                        constrainName = 'c_%s_%s_%sselfDisjoint'%(token, token1, relationName)
+                        m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1], GRB.LESS_EQUAL, 1, name=constrainName)
     
         m.update()
     
@@ -595,7 +605,9 @@ class iplOntSolver:
                         continue
     
                     Y_Q += graphResultsForPhraseRelation[relationName][token1][token]*y[relationName, token, token1]
-                    Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
+                    
+                    if (relationName+'-neg', token, token1) in y: 
+                        Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
         
         return Y_Q
         
@@ -644,13 +656,16 @@ class iplOntSolver:
             #    m.addConstr(quicksum(x[token, conceptName] for conceptName in conceptNames), GRB.LESS_EQUAL, 1, name=constrainName)
             
             m.update()
-              
+            
+            startOptimize = datetime.datetime.now()
             iplOntSolver.__logger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
 
             m.optimize()
-            
+            endOptimize = datetime.datetime.now()
+            elapsedOptimize = endOptimize - startOptimize
+
             if m.status == GRB.Status.OPTIMAL:
-                iplOntSolver.__logger.info('Optimal solution was found.')
+                iplOntSolver.__logger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
             elif m.status == GRB.Status.INFEASIBLE:
                  iplOntSolver.__logger.warning('Model was proven to be infeasible.')
             elif m.status == GRB.Status.INF_OR_UNBD:
