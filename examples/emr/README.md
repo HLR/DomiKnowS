@@ -72,18 +72,10 @@ The implement of the example is in package `emr`. Involved data is included in [
 
 The example can be run by using the following command.
 ```bash
-python3.7 -m emr
+python3 -m emr
 ```
 
-There are two sub-examples.
-`ner` example concider only one non-composed concept.
-Run it by the following command.
+There are two a simpler version with only "people", "organization", and "work for" relationship is also avaliable with additional `--simple` or `-s` option.
 ```bash
-python3.7 -m emr.ner
-```
-
-`ners` example concider multiple non-composed concept. They are independent classifiers, sharing the same word embedding.
-Run it by the following command.
-```bash
-python3.7 -m emr.ners
+python3 -m emr -s
 ```

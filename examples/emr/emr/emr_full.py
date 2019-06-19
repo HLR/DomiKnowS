@@ -4,7 +4,6 @@ from regr.sensor.allennlp.sensor import PhraseSequenceSensor, LabelSequenceSenso
 from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
 from allennlp.data import Vocabulary
 
-from .graph import graph
 from .data import Conll04SensorReader as Reader
 from .config import Config
 from .utils import seed
@@ -17,6 +16,7 @@ def data_preparation(config):
     return reader, vocab, train_dataset, valid_dataset
 
 def ontology_declaration():
+    from .graph import graph
     return graph
 
 
