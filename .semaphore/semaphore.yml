@@ -22,4 +22,4 @@ blocks:
       jobs:
       - name: pytest
         commands:
-          - pytest
+          - pytest test_regr -m "not gurobi"
