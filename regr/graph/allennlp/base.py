@@ -18,7 +18,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def __init__(self, vocab):
         self.model = ScaffoldedModel(self, vocab)
-        self.solver = ilpOntSolver.getInstance(self, ontologyPathname='./')
+        self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
 
     def get_multiassign(self):

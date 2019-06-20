@@ -77,7 +77,7 @@ class ilpOntSolver:
             self.myOnto = get_ontology(ontologyURL)
             self.myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
         except FileNotFoundError as e:
-            ilpOntSolver.__logger.warning("Error when loading - %s from: %s"%(ontologyURL,ontologyPath))
+            ilpOntSolver.__logger.warning("Error when loading - %s from: %s"%(ontologyURL, ontologyPathname))
     
         end = datetime.datetime.now()
         elapsed = end - start
