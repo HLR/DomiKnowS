@@ -38,17 +38,17 @@ class ilpOntSolver:
     __negVarTrashhold = 0.3
     
     @staticmethod
-    def getInstance(graph, ontologyPathname):    
+    def getInstance(graph):
         if (graph is not None) and (graph.ontology is not None):
             if graph.ontology not in ilpOntSolver.__instances:
-                ilpOntSolver(graph.ontology, ontologyPathname)
-                ilpOntSolver.__instances[graph.ontology].myGraph = graph
+                ilpOntSolver(graph.ontology.iri, graph.ontology.local)
+                ilpOntSolver.__instances[graph.ontology.iri].myGraph = graph
             else:
                 ilpOntSolver.__logger.info("Returning existing ilpOntSolver for %s"%(graph.ontology))
             
-        return ilpOntSolver.__instances[graph.ontology]
+        return ilpOntSolver.__instances[graph.ontology.iri]
        
-    def loadOntology(self, ontologyURL, ontologyPathname = "./"):
+    def loadOntology(self, ontologyURL, ontologyPathname=None):
         start = datetime.datetime.now()
         ilpOntSolver.__logger.info('Start')
         
@@ -61,15 +61,16 @@ class ilpOntSolver:
             ilpOntSolver.__logger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
             exit()
             
-        # Check if specific ontology path is correct
-        ontologyPath = Path(os.path.normpath(ontologyPathname))
-        ontologyPath = ontologyPath.resolve()
-        if not os.path.isdir(ontologyPath):
-            ilpOntSolver.__logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
-            exit()
-    
-        onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
-        onto_path.append(ontologyPath) # the folder with the ontology for the specific  graph
+        if ontologyPathname is not None:
+            # Check if specific ontology path is correct
+            ontologyPath = Path(os.path.normpath(ontologyPathname))
+            ontologyPath = ontologyPath.resolve()
+            if not os.path.isdir(ontologyPath):
+                ilpOntSolver.__logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
+                exit()
+
+            onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
+            onto_path.append(ontologyPath) # the folder with the ontology for the specific  graph
     
         # Load specific ontology
         try :
@@ -84,7 +85,7 @@ class ilpOntSolver:
         
         return self.myOnto
 
-    def __init__(self, ontologyURL, ontologyPathname):
+    def __init__(self, ontologyURL, ontologyPathname=None):
         if ilpOntSolver.__logger == None:
             # create logger
             ilpOntSolver.__logger = logging.getLogger('ilpOntSolver')
