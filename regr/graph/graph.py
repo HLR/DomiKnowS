@@ -10,17 +10,30 @@ class Graph(BaseGraphTree):
     def __init__(self, name=None, ontology=None, iri=None, local=None):
         BaseGraphTree.__init__(self, name)
         if ontology is None:
-            self.ontology = Graph.Ontology(iri, local)
+            self.ontology = (iri, local)
         elif isinstance(ontology, Graph.Ontology):
             self.ontology = ontology
         elif isinstance(ontology, str):
-            self.ontology = Graph.Ontology(ontology, local)
+            self.ontology = (ontology, local)
         self._concepts = OrderedDict()
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
 
+    @property
+    def ontology(self):
+        return self._ontology
+    
+    @ontology.setter
+    def ontology(self, ontology):
+        if isinstance(ontology, Graph.Ontology):
+            self._ontology = ontology
+        elif isinstance(ontology, str):
+            self._ontology = Graph.Ontology(ontology)
+        elif isinstance(ontology, tuple) and len(ontology) == 2:
+            self._ontology = Graph.Ontology(*ontology)
+        
     @staticmethod
     def get_apply(self, name):
         if name in self.concepts:
