@@ -128,32 +128,61 @@ from allennlp.data.fields import TextField, SequenceLabelField, AdjacencyField
 
 corpus_reader = Conll04CorpusReader()
 
+class SensableReader(DatasetReader):
+    def __init__(self, lazy=False) -> None:
+        super().__init__(lazy=lazy)
 
-class Conll04Reader(DatasetReader):
+    @classmethod
+    def update(cls, key):
+        def up(func):
+            def update_field(self_, fields, *args, **kwargs):
+                try:
+                    field = func(self_, fields, *args, **kwargs)
+                    if field is not None:
+                        fields[key] = field
+                except KeyError:
+                    pass
+                finally:
+                    return fields
+            return update_field
+        return up
+
+    @classmethod
+    def update_each(cls, func):
+        def update_field(self_, fields, *args, **kwargs):
+            for key, field in func(self_, fields, *args, **kwargs):
+                try:
+                    if field is not None:
+                        fields[key] = field
+                except KeyError:
+                    pass
+            return fields
+        return update_field
+
+
+class Conll04Reader(SensableReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)
-        # 'tokens' could be just any name, and I don't know where it is need again
-        # checkout modules used in word2vec, they need this name there
-        self.token_indexers = {'tokens': SingleIdTokenIndexer()}
+        self.token_indexers = {'phrase': SingleIdTokenIndexer('phrase')}
 
+    @SensableReader.update('sentence')
     def update_sentence(
         self,
         fields: Dict,
         sentence: List[str]
     ) -> Dict:
-        fields['sentence'] = TextField(
-            [Token(word) for word in sentence], self.token_indexers)
-        return fields
+        return TextField([Token(word) for word in sentence], self.token_indexers)
 
+    @SensableReader.update('labels')
     def update_labels(
         self,
         fields: Dict,
         labels: List[str]
     ) -> Dict:
         # {'Other', 'Loc', 'Peop', 'Org', 'O'}
-        fields['label'] = SequenceLabelField(labels, fields['sentence'])
-        return fields
+        return SequenceLabelField(labels, fields['sentence'])
 
+    @SensableReader.update('relation')
     def update_relations(
         self,
         fields: Dict,
@@ -163,15 +192,13 @@ class Conll04Reader(DatasetReader):
         # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
         if relation_labels is None:
             # giving none for label because user do not want label
-            # return directly
-            return fields
-        fields['relation'] = AdjacencyField(
+            return None
+        return AdjacencyField(
             relation_indices,
             fields['sentence'],
             relation_labels,
             padding_value=-1 # multi-class label, use -1 for null class
         )
-        return fields
 
     def to_instance(
         self,
@@ -182,10 +209,10 @@ class Conll04Reader(DatasetReader):
     ) -> Instance:
         fields = {}
 
-        fields = self.update_sentence(fields, sentence)
+        self.update_sentence(fields, sentence)
 
         if labels is not None:
-            fields = self.update_labels(fields, labels)
+            self.update_labels(fields, labels)
 
         if relations is not None:
             # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
@@ -196,7 +223,8 @@ class Conll04Reader(DatasetReader):
                 dst_index = rel[2][0]
                 relation_indices.append((src_index, dst_index))
                 relation_labels.append(rel[0])
-            fields = self.update_relations(fields, relation_indices, relation_labels)
+            self.update_relations(fields, relation_indices, relation_labels)
+
         return Instance(fields)
 
     def _read(
@@ -227,6 +255,7 @@ class Conll04TokenBinaryReader(Conll04TokenReader):
         super().__init__()
         self.label_names = label_names
 
+    @SensableReader.update_each
     def update_labels(
         self,
         fields: Dict,
@@ -234,16 +263,16 @@ class Conll04TokenBinaryReader(Conll04TokenReader):
     ) -> Dict:
         # {'Other', 'Loc', 'Peop', 'Org', 'O'}
         for label_name in self.label_names:
-            fields[label_name] = SequenceLabelField(
+            yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
                 fields['sentence'])
-        return fields
 
 
 class Conll04BinaryReader(Conll04Reader):
     label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
     relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
 
+    @SensableReader.update_each
     def update_labels(
         self,
         fields: Dict,
@@ -251,11 +280,11 @@ class Conll04BinaryReader(Conll04Reader):
     ) -> Dict:
         # {'Other', 'Loc', 'Peop', 'Org', 'O'}
         for label_name in self.label_names:
-            fields[label_name] = SequenceLabelField(
+            yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
                 fields['sentence'])
-        return fields
 
+    @SensableReader.update_each
     def update_relations(
         self,
         fields: Dict,
@@ -265,20 +294,19 @@ class Conll04BinaryReader(Conll04Reader):
         # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
         if relation_labels is None:
             # giving none for label because user do not want label
-            # return directly
-            return fields
+            pass
+
         for relation_name in self.relation_names:
             cur_indices = []
             for index, label in zip(relation_indices, relation_labels):
                 if label == relation_name:
                     cur_indices.append(index)
 
-            fields[relation_name] = AdjacencyField(
+            yield relation_name, AdjacencyField(
                 cur_indices,
                 fields['sentence'],
                 padding_value=0
             )
-        return fields
 
 class Conll04CandidateReader(Conll04Reader):
     def _is_candidate(
@@ -300,6 +328,7 @@ class Conll04CandidateReader(Conll04Reader):
         #   those not in candidate_p are something important
         return False
 
+    @SensableReader.update('candidate')
     def update_candidate(
         self,
         fields: Dict,
@@ -308,11 +337,9 @@ class Conll04CandidateReader(Conll04Reader):
         labels,
         relation
     ) -> Dict:
-        fields['candidate'] = SequenceLabelField(
-                [str(self._is_candidate(word, p, label, i, relation))
+        return SequenceLabelField([str(self._is_candidate(word, p, label, i, relation))
                  for i, (word, p, label) in enumerate(zip(sentence, pos, labels))],
                 fields['sentence'])
-        return fields
 
     def to_instance(
         self,
@@ -399,3 +426,7 @@ class Data(object):
     def __getitem__(self, name: str) -> str:
         # return an identifier the module can use in forward function to get the data
         return name
+
+
+class Conll04SensorReader(Conll04BinaryReader):
+    pass

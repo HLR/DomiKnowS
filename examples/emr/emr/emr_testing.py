@@ -3,6 +3,8 @@ from allennlp.data.iterators import BucketIterator
 from allennlp.data.vocabulary import Vocabulary
 from regr.scaffold.inference import inference
 
+# TODO: fix this testing model example
+
 
 saved_path = './saved/20190512-1'
 
