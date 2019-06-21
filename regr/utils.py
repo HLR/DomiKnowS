@@ -62,7 +62,7 @@ def enum(inst, cls=None, offset=0):
         enum = inst.items()
     elif isinstance(inst, dict):
         enum = inst.items()
-        if inst: # if dict not empty
+        if inst:  # if dict not empty
             # NB: stacklevel
             #     1 - utils.enum()
             #     2 - concept.Concept.relation_type.<local>.update.<local>.create()
@@ -222,6 +222,7 @@ def optional_arg_decorator(fn, test=None):
                 return fn(decoratee, *args)
             return real_decorator
     return wrapped_decorator
+
 
 def optional_arg_decorator_for(test):
     return lambda fn: optional_arg_decorator(fn, test)

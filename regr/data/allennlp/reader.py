@@ -1,20 +1,19 @@
-from typing import Iterator, List, Dict, Set, Optional
+from typing import Iterator
 from collections import OrderedDict
 from allennlp.data.dataset_readers import DatasetReader
-from allennlp.data.tokenizers import Token
-from allennlp.data.token_indexers import SingleIdTokenIndexer
 from allennlp.data import Instance
-from allennlp.data.fields import TextField, SequenceLabelField, AdjacencyField
 from ...utils import optional_arg_decorator, optional_arg_decorator_for
 
 field_dict = {}  # just a global container
 
 FIELDS_SUFFIX = '()'
 
+
 def get_field_decorator(name):
     def update(key):
         if key.endswith(FIELDS_SUFFIX):
-            raise ValueError('Data field name cannot end with "{}"'.format(FIELDS_SUFFIX))
+            raise ValueError(
+                'Data field name cannot end with "{}"'.format(FIELDS_SUFFIX))
 
         def up(func):
             def update_field(self_, fields, *args, **kwargs):
@@ -30,6 +29,7 @@ def get_field_decorator(name):
             return update_field
         return up
     return update
+
 
 def get_fields_decorator(name):
     def update_each(func):
@@ -107,5 +107,5 @@ def keep_fields(cls, *keys):
     # update with current lastly
     fields.update(field_dict[cls.__name__])
     field_dict[cls.__name__] = fields
-    
+
     return cls

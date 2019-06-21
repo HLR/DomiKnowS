@@ -1,9 +1,6 @@
-from typing import Iterator, List, Dict, Set, Optional
-from collections import OrderedDict
-from allennlp.data.dataset_readers import DatasetReader
+from typing import Dict
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer
-from allennlp.data import Instance
 from allennlp.data.fields import TextField, SequenceLabelField, AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_fields
 from .conll import Conll04CorpusReader
@@ -184,6 +181,7 @@ class Conll04CandidateBinaryReader(Conll04CandidateReader, Conll04BinaryReader):
 @keep_fields('sentence', 'candidate', 'update_labels()', 'update_relations()')
 class Conll04CandidateFilteredBinaryReader(Conll04CandidateFilteredReader, Conll04BinaryReader):
     pass
+
 
 @keep_fields
 class Conll04SensorReader(Conll04BinaryReader):
