@@ -4,18 +4,20 @@ from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from torch.nn import Module, Dropout, Sequential, GRU, Linear, LogSoftmax
 from ...graph import Property
 from .base import SinglePreLearner, SinglePreMaskedLearner
-from .sensor import PhraseSequenceSensor
+from .sensor import TokenInSequenceSensor, SinglePreMaskedSensor
 
 
 class W2VLearner(SinglePreMaskedLearner):
     class W2V(Module):
-        def __init__(self, sensor, embedding_dim, dropout=0.5):
+        def __init__(self, pre_sensor, embedding_dim, dropout=0.5):
             Module.__init__(self)
 
             self.token_embedding = Embedding(
-                num_embeddings=sensor.vocab.get_vocab_size(sensor.tokenname),
-                embedding_dim=embedding_dim)
-            self.word_embeddings = BasicTextFieldEmbedder({sensor.tokenname: self.token_embedding})
+                num_embeddings=0, # later load or extend
+                embedding_dim=embedding_dim,
+                vocab_namespace=pre_sensor.fullname
+            )
+            self.word_embeddings = BasicTextFieldEmbedder({pre_sensor.fullname: self.token_embedding})
             self.dropout = Dropout(dropout)
 
         def forward(self, x, mask):
@@ -24,18 +26,22 @@ class W2VLearner(SinglePreMaskedLearner):
     def __init__(
         self,
         embedding_dim: int,
-        *pres: List[Property]
+        pre: Property
     ) -> NoReturn:
-        pre = pres[0]
-        for sensor in pre.values():
-            # FIXME: pre is a property! how do we know which sensor? using the first PhraseSequenceSensor
-            if isinstance(sensor, PhraseSequenceSensor):
-                break
+        for name, sensor in pre.find(TokenInSequenceSensor):
+            break
         else:
-            raise TypeError('{} takes a PhraseSequenceSensor as pre-required sensor, while a {} instance is given.'.format(type(self), type(pre)))
+            raise TypeError('{} takes a TokenInSequenceSensor as pre-required sensor, what cannot be found in a {} instance is given.'.format(self.fullname, type(pre)))
 
         module = W2VLearner.W2V(sensor, embedding_dim)
-        SinglePreMaskedLearner.__init__(self, module, *pres)
+        SinglePreMaskedLearner.__init__(self, module, pre)
+        self.sequence = sensor.pre
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        return self.module(context[self.sequence.fullname], self.get_mask(context)) # need sequence as input
 
 
 class RNNLearner(SinglePreMaskedLearner):
@@ -57,19 +63,19 @@ class RNNLearner(SinglePreMaskedLearner):
     def __init__(
         self,
         embedding_dim: int,
-        *pres: List[Property]
+        pre: Property
     ) -> NoReturn:
         module = RNNLearner.DropoutRNN(embedding_dim)
-        SinglePreMaskedLearner.__init__(self, module, *pres)
+        SinglePreMaskedLearner.__init__(self, module, pre)
 
 
-class LogisticRegressionLearner(SinglePreLearner):
+class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
     def __init__(
         self,
         input_dim: int,
-        *pres: List[Property]
+        pre: Property
     ) -> NoReturn:
         fc = Linear(in_features=input_dim, out_features=2)
         sm = LogSoftmax(dim=-1)
         module = Sequential(fc, sm)
-        SinglePreLearner.__init__(self, module, *pres)
+        SinglePreLearner.__init__(self, module, pre)

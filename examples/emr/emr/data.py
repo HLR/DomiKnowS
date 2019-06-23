@@ -1,6 +1,6 @@
 from typing import Dict
+from collections import defaultdict
 from allennlp.data.tokenizers import Token
-from allennlp.data.token_indexers import SingleIdTokenIndexer
 from allennlp.data.fields import TextField, SequenceLabelField, AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_fields
 from .conll import Conll04CorpusReader
@@ -12,7 +12,6 @@ corpus_reader = Conll04CorpusReader()
 class Conll04Reader(SensableReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)
-        self.token_indexers = {'phrase': SingleIdTokenIndexer('phrase')}
 
     def raw_read(self, file_path):
         yield from zip(*corpus_reader(file_path))
@@ -24,7 +23,7 @@ class Conll04Reader(SensableReader):
         raw_sample
     ) -> Dict:
         (sentence, pos, labels), relations = raw_sample
-        return TextField([Token(word) for word in sentence], self.token_indexers)
+        return TextField([Token(word) for word in sentence], self.get_token_indexers('sentence'))
 
     @field('labels')
     def update_labels(
@@ -36,7 +35,7 @@ class Conll04Reader(SensableReader):
         (sentence, pos, labels), relations = raw_sample
         if labels is None:
             return None
-        return SequenceLabelField(labels, fields['sentence'])
+        return SequenceLabelField(labels, fields[self.get_fieldname('sentence')])
 
     @field('relation')
     def update_relations(
@@ -57,7 +56,7 @@ class Conll04Reader(SensableReader):
             relation_labels.append(rel[0])
         return AdjacencyField(
             relation_indices,
-            fields['sentence'],
+            fields[self.get_fieldname('sentence')],
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
@@ -79,7 +78,7 @@ class Conll04BinaryReader(Conll04Reader):
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
-                fields['sentence'])
+                fields[self.get_fieldname('sentence')])
 
     @fields
     def update_relations(
@@ -107,7 +106,7 @@ class Conll04BinaryReader(Conll04Reader):
 
             yield relation_name, AdjacencyField(
                 cur_indices,
-                fields['sentence'],
+                fields[self.get_fieldname('sentence')],
                 padding_value=0
             )
 

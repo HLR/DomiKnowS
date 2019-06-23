@@ -103,6 +103,7 @@ class ilpOntSolver:
 
             # add ch to logger
             ilpOntSolver.__logger.addHandler(ch)
+            ilpOntSolver.__logger.setLevel(logging.WARNING)
             
         if ontologyURL in ilpOntSolver.__instances:
              pass

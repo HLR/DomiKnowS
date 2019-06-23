@@ -1,5 +1,5 @@
 from typing import Iterator
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data import Instance
 from ...utils import optional_arg_decorator, optional_arg_decorator_for
@@ -20,11 +20,11 @@ def get_field_decorator(name):
                 try:
                     field = func(self_, fields, *args, **kwargs)
                     if field is not None:
-                        fields[key] = field
+                        for sensor in self_.key_fields[key]:
+                            fields[sensor.fullname] = field
                 except KeyError:
-                    pass
-                finally:
-                    return fields
+                    raise
+                return fields
             field_dict[name][key] = update_field
             return update_field
         return up
@@ -34,12 +34,13 @@ def get_field_decorator(name):
 def get_fields_decorator(name):
     def update_each(func):
         def update_field(self_, fields, *args, **kwargs):
-            for key, field in func(self_, fields, *args, **kwargs):
-                try:
+            try:
+                for key, field in func(self_, fields, *args, **kwargs):
                     if field is not None:
-                        fields[key] = field
-                except KeyError:
-                    pass
+                        for sensor in self_.key_fields[key]:
+                            fields[sensor.fullname] = field
+            except KeyError:
+                raise
             return fields
         field_dict[name][func.__name__ + FIELDS_SUFFIX] = update_field
         return update_field
@@ -75,18 +76,38 @@ class SensableReaderMeta(type):
 class SensableReader(DatasetReader, metaclass=SensableReaderMeta):
     __metaclass__ = SensableReaderMeta
 
+    def __init__(self, lazy=False) -> None:
+        super().__init__(lazy=lazy)
+        self.key_fields = defaultdict(list)
+        self.token_indexers = defaultdict(dict)
+        self.token_indexers_cls = defaultdict(dict)
+
     def _to_instance(self, raw_sample) -> Instance:
         cls = type(self)
         fields = {}
 
         for key, update_field in field_dict[cls.__name__].items():
             update_field(self, fields, raw_sample)
+
         return Instance(fields)
 
     def _read(self, *args, **kwargs) -> Iterator[Instance]:
         for raw_sample in self.raw_read(*args, **kwargs):
             yield self._to_instance(raw_sample)
 
+    def claim(self, key, sensor):
+        self.key_fields[key].append(sensor)
+
+    def get_fieldname(self, key):
+        return self.key_fields[key][0].fullname # using any[0]?
+
+    def get_token_indexers(self, key):
+        if key not in self.token_indexers:
+            # should satisfy all sensors connected to the same field
+            for sensor in self.key_fields[key]:
+                for token_sensor in sensor.tokens:
+                    self.token_indexers[key][token_sensor.fullname] = self.token_indexers_cls[sensor][token_sensor](token_sensor)
+        return self.token_indexers[key]
 
 @optional_arg_decorator_for(lambda cls: issubclass(cls, SensableReader))
 def keep_fields(cls, *keys):

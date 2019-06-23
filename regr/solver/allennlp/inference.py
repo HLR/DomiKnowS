@@ -1,10 +1,11 @@
-from ..graph import Graph
 from typing import Dict
 from torch import Tensor
 import torch
 import pandas as pd
-from ..utils import printablesize
-from .ilpSelectClassification import ilpOntSolver
+from ...utils import printablesize
+from ...graph import Graph
+from ...sensor.allennlp.sensor import SequenceSensor
+from ..ilpSelectClassification import ilpOntSolver
 
 
 DataInstance = Dict[str, Tensor]
@@ -22,13 +23,14 @@ def inference(
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
 
-    basefield = 'sentence' # FIXME: findout field
-    basenamespace = 'phrase' # FIXME: findout namespace
+    sentence_sensors = graph.get_sensors(SequenceSensor)
+    name, sentence_sensor = sentence_sensors[0] # FIXME: considering problems with only one sentence
+    token = sentence_sensor.tokens[0] # FIXME: using the first only
 
-    mask = data['mask'] # (b, l) # FIXME: the key mask is problem
+    mask = sentence_sensor.get_mask(data)
     mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
 
-    sentence = data[basefield][basenamespace] # (b, l)
+    sentence = data[sentence_sensor.fullname][token.fullname] # (b, l)
 
     # table columns, as many table columns as groups
     tables = [[] for _ in groups]
@@ -110,7 +112,7 @@ def inference(
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
-            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=basenamespace))
+            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=token.fullname))
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]
