@@ -1,11 +1,11 @@
-def seed():
+def seed(s=1):
     import random
     import numpy as np
     import torch
 
-    np.random.seed(1)
-    random.seed(1)
-    torch.manual_seed(1)
+    np.random.seed(s)
+    random.seed(s)
+    torch.manual_seed(s)
 
 
 class Namespace(dict):
