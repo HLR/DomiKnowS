@@ -15,9 +15,9 @@ class W2VLearner(SinglePreMaskedLearner):
             self.token_embedding = Embedding(
                 num_embeddings=0, # later load or extend
                 embedding_dim=embedding_dim,
-                vocab_namespace=pre_sensor.fullname
+                vocab_namespace=pre_sensor.get_fullname('_')
             )
-            self.word_embeddings = BasicTextFieldEmbedder({pre_sensor.fullname: self.token_embedding})
+            self.word_embeddings = BasicTextFieldEmbedder({pre_sensor.get_fullname('_'): self.token_embedding})
             self.dropout = Dropout(dropout)
 
         def forward(self, x, mask):

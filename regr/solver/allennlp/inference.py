@@ -30,7 +30,7 @@ def inference(
     mask = sentence_sensor.get_mask(data)
     mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
 
-    sentence = data[sentence_sensor.fullname][token.fullname] # (b, l)
+    sentence = data[sentence_sensor.fullname][token.get_fullname('_')] # (b, l)
 
     # table columns, as many table columns as groups
     tables = [[] for _ in groups]
@@ -112,7 +112,7 @@ def inference(
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
-            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=token.fullname))
+            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=token.get_fullname('_')))
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]

@@ -1,13 +1,7 @@
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import chain
-if __package__ is None or __package__ == '':
-    from base import Scoped, BaseGraphTree
-    from property import Property
-else:
-    from .base import Scoped, BaseGraphTree
-    from .property import Property
-from ..sensor import Sensor
+from .base import Scoped, BaseGraphTree
 from ..utils import enum
 
 
@@ -44,6 +38,8 @@ class Concept(BaseGraphTree):
 
     @staticmethod
     def set_apply(self, name, sub):
+        from ..sensor import Sensor
+        from .property import Property
         if isinstance(sub, Property):
             # call usually come from attach, further from constructor of property
             BaseGraphTree.set_apply(self, name, sub)

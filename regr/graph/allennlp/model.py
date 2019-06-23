@@ -237,7 +237,7 @@ class ScaffoldedModel(BaseModel):
             label, pred, mask = get_prop_result(prop, data)
             size = label.size()
 
-            bfactor = 0.  # 0 - no balance, 1 - balance
+            bfactor = 1.  # 0 - no balance, 1 - balance
             if len(size) == 2:  # (b,l,)
                 mask = mask.clone().float()
                 # class balance weighted

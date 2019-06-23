@@ -19,7 +19,7 @@ class SequenceSensor(MaskedSensor):
 
     def add_token(self, sensor):
         self.tokens.append(sensor)
-        self.reader.token_indexers_cls[self][sensor] = lambda s: SingleIdTokenIndexer(namespace=s.fullname)
+        self.reader.token_indexers_cls[self][sensor] = lambda s: SingleIdTokenIndexer(namespace=s.get_fullname('_'))
 
     def get_mask(self, context: Dict[str, Any]):
         return get_text_field_mask(context[self.fullname])
@@ -43,7 +43,7 @@ class TokenInSequenceSensor(SinglePreMaskedSensor):
         context: Dict[str, Any]
     ) -> Any:
         seq_dict = context[self.pre.fullname]
-        return seq_dict[self.fullname]
+        return seq_dict[self.get_fullname('_')]
 
 
 class LabelSensor(AllenNlpReaderSensor):

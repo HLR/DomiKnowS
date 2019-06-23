@@ -1,8 +1,4 @@
-if __package__ is None or __package__ == '':
-    from base import BaseGraphShallowTree
-else:
-    from .base import BaseGraphShallowTree
-from ..sensor import Sensor
+from .base import BaseGraphShallowTree
 
 
 @BaseGraphShallowTree.localize_namespace
@@ -18,6 +14,7 @@ class Property(BaseGraphShallowTree):
         BaseGraphShallowTree.attach_to_context(self, self.prop_name)
 
     def attach(self, sub):
+        from ..sensor import Sensor
         if isinstance(sub, Sensor):
             BaseGraphShallowTree.attach(self, sub)
         else:
@@ -38,5 +35,6 @@ class Property(BaseGraphShallowTree):
                 if not sensor_test(sensor):
                     break
             else:
+                from ..sensor import Sensor
                 if isinstance(sensor, Sensor):
                     yield name, sensor

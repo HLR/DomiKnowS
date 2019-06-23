@@ -106,7 +106,7 @@ class SensableReader(DatasetReader, metaclass=SensableReaderMeta):
             # should satisfy all sensors connected to the same field
             for sensor in self.key_fields[key]:
                 for token_sensor in sensor.tokens:
-                    self.token_indexers[key][token_sensor.fullname] = self.token_indexers_cls[sensor][token_sensor](token_sensor)
+                    self.token_indexers[key][token_sensor.get_fullname('_')] = self.token_indexers_cls[sensor][token_sensor](token_sensor)
         return self.token_indexers[key]
 
 @optional_arg_decorator_for(lambda cls: issubclass(cls, SensableReader))

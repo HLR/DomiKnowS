@@ -6,6 +6,7 @@ from allennlp.training import Trainer
 from ...utils import WrapperMetaClass
 from ...solver.ilpSelectClassification import ilpOntSolver
 from .. import Graph, Property
+from ...sensor.allennlp.base import AllenNlpReaderSensor
 from ...sensor.allennlp.sensor import SequenceSensor
 
 
@@ -51,7 +52,11 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
-    def train(self, train_config, data_config):
+    def train(self, data_config, train_config):
+        sentence_sensors = self.get_sensors(AllenNlpReaderSensor)
+        readers = {sensor.reader for name, sensor in sentence_sensors}
+        assert len(readers) == 1 # consider only 1 reader now
+        reader = readers.pop()
         train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path))
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path))
         self.update_vocab_from_instances(train_dataset + valid_dataset)
