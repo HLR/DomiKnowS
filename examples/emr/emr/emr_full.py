@@ -8,12 +8,6 @@ from .data import Conll04SensorReader as Reader
 from .config import Config
 from .utils import seed
 
-def data_preparation(config):
-    reader = Reader()
-    train_dataset = reader.read(os.path.join(config.relative_path, config.train_path))
-    valid_dataset = reader.read(os.path.join(config.relative_path, config.valid_path))
-    vocab = Vocabulary.from_instances(train_dataset + valid_dataset)
-    return reader, vocab, train_dataset, valid_dataset
 
 def ontology_declaration():
     from .graph import graph
