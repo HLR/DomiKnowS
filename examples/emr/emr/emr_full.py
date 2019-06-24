@@ -161,6 +161,7 @@ def main():
     #### Save the model, including vocabulary use to index the tokens.
     lbp.save('/tmp/emr')
 
+####
 """
 This example show a full pipeline how to work with `regr`.
 """
