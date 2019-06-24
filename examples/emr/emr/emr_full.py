@@ -13,15 +13,15 @@ This example follows the pipeline we discussed in our preliminary paper.
 from regr.sensor.allennlp.sensor import SequenceSensor, TokenInSequenceSensor, LabelSensor, CartesianProductSensor
 from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
 
-#### `AllenNlpGraph` is a special subclass of `Graph` that wrap a `Graph` and add computational functionalities to it. 
+#### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it. 
 from regr.graph.allennlp import AllenNlpGraph
 
-#### There are a few other components that is needed in common machine learning models.
+#### There are a few other components that are needed in common machine learning models.
 #### * `Conll04SensorReader` is a AllenNLP `DatasetReader`.
-#### We added a bit magics to make it more compatible with `regr`.
+#### We added a bit of magic to make it more compatible with `regr`.
 #### See `data.py` for details.
-#### * `Config` contain configurations for model, data, and training.
-#### * `seed` is a useful function the reset random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
+#### * `Config` contains configurations for model, data, and training.
+#### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 from .data import Conll04SensorReader as Reader
 from .config import Config
 from .utils import seed
@@ -38,8 +38,8 @@ def ontology_declaration():
 
 
 #### "*Model Declaration*" comes after "Ontology Declaration" in our pipeline.
-#### Sensors and learners are connected to the graph, what wrap the graph with functionalities to retieve data, forward computing, learning from error, and inference during all those processes.
-#### `graph` is a `Graph` object retieve from the "Ontology Declaration".
+#### Sensors and learners are connected to the graph, what wraps the graph with functionalities to retieve data, forward computing, learning from error, and inference during all those processes.
+#### `graph` is a `Graph` object retrieved from the "Ontology Declaration".
 #### `config` is configurations relatred to the model.
 def model_declaration(graph, config):
     #### `Graph` objects has some kind of global variables.
@@ -73,7 +73,7 @@ def model_declaration(graph, config):
     #### The most important part in "Model Declaration" is to connect sensors (and learners) to the graph.
     #### We start with linguistic concepts.
     #### `SequenceSensor` provides the ability to read from a `TextField` in AllenNLP.
-    #### It take two arguments, firstly the reader to read with, and secondly a `key` for the reader to refer to correct `TextField`.
+    #### It takes two arguments, firstly the reader to read with, and secondly a `key` for the reader to refer to correct `TextField`.
     sentence['raw'] = SequenceSensor(reader, 'sentence')
     #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.
     #### Notice that the Conll04 dataset comes with phrase tokenized sentences.
