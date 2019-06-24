@@ -1,2 +1,3 @@
 pandas
 owlready2
+setuptools
