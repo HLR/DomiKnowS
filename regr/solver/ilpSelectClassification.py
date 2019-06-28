@@ -39,7 +39,7 @@ else:
     from ..graph.concept import Concept, enum
     from ..graph.graph import Graph
     #from ..graph.relation import Relation, IsA, HasA
-    from .ilpBooleanMehods import *
+    from .ilpBooleanMethods import *
 
 import logging
 import datetime
