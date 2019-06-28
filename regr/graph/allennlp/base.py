@@ -1,4 +1,5 @@
 import os
+import logging
 import torch
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
@@ -14,6 +15,11 @@ from .model import ScaffoldedModel
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
+
+
+# TODO: handle logger more properly
+ilpOntSolver._ilpOntSolver__logger = logging.getLogger('ilpOntSolver')
+ilpOntSolver._ilpOntSolver__logger.disabled = True
 
 
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
