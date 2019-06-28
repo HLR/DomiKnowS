@@ -1,92 +1,45 @@
 from typing import Iterator
 from collections import OrderedDict, defaultdict
+import uuid
+from six import with_metaclass
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data import Instance
+import cls
 from ...utils import optional_arg_decorator, optional_arg_decorator_for
 
-field_dict = {}  # just a global container
 
-FIELDS_SUFFIX = '()'
-
-
-def get_field_decorator(name):
-    def update(key):
-        if key.endswith(FIELDS_SUFFIX):
-            raise ValueError(
-                'Data field name cannot end with "{}"'.format(FIELDS_SUFFIX))
-
-        def up(func):
-            def update_field(self_, fields, *args, **kwargs):
-                try:
-                    field = func(self_, fields, *args, **kwargs)
-                    if field is not None:
-                        for sensor in self_.key_fields[key]:
-                            fields[sensor.fullname] = field
-                except KeyError:
-                    raise
-                return fields
-            field_dict[name][key] = update_field
-            return update_field
-        return up
-    return update
+PLURAL_SUFFIX = '()'
 
 
-def get_fields_decorator(name):
-    def update_each(func):
-        def update_field(self_, fields, *args, **kwargs):
-            try:
-                for key, field in func(self_, fields, *args, **kwargs):
-                    if field is not None:
-                        for sensor in self_.key_fields[key]:
-                            fields[sensor.fullname] = field
-            except KeyError:
-                raise
-            return fields
-        field_dict[name][func.__name__ + FIELDS_SUFFIX] = update_field
-        return update_field
-    return update_each
-
-
-class SensableReaderMeta(type):
-    # Steps constructing class:
-    # 0. Resolving MRO entries
-    # 1. Determining the appropriate metaclass
-    # 2. Preparing the class namespace
-
-    def __prepare__(name, bases, **kwds):
-        namespace = OrderedDict()
-        namespace['field'] = get_field_decorator(name)
-        namespace['fields'] = get_fields_decorator(name)
-        field_dict[name] = OrderedDict()
-        return namespace
-
-    # 3. Executing the class body
-    # 4. Creating the class object
-    # def __call__(name, bases, namespace, **kwds)
-    #   def __new__(name, bases, namespace, **kwds) -> cls
-    #     4.1.0 colloct descriptors
-    #     4.1.1 for each descriptor call __set_name__(self, owner, name)
-    #     4.1.2 init cls
+class SensableReaderMeta(cls.ClsMeta):
     def __init__(cls, name, bases, namespace):
+        cls.tokens_dict = OrderedDict()
+        cls.textfield_dict = OrderedDict()
+        cls.field_dict = OrderedDict()
         super(SensableReaderMeta, cls).__init__(name, bases, namespace)
 
-    # 5. Nothing more, ready to go
 
-
-class SensableReader(DatasetReader, metaclass=SensableReaderMeta):
-    __metaclass__ = SensableReaderMeta
-
+class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
     def __init__(self, lazy=False) -> None:
-        super().__init__(lazy=lazy)
-        self.key_fields = defaultdict(list)
+        super(SensableReader, self).__init__(lazy=lazy)
+        self.key_sensors = defaultdict(list)
+        self.key_tokens = {}
         self.token_indexers = defaultdict(dict)
-        self.token_indexers_cls = defaultdict(dict)
 
     def _to_instance(self, raw_sample) -> Instance:
         cls = type(self)
         fields = {}
 
-        for key, update_field in field_dict[cls.__name__].items():
+        # prepare tokens
+        for key, update_tokens in cls.tokens_dict.items():
+            update_tokens(self, fields, raw_sample)
+
+        # prepare `TextField`s
+        for key, update_textfield in cls.textfield_dict.items():
+            update_textfield(self, fields, raw_sample)
+
+        # prepare other field
+        for key, update_field in cls.field_dict.items():
             update_field(self, fields, raw_sample)
 
         return Instance(fields)
@@ -95,38 +48,110 @@ class SensableReader(DatasetReader, metaclass=SensableReaderMeta):
         for raw_sample in self.raw_read(*args, **kwargs):
             yield self._to_instance(raw_sample)
 
+    @cls
+    def field(cls, key):
+        if key.endswith(PLURAL_SUFFIX):
+            raise ValueError(
+                'Data field key cannot end with "{}"'.format(PLURAL_SUFFIX))
+
+        def decorator(func):
+            def update_field(self_, fields, raw_sample):
+                field = func(self_, fields, raw_sample)
+                if field is not None:
+                    for sensor in self_.key_sensors[key]:
+                        fields[sensor.fullname] = field
+                return fields
+            cls.field_dict[key] = update_field
+            return update_field
+        return decorator
+
+    @cls
+    def tokens(cls, key):
+        if key.endswith(PLURAL_SUFFIX):
+            raise ValueError(
+                'Data field key cannot end with "{}"'.format(PLURAL_SUFFIX))
+
+        def decorator(func):
+            def update_tokens(self_, fields, raw_sample):
+                tokens = func(self_, fields, raw_sample)
+                if tokens is not None:
+                    self_.key_tokens[key] = tokens
+                return tokens
+            cls.tokens_dict[key] = update_tokens
+            return update_tokens
+        return decorator
+
+    @cls
+    def textfield(cls, key):
+        if key.endswith(PLURAL_SUFFIX):
+            raise ValueError(
+                'Data field name cannot end with "{}"'.format(PLURAL_SUFFIX))
+
+        def decorator(func):
+            def update_textfield(self_, fields, raw_sample):
+                for sensor in self_.key_sensors[key]: # sensors associate with 'pos_tag'
+                    # it would be possible different sensor refers to different tokens
+                    tokens = self_.key_tokens[sensor.tokens_key]
+                    field = func(self_, fields, tokens)
+                    if field is not None:
+                        fields[sensor.fullname] = field
+                return fields
+            cls.textfield_dict[key] = update_textfield
+            return update_textfield
+        return decorator
+
+    @cls(True)
+    def fields(cls):
+        def decorator(func):
+            def update_field(self_, fields, raw_sample):
+                for key, field in func(self_, fields, raw_sample):
+                    if field is not None:
+                        for sensor in self_.key_sensors[key]:
+                            fields[sensor.fullname] = field
+                return fields
+            cls.field_dict[func.__name__ + PLURAL_SUFFIX] = update_field
+            return update_field
+        return decorator
+
     def claim(self, key, sensor):
-        self.key_fields[key].append(sensor)
+        self.key_sensors[key].append(sensor)
 
     def get_fieldname(self, key):
-        return self.key_fields[key][0].fullname # using any[0]?
+        return self.key_sensors[key][0].fullname # using any[0]?
 
-    def get_token_indexers(self, key):
-        if key not in self.token_indexers:
-            # should satisfy all sensors connected to the same field
-            for sensor in self.key_fields[key]:
-                for token_sensor in sensor.tokens:
-                    self.token_indexers[key][token_sensor.get_fullname('_')] = self.token_indexers_cls[sensor][token_sensor](token_sensor)
-        return self.token_indexers[key]
 
 @optional_arg_decorator_for(lambda cls: issubclass(cls, SensableReader))
 def keep_fields(cls, *keys):
-    fields = OrderedDict()
-    # though same level, reversed order seems more expected
+    tokens_dict = OrderedDict()
+    textfield_dict = OrderedDict()
+    field_dict = OrderedDict()
+
+    # reversed order ensure MRO priority by override
     for base in reversed(cls.__bases__):
         if issubclass(base, SensableReader):
             if len(keys) == 0:
-                fields.update(field_dict[base.__name__])
+                tokens_dict.update(base.tokens_dict)
+                textfield_dict.update(base.textfield_dict)
+                field_dict.update(base.field_dict)
             else:
                 for key in keys:
-                    if key in field_dict[base.__name__]:
-                        fields[key] = field_dict[base.__name__][key]
+                    if key in base.tokens_dict:
+                        tokens_dict[key] = base.tokens_dict[key]
+                    if key in base.textfield_dict:
+                        textfield_dict[key] = base.textfield_dict[key]
+                    if key in base.field_dict:
+                        field_dict[key] = base.field_dict[key]
     for key in keys:
-        if key not in fields:
-            raise ValueError(
-                'Cannot find key {} from any of the bases of {}'.format(key, cls.__name__))
+        if (key not in tokens_dict) and (key not in textfield_dict) and (key not in field_dict):
+            raise ValueError('Cannot find key {} from any of the bases of {}'.format(key, cls.__name__))
+
     # update with current lastly
-    fields.update(field_dict[cls.__name__])
-    field_dict[cls.__name__] = fields
+    tokens_dict.update(cls.tokens_dict)
+    textfield_dict.update(cls.textfield_dict)
+    field_dict.update(cls.field_dict)
+
+    cls.tokens_dict = tokens_dict
+    cls.textfield_dict = textfield_dict
+    cls.field_dict = field_dict
 
     return cls

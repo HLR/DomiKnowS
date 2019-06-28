@@ -1,47 +1,56 @@
 from typing import List, Dict, Any, NoReturn
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+from allennlp.nn.util import get_text_field_mask
 from torch.nn import Module, Dropout, Sequential, GRU, Linear, LogSoftmax
 from ...graph import Property
 from .base import SinglePreLearner, SinglePreMaskedLearner
-from .sensor import TokenInSequenceSensor, SinglePreMaskedSensor
+from .sensor import SentenceSensor, SinglePreMaskedSensor
 
 
-class W2VLearner(SinglePreMaskedLearner):
-    class W2V(Module):
-        def __init__(self, pre_sensor, embedding_dim, dropout=0.5):
-            Module.__init__(self)
-
-            self.token_embedding = Embedding(
-                num_embeddings=0, # later load or extend
-                embedding_dim=embedding_dim,
-                vocab_namespace=pre_sensor.get_fullname('_')
-            )
-            self.word_embeddings = BasicTextFieldEmbedder({pre_sensor.get_fullname('_'): self.token_embedding})
-            self.dropout = Dropout(dropout)
-
-        def forward(self, x, mask):
-            return self.dropout(self.word_embeddings(x))
-
+class SentenceEmbedderLearner(SinglePreMaskedLearner):
     def __init__(
         self,
+        key: str,
         embedding_dim: int,
-        pre: Property
+        pre,
     ) -> NoReturn:
-        for name, sensor in pre.find(TokenInSequenceSensor):
+        self.embedding = Embedding(
+            num_embeddings=0, # later load or extend
+            embedding_dim=embedding_dim,
+            vocab_namespace=key
+        )
+        module = BasicTextFieldEmbedder({key: self.embedding})
+        SinglePreMaskedLearner.__init__(self, module, pre)
+
+        for name, pre_sensor in pre.find(SentenceSensor):
             break
         else:
-            raise TypeError('{} takes a TokenInSequenceSensor as pre-required sensor, what cannot be found in a {} instance is given.'.format(self.fullname, type(pre)))
+            raise TypeError()
+            
+        self.key = key
+        self.tokens_key = pre_sensor.key # used by reader.update_textfield()
+        pre_sensor.add_embedder(key, self)
 
-        module = W2VLearner.W2V(sensor, embedding_dim)
-        SinglePreMaskedLearner.__init__(self, module, pre)
-        self.sequence = sensor.pre
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+        if self.fullname in context and isinstance(context[self.fullname], dict):
+            context[self.fullname + '_index'] = context[self.fullname] # reserve
+            force = True
+        return SinglePreMaskedLearner.update_context(self, context, force)
 
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        return self.module(context[self.sequence.fullname], self.get_mask(context)) # need sequence as input
+        return self.module(context[self.fullname])
+
+    def get_mask(self, context: Dict[str, Any]):
+        # TODO: make sure update_context has been called
+        return get_text_field_mask(context[self.fullname + '_index'])
 
 
 class RNNLearner(SinglePreMaskedLearner):
@@ -50,7 +59,7 @@ class RNNLearner(SinglePreMaskedLearner):
             Module.__init__(self)
 
             from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-            self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim,
+            self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim*2,
                                                  embedding_dim,
                                                  batch_first=True,
                                                  dropout=dropout,

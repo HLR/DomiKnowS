@@ -1,62 +1,72 @@
 from typing import List, Dict, Any, Optional, NoReturn
+from collections import OrderedDict
 import torch
 from torch.nn import Module
-from allennlp.nn.util import get_text_field_mask
-from allennlp.data.token_indexers import SingleIdTokenIndexer
 from ...graph import Property
-from .base import AllenNlpReaderSensor, AllenNlpModuleSensor, SinglePreMaskedSensor, MaskedSensor
+from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor
 
 
-class SequenceSensor(MaskedSensor):
+class SentenceSensor(ReaderSensor):
     def __init__(
         self,
         reader,
         key: str,
         output_only: Optional[bool]=False
     ) -> NoReturn:
-        AllenNlpReaderSensor.__init__(self, reader, key, output_only=output_only) # *pres=[]
-        self.tokens = []
+        ReaderSensor.__init__(self, reader, key, output_only=output_only) # *pres=[]
+        self.embedders = OrderedDict() # list of SentenceEmbedderLearner
 
-    def add_token(self, sensor):
-        self.tokens.append(sensor)
-        self.reader.token_indexers_cls[self][sensor] = lambda s: SingleIdTokenIndexer(namespace=s.get_fullname('_'))
-
-    def get_mask(self, context: Dict[str, Any]):
-        return get_text_field_mask(context[self.fullname])
-
-
-class TokenInSequenceSensor(SinglePreMaskedSensor):
-    def __init__(
-        self,
-        pre,
-        output_only: Optional[bool]=False
-    ) -> NoReturn:
-        SinglePreMaskedSensor.__init__(self, pre, output_only=output_only)
-        for name, sensor in pre.find(SequenceSensor):
-            break
-        else:
-            raise TypeError('{} takes a SequenceSensor as pre-required sensor, what cannot be found in a {} instance is given.'.format(self.fullname, type(pre)))
-        sensor.add_token(self)
+    def add_embedder(self, key, embedder):
+        self.reader.claim(key, embedder)
+        self.embedders[key] = embedder
 
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        seq_dict = context[self.pre.fullname]
-        return seq_dict[self.get_fullname('_')]
+        # This sensor it self can do nothing
+        # mayby with self.embedders something more can happen?
+        return None
 
 
-class LabelSensor(AllenNlpReaderSensor):
+class LabelSensor(ReaderSensor):
     def __init__(
         self,
         reader,
         key: str,
         output_only: bool=True
     ) -> NoReturn:
-        AllenNlpReaderSensor.__init__(self, reader, key, output_only=output_only)
+        ReaderSensor.__init__(self, reader, key, output_only=output_only)
 
 
-class CartesianProductSensor(AllenNlpModuleSensor, MaskedSensor):
+class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
+    class Concat(Module):
+        def forward(self, *x):
+            return torch.cat(x, dim=-1)
+
+    def __init__(
+        self,
+        *pres: List[Property]
+    ) -> NoReturn:
+        module = ConcatSensor.Concat()
+        PreArgsModuleSensor.__init__(self, module, *pres)
+
+    def get_mask(self, context: Dict[str, Any]):
+        for pre in self.pres:
+            for name, sensor in pre.find(MaskedSensor):
+                return sensor.get_mask(context)
+            else:
+                # not found
+                continue
+            # found
+            break
+        else:
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        return None # not going to here
+
+
+class CartesianProductSensor(ModuleSensor, MaskedSensor):
     class CP(Module):
         def forward(self, x, y):  # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, f1+f2)
             xs = x.size()
@@ -79,7 +89,7 @@ class CartesianProductSensor(AllenNlpModuleSensor, MaskedSensor):
             raise ValueError(
                 '{} take one pre-required sensor, {} given.'.format(type(self), len(pres)))
         module = CartesianProductSensor.SelfCP()
-        AllenNlpModuleSensor.__init__(self, module, *pres)
+        ModuleSensor.__init__(self, module, *pres)
         self.pre = self.pres[0]
 
     def forward(

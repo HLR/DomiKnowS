@@ -17,9 +17,10 @@ class Sensor(BaseGraphTreeNode):
 
     def update_context(
         self,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        force=False
     ) -> Dict[str, Any]:
-        if self.fullname in context:
+        if not force and self.fullname in context:
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
