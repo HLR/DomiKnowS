@@ -17,7 +17,8 @@ class AllenNlpSensor(Sensor):
 
     def update_context(
         self,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        force=False
     ) -> Dict[str, Any]:
         # update prerequired first
         for pre in self.pres:
@@ -34,10 +35,10 @@ class AllenNlpSensor(Sensor):
                     pre.fullname, self.fullname))
 
         # then call forward
-        return Sensor.update_context(self, context)
+        return Sensor.update_context(self, context, force)
 
 
-class AllenNlpReaderSensor(AllenNlpSensor):
+class ReaderSensor(AllenNlpSensor):
     def __init__(
         self,
         reader,
@@ -56,11 +57,11 @@ class AllenNlpReaderSensor(AllenNlpSensor):
         return context[self.fullname]
 
 
-class AllenNlpModuleSensor(AllenNlpSensor):
+class ModuleSensor(AllenNlpSensor):
     class WrapperModule(Module):
         # use a wrapper to keep pre-requireds and avoid side-effect of sequencial or other modules
         def __init__(self, module):
-            super(AllenNlpModuleSensor.WrapperModule, self).__init__()
+            super(ModuleSensor.WrapperModule, self).__init__()
             self.main_module = module
 
         def forward(self, *args, **kwargs):
@@ -73,19 +74,19 @@ class AllenNlpModuleSensor(AllenNlpSensor):
         output_only: Optional[bool]=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, *pres, output_only=output_only)
-        self.module = AllenNlpModuleSensor.WrapperModule(module)
+        self.module = ModuleSensor.WrapperModule(module)
         for pre in pres:
             for name, sensor in pre.items():
-                if isinstance(sensor, AllenNlpModuleSensor) and not sensor.output_only:
+                if isinstance(sensor, ModuleSensor) and not sensor.output_only:
                     self.module.add_module(sensor.fullname, sensor.module)
 
 
-class AllenNlpLearner(AllenNlpModuleSensor, Learner):
+class AllenNlpLearner(ModuleSensor, Learner):
     def parameters(self):
         return self.module.parameters()
 
 
-class PreArgsModuleSensor(AllenNlpModuleSensor):
+class PreArgsModuleSensor(ModuleSensor):
     def forward(
         self,
         context: Dict[str, Any]
@@ -137,7 +138,6 @@ class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
             print(self.pre)
             raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
         return sensor.get_mask(context)
-
 
 
 class SinglePreMaskedLearner(SinglePreMaskedSensor, SinglePreLearner):

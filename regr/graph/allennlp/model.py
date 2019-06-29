@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 
 from .. import Graph
 from ...sensor.allennlp import AllenNlpLearner
-from ...sensor.allennlp.base import AllenNlpModuleSensor
+from ...sensor.allennlp.base import ModuleSensor
 from ...solver.allennlp.inference import inference
 
 
@@ -189,7 +189,7 @@ class ScaffoldedModel(BaseModel):
 
         i = 0  # TODO: this looks too bad
         for prop in self.graph.get_multiassign():
-            for name, sensor in prop.find(AllenNlpModuleSensor,  lambda s: s.module is not None):
+            for name, sensor in prop.find(ModuleSensor,  lambda s: s.module is not None):
                 self.add_module(str(i), sensor.module)
                 i += 1
 

@@ -186,7 +186,7 @@ def main() :
     _var2 = m.addVar(vtype=GRB.BINARY, name="_var2")
 
     m.addConstr(_var1, GRB.EQUAL, 1)
-    m.addConstr(_var2, GRB.EQUAL, 2)
+    m.addConstr(_var2, GRB.EQUAL, 1)
 
     _andVar = andVar(m, _var1, _var2)
     m.update()
@@ -195,6 +195,8 @@ def main() :
     Q += _andVar
     m.setObjective(Q, GRB.MAXIMIZE)
 
+    m.update()
+    
     print(m.getObjective()) 
     for const in m.getConstrs():
         print(m.getConstrByName(const.ConstrName))
@@ -204,7 +206,7 @@ def main() :
     print(m.printStats())
 
     if m.status == GRB.Status.OPTIMAL:
-        print('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
+        print('Optimal solution was found')
     elif m.status == GRB.Status.INFEASIBLE:
         print('Model was proven to be infeasible.')
         exit()
@@ -218,6 +220,7 @@ def main() :
         print('Optimal solution not was found - error code %i'%(m.status))
         exit()
 
+    m.update()
     m.printAttr('x') 
     
     #print(_andVar.getAttr(GRB.Attr.X))

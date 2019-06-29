@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 from ...utils import printablesize
 from ...graph import Graph
-from ...sensor.allennlp.sensor import SequenceSensor
+from ...sensor.allennlp.learner import SentenceEmbedderLearner
 from ..ilpSelectClassification import ilpOntSolver
 
 
@@ -23,14 +23,13 @@ def inference(
         ['work_for', 'located_in', 'live_in', 'orgbase_on'],
     ]
 
-    sentence_sensors = graph.get_sensors(SequenceSensor)
-    name, sentence_sensor = sentence_sensors[0] # FIXME: considering problems with only one sentence
-    token = sentence_sensor.tokens[0] # FIXME: using the first only
+    tokens_sensors = graph.get_sensors(SentenceEmbedderLearner)
+    name, tokens_sensor = tokens_sensors[0] # FIXME: considering problems with only one sentence
 
-    mask = sentence_sensor.get_mask(data)
+    mask = tokens_sensor.get_mask(data)
     mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
 
-    sentence = data[sentence_sensor.fullname][token.get_fullname('_')] # (b, l)
+    sentence = data[tokens_sensor.fullname + '_index'][tokens_sensor.key] # (b, l)
 
     # table columns, as many table columns as groups
     tables = [[] for _ in groups]
@@ -112,7 +111,7 @@ def inference(
         # apply mask for phrase
         phrasetable = phrasetable[:mask_len[batch_index], :]
         if vocab:
-            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=token.get_fullname('_')))
+            tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=tokens_sensor.key))
                       for i in torch.arange(phrasetable.shape[0], device=values.device)]
         else:
             tokens = [str(j) for j in range(phrasetable.shape[0])]

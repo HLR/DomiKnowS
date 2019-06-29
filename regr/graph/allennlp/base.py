@@ -1,4 +1,5 @@
 import os
+import logging
 import torch
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
@@ -6,14 +7,19 @@ from allennlp.training import Trainer
 from ...utils import WrapperMetaClass
 from ...solver.ilpSelectClassification import ilpOntSolver
 from .. import Graph, Property
-from ...sensor.allennlp.base import AllenNlpReaderSensor
-from ...sensor.allennlp.sensor import SequenceSensor
+from ...sensor.allennlp.base import ReaderSensor
+from ...sensor.allennlp.learner import SentenceEmbedderLearner
 
 
 from .model import ScaffoldedModel
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
+
+
+# TODO: handle logger more properly
+ilpOntSolver._ilpOntSolver__logger = logging.getLogger('ilpOntSolver')
+ilpOntSolver._ilpOntSolver__logger.disabled = True
 
 
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
@@ -53,7 +59,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
     def train(self, data_config, train_config):
-        sentence_sensors = self.get_sensors(AllenNlpReaderSensor)
+        sentence_sensors = self.get_sensors(ReaderSensor)
         readers = {sensor.reader for name, sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
         reader = readers.pop()
@@ -82,7 +88,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         from torch.optim import Adam
         optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
 
-        sentence_sensors = self.get_sensors(SequenceSensor)
+        sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
         sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
 
         iterator = BucketIterator(batch_size=batch,

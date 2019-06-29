@@ -10,8 +10,8 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SequenceSensor, TokenInSequenceSensor, LabelSensor, CartesianProductSensor
-from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProductSensor, ConcatSensor
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it. 
 from regr.graph.allennlp import AllenNlpGraph
@@ -74,25 +74,32 @@ def model_declaration(graph, config):
     #### We start with linguistic concepts.
     #### `SequenceSensor` provides the ability to read from a `TextField` in AllenNLP.
     #### It takes two arguments, firstly the reader to read with, and secondly a `key` for the reader to refer to correct `TextField`.
-    sentence['raw'] = SequenceSensor(reader, 'sentence')
+    sentence['raw'] = SentenceSensor(reader, 'sentence')
     #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.
     #### Notice that the Conll04 dataset comes with phrase tokenized sentences.
     #### Thus this is already a phrase-based sentence.
     #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    phrase['raw'] = TokenInSequenceSensor(sentence['raw'])
+    phrase['raw'] = SentenceEmbedderLearner('phrase', config.embedding_dim, sentence['raw'])
+    phrase['pos'] = SentenceEmbedderLearner('pos_tags', config.embedding_dim, sentence['raw'])
+    # possible to add more this kind
+    '''
     #### `W2VLearner` converts index-based `phrase['raw']` into vectors by "word2vec" module that is widely applied in Deep Learning with NLP tasks.
     #### The first argument specify the output dimensions of this module, that is the dimension of output vectors.
     #### And the second argument tells the learner from where it convert.
     #### Notice that this is a learner which imply there are trainable parameters in this `learner`.
     #### `Learner`s are just `Sensor`s with parameters.
     #### In this example, this implies we want to update this "word2vec" dictionary.
-    phrase['w2v'] = W2VLearner(config.embedding_dim, phrase['raw'])
+    phrase['raw_w2v'] = W2VLearner(config.embedding_dim, phrase['raw'])
+    phrase['pos_w2v'] = W2VLearner(config.embedding_dim, phrase['pos'])
+    '''
+
+    phrase['all_features'] = ConcatSensor(phrase['raw'], phrase['pos'])
     #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    phrase['emb'] = RNNLearner(config.embedding_dim, phrase['w2v'])
+    phrase['emb'] = RNNLearner(config.embedding_dim, phrase['all_features'])
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
