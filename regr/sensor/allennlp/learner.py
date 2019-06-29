@@ -27,7 +27,7 @@ class SentenceEmbedderLearner(SinglePreMaskedLearner):
             break
         else:
             raise TypeError()
-            
+
         self.key = key
         self.tokens_key = pre_sensor.key # used by reader.update_textfield()
         pre_sensor.add_embedder(key, self)
