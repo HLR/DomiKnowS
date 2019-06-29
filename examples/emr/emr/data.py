@@ -222,7 +222,3 @@ class Conll04CandidateFilteredBinaryReader(Conll04CandidateFilteredReader, Conll
 @keep_fields
 class Conll04SensorReader(Conll04BinaryReader):
     pass
-
-print(Conll04SensorReader.tokens_dict)
-print(Conll04SensorReader.textfield_dict)
-print(Conll04SensorReader.field_dict)
