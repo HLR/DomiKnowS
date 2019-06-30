@@ -1,25 +1,26 @@
 import os
 import logging
+import logging.config
 import torch
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
 from ...utils import WrapperMetaClass
+from ...solver import ilpSelectClassification
 from ...solver.ilpSelectClassification import ilpOntSolver
-from .. import Graph, Property
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
-
-
+from .. import Graph, Property
 from .model import ScaffoldedModel
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
-# TODO: handle logger more properly
-ilpOntSolver._ilpOntSolver__logger = logging.getLogger('ilpOntSolver')
-ilpOntSolver._ilpOntSolver__logger.disabled = True
+solver_logger = logging.getLogger(ilpSelectClassification.__name__)
+solver_logger.propagate = False
+if DEBUG_TRAINING:
+    solver_logger.setLevel(logging.DEBUG)
 
 
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):

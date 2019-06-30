@@ -44,16 +44,17 @@ else:
 import logging
 import datetime
 
+
 class ilpOntSolver:
     __instances = {}
-    __logger = None
+    __logger = logging.getLogger(__name__)
     
     __negVarTrashhold = 0.3
     
     @staticmethod
     def getInstance(graph):
         if (graph is not None) and (graph.ontology is not None):
-            if graph.ontology not in ilpOntSolver.__instances:
+            if graph.ontology.iri not in ilpOntSolver.__instances:
                 ilpOntSolver(graph.ontology.iri, graph.ontology.local)
                 ilpOntSolver.__instances[graph.ontology.iri].myGraph = graph
             else:
@@ -99,24 +100,6 @@ class ilpOntSolver:
         return self.myOnto
 
     def __init__(self, ontologyURL, ontologyPathname=None):
-        if ilpOntSolver.__logger == None:
-            # create logger
-            ilpOntSolver.__logger = logging.getLogger('ilpOntSolver')
-            ilpOntSolver.__logger.setLevel(logging.INFO)
-
-            # create file handler and set level to info
-            ch = logging.FileHandler('ilpOntSolver.log')
-            ch.setLevel(logging.INFO)
-
-            # create formatter
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-
-            # add formatter to ch
-            ch.setFormatter(formatter)
-
-            # add ch to logger
-            ilpOntSolver.__logger.addHandler(ch)
-            
         if ontologyURL in ilpOntSolver.__instances:
              pass
         else:  
@@ -192,8 +175,8 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
-                        # m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-                        nandVar(m, x[token, conceptName], x[token, disjointConcept])
+                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
+                        #nandVar(m, x[token, conceptName], x[token, disjointConcept])
                     elif ilpSolver == "GEKKO":
                          m.Equation(x[token, conceptName] + x[token, disjointConcept] <= 1)
                                
@@ -862,9 +845,30 @@ class ilpOntSolver:
         # return results of ILP optimization
         return tokenResult, relationsResult
 
+
+def setup_solver_logger(log_filename='ilpOntSolver.log'):
+    logger = logging.getLogger(__name__)
+
+    # create file handler and set level to info
+    ch = logging.FileHandler(log_filename)
+
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+
+    # add formatter to ch
+    ch.setFormatter(formatter)
+
+    # add ch to logger
+    logger.addHandler(ch)
+
+setup_solver_logger()
+
 # --------- Testing
 
-def main() :
+def main():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
 
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]

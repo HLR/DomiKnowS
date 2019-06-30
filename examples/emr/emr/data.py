@@ -27,7 +27,7 @@ class Conll04Reader(SensableReader):
     ) -> List[Token]:
         (sentence, pos, labels), relations = raw_sample
         # NB: pos_ for coarse POS tags, and tag_ for fine-grained
-        return [Token(word, pos_=pos_tag, tag_=pos_tag) 
+        return [Token(word, pos_=pos_tag, tag_=pos_tag)
                     for word, pos_tag in zip(sentence, pos)]
 
     @cls.textfield('phrase')
