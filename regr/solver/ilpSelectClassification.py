@@ -175,8 +175,8 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
-                        # m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-                        nandVar(m, x[token, conceptName], x[token, disjointConcept])
+                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
+                        #nandVar(m, x[token, conceptName], x[token, disjointConcept])
                     elif ilpSolver == "GEKKO":
                          m.Equation(x[token, conceptName] + x[token, disjointConcept] <= 1)
                                
