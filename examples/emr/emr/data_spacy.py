@@ -1,5 +1,9 @@
+import warnings
+from typing import List, Dict, Tuple, Generator
 from allennlp.data.tokenizers.word_splitter import SpacyWordSplitter
-from regr.data.allennlp.reader import SensableReader, keep_fields
+from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, DepLabelIndexer, NerTagIndexer
+from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
+from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
 from .conll import Conll04CorpusReader
 
@@ -154,7 +158,10 @@ def reprocess(sentence, relations, keep_entity=False, first=True):
         else:
             new_token = [token]
             new_pos_tag = [pos_tag]
-        assert len(new_token) == len(new_pos_tag)
+        if len(new_token) != len(new_pos_tag):
+            warnings.warn(('POS tags do not match tokens when processing original CONLL04 data. '
+                           '{}:{} -> {}:{}.').format(token, pos_tag, new_token, new_pos_tag),
+                          stacklevel=2)
         for j, word in enumerate(new_token):
             if label != NONE_LABEL and word == '.' and j > 0:
                 new_token[j - 1] = new_token[j - 1] + '.'
@@ -269,7 +276,7 @@ class Conll04SpaCyReader(SensableReader):
         self,
         fields: Dict,
         raw_sample
-    ) -> List[Token]:
+    ) -> List:
         tokens, labels, relations = raw_sample
         return tokens
 
@@ -280,16 +287,6 @@ class Conll04SpaCyReader(SensableReader):
         tokens
     ) -> Field:
         indexers = {'word': SingleIdTokenIndexer(namespace='word')}
-        textfield = TextField(tokens, indexers)
-        return textfield
-
-    @cls.textfield('pos_tag')
-    def update_sentence_pos(
-        self,
-        fields,
-        tokens
-    ) -> Field:
-        indexers = {'pos_tag': PosTagIndexer(namespace='pos_tag')}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -333,8 +330,9 @@ class Conll04SpaCyReader(SensableReader):
         tokens, labels, relations = raw_sample
         if labels is None:
             return None
-        label_list = [NONE_LABEL,] * len(tokens)
+        label_list = [NONE_LABEL, ] * len(tokens)
         for label_type, token in labels:
+            # token[0] : only use the first
             label_list[token[0].i] = label_type
         return SequenceLabelField(label_list, fields[self.get_fieldname('word')])
 
@@ -351,7 +349,7 @@ class Conll04SpaCyReader(SensableReader):
         relation_indices = []
         relation_labels = []
         for relation_type, src_token, dst_token in relations:
-            relation_indices.append((src_token.i, dst_token.i))
+            relation_indices.append((src_token[0].i, dst_token[0].i))
             relation_labels.append(relation_type)
         return AdjacencyField(
             relation_indices,
@@ -359,3 +357,55 @@ class Conll04SpaCyReader(SensableReader):
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
+
+
+@keep_keys(exclude=['labels', 'relation'])
+class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
+    label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
+    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+
+    @cls.fields
+    def update_labels(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Generator[Tuple[str, Field], None, None]:
+        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
+        tokens, labels, relations = raw_sample
+
+        labels_dict = {}
+        for label_type in self.label_names:
+            labels_dict[label_type] = [False, ] * len(tokens)
+
+        for label_type, token in labels:
+            labels_dict[label_type][token[0].i] = True
+
+        for label_type, label_list in labels_dict.items():
+            yield label_type, SequenceLabelField(label_list, fields[self.get_fieldname('word')])
+
+    @cls.fields
+    def update_relations(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Generator[Tuple[str, Field], None, None]:
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        tokens, labels, relations = raw_sample
+
+        relations_dict = {}
+        for relation_type in self.relation_names:
+            relations_dict[relation_type] = []  # just need indices
+
+        if len(relations)>0: print(relations)
+        for relation_type, src_token, dst_token in relations:
+            if relation_type not in relations_dict:
+                raise RuntimeError('Relationship {} is unknown. Sentence: {} Raltions: {}'.format(relation_type, tokens, relations))
+            relations_dict[relation_type].append(
+                (src_token[0].i, dst_token[0].i))
+
+        for relation_type, indices in relations_dict.items():
+            yield relation_type, AdjacencyField(
+                indices,
+                fields[self.get_fieldname('word')],
+                padding_value=0
+            )

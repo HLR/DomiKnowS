@@ -22,7 +22,8 @@ from regr.graph.allennlp import AllenNlpGraph
 #### See `data.py` for details.
 #### * `Config` contains configurations for model, data, and training.
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
-from .data import Conll04SensorReader as Reader
+#from .data import Conll04SensorReader as Reader
+from .data_spacy import Conll04SpaCyBinaryReader as Reader
 from .config import Config
 from .utils import seed
 
@@ -51,7 +52,7 @@ def model_declaration(graph, config):
     #### Here we just retrieve them to use them as python variables.
     #### `sentence`, `phrase`, and `pair` are basic linguistic concepts in this demo.
     sentence = graph['linguistic/sentence']
-    phrase = graph['linguistic/phrase']
+    word = graph['linguistic/phrase']
     pair = graph['linguistic/pair']
 
     #### `people`, `organization`, `location`, `other`, and `O` are entities we want to extract in this demo.
@@ -80,30 +81,19 @@ def model_declaration(graph, config):
     #### Thus this is already a phrase-based sentence.
     #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    phrase['raw'] = SentenceEmbedderLearner('phrase', config.embedding_dim, sentence['raw'])
-    phrase['pos'] = SentenceEmbedderLearner('pos_tags', config.embedding_dim, sentence['raw'])
+    word['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    word['pos'] = SentenceEmbedderLearner('pos_tags', config.embedding_dim, sentence['raw'])
     # possible to add more this kind
-    '''
-    #### `W2VLearner` converts index-based `phrase['raw']` into vectors by "word2vec" module that is widely applied in Deep Learning with NLP tasks.
-    #### The first argument specify the output dimensions of this module, that is the dimension of output vectors.
-    #### And the second argument tells the learner from where it convert.
-    #### Notice that this is a learner which imply there are trainable parameters in this `learner`.
-    #### `Learner`s are just `Sensor`s with parameters.
-    #### In this example, this implies we want to update this "word2vec" dictionary.
-    phrase['raw_w2v'] = W2VLearner(config.embedding_dim, phrase['raw'])
-    phrase['pos_w2v'] = W2VLearner(config.embedding_dim, phrase['pos'])
-    '''
-
-    phrase['all_features'] = ConcatSensor(phrase['raw'], phrase['pos'])
+    word['all_features'] = ConcatSensor(word['raw'], word['pos'])
     #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    phrase['emb'] = RNNLearner(config.embedding_dim, phrase['all_features'])
+    word['emb'] = RNNLearner(config.embedding_dim, word['all_features'])
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
-    pair['emb'] = CartesianProductSensor(phrase['emb'])
+    pair['emb'] = CartesianProductSensor(word['emb'])
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
@@ -126,11 +116,11 @@ def model_declaration(graph, config):
     #### Notice the first argument, the "input dimention", takes a `* 2` because the output from `phrase['emb']` is bidirectional, having two times dimentions.
     #### The second argument is base on what the prediction will be made.
     #### The constructors make individule modules for them with seperated parameters, though they take same arguments.
-    people['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    organization['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    location['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    other['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    o['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
+    people['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
+    organization['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
+    location['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
+    other['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
+    o['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
 
     #### We repeat these on composed-concepts.
     #### There is nothing different in usage thought they are higher ordered concepts.

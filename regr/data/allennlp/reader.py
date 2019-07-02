@@ -121,7 +121,7 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
 
 
 @optional_arg_decorator_for(lambda cls: issubclass(cls, SensableReader))
-def keep_fields(cls, *keys):
+def keep_keys(cls, *keys, exclude=[]):
     tokens_dict = OrderedDict()
     textfield_dict = OrderedDict()
     field_dict = OrderedDict()
@@ -130,11 +130,13 @@ def keep_fields(cls, *keys):
     for base in reversed(cls.__bases__):
         if issubclass(base, SensableReader):
             if len(keys) == 0:
-                tokens_dict.update(base.tokens_dict)
-                textfield_dict.update(base.textfield_dict)
-                field_dict.update(base.field_dict)
+                tokens_dict.update({k:v for k, v in base.tokens_dict.items() if k not in exclude})
+                textfield_dict.update({k:v for k, v in base.textfield_dict.items() if k not in exclude})
+                field_dict.update({k:v for k, v in base.field_dict.items() if k not in exclude})
             else:
                 for key in keys:
+                    if key in exclude:
+                        continue
                     if key in base.tokens_dict:
                         tokens_dict[key] = base.tokens_dict[key]
                     if key in base.textfield_dict:
@@ -142,7 +144,7 @@ def keep_fields(cls, *keys):
                     if key in base.field_dict:
                         field_dict[key] = base.field_dict[key]
     for key in keys:
-        if (key not in tokens_dict) and (key not in textfield_dict) and (key not in field_dict):
+        if (key not in tokens_dict) and (key not in textfield_dict) and (key not in field_dict) and (key not in exclude):
             raise ValueError('Cannot find key {} from any of the bases of {}'.format(key, cls.__name__))
 
     # update with current lastly

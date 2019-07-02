@@ -214,12 +214,12 @@ class WrapperMetaClass(type):
 
 
 def optional_arg_decorator(fn, test=None):
-    def wrapped_decorator(*args):
+    def wrapped_decorator(*args, **kwargs):
         if len(args) == 1 and callable(args[0]) and (test is None or test(args[0])):
             return fn(args[0])
         else:
             def real_decorator(decoratee):
-                return fn(decoratee, *args)
+                return fn(decoratee, *args, **kwargs)
             return real_decorator
     return wrapped_decorator
 
