@@ -263,3 +263,99 @@ class Conll04SpaCyReader(SensableReader):
             spacy_tokens, spacy_labels, spacy_relations = spacy_process(
                 self.splitter, tokens, labels, relations)
             yield spacy_tokens, spacy_labels, spacy_relations
+
+    @cls.tokens('sentence')
+    def update_sentence(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> List[Token]:
+        tokens, labels, relations = raw_sample
+        return tokens
+
+    @cls.textfield('word')
+    def update_sentence_raw(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'word': SingleIdTokenIndexer(namespace='word')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('pos_tag')
+    def update_sentence_pos(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'pos_tag': PosTagIndexer(namespace='pos_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('pos_tag')
+    def update_sentence_pos(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'pos_tag': PosTagIndexer(namespace='pos_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('dep_tag')
+    def update_sentence_dep(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'dep_tag': DepLabelIndexer(namespace='dep_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('dep_tag')
+    def update_sentence_ner(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'dep_tag': NerTagIndexer(namespace='dep_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.field('labels')
+    def update_labels(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
+        tokens, labels, relations = raw_sample
+        if labels is None:
+            return None
+        label_list = [NONE_LABEL,] * len(tokens)
+        for label_type, token in labels:
+            label_list[token[0].i] = label_type
+        return SequenceLabelField(label_list, fields[self.get_fieldname('word')])
+
+    @cls.field('relation')
+    def update_relations(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        tokens, labels, relations = raw_sample
+        if relations is None:
+            return None
+        relation_indices = []
+        relation_labels = []
+        for relation_type, src_token, dst_token in relations:
+            relation_indices.append((src_token.i, dst_token.i))
+            relation_labels.append(relation_type)
+        return AdjacencyField(
+            relation_indices,
+            fields[self.get_fieldname('phrase')],
+            relation_labels,
+            padding_value=-1  # multi-class label, use -1 for null class
+        )
