@@ -1,22 +1,9 @@
-# variable controlling what ILP solver is used
-ilpSolver = "Gurobi" # "Gurobi", "GEKKO", "None"
-
 # numpy
 import numpy as np
 
 # pandas
 import pandas as pd
 
-# ILP solver module selection
-if ilpSolver=="Gurobi":
-    # Gurobi
-    from gurobipy import *
-elif ilpSolver == "GEKKO":
-    # GEKKO
-    from gekko import GEKKO
-else:
-    print("ILP Solver not specified - exiting")
-    exit()
 
 # ontology
 from owlready2 import *
@@ -175,10 +162,9 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
-                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)
-                        #nandVar(m, x[token, conceptName], x[token, disjointConcept])
+                        m.addConstr(nandVar(m, x[token, conceptName], x[token, disjointConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
-                         m.Equation(x[token, conceptName] + x[token, disjointConcept] <= 1)
+                        m.Equation(nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1)
                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -212,13 +198,10 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Equivalent_%s'%(token, conceptName, equivalentConcept.name)
-                        _varAnd = m.addVar(name="andVar_%s"%(constrainName))
-            
-                        m.addGenConstrAnd(_varAnd, [x[token, conceptName], x[token, equivalentConcept.name]], constrainName)
-                        #m.addConstr(x[token, conceptName] + x[token, equivalentConcept], GRB.LESS_EQUAL, 1, name=constrainName) #?
+                        m.addConstr(andVar(m, x[token, conceptName], x[token, equivalentConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
-                        pass
-                                       
+                        m.Equation(andVar(m, x[token, conceptName], x[token, equivalentConcept]) >= 1)
+
                 if not (conceptName in foundEquivalent):
                     foundEquivalent[conceptName] = {equivalentConcept.name}
                 else:
@@ -240,9 +223,12 @@ class ilpOntSolver:
                      continue
                             
                 for token in tokens:
-                    constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
-                    m.addGenConstrIndicator(x[token, conceptName], True, x[token, ancestorConcept.name], GRB.EQUAL, 1)
-                
+                    if ilpSolver=="Gurobi":       
+                        constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
+                        m.addConstr(ifVar(m, x[token, conceptName], x[token, ancestorConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                    elif ilpSolver == "GEKKO":
+                        m.Equation(ifVar(m, x[token, conceptName], x[token, ancestorConcept]) >= 1)
+
                 ilpOntSolver.__logger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
 
         # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
@@ -267,7 +253,10 @@ class ilpOntSolver:
     
                         andList.append(x[token, conceptName])
                         
-                        m.addGenConstrAnd(_varAnd, andList, constrainName)
+                        if ilpSolver=="Gurobi":    
+                            m.addConstr(andVar(m, andList), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        elif ilpSolver == "GEKKO":
+                            m.Equation(andVar(m, andList) >= 1)
         
         # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
         for conceptName in conceptNames :
@@ -291,9 +280,12 @@ class ilpOntSolver:
     
                         orList.append(x[token, conceptName])
                         
-                        m.addGenConstrOr(_varOr, orList, constrainName)
+                        if ilpSolver=="Gurobi":    
+                            m.addConstr(orVar(m, orList), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        elif ilpSolver == "GEKKO":
+                            m.Equation(orVar(m, orList) >= 1)
         
-        # -- Add constraints based on concept objectComplementOf statements in ontology - var1 + var 2 = 1
+        # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
         for conceptName in conceptNames :
             
             currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
@@ -306,10 +298,13 @@ class ilpOntSolver:
                     
                     complementClass = conceptConstruct.Class
 
-                    for token in tokens:                    
-                        constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name)
-                        m.addConstr(x[token, conceptName] + x[token, complementClass.name], GRB.EQUAL, 1, name=constrainName)
-                        
+                    for token in tokens:       
+                        if ilpSolver=="Gurobi":    
+                            constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name)
+                            m.addConstr(xorVar(x[token, conceptName], x[token, complementClass.name]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        elif ilpSolver == "GEKKO":
+                            m.Equation(xorVar(x[token, conceptName], x[token, complementClass.name]) >= 1)
+
                     ilpOntSolver.__logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
         # ---- No supported yet
@@ -345,7 +340,6 @@ class ilpOntSolver:
                         else:
                             X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
 
-    
         return X_Q
         
     def addRelationsConstrains(self, m, tokens, conceptNames, x, y, graphResultsForPhraseRelation):
