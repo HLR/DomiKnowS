@@ -1,23 +1,51 @@
-# Gurobi
-from gurobipy import *
+# variable controlling what ILP solver is used
+ilpSolver = "Gurobi" # "Gurobi", "GEKKO", "None"
 
+# ILP solver module selection
+if ilpSolver=="Gurobi":
+    # Gurobi
+    from gurobipy import *
+elif ilpSolver == "GEKKO":
+    # GEKKO
+    from gekko import GEKKO
+else:
+    print("ILP Solver not specified - exiting")
+    exit()
+
+# Negation
 def notVar(m, _var):
-    _notVar = m.addVar(vtype=GRB.BINARY, name="not_%s" % (_var))
-    m.addConstr(1 - _var, GRB.EQUAL, _notVar)
-            
+    if ilpSolver=="Gurobi":
+         _notVar=m.addVar(vtype=GRB.BINARY, name="not_%s" % (_var))
+         
+         m.addConstr(1 - _var, GRB.EQUAL, _notVar)
+    elif ilpSolver == "GEKKO":
+        _notVar=m.Var(0, lb=0, ub=1, integer=True, name="not_%s" % (_var))
+        
+        m.Equation(1 - _var - _notVar == 0)
+
     return _notVar
 
-def andVar(m, _var1, _var2):
-    _andVar = m.addVar(vtype=GRB.BINARY, name="and_%s_%s" % (_var1, _var2))
-    
-    m.addConstr(_andVar - _var1, GRB.LESS_EQUAL, 0)
-    m.addConstr(_andVar - _var2, GRB.LESS_EQUAL, 0)
-    
-    m.addConstr(_var1 + _var2 - _andVar - 1, GRB.LESS_EQUAL, 0)
+# Conjunction 2 variable
+def and2Var(m, _var1, _var2):
+    if ilpSolver=="Gurobi":
+        _andVar=m.addVar(vtype=GRB.BINARY, name="and_%s_%s" % (_var1, _var2))
+        
+        m.addConstr(_andVar - _var1, GRB.LESS_EQUAL, 0)
+        m.addConstr(_andVar - _var2, GRB.LESS_EQUAL, 0)
+        
+        m.addConstr(_var1 + _var2 - _andVar - 1, GRB.LESS_EQUAL, 0)
+    elif ilpSolver == "GEKKO":
+        _andVar=m.Var(0, lb=0, ub=1, integer=True, name="and_%s_%s" % (_var1, _var2))
 
+        m.Equation(_andVar - _var1 <= 0)
+        m.Equation(_andVar - _var2 <= 0)
+        
+        m.Equation(_var1 + _var2 - _andVar <= 1)
+        
     return _andVar
 
-def andVar1(m, *_var):
+# Conjunction
+def andVar(m, *_var):
     if len(_var) < 1:
         return None
     
@@ -29,29 +57,48 @@ def andVar1(m, *_var):
     for currentVar in _var:
         _andVarName += "_%s" % (currentVar)
         
-    _andVar = m.addVar(vtype=GRB.BINARY, name=_andVarName)
-    
-    for currentVar in _var:
-        m.addConstr(_andVar, GRB.LESS_EQUAL, currentVar)
-    
-    _varSumLinExpr = LinExpr()
-    for currentVar in _var:
-        _varSumLinExpr += currentVar
+    if ilpSolver=="Gurobi":
+        _andVar = m.addVar(vtype=GRB.BINARY, name=_andVarName)
+    elif ilpSolver == "GEKKO":
+        _andVar = m.Var(0, lb=0, ub=1, integer=True, name=_andVarName)
 
-    m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, _andVar + len(_var) - 1)
+    for currentVar in _var:
+        if ilpSolver=="Gurobi":
+            m.addConstr(_andVar - currentVar, GRB.LESS_EQUAL, 0)
+        elif ilpSolver == "GEKKO":
+            m.Equation(_andVar - currentVar <= 0)
+
+    if ilpSolver=="Gurobi":
+        _varSumLinExpr = LinExpr()
+        for currentVar in _var:
+            _varSumLinExpr.addTerms(1.0, currentVar)
+    
+        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, _andVar + len(_var) - 1)
+    elif ilpSolver == "GEKKO":
+        m.Equation(m.sum(list(_var)) - _andVar - len(_var) <= -1)
 
     return _andVar
 
-def orVar(m, _var1, _var2):
-    _orVar = m.addVar(vtype=GRB.BINARY, name="or_%s_%s" % (_var1, _var2))
-    
-    m.addConstr(_orVar, GRB.LESS_EQUAL, _var1)
-    m.addConstr(_orVar, GRB.LESS_EQUAL, _var2)
-    
-    m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, _orVar)
+# Disjunction 2 variables
+def or2Var(m, _var1, _var2):
+    if ilpSolver=="Gurobi":
+        _orVar=m.addVar(vtype=GRB.BINARY, name="or_%s_%s" % (_var1, _var2))
+        
+        m.addConstr(_orVar, GRB.LESS_EQUAL, _var1)
+        m.addConstr(_orVar, GRB.LESS_EQUAL, _var2)
+        
+        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, _orVar)
+    elif ilpSolver == "GEKKO":
+        _orVar=m.Var(0, lb=0, ub=1, integer=True, name="or_%s_%s" % (_var1, _var2))
+ 
+        m.Equation(_orVar - _var1 <= 0)
+        m.Equation(_orVar - _var2 <= 0)
+        
+        m.Equation(_var1 + _var2 - _orVar >= 0)
 
     return _orVar
 
+# Disjunction
 def orVar(m, *_var):
     if len(_var) < 1:
         return None
@@ -63,30 +110,49 @@ def orVar(m, *_var):
     _orVarName = "or"
     for currentVar in _var:
         _orVarName += "_%s" % (currentVar)
-        
-    _orVar = m.addVar(vtype=GRB.BINARY, name=_orVarName)
     
+    if ilpSolver=="Gurobi":
+        _orVar = m.addVar(vtype=GRB.BINARY, name=_orVarName)
+    elif ilpSolver == "GEKKO":
+        _orVar = m.Var(0, lb=0, ub=1, integer=True, name=_orVarName)
+
     for currentVar in _var:
-        m.addConstr(_orVar, GRB.LESS_EQUAL, currentVar)
+        if ilpSolver=="Gurobi":
+            m.addConstr(_orVar, GRB.LESS_EQUAL, currentVar)
+        elif ilpSolver == "GEKKO":
+            m.Equation(_orVar - currentVar <= 0)
+
+    if ilpSolver=="Gurobi":
+        _varSumLinExpr = LinExpr()
+        for currentVar in _var:
+            _varSumLinExpr.addTerms(1.0, currentVar)
     
-    _varSumLinExpr = LinExpr()
-    for currentVar in _var:
-        _varSumLinExpr += currentVar
-
-    m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, _orVar)
-
+        m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, _orVar)
+    elif ilpSolver == "GEKKO":
+         m.Equation(m.sum(list(_var)) - _orVar >= 0)
+         
     return _orVar
 
-def nandVar(m, _var1, _var2):
-    _nandVar = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s" % (_var1, _var2))
+# Nand (Alternative denial) 2 variables
+def nand2Var(m, _var1, _var2):
+    if ilpSolver=="Gurobi":
+        _nandVar = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s" % (_var1, _var2))
+        
+        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var1)
+        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var2)
     
-    m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var1)
-    m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var2)
-    
-    m.addConstr(_var1 + _var2, GRB.LESS_EQUAL, 2 - _nandVar)
+        m.addConstr(_var1 + _var2, GRB.LESS_EQUAL, 2 - _nandVar)
+    elif ilpSolver == "GEKKO":
+        _nandVar = m.Var(0, lb=0, ub=1, integer=True, name="nand_%s_%s" % (_var1, _var2))
 
+        m.Equation(1 - _nandVar - _var1 <= 0)
+        m.Equation(1 - _nandVar - _var2 <= 0)
+    
+        m.Equation(_var1 + _var2 + _nandVar <= 2)
+    
     return _nandVar
 
+# Nand (Alternative denial)
 def nandVar(m, *_var):
     if len(_var) < 1:
         return None
@@ -99,29 +165,48 @@ def nandVar(m, *_var):
     for currentVar in _var:
         _nandVarName += "_%s" % (currentVar)
         
-    _nandVar = m.addVar(vtype=GRB.BINARY, name=_nandVarName)
-    
-    for currentVar in _var:
-        m.addConstr(_nandVar, GRB.LESS_EQUAL, currentVar)
-    
-    _varSumLinExpr = LinExpr()
-    for currentVar in _var:
-        _varSumLinExpr += currentVar
+    if ilpSolver=="Gurobi":
+        _nandVar = m.addVar(vtype=GRB.BINARY, name=_nandVarName)
+    elif ilpSolver == "GEKKO":
+        _nandVar = m.Var(0, lb=0, ub=1, integer=True, name=_nandVarName)
 
-    m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, _nandVar + len(_var) - 1)
+    for currentVar in _var:
+        if ilpSolver=="Gurobi":
+            m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, currentVar)
+        elif ilpSolver == "GEKKO":
+            m.Equation(currentVar + _nandVar >= 1)
+    
+    if ilpSolver=="Gurobi":
+        _varSumLinExpr = LinExpr()
+        for currentVar in _var:
+            _varSumLinExpr.addTerms(1.0, currentVar)
+
+        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, len(_var) - _nandVar)
+    elif ilpSolver == "GEKKO":
+        m.Equation(m.sum(list(_var)) + _nandVar <= len(_var))
 
     return _nandVar
 
-def norVar(m, _var1, _var2):
-    _norVar = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(_var1, _var2))
-    
-    m.addConstr(1 - _norVar, GRB.LESS_EQUAL, _var1)
-    m.addConstr(1 - _norVar, GRB.LESS_EQUAL, _var2)
-    
-    m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, 1 - _norVar)
-
+# Nor (Joint Denial) i2 variables
+def nor2Var(m, _var1, _var2):
+    if ilpSolver=="Gurobi":
+        _norVar = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(_var1, _var2))
+        
+        m.addConstr(_var1, GRB.LESS_EQUAL, 1 - _norVar)
+        m.addConstr(_var2, GRB.LESS_EQUAL, 1 - _norVar)
+        
+        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, 1 - _norVar)
+    elif ilpSolver == "GEKKO":
+        _norVar = m.Var(0, lb=0, ub=1, integer=True, name="nor_%s_%s"%(_var1, _var2))
+        
+        m.Equation(_norVar + _var1 <= 1)
+        m.Equation(_norVar + _var2 <= 1)
+        
+        m.Equation(_var1 + _var2 + _norVar >= 1)
+        
     return _norVar
 
+# Nor (Joint Denial)
 def norVar(m, *_var):
     if len(_var) < 1:
         return None
@@ -133,47 +218,82 @@ def norVar(m, *_var):
     _norVarName = "nor"
     for currentVar in _var:
         _norVarName += "_%s"%(currentVar)
-        
-    _norVar = m.addVar(vtype=GRB.BINARY, name=_norVarName)
-    
-    for currentVar in _var:
-        m.addConstr(_norVar, GRB.LESS_EQUAL, currentVar)
-    
-    _varSumLinExpr = LinExpr()
-    for currentVar in _var:
-        _varSumLinExpr += currentVar
+       
+    if ilpSolver=="Gurobi":
+        _norVar = m.addVar(vtype=GRB.BINARY, name=_norVarName)
+    elif ilpSolver == "GEKKO":
+        _norVar = m.Var(0, lb=0, ub=1, integer=True, name=_norVarName)
 
-    m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, 1 - _norVar)
+    for currentVar in _var:
+        if ilpSolver=="Gurobi":
+            m.addConstr(currentVar, GRB.LESS_EQUAL, 1 - _norVar)
+        elif ilpSolver == "GEKKO":
+            m.Equation(currentVar + _norVar  <= 1)
+    
+    if ilpSolver=="Gurobi":
+        _varSumLinExpr = LinExpr()
+        for currentVar in _var:
+            _varSumLinExpr.addTerms(1.0, currentVar)
+        
+        m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, 1 - _norVar)
+    elif ilpSolver == "GEKKO":
+        m.Equation(m.sum(list(_var)) + _nandVar >= 1)
 
     return _norVar
 
+# Exclusive Disjunction
 def xorVar(m, _var1, _var2):
-    _xorVar = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(_var1, _var2))
-    
-    m.addConstr(_var1 + _var2 + _xorVar, GRB.LESS_EQUAL, 2)
-    m.addConstr(-_var1 - _var2 + _xorVar, GRB.LESS_EQUAL, 0)
-    m.addConstr(_var1 - _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
-    m.addConstr(-_var1 + _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
-
+    if ilpSolver=="Gurobi":
+        _xorVar = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(_var1, _var2))
+        
+        m.addConstr(_var1 + _var2 + _xorVar, GRB.LESS_EQUAL, 2)
+        m.addConstr(-_var1 - _var2 + _xorVar, GRB.LESS_EQUAL, 0)
+        m.addConstr(_var1 - _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
+        m.addConstr(-_var1 + _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
+    elif ilpSolver == "GEKKO":
+        _xorVar = m.Var(0, lb=0, ub=1, integer=True, name="xor_%s_%s"%(_var1, _var2))
+        
+        m.Equation(_var1 + _var2 + _xorVar <= 2)
+        m.Equation(-_var1 - _var2 + _xorVar <= 0)
+        m.Equation(_var1 - _var2 + _xorVar >= 0)
+        m.Equation(-_var1 + _var2 + _xorVar >= 0)
+        
     return _xorVar
 
+# Implication
 def ifVar(m, _var1, _var2):
-    _ifVar = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(_var1, _var2))
-    
-    m.addConstr(1 - _var1 , GRB.LESS_EQUAL, _ifVar)
-    m.addConstr(_var2 , GRB.LESS_EQUAL, _ifVar)
-    m.addConstr(1 - _var1 + _var2, GRB.GREATER_EQUAL, _ifVar)
-
+    if ilpSolver=="Gurobi":
+        _ifVar = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(_var1, _var2))
+        
+        m.addConstr(1 - _var1 , GRB.LESS_EQUAL, _ifVar)
+        m.addConstr(_var2 , GRB.LESS_EQUAL, _ifVar)
+        m.addConstr(1 - _var1 + _var2, GRB.GREATER_EQUAL, _ifVar)
+    elif ilpSolver == "GEKKO":
+        _ifVar = m.Var(0, lb=0, ub=1, integer=True, name="if_%s_%s"%(_var1, _var2))
+        
+        m.Equation(_var1 + _ifVar >= 1)
+        m.Equation(_var2 - _ifVar <= 0)
+        m.Equation(_ifVar + _var1 - _var2 <= 1)
+        
     return _ifVar
-
+       
+# Equivalence 
 def epqVar(m, _var1, _var2):
-    _epqVar = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(_var1, _var2))
-    
-    m.addConstr(_var1 + _var2 - _epqVar, GRB.LESS_EQUAL, 1)
-    m.addConstr(_var1 + _var2 + _epqVar , GRB.GREATER_EQUAL, 1)
-    m.addConstr(-_var1 + _var2 + _epqVar, GRB.LESS_EQUAL, 1)
-    m.addConstr(_var1 - _var2 + _epqVar, GRB.LESS_EQUAL, 1)
-
+    if ilpSolver=="Gurobi":
+        _epqVar = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(_var1, _var2))
+        
+        m.addConstr(_var1 + _var2 - _epqVar, GRB.LESS_EQUAL, 1)
+        m.addConstr(_var1 + _var2 + _epqVar , GRB.GREATER_EQUAL, 1)
+        m.addConstr(-_var1 + _var2 + _epqVar, GRB.LESS_EQUAL, 1)
+        m.addConstr(_var1 - _var2 + _epqVar, GRB.LESS_EQUAL, 1)
+    elif ilpSolver == "GEKKO":
+        _epqVar = m.Var(0, lb=0, ub=1, integer=True, name="epq_%s_%s"%(_var1, _var2))
+        
+        m.Equation(_var1 + _var2 - _epqVar <= 1)
+        m.Equation(_var1 + _var2 + _epqVar >= 1)
+        m.Equation(-_var1 + _var2 + _epqVar <= 1)
+        m.Equation(_var1 - _var2 + _epqVar <= 1)
+ 
     return _epqVar
 
 def main() :
