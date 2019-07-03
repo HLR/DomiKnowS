@@ -82,7 +82,7 @@ def model_declaration(graph, config):
     #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
     word['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
-    word['pos'] = SentenceEmbedderLearner('pos_tags', config.embedding_dim, sentence['raw'])
+    word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     # possible to add more this kind
     word['all_features'] = ConcatSensor(word['raw'], word['pos'])
     #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.

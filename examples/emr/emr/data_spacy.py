@@ -396,12 +396,13 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
         for relation_type in self.relation_names:
             relations_dict[relation_type] = []  # just need indices
 
-        if len(relations)>0: print(relations)
         for relation_type, src_token, dst_token in relations:
-            if relation_type not in relations_dict:
-                raise RuntimeError('Relationship {} is unknown. Sentence: {} Raltions: {}'.format(relation_type, tokens, relations))
-            relations_dict[relation_type].append(
-                (src_token[0].i, dst_token[0].i))
+            try:
+                relations_dict[relation_type].append(
+                    (src_token[0].i, dst_token[0].i))
+            except KeyError:
+                msg = 'Relationship {} is unknown. Sentence: {} Raltions: {}'.format(relation_type, tokens, relations)
+                warnings.warn(msg, stacklevel=3)
 
         for relation_type, indices in relations_dict.items():
             yield relation_type, AdjacencyField(
