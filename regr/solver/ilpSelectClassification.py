@@ -4,7 +4,6 @@ import numpy as np
 # pandas
 import pandas as pd
 
-
 # ontology
 from owlready2 import *
 
@@ -30,7 +29,6 @@ else:
 
 import logging
 import datetime
-
 
 class ilpOntSolver:
     __instances = {}
@@ -96,7 +94,6 @@ class ilpOntSolver:
             ilpOntSolver.__instances[ontologyURL] = self 
         
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
-            
         # Create variables for token - concept and negative variables
         for token in tokens:            
             for conceptName in conceptNames: 
@@ -117,6 +114,7 @@ class ilpOntSolver:
                 if (token, conceptName+'-neg') in x:
                     if ilpSolver=="Gurobi":
                         constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)
+                        
                         m.addConstr(x[token, conceptName] + x[token, conceptName+'-neg'], GRB.LESS_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
                         m.Equation(x[token, conceptName] + x[token, conceptName+'-neg'] <= 1)
@@ -162,6 +160,7 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
+                        
                         m.addConstr(nandVar(m, x[token, conceptName], x[token, disjointConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
                         m.Equation(nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1)
@@ -198,6 +197,7 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Equivalent_%s'%(token, conceptName, equivalentConcept.name)
+                        
                         m.addConstr(andVar(m, x[token, conceptName], x[token, equivalentConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
                         m.Equation(andVar(m, x[token, conceptName], x[token, equivalentConcept]) >= 1)
@@ -225,6 +225,7 @@ class ilpOntSolver:
                 for token in tokens:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
+                        
                         m.addConstr(ifVar(m, x[token, conceptName], x[token, ancestorConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
                     elif ilpSolver == "GEKKO":
                         m.Equation(ifVar(m, x[token, conceptName], x[token, ancestorConcept]) >= 1)
@@ -243,7 +244,6 @@ class ilpOntSolver:
                 if type(conceptConstruct) is And :
                     
                     for token in tokens:
-                        constrainName = 'c_%s_%s_Intersection'%(token, conceptName)
                         _varAnd = m.addVar(name="andVar_%s"%(constrainName))
         
                         andList = []
@@ -253,7 +253,9 @@ class ilpOntSolver:
     
                         andList.append(x[token, conceptName])
                         
-                        if ilpSolver=="Gurobi":    
+                        if ilpSolver=="Gurobi":
+                            constrainName = 'c_%s_%s_Intersection'%(token, conceptName)
+    
                             m.addConstr(andVar(m, andList), GRB.GREATER_EQUAL, 1, name=constrainName)
                         elif ilpSolver == "GEKKO":
                             m.Equation(andVar(m, andList) >= 1)
@@ -270,7 +272,6 @@ class ilpOntSolver:
                 if type(conceptConstruct) is Or :
                     
                     for token in tokens:
-                        constrainName = 'c_%s_%s_Union'%(token, conceptName)
                         _varOr = m.addVar(name="orVar_%s"%(constrainName))
         
                         orList = []
@@ -280,7 +281,9 @@ class ilpOntSolver:
     
                         orList.append(x[token, conceptName])
                         
-                        if ilpSolver=="Gurobi":    
+                        if ilpSolver=="Gurobi": 
+                            constrainName = 'c_%s_%s_Union'%(token, conceptName)
+   
                             m.addConstr(orVar(m, orList), GRB.GREATER_EQUAL, 1, name=constrainName)
                         elif ilpSolver == "GEKKO":
                             m.Equation(orVar(m, orList) >= 1)
@@ -301,9 +304,10 @@ class ilpOntSolver:
                     for token in tokens:       
                         if ilpSolver=="Gurobi":    
                             constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name)
-                            m.addConstr(xorVar(x[token, conceptName], x[token, complementClass.name]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                            
+                            m.addConstr(xorVar(m, x[token, conceptName], x[token, complementClass.name]), GRB.GREATER_EQUAL, 1, name=constrainName)
                         elif ilpSolver == "GEKKO":
-                            m.Equation(xorVar(x[token, conceptName], x[token, complementClass.name]) >= 1)
+                            m.Equation(xorVar(m, x[token, conceptName], x[token, complementClass.name]) >= 1)
 
                     ilpOntSolver.__logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
@@ -330,7 +334,6 @@ class ilpOntSolver:
                     else:
                         X_Q += graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
 
-        
                 if (token, conceptName+'-neg') in x: 
                     if ilpSolver=="Gurobi":
                         X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
@@ -343,7 +346,6 @@ class ilpOntSolver:
         return X_Q
         
     def addRelationsConstrains(self, m, tokens, conceptNames, x, y, graphResultsForPhraseRelation):
-        
         relationNames = graphResultsForPhraseRelation.keys()
             
         for relationName in relationNames:            
@@ -410,15 +412,18 @@ class ilpOntSolver:
                                 continue
                              
                             if ilpSolver=="Gurobi":
-                                constrainName = 'c_%s_%s_%s'%(currentRelation, token, token1)
-                                currentConstrain = y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name]
-                                m.addConstr(currentConstrain, GRB.GREATER_EQUAL, 3 * y[currentRelation._name, token, token1], name=constrainName)
+                                constrainNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token, token1)
+                                constrainNameRange = 'c_range_%s_%s_%s'%(currentRelation, token, token1)
+                                
+                                m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
+                                m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token1, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
                             elif ilpSolver == "GEKKO":
-                                 m.Equation(y[currentRelation._name, token, token1] + x[token, domain._name] + x[token1, range._name] >= 3 * y[currentRelation._name, token, token1])
-                    
+                                m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]) >= 1)
+                                m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, range._name]) >= 1)
+                                
                     ilpOntSolver.__logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
-          # -- Add constraints based on property subProperty statements in ontology P subproperty of S - P(x, y) -> S(x, y)
+          # -- Add constraints based on property subProperty statements in ontology R subproperty of S - R(x, y) -> S(x, y)
         for relationName in graphResultsForPhraseRelation:
             currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
                 
@@ -436,11 +441,12 @@ class ilpOntSolver:
                         
                         if ilpSolver=="Gurobi":
                             constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token, token1, relationName, superProperty.name)
-                            m.addGenConstrIndicator(y[relationName, token, token1], True, y[superProperty.name, token, token1], GRB.EQUAL, 1)
+                            
+                            m.addConstr(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
                         elif ilpSolver == "GEKKO":
-                            pass
+                            m.Equation(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]) >= 1)
             
-        # -- Add constraints based on property equivalentProperty statements in ontology -  and(var1, av2)
+        # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
         foundEquivalent = dict() # too eliminate duplicates
         for relationName in graphResultsForPhraseRelation:
             currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
@@ -464,18 +470,20 @@ class ilpOntSolver:
                     for token1 in tokens:
                         if token == token1:
                             continue
-                    
-                        constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token, token1, relationName, equivalentProperty.name)
-                        _varAnd = m.addVar(name="andVar_%s"%(constrainName))
-        
-                        m.addGenConstrAnd(_varAnd, [y[relationName, token, token1], y[equivalentProperty.name, token, token1]], constrainName)
-                                             
+                        
+                        if ilpSolver=="Gurobi":
+                            constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token, token1, relationName, equivalentProperty.name)
+                            
+                            m.addConstr(andVar(m, y[relationName, token, token1], y[equivalentProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        elif ilpSolver == "GEKKO":
+                            m.Equation(andVar(m, y[relationName, token, token1], y[equivalentProperty.name, token, token1]) >= 1)
+                            
                     if not (relationName in foundEquivalent):
                         foundEquivalent[relationName] = {equivalentProperty.name}
                     else:
                         foundEquivalent[relationName].add(equivalentProperty.name)
         
-        # -- Add constraints based on property inverseProperty statements in ontology - S(x,y) -> P(y,x)
+        # -- Add constraints based on property inverseProperty statements in ontology - S(x,y) -> R(y,x)
         for relationName in graphResultsForPhraseRelation:
             currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
                 
@@ -496,8 +504,14 @@ class ilpOntSolver:
                         if token == token1:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_InverseProperty'%(token, token1, relationName)
-                        m.addGenConstrIndicator(y[relationName, token, token1], True, y[currentRelationInverse.name, token1, token], GRB.EQUAL, 1)
+                        if ilpSolver=="Gurobi":
+                            constrainName = 'c_%s_%s_%s_InverseProperty'%(token, token1, relationName)
+                            
+                            m.addGenConstrIndicator(y[relationName, token, token1], True, y[currentRelationInverse.name, token1, token], GRB.EQUAL, 1)
+                            
+                            m.addConstr(ifVar(m, y[equivalentProperty.name, token, token1], y[relationName, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        elif ilpSolver == "GEKKO":
+                            m.Equation(ifVar(m, y[equivalentProperty.name, token, token1], y[relationName, token, token1]) >= 1)
                             
         # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
         for relationName in graphResultsForPhraseRelation:
