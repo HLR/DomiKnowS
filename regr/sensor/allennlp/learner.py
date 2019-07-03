@@ -59,7 +59,7 @@ class RNNLearner(SinglePreMaskedLearner):
             Module.__init__(self)
 
             from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-            self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim*2,
+            self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim,
                                                  embedding_dim,
                                                  batch_first=True,
                                                  dropout=dropout,
