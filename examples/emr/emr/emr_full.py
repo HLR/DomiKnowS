@@ -83,13 +83,15 @@ def model_declaration(graph, config):
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
     word['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
     word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
+    word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
+    word['ner'] = SentenceEmbedderLearner('ner_tag', config.embedding_dim, sentence['raw'])
     # possible to add more this kind
-    word['all_features'] = ConcatSensor(word['raw'], word['pos'])
+    word['all_features'] = ConcatSensor(word['raw'], word['pos'], word['dep'], word['ner'])
     #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    word['emb'] = RNNLearner(config.embedding_dim, word['all_features'])
+    word['emb'] = RNNLearner(config.embedding_dim * 4, word['all_features'])
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
@@ -116,11 +118,11 @@ def model_declaration(graph, config):
     #### Notice the first argument, the "input dimention", takes a `* 2` because the output from `phrase['emb']` is bidirectional, having two times dimentions.
     #### The second argument is base on what the prediction will be made.
     #### The constructors make individule modules for them with seperated parameters, though they take same arguments.
-    people['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
-    organization['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
-    location['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
-    other['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
-    o['label'] = LogisticRegressionLearner(config.embedding_dim * 2, word['emb'])
+    people['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    organization['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    location['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    other['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
 
     #### We repeat these on composed-concepts.
     #### There is nothing different in usage thought they are higher ordered concepts.
@@ -131,10 +133,10 @@ def model_declaration(graph, config):
 
     #### We also connect the predictors for composed-concepts.
     #### Notice the first argument, the "input dimention", takes a `* 4` because `pair['emb']` from `CartesianProductSensor` has double dimention again over `phrase['emb']`.
-    work_for['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
-    live_in['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
-    located_in['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
-    orgbase_on['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
+    work_for['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
+    live_in['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
+    located_in['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
+    orgbase_on['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
 
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
     lbp = AllenNlpGraph(graph)
