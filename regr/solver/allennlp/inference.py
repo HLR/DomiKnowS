@@ -238,9 +238,10 @@ def inference(
             value = torch.cat([1 - value, value], dim=-1)
             #print('value=', printablesize(value))
 
-            fullname = '{}[{}]-{}'.format(sensor.sup.sup.fullname, prop, 1) # TODO: pos=1 here! figure out a way
             # put it back finally
-            data[fullname] = value
+            log_value = torch.log(value)
+            data[sensor.sup.fullname] = log_value
+            data[sensor.fullname] = log_value
 
             #print('9-'*40)
             #print(fullname)
