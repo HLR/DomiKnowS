@@ -36,8 +36,9 @@ def get_prop_result(prop, data):
 
 
 class BaseModel(Model):
-    def __init__(self, vocab: Vocabulary) -> None:
+    def __init__(self, vocab: Vocabulary, inference_interval: int=10) -> None:
         super().__init__(vocab)
+        self.inference_interval = inference_interval
         self.meta = {}
         self.metrics = {}
         self.metrics_inferenced = {}
@@ -68,7 +69,7 @@ class BaseModel(Model):
         if epoch_key not in data:
             return True  # no epoch record, then always inference
         epoch = min(data[epoch_key])
-        need = ((epoch + 1) % 50) == 0  # inference every 10 epoch
+        need = ((epoch + 1) % self.inference_interval) == 0  # inference every 10 epoch
         return need or DEBUG_TRAINING
 
     def _update_metrics(
@@ -125,12 +126,6 @@ class BaseModel(Model):
         self,
         **data: DataInstance
     ) -> DataInstance:
-
-        ##
-        # This is an identical stub
-        # something happen here to take the input to the output
-        ##
-
         data = self._update_loss(data)
         data = self._update_metrics(data)
 
@@ -148,9 +143,11 @@ class GraphModel(BaseModel):
     def __init__(
         self,
         graph: Graph,
-        vocab: Vocabulary
+        vocab: Vocabulary,
+        inference_interval: int = 10
     ) -> None:
-        BaseModel.__init__(self, vocab)
+        BaseModel.__init__(self, vocab, inference_interval)
+
         self.graph = graph
 
         from allennlp.training.metrics import CategoricalAccuracy, F1Measure
