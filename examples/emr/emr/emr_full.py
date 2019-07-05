@@ -67,6 +67,7 @@ def model_declaration(graph, config):
     located_in = graph['application/located_in']
     live_in = graph['application/live_in']
     orgbase_on = graph['application/orgbase_on']
+    kill = graph['application/kill']
 
     #### Create a `Conll04SensorReader` instance, to be assigned with properties, and allow the model to get corresponding data from it.
     reader = Reader()
@@ -131,6 +132,7 @@ def model_declaration(graph, config):
     live_in['label'] = LabelSensor(reader, 'Live_In', output_only=True)
     located_in['label'] = LabelSensor(reader, 'Located_In', output_only=True)
     orgbase_on['label'] = LabelSensor(reader, 'OrgBased_In', output_only=True)
+    kill['label'] = LabelSensor(reader, 'Kill', output_only=True)
 
     #### We also connect the predictors for composed-concepts.
     #### Notice the first argument, the "input dimention", takes a `* 4` because `pair['emb']` from `CartesianProductSensor` has double dimention again over `phrase['emb']`.
@@ -138,6 +140,7 @@ def model_declaration(graph, config):
     live_in['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
     located_in['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
     orgbase_on['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
+    kill['label'] = LogisticRegressionLearner(config.embedding_dim * 16, pair['emb'])
 
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
     lbp = AllenNlpGraph(graph)

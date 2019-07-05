@@ -102,7 +102,7 @@ class Conll04Reader(SensableReader):
 @keep_keys('sentence', 'phrase', 'pos_tags')
 class Conll04BinaryReader(Conll04Reader):
     label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
-    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
 
     @cls.fields
     def update_labels(
@@ -123,7 +123,7 @@ class Conll04BinaryReader(Conll04Reader):
         fields: Dict,
         raw_sample
     ) -> Generator[Tuple[str, Field], None, None]:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
         (sentence, pos, labels), relations = raw_sample
         if relations is None:
             return None

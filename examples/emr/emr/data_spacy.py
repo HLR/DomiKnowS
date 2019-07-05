@@ -342,7 +342,7 @@ class Conll04SpaCyReader(SensableReader):
         fields: Dict,
         raw_sample
     ) -> Field:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
         tokens, labels, relations = raw_sample
         if relations is None:
             return None
@@ -362,7 +362,7 @@ class Conll04SpaCyReader(SensableReader):
 @keep_keys(exclude=['labels', 'relation'])
 class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
     label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
-    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
 
     @cls.fields
     def update_labels(
@@ -377,7 +377,7 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
         for label_type in self.label_names:
             labels_dict[label_type] = [False, ] * len(tokens)
 
-        for label_type, token in labels:
+        for label_type, token in labels: # TODO: extend to BILOU
             labels_dict[label_type][token[0].i] = True
 
         for label_type, label_list in labels_dict.items():
@@ -389,7 +389,7 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
         fields: Dict,
         raw_sample
     ) -> Generator[Tuple[str, Field], None, None]:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
         tokens, labels, relations = raw_sample
 
         relations_dict = {}
