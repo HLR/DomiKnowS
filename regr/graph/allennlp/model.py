@@ -144,7 +144,7 @@ class BaseModel(Model):
         return data
 
 
-class GraphdModel(BaseModel):
+class GraphModel(BaseModel):
     def __init__(
         self,
         graph: Graph,
