@@ -11,7 +11,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
 from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProductSensor, ConcatSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it. 
 from regr.graph.allennlp import AllenNlpGraph
@@ -60,7 +60,7 @@ def model_declaration(graph, config):
     organization = graph['application/organization']
     location = graph['application/location']
     other = graph['application/other']
-    o = graph['application/O']
+    #o = graph['application/O']
 
     #### `people`, `organization`, `location`, `other`, and `O` are entities we want to extract in this demo.
     work_for = graph['application/work_for']
@@ -91,11 +91,12 @@ def model_declaration(graph, config):
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    word['emb'] = RNNLearner(config.embedding_dim * 4, word['all_features'])
+    word['emb'] = RNNLearner(config.embedding_dim * 4, word['all_features'], layers=1)
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
-    pair['emb'] = CartesianProductSensor(word['emb'])
+    pair['feature'] = CartesianProductSensor(word['emb'])
+    pair['emb'] = MLPLearner([config.embedding_dim * 16, config.embedding_dim * 16], pair['feature'])
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
@@ -105,7 +106,7 @@ def model_declaration(graph, config):
     organization['label'] = LabelSensor(reader, 'Org', output_only=True)
     location['label'] = LabelSensor(reader, 'Loc', output_only=True)
     other['label'] = LabelSensor(reader, 'Other', output_only=True)
-    o['label'] = LabelSensor(reader, 'O', output_only=True)
+    #o['label'] = LabelSensor(reader, 'O', output_only=True)
 
     #### We connect properties with learners that generate predictions.
     #### Notice that we connect the predicting `Learner`s to the same properties as "ground-truth" `Sensor`s.
@@ -122,7 +123,7 @@ def model_declaration(graph, config):
     organization['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
     location['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
     other['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
-    o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    #o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
 
     #### We repeat these on composed-concepts.
     #### There is nothing different in usage thought they are higher ordered concepts.
