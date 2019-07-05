@@ -66,7 +66,8 @@ def inference(
             sensor(data)  # (batch, len, ..., t/f)
             value = data[sensor.fullname]
             # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
-            value = torch.exp(value)
+            #value = torch.exp(value)
+            value = torch.nn.functional.softmax(value, dim=-1)
             #######
             #print('0-'*40)
             #print(concept.name)

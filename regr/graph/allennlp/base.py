@@ -11,7 +11,7 @@ from ...solver.ilpSelectClassification import ilpOntSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
 from .. import Graph, Property
-from .model import ScaffoldedModel
+from .model import GraphModel
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
@@ -28,7 +28,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def __init__(self):
         vocab = Vocabulary()
-        self.model = ScaffoldedModel(self, vocab)
+        self.model = GraphModel(self, vocab)
         self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
 
