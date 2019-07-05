@@ -55,12 +55,13 @@ class SentenceEmbedderLearner(SinglePreMaskedLearner):
 
 class RNNLearner(SinglePreMaskedLearner):
     class DropoutRNN(Module):
-        def __init__(self, embedding_dim, dropout=0.5, bidirectional=True):
+        def __init__(self, embedding_dim, layers=1, dropout=0.5, bidirectional=True):
             Module.__init__(self)
 
             from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
             self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim,
                                                  embedding_dim,
+                                                 num_layers=layers,
                                                  batch_first=True,
                                                  dropout=dropout,
                                                  bidirectional=bidirectional))
@@ -72,10 +73,26 @@ class RNNLearner(SinglePreMaskedLearner):
     def __init__(
         self,
         embedding_dim: int,
-        pre: Property
+        pre: Property,
+        layers: int=1,
+        dropout: float=0.5,
+        bidirectional: bool=True
     ) -> NoReturn:
-        module = RNNLearner.DropoutRNN(embedding_dim)
+        module = RNNLearner.DropoutRNN(embedding_dim, layers, dropout, bidirectional)
         SinglePreMaskedLearner.__init__(self, module, pre)
+
+
+class MLPLearner(SinglePreLearner, SinglePreMaskedSensor):
+    def __init__(
+        self,
+        dims: List[int],
+        pre: Property,
+    ) -> NoReturn:
+        layers = []
+        for dim_in, dim_out in zip(dims[:-1], dims[1:]):
+            layers.append(Linear(in_features=dim_in, out_features=dim_out))
+        module = Sequential(*layers)
+        SinglePreLearner.__init__(self, module, pre)
 
 
 class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
@@ -86,5 +103,7 @@ class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
     ) -> NoReturn:
         fc = Linear(in_features=input_dim, out_features=2)
         sm = LogSoftmax(dim=-1)
-        module = Sequential(fc, sm)
+        module = Sequential(fc,
+                            #sm,
+                           )
         SinglePreLearner.__init__(self, module, pre)

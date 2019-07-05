@@ -38,10 +38,6 @@ def get_prop_result(prop, data):
 class BaseModel(Model):
     def __init__(self, vocab: Vocabulary) -> None:
         super().__init__(vocab)
-        self.field_name = {'output': 'logits',
-                           'label': 'label',
-                           'mask': 'mask'
-                           }
         self.meta = {}
         self.metrics = {}
         self.metrics_inferenced = {}
@@ -57,14 +53,9 @@ class BaseModel(Model):
             from .metrics import Auc, AP, PRAuc
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
                 # AUC has problem using GPU
-                if len(size) == 2:
-                    metric(torch.exp(pred)[:, :, 1].reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
-                           label.reshape(-1).cpu(),  # (b,l) -> (b*l）
-                           )  # FIXME: some problem here
-                elif len(size) == 3:
-                    metric(torch.exp(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
-                           label.reshape(-1).cpu(),  # (b,l,l) -> (b*l*l）
-                           )  # FIXME: some problem here
+                metric(pred.select(dim=-1,index=1).reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
+                       label.reshape(-1).cpu(),  # (b,l) -> (b*l）
+                       mask)
             else:
                 metric(pred, label, mask)
         return data
@@ -77,7 +68,7 @@ class BaseModel(Model):
         if epoch_key not in data:
             return True  # no epoch record, then always inference
         epoch = min(data[epoch_key])
-        need = ((epoch + 1) % 10) == 0  # inference every 10 epoch
+        need = ((epoch + 1) % 50) == 0  # inference every 10 epoch
         return need or DEBUG_TRAINING
 
     def _update_metrics(
@@ -88,6 +79,7 @@ class BaseModel(Model):
             metric(data)
         data = self._update_metrics_base(data, self.metrics)
         if self._need_inference(data):
+            #import pdb; pdb.set_trace()
             data = self._inference(data)
             data = self._update_metrics_base(data, self.metrics_inferenced)
         return data
@@ -152,7 +144,7 @@ class BaseModel(Model):
         return data
 
 
-class ScaffoldedModel(BaseModel):
+class GraphdModel(BaseModel):
     def __init__(
         self,
         graph: Graph,
@@ -167,6 +159,7 @@ class ScaffoldedModel(BaseModel):
         def F1MeasureProxy(): return F1Measure(1)
 
         def PrecisionProxy(): return Precision(1)
+
         self.meta['epoch'] = Epoch()
         metrics = {
             #'Accuracy': CategoricalAccuracy,
@@ -189,7 +182,7 @@ class ScaffoldedModel(BaseModel):
 
         i = 0  # TODO: this looks too bad
         for prop in self.graph.get_multiassign():
-            for name, sensor in prop.find(ModuleSensor,  lambda s: s.module is not None):
+            for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
                 self.add_module(str(i), sensor.module)
                 i += 1
 
@@ -197,31 +190,17 @@ class ScaffoldedModel(BaseModel):
         self,
         **data: DataInstance
     ) -> DataInstance:
-        # just prototype
-        # TODO: how to retieve the sequence properly?
-        # I used to have topological-sorting over the module graph in my old frameworks
-
-        #data[self.field_name['mask']] = get_text_field_mask(
-        #    data['sentence'])  # FIXME: calculate mask for evert concept
-
-        #tensor = graph.people['label'][1][0](data)
         # make sure every node needed are calculated
         for prop in self.graph.get_multiassign():
             for name, sensor in prop.items():
                 sensor(data)
 
-        data = self._update_loss(data)
-        data = self._update_metrics(data)
-
-        return data
+        return BaseModel.forward(self, **data)
 
     def _inference(
         self,
         data: DataInstance
     ) -> DataInstance:
-        # variables in the closure
-        # scafold - the scafold object
-
         # print(data['global/application/other[label]-1'])
         data = inference(self.graph, self.graph.solver, data, self.vocab)
         # print(data['global/application/other[label]-1'])
@@ -231,48 +210,21 @@ class ScaffoldedModel(BaseModel):
         self,
         data: DataInstance
     ) -> DataInstance:
-        from allennlp.nn.util import sequence_cross_entropy_with_logits
+        from .utils import sequence_cross_entropy_with_logits
         loss = 0
         for prop in self.graph.get_multiassign():
             label, pred, mask = get_prop_result(prop, data)
-            size = label.size()
-
-            bfactor = 1.  # 0 - no balance, 1 - balance
-            if len(size) == 2:  # (b,l,)
-                mask = mask.clone().float()
-                # class balance weighted
-                target = (label > 0)
-                pos = (target).sum().float()
-                neg = (1 - target).sum().float()
-                mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
-                mask[1 - target] *= (pos + neg * (1 - bfactor)) / (pos + neg)
-
-                # NB: the order!
-                loss += sequence_cross_entropy_with_logits(
-                    pred, label, mask)
-            elif len(size) == 3:  # (b,l1,l2,)
-                mask = mask.clone().float()  # (b,l,l)
-                ms = mask.size()
-                # label -> (b,l1,l2,), elements are -1 (padding) and 1 (label)
-                # TODO: nosure how to retrieve padding correctly
-                target = (label > 0)
-                ts = target.size()
-                # class balance weighted
-                pos = (target).sum().float()
-                neg = (1 - target).sum().float()
-                mask[target] *= (neg + pos * (1 - bfactor)) / (pos + neg)
-                mask[1 - target] *= (pos + neg * (1 - bfactor)) / (pos + neg)
-                #
-                # reshape(ts[0], ts[1]*ts[2]) # (b,l1*l2)
-                pred = (pred)  # (b,l1,l2,c)
-                # reshape(ts[0], ts[1]*ts[2], -1) # (b,l1*l2,c)
-                loss += sequence_cross_entropy_with_logits(
-                    pred.view(ts[0], ts[1] * ts[2], -1),
-                    target.view(ts[0], ts[1] * ts[2]),
-                    # *0. # mute out the relation to see peop+org result
-                    mask.view(ms[0], ms[1] * ms[2])
-                )  # NB: the order!
-            else:
-                pass  # TODO: no idea, but we are not yet there
+            mask = mask.clone().float()
+            # class balance weighted
+            target = (label > 0)
+            pos = (target).sum().float()
+            neg = (1 - target).sum().float()
+            # alpha=(pos+neg)/pos for focal loss, but it cause divide by zero
+            loss += sequence_cross_entropy_with_logits(
+                pred, label, mask,
+                label_smoothing=0.1, # (0.05, 0.95)
+                gamma=2.0,
+                alpha=neg/(pos+neg)
+            )
 
         return loss
