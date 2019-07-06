@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 from ...utils import printablesize
 from ...graph import Graph
-from ...sensor.allennlp.learner import SentenceEmbedderLearner
+from ...sensor.allennlp.sensor import SentenceEmbedderSensor
 from ..ilpSelectClassification import ilpOntSolver
 
 
@@ -20,10 +20,10 @@ def inference(
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         # order of table follows order of group
         ['people', 'organization', 'location', 'other', 'O'],
-        ['work_for', 'located_in', 'live_in', 'orgbase_on'],
+        ['work_for', 'located_in', 'live_in', 'orgbase_on', 'kill'],
     ]
 
-    tokens_sensors = graph.get_sensors(SentenceEmbedderLearner)
+    tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
     name, tokens_sensor = tokens_sensors[0] # FIXME: considering problems with only one sentence
 
     mask = tokens_sensor.get_mask(data)
@@ -144,6 +144,7 @@ def inference(
         #print('4-'*40)
         #print(graphResultsForPhraseRelation)
         #print('5-'*40)
+        #import pdb; pdb.set_trace()
         try:
             tokenResult, relationsResult = solver.calculateILPSelection(
                 phrase, 
