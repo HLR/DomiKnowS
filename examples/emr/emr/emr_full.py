@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProductSensor, ConcatSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it. 
@@ -82,7 +82,7 @@ def model_declaration(graph, config):
     #### Thus this is already a phrase-based sentence.
     #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    word['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    word['raw'] = SentenceEmbedderSensor('word', config.embedding_dim, sentence['raw'])
     word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
     word['ner'] = SentenceEmbedderLearner('ner_tag', config.embedding_dim, sentence['raw'])
