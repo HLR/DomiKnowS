@@ -2,6 +2,9 @@ from typing import List, Dict, Any, NoReturn
 from collections import OrderedDict
 import torch
 from torch.nn import Module
+from allennlp.modules.token_embedders import Embedding
+from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+from allennlp.nn.util import get_text_field_mask
 from ...utils import prod
 from ...graph import Property
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor
@@ -120,3 +123,53 @@ class CartesianProductSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
         mask = mask.view(ms[0], ms[1], 1).matmul(
             mask.view(ms[0], 1, ms[1]))  # (b,l,l)
         return mask
+
+
+class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
+    def create_module(self):
+        self.embedding = Embedding(
+            num_embeddings=0, # later load or extend
+            embedding_dim=self.embedding_dim,
+            vocab_namespace=self.key,
+            trainable=False,
+        )
+        return BasicTextFieldEmbedder({self.key: self.embedding})
+
+    def __init__(
+        self,
+        key: str,
+        embedding_dim: int,
+        pre,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.key = key
+        self.embedding_dim = embedding_dim
+        self.pre = pre
+        ModuleSensor.__init__(self, pre, output_only=output_only)
+
+        for name, pre_sensor in pre.find(SentenceSensor):
+            pre_sensor.add_embedder(key, self)
+            self.tokens_key = pre_sensor.key # used by reader.update_textfield()
+            break
+        else:
+            raise TypeError()
+
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+        if self.fullname in context and isinstance(context[self.fullname], dict):
+            context[self.fullname + '_index'] = context[self.fullname] # reserve
+            force = True
+        return SinglePreMaskedSensor.update_context(self, context, force)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        return self.module(context[self.fullname])
+
+    def get_mask(self, context: Dict[str, Any]):
+        # TODO: make sure update_context has been called
+        return get_text_field_mask(context[self.fullname + '_index'])

@@ -128,6 +128,7 @@ class BaseModel(Model):
     ) -> DataInstance:
         data = self._update_loss(data)
         data = self._update_metrics(data)
+        import pdb; pdb.set_trace()
 
         return data
 
