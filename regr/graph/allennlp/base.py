@@ -110,6 +110,4 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     def update_vocab_from_instances(self, instances):
         from allennlp.common import Params
         self.model.vocab.extend_from_instances(Params({}), instances)
-        for model_path, module in self.model.named_modules():
-            if hasattr(module, 'extend_vocab'):
-                module.extend_vocab(self.model.vocab)
+        self.model.extend_embedder_vocab()

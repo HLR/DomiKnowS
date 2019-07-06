@@ -1,6 +1,8 @@
 import inspect
 import keyword
 
+from functools import reduce
+import operator
 from collections import OrderedDict
 from typing import Iterable
 from contextlib import contextmanager
@@ -214,15 +216,19 @@ class WrapperMetaClass(type):
 
 
 def optional_arg_decorator(fn, test=None):
-    def wrapped_decorator(*args):
+    def wrapped_decorator(*args, **kwargs):
         if len(args) == 1 and callable(args[0]) and (test is None or test(args[0])):
             return fn(args[0])
         else:
             def real_decorator(decoratee):
-                return fn(decoratee, *args)
+                return fn(decoratee, *args, **kwargs)
             return real_decorator
     return wrapped_decorator
 
 
 def optional_arg_decorator_for(test):
     return lambda fn: optional_arg_decorator(fn, test)
+
+
+def prod(iterable):
+    return reduce(operator.mul, iterable, 1)
