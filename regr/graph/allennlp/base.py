@@ -27,7 +27,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
 
     def __init__(self):
-        vocab = Vocabulary()
+        vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab)
         self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
@@ -109,5 +109,6 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def update_vocab_from_instances(self, instances):
         from allennlp.common import Params
-        self.model.vocab.extend_from_instances(Params({}), instances)
+        vocab = Vocabulary.from_instances(instances)
+        self.model.vocab = vocab #.extend_from_instances(Params({}), instances)
         self.model.extend_embedder_vocab()
