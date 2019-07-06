@@ -1,6 +1,8 @@
 import inspect
 import keyword
 
+from functools import reduce
+import operator
 from collections import OrderedDict
 from typing import Iterable
 from contextlib import contextmanager
@@ -226,3 +228,7 @@ def optional_arg_decorator(fn, test=None):
 
 def optional_arg_decorator_for(test):
     return lambda fn: optional_arg_decorator(fn, test)
+
+
+def prod(iterable):
+    return reduce(operator.mul, iterable, 1)

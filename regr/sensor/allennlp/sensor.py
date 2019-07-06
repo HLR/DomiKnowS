@@ -1,7 +1,8 @@
-from typing import List, Dict, Any, Optional, NoReturn
+from typing import List, Dict, Any, NoReturn
 from collections import OrderedDict
 import torch
 from torch.nn import Module
+from ...utils import prod
 from ...graph import Property
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor
 
@@ -11,9 +12,9 @@ class SentenceSensor(ReaderSensor):
         self,
         reader,
         key: str,
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
-        ReaderSensor.__init__(self, reader, key, output_only=output_only) # *pres=[]
+        ReaderSensor.__init__(self, reader, key, output_dim=(), output_only=output_only) # *pres=[]
         self.embedders = OrderedDict() # list of SentenceEmbedderLearner
 
     def add_embedder(self, key, embedder):
@@ -36,20 +37,26 @@ class LabelSensor(ReaderSensor):
         key: str,
         output_only: bool=True
     ) -> NoReturn:
-        ReaderSensor.__init__(self, reader, key, output_only=output_only)
+        ReaderSensor.__init__(self, reader, key, output_dim=(), output_only=output_only)
 
 
 class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
     class Concat(Module):
         def forward(self, *x):
+            # TODO: flatten
             return torch.cat(x, dim=-1)
 
-    def __init__(
-        self,
-        *pres: List[Property]
-    ) -> NoReturn:
-        module = ConcatSensor.Concat()
-        PreArgsModuleSensor.__init__(self, module, *pres)
+    def create_module(self):
+        return ConcatSensor.Concat()
+
+    def update_output_dim(self):
+        output_dim = 0
+        for pre_dim in self.pre_dims:
+            if len(pre_dim) == 0:
+                output_dim += 1
+            else:
+                output_dim += prod(pre_dim) # assume flatten
+        self.output_dim = (output_dim,)
 
     def get_mask(self, context: Dict[str, Any]):
         for pre in self.pres:
@@ -66,9 +73,10 @@ class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
         return None # not going to here
 
 
-class CartesianProductSensor(ModuleSensor, MaskedSensor):
+class CartesianProductSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
     class CP(Module):
         def forward(self, x, y):  # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, f1+f2)
+            # TODO: flatten
             xs = x.size()
             ys = y.size()
             assert xs[0] == ys[0]
@@ -81,22 +89,24 @@ class CartesianProductSensor(ModuleSensor, MaskedSensor):
         def forward(self, x):
             return CartesianProductSensor.CP.forward(self, x, x)
 
+    def create_module(self):
+        return CartesianProductSensor.SelfCP()
+
+    def update_output_dim(self):
+        if len(self.pre_dim) == 0:
+            output_dim = 2
+        else:
+            output_dim = prod(self.pre_dim) * 2 # assume flatten
+        self.output_dim = (output_dim,)
+
     def __init__(
         self,
-        *pres: List[Property]
+        pre: Property,
+        output_only: bool=False
     ) -> NoReturn:
-        if len(pres) != 1:
-            raise ValueError(
-                '{} take one pre-required sensor, {} given.'.format(type(self), len(pres)))
-        module = CartesianProductSensor.SelfCP()
-        ModuleSensor.__init__(self, module, *pres)
-        self.pre = self.pres[0]
+        self.pre = pre
+        PreArgsModuleSensor.__init__(self, pre, output_only=output_only)
 
-    def forward(
-        self,
-        context: Dict[str, Any]
-    ) -> Any:
-        return self.module(context[self.pre.fullname])
 
     def get_mask(self, context: Dict[str, Any]):
         for name, sensor in self.pre.find(MaskedSensor):
