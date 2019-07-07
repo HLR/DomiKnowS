@@ -220,7 +220,7 @@ class GraphModel(BaseModel):
             # alpha=(pos+neg)/pos for focal loss, but it cause divide by zero
             loss += sequence_cross_entropy_with_logits(
                 pred, label, mask,
-                label_smoothing=0.1, # (0.05, 0.95)
+                label_smoothing=0.01, # (0.005, 0.995)
                 gamma=2.0,
                 alpha=neg/(pos+neg)
             )
