@@ -20,7 +20,7 @@ def inference(
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         # order of table follows order of group
         ['people', 'organization', 'location', 'other', 'O'],
-        ['work_for', 'located_in', 'live_in', 'orgbase_on', 'kill'],
+        ['work_for', 'located_in', 'live_in', 'orgbase_on', ], # 'kill' since associated learner is never trained, the irrelevent result disturb other classes
     ]
 
     tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
@@ -38,12 +38,12 @@ def inference(
     for prop in graph.get_multiassign(): # order? always check with table
         # find the group it goes to
         # TODO: update later with group discover?
+        # for each assignment, [0] for label, [1] for pred
+        # consider only prediction here
+        sensor = list(prop.values())[1]
+        # how about conf?
         for group, table in zip(groups, tables):
             if prop.sup.name in group:
-                # for each assignment, [0] for label, [1] for pred
-                # consider only prediction here
-                sensor = list(prop.values())[1]
-                # how about conf?
                 table.append(sensor)
                 break
         else:  # for group, table, no break
@@ -241,9 +241,10 @@ def inference(
             #print('value=', printablesize(value))
 
             # put it back finally
-            log_value = torch.log(value)
-            data[sensor.sup.fullname] = log_value
-            data[sensor.fullname] = log_value
+            logits_value = torch.log(value/(1-value)) # go to +- inf
+            #logits_value = value # just use original value {0, 1} is fine
+            data[sensor.sup.fullname] = logits_value
+            data[sensor.fullname] = logits_value
 
             #print('9-'*40)
             #print(fullname)

@@ -107,8 +107,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
         return trainer
 
-    def update_vocab_from_instances(self, instances):
+    def update_vocab_from_instances(self, instances, embedding_sources_mapping=None):
         from allennlp.common import Params
         vocab = Vocabulary.from_instances(instances)
         self.model.vocab = vocab #.extend_from_instances(Params({}), instances)
-        self.model.extend_embedder_vocab()
+        self.model.extend_embedder_vocab(embedding_sources_mapping)
