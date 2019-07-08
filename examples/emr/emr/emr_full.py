@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it. 
@@ -82,7 +82,7 @@ def model_declaration(graph, config):
     #### Thus this is already a phrase-based sentence.
     #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
     #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    word['raw'] = SentenceEmbedderSensor('word', config.embedding_dim, sentence['raw'])
+    word['raw'] = SentenceEmbedderSensor('word', config.pretrained_dims['word'], sentence['raw'], pretrained_file=config.pretrained_files['word'])
     word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
     word['ner'] = SentenceEmbedderLearner('ner_tag', config.embedding_dim, sentence['raw'])
@@ -92,7 +92,8 @@ def model_declaration(graph, config):
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    word['emb'] = RNNLearner(word['all'], layers=1)
+    word['ngram'] = NGramSensor(7, word['all'])
+    word['emb'] = RNNLearner(word['ngram'], layers=1)
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
@@ -160,7 +161,7 @@ def main():
     #### To have better reproducibility, we initial the random seeds of all subsystems.
     seed()
     #### Train the model with inference functionality inside.
-    lbp.train(Config.Data, Config.Train)
+    lbp.train(Config.Data, Config.Model, Config.Train)
     #### Save the model, including vocabulary use to index the tokens.
     lbp.save('/tmp/emr')
 

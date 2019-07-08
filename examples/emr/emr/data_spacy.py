@@ -286,7 +286,7 @@ class Conll04SpaCyReader(SensableReader):
         fields,
         tokens
     ) -> Field:
-        indexers = {'word': SingleIdTokenIndexer(namespace='word')}
+        indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
