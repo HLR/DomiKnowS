@@ -59,14 +59,14 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
-    def train(self, data_config, train_config):
+    def train(self, data_config, model_config, train_config):
         sentence_sensors = self.get_sensors(ReaderSensor)
         readers = {sensor.reader for name, sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
         reader = readers.pop()
         train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path))
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path))
-        self.update_vocab_from_instances(train_dataset + valid_dataset)
+        self.update_vocab_from_instances(train_dataset + valid_dataset, model_config.pretrained_files)
         trainer = self.get_trainer(train_dataset, valid_dataset, **train_config)
         return trainer.train()
 
@@ -74,7 +74,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self,
         train_dataset,
         valid_dataset,
-        lr=1., wd=0.003, batch=64, epoch=1000, patience=50
+        lr=1., wd=0.003, batch=64, epoch=1000, patience=50,
+        *args, **kwargs
     ) -> Trainer:
         # prepare GPU
         if torch.cuda.is_available() and not DEBUG_TRAINING:
@@ -88,7 +89,6 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         # options for optimizor: SGD, Adam, Adadelta, Adagrad, Adamax, RMSprop
         from torch.optim import Adam
         optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
-
         sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
         sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
 
@@ -101,14 +101,16 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           iterator=iterator,
                           train_dataset=train_dataset,
                           validation_dataset=valid_dataset,
+                          shuffle=DEBUG_TRAINING,
                           patience=patience,
                           num_epochs=epoch,
                           cuda_device=device)
 
         return trainer
 
-    def update_vocab_from_instances(self, instances, embedding_sources_mapping=None):
-        from allennlp.common import Params
-        vocab = Vocabulary.from_instances(instances)
-        self.model.vocab = vocab #.extend_from_instances(Params({}), instances)
-        self.model.extend_embedder_vocab(embedding_sources_mapping)
+    def update_vocab_from_instances(self, instances, pretrained_files=None):
+        #import pdb; pdb.set_trace()
+        #from allennlp.common import Params
+        vocab = Vocabulary.from_instances(instances, pretrained_files=pretrained_files)
+        self.model.vocab = vocab
+        self.model.extend_embedder_vocab()

@@ -130,6 +130,7 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
         self.embedding = Embedding(
             num_embeddings=0, # later load or extend
             embedding_dim=self.embedding_dim,
+            pretrained_file=self.pretrained_file,
             vocab_namespace=self.key,
             trainable=False,
         )
@@ -140,10 +141,12 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
         key: str,
         embedding_dim: int,
         pre,
+        pretrained_file: str=None,
         output_only: bool=False
     ) -> NoReturn:
         self.key = key
         self.embedding_dim = embedding_dim
+        self.pretrained_file = pretrained_file
         self.pre = pre
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
@@ -173,3 +176,39 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
     def get_mask(self, context: Dict[str, Any]):
         # TODO: make sure update_context has been called
         return get_text_field_mask(context[self.fullname + '_index'])
+
+
+class NGramSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
+    class NGram(Module):
+        def __init__(self, ngram):
+            Module.__init__(self)
+            self.ngram = ngram
+
+        def forward(self, x):
+            #import pdb; pdb.set_trace()
+            shifted = []
+            size = x.size() # (b, l, c)
+            for i in torch.arange(self.ngram):
+                shifted_x = torch.zeros((size[0], size[1]+self.ngram, size[2]), device=x.device)
+                shifted_x[:, i:i-self.ngram, :] = x
+                shifted.append(shifted_x)
+            new_x = torch.cat(shifted, dim=-1)
+            offset = int((self.ngram-1) / 2)
+            return new_x[:, offset:offset-self.ngram, :]
+
+    def create_module(self):
+        return NGramSensor.NGram(self.ngram)
+
+    def update_output_dim(self):
+        #import pdb; pdb.set_trace()
+        self.output_dim = tuple([dim * self.ngram for dim in self.pre_dim])
+
+    def __init__(
+        self,
+        ngram: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.ngram = ngram
+        self.pre = pre
+        PreArgsModuleSensor.__init__(self, pre, output_only=output_only)
