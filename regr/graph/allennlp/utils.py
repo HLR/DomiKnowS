@@ -1,4 +1,5 @@
 from typing import Union, List
+import numpy
 import torch
 
 
@@ -8,7 +9,8 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
                                        average: str = "batch",
                                        label_smoothing: float = None,
                                        gamma: float = None,
-                                       alpha: Union[float, List[float], torch.FloatTensor] = None) -> torch.FloatTensor:
+                                       alpha: Union[float, List[float],
+                                                    torch.FloatTensor]=None) -> torch.FloatTensor:
     """
     Computes the cross entropy loss of a sequence, weighted with respect to
     some user provided weights. Note that the weighting here is not the same as
@@ -36,11 +38,11 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
         target would look like ``[0.05, 0.05, 0.85, 0.05]`` if the 3rd class was
         the correct label.
     gamma : ``float``, optional (default = None)
-        Focal loss[*] focusing parameter $\gamma$ to reduces the relative loss for
+        Focal loss[*] focusing parameter ``gamma`` to reduces the relative loss for
         well-classified examples and put more focus on hard. The greater value
-        $\gamma$ is, the more focus on hard examples.
+        ``gamma`` is, the more focus on hard examples.
     alpha : ``float`` or ``List[float]``, optional (default = None)
-        Focal loss[*] weighting factor $\alpha$ to balance between classes. Can be
+        Focal loss[*] weighting factor ``alpha`` to balance between classes. Can be
         used independently with ``gamma``. This is just a class-base shortcut to
         ``weights``. If a single ``float`` is provided, it is assumed binary case
         using ``alpha`` and ``1 - alpha`` for positive and negative respectively.
@@ -61,6 +63,8 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
         raise ValueError("Got average f{average}, expected one of "
                          "None, 'token', or 'batch'")
 
+    # make sure weights are float
+    weights = weights.float()
     # shape : (batch * sequence_length, num_classes)
     logits_flat = logits.view(-1, logits.size(-1))
     # shape : (batch * sequence_length, num_classes)
@@ -80,15 +84,19 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
         focal_factor = 1.
     if alpha is not None:
         # shape : () / (num_classes,)
-        if isinstance(alpha, float):
+        if isinstance(alpha, (float, int)):
+            # pylint: disable=not-callable
             # shape : (2,)
-            alpha_factor = torch.tensor([1. - alpha, alpha], device=targets_flat.device)
-        elif isinstance(alpha, list):
+            alpha_factor = torch.tensor([1. - float(alpha), float(alpha)], dtype=weights.dtype, device=weights.device)
+            # pylint: enable=not-callable
+        elif isinstance(alpha, (list, numpy.ndarray)):
+            # pylint: disable=not-callable
             # shape : (c,)
-            alpha_factor = torch.tensor(alpha, device=targets_flat.device)
+            alpha_factor = torch.tensor(alpha, dtype=weights.dtype, device=weights.device)
+            # pylint: enable=not-callable
         elif isinstance(alpha, torch.Tensor):
             # shape : () / (num_classes,)
-            alpha = alpha.clone().detach().to(device=targets_flat.device)
+            alpha = alpha.clone(dtype=weights.dtype).detach().to(device=weights.device)
             if alpha.size():
                 # shape : (num_classes,)
                 alpha_factor = alpha
@@ -98,14 +106,13 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
                 # shape : (2,)
                 alpha_factor = torch.cat([1 - alpha, alpha])
         else:
-            raise TypeError('alpha must be float, list of float, or torch.FloatTensor, {} provided.'.format(type(alpha)))
-        # shape : (batch * max_len,)
+            raise TypeError(('alpha must be float, list of float, or torch.FloatTensor, '
+                             '{} provided.').format(type(alpha)))
+        # shape : (batch, max_len)
         alpha_factor = torch.gather(alpha_factor, dim=0, index=targets_flat.view(-1)).view(*targets.size())
         weights = weights * alpha_factor
     else:
         alpha_factor = 1.
-
-    #import pdb;pdb.set_trace()
 
     if label_smoothing is not None and label_smoothing > 0.0:
         num_classes = logits.size(-1)
@@ -122,20 +129,20 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
         # shape : (batch * sequence_length, 1)
         negative_log_likelihood_flat = - torch.gather(log_probs_flat, dim=1, index=targets_flat)
     # shape : (batch * sequence_length, 1)
-    negative_log_likelihood = negative_log_likelihood_flat * focal_factor
+    negative_log_likelihood_flat = negative_log_likelihood_flat * focal_factor
     # shape : (batch, sequence_length)
     negative_log_likelihood = negative_log_likelihood_flat.view(*targets.size())
     # shape : (batch, sequence_length)
-    negative_log_likelihood = negative_log_likelihood * weights.float()
+    negative_log_likelihood = negative_log_likelihood * weights
 
     if average == "batch":
         # shape : (batch_size,)
-        per_batch_loss = negative_log_likelihood.sum(1) / (weights.sum(1).float() + 1e-13)
+        per_batch_loss = negative_log_likelihood.sum(1) / (weights.sum(1) + 1e-13)
         num_non_empty_sequences = ((weights.sum(1) > 0).float().sum() + 1e-13)
         return per_batch_loss.sum() / num_non_empty_sequences
     elif average == "token":
         return negative_log_likelihood.sum() / (weights.sum().float() + 1e-13)
     else:
         # shape : (batch_size,)
-        per_batch_loss = negative_log_likelihood.sum(1) / (weights.sum(1).float() + 1e-13)
+        per_batch_loss = negative_log_likelihood.sum(1) / (weights.sum(1) + 1e-13)
         return per_batch_loss
