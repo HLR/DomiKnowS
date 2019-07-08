@@ -310,16 +310,6 @@ class Conll04SpaCyReader(SensableReader):
         textfield = TextField(tokens, indexers)
         return textfield
 
-    @cls.textfield('ner_tag')
-    def update_sentence_ner(
-        self,
-        fields,
-        tokens
-    ) -> Field:
-        indexers = {'ner_tag': NerTagIndexer(namespace='ner_tag')}
-        textfield = TextField(tokens, indexers)
-        return textfield
-
     @cls.field('labels')
     def update_labels(
         self,

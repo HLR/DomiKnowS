@@ -85,9 +85,8 @@ def model_declaration(graph, config):
     word['raw'] = SentenceEmbedderSensor('word', config.pretrained_dims['word'], sentence['raw'], pretrained_file=config.pretrained_files['word'])
     word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
-    word['ner'] = SentenceEmbedderLearner('ner_tag', config.embedding_dim, sentence['raw'])
     # possible to add more this kind
-    word['all'] = ConcatSensor(word['raw'], word['pos'], word['dep'], word['ner'])
+    word['all'] = ConcatSensor(word['raw'], word['pos'], word['dep'])
     #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
