@@ -13,6 +13,7 @@ class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
         self.embedding = Embedding(
             num_embeddings=0, # later load or extend
             embedding_dim=self.embedding_dim,
+            pretrained_file=self.pretrained_file,
             vocab_namespace=self.key,
             trainable=True,
         )
