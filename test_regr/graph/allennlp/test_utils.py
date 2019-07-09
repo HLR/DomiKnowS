@@ -65,7 +65,7 @@ class TestNnUtil(AllenNlpTestCase):
         # Batch has one completely padded row, so divide by 4.
         assert loss.data.numpy() == vector_loss.sum().item() / 4
 
-    @flaky # some time not almost equal to 7 decimals
+    @flaky # some time "not almost equal to 7 decimals"
     def test_sequence_cross_entropy_with_logits_averages_token_correctly(self):
         # test token average is the same as multiplying the per-batch loss
         # with the per-batch weights and dividing by the total weight
@@ -112,6 +112,34 @@ class TestNnUtil(AllenNlpTestCase):
         length = 3
         classes = 2 # alpha float for binary class only
         alpha = numpy.random.rand() if numpy.random.rand() > 0.5 else (1. - numpy.random.rand()) # [0, 1]
+
+        tensor = torch.rand([batch, length, classes])
+        targets = torch.LongTensor(numpy.random.randint(0, classes, [batch, length]))
+        weights = torch.ones([batch, length])
+
+        loss = util.sequence_cross_entropy_with_logits(tensor, targets, weights, alpha=alpha)
+
+        correct_loss = 0.
+        sum_weight = 0.
+        for logit, label in zip(tensor.squeeze(0), targets.squeeze(0)):
+            logp = torch.nn.functional.log_softmax(logit, dim=-1)
+            logpt = logp[label]
+            if label:
+                at = alpha
+            else:
+                at = 1 - alpha
+            sum_weight += at
+            correct_loss += logpt * at
+        # Average over sequence.
+        correct_loss = - correct_loss / sum_weight
+        numpy.testing.assert_array_almost_equal(loss.data.numpy(), correct_loss.data.numpy())
+
+    def test_sequence_cross_entropy_with_logits_alpha_single_float_correctly(self):
+        batch = 1
+        length = 3
+        classes = 2 # alpha float for binary class only
+        alpha = numpy.random.rand() if numpy.random.rand() > 0.5 else (1. - numpy.random.rand()) # [0, 1]
+        alpha = torch.tensor(alpha)
 
         tensor = torch.rand([batch, length, classes])
         targets = torch.LongTensor(numpy.random.randint(0, classes, [batch, length]))
