@@ -4,8 +4,8 @@ from .utils import Namespace
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04_train.corp",
-        'valid_path': "conll04_test.corp"
+        'train_path': "conll04.corp_1_train.corp",
+        'valid_path': "conll04.corp_1_test.corp"
     },
     'Model': { # model setting
         'embedding_dim': 8,
