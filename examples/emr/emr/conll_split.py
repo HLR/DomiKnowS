@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-class Conll04Spliter():
+class Conll04Splitter():
     logger = logging.getLogger(__name__)
 
     def __init__(self):
@@ -64,7 +64,7 @@ class Conll04Spliter():
         for split_index in range(reminder, splits_num):
             yield index_list[offset:(offset + step)]
             offset += step
-        assert offset == total_num
+        assert offset == total_numsplitt
 
     def sample_by_splits(self, examples, splits):
         for split in splits:
@@ -102,7 +102,7 @@ args = parser.parse_args()
 
 
 def main():
-    spliter = Conll04Spliter()
+    spliter = Conll04Splitter()
     examples = spliter(args.path[0], args.splits_num, args.subfix)
     print('Done!')
 
