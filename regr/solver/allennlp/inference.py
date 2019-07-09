@@ -20,7 +20,7 @@ def inference(
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         # order of table follows order of group
         ['people', 'organization', 'location', 'other', 'O'],
-        ['work_for', 'located_in', 'live_in', 'orgbase_on', ], # 'kill' since associated learner is never trained, the irrelevent result disturb other classes
+        ['work_for', 'located_in', 'live_in', 'orgbase_on', 'kill']
     ]
 
     tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
