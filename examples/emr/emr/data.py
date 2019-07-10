@@ -4,7 +4,7 @@ from allennlp.data import TokenIndexer
 from allennlp.data.tokenizers import Token
 from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, DepLabelIndexer, NerTagIndexer
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
-from regr.data.allennlp.reader import SensableReader, keep_fields
+from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
 from .conll import Conll04CorpusReader
 
@@ -99,10 +99,10 @@ class Conll04Reader(SensableReader):
         )
 
 
-@keep_fields('sentence', 'phrase', 'pos_tags')
+@keep_keys('sentence', 'phrase', 'pos_tags')
 class Conll04BinaryReader(Conll04Reader):
     label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
-    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
 
     @cls.fields
     def update_labels(
@@ -123,7 +123,7 @@ class Conll04BinaryReader(Conll04Reader):
         fields: Dict,
         raw_sample
     ) -> Generator[Tuple[str, Field], None, None]:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
         (sentence, pos, labels), relations = raw_sample
         if relations is None:
             return None
@@ -148,7 +148,7 @@ class Conll04BinaryReader(Conll04Reader):
             )
 
 
-@keep_fields
+@keep_keys
 class Conll04CandidateReader(Conll04Reader):
     def _is_candidate(
         self,
@@ -181,7 +181,7 @@ class Conll04CandidateReader(Conll04Reader):
                                   fields[self.get_fieldname('phrase')])
 
 
-@keep_fields
+@keep_keys
 class Conll04CandidateFilteredReader(Conll04CandidateReader):
     def raw_read(self, file_path):
         for (sentence, pos, labels), relation in zip(sentences, relations):
@@ -209,16 +209,16 @@ class Conll04CandidateFilteredReader(Conll04CandidateReader):
             yield (sentence, pos, labels), relation
 
 
-@keep_fields('sentence', 'candidate', 'update_labels()', 'update_relations()')
+@keep_keys('sentence', 'candidate', 'update_labels()', 'update_relations()')
 class Conll04CandidateBinaryReader(Conll04CandidateReader, Conll04BinaryReader):
     pass
 
 
-@keep_fields('sentence', 'candidate', 'update_labels()', 'update_relations()')
+@keep_keys('sentence', 'candidate', 'update_labels()', 'update_relations()')
 class Conll04CandidateFilteredBinaryReader(Conll04CandidateFilteredReader, Conll04BinaryReader):
     pass
 
 
-@keep_fields
+@keep_keys
 class Conll04SensorReader(Conll04BinaryReader):
     pass

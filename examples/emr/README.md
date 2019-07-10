@@ -66,6 +66,20 @@ Install all python dependency specified in `requirements.txt` by
 sudo python3 -m pip install -r requirements.txt
 ```
 
+#### Data
+
+The Conll04 data is located in [`data/EntityMentionRelation/conll.corp`](data/EntityMentionRelation/conll.corp).
+Please consider resplit the data set.
+A handy tool `conll_split` it provided in this example to split dataset for n-fold corss-validation.
+```bash
+python3 -m emr.conll_split data/EntityMentionRelation/conll.corp
+```
+
+It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
+For more options like folds or output format, please use `-h`: `python3 -m emr.conll_split -h`.
+
+
+
 ### The example
 
 The implement of the example is in package `emr`. Involved data is included in [`data/EntityMentionRelation`](data/EntityMentionRelation).
@@ -79,3 +93,5 @@ There are two a simpler version with only "people", "organization", and "work fo
 ```bash
 python3 -m emr -s
 ```
+
+Please also checkout configuration of the program in [`emr/config.py`](emr/config.py).
