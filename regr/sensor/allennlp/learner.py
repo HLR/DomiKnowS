@@ -101,3 +101,25 @@ class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
         output_only: bool=False
     ) -> NoReturn:
         SinglePreLearner.__init__(self, pre, output_only=output_only)
+
+
+class SoftmaxLogitLearner(SinglePreLearner, SinglePreMaskedSensor):
+    def create_module(self):
+        fc = Linear(in_features=prod(self.pre_dim), out_features=self.classes)
+        sm = LogSoftmax(dim=-1)
+        module = Sequential(fc,
+                            #sm,
+                           )
+        return module
+
+    def update_output_dim(self):
+        self.output_dim = (self.classes,)
+
+    def __init__(
+        self,
+        classes: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.classes = classes
+        SinglePreLearner.__init__(self, pre, output_only=output_only)
