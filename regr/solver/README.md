@@ -2,7 +2,7 @@
 
 The OWL ontology, on which the learning system graph was build is loaded into the ilpOntSolver and parsed. 
 
-The OWL ontology language allows to specify constrains on [concepts](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [relations](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). The solver extracts these constrains.   
+The OWL ontology language allows to specify constrains on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). The solver extracts these constrains.   
 
 The solver has encoded mapping from OWL constrains to the appropriate equivalent logical expression. This mapping is presented below for each OWL constrain.
 
@@ -10,7 +10,7 @@ The ilpBooleanMethods module encodes basic logical expressions (*[AND](https://g
 
 The solver is using this module's methods to add ILP constrains to the ILP model for the given extracted ontology constrain.
 
-# Constrains extracted from ontology classes (concepts):
+# Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*):
 
 - **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Classes "OWL example of disjoint statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression -  
   
@@ -43,7 +43,7 @@ The solver is using this module's methods to add ILP constrains to the ILP model
 
 - **[oneOf](https://www.w3.org/TR/owl2-syntax/#Enumeration_of_Individuals "OWL example of enumeration of individuals for classes")** statements for a class *Concept* in ontology 
    
-## Constrains extracted from ontology properties (relations)
+## Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)
 
 - **[domain](https://www.w3.org/TR/owl2-syntax/#Object_Property_Domain "OWL example of domain statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
 
@@ -109,7 +109,7 @@ The solver is using this module's methods to add ILP constrains to the ILP model
 
   *...*
       
-- **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+- **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Exact_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
   *This is an Existential constrain not possible to check without assumption of close world*
     
