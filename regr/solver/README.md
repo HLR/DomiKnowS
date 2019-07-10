@@ -87,7 +87,7 @@ The solver is using this module's methods to add ILP constrains to the ILP model
   
 - **[allValuesFrom](https://www.w3.org/TR/owl2-syntax/#Universal_Quantification "OWL example of allValuesFrom statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *...*
   
 - **[someValueFrom](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of someValueFrom statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
@@ -95,36 +95,36 @@ The solver is using this module's methods to add ILP constrains to the ILP model
   
 - **[hasValue](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of hasValue statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world *
+  *This is an Existential constrain not possible to check without assumption of close world*
  
 - **[objectHasSelf](https://www.w3.org/TR/owl2-syntax/#Self-Restriction "OWL example of objectHasSelf statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *...*
         
-- **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Object_Properties OWL example of disjoint statement for properties)** statements for relations *P1(token1, token2)* and *P2(token1, token2)* in ontology are mapped to equivalent logical expression -  
+- **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Object_Properties "OWL example of disjoint statement for properties")** statements for relations *P1(token1, token2)* and *P2(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
   *NOT(IF(P1(token1, token2), P2(token1, token2)))*
 
-- **key** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
+- **[key](https://www.w3.org/TR/owl2-syntax/#Keys "OWL example of key statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *...*
       
 - **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *This is an Existential constrain not possible to check without assumption of close world*
     
 - **[minCardinality](https://www.w3.org/TR/owl2-syntax/#Minimum_Cardinality "OWL example of minCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *This is an Existential constrain not possible to check without assumption of close world*
 
 - **[maxCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of maxCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *?*
+  *count of token2 for which P(token1, token2) <= maxCardinality*
   
 - **[functional](https://www.w3.org/TR/owl2-syntax/#Functional_Object_Properties "OWL example of functional statement for properties")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
    
-  *syntactic shortcut for the following maxCardinality of P(token1, token2) is 1*
+  *Syntactic shortcut for the following maxCardinality of P(token1, token2) is 1*
    
 - **[inverse functional](https://www.w3.org/TR/owl2-syntax/#Inverse-Functional_Object_Properties "OWL example of inverse functional statement for properties")** relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
    
-  *syntactic shortcut for the following maxCardinality of inverse P(token2, token1) is 1*
+  *Syntactic shortcut for the following maxCardinality of inverse P(token2, token1) is 1*
