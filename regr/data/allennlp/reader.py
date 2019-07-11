@@ -3,6 +3,7 @@ from collections import OrderedDict, defaultdict
 import uuid
 from six import with_metaclass
 from allennlp.data.dataset_readers import DatasetReader
+from allennlp.data.fields import MetadataField
 from allennlp.data import Instance
 import cls
 from ...utils import optional_arg_decorator, optional_arg_decorator_for
@@ -26,9 +27,12 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
         self.key_tokens = {}
         self.token_indexers = defaultdict(dict)
 
-    def _to_instance(self, raw_sample) -> Instance:
+    def _to_instance(self, raw_sample, metas=None) -> Instance:
         cls = type(self)
         fields = {}
+        if metas is not None:
+            for key, value in metas.items():
+                fields[key] = MetadataField(value)
 
         # prepare tokens
         for key, update_tokens in cls.tokens_dict.items():
@@ -44,9 +48,15 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
 
         return Instance(fields)
 
-    def _read(self, *args, **kwargs) -> Iterator[Instance]:
-        for raw_sample in self.raw_read(*args, **kwargs):
-            yield self._to_instance(raw_sample)
+    def _read(self, file_path, metas=None) -> Iterator[Instance]:
+        for raw_sample in self.raw_read(file_path):
+            yield self._to_instance(raw_sample, metas)
+
+    def read(self, file_path, metas=None) -> Iterator[Instance]:
+        from copy import copy
+        sub = copy(self)
+        sub._read = lambda file_path: self._read(file_path, metas=metas)
+        return DatasetReader.read(sub, file_path)
 
     @cls
     def field(cls, key):

@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Tuple, Iterable
+from typing import Dict, List, Tuple, Iterable
 from torch import Tensor
 from torch.nn import Module
 from allennlp.models import Model
@@ -7,6 +7,8 @@ from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
 
 from .. import Graph
+from ..property import Property
+from ...utils import prod
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
 from ...solver.allennlp.inference import inference
@@ -39,32 +41,28 @@ class BaseModel(Model):
     def __init__(self, vocab: Vocabulary, inference_interval: int=10) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
-        self.meta = {}
-        self.metrics = {}
-        self.metrics_inferenced = {}
+        self.meta = []
+        self.metrics = []
+        self.metrics_inferenced = []
 
     def _update_metrics_base(
         self,
         data: DataInstance,
-        metrics: Dict[str, Tuple[callable, Tuple[Tuple[Module, callable], float]]]
+        metrics: List[Tuple[str, Property, callable]]
     ) -> DataInstance:
-        for metric_name, (metric, prop) in metrics.items():
+        for metric_name, class_index, prop, metric in metrics:
             label, pred, mask = get_prop_result(prop, data)
-
-            from .metrics import Auc, AP, PRAuc
-            if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
-                # AUC has problem using GPU
-                metric(pred.select(dim=-1,index=1).reshape(-1).cpu(),  # (b,l,c) -> (b,l) -> (b*l)
-                       label.reshape(-1).cpu(),  # (b,l) -> (b*l）
-                       mask)
-            else:
-                metric(pred, label, mask)
+            metric(pred, label, mask)
         return data
 
     def _need_inference(
         self,
         data: DataInstance
     ) -> bool:
+        #import pdb; pdb.set_trace()
+        dataset_type_key = 'dataset_type' # specify in regr.graph.allennlp.base.AllenNlpGraph
+        if dataset_type_key in data and all(dataset_type == 'train' for dataset_type in data[dataset_type_key]):
+            return False
         epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
         if epoch_key not in data:
             return True  # no epoch record, then always inference
@@ -76,7 +74,7 @@ class BaseModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
-        for metric_name, metric in self.meta.items():
+        for metric_name, metric in self.meta:
             metric(data)
         data = self._update_metrics_base(data, self.metrics)
         if self._need_inference(data):
@@ -88,9 +86,9 @@ class BaseModel(Model):
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
         from collections import OrderedDict
 
-        metrics = {}
+        metrics = OrderedDict()
 
-        def add(metric_name, metric):
+        def add(metric_name, class_index, suffix, prop, metric):
             try:
                 out = metric.get_metric(reset)
             except RuntimeError:
@@ -99,23 +97,46 @@ class BaseModel(Model):
                 # then pass
                 return
 
-            import numpy as np
-            import numbers
             if isinstance(out, Iterable):
-                for i, out_item in enumerate(out):
-                    metrics['{}[{}]'.format(metric_name, i)] = out_item
+                for i, (metric_name_item, out_item) in enumerate(sorted(zip(metric_name, out))):
+                    key = prop.sup.name
+                    if class_index is not None:
+                        class_name = self.vocab.get_token_from_index(class_index, namespace='labels')
+                        key += '({})'.format(class_name)
+                    if suffix is not None:
+                        key += '{}'.format(suffix)
+                    key += '-{}'.format(metric_name_item)
+                    if i == 0:
+                        key = '\n' + key
+                    metrics[key] = out_item
             else:
-                metrics[metric_name] = out
+                key = prop.sup.name
+                if class_index is not None:
+                    class_name = self.vocab.get_token_from_index(class_index, namespace='labels')
+                    key += '({})'.format(class_name)
+                if suffix is not None:
+                    key += '{}'.format(suffix)
+                key += '-{}'.format(metric_name)
+                key = '\n' + key
+                metrics[key] = out
 
-        for metric_name, metric in self.meta.items():
-            add(metric_name, metric)
-        for metric_name, (metric, _) in self.metrics.items():
-            add(metric_name, metric)
-        for metric_name, (metric, _) in self.metrics_inferenced.items():
-            add(metric_name + '_i', metric)
+        for metric_name, class_index, prop, metric in self.metrics:
+            add(metric_name, class_index, None, prop, metric)
+        for metric_name, class_index, prop, metric in self.metrics_inferenced:
+            add(metric_name, class_index, '_i', prop, metric)
 
-        metrics = OrderedDict(sorted(metrics.items()))
-        return metrics
+        max_len = max(len(metric_name.lstrip()) for metric_name in metrics)
+        pretty_metrics = OrderedDict()
+        for metric_name, metric in sorted(metrics.items(), key=lambda x: x[0].strip()):
+            lspace_len = len(metric_name) - len(metric_name.lstrip())
+            lspace = metric_name[:lspace_len]
+            name = metric_name[lspace_len:]
+            pretty_name = '{}{:>{max_len}}'.format(lspace, name, max_len=max_len)
+            pretty_metrics[pretty_name] = metric
+
+        for metric_name, metric in self.meta:
+            pretty_metrics['\n[ {} ]'.format(metric_name)] = metric.get_metric(reset)
+        return pretty_metrics
 
     def _update_loss(self, data):
         if hasattr(self, 'loss_func') and self.loss_func is not None:
@@ -152,34 +173,35 @@ class GraphModel(BaseModel):
         self.graph = graph
 
         from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-        from .metrics import Epoch, Auc, AP, PRAuc, Precision
+        from .metrics import Epoch
+        #from allennlp.training.metrics import CategoricalAccuracy, F1Measure
+        #from .metrics import Epoch, Auc, AP, PRAuc, Precision
 
-        def F1MeasureProxy(): return F1Measure(1)
-
-        def PrecisionProxy(): return Precision(1)
-
-        self.meta['epoch'] = Epoch()
-        metrics = {
-            #'Accuracy': CategoricalAccuracy,
-            #'Precision': PrecisionProxy,
-            'P/R/F1': F1MeasureProxy,
-            #'ROC-AUC': Auc,
-            #'PR-AUC': PRAuc,
-            #'AP': AP,
+        self.meta.append(('epoch', Epoch()))
+        whole_metrics = {
+            'Accuracy': CategoricalAccuracy,
+        }
+        class_metrics = {
+            ('P', 'R', 'F1'): F1Measure,
         }
 
-        for prop in self.graph.get_multiassign():
-            # if concept == graph.organization: # just don't print too much
-            #    continue
-            for metric_name, MetricClass in metrics.items():
-                fullname = '\n{}-{}'.format(prop.fullname, metric_name)
-                shortname = '\n{}-{}'.format(prop.sup.name, metric_name)
-                name = shortname
-                self.metrics[name] = (MetricClass(), prop)
-                self.metrics_inferenced[name] = (MetricClass(), prop)
+        for prop in self.graph.poi:
+            for metric_name, MetricClass in whole_metrics.items():
+                self.metrics.append((metric_name, None, prop, MetricClass()))
+                self.metrics_inferenced.append((metric_name, None, prop, MetricClass()))
+            for metric_name, MetricClass in class_metrics.items():
+                for name, sensor in prop.find(AllenNlpLearner):
+                    class_num = prod(sensor.output_dim)
+                    if class_num == 2:
+                        self.metrics.append((metric_name, None, prop, MetricClass(1)))
+                        self.metrics_inferenced.append((metric_name, None, prop, MetricClass(1)))
+                    else:
+                        for class_index in range(class_num):
+                            self.metrics.append((metric_name, class_index, prop, MetricClass(class_index)))
+                            self.metrics_inferenced.append((metric_name, class_index, prop, MetricClass(class_index)))
 
         i = 0  # TODO: this looks too bad
-        for prop in self.graph.get_multiassign():
+        for prop in self.graph.poi:
             for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
                 self.add_module(str(i), sensor.module)
                 i += 1
@@ -189,7 +211,7 @@ class GraphModel(BaseModel):
         **data: DataInstance
     ) -> DataInstance:
         # make sure every node needed are calculated
-        for prop in self.graph.get_multiassign():
+        for prop in self.graph.poi:
             for name, sensor in prop.items():
                 sensor(data)
 
@@ -199,9 +221,7 @@ class GraphModel(BaseModel):
         self,
         data: DataInstance
     ) -> DataInstance:
-        # print(data['global/application/other[label]-1'])
         data = inference(self.graph, self.graph.solver, data, self.vocab)
-        # print(data['global/application/other[label]-1'])
         return data
 
     def loss_func(
@@ -211,18 +231,27 @@ class GraphModel(BaseModel):
         from .utils import sequence_cross_entropy_with_logits
         loss = 0
         for prop in self.graph.get_multiassign():
+            # label (b, l)
+            # pred  (b, l, c)
+            # mask  (b, l)
             label, pred, mask = get_prop_result(prop, data)
+            label = label.clone().detach()
             mask = mask.clone().float()
+            #import pdb; pdb.set_trace()
+
             # class balance weighted
-            target = (label > 0)
-            pos = (target).sum().float()
-            neg = (1 - target).sum().float()
-            # alpha=(pos+neg)/pos for focal loss, but it cause divide by zero
+            num_token = float(prod(pred.shape[:-1]))
+            num_classes = pred.shape[-1]
+            balance_bias = 0.5 * num_token
+
+            alpha = [((num_token + balance_bias) / ((label == class_index).sum().float() + balance_bias))
+                     for class_index in range(num_classes)]
+            #import pdb; pdb.set_trace()
             loss += sequence_cross_entropy_with_logits(
                 pred, label, mask,
                 label_smoothing=0.01, # (0.005, 0.995)
                 gamma=2.0,
-                alpha=neg/(pos+neg)
+                alpha=alpha
             )
 
         return loss

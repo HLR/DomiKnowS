@@ -42,6 +42,10 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.traversal_apply(func)
         return ma
 
+    @property
+    def poi(self):
+        return self.get_multiassign()
+
     def get_sensors(self, *tests):
         sensors = []
 
@@ -64,8 +68,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         readers = {sensor.reader for name, sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
         reader = readers.pop()
-        train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path))
-        valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path))
+        train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path), metas={'dataset_type':'train'})
+        valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path), metas={'dataset_type':'valid'})
         self.update_vocab_from_instances(train_dataset + valid_dataset, model_config.pretrained_files)
         trainer = self.get_trainer(train_dataset, valid_dataset, **train_config)
         return trainer.train()
@@ -101,7 +105,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           iterator=iterator,
                           train_dataset=train_dataset,
                           validation_dataset=valid_dataset,
-                          shuffle=DEBUG_TRAINING,
+                          shuffle=not DEBUG_TRAINING,
                           patience=patience,
                           num_epochs=epoch,
                           cuda_device=device)
