@@ -9,10 +9,14 @@ from .data_spacy import Conll04SpaCyReader
 @keep_keys(exclude=['labels', 'relation'])
 class Conll04SpaCyBilouReader(Conll04SpaCyReader):
     def __init__(self, relation_anckor='last') -> None:
-        super().__init__(lazy=False)
+        super().__init__()
         self.relation_anckor = relation_anckor
         
     @property
+    def relation_anckor(self):
+        pass
+
+    @relation_anckor.setter
     def relation_anckor(self, relation_anckor):
         if relation_anckor in ('first', 'lass'):
             raise ValueError('"relation_anckor" must be one of "first" or "last".')
@@ -39,7 +43,7 @@ class Conll04SpaCyBilouReader(Conll04SpaCyReader):
                 for i, word in enumerate(token):
                     if i == 0:
                         label_list[token[i].i] = label_type + '-B'
-                    elif i < len(token):
+                    elif i < len(token)-1:
                         label_list[token[i].i] = label_type + '-I'
                     else:
                         label_list[token[i].i] = label_type + '-L'
@@ -89,12 +93,12 @@ class Conll04SpaCyBilouSepReader(Conll04SpaCyBilouReader):
 
         for label_type, token in labels: # TODO: extend to BILOU
             if len(token) == 1:
-                label_list[token[0].i] = 'U'
+                labels_dict[label_type][token[0].i] = 'U'
             else:
                 for i, word in enumerate(token):
                     if i == 0:
                         labels_dict[label_type][token[i].i] = 'B'
-                    elif i < len(token):
+                    elif i < len(token)-1:
                         labels_dict[label_type][token[i].i] = 'I'
                     else:
                         labels_dict[label_type][token[i].i] = 'L'

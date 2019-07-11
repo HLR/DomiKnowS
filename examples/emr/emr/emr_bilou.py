@@ -11,7 +11,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
 from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner, SoftmaxLogitLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
 from regr.graph.allennlp import AllenNlpGraph
@@ -23,7 +23,7 @@ from regr.graph.allennlp import AllenNlpGraph
 #### * `Config` contains configurations for model, data, and training.
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 #from .data import Conll04SensorReader as Reader
-from .data_spacy import Conll04SpaCyBinaryReader as Reader
+from .data_spacy_bilou import Conll04SpaCyBilouSepReader as Reader
 from .config import Config
 from .utils import seed
 
@@ -120,10 +120,10 @@ def model_declaration(graph, config):
     #### Notice the first argument, the "input dimention", takes a `* 2` because the output from `phrase['emb']` is bidirectional, having two times dimentions.
     #### The second argument is base on what the prediction will be made.
     #### The constructors make individule modules for them with seperated parameters, though they take same arguments.
-    people['label'] = LogisticRegressionLearner(word['emb'])
-    organization['label'] = LogisticRegressionLearner(word['emb'])
-    location['label'] = LogisticRegressionLearner(word['emb'])
-    other['label'] = LogisticRegressionLearner(word['emb'])
+    people['label'] = SoftmaxLogitLearner(5, word['emb'])
+    organization['label'] = SoftmaxLogitLearner(5, word['emb'])
+    location['label'] = SoftmaxLogitLearner(5, word['emb'])
+    other['label'] = SoftmaxLogitLearner(5, word['emb'])
     #o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
 
     #### We repeat these on composed-concepts.
