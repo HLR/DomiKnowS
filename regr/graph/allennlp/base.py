@@ -116,6 +116,9 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                                   sorting_keys=sorting_keys,
                                   track_epoch=True)
         iterator.index_with(self.model.vocab)
+        from allennlp.training.learning_rate_schedulers import LearningRateScheduler
+        from allennlp.common.params import Params
+        scheduler = LearningRateScheduler.from_params(optimizer, Params({'type':'reduce_on_plateau'}))
         trainer = Trainer(model=self.model,
                           optimizer=optimizer,
                           iterator=iterator,
@@ -125,6 +128,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           patience=patience,
                           num_epochs=epoch,
                           cuda_device=device,
+                          learning_rate_scheduler = scheduler,
                           serialization_dir=serialization_dir,
                           summary_interval=summary_interval,
                           histogram_interval=histogram_interval,
