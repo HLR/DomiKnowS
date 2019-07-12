@@ -91,13 +91,13 @@ def model_declaration(graph, config):
     #### Here we encode the word2vec output further with an RNN.
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    word['ngram'] = NGramSensor(7, word['all'])
-    word['emb'] = RNNLearner(word['ngram'], layers=1)
+    word['ngram'] = NGramSensor(config.ngram, word['all'])
+    word['emb'] = RNNLearner(word['ngram'], layers=1, dropout=config.dropout)
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
     pair['all'] = CartesianProductSensor(word['emb'])
-    pair['emb'] = MLPLearner([config.embedding_dim * 16], pair['all'])
+    pair['emb'] = MLPLearner((None,), pair['all'], dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.

@@ -95,3 +95,17 @@ python3 -m emr -s
 ```
 
 Please also checkout configuration of the program in [`emr/config.py`](emr/config.py).
+
+
+#### Tensorboard
+
+Tensorboard style log is generated in [`tensorboard`](tensorboard). To visualize the training process, use Tensorboard:
+```bash
+tensorboard --logdir=tensorboard
+```
+
+Tensorboard service will start at local port `6006` by default. Visit ['http://localhost:6006/'](http://localhost:6006/) using a modern browser.
+
+Some useful filters:
+* `(people|organization|location|other)-F1` show F1 score on entities.
+* `(work_for|live_in|located_in|orgbase_on|kill)-F1` show F1 score on composed entities (relations).
