@@ -1,10 +1,14 @@
 import os
 from typing import Dict, List, Tuple, Iterable
+from collections import OrderedDict
 from torch import Tensor
 from torch.nn import Module
 from allennlp.models import Model
 from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
+
+from allennlp.training.metrics import CategoricalAccuracy, F1Measure
+from .metrics import Epoch
 
 from .. import Graph
 from ..property import Property
@@ -12,6 +16,7 @@ from ...utils import prod
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
 from ...solver.allennlp.inference import inference
+from .utils import sequence_cross_entropy_with_logits
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
@@ -84,8 +89,6 @@ class BaseModel(Model):
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
-        from collections import OrderedDict
-
         metrics = OrderedDict()
 
         def add(metric_name, class_index, suffix, prop, metric):
@@ -166,16 +169,17 @@ class GraphModel(BaseModel):
         self,
         graph: Graph,
         vocab: Vocabulary,
+        balance_factor: float = 0.5,
+        label_smoothing: float = 0.1,
+        focal_gamma: float = 2.,
         inference_interval: int = 10
     ) -> None:
         BaseModel.__init__(self, vocab, inference_interval)
+        self.balance_factor = balance_factor
+        self.label_smoothing = label_smoothing
+        self.focal_gamma = focal_gamma
 
         self.graph = graph
-
-        from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-        from .metrics import Epoch
-        #from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-        #from .metrics import Epoch, Auc, AP, PRAuc, Precision
 
         self.meta.append(('epoch', Epoch()))
         whole_metrics = {
@@ -228,7 +232,6 @@ class GraphModel(BaseModel):
         self,
         data: DataInstance
     ) -> DataInstance:
-        from .utils import sequence_cross_entropy_with_logits
         loss = 0
         for prop in self.graph.get_multiassign():
             # label (b, l)
@@ -242,15 +245,15 @@ class GraphModel(BaseModel):
             # class balance weighted
             num_token = float(prod(pred.shape[:-1]))
             num_classes = pred.shape[-1]
-            balance_bias = 0.5 * num_token
+            balance_bias = num_token / self.balance_factor
 
             alpha = [((num_token + balance_bias) / ((label == class_index).sum().float() + balance_bias))
                      for class_index in range(num_classes)]
             #import pdb; pdb.set_trace()
             loss += sequence_cross_entropy_with_logits(
                 pred, label, mask,
-                label_smoothing=0.01, # (0.005, 0.995)
-                gamma=2.0,
+                label_smoothing=self.label_smoothing,
+                gamma=self.focal_gamma,
                 alpha=alpha
             )
 
