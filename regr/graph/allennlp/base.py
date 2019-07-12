@@ -21,14 +21,26 @@ solver_logger = logging.getLogger(ilpSelectClassification.__name__)
 solver_logger.propagate = False
 if DEBUG_TRAINING:
     solver_logger.setLevel(logging.DEBUG)
+else:
+    solver_logger.setLevel(logging.INFO)
 
 
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
 
-    def __init__(self):
+    def __init__(
+        self,
+        balance_factor: float = 0.5,
+        label_smoothing: float = 0.1,
+        focal_gamma: float = 2.,
+        inference_interval: int = 10
+    ):
         vocab = None # Vocabulary()
-        self.model = GraphModel(self, vocab)
+        self.model = GraphModel(self, vocab,
+                                balance_factor=balance_factor,
+                                label_smoothing=label_smoothing,
+                                focal_gamma=focal_gamma,
+                                inference_interval=inference_interval)
         self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
 
@@ -79,7 +91,11 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         train_dataset,
         valid_dataset,
         lr=1., wd=0.003, batch=64, epoch=1000, patience=50,
-        *args, **kwargs
+        serialization_dir='tensorboard/',
+        summary_interval=100,
+        histogram_interval=100,
+        should_log_parameter_statistics=True,
+        should_log_learning_rate=True
     ) -> Trainer:
         # prepare GPU
         if torch.cuda.is_available() and not DEBUG_TRAINING:
@@ -108,13 +124,17 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           shuffle=not DEBUG_TRAINING,
                           patience=patience,
                           num_epochs=epoch,
-                          cuda_device=device)
+                          cuda_device=device,
+                          serialization_dir=serialization_dir,
+                          summary_interval=summary_interval,
+                          histogram_interval=histogram_interval,
+                          should_log_parameter_statistics=should_log_parameter_statistics,
+                          should_log_learning_rate=should_log_learning_rate)
 
         return trainer
 
     def update_vocab_from_instances(self, instances, pretrained_files=None):
         #import pdb; pdb.set_trace()
-        #from allennlp.common import Params
         vocab = Vocabulary.from_instances(instances, pretrained_files=pretrained_files)
         self.model.vocab = vocab
         self.model.extend_embedder_vocab()
