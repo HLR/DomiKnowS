@@ -99,10 +99,12 @@ Please also checkout configuration of the program in [`emr/config.py`](emr/confi
 
 #### Tensorboard
 
-Tensorboard style log is generated in [`tensorboard`](tensorboard). To visualize the training process, use Tensorboard:
+Tensorboard style log is generated in `log.<starting date and time>`. To visualize the training process, use Tensorboard:
 ```bash
-tensorboard --logdir=tensorboard
+# replace log.<starting date and time> with your actural log directory
+tensorboard --logdir=log.<starting date and time>
 ```
+
 
 Tensorboard service will start at local port `6006` by default. Visit ['http://localhost:6006/'](http://localhost:6006/) using a modern browser.
 
