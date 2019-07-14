@@ -1,4 +1,5 @@
 from .utils import Namespace
+import time
 
 
 config = {
@@ -19,7 +20,7 @@ config = {
             'word': 50
         },
         'graph': {
-            'balance_factor': 0.5,
+            'balance_factor': 0.25,
             'label_smoothing': 0.1,
             'focal_gamma': 2.,
             'inference_interval': 10
@@ -28,9 +29,10 @@ config = {
     'Train': {
         'lr':0.001,
         'wd':0.0001,
-        'batch': 8,
+        'batch': 16,
         'epoch': 100,
-        'patience': None
+        'patience': None,
+        'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
     }
 }
 
