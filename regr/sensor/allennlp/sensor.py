@@ -2,6 +2,8 @@ from typing import List, Dict, Any, NoReturn
 from collections import OrderedDict
 import torch
 from torch.nn import Module
+import numpy as np
+from scipy.optimize import minimize, minimize_scalar
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.nn.util import get_text_field_mask
@@ -212,3 +214,116 @@ class NGramSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
         self.ngram = ngram
         self.pre = pre
         PreArgsModuleSensor.__init__(self, pre, output_only=output_only)
+
+
+class TokenDistantSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
+    def find_base(s, n):
+        length = lambda b: (1 - b ** (n + 1)) / (1 - b)
+        res = minimize_scalar(lambda b : (length(b) - s) ** 2, method='bounded', bounds=(1, (s-1)**(1./n)))
+        return res.x
+
+    class Dist(Module):
+        def __init__(self, emb_num, window):
+            Module.__init__(self)
+            self.emb_num = emb_num # must define emb_num (to have lb and ub) before window
+            self.window = window
+
+        @property
+        def window(self):
+            return self._window
+
+        @window.setter
+        def window(self, window):
+            self._window = window
+            ul = np.floor(window / 2)
+            self._base = TokenDistantSensor.find_base(ul, self.ub - 1)
+
+        @property
+        def base(self):
+            return self._base
+
+        @property
+        def emb_num(self):
+            return self._emb_num
+
+        @emb_num.setter
+        def emb_num(self, emb_num):
+            self._emb_num = emb_num
+            self._lb = -np.floor((emb_num - 1) / 2)
+            self._ub = np.ceil((emb_num - 1) / 2)
+
+        @property
+        def lb(self):
+            return self._lb
+
+        @property
+        def ub(self):
+            return self._ub
+
+        def forward(self, x):
+            batch = x.shape[0]
+            length = x.shape[1]
+            #(l*2)
+            dist = torch.arange(-length + 1, length, device=x.device)
+            rows = []
+            for i in range(length):
+                rows.append(dist[i:i + length].view(1, -1))
+            #(l, l)
+            dist = torch.cat(tuple(reversed(rows)))
+            #print(dist)
+            sign = dist.sign()
+            dist = dist.abs()
+            dist = dist.to(dtype=torch.float)
+            dist = (dist.log() / np.log(self.base) + 1).floor()
+            #print(dist)
+            dist[dist < 0] = 0
+            dist = dist * sign.to(dtype=dist.dtype, device=dist.device)
+            dist[dist < self.lb] = self.lb
+            dist[dist > self.ub] = self.ub
+            dist = dist - self.lb
+            dist = dist.to(dtype=torch.long)
+            #print(dist)
+            #(n, n)
+            eye = torch.eye(self.emb_num, device=dist.device)
+            #(l*l, n)
+            dist = dist.view(-1, 1).repeat(1, self.emb_num)
+            #(l*l, n)
+            dist = eye.gather(0, dist)
+            #(l, l, n)
+            dist = dist.view(length, length, self.emb_num)
+            #print(dist)
+            #(b, l, l, n)
+            dist = dist.view(1, length, length, self.emb_num).repeat(batch, 1, 1, 1)
+            return dist
+
+    def create_module(self):
+        return TokenDistantSensor.Dist(self.emb_num, self.window)
+
+    def update_output_dim(self):
+        self.output_dim = (self.emb_num,)
+
+    def __init__(
+        self,
+        emb_num: int,
+        window: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.pre = pre
+        self.emb_num = emb_num
+        self.window = window
+        PreArgsModuleSensor.__init__(self, pre, output_only=output_only)
+
+
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        mask = mask.view(ms[0], ms[1], 1).matmul(
+            mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+        return mask
