@@ -329,17 +329,6 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
         return TokenDepSensor.Dep()
 
-    def __init__(
-        self,
-        emb_num: int,
-        window: int,
-        pre: Property,
-        output_only: bool=False
-    ) -> NoReturn:
-        self.emb_num = emb_num
-        self.window = window
-        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
-
     def forward(
         self,
         context: Dict[str, Any]
