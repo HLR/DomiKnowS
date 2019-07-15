@@ -1,10 +1,13 @@
 import os
 import torch
+from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
 from ...utils import WrapperMetaClass
 from ...solver.ilpSelectClassification import ilpOntSolver
 from .. import Graph, Property
+from ...sensor.allennlp.base import AllenNlpReaderSensor
+from ...sensor.allennlp.sensor import SequenceSensor
 
 
 from .model import ScaffoldedModel
@@ -16,9 +19,10 @@ DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
 
-    def __init__(self, vocab):
+    def __init__(self):
+        vocab = Vocabulary()
         self.model = ScaffoldedModel(self, vocab)
-        self.solver = ilpOntSolver.getInstance(self, ontologyPathname='./')
+        self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
 
     def get_multiassign(self):
@@ -31,6 +35,16 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.traversal_apply(func)
         return ma
 
+    def get_sensors(self, *tests):
+        sensors = []
+
+        def func(node):
+            # use a closure to collect multi-assignments
+            if isinstance(node, Property):
+                sensors.extend(node.find(*tests))
+        self.traversal_apply(func)
+        return sensors
+
     def save(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
@@ -38,8 +52,15 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
-    def train(self, train_dataset, valid_dataset, config):
-        trainer = self.get_trainer(train_dataset, valid_dataset, **config)
+    def train(self, data_config, train_config):
+        sentence_sensors = self.get_sensors(AllenNlpReaderSensor)
+        readers = {sensor.reader for name, sensor in sentence_sensors}
+        assert len(readers) == 1 # consider only 1 reader now
+        reader = readers.pop()
+        train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path))
+        valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path))
+        self.update_vocab_from_instances(train_dataset + valid_dataset)
+        trainer = self.get_trainer(train_dataset, valid_dataset, **train_config)
         return trainer.train()
 
     def get_trainer(
@@ -60,8 +81,12 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         # options for optimizor: SGD, Adam, Adadelta, Adagrad, Adamax, RMSprop
         from torch.optim import Adam
         optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
+
+        sentence_sensors = self.get_sensors(SequenceSensor)
+        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
+
         iterator = BucketIterator(batch_size=batch,
-                                  sorting_keys=[('sentence', 'num_tokens')],
+                                  sorting_keys=sorting_keys,
                                   track_epoch=True)
         iterator.index_with(self.model.vocab)
         trainer = Trainer(model=self.model,
@@ -74,3 +99,10 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           cuda_device=device)
 
         return trainer
+
+    def update_vocab_from_instances(self, instances):
+        from allennlp.common import Params
+        self.model.vocab.extend_from_instances(Params({}), instances)
+        for model_path, module in self.model.named_modules():
+            if hasattr(module, 'extend_vocab'):
+                module.extend_vocab(self.model.vocab)

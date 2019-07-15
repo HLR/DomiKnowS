@@ -8,13 +8,31 @@ from allennlp.nn.util import get_text_field_mask
 
 from .. import Graph
 from ...sensor.allennlp import AllenNlpLearner
-from ...solver.inference import inference
+from ...sensor.allennlp.base import AllenNlpModuleSensor
+from ...solver.allennlp.inference import inference
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
 DataInstance = Dict[str, Tensor]
+
+
+def get_prop_result(prop, data):
+    vals = []
+    mask = None
+    for name, sensor in prop.items():
+        sensor(data)
+        if hasattr(sensor, 'get_mask'):
+            if mask is None:
+                mask = sensor.get_mask(data)
+            else:
+                assert mask == sensor.get_mask(data)
+        tensor = data[sensor.fullname]
+        vals.append(tensor)
+    label = vals[0]  # TODO: from readersensor
+    pred = vals[1]  # TODO: from learner
+    return label, pred, mask
 
 
 class BaseModel(Model):
@@ -34,23 +52,7 @@ class BaseModel(Model):
         metrics: Dict[str, Tuple[callable, Tuple[Tuple[Module, callable], float]]]
     ) -> DataInstance:
         for metric_name, (metric, prop) in metrics.items():
-            vals = []
-            for name, sensor in prop.items():
-                # TODO: consider the order, consider the confidence (and module?)
-                sensor(data)
-                tensor = data[sensor.fullname]
-                vals.append(tensor)
-
-            label = vals[0]
-            pred = vals[1]
-            size = label.size()  # (b,l,) or (b,l1,l2)
-            mask = data[self.field_name['mask']].float()
-            ms = mask.size()
-            if len(size) == 3:
-                mask = mask.view(ms[0], ms[1], 1).matmul(
-                    mask.view(ms[0], 1, ms[1]))  # (b,l,l)
-            else:
-                pass
+            label, pred, mask = get_prop_result(prop, data)
 
             from .metrics import Auc, AP, PRAuc
             if isinstance(metric, (Auc, AP, PRAuc)):  # FIXME: bad to have cases here!
@@ -63,6 +65,7 @@ class BaseModel(Model):
                     metric(torch.exp(pred)[:, :, :, 1].reshape(-1).cpu(),  # (b,l,l,c) -> (b,l,l) -> (b*l*l)
                            label.reshape(-1).cpu(),  # (b,l,l) -> (b*l*l）
                            )  # FIXME: some problem here
+
             else:
                 metric(pred, label, mask)
         return data
@@ -187,10 +190,9 @@ class ScaffoldedModel(BaseModel):
 
         i = 0  # TODO: this looks too bad
         for prop in self.graph.get_multiassign():
-            for name, sensor in prop.items():
-                if isinstance(sensor, AllenNlpLearner) and sensor.module is not None:
-                    self.add_module(str(i), sensor.module)
-                    i += 1
+            for name, sensor in prop.find(AllenNlpModuleSensor,  lambda s: s.module is not None):
+                self.add_module(str(i), sensor.module)
+                i += 1
 
     def forward(
         self,
@@ -200,8 +202,8 @@ class ScaffoldedModel(BaseModel):
         # TODO: how to retieve the sequence properly?
         # I used to have topological-sorting over the module graph in my old frameworks
 
-        data[self.field_name['mask']] = get_text_field_mask(
-            data['sentence'])  # FIXME: calculate mask for evert concept
+        #data[self.field_name['mask']] = get_text_field_mask(
+        #    data['sentence'])  # FIXME: calculate mask for evert concept
 
         #tensor = graph.people['label'][1][0](data)
         # make sure every node needed are calculated
@@ -233,18 +235,12 @@ class ScaffoldedModel(BaseModel):
         from allennlp.nn.util import sequence_cross_entropy_with_logits
         loss = 0
         for prop in self.graph.get_multiassign():
-            vals = []
-            for name, sensor in prop.items():
-                sensor(data)
-                tensor = data[sensor.fullname]
-                vals.append(tensor)
-            label = vals[0]  # TODO: from readersensor
-            pred = vals[1]  # TODO: from learner
+            label, pred, mask = get_prop_result(prop, data)
             size = label.size()
 
-            bfactor = 0.  # 0 - no balance, 1 - balance
+            bfactor = 1.  # 0 - no balance, 1 - balance
             if len(size) == 2:  # (b,l,)
-                mask = data[self.field_name['mask']].clone().float()
+                mask = mask.clone().float()
                 # class balance weighted
                 target = (label > 0)
                 pos = (target).sum().float()
@@ -256,13 +252,8 @@ class ScaffoldedModel(BaseModel):
                 loss += sequence_cross_entropy_with_logits(
                     pred, label, mask)
             elif len(size) == 3:  # (b,l1,l2,)
-                mask = data[self.field_name['mask']
-                            ].clone().float()  # (b,l,)
+                mask = mask.clone().float()  # (b,l,l)
                 ms = mask.size()
-                # TODO: this is only self relation mask since we have only one input mask
-                # TODO: mask should be generated somewhere else automatically
-                mask = mask.view(ms[0], ms[1], 1).matmul(
-                    mask.view(ms[0], 1, ms[1]))  # (b,l,l)
                 # label -> (b,l1,l2,), elements are -1 (padding) and 1 (label)
                 # TODO: nosure how to retrieve padding correctly
                 target = (label > 0)
@@ -280,7 +271,7 @@ class ScaffoldedModel(BaseModel):
                     pred.view(ts[0], ts[1] * ts[2], -1),
                     target.view(ts[0], ts[1] * ts[2]),
                     # *0. # mute out the relation to see peop+org result
-                    mask.view(ms[0], ms[1] * ms[1])
+                    mask.view(ms[0], ms[1] * ms[2])
                 )  # NB: the order!
             else:
                 pass  # TODO: no idea, but we are not yet there

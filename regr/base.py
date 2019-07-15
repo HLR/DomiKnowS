@@ -205,10 +205,13 @@ class NamedTreeNode(Named):
             yield from self.sup.sups
 
     @property
-    def fullname(self, delim='/'):
+    def fullname(self):
+        return self.get_fullname()
+
+    def get_fullname(self, delim='/'):
         if self.sup is None:
             return self.name
-        return self.sup.fullname + delim + self.name
+        return self.sup.get_fullname(delim) + delim + self.name
 
     def what(self):
         return {'sup': self.sup}

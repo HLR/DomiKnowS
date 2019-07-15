@@ -2,43 +2,61 @@ from typing import List, Dict, Any, Optional, NoReturn
 import torch
 from torch.nn import Module
 from allennlp.nn.util import get_text_field_mask
+from allennlp.data.token_indexers import SingleIdTokenIndexer
 from ...graph import Property
-from .base import AllenNlpReaderSensor, AllenNlpModuleSensor, MaskedSensor
+from .base import AllenNlpReaderSensor, AllenNlpModuleSensor, SinglePreMaskedSensor, MaskedSensor
 
 
-class SentenceSensor(AllenNlpReaderSensor):
-    pass
-
-
-class PhraseSensor(AllenNlpReaderSensor):
-    pass
-
-
-class PhraseSequenceSensor(AllenNlpReaderSensor, MaskedSensor):
+class SequenceSensor(MaskedSensor):
     def __init__(
         self,
-        vocab,
-        fieldname: str,
-        tokenname: str='tokens',
+        reader,
+        key: str,
         output_only: Optional[bool]=False
     ) -> NoReturn:
-        AllenNlpReaderSensor.__init__(self, fieldname, output_only=output_only) # *pres=[]
-        self.vocab = vocab
-        self.tokenname = tokenname
+        AllenNlpReaderSensor.__init__(self, reader, key, output_only=output_only) # *pres=[]
+        self.tokens = []
+
+    def add_token(self, sensor):
+        self.tokens.append(sensor)
+        self.reader.token_indexers_cls[self][sensor] = lambda s: SingleIdTokenIndexer(namespace=s.get_fullname('_'))
 
     def get_mask(self, context: Dict[str, Any]):
-        return get_text_field_mask(context[self.fieldname])
+        return get_text_field_mask(context[self.fullname])
+
+
+class TokenInSequenceSensor(SinglePreMaskedSensor):
+    def __init__(
+        self,
+        pre,
+        output_only: Optional[bool]=False
+    ) -> NoReturn:
+        SinglePreMaskedSensor.__init__(self, pre, output_only=output_only)
+        for name, sensor in pre.find(SequenceSensor):
+            break
+        else:
+            raise TypeError('{} takes a SequenceSensor as pre-required sensor, what cannot be found in a {} instance is given.'.format(self.fullname, type(pre)))
+        sensor.add_token(self)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        seq_dict = context[self.pre.fullname]
+        return seq_dict[self.get_fullname('_')]
 
 
 class LabelSensor(AllenNlpReaderSensor):
-    pass
+    def __init__(
+        self,
+        reader,
+        key: str,
+        output_only: bool=True
+    ) -> NoReturn:
+        AllenNlpReaderSensor.__init__(self, reader, key, output_only=output_only)
 
 
-class LabelSequenceSensor(AllenNlpReaderSensor):
-    pass
-
-
-class CartesianProductSensor(AllenNlpModuleSensor):
+class CartesianProductSensor(AllenNlpModuleSensor, MaskedSensor):
     class CP(Module):
         def forward(self, x, y):  # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, f1+f2)
             xs = x.size()
@@ -69,3 +87,16 @@ class CartesianProductSensor(AllenNlpModuleSensor):
         context: Dict[str, Any]
     ) -> Any:
         return self.module(context[self.pre.fullname])
+
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        mask = mask.view(ms[0], ms[1], 1).matmul(
+            mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+        return mask

@@ -62,7 +62,7 @@ def enum(inst, cls=None, offset=0):
         enum = inst.items()
     elif isinstance(inst, dict):
         enum = inst.items()
-        if inst: # if dict not empty
+        if inst:  # if dict not empty
             # NB: stacklevel
             #     1 - utils.enum()
             #     2 - concept.Concept.relation_type.<local>.update.<local>.create()
@@ -211,3 +211,18 @@ class WrapperMetaClass(type):
         # no need to call cls.__new__ because we do not need new instance
         inst.__init__(*args, **kwargs)
         return inst
+
+
+def optional_arg_decorator(fn, test=None):
+    def wrapped_decorator(*args):
+        if len(args) == 1 and callable(args[0]) and (test is None or test(args[0])):
+            return fn(args[0])
+        else:
+            def real_decorator(decoratee):
+                return fn(decoratee, *args)
+            return real_decorator
+    return wrapped_decorator
+
+
+def optional_arg_decorator_for(test):
+    return lambda fn: optional_arg_decorator(fn, test)

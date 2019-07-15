@@ -8,9 +8,6 @@ class Sensor(BaseGraphTreeNode):
         self,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        if self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            return context
         try:
             context = self.update_context(context)
         except:
@@ -22,10 +19,14 @@ class Sensor(BaseGraphTreeNode):
         self,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        fwval = self.forward(context)
-        if fwval is not None:
-            context[self.fullname] = fwval
-            context[self.sup.fullname] = fwval # override state under property name
+        if self.fullname in context:
+            # context cached results by sensor name. override if forced recalc is needed
+            val = context[self.fullname]
+        else:
+            val = self.forward(context)
+        if val is not None:
+            context[self.fullname] = val
+            context[self.sup.fullname] = val # override state under property name
         return context
 
     def forward(

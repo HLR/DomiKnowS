@@ -1,17 +1,12 @@
 import xml.etree.ElementTree as ET
-from allennlp.data.dataset_readers import DatasetReader
-from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
-import pandas as pd
-import logging as logger
-from tqdm import tqdm
-from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
-from allennlp.data.fields import Field,TextField, SequenceLabelField,LabelField, ArrayField, AdjacencyField
-from allennlp.data import Instance
+from typing import Dict
+from collections import defaultdict
 from allennlp.data.tokenizers import Token
-import numpy as np
-# from feature1 import getChunk
-# from feature1 import getHeadwords
-from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, DepLabelIndexer, NerTagIndexer
+from allennlp.data.fields import TextField, SequenceLabelField,AdjacencyField
+
+from regr.data.allennlp.reader import SensableReader, keep_fields
+from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
+from allennlp.data import Instance
 import spacy
 
 
@@ -21,115 +16,76 @@ from sklearn.feature_extraction.text import CountVectorizer
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
 nlpmodel = spacy.load("en_core_web_sm")
-class SpRLReader(DatasetReader):
+
+
+class SpRLReader(SensableReader):
+
 
     def __init__(self) -> None:
         super().__init__(lazy=False)
-        # 'tokens' could be just any name, and I don't know where it is need again
-        # checkout modules used in word2vec, they need this name there
 
-        self.token_indexers = {'phrase': SingleIdTokenIndexer('phrase')}
-
+    @field('sentence')
     def update_sentence(
+            self,
+            fields: Dict,
+            raw_sample
+    ) -> Dict:
+
+        (sentence,labels), relations = raw_sample
+        return TextField([Token(word) for word in sentence], self.get_token_indexers('sentence'))
+
+
+
+    @field('labels')
+    def update_labels(
         self,
         fields: Dict,
-        phrase: str
+        raw_sample
     ) -> Dict:
-
-        fields['sentence'] = TextField([Token(phrase)], self.token_indexers)
-        return fields
-
-
-
-    def update_labels_without_none(
-            self,
-            fields: Dict,
-            labels: str
-    ) -> Dict:
-        labelsname={"Landmark":["True"],"Trajector":["False"]}
-        if labels=="Landmark" :
-            labelist1=labelsname['Landmark']
-            labelist2=labelsname['Trajector']
-            fields["Landmark"] = SequenceLabelField(labelist1, fields['sentence'])
-            fields['Trajector']=SequenceLabelField(labelist2,fields['sentence'])
-        if labels=="Trajector":
-            labelist1 = labelsname['Trajector']
-            labelist2 = labelsname['Landmark']
-            fields["Landmark"] = SequenceLabelField(labelist1, fields['sentence'])
-            fields['Trajector'] = SequenceLabelField(labelist2, fields['sentence'])
-
-        return fields
-
-    def update_labels_with_none(
-            self,
-            fields: Dict,
-            labels: str
-    ) -> Dict:
-
-        labelsname = {"label1": ["True"], "label2": ["False"]}
-        labelist1=labelsname['label1']
-        labelist2=labelsname['label2']
-        if labels == "Landmark":
-            fields["Landmark"] = SequenceLabelField(labelist1, fields['sentence'])
-            fields['Trajector'] = SequenceLabelField(labelist2, fields['sentence'])
-            fields['None'] = SequenceLabelField(labelist2, fields['sentence'])
-
-        if labels == "Trajector":
-            fields["Landmark"] = SequenceLabelField(labelist2, fields['sentence'])
-            fields['Trajector'] = SequenceLabelField(labelist1, fields['sentence'])
-            fields['None'] = SequenceLabelField(labelist2, fields['sentence'])
-        if labels=="None":
-            fields["Landmark"] = SequenceLabelField(labelist2, fields['sentence'])
-            fields['Trajector'] = SequenceLabelField(labelist2, fields['sentence'])
-            fields['None'] = SequenceLabelField(labelist1, fields['sentence'])
-
-        return fields
+        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
+        (sentence, pos, labels), relations = raw_sample
+        if labels is None:
+            return None
+        return SequenceLabelField(labels, fields[self.get_fieldname('sentence')])
 
 
 
-
-
-    def to_instance(
+    @field('relation')
+    def update_relations(
         self,
-        sentence: List[str],
-        label: Optional[List[str]],
-    ) -> Instance:
-        fields = {}
-        fields = self.update_sentence(fields, sentence)#tokenization
+        fields: Dict,
+        raw_sample
+    ) -> Dict:
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        (sentence, pos, labels), relations = raw_sample
+        if relations is None:
+            return None
+        relation_indices = []
+        relation_labels = []
+        for rel in relations:
+            src_index = rel[1][0]
+            dst_index = rel[2][0]
+            relation_indices.append((src_index, dst_index))
+            relation_labels.append(rel[0])
+        return AdjacencyField(
+            relation_indices,
+            fields[self.get_fieldname('sentence')],
+            relation_labels,
+            padding_value=-1  # multi-class label, use -1 for null class
+        )
 
 
-        if label is not None:
-            #改
-           #fields = self.update_labels_without_none(fields, label)
-           fields = self.update_labels_with_none(fields, label)
-
-
-        return Instance(fields)
-
-    # def _read(self,file_path):
-    #     with open(file_path, "r") as data_file:
-    #         logger.info("Reading instances from lines in file at: %s", file_path)
-    #         for line_num, line in enumerate(tqdm(data_file.readlines())):
-    #             line = line.strip("\n")
-    #             print(line)
-    #             if not line:
-    #                 continue
 
     def _read(
         self,
         file_path: str
     ) -> Iterable[Instance]:
+
         phrase_list=self.parseSprlXML(file_path)
-        #改
-        #phrases=self.getCorpus_without_none(phrase_list)# to add these two lines to process xml data
-        phrases=self.getCorpus_with_none(self.chunk_generation(phrase_list))
+        raw_examples=self.getCorpus_with_none(self.chunk_generation(phrase_list))
 
-
-
-        for (phrase, label)in phrases:
-             yield self.to_instance(phrase, label)
-
-
+        for raw_sample in raw_examples:
+            yield self._to_instance(raw_sample)
 
     def parseSprlXML(self,sprlxmlfile):
 
@@ -143,34 +99,69 @@ class SpRLReader(DatasetReader):
         sentences_list = []
 
         # iterate news items
+        type_list=[]
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
-             temp_landmark = []
-             temp_trajector=[]
+             landmark = []
+             trajector=[]
+             spatialindicator=[]
+             relationship=[]
+             id_text_list = {}
+             id_label_list={}
              sentence_dic = {}
-
              sentence_dic["id"] = sentenceItem.attrib["id"]
 
              # iterate child elements of item
+
              for child in sentenceItem:
 
 
                  if child.tag == 'TEXT':
                      sentence_dic[child.tag] = child.text
+
+                 if child.tag == 'SPATIALINDICATOR' :
+                    if "text" in child.attrib:
+                         spatialindicator.append(child.attrib['text'])
+                         sentence_dic[child.tag] = spatialindicator
+                         id_text_list[child.attrib['id']]=child.attrib['text']
+                         id_label_list[child.attrib['id']] = child.tag
+
                  if child.tag == 'LANDMARK' :
                     if "text" in child.attrib:
-                         temp_landmark.append(child.attrib['text'])
-                         sentence_dic[child.tag] = temp_landmark
+                         landmark.append(child.attrib['text'])
+                         sentence_dic[child.tag] = landmark
+                         id_text_list[child.attrib['id']]=child.attrib['text']
+                         id_label_list[child.attrib['id']] = child.tag
+
+
                  if child.tag == 'TRAJECTOR':
                      if "text" in child.attrib:
-                         temp_trajector.append(child.attrib['text'])
-                         sentence_dic[child.tag] = temp_trajector
+                         trajector.append(child.attrib['text'])
+                         sentence_dic[child.tag] = trajector
+                         id_text_list[child.attrib['id']] = child.attrib['text']
+                         id_label_list[child.attrib['id']] = child.tag
 
-                         # if "start" in child.attrib:
-                         #     padded_str = ' ' * int(child.attrib["start"]) + child.attrib["text"]
-                         #     sentence_dic[child.tag + "padded"] = padded_str
+
+                 if child.tag == "RELATION":
+                    if child.attrib['general_type'] not in type_list:
+                        type_list.append(child.attrib['general_type'])
+
+                    try:
+
+
+                     if 'general_type' in child.attrib:
+                         # if child.attrib['general_type'] not in type_list:
+                         #     type_list.append(child.attrib['general_type'])
+                         each_relationship=((child.attrib['general_type'],[(id_text_list[child.attrib['landmark_id']],id_label_list[child.attrib['landmark_id']])],
+                                             [(id_text_list[child.attrib['trajector_id']],id_label_list[child.attrib['trajector_id']])],
+                                             [(id_text_list[child.attrib['spatial_indicator_id']],id_label_list[child.attrib['spatial_indicator_id']])]))
+
+                         relationship.append(each_relationship)
+                         sentence_dic[child.tag]=relationship
+                    except:KeyError
+
+
 
              sentences_list.append(sentence_dic)
-
 
 
         # create empty dataform for sentences
@@ -178,142 +169,112 @@ class SpRLReader(DatasetReader):
         return sentences_list
 
 
-#gold label and generate chunk label
+
     def getCorpus_with_none(self,sentences_list):
 
-        output = ["Landmark", "Trajector","None"]
-
-       # print(sentences_list)
-        # Combine landmarks and trajectors phrases and add answers
-        landmark_list=[]
-        trajector_list=[]
-        none_list=[]
-
-
-        corpus_landmarks={}
-        corpus_trajecor={}
-        corpus_none={}
-
+        output = list(self.label_names)
+        final_relationship=[]
 
         for sents in sentences_list:
+            phrase_list = []
+            label_list = []
+            temp_relation = []
+
+            if "RELATION" not in sents.keys():
+                continue
 
             try:
-                landmark_list+=sents['LANDMARK']
-                trajector_list+=sents['TRAJECTOR']
-                none_list+=sents['NONE']
-            except:
-                KeyError
 
-        corpus_landmarks['Phrase']=landmark_list
-        corpus_trajecor['Phrase']=trajector_list
-        corpus_none['Phrase']=none_list
+                for land in sents[output[0]]:
+                    phrase_list.append(land)
+                    label_list.append(output[0])
 
-        landmark_df=pd.DataFrame(corpus_landmarks)
-        trajector_df=pd.DataFrame(corpus_trajecor)
-        none_df=pd.DataFrame(corpus_none)
+                for traj in sents[output[1]]:
+                    phrase_list.append(traj)
+                    label_list.append(output[1])
 
+                for none in sents[output[2]]:
+                    phrase_list.append(none)
+                    label_list.append(output[2])
 
-        landmark_df = landmark_df[~landmark_df['Phrase'].isnull()]
-        landmark_df['Output'] = landmark_df['Phrase'].apply(lambda x: output[0])
-
-        trajector_df = trajector_df[~trajector_df['Phrase'].isnull()]
-        trajector_df['Output'] = trajector_df["Phrase"].apply(lambda x: output[1])
-
-        none_df = none_df[~none_df['Phrase'].isnull()]
-        none_df['Output'] = none_df["Phrase"].apply(lambda x: output[2])
-
-        corpus = landmark_df.append(trajector_df)
-        corpus=corpus.append(none_df)
-
-        corpus_list = np.array(corpus)  # np.ndarray()
-        corpus_list = corpus_list.tolist()  # list
-
-        # corpus.to_csv('data/corpus.txt', sep='\t', index=False)
-
-
-        return corpus_list
-
-
-
-# gold label
-    def getCorpus_without_none(self,sentences_list):
-        output = ["Landmark", "Trajector"]
-
-       # print(sentences_list)
-        # Combine landmarks and trajectors phrases and add answers
-        landmark_list=[]
-        trajector_list=[]
-
-
-        corpus_landmarks={}
-        corpus_trajecor={}
-
-        for sents in sentences_list:
-
-            try:
-                landmark_list+=sents['LANDMARK']
-                trajector_list+=sents['TRAJECTOR']
+                for sptialindicator in sents[output[3]]:
+                    phrase_list.append(sptialindicator)
+                    label_list.append(output[3])
 
             except:
                 KeyError
 
-        corpus_landmarks['Phrase']=landmark_list
-        corpus_trajecor['Phrase']=trajector_list
 
-        landmark_df=pd.DataFrame(corpus_landmarks)
-        trajector_df=pd.DataFrame(corpus_trajecor)
+            for rel in sents['RELATION']:
+                    temp_temp_element=[]
+                    temp_temp_element.append(rel[0])
 
+                    for element in rel[1:]:
 
-        landmark_df = landmark_df[~landmark_df['Phrase'].isnull()]
-        landmark_df['Output'] = landmark_df['Phrase'].apply(lambda x: output[0])
+                       element.insert(0,phrase_list.index(element[0][0]))
+                       temp_temp_element.append(tuple(element))
 
-        trajector_df = trajector_df[~trajector_df['Phrase'].isnull()]
-        trajector_df['Output'] = trajector_df["Phrase"].apply(lambda x: output[1])
+                    temp_relation.append(tuple(temp_temp_element))
 
-
-        corpus = landmark_df.append(trajector_df)
-
-        corpus_list = np.array(corpus)  # np.ndarray()
-        corpus_list = corpus_list.tolist()  # list
-
-        # corpus.to_csv('data/corpus.txt', sep='\t', index=False)
+            relation_tuple=((phrase_list, label_list),temp_relation)
+            final_relationship.append(relation_tuple)
 
 
-        return corpus_list
 
+        return final_relationship
 
-    #here just a example how to generate phrase from sentence
+    def chunk_generation(self, phraselist):
 
-    def chunk_generation(self,phraselist):
-        new_phraselist=[]
+        new_phraselist = []
+
         for phrase in phraselist:
-         try:
-               chunklist=self.getChunk(phrase['TEXT'])
-               tag1list=phrase['LANDMARK']
-               tag2list=phrase['TRAJECTOR']
-               phrase['NONE']=list()
-               labelnone=phrase['NONE']
+            try:
 
-               tag1_headword=[]
-               tag2_headword=[]
+                chunklist = self.getChunk(phrase['TEXT'])
+                tag1list = phrase['LANDMARK']
+                tag2list = phrase['TRAJECTOR']
+                tag3list = phrase['SPATIALINDICATOR']
 
-               for tag1 in tag1list:
-                   tag1_headword.append(self.getHeadwords(tag1))
-               for tag2 in tag2list:
-                   tag2_headword.append(self.getHeadwords(tag2))
+                phrase['NONE'] = list()
+                labelnone = phrase['NONE']
 
-               for chunk in chunklist:
-                        if chunk in tag1list or chunk in tag2list:
-                            continue
-                        if self.getHeadwords(chunk) in tag1_headword:
-                            tag1list.append(chunk)
-                        if self.getHeadwords(chunk) in tag2_headword:
-                            tag2list.append(chunk)
-                        else:
-                            labelnone.append(chunk)
-               new_phraselist.append(phrase)
+                tag1_headword = []
+                tag2_headword = []
+                tag3_headword = []
 
-         except:KeyError
+                for tag1 in tag1list:
+                    tag1_headword.append(self.getHeadwords(tag1))
+                for tag2 in tag2list:
+                    tag2_headword.append(self.getHeadwords(tag2))
+                for tag3 in tag3list:
+                    tag3_headword.append(self.getHeadwords(tag3))
+
+                chunklist = list(set(chunklist))
+
+                for chunk in chunklist:
+                    if chunk in tag1list or chunk in tag2list or chunk in tag3list:
+                        continue
+                    elif self.getHeadwords(chunk) in tag1_headword:
+                        tag1list.append(chunk)
+
+                    elif self.getHeadwords(chunk) in tag2_headword:
+                        tag2list.append(chunk)
+
+                    elif self.getHeadwords(chunk) in tag3_headword:
+                        tag3list.append(chunk)
+
+                    else:
+                        labelnone.append(chunk)
+
+                new_phraselist.append(phrase)
+
+
+
+            except:
+                KeyError
+
+        return new_phraselist
+
 
         return new_phraselist
 
@@ -333,6 +294,63 @@ class SpRLReader(DatasetReader):
 
 
 
+@keep_fields('sentence')
+class SpRLBinaryReader(SpRLReader):
+    label_names = {'LANDMARK', 'TRAJECTOR', 'NONE', 'SPATIALINDICATOR'}
+    relation_names = {'region', 'direction', 'distance'}
+
+    @fields
+    def update_labels(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Dict:
+        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
+        (sentence, labels), relations = raw_sample
+        for label_name in self.label_names:
+            yield label_name, SequenceLabelField(
+                [str(label == label_name) for label in labels],
+                fields[self.get_fieldname('sentence')])
+
+    @fields
+    def update_relations(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Dict:
+        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
+        (sentence, labels), relations = raw_sample
+        if relations is None:
+            return None
+        relation_indices = []
+        relation_labels = []
+        for rel in relations:
+            src_index = rel[1][0]
+           # mid_index=rel[2][0]
+            dst_index = rel[3][0]
+            if (src_index, dst_index) not in relation_indices:
+                relation_indices.append((src_index,dst_index))
+
+            relation_labels.append(rel[0])
+
+        for relation_name in self.relation_names:
+            cur_indices = []
+            for index, label in zip(relation_indices, relation_labels):
+                if label == relation_name:
+                    cur_indices.append(index)
+
+            yield relation_name, AdjacencyField(
+                cur_indices,
+                fields[self.get_fieldname('sentence')],
+                padding_value=0
+            )
+
+
+
+
+@keep_fields
+class SpRLSensorReader(SpRLBinaryReader):
+    pass
 
 
 
@@ -341,12 +359,11 @@ class SpRLReader(DatasetReader):
 
 
 
+#sp.parseSprlXML('data/newSprl2017_all.xml')
+#sp.getCorpus_without_none(sp.parseSprlXML('data/newSprl2017_all.xml'))
 
 
-
-
-#sp=SpRLReader()
-# sp.getCorpus_with_none(sp.chunk_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
+#sp._read(sp.getCorpus_with_none(sp.chunk_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))))
 #a=sp.parseSprlXML('data/newSprl2017_all.xml')
 
 #sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
