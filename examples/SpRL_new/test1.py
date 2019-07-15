@@ -66,6 +66,8 @@ def ontology_declaration():
 def main():
     # 0.prepare data
     reader, vocab, train_dataset, test_dataset = data_preparation(Config.Data)
+    for i in train_dataset:
+        print(i)
 
     graph = ontology_declaration()
 
@@ -74,9 +76,9 @@ def main():
 
     # # # 2.5/3. Train and save the model (Explicit inference done automatically)
     # #  # initial the random seeds of all subsystems
-    seed()
-    lbp.train(train_dataset, test_dataset, Config.Train)
-    lbp.save('/tmp/emr')
+    #seed()
+    #lbp.train(train_dataset, test_dataset, Config.Train)
+    #lbp.save('/tmp/emr')
 
 
 if __name__ == '__main__':

@@ -32,28 +32,35 @@ def model_declaration(graph, vocab):
 
     # retrieve concepts you need in this model
     phrase = graph['linguistic/phrase']
+    pair = graph['linguistic/pair']
 
-    landmark = graph['application/Landmark']
-    trajector = graph['application/Trajector']
-    none=graph['application/None']
+    landmark = graph['application/LANDMARK']
+    trajector = graph['application/TRAJECTOR']
+    region= graph['application/region']
+   # none=graph['application/NONE']
 
     # connect sensors and learners
     # features
     phrase['raw'] = PhraseSequenceSensor(vocab, 'sentence', 'phrase')
     phrase['w2v'] = W2VLearner(embedding_dim, phrase['raw'])
     phrase['emb'] = RNNLearner(embedding_dim, phrase['w2v'])
+    pair['emb'] = CartesianProductSensor(phrase['emb'])
 
     # phrase label
-    landmark['label'] = LabelSequenceSensor('Landmark', output_only=True)
-    trajector['label'] = LabelSequenceSensor('Trajector', output_only=True)
-    none['label']=LabelSequenceSensor('None',output_only=True)
+    landmark['label'] = LabelSequenceSensor('LANDMARK', output_only=True)
+    trajector['label'] = LabelSequenceSensor('TRAJECTOR', output_only=True)
+   # none['label']=LabelSequenceSensor('NONE',output_only=True)
 
     # concept prediction
     landmark['label'] = LogisticRegressionLearner(embedding_dim * 2, phrase['emb'])
     trajector['label'] = LogisticRegressionLearner(embedding_dim * 2, phrase['emb'])
-    none['label'] = LogisticRegressionLearner(embedding_dim * 2, phrase['emb'])
+   # none['label'] = LogisticRegressionLearner(embedding_dim * 2, phrase['emb'])
 
     # wrap with allennlp model
+    region['label'] = LabelSequenceSensor('region', output_only=True)
+
+    # composed-concept prediction
+    region['label'] = LogisticRegressionLearner(embedding_dim * 4, pair['emb'])
     lbp = AllenNlpGraph(graph, vocab)
     return lbp
 
@@ -66,6 +73,7 @@ def ontology_declaration():
 def main():
     # 0.prepare data
     reader, vocab, train_dataset, test_dataset = data_preparation(Config.Data)
+
 
     graph = ontology_declaration()
 

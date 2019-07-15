@@ -74,6 +74,7 @@ def main():
 
     # # # 2.5/3. Train and save the model (Explicit inference done automatically)
     # #  # initial the random seeds of all subsystems
+
     seed()
     lbp.train(train_dataset, test_dataset, Config.Train)
     lbp.save('/tmp/emr')
