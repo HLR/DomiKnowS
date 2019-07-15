@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
@@ -97,8 +97,9 @@ def model_declaration(graph, config):
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
     pair['cat'] = CartesianProductSensor(word['emb'])
-    pair['tkn_dist'] = TokenDistantSensor(16, 128, word['emb'])
-    pair['all'] = ConcatSensor(pair['cat'], pair['tkn_dist'])
+    pair['tkn_dist'] = TokenDistantSensor(16, 128, sentence['raw'])
+    pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
+    pair['all'] = ConcatSensor(pair['cat'], pair['tkn_dist'], pair['tkn_dep'])
     pair['emb'] = MLPLearner([None, None], pair['all'], dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
