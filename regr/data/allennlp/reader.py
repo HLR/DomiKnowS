@@ -86,6 +86,9 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
                 tokens = func(self_, fields, raw_sample)
                 if tokens is not None:
                     self_.key_tokens[key] = tokens
+                    # an additional metafield for the token list
+                    for sensor in self_.key_sensors[key]:
+                        fields[sensor.fullname] = MetadataField(tokens)
                 return tokens
             cls.tokens_dict[key] = update_tokens
             return update_tokens

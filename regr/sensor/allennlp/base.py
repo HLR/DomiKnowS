@@ -133,7 +133,10 @@ class SinglePreSensor(AllenNlpSensor):
         output_only: bool=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, output_dim, pre, output_only=output_only)
-        self.pre = pre
+
+    @property
+    def pre(self):
+        return self.pres[0]
 
     @property
     def pre_dim(self):
@@ -146,7 +149,6 @@ class SinglePreLearner(SinglePreSensor, PreArgsModuleLearner):
         pre: Property,
         output_only: bool=False
     ) -> NoReturn:
-        self.pre = pre
         PreArgsModuleLearner.__init__(self, pre, output_only=output_only)
 
 
@@ -171,3 +173,18 @@ class SinglePreMaskedLearner(SinglePreMaskedSensor, SinglePreLearner):
         context: Dict[str, Any]
     ) -> Any:
         return self.module(context[self.pre.fullname], self.get_mask(context))
+
+
+class SinglePreArgMaskedPairSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        mask = mask.view(ms[0], ms[1], 1).matmul(
+            mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+        return mask
