@@ -1,9 +1,8 @@
 import inspect
 import keyword
-
 from functools import reduce
 import operator
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from typing import Iterable
 from contextlib import contextmanager
 import warnings
@@ -232,3 +231,22 @@ def optional_arg_decorator_for(test):
 
 def prod(iterable):
     return reduce(operator.mul, iterable, 1)
+
+
+def guess_device(context):
+    import torch
+    poll = Counter()
+    for value in context.values():
+        if isinstance(value, dict):
+            poll += guess_device(value)
+        elif isinstance(value, torch.Tensor):
+            poll[value.device] += 1
+        else:
+            poll[None] += 1
+    return poll
+
+def find_base(s, n):
+    from scipy.optimize import minimize, minimize_scalar
+    length = lambda b: (1 - b ** (n + 1)) / (1 - b)
+    res = minimize_scalar(lambda b : (length(b) - s) ** 2, method='bounded', bounds=(1, (s-1)**(1./n)))
+    return res.x
