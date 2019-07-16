@@ -254,19 +254,15 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
             dist[dist < self.lb] = self.lb
             dist[dist > self.ub] = self.ub
             dist = dist - self.lb
-            dist = dist.to(dtype=torch.long)
+            dist = dist.long()
             #print(dist)
             #(n, n)
             eye = torch.eye(self.emb_num, device=dist.device)
-            #(l*l, n)
-            dist = dist.view(-1, 1).repeat(1, self.emb_num)
-            #(l*l, n)
-            dist = eye.gather(0, dist)
-            #(l, l, n)
-            dist = dist.view(length, length, self.emb_num)
-            #print(dist)
+            #import pdb; pdb.set_trace()
+            #(1, l, l, n)
+            dist = eye.index_select(0, dist.view(-1)).view(1, length, length, -1)
             #(b, l, l, n)
-            dist = dist.view(1, length, length, self.emb_num).repeat(batch, 1, 1, 1)
+            dist = dist.repeat(batch, 1, 1, 1)
             return dist
 
     def create_module(self):
@@ -334,6 +330,83 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         #import pdb; pdb.set_trace()
+        device, _ = guess_device(context).most_common(1)[0]
+        with torch.cuda.device(device):
+            return super().forward(context)
+
+
+class TokenLcaSensor(SinglePreArgMaskedPairSensor):
+    class LCA(Module):
+        def forward(self, token_lists, features):
+            #import pdb; pdb.set_trace()
+            batch = features.shape[0]
+            length = features.shape[1]
+            feat = features.shape[2]
+
+            docs = []
+            for token_list in token_lists:
+                doc = None
+                for token in token_list:
+                    if doc is None:
+                        doc = token.doc
+                    else:
+                        assert doc == token.doc
+                docs.append(doc)
+
+            # (b,lx,lx)
+            lcas = torch.zeros((batch, length, length), device=features.device, dtype=torch.long)
+            for doc, lca in zip(docs, lcas):
+                # (l,l) ~ [-1, l-1]
+                lca_np = doc.get_lca_matrix()
+                # (lx,lx) ~ [0, l]
+                lca[:lca_np.shape[0], :lca_np.shape[0]] = torch.as_tensor(lca_np) + 1
+            # (b, lx+1, f)
+            features = torch.cat((torch.zeros((batch, 1, feat), device=features.device), features), dim=1)
+            # (b, lx*lx)
+            lcas = lcas.view(batch, length * length)
+            lcas_emb = []
+            for feature, lca in zip(features, lcas):
+                # [(1, lx*lx, f)...]
+                lcas_emb.append(feature.index_select(0, lca).view(1, length * length, feat))
+            # (b, lx, lx, f)
+            lcas_emb = torch.cat(lcas_emb, dim=0).view(batch, length, length, feat)
+
+            return lcas_emb
+
+    def create_module(self):
+        return TokenLcaSensor.LCA()
+
+    def update_output_dim(self):
+        self.output_dim = self.pre_dims[1]
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        return PreArgsModuleSensor.forward(self, context)
+
+
+class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
+    class DepDist(Module):
+        def __init__(self, emb_num):
+            Module.__init__(self)
+            self.emb_num = emb_num
+
+        def get_output_dim(self):
+            return self.emb_num
+
+        def forward(self, token_lists, features):
+            raise NotImplementedError
+
+    def create_module(self):
+        return TokenDepDistSensor.DepDist(self.emb_num)
+
+    def forward(
+        self,
+        emb_num: int,
+        context: Dict[str, Any]
+    ) -> Any:
+        self.emb_num = emb_num
         device, _ = guess_device(context).most_common(1)[0]
         with torch.cuda.device(device):
             return super().forward(context)
