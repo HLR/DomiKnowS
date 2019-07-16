@@ -4,7 +4,7 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ## Problem description
 
-To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](https://www.clips.uantwerpen.be/conll2003/ner/).
+To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](http://cogcomp.org/page/resource_view/43).
 The task is as follow:
 > **given** an input text such as 
 >> *"Washington works for Associated Press."*,
@@ -97,7 +97,7 @@ python3 -m emr -s
 Please also checkout configuration of the program in [`emr/config.py`](emr/config.py).
 
 
-#### Tensorboard
+#### Logs
 
 Tensorboard style log is generated in `log.<starting date and time>`. To visualize the training process, use Tensorboard:
 ```bash
@@ -111,3 +111,10 @@ Tensorboard service will start at local port `6006` by default. Visit ['http://l
 Some useful filters:
 * `(people|organization|location|other)-F1` show F1 score on entities.
 * `(work_for|live_in|located_in|orgbase_on|kill)-F1` show F1 score on composed entities (relations).
+
+Solver log can be find in the same `log.<starting date and time>` directory and named `solver.log`. It could be too large to load at once after a long-term training and testing. You can try to show the last one solution by `tail`:
+```bash
+# replace log.<starting date and time> with your actural log directory
+tail -n 1000 log.<starting date and time>/solver.log
+```
+Usually last 1000 lines, with option `-n 1000`, is enough for one solution.

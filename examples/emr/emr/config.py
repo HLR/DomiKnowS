@@ -12,7 +12,7 @@ config = {
         'embedding_dim': 8,
         'ngram': 5,
         'bidirectional': True,
-        'dropout': 0.3,
+        'dropout': 0.5,
         'pretrained_files': {
             'word': 'data/glove.6B/glove.6B.50d.txt'
         },
