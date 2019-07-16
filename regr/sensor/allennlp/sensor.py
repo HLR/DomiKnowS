@@ -401,11 +401,11 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         def __init__(self, emb_num):
             Module.__init__(self)
             self.emb_num = emb_num
-            self.emb_dim = 64
+            #self.emb_dim = 64
             self.window = 128
             # leave one for zero-distance, making one-distance another unique (b**0===1 <- b!=0)
             self.base = find_base(self.window, self.emb_num - 1)
-            self.embedding = torch.nn.Embedding(self.emb_num, self.emb_dim)
+            #self.embedding = torch.nn.Embedding(self.emb_num, self.emb_dim)
 
         def get_output_dim(self):
             return self.emb_num * 2
@@ -447,18 +447,19 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
             right_dist[right_dist > self.emb_num - 1] = self.emb_num - 1
             right_dist = right_dist.long()
 
-            left_dist = right_dist.transpose(1, 2)
+            #left_dist = right_dist.transpose(1, 2)
 
             # (lx, lx)
             eye = torch.eye(self.emb_num, device=lcas.device)
             # (b,lx,lx, emb_num)
-            left_oh = eye.index_select(0, left_dist.view(-1)).view(batch, length, length, -1)
+            #left_oh = eye.index_select(0, left_dist.view(-1)).view(batch, length, length, -1)
             right_oh = eye.index_select(0, right_dist.view(-1)).view(batch, length, length, -1)
+            left_oh = right_oh.transpose(1, 2)
 
             # (b,lx,lx,emb_dim)
-            #left_emb = self.embedding[left_dist]
+            #left_emb = self.embedding(left_dist)
             # (b,lx,lx,emb_dim)
-            #right_emb = self.embedding[right_dist]
+            #right_emb = self.embedding(right_dist)
 
             # (b,lx,lx, emb_num*2)
             dist = torch.cat((left_oh, right_oh), dim=-1)
