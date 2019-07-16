@@ -8,13 +8,11 @@ from .. import Sensor, Learner
 class AllenNlpSensor(Sensor):
     def __init__(
         self,
-        output_dim: Tuple[int],
         *pres: List[Property],
         output_only: bool=False
     ) -> NoReturn:
         Sensor.__init__(self)
         self.pres = pres
-        self.output_dim = output_dim
         self.output_only = output_only
         self.pre_dims = []
         for pre in pres:
@@ -47,16 +45,18 @@ class AllenNlpSensor(Sensor):
         # then call forward
         return Sensor.update_context(self, context, force)
 
+    @property
+    def output_dim(self):
+        return None
 
 class ReaderSensor(AllenNlpSensor):
     def __init__(
         self,
         reader,
         key: str,
-        output_dim: Tuple[int],
         output_only: bool=False
     ) -> NoReturn:
-        AllenNlpSensor.__init__(self, output_dim, output_only=output_only) # *pres=[]
+        AllenNlpSensor.__init__(self, output_only=output_only) # *pres=[]
         self.key = key
         self.reader = reader
         reader.claim(key, self)
@@ -84,22 +84,22 @@ class ModuleSensor(AllenNlpSensor):
 
     def create_module(self): pass
 
-    def update_output_dim(self):
-        self.output_dim = (self.module.get_output_dim(),)
+    @property
+    def output_dim(self):
+        return (self.module.get_output_dim(),)
 
     def __init__(
         self,
         *pres: List[Property],
         output_only: bool=False
     ) -> NoReturn:
-        AllenNlpSensor.__init__(self, None, *pres, output_only=output_only)
+        AllenNlpSensor.__init__(self, *pres, output_only=output_only)
         module = self.create_module()
         self.module = ModuleSensor.WrapperModule(module)
         for pre in pres:
             for name, sensor in pre.items():
                 if isinstance(sensor, ModuleSensor) and not sensor.output_only:
                     self.module.add_module(sensor.fullname, sensor.module)
-        self.update_output_dim()
 
 
 class AllenNlpLearner(ModuleSensor, Learner):
@@ -129,10 +129,9 @@ class SinglePreSensor(AllenNlpSensor):
     def __init__(
         self,
         pre: Property,
-        output_dim: Tuple[int],
         output_only: bool=False
     ) -> NoReturn:
-        AllenNlpSensor.__init__(self, output_dim, pre, output_only=output_only)
+        AllenNlpSensor.__init__(self, pre, output_only=output_only)
 
     @property
     def pre(self):
