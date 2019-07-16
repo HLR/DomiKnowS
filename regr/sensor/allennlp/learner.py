@@ -79,7 +79,8 @@ class MLPLearner(SinglePreLearner, SinglePreMaskedSensor):
         layers = []
         for dim_in, dim_out, activation, dropout in zip(dims[:-1], dims[1:], activations, dropouts):
             layers.append(Linear(in_features=dim_in, out_features=dim_out))
-            layers.append(activation)
+            if activation is not None:
+                layers.append(activation)
             layers.append(Dropout(dropout))
 
         module = Sequential(*layers)

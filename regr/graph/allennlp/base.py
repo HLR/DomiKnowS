@@ -17,14 +17,6 @@ from .model import GraphModel
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
-solver_logger = logging.getLogger(ilpSelectClassification.__name__)
-solver_logger.propagate = False
-if DEBUG_TRAINING:
-    solver_logger.setLevel(logging.DEBUG)
-else:
-    solver_logger.setLevel(logging.INFO)
-
-
 class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
 
@@ -84,6 +76,18 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path), metas={'dataset_type':'valid'})
         self.update_vocab_from_instances(train_dataset + valid_dataset, model_config.pretrained_files)
         trainer = self.get_trainer(train_dataset, valid_dataset, **train_config)
+
+        solver_logger = logging.getLogger(ilpSelectClassification.__name__)
+        solver_logger.propagate = False
+        if DEBUG_TRAINING:
+            solver_logger.setLevel(logging.DEBUG)
+        else:
+            solver_logger.setLevel(logging.INFO)
+        solver_logger.handlers = []
+        if train_config.serialization_dir is not None:
+            handler = logging.FileHandler(os.path.join(train_config.serialization_dir, 'solver.log'))
+            solver_logger.addHandler(handler)
+
         return trainer.train()
 
     def get_trainer(
