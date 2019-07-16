@@ -18,7 +18,7 @@ class SentenceSensor(ReaderSensor):
         key: str,
         output_only: bool=False
     ) -> NoReturn:
-        ReaderSensor.__init__(self, reader, key, output_dim=(), output_only=output_only) # *pres=[]
+        ReaderSensor.__init__(self, reader, key, output_only=output_only) # *pres=[]
         self.embedders = OrderedDict() # list of SentenceEmbedderLearner
 
     def add_embedder(self, key, embedder):
@@ -33,6 +33,9 @@ class SentenceSensor(ReaderSensor):
         # mayby with self.embedders something more can happen?
         return None
 
+    @property
+    def output_dim(self):
+        return ()
 
 class LabelSensor(ReaderSensor):
     def __init__(
@@ -41,8 +44,11 @@ class LabelSensor(ReaderSensor):
         key: str,
         output_only: bool=True
     ) -> NoReturn:
-        ReaderSensor.__init__(self, reader, key, output_dim=(), output_only=output_only)
+        ReaderSensor.__init__(self, reader, key, output_only=output_only)
 
+    @property
+    def output_dim(self):
+        return ()
 
 class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
     class Concat(Module):
@@ -53,14 +59,15 @@ class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
     def create_module(self):
         return ConcatSensor.Concat()
 
-    def update_output_dim(self):
+    @property
+    def output_dim(self):
         output_dim = 0
         for pre_dim in self.pre_dims:
             if len(pre_dim) == 0:
                 output_dim += 1
             else:
                 output_dim += prod(pre_dim) # assume flatten
-        self.output_dim = (output_dim,)
+        return (output_dim,)
 
     def get_mask(self, context: Dict[str, Any]):
         for pre in self.pres:
@@ -96,12 +103,13 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
         return CartesianProductSensor.SelfCP()
 
-    def update_output_dim(self):
+    @property
+    def output_dim(self):
         if len(self.pre_dim) == 0:
             output_dim = 2
         else:
             output_dim = prod(self.pre_dim) * 2 # assume flatten
-        self.output_dim = (output_dim,)
+        return (output_dim,)
 
 
 class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
@@ -177,9 +185,10 @@ class NGramSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
     def create_module(self):
         return NGramSensor.NGram(self.ngram)
 
-    def update_output_dim(self):
+    @property
+    def output_dim(self):
         #import pdb; pdb.set_trace()
-        self.output_dim = tuple([dim * self.ngram for dim in self.pre_dim])
+        return tuple(dim * self.ngram for dim in self.pre_dim)
 
     def __init__(
         self,
@@ -246,7 +255,7 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
             #print(dist)
             sign = dist.sign()
             dist = dist.abs()
-            dist = dist.to(dtype=torch.float)
+            dist = dist.float()
             dist = (dist.log() / np.log(self.base) + 1).floor()
             #print(dist)
             dist[dist < 0] = 0
@@ -376,8 +385,9 @@ class TokenLcaSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
         return TokenLcaSensor.LCA()
 
-    def update_output_dim(self):
-        self.output_dim = self.pre_dims[1]
+    @property
+    def output_dim(self):
+        return self.pre_dims[1]
 
     def forward(
         self,
@@ -391,22 +401,85 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         def __init__(self, emb_num):
             Module.__init__(self)
             self.emb_num = emb_num
+            self.emb_dim = 64
+            self.window = 128
+            # leave one for zero-distance, making one-distance another unique (b**0===1 <- b!=0)
+            self.base = find_base(self.window, self.emb_num - 1)
+            self.embedding = torch.nn.Embedding(self.emb_num, self.emb_dim)
 
         def get_output_dim(self):
-            return self.emb_num
+            return self.emb_num * 2
 
-        def forward(self, token_lists, features):
-            raise NotImplementedError
+        def forward(self, token_lists):
+            #import pdb; pdb.set_trace()
+            batch = len(token_lists)
+            length = max(len(token_list) for token_list in token_lists)
+
+            docs = []
+            for token_list in token_lists:
+                doc = None
+                for token in token_list:
+                    if doc is None:
+                        doc = token.doc
+                    else:
+                        assert doc == token.doc
+                docs.append(doc)
+
+            # (b,lx,lx)
+            lcas = torch.zeros((batch, length, length), device=torch.cuda.current_device(), dtype=torch.long)
+            for doc, lca in zip(docs, lcas):
+                # (l,l) ~ [-1, l-1]
+                lca_np = doc.get_lca_matrix()
+                # (lx,lx) ~ [-1, l-1]
+                lca[:lca_np.shape[0], :lca_np.shape[0]] = torch.as_tensor(lca_np)
+            # (b,lx,lx) ~ [0, l-1] U {inf}
+            lcas[lcas==-1] = torch.as_tensor(np.inf)
+            # (lx,)
+            index = torch.arange(length, device=lcas.device)
+            # (b,lx,lx) = (b,lx,lx) - (lx,1)
+            right_dist = (lcas - index).abs()
+
+            right_dist = right_dist.float()
+            # (b,lx,lx) ~ [0, emb_num-2] U {-inf} + 1 ~ [1, emb_num-1] U {-inf}
+            right_dist = (right_dist.log() / np.log(self.base) + 1).floor()
+            # (b,lx,lx) ~ [0, emb_num-1]
+            right_dist[right_dist < 0] = 0
+            right_dist[right_dist > self.emb_num - 1] = self.emb_num - 1
+            right_dist = right_dist.long()
+
+            left_dist = right_dist.transpose(1, 2)
+
+            # (lx, lx)
+            eye = torch.eye(self.emb_num, device=lcas.device)
+            # (b,lx,lx, emb_num)
+            left_oh = eye.index_select(0, left_dist.view(-1)).view(batch, length, length, -1)
+            right_oh = eye.index_select(0, right_dist.view(-1)).view(batch, length, length, -1)
+
+            # (b,lx,lx,emb_dim)
+            #left_emb = self.embedding[left_dist]
+            # (b,lx,lx,emb_dim)
+            #right_emb = self.embedding[right_dist]
+
+            # (b,lx,lx, emb_num*2)
+            dist = torch.cat((left_oh, right_oh), dim=-1)
+            return dist
 
     def create_module(self):
         return TokenDepDistSensor.DepDist(self.emb_num)
 
-    def forward(
+    def __init__(
         self,
         emb_num: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.emb_num = emb_num
+        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
+
+    def forward(
+        self,
         context: Dict[str, Any]
     ) -> Any:
-        self.emb_num = emb_num
         device, _ = guess_device(context).most_common(1)[0]
         with torch.cuda.device(device):
             return super().forward(context)

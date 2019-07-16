@@ -40,11 +40,12 @@ class RNNLearner(SinglePreMaskedLearner):
     def create_module(self):
         return RNNLearner.DropoutRNN(prod(self.pre_dim), self.layers, self.dropout, self.bidirectional)
 
-    def update_output_dim(self):
+    @property
+    def output_dim(self):
         if self.bidirectional:
-            self.output_dim = (prod(self.pre_dim) * 2,)
+            return (prod(self.pre_dim) * 2,)
         else:
-            self.output_dim = (prod(self.pre_dim),)
+            return (prod(self.pre_dim),)
 
     def __init__(
         self,
@@ -86,13 +87,14 @@ class MLPLearner(SinglePreLearner, SinglePreMaskedSensor):
         module = Sequential(*layers)
         return module
 
-    def update_output_dim(self):
+    @property
+    def output_dim(self):
         dims = list(self.dims) # convert or copy
         dims.insert(0, prod(self.pre_dim))
         for i in range(len(dims) - 1):
             if dims[i + 1] is None:
                 dims[i + 1] = dims[i]
-        self.output_dim = (dims[-1],)
+        return (dims[-1],)
 
     def __init__(
         self,
@@ -117,8 +119,9 @@ class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
                            )
         return module
 
-    def update_output_dim(self):
-        self.output_dim = (2,)
+    @property
+    def output_dim(self):
+        return (2,)
 
     def __init__(
         self,
@@ -137,8 +140,9 @@ class SoftmaxLogitLearner(SinglePreLearner, SinglePreMaskedSensor):
                            )
         return module
 
+    @property
     def update_output_dim(self):
-        self.output_dim = (self.classes,)
+        return (self.classes,)
 
     def __init__(
         self,
