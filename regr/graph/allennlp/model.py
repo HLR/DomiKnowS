@@ -42,38 +42,87 @@ def get_prop_result(prop, data):
     return label, pred, mask
 
 
-class BaseModel(Model):
-    def __init__(self, vocab: Vocabulary, inference_interval: int=10) -> None:
+def update_metrics(
+    data: DataInstance,
+    metrics: List[Tuple[str, Property, callable]]
+) -> DataInstance:
+    for metric_name, class_index, prop, metric in metrics:
+        label, pred, mask = get_prop_result(prop, data)
+        metric(pred, label, mask)
+    return data
+
+
+class GraphModel(Model):
+    def __init__(
+        self,
+        graph: Graph,
+        vocab: Vocabulary,
+        balance_factor: float = 0.5,
+        label_smoothing: float = 0.1,
+        focal_gamma: float = 2.,
+        inference_interval: int = 10,
+        inference_training_set: bool = False
+    ) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
+        self.inference_training_set = inference_training_set
         self.meta = []
         self.metrics = []
         self.metrics_inferenced = []
 
-    def _update_metrics_base(
-        self,
-        data: DataInstance,
-        metrics: List[Tuple[str, Property, callable]]
-    ) -> DataInstance:
-        for metric_name, class_index, prop, metric in metrics:
-            label, pred, mask = get_prop_result(prop, data)
-            metric(pred, label, mask)
-        return data
+        self.balance_factor = balance_factor
+        self.label_smoothing = label_smoothing
+        self.focal_gamma = focal_gamma
+
+        self.graph = graph
+
+        self.meta.append(('epoch', Epoch()))
+        whole_metrics = {
+            'Accuracy': CategoricalAccuracy,
+        }
+        class_metrics = {
+            ('P', 'R', 'F1'): F1Measure,
+        }
+
+        for prop in self.graph.poi:
+            for metric_name, MetricClass in whole_metrics.items():
+                self.metrics.append((metric_name, None, prop, MetricClass()))
+                self.metrics_inferenced.append((metric_name, None, prop, MetricClass()))
+            for metric_name, MetricClass in class_metrics.items():
+                for name, sensor in prop.find(AllenNlpLearner):
+                    class_num = prod(sensor.output_dim)
+                    if class_num == 2:
+                        self.metrics.append((metric_name, None, prop, MetricClass(1)))
+                        self.metrics_inferenced.append((metric_name, None, prop, MetricClass(1)))
+                    else:
+                        for class_index in range(class_num):
+                            self.metrics.append((metric_name, class_index, prop, MetricClass(class_index)))
+                            self.metrics_inferenced.append((metric_name, class_index, prop, MetricClass(class_index)))
+
+        i = 0  # TODO: this looks too bad
+        for prop in self.graph.poi:
+            for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
+                self.add_module(str(i), sensor.module)
+                i += 1
 
     def _need_inference(
         self,
         data: DataInstance
     ) -> bool:
         #import pdb; pdb.set_trace()
+        if DEBUG_TRAINING:
+            return True
         dataset_type_key = 'dataset_type' # specify in regr.graph.allennlp.base.AllenNlpGraph
-        if dataset_type_key in data and all(dataset_type == 'train' for dataset_type in data[dataset_type_key]):
+        if (not self.inference_training_set and
+            dataset_type_key in data and
+            all(dataset_type == 'train' for dataset_type in data[dataset_type_key])):
             return False
         epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
         if epoch_key not in data:
             return True  # no epoch record, then always inference
         epoch = min(data[epoch_key])
         need = ((epoch + 1) % self.inference_interval) == 0  # inference every 10 epoch
-        return need or DEBUG_TRAINING
+        return need
 
     def _update_metrics(
         self,
@@ -81,11 +130,11 @@ class BaseModel(Model):
     ) -> DataInstance:
         for metric_name, metric in self.meta:
             metric(data)
-        data = self._update_metrics_base(data, self.metrics)
+        data = update_metrics(data, self.metrics)
         if self._need_inference(data):
             #import pdb; pdb.set_trace()
             data = self._inference(data)
-            data = self._update_metrics_base(data, self.metrics_inferenced)
+            data = update_metrics(data, self.metrics_inferenced)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
@@ -142,73 +191,8 @@ class BaseModel(Model):
         return pretty_metrics
 
     def _update_loss(self, data):
-        if hasattr(self, 'loss_func') and self.loss_func is not None:
-            data['loss'] = self.loss_func(data)
+        data['loss'] = self.loss_func(data)
         return data
-
-    def forward(
-        self,
-        **data: DataInstance
-    ) -> DataInstance:
-        data = self._update_loss(data)
-        data = self._update_metrics(data)
-        #import pdb; pdb.set_trace()
-
-        return data
-
-    def _inference(
-        self,
-        data: DataInstance
-    ) -> DataInstance:
-        # pass through
-        return data
-
-
-class GraphModel(BaseModel):
-    def __init__(
-        self,
-        graph: Graph,
-        vocab: Vocabulary,
-        balance_factor: float = 0.5,
-        label_smoothing: float = 0.1,
-        focal_gamma: float = 2.,
-        inference_interval: int = 10
-    ) -> None:
-        BaseModel.__init__(self, vocab, inference_interval)
-        self.balance_factor = balance_factor
-        self.label_smoothing = label_smoothing
-        self.focal_gamma = focal_gamma
-
-        self.graph = graph
-
-        self.meta.append(('epoch', Epoch()))
-        whole_metrics = {
-            'Accuracy': CategoricalAccuracy,
-        }
-        class_metrics = {
-            ('P', 'R', 'F1'): F1Measure,
-        }
-
-        for prop in self.graph.poi:
-            for metric_name, MetricClass in whole_metrics.items():
-                self.metrics.append((metric_name, None, prop, MetricClass()))
-                self.metrics_inferenced.append((metric_name, None, prop, MetricClass()))
-            for metric_name, MetricClass in class_metrics.items():
-                for name, sensor in prop.find(AllenNlpLearner):
-                    class_num = prod(sensor.output_dim)
-                    if class_num == 2:
-                        self.metrics.append((metric_name, None, prop, MetricClass(1)))
-                        self.metrics_inferenced.append((metric_name, None, prop, MetricClass(1)))
-                    else:
-                        for class_index in range(class_num):
-                            self.metrics.append((metric_name, class_index, prop, MetricClass(class_index)))
-                            self.metrics_inferenced.append((metric_name, class_index, prop, MetricClass(class_index)))
-
-        i = 0  # TODO: this looks too bad
-        for prop in self.graph.poi:
-            for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
-                self.add_module(str(i), sensor.module)
-                i += 1
 
     def forward(
         self,
@@ -219,7 +203,10 @@ class GraphModel(BaseModel):
             for name, sensor in prop.items():
                 sensor(data)
 
-        return BaseModel.forward(self, **data)
+        data = self._update_loss(data)
+        data = self._update_metrics(data)
+
+        return data
 
     def _inference(
         self,
@@ -233,7 +220,7 @@ class GraphModel(BaseModel):
         data: DataInstance
     ) -> DataInstance:
         loss = 0
-        for prop in self.graph.get_multiassign():
+        for prop in self.graph.poi:
             # label (b, l)
             # pred  (b, l, c)
             # mask  (b, l)

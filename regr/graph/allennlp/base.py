@@ -22,17 +22,11 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def __init__(
         self,
-        balance_factor: float = 0.5,
-        label_smoothing: float = 0.1,
-        focal_gamma: float = 2.,
-        inference_interval: int = 10
+        *args,
+        **kwargs
     ):
         vocab = None # Vocabulary()
-        self.model = GraphModel(self, vocab,
-                                balance_factor=balance_factor,
-                                label_smoothing=label_smoothing,
-                                focal_gamma=focal_gamma,
-                                inference_interval=inference_interval)
+        self.model = GraphModel(self, vocab, *args, **kwargs)
         self.solver = ilpOntSolver.getInstance(self)
         # do not invoke super().__init__() here
 
@@ -67,15 +61,15 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
 
-    def train(self, data_config, model_config, train_config):
+    def train(self, data_config, train_config):
         sentence_sensors = self.get_sensors(ReaderSensor)
         readers = {sensor.reader for name, sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
         reader = readers.pop()
         train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path), metas={'dataset_type':'train'})
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path), metas={'dataset_type':'valid'})
-        self.update_vocab_from_instances(train_dataset + valid_dataset, model_config.pretrained_files)
-        trainer = self.get_trainer(train_dataset, valid_dataset, **train_config)
+        self.update_vocab_from_instances(train_dataset + valid_dataset, train_config.pretrained_files)
+        trainer = self.get_trainer(train_dataset, valid_dataset, **train_config.trainer)
 
         solver_logger = logging.getLogger(ilpSelectClassification.__name__)
         solver_logger.propagate = False
@@ -84,8 +78,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         else:
             solver_logger.setLevel(logging.INFO)
         solver_logger.handlers = []
-        if train_config.serialization_dir is not None:
-            handler = logging.FileHandler(os.path.join(train_config.serialization_dir, 'solver.log'))
+        if train_config.trainer.serialization_dir is not None:
+            handler = logging.FileHandler(os.path.join(train_config.trainer.serialization_dir, 'solver.log'))
             solver_logger.addHandler(handler)
 
         return trainer.train()
@@ -95,7 +89,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         train_dataset,
         valid_dataset,
         lr=1., wd=0.003, batch=64, epoch=1000, patience=50,
-        serialization_dir='tensorboard/',
+        serialization_dir='log/',
         summary_interval=100,
         histogram_interval=100,
         should_log_parameter_statistics=True,
