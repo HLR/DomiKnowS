@@ -100,7 +100,7 @@ def model_declaration(graph, config):
     pair['cat'] = CartesianProductSensor(word['compact'])
     pair['tkn_dist'] = TokenDistantSensor(16, 128, sentence['raw'])
     pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(16, sentence['raw'])
+    pair['tkn_dep_dist'] = TokenDepDistSensor(16, 128, sentence['raw'])
     pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
     pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
@@ -151,7 +151,7 @@ def model_declaration(graph, config):
     kill['label'] = LogisticRegressionLearner(pair['encode'])
 
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
-    lbp = AllenNlpGraph(graph)
+    lbp = AllenNlpGraph(graph, **config.graph)
     return lbp
 
 
@@ -168,7 +168,7 @@ def main():
     #### To have better reproducibility, we initial the random seeds of all subsystems.
     seed()
     #### Train the model with inference functionality inside.
-    lbp.train(Config.Data, Config.Model, Config.Train)
+    lbp.train(Config.Data, Config.Train)
     #### Save the model, including vocabulary use to index the tokens.
     lbp.save('/tmp/emr')
 

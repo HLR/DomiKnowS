@@ -23,16 +23,22 @@ config = {
             'balance_factor': 0.25,
             'label_smoothing': 0.1,
             'focal_gamma': 2.,
-            'inference_interval': 10
+            'inference_interval': 10,
+            'inference_training_set': True
         }
     },
     'Train': {
-        'lr':0.001,
-        'wd':0.0001,
-        'batch': 16,
-        'epoch': 100,
-        'patience': None,
-        'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+        'pretrained_files': {
+            'word': 'data/glove.6B/glove.6B.50d.txt'
+        },
+        'trainer': {
+            'lr':0.001,
+            'wd':0.0001,
+            'batch': 16,
+            'epoch': 100,
+            'patience': None,
+            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+        }
     }
 }
 
