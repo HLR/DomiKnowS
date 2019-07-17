@@ -1,11 +1,12 @@
 from typing import List, Dict, Any, Union, NoReturn
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from torch.nn import Module, Dropout, Sequential, GRU, Linear, LogSoftmax, ReLU
+from torch.nn import Module, Dropout, Sequential, Linear, LogSoftmax, ReLU
 from ...utils import prod
 from ...graph import Property
 from .base import AllenNlpLearner, SinglePreLearner, SinglePreMaskedLearner
 from .sensor import SentenceSensor, SinglePreMaskedSensor, SentenceEmbedderSensor
+from .module import DropoutRNN
 
 
 class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
@@ -21,31 +22,8 @@ class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
 
 
 class RNNLearner(SinglePreMaskedLearner):
-    class DropoutRNN(Module):
-        def __init__(self, embedding_dim, layers=1, dropout=0.5, bidirectional=True):
-            Module.__init__(self)
-
-            from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
-            self.rnn = PytorchSeq2SeqWrapper(GRU(embedding_dim,
-                                                 embedding_dim,
-                                                 num_layers=layers,
-                                                 batch_first=True,
-                                                 dropout=dropout,
-                                                 bidirectional=bidirectional))
-            self.dropout = Dropout(dropout)
-
-        def forward(self, x, mask):
-            return self.dropout(self.rnn(x, mask))
-
     def create_module(self):
-        return RNNLearner.DropoutRNN(prod(self.pre_dim), self.layers, self.dropout, self.bidirectional)
-
-    @property
-    def output_dim(self):
-        if self.bidirectional:
-            return (prod(self.pre_dim) * 2,)
-        else:
-            return (prod(self.pre_dim),)
+        return DropoutRNN(prod(self.pre_dim), self.layers, self.dropout, self.bidirectional)
 
     def __init__(
         self,
