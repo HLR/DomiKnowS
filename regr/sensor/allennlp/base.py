@@ -1,8 +1,8 @@
 from typing import List, Dict, Tuple, NoReturn, Any
 import torch
-from torch.nn import Module
 from ...graph import Property
 from .. import Sensor, Learner
+from .module import WrapperModule
 
 
 class AllenNlpSensor(Sensor):
@@ -70,36 +70,27 @@ class ReaderSensor(AllenNlpSensor):
 
 
 class ModuleSensor(AllenNlpSensor):
-    class WrapperModule(Module):
-        # use a wrapper to keep pre-requireds and avoid side-effect of sequencial or other modules
-        def __init__(self, module):
-            Module.__init__(self)
-            self.main_module = module
-
-        def forward(self, *args, **kwargs):
-            return self.main_module(*args, **kwargs)
-
-        def get_output_dim(self):
-            return self.main_module.get_output_dim()
-
-    def create_module(self): pass
-
-    @property
-    def output_dim(self):
-        return (self.module.get_output_dim(),)
-
     def __init__(
         self,
         *pres: List[Property],
         output_only: bool=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, *pres, output_only=output_only)
-        module = self.create_module()
-        self.module = ModuleSensor.WrapperModule(module)
-        for pre in pres:
-            for name, sensor in pre.items():
-                if isinstance(sensor, ModuleSensor) and not sensor.output_only:
-                    self.module.add_module(sensor.fullname, sensor.module)
+        self._module = None
+
+    def create_module(self):
+        raise NotImplementedError('Implemented of create_module is required in subclass of ModuleSensor.')
+
+    @property
+    def module(self):
+        if self._module is None:
+            module = self.create_module()
+            self._module = WrapperModule(module, self.pres)
+        return self._module
+
+    @property
+    def output_dim(self):
+        return (self.module.get_output_dim(),)
 
 
 class AllenNlpLearner(ModuleSensor, Learner):
