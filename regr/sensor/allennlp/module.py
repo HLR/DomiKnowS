@@ -309,3 +309,12 @@ class PairTokenDependencyDistance(BaseModule):
         # (b,lx,lx, emb_num*2)
         dist = torch.cat((left_oh, right_oh), dim=-1)
         return dist
+
+
+class Permute(Module):
+    def __init__(self, *dims):
+        Module.__init__(self)
+        self.dims = dims
+
+    def forward(self, x):
+        return x.permute(self.dims)

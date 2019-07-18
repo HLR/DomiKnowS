@@ -1,12 +1,14 @@
 from typing import List, Dict, Any, Union, NoReturn
+from collections.abc import Iterable
+import math
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from torch.nn import Module, Dropout, Sequential, Linear, LogSoftmax, ReLU
+from torch.nn import Module, Dropout, Sequential, Linear, ZeroPad2d, Conv2d, LogSoftmax, ReLU
 from ...utils import prod
 from ...graph import Property
 from .base import AllenNlpLearner, SinglePreLearner, SinglePreMaskedLearner
 from .sensor import SentenceSensor, SinglePreMaskedSensor, SentenceEmbedderSensor
-from .module import DropoutRNN
+from .module import DropoutRNN, Permute
 
 
 class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
@@ -83,6 +85,57 @@ class MLPLearner(SinglePreLearner, SinglePreMaskedSensor):
         output_only: bool=False
     ) -> NoReturn:
         self.dims = dims
+        self.activation = activation
+        self.dropout = dropout
+        SinglePreLearner.__init__(self, pre, output_only=output_only)
+
+
+class ConvLearner(MLPLearner):
+    def create_module(self):
+        dims = list(self.dims) # convert or copy
+        if isinstance(self.kernel_size, Iterable):
+            kernel_sizes = self.kernel_size
+        else:
+            kernel_sizes = [self.kernel_size,] * len(dims)
+        if isinstance(self.activation, Iterable):
+            activations = self.activation
+        else:
+            activations = [self.activation,] * len(dims)
+        if isinstance(self.dropout, Iterable):
+            dropouts = self.dropout
+        else:
+            dropouts = [self.dropout,] * len(dims)
+
+        dims.insert(0, prod(self.pre_dim))
+        for i in range(len(dims) - 1):
+            if dims[i + 1] is None:
+                dims[i + 1] = dims[i]
+        layers = []
+        for dim_in, dim_out, kernel_size, activation, dropout in zip(dims[:-1], dims[1:], kernel_sizes, activations, dropouts):
+            layers.append(Permute(0, 3, 1, 2)) # (b,l,l,c) -> (b,c,l,l)
+            padding_t = padding_l = math.floor((float(kernel_size) - 1) / 2)
+            padding_b = padding_r = math.ceil((float(kernel_size) - 1) / 2)
+            layers.append(ZeroPad2d(padding=(padding_l, padding_r, padding_t, padding_b)))
+            layers.append(Conv2d(in_channels=dim_in, out_channels=dim_out, kernel_size=kernel_size))
+            layers.append(Permute(0, 2, 3, 1)) # (b,c,l,l) -> (b,l,l,c)
+            if activation is not None:
+                layers.append(activation)
+            layers.append(Dropout(dropout))
+
+        module = Sequential(*layers)
+        return module
+
+    def __init__(
+        self,
+        dims: List[int],
+        kernel_size: Union[int, List[int]],
+        pre: Property,
+        activation: Union[Module, List[Module]]=ReLU(),
+        dropout: Union[float, List[float]]=0.5,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.dims = dims
+        self.kernel_size = kernel_size
         self.activation = activation
         self.dropout = dropout
         SinglePreLearner.__init__(self, pre, output_only=output_only)
