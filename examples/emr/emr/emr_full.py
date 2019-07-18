@@ -11,7 +11,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
 from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
 from regr.graph.allennlp import AllenNlpGraph
@@ -105,7 +105,7 @@ def model_declaration(graph, config):
     pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
     pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    pair['encode'] = MLPLearner([None, None], pair['all'], dropout=config.dropout)
+    pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
