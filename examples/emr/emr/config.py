@@ -24,7 +24,7 @@ config = {
             'label_smoothing': 0.1,
             'focal_gamma': 2.,
             'inference_interval': 10,
-            'inference_training_set': True
+            'inference_training_set': False
         }
     },
     'Train': {

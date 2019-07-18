@@ -79,6 +79,11 @@ It will generate the datasets for trainging and testing [`data/EntityMentionRela
 For more options like folds or output format, please use `-h`: `python3 -m emr.conll_split -h`.
 
 
+Some basic statistics of a data file can be obtained by
+```bash
+python3 -m emr.conll_stat data/EntityMentionRelation/conll.corp
+```
+
 
 ### The example
 

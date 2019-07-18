@@ -11,12 +11,7 @@ class Conll04SpaCyBilouReader(Conll04SpaCyReader):
     def __init__(self, relation_anckor='last') -> None:
         super().__init__()
         self.relation_anckor = relation_anckor
-        
-    @property
-    def relation_anckor(self):
-        pass
 
-    @relation_anckor.setter
     def relation_anckor(self, relation_anckor):
         if relation_anckor in ('first', 'lass'):
             raise ValueError('"relation_anckor" must be one of "first" or "last".')
@@ -24,6 +19,8 @@ class Conll04SpaCyBilouReader(Conll04SpaCyReader):
             self._relation_index = 0
         elif relation_anckor == 'last':
             self._relation_index = -1
+
+    relation_anckor = property(fset=relation_anckor)
 
     @cls.field('labels')
     def update_labels(
@@ -35,7 +32,7 @@ class Conll04SpaCyBilouReader(Conll04SpaCyReader):
         tokens, labels, relations = raw_sample
         if labels is None:
             return None
-        label_list = ['O', ] * len(tokens)
+        label_list = ['O',] * len(tokens)
         for label_type, token in labels:
             if len(token) == 1:
                 label_list[token[0].i] = label_type + '-U'

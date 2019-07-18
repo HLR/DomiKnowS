@@ -98,9 +98,9 @@ def model_declaration(graph, config):
     #### But there is still a PyTorch module associated with it.
     word['compact'] = MLPLearner([64,], word['encode'])
     pair['cat'] = CartesianProductSensor(word['compact'])
-    pair['tkn_dist'] = TokenDistantSensor(16, 128, sentence['raw'])
+    pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
     pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(16, 128, sentence['raw'])
+    pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
     pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
     pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
