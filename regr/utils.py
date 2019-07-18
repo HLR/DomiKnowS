@@ -247,6 +247,8 @@ def guess_device(context):
 
 def find_base(s, n):
     from scipy.optimize import minimize, minimize_scalar
-    length = lambda b: (1 - b ** (n + 1)) / (1 - b)
+    # NB: `n` here is the number of terms in this "geometric series", including 0 and last k.
+    #     So the "n+1" in the original formula is `n` here.
+    length = lambda b: (1 - b ** n) / (1 - b)
     res = minimize_scalar(lambda b : (length(b) - s) ** 2, method='bounded', bounds=(1, (s-1)**(1./n)))
     return res.x
