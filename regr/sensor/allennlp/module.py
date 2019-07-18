@@ -277,15 +277,15 @@ class PairTokenDependencyDistance(BaseModule):
             lca_np = doc.get_lca_matrix()
             # (lx,lx) ~ [-1, l-1]
             lca[:lca_np.shape[0], :lca_np.shape[0]] = torch.as_tensor(lca_np)
+        lcas = lcas.float()
         # (b,lx,lx) ~ [0, l-1] U {inf}
         lcas[lcas==-1] = torch.as_tensor(np.inf)
         # (lx,)
-        index = torch.arange(length, device=lcas.device)
-        # (b,lx,lx) = (b,lx,lx) - (lx,1)
+        index = torch.arange(length, device=lcas.device, dtype=torch.float)
+        # (b,lx,lx) = (b,lx,lx) - (lx,1) ~ [0, l-1] U {inf}
         right_dist = (lcas - index).abs()
 
-        right_dist = right_dist.float()
-        # (b,lx,lx) ~ [0, emb_num-2] U {-inf} + 1 ~ [1, emb_num-1] U {-inf}
+        # (b,lx,lx) ~ [0, emb_num-2] U {-inf, inf} + 1 ~ [1, emb_num-1] U {-inf, inf}
         right_dist = (right_dist.log() / np.log(self.base) + 1).floor()
         # (b,lx,lx) ~ [0, emb_num-1]
         right_dist[right_dist < 0] = 0
