@@ -314,6 +314,7 @@ class SpRLBinaryReader(SpRLReader):
 
     @fields
     def update_relations(
+
         self,
         fields: Dict,
         raw_sample
