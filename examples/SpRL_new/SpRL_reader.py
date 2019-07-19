@@ -7,6 +7,9 @@ from allennlp.data.fields import TextField, SequenceLabelField,AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_fields
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
+from allennlp.data.fields.sequence_field import SequenceField
+from allennlp.common.checks import ConfigurationError
+from test3 import NewAdjacencyField
 import spacy
 
 
@@ -305,7 +308,6 @@ class SpRLBinaryReader(SpRLReader):
         fields: Dict,
         raw_sample
     ) -> Dict:
-        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
         (sentence, labels), relations = raw_sample
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
@@ -319,7 +321,6 @@ class SpRLBinaryReader(SpRLReader):
         fields: Dict,
         raw_sample
     ) -> Dict:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
         (sentence, labels), relations = raw_sample
         if relations is None:
             return None
@@ -327,10 +328,10 @@ class SpRLBinaryReader(SpRLReader):
         relation_labels = []
         for rel in relations:
             src_index = rel[1][0]
-           # mid_index=rel[2][0]
+            mid_index=rel[2][0]
             dst_index = rel[3][0]
-            if (src_index, dst_index) not in relation_indices:
-                relation_indices.append((src_index,dst_index))
+            if (src_index,mid_index, dst_index) not in relation_indices:
+                relation_indices.append((src_index,mid_index,dst_index))
 
             relation_labels.append(rel[0])
 
@@ -340,7 +341,7 @@ class SpRLBinaryReader(SpRLReader):
                 if label == relation_name:
                     cur_indices.append(index)
 
-            yield relation_name, AdjacencyField(
+            yield relation_name, NewAdjacencyField(
                 cur_indices,
                 fields[self.get_fieldname('sentence')],
                 padding_value=0
