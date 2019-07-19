@@ -108,6 +108,8 @@ class NewAdjacencyField(Field[torch.Tensor]):
             tensor[index] = label
         return tensor
 
+
+
     @overrides
     def empty_field(self) -> 'AdjacencyField':
         # pylint: disable=protected-access
