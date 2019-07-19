@@ -2,9 +2,9 @@ import xml.etree.ElementTree as ET
 from typing import Dict
 from collections import defaultdict
 from allennlp.data.tokenizers import Token
-from allennlp.data.fields import TextField, SequenceLabelField,AdjacencyField
-
-from regr.data.allennlp.reader import SensableReader, keep_fields
+from allennlp.data.fields import Field, TextField, SequenceLabelField,AdjacencyField
+from allennlp.data.token_indexers import SingleIdTokenIndexer
+from regr.data.allennlp.reader import SensableReader, keep_keys
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
 from allennlp.data.fields.sequence_field import SequenceField
@@ -29,7 +29,7 @@ class SpRLReader(SensableReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)
 
-    @field('sentence')
+    @cls.tokens('sentence')
     def update_sentence(
             self,
             fields: Dict,
@@ -37,11 +37,21 @@ class SpRLReader(SensableReader):
     ) -> Dict:
 
         (sentence,labels), relations = raw_sample
-        return TextField([Token(word) for word in sentence], self.get_token_indexers('sentence'))
+        return [Token(word) for word in sentence]
 
 
+    @cls.textfield('word')
+    def update_sentence_word(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
+        textfield = TextField(tokens, indexers)
+        return textfield
 
-    @field('labels')
+
+    @cls.field('labels')
     def update_labels(
         self,
         fields: Dict,
@@ -51,11 +61,11 @@ class SpRLReader(SensableReader):
         (sentence, pos, labels), relations = raw_sample
         if labels is None:
             return None
-        return SequenceLabelField(labels, fields[self.get_fieldname('sentence')])
+        return SequenceLabelField(labels, fields[self.get_fieldname('word')])
 
 
 
-    @field('relation')
+    @cls.field('relation')
     def update_relations(
         self,
         fields: Dict,
@@ -74,14 +84,13 @@ class SpRLReader(SensableReader):
             relation_labels.append(rel[0])
         return AdjacencyField(
             relation_indices,
-            fields[self.get_fieldname('sentence')],
+            fields[self.get_fieldname('word')],
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
 
 
-
-    def _read(
+    def raw_read(
         self,
         file_path: str
     ) -> Iterable[Instance]:
@@ -90,7 +99,7 @@ class SpRLReader(SensableReader):
         raw_examples=self.getCorpus_with_none(self.chunk_generation(phrase_list))
 
         for raw_sample in raw_examples:
-            yield self._to_instance(raw_sample)
+            yield raw_sample
 
     def parseSprlXML(self,sprlxmlfile):
 
@@ -299,12 +308,12 @@ class SpRLReader(SensableReader):
 
 
 
-@keep_fields('sentence')
+@keep_keys(exclude=['labels', 'relation'])
 class SpRLBinaryReader(SpRLReader):
     label_names = {'LANDMARK', 'TRAJECTOR', 'NONE', 'SPATIALINDICATOR'}
     relation_names = {'region', 'direction', 'distance'}
 
-    @fields
+    @cls.fields
     def update_labels(
         self,
         fields: Dict,
@@ -314,11 +323,10 @@ class SpRLBinaryReader(SpRLReader):
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
-                fields[self.get_fieldname('sentence')])
-
-    @fields
+                fields[self.get_fieldname('word')])
+            
+    @cls.fields
     def update_relations(
-
         self,
         fields: Dict,
         raw_sample
@@ -345,14 +353,14 @@ class SpRLBinaryReader(SpRLReader):
 
             yield relation_name, NewAdjacencyField(
                 cur_indices,
-                fields[self.get_fieldname('sentence')],
+                fields[self.get_fieldname('word')],
                 padding_value=0
             )
 
 
 
 
-@keep_fields
+@keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
     pass
 
