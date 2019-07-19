@@ -144,7 +144,7 @@ class SinglePreLearner(SinglePreSensor, PreArgsModuleLearner):
 
 class MaskedSensor(AllenNlpSensor):
     def get_mask(self, context: Dict[str, Any]):
-        pass
+        raise NotImplementedError('Implement get_mask in subclass of MaskedSensor.')
 
 
 class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
@@ -166,15 +166,4 @@ class SinglePreMaskedLearner(SinglePreMaskedSensor, SinglePreLearner):
 
 
 class SinglePreArgMaskedPairSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
-    def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
-            break
-        else:
-            print(self.pre)
-            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
-
-        mask = sensor.get_mask(context).float()
-        ms = mask.size()
-        mask = mask.view(ms[0], ms[1], 1).matmul(
-            mask.view(ms[0], 1, ms[1]))  # (b,l,l)
-        return mask
+    pass
