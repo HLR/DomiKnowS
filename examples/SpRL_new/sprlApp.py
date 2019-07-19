@@ -1,11 +1,14 @@
-from regr.sensor.allennlp.sensor import SequenceSensor, TokenInSequenceSensor, LabelSensor, CartesianProductSensor
-from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner
+
 
 from regr.graph.allennlp import AllenNlpGraph
 from SpRL_reader import SpRLSensorReader as Reader
 from config import Config
 from utils import seed
 
+
+REGR_DEBUG=1
 def ontology_declaration():
     from spGraph import splang_Graph
     return splang_Graph
@@ -28,14 +31,16 @@ def model_declaration(graph, config):
 
 
     region = graph['application/region']
+    relation_none=graph['application/relation_none']
+    direction = graph['application/direction']
+    distance=graph['application/distance']
 
     reader = Reader()
 
-    sentence['raw'] = SequenceSensor(reader, 'sentence')
-    phrase['raw'] = TokenInSequenceSensor(sentence['raw'])
-    phrase['w2v'] = W2VLearner(config.embedding_dim, phrase['raw'])
-    phrase['emb'] = RNNLearner(config.embedding_dim, phrase['w2v'])
-    pair['emb'] = CartesianProductSensor(phrase['emb'])
+    sentence['raw'] = SentenceSensor(reader, 'sentence')
+    phrase['w2v'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    phrase['emb'] = RNNLearner(phrase['w2v'])
+    pair['emb'] = CartesianProduct3Sensor(phrase['emb'])
 
     landmark['label'] = LabelSensor(reader,'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader,'TRAJECTOR', output_only=True)
@@ -43,15 +48,21 @@ def model_declaration(graph, config):
     none['label'] = LabelSensor(reader,'NONE', output_only=True)
 
 
-    landmark['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    trajector['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    spatialindicator['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    none['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
+    landmark['label'] = LogisticRegressionLearner(phrase['emb'])
+    trajector['label'] = LogisticRegressionLearner(phrase['emb'])
+    spatialindicator['label'] = LogisticRegressionLearner(phrase['emb'])
+    none['label'] = LogisticRegressionLearner(phrase['emb'])
 
     region['label'] = LabelSensor(reader, 'region', output_only=True)
+    relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
+    direction['label'] = LabelSensor(reader, 'direction', output_only=True)
+    distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
-    region['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
 
+    region['label'] = LogisticRegressionLearner(pair['emb'])
+    relation_none['label'] = LogisticRegressionLearner(pair['emb'])
+    direction['label'] = LogisticRegressionLearner(pair['emb'])
+    distance['label'] = LogisticRegressionLearner(pair['emb'])
 
     lbp = AllenNlpGraph(graph)
     return lbp

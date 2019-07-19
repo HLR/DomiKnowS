@@ -129,7 +129,7 @@ class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
         #(b,l,l)
         mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
         mask2 = mask1.view(ms[0], ms[1], ms[1], 1).matmul(mask.view(ms[0], 1, 1, ms[1]))
-
+        
         return mask2
 
 class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):

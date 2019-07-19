@@ -2,34 +2,34 @@ import xml.etree.ElementTree as ET
 from typing import Dict
 from collections import defaultdict
 from allennlp.data.tokenizers import Token
-from allennlp.data.fields import TextField, SequenceLabelField,AdjacencyField
-
-from regr.data.allennlp.reader import SensableReader, keep_fields
+from allennlp.data.fields import Field, TextField, SequenceLabelField,AdjacencyField
+from allennlp.data.token_indexers import SingleIdTokenIndexer
+from regr.data.allennlp.reader import SensableReader, keep_keys
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
 from allennlp.data.fields.sequence_field import SequenceField
 from allennlp.common.checks import ConfigurationError
-import logging
+import itertools
 import spacy
 import torch
 
 
 
 #sklearn
-from sklearn.feature_extraction.text import CountVectorizer
-
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
 nlpmodel = spacy.load("en_core_web_sm")
 
 
 class SpRLReader(SensableReader):
+    label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR','NONE']
+    relation_names = ['region', 'direction', 'distance','relation_none']
 
 
     def __init__(self) -> None:
         super().__init__(lazy=False)
 
-    @field('sentence')
+    @cls.tokens('sentence')
     def update_sentence(
             self,
             fields: Dict,
@@ -37,11 +37,21 @@ class SpRLReader(SensableReader):
     ) -> Dict:
 
         (sentence,labels), relations = raw_sample
-        return TextField([Token(word) for word in sentence], self.get_token_indexers('sentence'))
+        return [Token(word) for word in sentence]
 
 
+    @cls.textfield('word')
+    def update_sentence_word(
+        self,
+        fields,
+        tokens
+    ) -> Field:
+        indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
+        textfield = TextField(tokens, indexers)
+        return textfield
 
-    @field('labels')
+
+    @cls.field('labels')
     def update_labels(
         self,
         fields: Dict,
@@ -51,11 +61,11 @@ class SpRLReader(SensableReader):
         (sentence, pos, labels), relations = raw_sample
         if labels is None:
             return None
-        return SequenceLabelField(labels, fields[self.get_fieldname('sentence')])
+        return SequenceLabelField(labels, fields[self.get_fieldname('word')])
 
 
 
-    @field('relation')
+    @cls.field('relation')
     def update_relations(
         self,
         fields: Dict,
@@ -74,23 +84,22 @@ class SpRLReader(SensableReader):
             relation_labels.append(rel[0])
         return AdjacencyField(
             relation_indices,
-            fields[self.get_fieldname('sentence')],
+            fields[self.get_fieldname('word')],
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
 
 
-
-    def _read(
+    def raw_read(
         self,
         file_path: str
     ) -> Iterable[Instance]:
 
         phrase_list=self.parseSprlXML(file_path)
-        raw_examples=self.getCorpus_with_none(self.chunk_generation(phrase_list))
+        raw_examples=self.negative_relation_generation(self.getCorpus(self.negative_entity_generation(phrase_list)))
 
         for raw_sample in raw_examples:
-            yield self._to_instance(raw_sample)
+            yield raw_sample
 
     def parseSprlXML(self,sprlxmlfile):
 
@@ -175,9 +184,11 @@ class SpRLReader(SensableReader):
 
 
 
-    def getCorpus_with_none(self,sentences_list):
 
-        output = list(self.label_names)
+    def getCorpus(self,sentences_list):
+
+        output = self.label_names
+
         final_relationship=[]
 
         for sents in sentences_list:
@@ -198,12 +209,13 @@ class SpRLReader(SensableReader):
                     phrase_list.append(traj)
                     label_list.append(output[1])
 
-                for none in sents[output[2]]:
-                    phrase_list.append(none)
+                for sptialindicator in sents[output[2]]:
+                    phrase_list.append(sptialindicator)
                     label_list.append(output[2])
 
-                for sptialindicator in sents[output[3]]:
-                    phrase_list.append(sptialindicator)
+
+                for none in sents[output[3]]:
+                    phrase_list.append(none)
                     label_list.append(output[3])
 
             except:
@@ -226,9 +238,44 @@ class SpRLReader(SensableReader):
 
 
 
+        self.negative_relation_generation(final_relationship)
         return final_relationship
 
-    def chunk_generation(self, phraselist):
+    def negative_relation_generation(self,phrase_relation_list):
+        for phrase_relation in phrase_relation_list:
+
+            list_indices=list(range(len(phrase_relation[0][0])))
+            list_indices=list(itertools.combinations(list_indices,3))
+
+            positive_list=[]
+            for rel in phrase_relation[1]:
+                src_index = rel[1][0]
+                mid_index = rel[2][0]
+                dst_index = rel[3][0]
+                positive_list.append((src_index,mid_index,dst_index))
+
+            label_indices_list=phrase_relation[0][1]
+            text_list=phrase_relation[0][0]
+            label_name_list=self.label_names
+
+            for indice in list_indices:
+                if indice in positive_list:
+                    continue
+                elif label_indices_list[indice [0]]==label_name_list[0] and \
+                     label_indices_list[indice [1]]==label_name_list[1] and \
+                     label_indices_list[indice [2]]==label_name_list[2]:
+                     new_relationship=(("relation_none",
+                                                   (indice[0],(text_list[indice [0]],label_indices_list[indice [0]])),
+                                                   (indice[1],(text_list[indice [1]],label_indices_list[indice [1]])),
+                                                   (indice[2], (text_list[indice[2]], label_indices_list[indice[2]]))))
+                     phrase_relation[1].append(new_relationship)
+
+
+
+        return phrase_relation_list
+
+
+    def negative_entity_generation(self, phraselist):
 
         new_phraselist = []
 
@@ -256,16 +303,21 @@ class SpRLReader(SensableReader):
 
                 chunklist = list(set(chunklist))
 
+
                 for chunk in chunklist:
+
                     if chunk in tag1list or chunk in tag2list or chunk in tag3list:
                         continue
-                    elif self.getHeadwords(chunk) in tag1_headword:
+                    elif self.getHeadwords(chunk) in tag1_headword and self.get_Pos(chunk) != "VERB":
+
                         tag1list.append(chunk)
 
-                    elif self.getHeadwords(chunk) in tag2_headword:
+                    elif self.getHeadwords(chunk) in tag2_headword and self.get_Pos(chunk) != "VERB":
+
                         tag2list.append(chunk)
 
-                    elif self.getHeadwords(chunk) in tag3_headword:
+                    elif self.getHeadwords(chunk) in tag3_headword and self.get_Pos(chunk) != "VERB":
+
                         tag3list.append(chunk)
 
                     else:
@@ -273,10 +325,9 @@ class SpRLReader(SensableReader):
 
                 new_phraselist.append(phrase)
 
-
-
             except:
                 KeyError
+
 
         return new_phraselist
 
@@ -296,15 +347,19 @@ class SpRLReader(SensableReader):
         for doc in docs.noun_chunks:
             return str(doc.root.text)
 
+    def get_Pos(self,phrase):
+        docs = nlpmodel(phrase)
+        for token in docs:
+           return token.pos_
 
 
 
-@keep_fields('sentence')
+
+@keep_keys(exclude=['labels', 'relation'])
 class SpRLBinaryReader(SpRLReader):
-    label_names = {'LANDMARK', 'TRAJECTOR', 'NONE', 'SPATIALINDICATOR'}
-    relation_names = {'region', 'direction', 'distance'}
 
-    @fields
+
+    @cls.fields
     def update_labels(
         self,
         fields: Dict,
@@ -314,11 +369,10 @@ class SpRLBinaryReader(SpRLReader):
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
-                fields[self.get_fieldname('sentence')])
-
-    @fields
+                fields[self.get_fieldname('word')])
+            
+    @cls.fields
     def update_relations(
-
         self,
         fields: Dict,
         raw_sample
@@ -345,14 +399,14 @@ class SpRLBinaryReader(SpRLReader):
 
             yield relation_name, NewAdjacencyField(
                 cur_indices,
-                fields[self.get_fieldname('sentence')],
+                fields[self.get_fieldname('word')],
                 padding_value=0
             )
 
 
 
 
-@keep_fields
+@keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
     pass
 
@@ -411,9 +465,10 @@ class NewAdjacencyField(AdjacencyField):
 
 
 
-#sp.parseSprlXML('data/newSprl2017_all.xml')
-#sp.getCorpus_without_none(sp.parseSprlXML('data/newSprl2017_all.xml'))
-
+#sp=SpRLReader()
+#sp.parseSprlXML('data/sprl2017_train.xml')
+#sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
+#sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))
 
 #sp._read(sp.getCorpus_with_none(sp.chunk_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))))
 #a=sp.parseSprlXML('data/newSprl2017_all.xml')

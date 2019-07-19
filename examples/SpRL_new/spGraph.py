@@ -1,4 +1,5 @@
 from regr.graph import Graph, Concept, Relation
+
 Graph.clear()
 Concept.clear()
 
@@ -38,6 +39,12 @@ with Graph('spLanguage') as splang_Graph:
         # sp_tr.be((tr, lm))
         region = Concept(name='region')
         region.is_a(pair)
+        relation_none= Concept(name='relation_none')
+        relation_none.is_a(pair)
+        distance = Concept(name='distance')
+        distance.is_a(pair)
+        direction = Concept(name='direction')
+        direction.is_a(pair)
 
 
 
