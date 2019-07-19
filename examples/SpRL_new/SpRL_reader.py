@@ -9,8 +9,10 @@ from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
 from allennlp.data.fields.sequence_field import SequenceField
 from allennlp.common.checks import ConfigurationError
-from test3 import NewAdjacencyField
+import logging
 import spacy
+import torch
+
 
 
 #sklearn
@@ -357,8 +359,55 @@ class SpRLSensorReader(SpRLBinaryReader):
 
 
 
+class NewAdjacencyField(AdjacencyField):
+    _already_warned_namespaces: Set[str] = set()
+
+    def __init__(self,
+                 indices: List[Tuple[int, int, int]],
+                 sequence_field: SequenceField,
+                 labels: List[str] = None,
+                 label_namespace: str = 'labels',
+                 padding_value: int = -1) -> None:
+        self.indices = indices
+        self.labels = labels
+        self.sequence_field = sequence_field
+        self._label_namespace = label_namespace
+        self._padding_value = padding_value
+        self._indexed_labels: List[int] = None
+
+        self._maybe_warn_for_namespace(label_namespace)
+        field_length = sequence_field.sequence_length()
+
+        if len(set(indices)) != len(indices):
+            raise ConfigurationError(f"Indices must be unique, but found {indices}")
+
+        if not all([0 <= index[1] < field_length and 0 <= index[0] < field_length for index in indices]):
+            raise ConfigurationError(f"Label indices and sequence length "
+                                     f"are incompatible: {indices} and {field_length}")
+
+        if labels is not None and len(indices) != len(labels):
+            raise ConfigurationError(f"Labelled indices were passed, but their lengths do not match: "
+                                     f" {labels}, {indices}")
 
 
+    def as_tensor(self, padding_lengths: Dict[str, int]) -> torch.Tensor:
+        desired_num_tokens = padding_lengths['num_tokens']
+        tensor = torch.ones(desired_num_tokens, desired_num_tokens, desired_num_tokens) * self._padding_value
+        labels = self._indexed_labels or [1 for _ in range(len(self.indices))]
+
+        for index, label in zip(self.indices, labels):
+            tensor[index] = label
+        return tensor
+
+
+    def empty_field(self) -> 'AdjacencyField':
+        # pylint: disable=protected-access
+        # The empty_list here is needed for mypy
+        empty_list: List[Tuple[int, int, int]] = []
+        adjacency_field = NewAdjacencyField(empty_list,
+                                            self.sequence_field.empty_field(),
+                                            padding_value=self._padding_value)
+        return adjacency_field
 
 
 
