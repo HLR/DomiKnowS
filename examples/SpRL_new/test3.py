@@ -82,6 +82,8 @@ class NewAdjacencyField(Field[torch.Tensor]):
                                self._label_namespace)
                 self._already_warned_namespaces.add(label_namespace)
 
+
+
     @overrides
     def count_vocab_items(self, counter: Dict[str, Dict[str, int]]):
         if self._indexed_labels is None and self.labels is not None:
