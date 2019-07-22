@@ -2,8 +2,8 @@ import xml.etree.ElementTree as ET
 from typing import Dict
 from collections import defaultdict
 from allennlp.data.tokenizers import Token
-from allennlp.data.fields import Field, TextField, SequenceLabelField,AdjacencyField
-from allennlp.data.token_indexers import SingleIdTokenIndexer
+from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
+from allennlp.data.token_indexers import SingleIdTokenIndexer,PosTagIndexer,DepLabelIndexer
 from regr.data.allennlp.reader import SensableReader, keep_keys
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
@@ -13,50 +13,57 @@ import itertools
 import spacy
 import torch
 
-
-
-#sklearn
+# sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
 nlpmodel = spacy.load("en_core_web_sm")
 
 
-
 class SpRLReader(SensableReader):
-    label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR','NONE']
-    relation_names = ['region', 'direction', 'distance','relation_none']
-
+    label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
+    relation_names = ['region', 'direction', 'distance', 'relation_none']
 
     def __init__(self) -> None:
         super().__init__(lazy=False)
 
+    # @cls.tokens('sentence')
+    # def update_sentence(
+    #         self,
+    #         fields: Dict,
+    #         raw_sample
+    # ) -> Dict:
+    #
+    #     (sentence, labels), relations = raw_sample
+    #     return [Token(word) for word in sentence]
     @cls.tokens('sentence')
     def update_sentence(
             self,
             fields: Dict,
             raw_sample
     ) -> Dict:
-
-        (sentence,labels), relations = raw_sample
-        return [Token(word) for word in sentence]
-
+        (sentence, labels), relations = raw_sample
+        nlpsentence = nlpmodel.pipe(sentence, n_threads=-1)
+        return [Token(words[0].doc.text,
+                      pos_='|'.join([word.pos_ for word in words]),
+                      tag_='|'.join([word.tag_ for word in words]),
+                      dep_='|'.join([word.dep_ for word in words]))
+                for words in nlpsentence]
 
     @cls.textfield('word')
     def update_sentence_word(
-        self,
-        fields,
-        tokens
+            self,
+            fields,
+            tokens
     ) -> Field:
         indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
-
     @cls.field('labels')
     def update_labels(
-        self,
-        fields: Dict,
-        raw_sample
+            self,
+            fields: Dict,
+            raw_sample
     ) -> Dict:
         # {'Other', 'Loc', 'Peop', 'Org', 'O'}
         (sentence, pos, labels), relations = raw_sample
@@ -64,13 +71,11 @@ class SpRLReader(SensableReader):
             return None
         return SequenceLabelField(labels, fields[self.get_fieldname('word')])
 
-
-
     @cls.field('relation')
     def update_relations(
-        self,
-        fields: Dict,
-        raw_sample
+            self,
+            fields: Dict,
+            raw_sample
     ) -> Dict:
         # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
         (sentence, pos, labels), relations = raw_sample
@@ -90,19 +95,41 @@ class SpRLReader(SensableReader):
             padding_value=-1  # multi-class label, use -1 for null class
         )
 
+    @cls.textfield('pos_tag')
+    def update_sentence_pos(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        for i in PosTagIndexer(namespace='pos_tag')._logged_errors:
+            for j in i:
+                print(j)
+        indexers = {'pos_tag': PosTagIndexer(namespace='pos_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('dep_tag')
+    def update_sentence_dep(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        indexers = {'dep_tag': DepLabelIndexer(namespace='dep_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
 
     def raw_read(
-        self,
-        file_path: str
+            self,
+            file_path: str
     ) -> Iterable[Instance]:
 
-        phrase_list=self.parseSprlXML(file_path)
-        raw_examples=self.negative_relation_generation(self.getCorpus(self.negative_entity_generation(phrase_list)))
+        phrase_list = self.parseSprlXML(file_path)
+        raw_examples = self.negative_relation_generation(self.getCorpus(self.negative_entity_generation(phrase_list)))
 
         for raw_sample in raw_examples:
             yield raw_sample
 
-    def parseSprlXML(self,sprlxmlfile):
+    def parseSprlXML(self, sprlxmlfile):
 
         # parse the xml tree object
 
@@ -114,83 +141,79 @@ class SpRLReader(SensableReader):
         sentences_list = []
 
         # iterate news items
-        type_list=[]
+        type_list = []
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
-             landmark = []
-             trajector=[]
-             spatialindicator=[]
-             relationship=[]
-             id_text_list = {}
-             id_label_list={}
-             sentence_dic = {}
-             sentence_dic["id"] = sentenceItem.attrib["id"]
+            landmark = []
+            trajector = []
+            spatialindicator = []
+            relationship = []
+            id_text_list = {}
+            id_label_list = {}
+            sentence_dic = {}
+            sentence_dic["id"] = sentenceItem.attrib["id"]
 
-             # iterate child elements of item
+            # iterate child elements of item
 
-             for child in sentenceItem:
+            for child in sentenceItem:
 
+                if child.tag == 'TEXT':
+                    sentence_dic[child.tag] = child.text
 
-                 if child.tag == 'TEXT':
-                     sentence_dic[child.tag] = child.text
-
-                 if child.tag == 'SPATIALINDICATOR' :
+                if child.tag == 'SPATIALINDICATOR':
                     if "text" in child.attrib:
-                         spatialindicator.append(child.attrib['text'])
-                         sentence_dic[child.tag] = spatialindicator
-                         id_text_list[child.attrib['id']]=child.attrib['text']
-                         id_label_list[child.attrib['id']] = child.tag
+                        spatialindicator.append(child.attrib['text'])
+                        sentence_dic[child.tag] = spatialindicator
+                        id_text_list[child.attrib['id']] = child.attrib['text']
+                        id_label_list[child.attrib['id']] = child.tag
 
-                 if child.tag == 'LANDMARK' :
+                if child.tag == 'LANDMARK':
                     if "text" in child.attrib:
-                         landmark.append(child.attrib['text'])
-                         sentence_dic[child.tag] = landmark
-                         id_text_list[child.attrib['id']]=child.attrib['text']
-                         id_label_list[child.attrib['id']] = child.tag
+                        landmark.append(child.attrib['text'])
+                        sentence_dic[child.tag] = landmark
+                        id_text_list[child.attrib['id']] = child.attrib['text']
+                        id_label_list[child.attrib['id']] = child.tag
 
+                if child.tag == 'TRAJECTOR':
+                    if "text" in child.attrib:
+                        trajector.append(child.attrib['text'])
+                        sentence_dic[child.tag] = trajector
+                        id_text_list[child.attrib['id']] = child.attrib['text']
+                        id_label_list[child.attrib['id']] = child.tag
 
-                 if child.tag == 'TRAJECTOR':
-                     if "text" in child.attrib:
-                         trajector.append(child.attrib['text'])
-                         sentence_dic[child.tag] = trajector
-                         id_text_list[child.attrib['id']] = child.attrib['text']
-                         id_label_list[child.attrib['id']] = child.tag
-
-
-                 if child.tag == "RELATION":
+                if child.tag == "RELATION":
                     if child.attrib['general_type'] not in type_list:
                         type_list.append(child.attrib['general_type'])
 
                     try:
 
+                        if 'general_type' in child.attrib:
+                            # if child.attrib['general_type'] not in type_list:
+                            #     type_list.append(child.attrib['general_type'])
+                            each_relationship = ((child.attrib['general_type'], [(id_text_list[
+                                                                                      child.attrib['landmark_id']],
+                                                                                  id_label_list[
+                                                                                      child.attrib['landmark_id']])],
+                                                  [(id_text_list[child.attrib['trajector_id']],
+                                                    id_label_list[child.attrib['trajector_id']])],
+                                                  [(id_text_list[child.attrib['spatial_indicator_id']],
+                                                    id_label_list[child.attrib['spatial_indicator_id']])]))
 
-                     if 'general_type' in child.attrib:
-                         # if child.attrib['general_type'] not in type_list:
-                         #     type_list.append(child.attrib['general_type'])
-                         each_relationship=((child.attrib['general_type'],[(id_text_list[child.attrib['landmark_id']],id_label_list[child.attrib['landmark_id']])],
-                                             [(id_text_list[child.attrib['trajector_id']],id_label_list[child.attrib['trajector_id']])],
-                                             [(id_text_list[child.attrib['spatial_indicator_id']],id_label_list[child.attrib['spatial_indicator_id']])]))
+                            relationship.append(each_relationship)
+                            sentence_dic[child.tag] = relationship
+                    except:
+                        KeyError
 
-                         relationship.append(each_relationship)
-                         sentence_dic[child.tag]=relationship
-                    except:KeyError
-
-
-
-             sentences_list.append(sentence_dic)
-
+            sentences_list.append(sentence_dic)
 
         # create empty dataform for sentences
-        #sentences_df = pd.DataFrame(sentences_list)
+        # sentences_df = pd.DataFrame(sentences_list)
         return sentences_list
 
-
-
-
-    def getCorpus(self,sentences_list):
+    def getCorpus(self, sentences_list):
 
         output = self.label_names
 
-        final_relationship=[]
+        final_relationship = []
 
         for sents in sentences_list:
             phrase_list = []
@@ -214,7 +237,6 @@ class SpRLReader(SensableReader):
                     phrase_list.append(sptialindicator)
                     label_list.append(output[2])
 
-
                 for none in sents[output[3]]:
                     phrase_list.append(none)
                     label_list.append(output[3])
@@ -222,59 +244,52 @@ class SpRLReader(SensableReader):
             except:
                 KeyError
 
-
             for rel in sents['RELATION']:
-                    temp_temp_element=[]
-                    temp_temp_element.append(rel[0])
+                temp_temp_element = []
+                temp_temp_element.append(rel[0])
 
-                    for element in rel[1:]:
+                for element in rel[1:]:
+                    element.insert(0, phrase_list.index(element[0][0]))
+                    temp_temp_element.append(tuple(element))
 
-                       element.insert(0,phrase_list.index(element[0][0]))
-                       temp_temp_element.append(tuple(element))
+                temp_relation.append(tuple(temp_temp_element))
 
-                    temp_relation.append(tuple(temp_temp_element))
-
-            relation_tuple=((phrase_list, label_list),temp_relation)
+            relation_tuple = ((phrase_list, label_list), temp_relation)
             final_relationship.append(relation_tuple)
-
-
 
         self.negative_relation_generation(final_relationship)
         return final_relationship
 
-    def negative_relation_generation(self,phrase_relation_list):
+    def negative_relation_generation(self, phrase_relation_list):
         for phrase_relation in phrase_relation_list:
 
-            list_indices=list(range(len(phrase_relation[0][0])))
-            list_indices=list(itertools.combinations(list_indices,3))
+            list_indices = list(range(len(phrase_relation[0][0])))
+            list_indices = list(itertools.combinations(list_indices, 3))
 
-            positive_list=[]
+            positive_list = []
             for rel in phrase_relation[1]:
                 src_index = rel[1][0]
                 mid_index = rel[2][0]
                 dst_index = rel[3][0]
-                positive_list.append((src_index,mid_index,dst_index))
+                positive_list.append((src_index, mid_index, dst_index))
 
-            label_indices_list=phrase_relation[0][1]
-            text_list=phrase_relation[0][0]
-            label_name_list=self.label_names
+            label_indices_list = phrase_relation[0][1]
+            text_list = phrase_relation[0][0]
+            label_name_list = self.label_names
 
             for indice in list_indices:
                 if indice in positive_list:
                     continue
-                elif label_indices_list[indice [0]]==label_name_list[0] and \
-                     label_indices_list[indice [1]]==label_name_list[1] and \
-                     label_indices_list[indice [2]]==label_name_list[2]:
-                     new_relationship=(("relation_none",
-                                                   (indice[0],(text_list[indice [0]],label_indices_list[indice [0]])),
-                                                   (indice[1],(text_list[indice [1]],label_indices_list[indice [1]])),
-                                                   (indice[2], (text_list[indice[2]], label_indices_list[indice[2]]))))
-                     phrase_relation[1].append(new_relationship)
-
-
+                elif label_indices_list[indice[0]] == label_name_list[0] and \
+                        label_indices_list[indice[1]] == label_name_list[1] and \
+                        label_indices_list[indice[2]] == label_name_list[2]:
+                    new_relationship = (("relation_none",
+                                         (indice[0], (text_list[indice[0]], label_indices_list[indice[0]])),
+                                         (indice[1], (text_list[indice[1]], label_indices_list[indice[1]])),
+                                         (indice[2], (text_list[indice[2]], label_indices_list[indice[2]]))))
+                    phrase_relation[1].append(new_relationship)
 
         return phrase_relation_list
-
 
     def negative_entity_generation(self, phraselist):
 
@@ -304,7 +319,6 @@ class SpRLReader(SensableReader):
 
                 chunklist = list(set(chunklist))
 
-
                 for chunk in chunklist:
 
                     if chunk in tag1list or chunk in tag2list or chunk in tag3list:
@@ -329,54 +343,49 @@ class SpRLReader(SensableReader):
             except:
                 KeyError
 
+        return new_phraselist
 
         return new_phraselist
 
-
-        return new_phraselist
-
-    def getChunk(self,sentence):
+    def getChunk(self, sentence):
         pre_chunk = nlpmodel(sentence)
         new_chunk = []
         for chunk in pre_chunk.noun_chunks:
             new_chunk.append(chunk.text)
         return new_chunk
 
-    def getHeadwords(self,phrase):
+    def getHeadwords(self, phrase):
         docs = nlpmodel(phrase)
 
         for doc in docs.noun_chunks:
             return str(doc.root.text)
 
-    def get_Pos(self,phrase):
+    def get_Pos(self, phrase):
         docs = nlpmodel(phrase)
         for token in docs:
-           return token.pos_
-
-
+            return token.pos_
 
 
 @keep_keys(exclude=['labels', 'relation'])
 class SpRLBinaryReader(SpRLReader):
 
-
     @cls.fields
     def update_labels(
-        self,
-        fields: Dict,
-        raw_sample
+            self,
+            fields: Dict,
+            raw_sample
     ) -> Dict:
         (sentence, labels), relations = raw_sample
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
                 [str(label == label_name) for label in labels],
                 fields[self.get_fieldname('word')])
-            
+
     @cls.fields
     def update_relations(
-        self,
-        fields: Dict,
-        raw_sample
+            self,
+            fields: Dict,
+            raw_sample
     ) -> Dict:
         (sentence, labels), relations = raw_sample
         if relations is None:
@@ -385,10 +394,10 @@ class SpRLBinaryReader(SpRLReader):
         relation_labels = []
         for rel in relations:
             src_index = rel[1][0]
-            mid_index=rel[2][0]
+            mid_index = rel[2][0]
             dst_index = rel[3][0]
-            if (src_index,mid_index, dst_index) not in relation_indices:
-                relation_indices.append((src_index,mid_index,dst_index))
+            if (src_index, mid_index, dst_index) not in relation_indices:
+                relation_indices.append((src_index, mid_index, dst_index))
 
             relation_labels.append(rel[0])
 
@@ -405,13 +414,9 @@ class SpRLBinaryReader(SpRLReader):
             )
 
 
-
-
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
     pass
-
-
 
 
 class NewAdjacencyField(AdjacencyField):
@@ -444,7 +449,6 @@ class NewAdjacencyField(AdjacencyField):
             raise ConfigurationError(f"Labelled indices were passed, but their lengths do not match: "
                                      f" {labels}, {indices}")
 
-
     def as_tensor(self, padding_lengths: Dict[str, int]) -> torch.Tensor:
         desired_num_tokens = padding_lengths['num_tokens']
         tensor = torch.ones(desired_num_tokens, desired_num_tokens, desired_num_tokens) * self._padding_value
@@ -453,7 +457,6 @@ class NewAdjacencyField(AdjacencyField):
         for index, label in zip(self.indices, labels):
             tensor[index] = label
         return tensor
-
 
     def empty_field(self) -> 'AdjacencyField':
         # pylint: disable=protected-access
@@ -464,18 +467,15 @@ class NewAdjacencyField(AdjacencyField):
                                             padding_value=self._padding_value)
         return adjacency_field
 
+# sp=SpRLReader()
+# sp.parseSprlXML('data/sprl2017_train.xml')
+# sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
+# sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))
 
+# sp._read(sp.getCorpus_with_none(sp.chunk_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))))
+# a=sp.parseSprlXML('data/newSprl2017_all.xml')
 
-#sp=SpRLReader()
-#sp.parseSprlXML('data/sprl2017_train.xml')
-#sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
-#sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))
-
-#sp._read(sp.getCorpus_with_none(sp.chunk_generation(sp.parseSprlXML('data/newSprl2017_all.xml'))))
-#a=sp.parseSprlXML('data/newSprl2017_all.xml')
-
-#sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
+# sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # print(sentence_list)
 
 # getCorpus(sentence_list)
-

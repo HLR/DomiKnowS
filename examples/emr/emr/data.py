@@ -7,7 +7,8 @@ from allennlp.data.fields import Field, TextField, SequenceLabelField, Adjacency
 from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
 from .conll import Conll04CorpusReader
-
+from typing import Iterator
+from allennlp.data import Instance
 
 corpus_reader = Conll04CorpusReader()
 
@@ -97,6 +98,49 @@ class Conll04Reader(SensableReader):
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
+    def _read(self, *args, **kwargs) -> Iterator[Instance]:
+
+        for raw_sample in self.raw_read(*args, **kwargs):
+            raw_sample=self.negative_entity_generation(raw_sample)
+            yield self._to_instance(raw_sample)
+
+
+
+
+    def negative_entity_generation(self,raw_sample):
+        temp_num=0
+        label_dict={}
+        label_dict['NONE']=[]
+
+        sentence = " ".join(raw_sample[0][0])
+        new_chunk=self.getChunk(sentence)
+
+        for label in raw_sample[0][2]:
+
+          try:
+              label_dict[label].append(raw_sample[0][0][temp_num])
+          except:
+              label_dict[label]=[]
+              label_dict[label].append(raw_sample[0][0][temp_num])
+          temp_num += 1
+
+        for chunk in new_chunk:
+
+            for value in label_dict.items():
+
+                if chunk in value[1]:
+                    continue
+                elif self.getHeadwords(chunk) in value[1]:
+                    value[1].append(chunk)
+                    raw_sample[0][0].append(chunk)
+                    raw_sample[0][1].append(self.get_Postag(chunk))
+                    raw_sample[0][2].append(value[0])
+
+            if chunk not in value[1]:
+                raw_sample[0][0].append(chunk)
+                raw_sample[0][1].append(self.get_Postag(chunk))
+                raw_sample[0][2].append("NONE")
+        return raw_sample
 
 
 @keep_keys('sentence', 'phrase', 'pos_tags')

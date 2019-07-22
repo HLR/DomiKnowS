@@ -1,4 +1,4 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor,ConcatSensor,NGramSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner
 
 
@@ -21,7 +21,7 @@ def model_declaration(graph, config):
 
 
     sentence = graph['linguistic/sentence']
-    phrase = graph['linguistic/phrase']
+    word = graph['linguistic/phrase']
     pair = graph['linguistic/pair']
 
 
@@ -39,9 +39,18 @@ def model_declaration(graph, config):
     reader = Reader()
 
     sentence['raw'] = SentenceSensor(reader, 'sentence')
-    phrase['w2v'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
-    phrase['emb'] = RNNLearner(phrase['w2v'])
-    pair['emb'] = CartesianProduct3Sensor(phrase['emb'])
+    word['raw']=SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'],pretrained_file=config.pretrained_files['word'])
+    word['dep']=SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
+    word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
+
+   # phrase['emb'] = RNNLearner(phrase['w2v'])
+
+    word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'])
+
+    word['ngram'] = NGramSensor(config.ngram, word['all'])
+    word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
+
+#    pair['emb'] = CartesianProduct3Sensor(phrase['emb'])
 
     landmark['label'] = LabelSensor(reader,'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader,'TRAJECTOR', output_only=True)
@@ -49,21 +58,21 @@ def model_declaration(graph, config):
     none['label'] = LabelSensor(reader,'NONE', output_only=True)
 
 
-    landmark['label'] = LogisticRegressionLearner(phrase['emb'])
-    trajector['label'] = LogisticRegressionLearner(phrase['emb'])
-    spatialindicator['label'] = LogisticRegressionLearner(phrase['emb'])
-    none['label'] = LogisticRegressionLearner(phrase['emb'])
+    landmark['label'] = LogisticRegressionLearner(word['encode'])
+    trajector['label'] = LogisticRegressionLearner(word['encode'])
+    spatialindicator['label'] = LogisticRegressionLearner(word['encode'])
+    none['label'] = LogisticRegressionLearner(word['encode'])
 
-    region['label'] = LabelSensor(reader, 'region', output_only=True)
-    relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
-    direction['label'] = LabelSensor(reader, 'direction', output_only=True)
-    distance['label'] = LabelSensor(reader, 'distance', output_only=True)
+    # region['label'] = LabelSensor(reader, 'region', output_only=True)
+    # relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
+    # direction['label'] = LabelSensor(reader, 'direction', output_only=True)
+    # distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
 
-    region['label'] = LogisticRegressionLearner(pair['emb'])
-    relation_none['label'] = LogisticRegressionLearner(pair['emb'])
-    direction['label'] = LogisticRegressionLearner(pair['emb'])
-    distance['label'] = LogisticRegressionLearner(pair['emb'])
+    #region['label'] = LogisticRegressionLearner(pair['encode'])
+    # relation_none['label'] = LogisticRegressionLearner(pair['encode'])
+    # direction['label'] = LogisticRegressionLearner(pair['encode'])
+    # distance['label'] = LogisticRegressionLearner(pair['encode'])
 
     lbp = AllenNlpGraph(graph)
     return lbp
