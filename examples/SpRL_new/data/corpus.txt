@@ -1,0 +1,2 @@
+stairs a a a a Landmark
+the background b b b b Landmark

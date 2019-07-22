@@ -1,0 +1,11 @@
+2019-04-08.14-00-36.parisas-MacBook-Pro.local ls
+2019-04-08.14-00-50.parisas-MacBook-Pro.local bash setup-data.sh 
+2019-04-08.14-32-29.parisas-MacBook-Pro.local bash /Users/parisakordjamshidi/Documents/iGitHub/RelationalGraph/examples/emr/setup-env.sh
+2019-04-08.14-33-20.parisas-MacBook-Pro.local export PYTHONPATH=$PYTHONPATH:$(cd ../../regr && pwd)
+2019-04-08.14-33-35.parisas-MacBook-Pro.local export PYTHONPATH=$PYTHONPATH:$(cd ../../regr && pwd)
+2019-04-08.14-33-38.parisas-MacBook-Pro.local export PYTHONPATH=$PYTHONPATH:$(cd ../../regr && pwd)
+2019-04-08.14-33-49.parisas-MacBook-Pro.local python3.7 -m emr
+2019-04-08.14-34-08.parisas-MacBook-Pro.local pwd
+2019-04-08.14-34-17.parisas-MacBook-Pro.local env
+2019-04-08.14-34-45.parisas-MacBook-Pro.local export PYTHONPATH=$PYTHONPATH:$(cd ../.. && pwd)
+2019-04-08.14-35-51.parisas-MacBook-Pro.local python3.7 -m emr
