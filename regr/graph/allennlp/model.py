@@ -99,11 +99,11 @@ class GraphModel(Model):
                             self.metrics.append((metric_name, class_index, prop, MetricClass(class_index)))
                             self.metrics_inferenced.append((metric_name, class_index, prop, MetricClass(class_index)))
 
-        i = 0  # TODO: this looks too bad
+        #i = 0  # TODO: this looks too bad
         for prop in self.graph.poi:
             for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
-                self.add_module(str(i), sensor.module)
-                i += 1
+                self.add_module(name, sensor.module)
+                #i += 1
 
     def _need_inference(
         self,

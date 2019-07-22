@@ -73,7 +73,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
         solver_logger = logging.getLogger(ilpSelectClassification.__name__)
         solver_logger.propagate = False
-        if DEBUG_TRAINING:
+        if DEBUG_TRAINING or True:
             solver_logger.setLevel(logging.DEBUG)
         else:
             solver_logger.setLevel(logging.INFO)
@@ -93,7 +93,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         summary_interval=100,
         histogram_interval=100,
         should_log_parameter_statistics=True,
-        should_log_learning_rate=True
+        should_log_learning_rate=True,
+        **kwargs
     ) -> Trainer:
         # prepare GPU
         if torch.cuda.is_available() and not DEBUG_TRAINING:
@@ -131,7 +132,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                           summary_interval=summary_interval,
                           histogram_interval=histogram_interval,
                           should_log_parameter_statistics=should_log_parameter_statistics,
-                          should_log_learning_rate=should_log_learning_rate)
+                          should_log_learning_rate=should_log_learning_rate,
+                          **kwargs)
 
         return trainer
 
