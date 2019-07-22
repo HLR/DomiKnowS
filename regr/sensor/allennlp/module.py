@@ -76,6 +76,26 @@ class SelfCartesianProduct(CartesianProduct):
         return CartesianProduct.forward(self, x, x)
 
 
+class CartesianProduct3(Module):
+    # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, l3, f1+f2+f3)
+    def forward(self, x, y, z):
+        # TODO: flatten
+        xs = x.size()
+        ys = y.size()
+        zs = z.size()
+        assert xs[0] == ys[0] and ys[0] == zs[0]
+        # torch cat is not broadcasting, do repeat manually
+        xx = x.view(xs[0], xs[1], 1, 1, xs[2]).repeat(1, 1, ys[1], zs[1], 1)
+        yy = y.view(ys[0], 1, ys[1], 1, ys[2]).repeat(1, xs[1], 1, zs[1], 1)
+        zz = z.view(ys[0], 1, 1, ys[1], zs[2]).repeat(1, xs[1], ys[1], 1, 1)
+        return torch.cat([xx, yy, zz], dim=-1)
+
+
+class SelfCartesianProduct3(CartesianProduct3):
+    def forward(self, x):
+        return CartesianProduct3.forward(self, x, x, x)
+
+
 class NGram(Module):
     def __init__(self, ngram):
         Module.__init__(self)
