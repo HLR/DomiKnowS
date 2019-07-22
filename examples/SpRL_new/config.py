@@ -10,7 +10,11 @@ config = {
     },
     'Model': {  # model setting
         'embedding_dim': 8,
-        'pretrained_files': None,
+        'ngram': 5,
+        'dropout': 0.5,
+        'pretrained_files': {
+            'word': 'data/glove.6B/glove.6B.50d.txt'
+        },
         'pretrained_dims': {
             'word': 50
         },

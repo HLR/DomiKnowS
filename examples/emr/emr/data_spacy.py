@@ -170,7 +170,7 @@ def reprocess(sentence, relations, keep_entity=False, first=True):
                 del new_pos_tag[j]
         # TODO: the problem with '.' remain when it is a entity and it is not abbreviation
 
-        new_label = [label, ] * len(new_token)
+        new_label = [label,] * len(new_token)
         new_tokens.extend(new_token)
         new_pos_tags.extend(new_pos_tag)
         new_labels.extend(new_label)
@@ -260,8 +260,19 @@ class Conll04SpaCyReader(SensableReader):
     splitter = SpacyWordSplitter(
         'en_core_web_sm', True, True, True, keep_spacy_tokens=True)
 
-    def __init__(self) -> None:
-        super().__init__(lazy=False)
+    def __init__(self, entity_anckor='last') -> None:
+        super().__init__()
+        self.entity_anckor = entity_anckor
+
+    def entity_anckor(self, entity_anckor):
+        if entity_anckor in ('first', 'lass'):
+            raise ValueError('"entity_anckor" must be one of "first" or "last".')
+        if entity_anckor == 'first':
+            self._entity_index = 0
+        elif entity_anckor == 'last':
+            self._entity_index = -1
+
+    entity_anckor = property(fset=entity_anckor)
 
     def raw_read(self, file_path):
         sentences, relation_lists = self.corpus_reader(file_path)
@@ -320,10 +331,9 @@ class Conll04SpaCyReader(SensableReader):
         tokens, labels, relations = raw_sample
         if labels is None:
             return None
-        label_list = [NONE_LABEL, ] * len(tokens)
+        label_list = [NONE_LABEL,] * len(tokens)
         for label_type, token in labels:
-            # token[0] : only use the first
-            label_list[token[0].i] = label_type
+            label_list[token[self._entity_index].i] = label_type
         return SequenceLabelField(label_list, fields[self.get_fieldname('word')])
 
     @cls.field('relation')
@@ -339,7 +349,7 @@ class Conll04SpaCyReader(SensableReader):
         relation_indices = []
         relation_labels = []
         for relation_type, src_token, dst_token in relations:
-            relation_indices.append((src_token[0].i, dst_token[0].i))
+            relation_indices.append((src_token[self._entity_index].i, dst_token[self._entity_index].i))
             relation_labels.append(relation_type)
         return AdjacencyField(
             relation_indices,
@@ -365,10 +375,10 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
 
         labels_dict = {}
         for label_type in self.label_names:
-            labels_dict[label_type] = [False, ] * len(tokens)
+            labels_dict[label_type] = [False,] * len(tokens)
 
-        for label_type, token in labels: # TODO: extend to BILOU
-            labels_dict[label_type][token[0].i] = True
+        for label_type, token in labels:
+            labels_dict[label_type][token[self._entity_index].i] = True
 
         for label_type, label_list in labels_dict.items():
             yield label_type, SequenceLabelField(label_list, fields[self.get_fieldname('word')])
@@ -384,12 +394,12 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
 
         relations_dict = {}
         for relation_type in self.relation_names:
-            relations_dict[relation_type] = []  # just need indices
+            relations_dict[relation_type] = [] # just need indices
 
         for relation_type, src_token, dst_token in relations:
             try:
                 relations_dict[relation_type].append(
-                    (src_token[0].i, dst_token[0].i))
+                    (src_token[self._entity_index].i, dst_token[self._entity_index].i))
             except KeyError:
                 msg = 'Relationship {} is unknown. Sentence: {} Raltions: {}'.format(relation_type, tokens, relations)
                 warnings.warn(msg, stacklevel=3)
