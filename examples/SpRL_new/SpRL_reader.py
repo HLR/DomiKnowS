@@ -21,6 +21,7 @@ from allennlp.data.fields import TextField, MetadataField, ArrayField
 nlpmodel = spacy.load("en_core_web_sm")
 
 
+
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR','NONE']
     relation_names = ['region', 'direction', 'distance','relation_none']

@@ -14,6 +14,7 @@ def ontology_declaration():
     return splang_Graph
 
 
+
 def model_declaration(graph, config):
 
     graph.detach()

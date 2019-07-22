@@ -7,6 +7,7 @@ with Graph('spLanguage') as splang_Graph:
     splang_Graph.ontology = 'http://ontology.ihmc.us/ML/EMR.owl'
 
 
+
     with Graph('linguistic') as ling_graph:
 
        word = Concept(name ='word')
