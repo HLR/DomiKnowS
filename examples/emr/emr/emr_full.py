@@ -23,10 +23,14 @@ from regr.graph.allennlp import AllenNlpGraph
 #### * `Config` contains configurations for model, data, and training.
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 #from .data import Conll04SensorReader as Reader
-from .data_spacy import Conll04SpaCyBinaryReader as Reader
-from .config import Config
-from .utils import seed
-
+if __package__ is None or __package__ == '':
+    from data_spacy import Conll04SpaCyBinaryReader as Reader
+    from config import Config
+    from utils import seed
+else:
+    from .data_spacy import Conll04SpaCyBinaryReader as Reader
+    from .config import Config
+    from .utils import seed
 
 #### "*Ontology Declaration*" is the first step in our pipeline.
 #### A graph of the concepts, representing the ontology in this application, is declared.
@@ -34,7 +38,11 @@ from .utils import seed
 #### Here we just import the graph from `graph.py`.
 #### Please also refer to `graph.py` for details.
 def ontology_declaration():
-    from .graph import graph
+    if __package__ is None or __package__ == '':
+        from graph import graph
+    else:
+        from .graph import graph
+        
     return graph
 
 

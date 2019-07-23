@@ -5,7 +5,10 @@ from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, De
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
-from .conll import Conll04CorpusReader
+if __package__ is None or __package__ == '':
+    from conll import Conll04CorpusReader
+else:
+    from .conll import Conll04CorpusReader
 
 
 DELIM = '/'
