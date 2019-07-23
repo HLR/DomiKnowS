@@ -415,11 +415,17 @@ class ilpOntSolver:
                                 constrainNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token, token1)
                                 constrainNameRange = 'c_range_%s_%s_%s'%(currentRelation, token, token1)
                                 
-                                m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
-                                m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token1, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
+                                #m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
+                                #m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token1, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
+                                
+                                m.addConstr(x[token, domain._name] - y[currentRelation._name, token, token1], GRB.GREATER_EQUAL, 0, name=constrainNameDomain)
+                                m.addConstr(x[token1, range._name] - y[currentRelation._name, token, token1], GRB.GREATER_EQUAL, 0, name=constrainNameRange)
                             elif ilpSolver == "GEKKO":
-                                m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]) >= 1)
-                                m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, range._name]) >= 1)
+                                #m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]) >= 1)
+                                #m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, range._name]) >= 1)
+                                
+                                m.Equation(x[token, domain._name] - y[currentRelation._name, token, token1] >= 0)
+                                m.Equation(x[token1, range._name] - y[currentRelation._name, token, token1] >= 0)
                                 
                     ilpOntSolver.__logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
@@ -442,9 +448,12 @@ class ilpOntSolver:
                         if ilpSolver=="Gurobi":
                             constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token, token1, relationName, superProperty.name)
                             
-                            m.addConstr(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                            #m.addConstr(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                            m.addConstr(y[superProperty.name, token, token1] - y[relationName, token, token1], GRB.GREATER_EQUAL, 0, name=constrainName)
                         elif ilpSolver == "GEKKO":
-                            m.Equation(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]) >= 1)
+                            #m.Equation(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]) >= 1)
+                            m.Equation(y[superProperty.name, token, token1] - y[relationName, token, token1] >= 0)
+
             
         # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
         foundEquivalent = dict() # too eliminate duplicates

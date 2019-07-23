@@ -1,11 +1,6 @@
 import sys
 from argparse import ArgumentParser
 
-
-if len(__package__) == 0:
-    __package__ = 'emr'
-
-
 parser = ArgumentParser(
     description='Entity-Mention-Relation example using `regr`.')
 parser.add_argument(
@@ -21,11 +16,24 @@ args = parser.parse_args()
 
 def main():
     if args.simple:
-        from .emr_simple import main
+        if __package__ is None or __package__ == '':
+            from emr_simple import main
+        else:
+            from .emr_simple import main
     elif args.bilou:
-        from .emr_bilou import main
+        if __package__ is None or __package__ == '':
+            from emr_bilou import main
+        else:
+            if __package__ is None or __package__ == '':
+                from emr_bilou import main
+            else:
+                from .emr_bilou import main
     else:
-        from .emr_full import main
+        if __package__ is None or __package__ == '':
+            from emr_full import main
+        else:
+            from .emr_full import main
+        
     return main()
 
 

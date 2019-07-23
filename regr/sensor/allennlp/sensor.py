@@ -129,7 +129,7 @@ class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
         #(b,l,l)
         mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
         mask2 = mask1.view(ms[0], ms[1], ms[1], 1).matmul(mask.view(ms[0], 1, 1, ms[1]))
-
+        
         return mask2
 
 class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
@@ -223,9 +223,11 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
+        if device.type == 'cuda':
+            with torch.cuda.device(device):
+                return super().forward(context)
+        else:
             return super().forward(context)
-
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -237,9 +239,12 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
+        
+        if device.type == 'cuda':
+            with torch.cuda.device(device):
+                return super().forward(context)
+        else:
             return super().forward(context)
-
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -276,5 +281,9 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
+        
+        if device.type == 'cuda':
+            with torch.cuda.device(device):
+                return super().forward(context)
+        else:
             return super().forward(context)

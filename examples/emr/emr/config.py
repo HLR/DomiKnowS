@@ -1,4 +1,8 @@
-from .utils import Namespace
+if __package__ is None or __package__ == '':
+    from utils import Namespace
+else:
+    from .utils import Namespace
+
 import time
 
 
