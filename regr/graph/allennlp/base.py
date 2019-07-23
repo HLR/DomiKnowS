@@ -1,6 +1,7 @@
 import os
 import logging
 import logging.config
+import pickle
 import torch
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
@@ -54,12 +55,15 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.traversal_apply(func)
         return sensors
 
-    def save(self, path):
+    def save(self, path, **objects):
         if not os.path.exists(path):
             os.makedirs(path)
         with open(os.path.join(path, 'model.th'), 'wb') as fout:
             torch.save(self.model.state_dict(), fout)
         self.model.vocab.save_to_files(os.path.join(path, 'vocab'))
+        for k, v in objects.items():
+            with open(os.path.join(path, k + '.pkl'), 'wb') as fout:
+                pickle.dump(v, fout)
 
     def train(self, data_config, train_config):
         sentence_sensors = self.get_sensors(ReaderSensor)
