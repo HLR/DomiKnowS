@@ -81,8 +81,31 @@ For more options like folds or output format, please use `-h`: `python3 -m emr.c
 
 Some basic statistics of a data file can be obtained by
 ```bash
-python3 -m emr.conll_stat data/EntityMentionRelation/conll.corp
+python3 -m emr.conll_stat data/EntityMentionRelation/conll04.corp
 ```
+You will see the something like this
+```
+- Sentence length / min 1
+- Sentence length / max 169
+- Sentence length / mean 23.41569978245105
+- Sentence length / mid 23.0
+- Sentence length / hist
+             1.0     17.8    34.6    51.4    68.2    85.0    101.8   118.6   135.4   152.2  169.0
+length        1.0    17.8    34.6    51.4    68.2    85.0   101.8   118.6   135.4   152.2  169.0
+count      1957.0  2522.0   867.0   113.0    29.0    15.0     9.0     0.0     0.0     4.0    NaN
+cum_count  1957.0  4479.0  5346.0  5459.0  5488.0  5503.0  5512.0  5512.0  5512.0  5516.0    NaN
+- Labels count / O 114984
+- Labels count / Loc 4765
+- Labels count / Peop 3918
+- Labels count / Other 2995
+- Labels count / Org 2499
+- Relation count / Live_In 521
+- Relation count / OrgBased_In 452
+- Relation count / Located_In 406
+- Relation count / Work_For 401
+- Relation count / Kill 268
+```
+You can show statistics on splited data sets by replacing the file name in above command.
 
 
 ### The example

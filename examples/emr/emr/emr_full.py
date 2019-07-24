@@ -178,7 +178,8 @@ def main():
     #### Train the model with inference functionality inside.
     lbp.train(Config.Data, Config.Train)
     #### Save the model, including vocabulary use to index the tokens.
-    lbp.save('/tmp/emr')
+    save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
+    lbp.save(save_to, config=Config)
 
 ####
 """
