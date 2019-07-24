@@ -34,7 +34,7 @@ class ilpOntSolver:
     __instances = {}
     __logger = logging.getLogger(__name__)
     
-    __negVarTrashhold = 0.3
+    __negVarTrashhold = 1.0
     
     @staticmethod
     def getInstance(graph):
@@ -161,9 +161,17 @@ class ilpOntSolver:
                     if ilpSolver=="Gurobi":       
                         constrainName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
                         
-                        m.addConstr(nandVar(m, x[token, conceptName], x[token, disjointConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        #m.addConstr(nandVar(m, x[token, conceptName], x[token, disjointConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+
+                        # short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
+                        m.addConstr(x[token, conceptName] + x[token, disjointConcept], GRB.LESS_EQUAL, 1, name=constrainName)                 
+                       
                     elif ilpSolver == "GEKKO":
-                        m.Equation(nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1)
+                        
+                        #m.Equation(nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1)
+
+                        # short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
+                        m.Equation(x[token, conceptName] + x[token, disjointConcept] <= 1) 
                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -418,12 +426,14 @@ class ilpOntSolver:
                                 #m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
                                 #m.addConstr(ifVar(m, y[currentRelation._name, token, token1], x[token1, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
                                 
+                                # short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                                 m.addConstr(x[token, domain._name] - y[currentRelation._name, token, token1], GRB.GREATER_EQUAL, 0, name=constrainNameDomain)
                                 m.addConstr(x[token1, range._name] - y[currentRelation._name, token, token1], GRB.GREATER_EQUAL, 0, name=constrainNameRange)
                             elif ilpSolver == "GEKKO":
                                 #m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]) >= 1)
                                 #m.Equation(ifVar(m, y[currentRelation._name, token, token1], x[token, range._name]) >= 1)
                                 
+                                # short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                                 m.Equation(x[token, domain._name] - y[currentRelation._name, token, token1] >= 0)
                                 m.Equation(x[token1, range._name] - y[currentRelation._name, token, token1] >= 0)
                                 
@@ -453,7 +463,6 @@ class ilpOntSolver:
                         elif ilpSolver == "GEKKO":
                             #m.Equation(ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]) >= 1)
                             m.Equation(y[superProperty.name, token, token1] - y[relationName, token, token1] >= 0)
-
             
         # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
         foundEquivalent = dict() # too eliminate duplicates
@@ -657,7 +666,7 @@ class ilpOntSolver:
             if currentRelation is None:
                 continue   
     
-        # ---- Related to DataType properties - not sure yet if we needto support them
+        # ---- Related to DataType properties - not sure yet if we need to support them
         
             # -- Add constraints based on property dataSomeValuesFrom statements in ontology
         
