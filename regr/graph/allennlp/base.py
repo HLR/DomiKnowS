@@ -1,8 +1,8 @@
 import os
 import logging
-import logging.config
 import pickle
 import torch
+import pandas as pd
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
@@ -79,6 +79,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         solver_logger.propagate = False
         if DEBUG_TRAINING or True:
             solver_logger.setLevel(logging.DEBUG)
+            pd.options.display.max_rows = None
+            pd.options.display.max_columns = None
         else:
             solver_logger.setLevel(logging.INFO)
         solver_logger.handlers = []
