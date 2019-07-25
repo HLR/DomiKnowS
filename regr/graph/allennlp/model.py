@@ -117,6 +117,9 @@ class GraphModel(Model):
             dataset_type_key in data and
             all(dataset_type == 'train' for dataset_type in data[dataset_type_key])):
             return False
+        if (dataset_type_key in data and
+            all(dataset_type == 'test' for dataset_type in data[dataset_type_key])):
+            return True
         epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
         if epoch_key not in data:
             return True  # no epoch record, then always inference

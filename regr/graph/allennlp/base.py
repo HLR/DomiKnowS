@@ -6,6 +6,8 @@ import pandas as pd
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
 from allennlp.training import Trainer
+from allennlp.training.util import evaluate
+from allennlp.nn.util import device_mapping
 from ...utils import WrapperMetaClass
 from ...solver import ilpSelectClassification
 from ...solver.ilpSelectClassification import ilpOntSolver
@@ -29,6 +31,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
         self.solver = ilpOntSolver.getInstance(self)
+        self.solver_log_to(None)
         # do not invoke super().__init__() here
 
     def get_multiassign(self):
@@ -55,6 +58,20 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.traversal_apply(func)
         return sensors
 
+    def solver_log_to(self, log_path:str=None):
+        solver_logger = logging.getLogger(ilpSelectClassification.__name__)
+        solver_logger.propagate = False
+        if DEBUG_TRAINING or True:
+            solver_logger.setLevel(logging.DEBUG)
+            pd.options.display.max_rows = None
+            pd.options.display.max_columns = None
+        else:
+            solver_logger.setLevel(logging.INFO)
+        solver_logger.handlers = []
+        if log_path is not None:
+            handler = logging.FileHandler(log_path)
+            solver_logger.addHandler(handler)
+
     def save(self, path, **objects):
         if not os.path.exists(path):
             os.makedirs(path)
@@ -65,28 +82,34 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             with open(os.path.join(path, k + '.pkl'), 'wb') as fout:
                 pickle.dump(v, fout)
 
-    def train(self, data_config, train_config):
+    def load(self, path):
+        if torch.cuda.is_available() and not DEBUG_TRAINING:
+            device = 0
+            self.model.cuda()
+        else:
+            device = -1
+
+        self.model.vocab = Vocabulary.from_files(os.path.join(path, 'vocab'))
+        self.model.extend_embedder_vocab()
+        with open(os.path.join(path, 'model.th'), 'rb') as fin:
+            self.model.load_state_dict(torch.load(fin, map_location=device_mapping(device)))
+
+    @property
+    def reader(self):
         sentence_sensors = self.get_sensors(ReaderSensor)
         readers = {sensor.reader for name, sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
-        reader = readers.pop()
+        return readers.pop()
+
+    def train(self, data_config, train_config):
+        reader = self.reader
         train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path), metas={'dataset_type':'train'})
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path), metas={'dataset_type':'valid'})
         self.update_vocab_from_instances(train_dataset + valid_dataset, train_config.pretrained_files)
         trainer = self.get_trainer(train_dataset, valid_dataset, **train_config.trainer)
 
-        solver_logger = logging.getLogger(ilpSelectClassification.__name__)
-        solver_logger.propagate = False
-        if DEBUG_TRAINING or True:
-            solver_logger.setLevel(logging.DEBUG)
-            pd.options.display.max_rows = None
-            pd.options.display.max_columns = None
-        else:
-            solver_logger.setLevel(logging.INFO)
-        solver_logger.handlers = []
         if train_config.trainer.serialization_dir is not None:
-            handler = logging.FileHandler(os.path.join(train_config.trainer.serialization_dir, 'solver.log'))
-            solver_logger.addHandler(handler)
+            self.solver_log_to(os.path.join(train_config.trainer.serialization_dir, 'solver.log'))
 
         return trainer.train()
 
@@ -105,7 +128,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         # prepare GPU
         if torch.cuda.is_available() and not DEBUG_TRAINING:
             device = 0
-            model = self.model.cuda()
+            self.model.cuda()
         else:
             device = -1
 
@@ -148,3 +171,29 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         vocab = Vocabulary.from_instances(instances, pretrained_files=pretrained_files)
         self.model.vocab = vocab
         self.model.extend_embedder_vocab()
+
+    def test(self, data_path, log_path=None, batch=1):
+        # prepare GPU
+        if torch.cuda.is_available() and not DEBUG_TRAINING:
+            device = 0
+            self.model.cuda()
+        else:
+            device = -1
+
+        reader = self.reader
+        dataset = reader.read(data_path, metas={'dataset_type':'test'})
+        self.solver_log_to(log_path)
+        sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
+        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
+        iterator = BucketIterator(batch_size=batch,
+                                  sorting_keys=sorting_keys,
+                                  track_epoch=True)
+        iterator.index_with(self.model.vocab)
+
+        final_metrics = evaluate(model=self.model,
+                                 instances=dataset,
+                                 data_iterator=iterator,
+                                 cuda_device=device,
+                                 batch_weight_key=None)
+
+        return final_metrics
