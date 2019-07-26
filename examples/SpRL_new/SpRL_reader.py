@@ -9,6 +9,7 @@ from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
 from allennlp.data.fields.sequence_field import SequenceField
 from allennlp.common.checks import ConfigurationError
+from allennlp.common.util import get_spacy_model
 import itertools
 import spacy
 import torch
@@ -18,8 +19,7 @@ import torch
 #sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
-nlpmodel = spacy.load("en_core_web_sm")
-
+nlpmodel = get_spacy_model("en_core_web_sm", pos_tags=True, parse=True, ner=True)
 
 
 class SpRLReader(SensableReader):
@@ -36,9 +36,12 @@ class SpRLReader(SensableReader):
             fields: Dict,
             raw_sample
     ) -> Dict:
-
-        (sentence,labels), relations = raw_sample
-        return [Token(word) for word in sentence]
+        (sentence, labels), relations = raw_sample
+        nlpsentence = self.spacy.pipe(sentence, n_threads=-1)
+        return [Token(words[0].doc.text,
+                      pos_='|'.join([word.pos_ for word in words]),
+                      tag_='|'.join([word.pos_ for word in words]))
+                for words in nlpsentence]
 
 
     @cls.textfield('word')
