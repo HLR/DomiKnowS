@@ -1,6 +1,8 @@
 import os
 import logging
 import pickle
+from glob import glob
+from typing import Union
 import torch
 import pandas as pd
 from allennlp.data.vocabulary import Vocabulary
@@ -82,16 +84,39 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             with open(os.path.join(path, k + '.pkl'), 'wb') as fout:
                 pickle.dump(v, fout)
 
-    def load(self, path):
+    def load(self, path, model:Union[str, int]='default'):
+        model_file = None
+        if isinstance(model, int):
+            model_file = 'model_state_epoch_{}'.format(model)
+        elif isinstance(model, str):
+            if model.endswith('.th'):
+                model_file = model
+            elif model == 'best':
+                model_file = 'best.th'
+            elif model == 'last':
+                model_file = sorted(glob(os.path.join(path, "model_state_epoch_*.th")), key=lambda p: os.path.getmtime(p)).pop()
+            elif model == 'default':
+                model_file = 'model.th'
+        if model_file is None:
+            raise ValueError(('`model` in `load()` must be one of the following: '
+                              'an integer for epoch number, '
+                              'a string name ends with ".th", '
+                              'the string "best" for best model, '
+                              'the string "last" for last saved model, '
+                              'or the string "default" for just "model.th".'))
+        vocab_file = os.path.join(path, 'vocab')
+
         if torch.cuda.is_available() and not DEBUG_TRAINING:
             device = 0
             self.model.cuda()
         else:
             device = -1
 
-        self.model.vocab = Vocabulary.from_files(os.path.join(path, 'vocab'))
+        #print('Loading vocab from {}'.format(vocab_file))
+        self.model.vocab = Vocabulary.from_files(vocab_file)
         self.model.extend_embedder_vocab()
-        with open(os.path.join(path, 'model.th'), 'rb') as fin:
+        #print('Loading model from {}'.format(model_file))
+        with open(model_file, 'rb') as fin:
             self.model.load_state_dict(torch.load(fin, map_location=device_mapping(device)))
 
     @property

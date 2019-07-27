@@ -30,7 +30,7 @@ def test(model_path, data_path, log_solver, batch_size):
     lbp = model_declaration(graph, Config.Model)
 
     seed()
-    lbp.load(model_path)
+    lbp.load(model_path, 'last')
     metrics = lbp.test(data_path, log_solver, batch_size)
     print(metrics)
 
