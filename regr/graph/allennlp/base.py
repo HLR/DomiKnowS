@@ -214,6 +214,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                                   sorting_keys=sorting_keys,
                                   track_epoch=True)
         iterator.index_with(self.model.vocab)
+        training_state = self.model.training
+        self.model.eval()
 
         final_metrics = evaluate(model=self.model,
                                  instances=dataset,
@@ -221,4 +223,5 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                                  cuda_device=device,
                                  batch_weight_key=None)
 
+        self.model.train(training_state)
         return final_metrics
