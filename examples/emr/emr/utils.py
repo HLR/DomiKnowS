@@ -19,3 +19,21 @@ class Namespace(dict):
 
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, ','.join('\'{}\':{}'.format(k,v) for k,v in self.items()))
+
+
+def caller_source():
+    import inspect
+
+    for frame in inspect.getouterframes(inspect.currentframe(), context=1)[2:]:
+        if frame.code_context is not None:
+            try:
+                with open(frame.filename, 'r') as fin:
+                    return fin.read()
+                break
+            except FileNotFoundError as ex:
+                ex = type(ex)('{}\n'
+                              'Please run from a file base environment, '
+                              'rather than something like notebook.'.format(ex))
+                raise ex
+    else:
+        raise RuntimeError('Who is calling?')

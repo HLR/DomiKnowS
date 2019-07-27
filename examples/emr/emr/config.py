@@ -1,7 +1,7 @@
 if __package__ is None or __package__ == '':
-    from utils import Namespace
+    from utils import Namespace, caller_source
 else:
-    from .utils import Namespace
+    from .utils import Namespace, caller_source
 
 import time
 
@@ -16,7 +16,7 @@ config = {
         'embedding_dim': 8,
         'ngram': 5,
         'bidirectional': True,
-        'dropout': 0.5,
+        'dropout': 0.35,
         'pretrained_files': {
             'word': 'data/glove.6B/glove.6B.50d.txt'
         },
@@ -24,10 +24,10 @@ config = {
             'word': 50
         },
         'graph': {
-            'balance_factor': 0.25,
-            'label_smoothing': 0.1,
-            'focal_gamma': 2.,
-            'inference_interval': 10,
+            'balance_factor': 1.5,
+            'label_smoothing': 0.01,
+            'focal_gamma': 2,
+            'inference_interval': 100,
             'inference_training_set': False
         }
     },
@@ -36,13 +36,16 @@ config = {
             'word': 'data/glove.6B/glove.6B.50d.txt'
         },
         'trainer': {
-            'lr':0.001,
-            'wd':0.0001,
-            'batch': 16,
+            'lr':0.0001,
+            'wd':0.00001,
+            'batch': 8,
             'epoch': 100,
             'patience': None,
             'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
         }
+    },
+    'Source': {
+        'emr': caller_source()
     }
 }
 
