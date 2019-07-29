@@ -221,9 +221,9 @@ class PairTokenDependencyRelation(BaseModule):
                 # conjuncts: coordinated tokens
                 for r_token in token.conjuncts:
                     dep[i, j, r_token.i, 3] = 1
-                # head: syntactic parent, or 
+                # head: syntactic parent, or "governor"
                 dep[i, j, token.head.i, 4] = 1
-                # ancestors: rightmost token of this toke™s syntactic descendants
+                # ancestors: rightmost token of this toke's syntactic descendants
                 for r_token in token.ancestors:
                     dep[i, j, r_token.i, 5] = 1
 
