@@ -104,16 +104,17 @@ def model_declaration(graph, config):
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
-    word['compact'] = MLPLearner([64,], word['encode'])
+    word['compact'] = MLPLearner([48,], word['encode'])
     pair['cat'] = CartesianProductSensor(word['compact'])
     pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
     pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
     pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
     pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
+    pair['emb'] = MLPLearner([256,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
     pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
+    import torch
+    pair['encode'] = ConvLearner([None,] * 3, 7, pair['all'], activation=torch.nn.SELU(), dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.

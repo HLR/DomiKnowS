@@ -7,7 +7,10 @@ import torch
 import pandas as pd
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.iterators import BucketIterator
+from allennlp.common.params import Params
 from allennlp.training import Trainer
+from allennlp.training.optimizers import Optimizer
+from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.util import evaluate
 from allennlp.nn.util import device_mapping
 from ...utils import WrapperMetaClass
@@ -54,7 +57,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         sensors = []
 
         def func(node):
-            # use a closure to collect multi-assignments
+            # use a closure to collect sensors
             if isinstance(node, Property):
                 sensors.extend(node.find(*tests))
         self.traversal_apply(func)
@@ -131,19 +134,48 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         train_dataset = reader.read(os.path.join(data_config.relative_path, data_config.train_path), metas={'dataset_type':'train'})
         valid_dataset = reader.read(os.path.join(data_config.relative_path, data_config.valid_path), metas={'dataset_type':'valid'})
         self.update_vocab_from_instances(train_dataset + valid_dataset, train_config.pretrained_files)
-        trainer = self.get_trainer(train_dataset, valid_dataset, **train_config.trainer)
+
+        # prepare optimizer
+        #print({n: p.size() for n, p in self.model.named_parameters()})
+        optimizer = Optimizer.from_params(self.model.named_parameters(), Params(train_config.optimizer))
+
+        # prepare scheduler
+        if 'scheduler' in train_config:
+            scheduler = LearningRateScheduler.from_params(optimizer, Params(train_config.scheduler))
+        else:
+            scheduler = None
+
+        # prepare iterator
+        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderLearner)]
+        iterator = BucketIterator(sorting_keys=sorting_keys,
+                                  track_epoch=True,
+                                  **train_config.iterator)
+        iterator.index_with(self.model.vocab)
+
+        # prepare model
+        training_state = self.model.training
+        self.model.train()
+
+        trainer = self.get_trainer(train_dataset, valid_dataset,
+                                   optimizer=optimizer,
+                                   learning_rate_scheduler=scheduler,
+                                   iterator=iterator,
+                                   **train_config.trainer)
 
         if train_config.trainer.serialization_dir is not None:
             self.solver_log_to(os.path.join(train_config.trainer.serialization_dir, 'solver.log'))
 
-        return trainer.train()
+        metrics = trainer.train()
+
+        # restore model
+        self.model.train(training_state)
+
+        return metrics
 
     def get_trainer(
         self,
         train_dataset,
         valid_dataset,
-        lr=1., wd=0.003, batch=64, epoch=1000, patience=50,
-        serialization_dir='log/',
         summary_interval=100,
         histogram_interval=100,
         should_log_parameter_statistics=True,
@@ -157,32 +189,11 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         else:
             device = -1
 
-        # prepare optimizer
-        #print([p.size() for p in model.parameters()])
-        # options for optimizor: SGD, Adam, Adadelta, Adagrad, Adamax, RMSprop
-        from torch.optim import Adam
-        optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
-        sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
-        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
-
-        iterator = BucketIterator(batch_size=batch,
-                                  sorting_keys=sorting_keys,
-                                  track_epoch=True)
-        iterator.index_with(self.model.vocab)
-        from allennlp.training.learning_rate_schedulers import LearningRateScheduler
-        from allennlp.common.params import Params
-        scheduler = LearningRateScheduler.from_params(optimizer, Params({'type':'reduce_on_plateau'}))
         trainer = Trainer(model=self.model,
-                          optimizer=optimizer,
-                          iterator=iterator,
                           train_dataset=train_dataset,
                           validation_dataset=valid_dataset,
                           shuffle=not DEBUG_TRAINING,
-                          patience=patience,
-                          num_epochs=epoch,
                           cuda_device=device,
-                          learning_rate_scheduler = scheduler,
-                          serialization_dir=serialization_dir,
                           summary_interval=summary_interval,
                           histogram_interval=histogram_interval,
                           should_log_parameter_statistics=should_log_parameter_statistics,
@@ -207,21 +218,27 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
         reader = self.reader
         dataset = reader.read(data_path, metas={'dataset_type':'test'})
-        self.solver_log_to(log_path)
+
+        # prepare iterator
         sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
         sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
         iterator = BucketIterator(batch_size=batch,
                                   sorting_keys=sorting_keys,
                                   track_epoch=True)
         iterator.index_with(self.model.vocab)
+
+        # prepare model
         training_state = self.model.training
         self.model.eval()
 
-        final_metrics = evaluate(model=self.model,
-                                 instances=dataset,
-                                 data_iterator=iterator,
-                                 cuda_device=device,
-                                 batch_weight_key=None)
+        self.solver_log_to(log_path)
+        metrics = evaluate(model=self.model,
+                           instances=dataset,
+                           data_iterator=iterator,
+                           cuda_device=device,
+                           batch_weight_key=None)
 
+        # restore model
         self.model.train(training_state)
-        return final_metrics
+
+        return metrics

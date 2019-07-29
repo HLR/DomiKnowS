@@ -36,12 +36,21 @@ config = {
             'word': 'data/glove.6B/glove.6B.50d.txt'
         },
         'trainer': {
-            'lr':0.0001,
-            'wd':0.00001,
-            'batch': 8,
-            'epoch': 100,
+            'num_epochs': 100,
             'patience': None,
-            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+            'serialization_dir': None#'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+        },
+        'optimizer': {
+            'type': 'adam',
+            'lr': 5e-5,
+            'weight_decay': 5e-7
+        },
+        'scheduler': {
+            'type': 'reduce_on_plateau',
+            'patience': 5
+        },
+        'iterator': {
+            'batch_size': 8,
         }
     },
     'Source': {
