@@ -100,21 +100,20 @@ def model_declaration(graph, config):
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
     word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
+    word['encode'] = RNNLearner(word['ngram'], layers=config.rnn.layers, bidirectional=config.rnn.bidirectional, dropout=config.dropout)
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
-    word['compact'] = MLPLearner([48,], word['encode'])
+    word['compact'] = MLPLearner(config.compact.layers, word['encode'], activation=config.activation)
     pair['cat'] = CartesianProductSensor(word['compact'])
-    pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
+    pair['tkn_dist'] = TokenDistantSensor(config.distance_emb_size * 2, config.max_distance, sentence['raw'])
     pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
+    pair['tkn_dep_dist'] = TokenDepDistSensor(config.distance_emb_size, config.max_distance, sentence['raw'])
     pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    pair['emb'] = MLPLearner([256,], pair['onehots'], activation=None)
+    pair['emb'] = MLPLearner([config.relemb.emb_size,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
     pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    import torch
-    pair['encode'] = ConvLearner([None,] * 3, 7, pair['all'], activation=torch.nn.SELU(), dropout=config.dropout)
+    pair['encode'] = ConvLearner(config.relconv.layers, config.relconv.kernel_size, pair['all'], activation=config.activation, dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.

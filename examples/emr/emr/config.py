@@ -1,9 +1,10 @@
+import time
+import torch
+
 if __package__ is None or __package__ == '':
     from utils import Namespace, caller_source
 else:
     from .utils import Namespace, caller_source
-
-import time
 
 
 config = {
@@ -15,8 +16,24 @@ config = {
     'Model': { # model setting
         'embedding_dim': 8,
         'ngram': 5,
-        'bidirectional': True,
         'dropout': 0.35,
+        'activation': torch.nn.ReLU(),
+        'max_distance': 64,
+        'distance_emb_size': 8,
+        'rnn': {
+            'layers': 2,
+            'bidirectional': True,
+        },
+        'compact': {
+            'layers': [48,],
+        },
+        'relemb':{
+            'emb_size': 256,
+        },
+        'relconv':{
+            'layers': [None,]*3,
+            'kernel_size': 7
+        },
         'pretrained_files': {
             'word': 'data/glove.6B/glove.6B.50d.txt'
         },
@@ -38,16 +55,16 @@ config = {
         'trainer': {
             'num_epochs': 100,
             'patience': None,
-            'serialization_dir': None#'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
         },
         'optimizer': {
             'type': 'adam',
-            'lr': 5e-5,
-            'weight_decay': 5e-7
+            'lr': 1e-4,
+            'weight_decay': 1e-5
         },
         'scheduler': {
             'type': 'reduce_on_plateau',
-            'patience': 5
+            'patience': 10
         },
         'iterator': {
             'batch_size': 8,
