@@ -143,6 +143,7 @@ class SpRLReader(SensableReader):
         for raw_sample in raw_examples:
             yield raw_sample
 
+
     def parseSprlXML(self, sprlxmlfile):
 
         # parse the xml tree object
