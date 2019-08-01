@@ -1,8 +1,10 @@
 import spacy
-
+from allennlp.data.tokenizers import Token
 nlpmodel=spacy.load("en_core_web_sm")
 
-class Data():
+
+
+class DataFeature():
 
     def __init__(self,anystr):
         self.sentence=anystr
@@ -22,10 +24,11 @@ class Data():
     #get tokens
     def getTokens(self):
         docs = nlpmodel(self.phrase)
-        tokens=[]
+        num=0
         for token in docs:
-           tokens.append(token)
-        return tokens
+            num+=1
+        span=docs[0:num]
+        return span.merge()
 
 
     def getLower(self):
@@ -42,37 +45,37 @@ class Data():
 
     #pos feature
     def getPos(self):
-        pos=''
+        pos=[]
         for doc in self.docs:
-            pos+=doc.pos_+"|"
-        return pos
+            pos.append(doc.pos_)
+        return '|'.join(pos)
 
     #tag feature
     def getTag(self):
-        tag = ''
+        tag = []
         for doc in self.docs:
-            tag += doc.tag_ + "|"
-        return tag
+            tag.append(doc.tag_)
+        return "|".join(tag)
 
     # lemma feature
     def getLemma(self):
-        lemma = ''
+        lemma = []
         for doc in self.docs:
-            lemma += doc.lemma_ + "|"
-        return lemma
+            lemma.append(doc.lemma_)
+        return "|".join(lemma)
 
     #dependenceyrelation
-    def getDenpendencyRelation(self):
-        dependenceyRelation= ''
+    def getDenpendency(self):
+        dependenceyRelation=[]
         for doc in self.docs:
-            dependenceyRelation += doc.dep_ + "|"
-        return dependenceyRelation
+            dependenceyRelation.append( doc.dep_ )
+        return "|".join(dependenceyRelation)
 
     #phrasetag
     def getPhrasetag(self):
         phrasetag=''
         with self.docs.retokenize() as retokenizer:
-            retokenizer.merge(self.docs[0:len(phrase)])
+            retokenizer.merge(self.docs[0:len(self.phrase)])
         for doc in self.docs:
             phrasetag=doc.tag_
         return phrasetag
@@ -86,7 +89,22 @@ class Data():
         pass
 
 
-phrase="fantastic car"
-data=Data(phrase)
-postag=data.getDenpendencyRelation()
-print(postag)
+#
+# sentence=['fantastic car','new cars','about 20 years old']
+# newtokens=[]
+# for word in sentence:
+#     tokens=DataFeature(word).getTokens()
+#     pos__=DataFeature(word).getPos()
+#     tokens.set_extension("pos_", default=False, force=True)
+#     tokens._.set('pos_',pos__)
+#     newtokens.append(tokens)
+# for i in newtokens:
+#     print(i)
+#     print(i._.pos_)
+
+
+#
+# data=DataFeature(phrase)
+# postag=data.getTokens()
+# print(postag)
+

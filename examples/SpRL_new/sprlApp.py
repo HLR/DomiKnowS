@@ -43,10 +43,12 @@ def model_declaration(graph, config):
     word['dep']=SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
     word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     word['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])
+    word['headword'] = SentenceEmbedderLearner('headword_tag', config.embedding_dim, sentence['raw'])
+    word['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
    # phrase['emb'] = RNNLearner(phrase['w2v'])
 
-    word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'])
+    word['all'] = ConcatSensor(word['raw'],word['lemma'],word['dep'],word['pos'],word['headword'],word['phrasepos'])
 
     word['ngram'] = NGramSensor(config.ngram, word['all'])
     word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)

@@ -4,7 +4,7 @@ from typing import Dict
 from collections import defaultdict
 from allennlp.data.tokenizers import Token
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
-from allennlp.data.token_indexers import SingleIdTokenIndexer,PosTagIndexer,DepLabelIndexer
+from allennlp.data.token_indexers import SingleIdTokenIndexer
 from regr.data.allennlp.reader import SensableReader, keep_keys
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
@@ -13,7 +13,10 @@ from allennlp.common.checks import ConfigurationError
 import itertools
 import spacy
 import torch
-from lemma import LemmaIndexer
+from featureIndexer import PosTaggerIndexer,LemmaIndexer,DependencyIndexer,HeadwordIndexer,PhrasePosIndexer
+from feature import DataFeature
+
+
 
 # sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
@@ -28,15 +31,7 @@ class SpRLReader(SensableReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)
 
-    # @cls.tokens('sentence')
-    # def update_sentence(
-    #         self,
-    #         fields: Dict,
-    #         raw_sample
-    # ) -> Dict:
-    #
-    #     (sentence, labels), relations = raw_sample
-    #     return [Token(word) for word in sentence]
+
     @cls.tokens('sentence')
     def update_sentence(
             self,
@@ -44,15 +39,27 @@ class SpRLReader(SensableReader):
             raw_sample
     ) -> Dict:
         (sentence, labels), relations = raw_sample
-        nlpsentence = nlpmodel.pipe(sentence, n_threads=-1)
-        return [
-            Token(words[0].doc.text,
-                  pos_='|'.join([word.pos_ for word in words]),
-                  tag_='|'.join([word.tag_ for word in words]),
-                  dep_='|'.join([word.dep_ for word in words]),
-                  lemma_='|'.join([word.dep_ for word in words]))
-                for words in nlpsentence
-        ]
+        newtoken=[]
+        for word in sentence:
+            token = DataFeature(word).getTokens()
+            token.set_extension("lemma_", default=False, force=True)
+            token.set_extension('pos_',default=False,force=True)
+            token.set_extension('tag_', default=False, force=True)
+            token.set_extension('dep_', default=False, force=True)
+            token.set_extension('headword_', default=False, force=True)
+            token.set_extension('phrasepos_', default=False, force=True)
+            token._.set('lemma_', DataFeature(word).getLemma())
+            token._.set('pos_', DataFeature(word).getPos())
+            token._.set('tag_', DataFeature(word).getTag())
+            token._.set('dep_', DataFeature(word).getDenpendency())
+            token._.set('headword_', DataFeature(word).getHeadword())
+            token._.set('phrasepos_', DataFeature(word).getPhrasetag())
+
+            newtoken.append(token)
+
+
+        return newtoken
+
 
     @cls.textfield('word')
     def update_sentence_word(
@@ -106,29 +113,47 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'pos_tag': PosTagIndexer(namespace='pos_tag')}
+        indexers = {'pos_tag':PosTaggerIndexer(namespace='pos_tag')}
         textfield = TextField(tokens, indexers)
         return textfield
 
-    @cls.textfield('lemma')
-    def update_sentence_pos(
+    @cls.textfield('lemma_tag')
+    def update_sentence_lemma(
             self,
             fields,
             tokens
     ) -> Field:
-        indexers = {'lemma_tag': PosTagIndexer(namespace='lemma_tag')}
-        for i in tokens:
-            print(i.lemma_)
+        indexers = {'lemma_tag': LemmaIndexer(namespace='lemma_tag')}
         textfield = TextField(tokens, indexers)
         return textfield
-
+    #
     @cls.textfield('dep_tag')
     def update_sentence_dep(
             self,
             fields,
             tokens
     ) -> Field:
-        indexers = {'dep_tag': DepLabelIndexer(namespace='dep_tag')}
+        indexers = {'dep_tag': DependencyIndexer(namespace='dep_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('headword_tag')
+    def update_sentence_dep(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        indexers = {'headword_tag': HeadwordIndexer(namespace='headword_tag')}
+        textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('phrasepos_tag')
+    def update_sentence_dep(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        indexers = {'phrasepos_tag': PhrasePosIndexer(namespace='phrasepos_tag')}
         textfield = TextField(tokens, indexers)
         return textfield
 
