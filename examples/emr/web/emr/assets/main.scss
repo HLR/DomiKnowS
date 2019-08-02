@@ -1,0 +1,31 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/**
+ * Code formatting
+ */
+pre,
+code {
+  border: none;
+  border-radius: none; }
+
+code { padding: 0; }
+
+pre { padding: 0; }
+
+/**
+ * Wrapper
+ */
+.wrapper { max-width: none; }
+
+/**
+ * Syntax highlighting styles
+ */
+.highlight { background: none; }
+
+@import "annotated-code";
+
+html,
+body { background: none; }
