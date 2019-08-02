@@ -50,7 +50,7 @@ class SpRLReader(SensableReader):
                   pos_='|'.join([word.pos_ for word in words]),
                   tag_='|'.join([word.tag_ for word in words]),
                   dep_='|'.join([word.dep_ for word in words]),
-                  lemma_='|'.join([word.dep_ for word in words]))
+                  lemma_='|'.join([word.lemma_ for word in words]))
                 for words in nlpsentence
         ]
 
@@ -110,13 +110,13 @@ class SpRLReader(SensableReader):
         textfield = TextField(tokens, indexers)
         return textfield
 
-    @cls.textfield('lemma')
+    @cls.textfield('lemma_tag')
     def update_sentence_pos(
             self,
             fields,
             tokens
     ) -> Field:
-        indexers = {'lemma_tag': PosTagIndexer(namespace='lemma_tag')}
+        indexers = {'lemma_tag': LemmaIndexer(namespace='lemma_tag')}
         for i in tokens:
             print(i.lemma_)
         textfield = TextField(tokens, indexers)

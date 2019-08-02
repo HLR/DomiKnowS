@@ -46,7 +46,7 @@ def model_declaration(graph, config):
 
    # phrase['emb'] = RNNLearner(phrase['w2v'])
 
-    word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'])
+    word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'], word['lemma'])
 
     word['ngram'] = NGramSensor(config.ngram, word['all'])
     word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
