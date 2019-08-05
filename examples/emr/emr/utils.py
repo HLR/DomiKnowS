@@ -22,11 +22,11 @@ class Namespace(dict):
 
     def clone(self):
         from copy import copy
-        return copy(self)
+        return Namespace(copy(self))
 
     def deepclone(self):
         from copy import deepcopy
-        return deepcopy(self)
+        return Namespace(deepcopy(self))
 
 def caller_source():
     import inspect

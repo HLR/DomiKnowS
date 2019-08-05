@@ -1,4 +1,3 @@
-from __future__ import print_function
 import logging
 from argparse import ArgumentParser
 import numpy as np
@@ -11,7 +10,8 @@ class Stat():
     def setup(self): pass
     def sample(self, sample): pass
     def summarize(self): pass
-    
+
+
 class Length(Stat):
     def setup(self):
         self.sentence_length = []
@@ -31,7 +31,7 @@ class Length(Stat):
                                    index=['length', 'count', 'cum_count'],
                                    columns=length)
         yield 'Sentence length / hist\n', sentence_df
-    
+
 
 class Labels(Stat):
     def setup(self):
@@ -74,18 +74,20 @@ class Conll04Stat():
                 
         for stat in self.Stats:
             for name, result in stat.summarize():
-                print('-', name, result)
-
-
-parser = ArgumentParser(
-    description='Show stat of the data set.')
-parser.add_argument('path', nargs=1)
-args = parser.parse_args()
+                self.logger.info('- {}: {}'.format(name, result))
+                yield name, result
 
 
 def main():
+    parser = ArgumentParser(
+        description='Show stat of the data set.')
+    parser.add_argument('path', nargs=1)
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
     stat = Conll04Stat()
-    stat(args.path[0])
+    for name, result in stat(args.path[0]):
+        pass
 
 
 if __name__ == '__main__':

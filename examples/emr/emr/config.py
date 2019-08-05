@@ -16,7 +16,7 @@ config = {
     'Model': { # model setting
         'embedding_dim': 8,
         'ngram': 5,
-        'dropout': 0.3,
+        'dropout': 0.35,
         'activation': torch.nn.LeakyReLU(),
         'max_distance': 64,
         'distance_emb_size': 8,
