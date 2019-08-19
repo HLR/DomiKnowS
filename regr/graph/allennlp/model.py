@@ -215,7 +215,9 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
-        data = inference(self.graph, self.graph.solver, data, self.vocab)
+        #data = inference(self.graph, self.graph.solver, data, self.vocab)
+        data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
+        
         return data
 
     def loss_func(
