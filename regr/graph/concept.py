@@ -62,7 +62,7 @@ class Concept(BaseGraphTree):
 
         def handle(*args, **kwargs):
             if not args and not kwargs:
-                return self._out[rel]
+                return self._out.setdefault(rel, [])
             return cls._rels[rel](self, *args, **kwargs)
         return handle
 
