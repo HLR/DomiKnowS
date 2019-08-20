@@ -26,6 +26,7 @@ class BaseModule(Module):
     def __init__(self, output_dim):
         Module.__init__(self)
         self.output_dim = output_dim
+        self.default_device = None
 
     def get_output_dim(self):
         return self.output_dim
