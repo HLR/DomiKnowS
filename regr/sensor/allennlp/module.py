@@ -156,10 +156,7 @@ class PairTokenDistance(BaseModule):
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(l*2)
-        if torch.cuda.is_available():
-            dist = torch.arange(-length + 1, length, device=torch.cuda.current_device())
-        else:
-            dist = torch.arange(-length + 1, length)
+        dist = torch.arange(-length + 1, length, device=self.default_device)
         rows = []
         for i in range(length):
             rows.append(dist[i:i + length].view(1, -1))
@@ -172,20 +169,14 @@ class PairTokenDistance(BaseModule):
         dist = (dist.log() / np.log(self.base) + 1).floor()
         #print(dist)
         dist[dist < 0] = 0
-        if torch.cuda.is_available():
-            dist = dist * sign.to(dtype=dist.dtype, device=dist.device)
-        else:
-            dist = dist * sign.to(dtype=dist.dtype)
+        dist = dist * sign.to(dtype=dist.dtype, device=dist.device)
         dist[dist < self.lb] = self.lb
         dist[dist > self.ub] = self.ub
         dist = dist - self.lb
         dist = dist.long()
         #print(dist)
         #(n, n)
-        if torch.cuda.is_available():
-            eye = torch.eye(self.emb_num, device=dist.device)
-        else:
-            eye = torch.eye(self.emb_num)
+        eye = torch.eye(self.emb_num, device=dist.device)
         #import pdb; pdb.set_trace()
         #(1, l, l, n)
         dist = eye.index_select(0, dist.view(-1)).view(1, length, length, -1)
@@ -203,10 +194,7 @@ class PairTokenDependencyRelation(BaseModule):
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(b,l,l,f)
-        if torch.cuda.is_available(): 
-            dep = torch.zeros((batch, length, length, self.get_output_dim()), device=torch.cuda.current_device())
-        else:
-            dep = torch.zeros((batch, length, length, self.get_output_dim()))
+        dep = torch.zeros((batch, length, length, self.get_output_dim()), device=self.default_device)
         for i, span in enumerate(x):
             for j, token in enumerate(span):
                 # children: immediate syntactic children
@@ -303,10 +291,7 @@ class PairTokenDependencyDistance(BaseModule):
             docs.append(doc)
 
         # (b,lx,lx)
-        if torch.cuda.is_available(): 
-            lcas = torch.zeros((batch, length, length), device=torch.cuda.current_device(), dtype=torch.long)
-        else:
-            lcas = torch.zeros((batch, length, length), dtype=torch.long)
+        lcas = torch.zeros((batch, length, length), device=self.default_device, dtype=torch.long)
 
         for doc, lca in zip(docs, lcas):
             # (l,l) ~ [-1, l-1]

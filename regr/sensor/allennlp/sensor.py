@@ -223,11 +223,9 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.default_device = device
+        return super().forward(context)
+
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -239,12 +237,9 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.default_device = device
+        return super().forward(context)
+
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -281,9 +276,5 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.default_device = device
+        return super().forward(context)
