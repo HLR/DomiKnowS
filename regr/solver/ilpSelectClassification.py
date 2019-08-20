@@ -41,7 +41,7 @@ else:
     from ..sensor.allennlp.sensor import SentenceEmbedderSensor
     from ..graph.allennlp.base import *
     
-#     from .ilpConfig import ilpConfig 
+    from .ilpConfig import ilpConfig 
     from .ilpBooleanMethods import *
 
 import logging
@@ -911,25 +911,17 @@ class ilpOntSolver:
         
         concepts = []
         relations = []
-        
-        appGraph = graph.what()['subs']['application']
-            
-        for currrentConcept in appGraph.concepts:
-            if 'has_a' in appGraph.what()['concepts'][currrentConcept].what()['relations'].keys():
-                relations.append(currrentConcept)
-            elif 'is_a' in appGraph.what()['concepts'][currrentConcept].what()['relations'].keys():
-                if currrentConcept is not 'entity':
-                    concepts.append(currrentConcept)
-            
-        groups = [  # TODO: replace by constraint in graph, or group discover, later
-                    # order of table follows order of group
+
+        for prop in graph.poi:
+            concept = prop.sup
+            if concept.has_a():
+                relations.append(concept.name)
+            else:
+                concepts.append(concept.name)
+
+        groups = [
             concepts,
             relations
-        ]      
-        groups1 = [  # TODO: replace by constraint in graph, or group discover, later
-                     # order of table follows order of group
-            ['people', 'organization', 'location', 'other', 'O'],
-            ['work_for', 'located_in', 'live_in', 'orgbase_on', 'kill']
         ]
     
         tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
