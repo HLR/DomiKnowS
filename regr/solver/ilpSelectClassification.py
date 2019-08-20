@@ -41,7 +41,7 @@ else:
     from ..sensor.allennlp.sensor import SentenceEmbedderSensor
     from ..graph.allennlp.base import *
     
-    from .ilpConfig import ilpConfig 
+#     from .ilpConfig import ilpConfig 
     from .ilpBooleanMethods import *
 
 import logging
@@ -1036,7 +1036,7 @@ class ilpOntSolver:
     
             # Do inference
             try:
-                tokenResult, relationsResult = calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation)
+                tokenResult, relationsResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation)
                 
                 if tokenResult is None and relationsResult is None:
                     raise RuntimeError('No result from solver. Check any log from the solver.')
