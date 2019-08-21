@@ -163,10 +163,10 @@ Usually last 1000 lines, with option `-n 1000`, is enough for one solution.
 ### Evaluation
 
 To evaluate a trained model with specific dataset,
-```
+```bash
 python3 -m emr.emr_testing -m log.<starting date and time> -d <path to data corp> -b <batch size>
 ```
 You may want to avoid using GPU because they are used by a training procees. Here is a complete example:
-```
+```bash
 CUDA_VISIBLE_DEVICES=none python3 -m emr.emr_testing -m ./log.20190724-174229 -d ./data/EntityMentionRelation/conll04.corp_1_test.corp -b=16
 ```
