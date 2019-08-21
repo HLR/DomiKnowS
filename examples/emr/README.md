@@ -114,7 +114,7 @@ Please download [glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip) and ex
 You can use the following commands
 ```bash
 wget http://nlp.stanford.edu/data/glove.6B.zip
-unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "glove.6B"
+unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "data/glove.6B"
 ```
 You can also download and extract other word representation, and setup in [`emr/config.py`](emr/config.py) correspondingly.
 
