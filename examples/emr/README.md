@@ -70,14 +70,14 @@ sudo python3 -m pip install -r requirements.txt
 
 #### Data
 
-The Conll04 data is located in [`data/EntityMentionRelation/conll.corp`](data/EntityMentionRelation/conll.corp).
+The Conll04 data is located in [`data/EntityMentionRelation/conll04.corp`](data/EntityMentionRelation/conll04.corp).
 Please consider resplit the data set.
 A handy tool `conll_split` it provided in this example to split dataset for n-fold corss-validation.
 ```bash
-python3 -m emr.conll_split data/EntityMentionRelation/conll.corp
+python3 -m emr.conll_split data/EntityMentionRelation/conll04.corp
 ```
 
-It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
+It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll04.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
 For more options like folds or output format, please use `-h`: `python3 -m emr.conll_split -h`.
 
 
