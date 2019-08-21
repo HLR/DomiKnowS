@@ -48,6 +48,8 @@ By [solving the generated ILP problem](../../regr/solver/ilpSelectClassification
 
 ## Run the example
 
+**Be sure to run anything in this instruction from current directory `examples/emr`, rather than from the project root.**
+
 ### Prepare
 
 #### Tools
