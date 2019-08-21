@@ -48,7 +48,7 @@ def update_metrics(
 ) -> DataInstance:
     for metric_name, class_index, prop, metric in metrics:
         label, pred, mask = get_prop_result(prop, data)
-        metric(pred, label, mask.clone().float())
+        metric(pred, label, mask)
     return data
 
 
