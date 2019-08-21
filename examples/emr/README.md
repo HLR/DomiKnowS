@@ -107,6 +107,16 @@ cum_count  1957.0  4479.0  5346.0  5459.0  5488.0  5503.0  5512.0  5512.0  5512.
 ```
 You can show statistics on splited data sets by replacing the file name in above command.
 
+#### Word2vec
+
+We use [GloVe](https://nlp.stanford.edu/projects/glove/) (glove.6B.50d) in this example.
+Please download [glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip) and extract to `data/glove.6B`.
+You can use the following commands
+```bash
+wget http://nlp.stanford.edu/data/glove.6B.zip
+unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "glove.6B"
+```
+You can also download and extract other word representation, and setup in [`emr/config.py`](emr/config.py) correspondingly.
 
 ### The example
 
