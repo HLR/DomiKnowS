@@ -10,14 +10,14 @@ else:
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04.corp_1_train.corp",
-        'valid_path': "conll04.corp_1_test.corp"
+        'train_path': "conll04.corp_5_train.corp",
+        'valid_path': "conll04.corp_5_test.corp"
     },
     'Model': { # model setting
         'embedding_dim': 8,
         'ngram': 5,
         'dropout': 0.35,
-        'activation': torch.nn.ReLU(),
+        'activation': torch.nn.LeakyReLU(),
         'max_distance': 64,
         'distance_emb_size': 8,
         'rnn': {
@@ -31,7 +31,7 @@ config = {
             'emb_size': 256,
         },
         'relconv':{
-            'layers': [None,]*3,
+            'layers': [None,] * 3,
             'kernel_size': 7
         },
         'pretrained_files': {

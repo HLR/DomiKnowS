@@ -165,6 +165,7 @@ def model_declaration(graph, config):
 
 #### The main entrance of the program.
 def main():
+    save_config = Config.deepclone()
     #### 1. "Ontology Declaration" to get a graph, as a partial program.
     graph = ontology_declaration()
 
@@ -179,7 +180,7 @@ def main():
     lbp.train(Config.Data, Config.Train)
     #### Save the model, including vocabulary use to index the tokens.
     save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
-    lbp.save(save_to, config=Config)
+    lbp.save(save_to, config=save_config)
 
 ####
 """

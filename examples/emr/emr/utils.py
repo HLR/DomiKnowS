@@ -20,6 +20,13 @@ class Namespace(dict):
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, ','.join('\'{}\':{}'.format(k,v) for k,v in self.items()))
 
+    def clone(self):
+        from copy import copy
+        return Namespace(copy(self))
+
+    def deepclone(self):
+        from copy import deepcopy
+        return Namespace(deepcopy(self))
 
 def caller_source():
     import inspect
