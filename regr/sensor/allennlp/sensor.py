@@ -223,7 +223,7 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        self.module.default_device = device
+        self.module.main_module.default_device = device
         return super().forward(context)
 
 
@@ -237,7 +237,7 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        self.module.default_device = device
+        self.module.main_module.default_device = device
         return super().forward(context)
 
 
@@ -276,5 +276,5 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        self.module.default_device = device
+        self.module.main_module.default_device = device
         return super().forward(context)
