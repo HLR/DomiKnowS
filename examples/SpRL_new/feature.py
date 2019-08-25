@@ -6,28 +6,31 @@ nlpmodel=spacy.load("en_core_web_sm")
 
 class DataFeature():
 
-    def __init__(self,anystr):
-        self.sentence=anystr
-        self.phrase=anystr
-        self.docs=nlpmodel(anystr)
+    def __init__(self,sentence,phrase):
+        self.sentence = sentence
+        self.phrase = phrase
+
+        self.parse_sentence = nlpmodel(self.sentence)
+        self.parse_phrase = nlpmodel(self.phrase)
 
     def getChunks(self):
         pre_chunk=nlpmodel(self.sentence)
         new_chunk=[]
         for chunk in pre_chunk.noun_chunks:
-            new_chunk.append(chunk.text)
+            new_chunk.append(chunk)
         return new_chunk
 
     def getSentence(self):
         pass
 
+
     #get tokens
-    def getTokens(self):
-        docs = nlpmodel(self.phrase)
+    def getPhraseTokens(self):
+        # docs = nlpmodel(self.phrase)
         num=0
-        for token in docs:
+        for token in self.parse_phrase:
             num+=1
-        span=docs[0:num]
+        span=self.parse_phrase[0:num]
         return span.merge()
 
 
@@ -40,45 +43,66 @@ class DataFeature():
 
     # headword
     def getHeadword(self):
-       for doc in self.docs.noun_chunks:
-           return str(doc.root.text).lower()
+       if len(list(self.parse_phrase.noun_chunks))==0:
+           return self.phrase
+       else:
+           for doc in self.parse_phrase.noun_chunks:
+                    return str(doc.root.head.text).lower()
 
     #pos feature
     def getPos(self):
-        pos=[]
-        for doc in self.docs:
-            pos.append(doc.pos_)
+        newpos=[]
+        pos = []
+        for token in self.parse_sentence:
+            newpos.append((token.text,token.pos_))
+
+        for phrase_token in self.parse_phrase:
+            for new_p in newpos:
+                if phrase_token.text == new_p[0]:
+                    pos.append(new_p[1])
         return '|'.join(pos)
 
     #tag feature
     def getTag(self):
+        newtag = []
         tag = []
-        for doc in self.docs:
-            tag.append(doc.tag_)
-        return "|".join(tag)
+        for token in self.parse_sentence:
+            newtag.append((token.text, token.tag_))
+
+        for phrase_token in self.parse_phrase:
+            for new_t in newtag:
+                if phrase_token.text == new_t[0]:
+                    tag.append(new_t[1])
+        return '|'.join(tag)
 
     # lemma feature
     def getLemma(self):
         lemma = []
-        for doc in self.docs:
-            lemma.append(doc.lemma_)
+        for phrase in self.parse_phrase:
+            lemma.append(phrase.lemma_)
         return "|".join(lemma)
 
     #dependenceyrelation
     def getDenpendency(self):
-        dependenceyRelation=[]
-        for doc in self.docs:
-            dependenceyRelation.append( doc.dep_ )
-        return "|".join(dependenceyRelation)
+        newdependency = []
+        dependency = []
+        for token in self.parse_sentence:
+            newdependency.append((token.text, token.dep_))
+
+        for phrase_token in self.parse_phrase:
+            for new_t in newdependency:
+                if phrase_token.text == new_t[0]:
+                    dependency.append(new_t[1])
+        return '|'.join(dependency)
 
     #phrasetag
-    def getPhrasetag(self):
-        phrasetag=''
-        with self.docs.retokenize() as retokenizer:
-            retokenizer.merge(self.docs[0:len(self.phrase)])
-        for doc in self.docs:
-            phrasetag=doc.tag_
-        return phrasetag
+    def getPhrasepos(self):
+        phrasepos=''
+        with self.parse_phrase.retokenize() as retokenizer:
+            retokenizer.merge(self.parse_phrase[0:len(self.phrase)])
+        for doc in self.parse_phrase:
+            phrasepos=doc.pos_
+        return phrasepos
 
     #wordform
     def getWordform(self):
@@ -103,8 +127,8 @@ class DataFeature():
 #     print(i._.pos_)
 
 
-#
-# data=DataFeature(phrase)
-# postag=data.getTokens()
-# print(postag)
+# sentence="About 20 kids in traditional clothing and hats waiting on stairs ."
+# phrase="About 20 kids ."
+# data=DataFeature(sentence,phrase)
+# print(data.getHeadword())
 

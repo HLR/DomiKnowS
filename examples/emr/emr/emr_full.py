@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor,WordDistantSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
@@ -23,9 +23,9 @@ from regr.graph.allennlp import AllenNlpGraph
 #### * `Config` contains configurations for model, data, and training.
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 #from .data import Conll04SensorReader as Reader
-from .data_spacy import Conll04SpaCyBinaryReader as Reader
-from .config import Config
-from .utils import seed
+from data_spacy import Conll04SpaCyBinaryReader as Reader
+from config import Config
+from utils import seed
 
 
 #### "*Ontology Declaration*" is the first step in our pipeline.
@@ -34,7 +34,7 @@ from .utils import seed
 #### Here we just import the graph from `graph.py`.
 #### Please also refer to `graph.py` for details.
 def ontology_declaration():
-    from .graph import graph
+    from graph import graph
     return graph
 
 
@@ -98,13 +98,14 @@ def model_declaration(graph, config):
     #### But there is still a PyTorch module associated with it.
     word['compact'] = MLPLearner([64,], word['encode'])
     pair['cat'] = CartesianProductSensor(word['compact'])
-    pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
-    pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
-    pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
-    pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
-    pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
+    pair['word_dist'] =WordDistantSensor(16, 64, sentence['raw'])
+    # pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
+   # pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
+    # pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
+    # pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
+    #pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
+    # pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
+    pair['all'] = ConcatSensor(pair['cat'], pair['word_dist'])
     pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
@@ -145,7 +146,7 @@ def model_declaration(graph, config):
     #### We also connect the predictors for composed-concepts.
     #### Notice the first argument, the "input dimention", takes a `* 4` because `pair['emb']` from `CartesianProductSensor` has double dimention again over `phrase['emb']`.
     work_for['label'] = LogisticRegressionLearner(pair['encode'])
-    live_in['label'] = LogisticRegressionLearner(pair['encode'])
+    live_in['label'] = LogisticRegressionLearner(pair["encode"])
     located_in['label'] = LogisticRegressionLearner(pair['encode'])
     orgbase_on['label'] = LogisticRegressionLearner(pair['encode'])
     kill['label'] = LogisticRegressionLearner(pair['encode'])
@@ -176,3 +177,5 @@ def main():
 """
 This example show a full pipeline how to work with `regr`.
 """
+if __name__ == '__main__':
+    main()

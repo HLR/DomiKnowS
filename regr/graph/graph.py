@@ -17,6 +17,8 @@ class Graph(BaseGraphTree):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
 
+
+
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
@@ -24,6 +26,7 @@ class Graph(BaseGraphTree):
     @property
     def ontology(self):
         return self._ontology
+
     
     @ontology.setter
     def ontology(self, ontology):

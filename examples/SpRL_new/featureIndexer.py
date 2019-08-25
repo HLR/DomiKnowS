@@ -32,11 +32,11 @@ class Indexer(TokenIndexer[int]):
     def __init__(self, namespace: str = 'feature_labels',
                  coarse_tags: bool = False,
                  token_min_padding_length: int = 0) -> None:
+
         super().__init__(token_min_padding_length)
         self._namespace = namespace
         self._coarse_tags = coarse_tags
         self._logged_errors: Set[str] = set()
-
 
     @overrides
     def get_padding_token(self) -> int:
@@ -96,7 +96,7 @@ class LemmaIndexer(Indexer):
         lemma_label = token._.lemma_
         if not lemma_label:
             if token.text not in self._logged_errors:
-                logger.warning("Token had no dependency label: %s", token.text)
+                logger.warning("Token had no Lemma label: %s", token.text)
                 self._logged_errors.add(token.text)
             lemma_label = 'NONE'
         counter[self._namespace][lemma_label] += 1
@@ -140,7 +140,7 @@ class HeadwordIndexer(Indexer):
         headword_label = token._.headword_
         if not headword_label:
             if token.text not in self._logged_errors:
-                logger.warning("Token had no dependency label: %s", token.text)
+                logger.warning("Token had no headword label: %s", token.text)
                 self._logged_errors.add(token.text)
             headword_label = 'NONE'
         counter[self._namespace][headword_label] += 1
@@ -162,7 +162,7 @@ class PhrasePosIndexer(Indexer):
         headword_label = token._.phrasepos_
         if not headword_label:
             if token.text not in self._logged_errors:
-                logger.warning("Token had no dependency label: %s", token.text)
+                logger.warning("Token had no phrasepos label: %s", token.text)
                 self._logged_errors.add(token.text)
             headword_label = 'NONE'
         counter[self._namespace][headword_label] += 1

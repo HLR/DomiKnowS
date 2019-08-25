@@ -1,11 +1,13 @@
 import warnings
+import warnings
 from typing import List, Dict, Tuple, Generator
 from allennlp.data.tokenizers.word_splitter import SpacyWordSplitter
-from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, DepLabelIndexer, NerTagIndexer
+from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, NerTagIndexer,DepLabelIndexer
+
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
-from .conll import Conll04CorpusReader
+from conll import Conll04CorpusReader
 
 
 DELIM = '/'

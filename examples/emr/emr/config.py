@@ -1,12 +1,12 @@
-from .utils import Namespace
+from utils import Namespace
 import time
 
 
 config = {
     'Data': { # data setting
-        'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04.corp_1_train.corp",
-        'valid_path': "conll04.corp_1_test.corp"
+        'relative_path': "../data/EntityMentionRelation",
+        'train_path': "conll04_train.corp",
+        'valid_path': "conll04_test.corp"
     },
     'Model': { # model setting
         'embedding_dim': 8,
@@ -14,7 +14,7 @@ config = {
         'bidirectional': True,
         'dropout': 0.5,
         'pretrained_files': {
-            'word': 'data/glove.6B/glove.6B.50d.txt'
+            'word': '../data/glove.6B.50d.txt'
         },
         'pretrained_dims': {
             'word': 50
@@ -28,9 +28,7 @@ config = {
         }
     },
     'Train': {
-        'pretrained_files': {
-            'word': 'data/glove.6B/glove.6B.50d.txt'
-        },
+        'pretrained_files': None,
         'trainer': {
             'lr':0.001,
             'wd':0.0001,

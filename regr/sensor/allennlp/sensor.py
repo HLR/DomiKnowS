@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor
+from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, WordDistance
 
 
 class SentenceSensor(ReaderSensor):
@@ -181,6 +181,7 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
 
     def get_mask(self, context: Dict[str, Any]):
         # TODO: make sure update_context has been called
+
         return get_text_field_mask(context[self.fullname + '_index'])
 
 
@@ -222,9 +223,37 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
+
         device, _ = guess_device(context).most_common(1)[0]
+        return super().forward(context)
         with torch.cuda.device(device):
             return super().forward(context)
+
+
+
+class WordDistantSensor(SinglePreArgMaskedPairSensor):
+    def create_module(self):
+        return WordDistance(self.emb_num, self.window)
+
+    def __init__(
+        self,
+        emb_num: int,
+        window: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.emb_num = emb_num
+        self.window = window
+        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+
+      device, _ = guess_device(context).most_common(1)[0]
+      return super().forward(context)
+
 
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):

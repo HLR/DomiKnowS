@@ -46,6 +46,8 @@ with Graph('spLanguage') as splang_Graph:
         distance.is_a(pair)
         direction = Concept(name='direction')
         direction.is_a(pair)
+        is_triplet=Concept (name='is_triplet')
+        # is_not_triplet=Concept (name="is_not_triplet")
 
 
 

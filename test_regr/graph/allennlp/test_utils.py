@@ -10,7 +10,7 @@ from regr.graph.allennlp import utils as util
 class TestNnUtil(AllenNlpTestCase):
     def test_sequence_cross_entropy_with_logits_masks_loss_correctly(self):
 
-        # test weight masking by checking that a tensor with non-zero values in
+        # feature.py weight masking by checking that a tensor with non-zero values in
         # masked positions returns the same loss as a tensor with zeros in those
         # positions.
         tensor = torch.rand([5, 7, 4])
@@ -49,7 +49,7 @@ class TestNnUtil(AllenNlpTestCase):
         numpy.testing.assert_array_almost_equal(loss.data.numpy(), correct_loss.data.numpy())
 
     def test_sequence_cross_entropy_with_logits_averages_batch_correctly(self):
-        # test batch average is the same as dividing the batch averaged
+        # feature.py batch average is the same as dividing the batch averaged
         # loss by the number of batches containing any non-padded tokens.
         tensor = torch.rand([5, 7, 4])
         tensor[0, 3:, :] = 0
@@ -68,7 +68,7 @@ class TestNnUtil(AllenNlpTestCase):
 
     @flaky(max_runs=3, min_passes=1)
     def test_sequence_cross_entropy_with_logits_averages_token_correctly(self):
-        # test token average is the same as multiplying the per-batch loss
+        # feature.py token average is the same as multiplying the per-batch loss
         # with the per-batch weights and dividing by the total weight
         tensor = torch.rand([5, 7, 4])
         tensor[0, 3:, :] = 0

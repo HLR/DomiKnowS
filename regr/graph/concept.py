@@ -166,3 +166,6 @@ class Concept(BaseGraphTree):
             vals.extend(rvals)
             confs.extend(rconfs)
         return vals, confs
+
+
+

@@ -27,7 +27,8 @@ config = {
         }
     },
     'Train': {
-        'pretrained_files': None,
+        'pretrained_files':
+            None,
         'trainer':{
             'lr':0.001,
             'wd':0.0001,
