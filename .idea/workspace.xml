@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="85d2d89d-c188-4752-802f-d390adc29577" name="Default" comment="add feature from sentence">
-      <change afterPath="$PROJECT_DIR$/examples/SpRL_new/data/glove.6B.50d.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/SpRL_new/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/SpRL_new/config.py" afterDir="false" />
-    </list>
+    <list default="true" id="85d2d89d-c188-4752-802f-d390adc29577" name="Default" comment="add feature from sentence" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -18,7 +14,7 @@
       <file leaf-file-name="sprlApp.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/examples/SpRL_new/sprlApp.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="370">
+            <state relative-caret-position="705">
               <caret line="114" selection-start-line="114" selection-end-line="114" />
               <folding>
                 <element signature="e#0#226#0" expanded="true" />
@@ -36,11 +32,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="SpRL_reader.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="SpRL_reader.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-1963">
-              <caret line="38" column="14" selection-start-line="38" selection-start-column="14" selection-end-line="38" selection-end-column="14" />
+            <state relative-caret-position="247">
+              <caret line="168" column="46" lean-forward="true" selection-end-line="552" selection-end-column="26" />
             </state>
           </provider>
         </entry>
@@ -91,11 +87,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="config.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="config.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/examples/SpRL_new/config.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="56">
-              <caret line="26" column="9" lean-forward="true" selection-start-line="26" selection-start-column="9" selection-end-line="26" selection-end-column="9" />
+            <state relative-caret-position="124">
+              <caret line="30" column="16" selection-start-line="30" selection-start-column="16" selection-end-line="30" selection-end-column="16" />
             </state>
           </provider>
         </entry>
@@ -130,13 +126,13 @@
       <find>relation_names</find>
       <find>-1</find>
       <find>TEXT</find>
-      <find>About 20 kids</find>
+      <find />
       <find>DISTANCE</find>
       <find>relation_none</find>
       <find>RE</find>
       <find>relation</find>
       <find>negative_relation_generation</find>
-      <find>About 20 kids</find>
+      <find />
       <find>DIRECTION</find>
       <find>/DISTANCE</find>
       <find>/</find>
@@ -146,12 +142,12 @@
       <find>%%%</find>
       <find>$$</find>
       <find>%%%%%%%%%%%%%</find>
-      <find>very rocky landscape</find>
+      <find />
       <find>emb</find>
       <find>print</find>
-      <find>sentence</find>
       <find>triplet</find>
       <find>pair-word_dist</find>
+      <find>sentence</find>
       <find>word_dist</find>
     </findStrings>
   </component>
@@ -230,8 +226,8 @@
     </option>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="19" />
-    <option name="y" value="87" />
+    <option name="x" value="189" />
+    <option name="y" value="32" />
     <option name="width" value="1994" />
     <option name="height" value="923" />
   </component>
@@ -298,8 +294,8 @@
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/examples/SpRL_new/data" />
       <recent name="$PROJECT_DIR$/examples/emr/data" />
+      <recent name="$PROJECT_DIR$/examples/SpRL_new/data" />
       <recent name="$PROJECT_DIR$/examples/SpRL_new" />
       <recent name="$PROJECT_DIR$/examples" />
       <recent name="$PROJECT_DIR$" />
@@ -651,8 +647,9 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="19" y="87" width="1994" height="923" extended-state="0" />
+    <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.20476432" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.20476432" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.1037415" />
       <window_info anchor="bottom" id="Event Log" order="7" side_tool="true" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.14154786" />
@@ -660,7 +657,7 @@
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.32892057" />
       <window_info anchor="bottom" id="Python Console" order="7" weight="0.32790223" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="7" visible="true" weight="0.75342464" />
+      <window_info anchor="bottom" id="Terminal" order="7" visible="true" weight="0.44956413" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.39307535" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
@@ -951,7 +948,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/data/glove.6B.50d.txt">
+    <entry file="file://$PROJECT_DIR$/examples/emr/data/glove.6B.50d.txt">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
     <entry file="file://$PROJECT_DIR$/examples/SpRL_new/data/newSprl2017_all.xml">
@@ -1045,13 +1042,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1963">
-          <caret line="38" column="14" selection-start-line="38" selection-start-column="14" selection-end-line="38" selection-end-column="14" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/examples/SpRL_new/spGraph.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="367">
@@ -1059,9 +1049,16 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/config.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="124">
+          <caret line="30" column="16" selection-start-line="30" selection-start-column="16" selection-end-line="30" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/examples/SpRL_new/sprlApp.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="370">
+        <state relative-caret-position="705">
           <caret line="114" selection-start-line="114" selection-end-line="114" />
           <folding>
             <element signature="e#0#226#0" expanded="true" />
@@ -1069,10 +1066,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/config.py">
+    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="56">
-          <caret line="26" column="9" lean-forward="true" selection-start-line="26" selection-start-column="9" selection-end-line="26" selection-end-column="9" />
+        <state relative-caret-position="247">
+          <caret line="168" column="46" lean-forward="true" selection-end-line="552" selection-end-column="26" />
         </state>
       </provider>
     </entry>
