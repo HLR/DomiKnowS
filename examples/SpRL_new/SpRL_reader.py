@@ -127,7 +127,7 @@ class SpRLReader(SensableReader):
 
         phrase_list = self.parseSprlXML(file_path)
         raw_examples = self.getCorpus(self.negative_entity_generation(phrase_list))
-
+        #raw_examples = self.getCorpus(phrase_list)
 
 
 
@@ -539,8 +539,8 @@ class NewAdjacencyField(AdjacencyField):
                                             padding_value=self._padding_value)
         return adjacency_field
 
-#sp=SpRLReader()
-#sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
+# sp=SpRLReader()
+# sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
 #sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 #sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 

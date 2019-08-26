@@ -51,8 +51,8 @@ def model_declaration(graph, config):
     word['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
 
-   # word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'],word['lemma'],word['headword'],word['phrasepos'])
-    word['all'] = ConcatSensor(word['raw'])
+    word['all'] = ConcatSensor(word['raw'],word['dep'],word['pos'],word['lemma'],word['headword'],word['phrasepos'])
+   # word['all'] = ConcatSensor(word['raw'])
     word['ngram'] = NGramSensor(config.ngram, word['all'])
     word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
 
@@ -73,7 +73,7 @@ def model_declaration(graph, config):
     word['compact'] = MLPLearner([64,], word['encode'])
     pair['cat'] = CartesianProduct3Sensor(word['compact'])
     #
-    pair['word_dist'] = WordDistantSensor(16, 64, sentence['raw'])
+    #pair['word_dist'] = WordDistantSensor(16, 64, sentence['raw'])
     #pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
     # pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
     # pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
@@ -83,7 +83,7 @@ def model_declaration(graph, config):
     #
     #pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
     #
-    # pair['all'] = ConcatSensor(pair['cat'],  pair['word_dist'])
+    #pair['all'] = ConcatSensor(pair['cat'],  pair['word_dist'])
     #pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
     #
     region['label'] = LabelSensor(reader, 'region', output_only=True)
@@ -92,11 +92,11 @@ def model_declaration(graph, config):
     distance['label'] = LabelSensor(reader, 'distance', output_only=True)
     is_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
 
-    region['label'] = LogisticRegressionLearner(pair['word_dist'])
-    relation_none['label'] = LogisticRegressionLearner(pair['word_dist'])
-    direction['label'] = LogisticRegressionLearner(pair['word_dist'])
-    distance['label'] = LogisticRegressionLearner(pair['word_dist'])
-    is_triplet['label'] = LogisticRegressionLearner(pair['word_dist'])
+    region['label'] = LogisticRegressionLearner(pair['cat'])
+    relation_none['label'] = LogisticRegressionLearner(pair['cat'])
+    direction['label'] = LogisticRegressionLearner(pair['cat'])
+    distance['label'] = LogisticRegressionLearner(pair['cat'])
+    is_triplet['label'] = LogisticRegressionLearner(pair['cat'])
 
 
     lbp = AllenNlpGraph(graph)

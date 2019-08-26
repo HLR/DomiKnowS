@@ -228,8 +228,14 @@ class WordDistance(BaseModule):
     def forward(self, x):
         print(x)
         print("%%%%%%%%%%%%%")
-        return None
-        # batch = len(x)
+        batch = len(x)
+        length = max(len(xx) for xx in x)
+        print(length)
+        print('^^^^^^^^')
+        dist = torch.arange(-length+1, length)
+        dist = dist.repeat(batch, 1, 1, 1)
+        return dist
+
         # length = max(len(xx) for xx in x)
         # #(l*2)
         # dist = torch.arange(-length + 1, length)
