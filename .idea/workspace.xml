@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="85d2d89d-c188-4752-802f-d390adc29577" name="Default" comment="add feature from sentence" />
+    <list default="true" id="85d2d89d-c188-4752-802f-d390adc29577" name="Default" comment="add feature from sentence">
+      <change beforePath="$PROJECT_DIR$/regr/sensor/allennlp/module.py" beforeDir="false" afterPath="$PROJECT_DIR$/regr/sensor/allennlp/module.py" afterDir="false" />
+    </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -14,8 +16,8 @@
       <file leaf-file-name="sprlApp.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/examples/SpRL_new/sprlApp.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="705">
-              <caret line="114" selection-start-line="114" selection-end-line="114" />
+            <state relative-caret-position="193">
+              <caret line="75" column="33" selection-start-line="75" selection-start-column="33" selection-end-line="75" selection-end-column="33" />
               <folding>
                 <element signature="e#0#226#0" expanded="true" />
               </folding>
@@ -32,11 +34,14 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="SpRL_reader.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="SpRL_reader.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="247">
-              <caret line="168" column="46" lean-forward="true" selection-end-line="552" selection-end-column="26" />
+            <state relative-caret-position="-2368">
+              <caret line="64" column="18" lean-forward="true" selection-start-line="64" selection-start-column="18" selection-end-line="64" selection-end-column="18" />
+              <folding>
+                <element signature="e#0#34#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -60,8 +65,8 @@
       <file leaf-file-name="sensor.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/sensor.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="108">
-              <caret line="235" column="21" selection-start-line="235" selection-start-column="21" selection-end-line="235" selection-end-column="21" />
+            <state relative-caret-position="46">
+              <caret line="235" column="22" selection-start-line="235" selection-start-column="22" selection-end-line="235" selection-end-column="22" />
               <folding>
                 <element signature="e#0#44#0" expanded="true" />
               </folding>
@@ -78,11 +83,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="module.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="module.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/module.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="122">
-              <caret line="237" column="57" selection-start-line="237" selection-start-column="57" selection-end-line="237" selection-end-column="57" />
+            <state relative-caret-position="74">
+              <caret line="233" column="23" selection-start-line="233" selection-start-column="23" selection-end-line="233" selection-end-column="23" />
             </state>
           </provider>
         </entry>
@@ -216,20 +221,20 @@
         <option value="$PROJECT_DIR$/examples/emr/emr/config.py" />
         <option value="$PROJECT_DIR$/examples/emr/emr/emr_full.py" />
         <option value="$PROJECT_DIR$/regr/sensor/allennlp/sensor.py" />
-        <option value="$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py" />
         <option value="$PROJECT_DIR$/examples/SpRL_new/feature.py" />
-        <option value="$PROJECT_DIR$/regr/sensor/allennlp/module.py" />
         <option value="$PROJECT_DIR$/examples/SpRL_new/spGraph.py" />
-        <option value="$PROJECT_DIR$/examples/SpRL_new/sprlApp.py" />
         <option value="$PROJECT_DIR$/examples/SpRL_new/config.py" />
+        <option value="$PROJECT_DIR$/examples/SpRL_new/sprlApp.py" />
+        <option value="$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py" />
+        <option value="$PROJECT_DIR$/regr/sensor/allennlp/module.py" />
       </list>
     </option>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="189" />
-    <option name="y" value="32" />
-    <option name="width" value="1994" />
-    <option name="height" value="923" />
+    <option name="x" value="451" />
+    <option name="y" value="23" />
+    <option name="width" value="2764" />
+    <option name="height" value="724" />
   </component>
   <component name="ProjectView">
     <navigator proportions="" version="1">
@@ -248,32 +253,6 @@
               <item name="RelationalGraph" type="b2602c69:ProjectViewProjectNode" />
               <item name="RelationalGraph" type="462c0819:PsiDirectoryNode" />
               <item name="examples" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="RelationalGraph" type="b2602c69:ProjectViewProjectNode" />
-              <item name="RelationalGraph" type="462c0819:PsiDirectoryNode" />
-              <item name="examples" type="462c0819:PsiDirectoryNode" />
-              <item name="emr" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="RelationalGraph" type="b2602c69:ProjectViewProjectNode" />
-              <item name="RelationalGraph" type="462c0819:PsiDirectoryNode" />
-              <item name="examples" type="462c0819:PsiDirectoryNode" />
-              <item name="emr" type="462c0819:PsiDirectoryNode" />
-              <item name="data" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="RelationalGraph" type="b2602c69:ProjectViewProjectNode" />
-              <item name="RelationalGraph" type="462c0819:PsiDirectoryNode" />
-              <item name="examples" type="462c0819:PsiDirectoryNode" />
-              <item name="SpRL_new" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="RelationalGraph" type="b2602c69:ProjectViewProjectNode" />
-              <item name="RelationalGraph" type="462c0819:PsiDirectoryNode" />
-              <item name="examples" type="462c0819:PsiDirectoryNode" />
-              <item name="SpRL_new" type="462c0819:PsiDirectoryNode" />
-              <item name="data" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
@@ -646,18 +625,17 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="19" y="87" width="1994" height="923" extended-state="0" />
-    <editor active="true" />
+    <frame x="-29" y="23" width="2764" height="725" extended-state="0" />
     <layout>
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.20476432" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.147284" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.1037415" />
       <window_info anchor="bottom" id="Event Log" order="7" side_tool="true" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.14154786" />
-      <window_info anchor="bottom" id="Run" order="2" weight="0.24283935" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.646281" />
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.32892057" />
       <window_info anchor="bottom" id="Python Console" order="7" weight="0.32790223" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info anchor="bottom" id="Terminal" order="7" visible="true" weight="0.44956413" />
+      <window_info anchor="bottom" id="Terminal" order="7" weight="0.18838526" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.39307535" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
@@ -706,7 +684,8 @@
     <MESSAGE value="Merge remote-tracking branch 'origin/spatial_info' into spatial_info&#10;&#10;# Conflicts:&#10;#&#9;examples/SpRL_new/SpRL_reader.py" />
     <MESSAGE value="add feature from sentence" />
     <MESSAGE value="update relation data read method" />
-    <option name="LAST_COMMIT_MESSAGE" value="update relation data read method" />
+    <MESSAGE value="update relation data" />
+    <option name="LAST_COMMIT_MESSAGE" value="update relation data" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -1025,23 +1004,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/sensor.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="108">
-          <caret line="235" column="21" selection-start-line="235" selection-start-column="21" selection-end-line="235" selection-end-column="21" />
-          <folding>
-            <element signature="e#0#44#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/module.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="122">
-          <caret line="237" column="57" selection-start-line="237" selection-start-column="57" selection-end-line="237" selection-end-column="57" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/examples/SpRL_new/spGraph.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="367">
@@ -1056,20 +1018,40 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-2368">
+          <caret line="64" column="18" lean-forward="true" selection-start-line="64" selection-start-column="18" selection-end-line="64" selection-end-column="18" />
+          <folding>
+            <element signature="e#0#34#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/examples/SpRL_new/sprlApp.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="705">
-          <caret line="114" selection-start-line="114" selection-end-line="114" />
+        <state relative-caret-position="193">
+          <caret line="75" column="33" selection-start-line="75" selection-start-column="33" selection-end-line="75" selection-end-column="33" />
           <folding>
             <element signature="e#0#226#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/examples/SpRL_new/SpRL_reader.py">
+    <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/sensor.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="247">
-          <caret line="168" column="46" lean-forward="true" selection-end-line="552" selection-end-column="26" />
+        <state relative-caret-position="46">
+          <caret line="235" column="22" selection-start-line="235" selection-start-column="22" selection-end-line="235" selection-end-column="22" />
+          <folding>
+            <element signature="e#0#44#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/regr/sensor/allennlp/module.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="74">
+          <caret line="233" column="23" selection-start-line="233" selection-start-column="23" selection-end-line="233" selection-end-column="23" />
         </state>
       </provider>
     </entry>
