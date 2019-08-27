@@ -98,6 +98,7 @@ def model_declaration(graph, config):
     is_triplet['label'] = LogisticRegressionLearner(pair['cat'])
 
 
+
     lbp = AllenNlpGraph(graph)
     return lbp
 
