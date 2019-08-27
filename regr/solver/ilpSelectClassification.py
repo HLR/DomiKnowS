@@ -182,7 +182,7 @@ class ilpOntSolver:
                     if currentConcept._name == disjointConcept:
                         continue
                         
-                if disjointConcept not in graphResultsForPhraseToken.columns:
+                if disjointConcept not in conceptNames:
                      continue
                         
                 if conceptName in foundDisjoint:
@@ -227,7 +227,7 @@ class ilpOntSolver:
                 continue
                 
             for equivalentConcept in currentConcept.equivalent_to:
-                if equivalentConcept.name not in graphResultsForPhraseToken.columns:
+                if equivalentConcept.name not in conceptNames:
                      continue
                         
                 if conceptName in foundEquivalent:
@@ -263,7 +263,7 @@ class ilpOntSolver:
                 continue
                 
             for ancestorConcept in currentConcept.ancestors(include_self = False) :
-                if ancestorConcept.name not in graphResultsForPhraseToken.columns :
+                if ancestorConcept.name not in conceptNames :
                      continue
                             
                 for token in tokens:
@@ -812,6 +812,84 @@ class ilpOntSolver:
     
             ilpOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
             
+            ancestorConcept = None
+            for _ancestorConcept in currentTripleRelation.ancestors(include_self = False):
+                if _ancestorConcept.name == "Thing":
+                     continue
+                 
+                ancestorConcept = _ancestorConcept
+                break
+            
+            if ancestorConcept is None:
+                break
+            
+            tripleProperties = {}
+            triplePropertiesRanges = {}    
+
+            for property in self.myOnto.object_properties():
+                _domain = property.domain
+                
+                if _domain is None:
+                    break
+                
+                domain = _domain[0]._name
+                if domain is ancestorConcept.name:                    
+                    for superProperty in property.is_a:
+                        if superProperty is None:
+                            continue
+                        
+                        if superProperty.name == 'first':
+                            tripleProperties['1'] = property
+                            _range = property.range
+                
+                            if _range is None:
+                                break
+                
+                            range = _range[0]._name
+                            triplePropertiesRanges['1'] = range
+                        elif superProperty.name == 'second':
+                            tripleProperties['2'] = property
+                            _range = property.range
+                
+                            if _range is None:
+                                break
+                
+                            range = _range[0]._name
+                            triplePropertiesRanges['2'] = range
+                        elif superProperty.name == 'third':
+                            tripleProperties['3'] = property
+                            _range = property.range
+                
+                            if _range is None:
+                                break
+                
+                            range = _range[0]._name
+                            triplePropertiesRanges['3'] = range
+                                        
+            for toke1n in tokens:
+                for token2 in tokens:
+                    if token2 == token1:
+                        continue
+                        
+                    for token3 in tokens:
+                        if token3 == token1:
+                            continue
+                        
+                        if token3 == token2:
+                            continue
+                     
+                        if self.ilpSolver == "Gurobi":
+                            constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
+                            
+                            m.addConstr(x[token1, triplePropertiesRanges['1']] + x[token2, triplePropertiesRanges['2']] + x[token3, triplePropertiesRanges['3']] - z[tripleRelationName, token1, token2, token3], 
+                                        GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
+                        elif self.ilpSolver == "GEKKO":
+                            #m.Equation(x[token1, range._name] - y[currentRelation._name, token, token1] >= 0)
+                            pass
+                                    
+                        ilpOntSolver.__logger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+    
+                
         if self.ilpSolver == "Gurobi":
             m.update()
         elif self.ilpSolver == "GEKKO":
@@ -1443,7 +1521,7 @@ def sprlMain():
     Concept.clear()
 
     with Graph('spLanguage') as splang_Graph:
-        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './examples/SpRL_new')
     
         with Graph('linguistic') as ling_graph:
             ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
@@ -1454,7 +1532,7 @@ def sprlMain():
             sentence.has_many(phrase)
     
         with Graph('application') as app_graph:
-            splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+            splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './examples/SpRL_new')
     
             trajector = Concept(name='TRAJECTOR')
             landmark = Concept(name='LANDMARK')
