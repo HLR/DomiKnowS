@@ -748,6 +748,8 @@ class ilpOntSolver:
         return Y_Q
     
     def addTripleRelationsConstrains(self, m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation):
+        if graphResultsForPhraseTripleRelation is None:
+            return None
         tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
             
         # Create variables for relation - token - token -token and negative variables
@@ -930,7 +932,7 @@ class ilpOntSolver:
                 
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
     
         if self.ilpSolver == None:
             ilpOntSolver.__logger.info('ILP solver not provided - returning unchanged results')
@@ -950,7 +952,8 @@ class ilpOntSolver:
                 ilpOntSolver.__logger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseTripleRelation[relation]))
 
         conceptNames = graphResultsForPhraseToken.keys()
-        tokens = [x for x, _ in phrase]
+        #tokens = [x for x, _ in phrase]
+        tokens = phrase
                     
         try:
             if self.ilpSolver == "Gurobi":
@@ -1039,29 +1042,31 @@ class ilpOntSolver:
 
             # Collect results for tokens
             tokenResult = None
-            tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
-            if self.ilpSolver == "Gurobi":
-                if x or True:
-                    if m.status == GRB.Status.OPTIMAL:
-        
-                        solution = m.getAttr('x', x)
-                        
-                        for token in tokens :
-                            for conceptName in conceptNames:
-                                if solution[token, conceptName] == 1:                                    
-                                    tokenResult[conceptName][token] = 1
-                                    ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
-                                    
-            elif self.ilpSolver == "GEKKO":
-                for token in tokens :
-                    for conceptName in conceptNames:
-                        if x[token, conceptName].value[0] > gekkoTresholdForTruth:
-                            tokenResult[conceptName][token] = 1
-                            ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+            if graphResultsForPhraseToken is not None:
+                tokenResult = pd.DataFrame(0, index=tokens, columns=conceptNames)
+                if self.ilpSolver == "Gurobi":
+                    if x or True:
+                        if m.status == GRB.Status.OPTIMAL:
+
+                            solution = m.getAttr('x', x)
+
+                            for token in tokens :
+                                for conceptName in conceptNames:
+                                    if solution[token, conceptName] == 1:                                    
+                                        tokenResult[conceptName][token] = 1
+                                        ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+
+                elif self.ilpSolver == "GEKKO":
+                    for token in tokens :
+                        for conceptName in conceptNames:
+                            if x[token, conceptName].value[0] > gekkoTresholdForTruth:
+                                tokenResult[conceptName][token] = 1
+                                ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
 
             # Collect results for relations
-            relationsResult = {}
+            relationsResult = None
             if graphResultsForPhraseRelation is not None: 
+                relationsResult = {}
                 relationNames = graphResultsForPhraseRelation.keys()
                 if self.ilpSolver == "Gurobi":
                     if y or True:
@@ -1099,9 +1104,9 @@ class ilpOntSolver:
                         relationsResult[relationName] = relationResult
                     
             # Collect results for triple relations
-            tripleRelationsResult = {}
-            
+            tripleRelationsResult = None
             if graphResultsForPhraseTripleRelation is not None:
+                tripleRelationsResult = {}
                 tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
                 
                 for tripleRelationName in tripleRelationNames:
@@ -1210,7 +1215,7 @@ class ilpOntSolver:
                     table_list.append(values[batch_index][rank])
                 else:
                     table_list.append(None)
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             # Do inference
             try:
                 # following statement should be equivalent to
@@ -1220,35 +1225,35 @@ class ilpOntSolver:
                 # result_list = self.calculateILPSelection(tokens, concept_dict, None, triplet_dict)
                 result_table_list = self.calculateILPSelection(tokens, *table_list)
 
-                if all([result_table == None for result_table in result_table_list]):
+                #import pdb; pdb.set_trace()
+                if all([result_table is None for result_table in result_table_list]):
                     raise RuntimeError('No result from solver. Check any log from the solver.')
             except:
                 # whatever, raise it
                 raise
 
             # collect result in batch
-            result = defaultdict[dict]
+            result = defaultdict(dict)
             for rank, props in prop_dict.items():
                 for prop in props:
                     name = prop.name
                     # (l'...*r)
                     # return structure is a pd?
-                    result[rank][name] = result_table_list[rank][name]
+                    # result_table_list started from 0
+                    result[rank][name] = result_table_list[rank - 1][name]
             results.append(result)
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         # put results back
         for rank, props in prop_dict.items():
             for prop in props:
                 name = prop.name
                 instance_value_list = []
-                for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
+                for batch_index in range(batch_size):
                     # (l'...*r)
                     instance_value = results[batch_index][rank][name]
-                    shape = [1, ]
-                    shape.extend([length, ] * rank)
                     # (l...*r)
-                    instance_value_pad = np.empty(shape)
+                    instance_value_pad = np.empty([length, ] * rank)
                     instance_value_pad[(slice(0, mask_len[batch_index]),) * rank] = instance_value
                     # (l...*r)
                     instance_value_d = torch.tensor(instance_value_pad, device=device)
@@ -1260,7 +1265,7 @@ class ilpOntSolver:
                 # undo softmax
                 logits_value = torch.log(batched_value / (1 - batched_value))  # Go to +- inf
                 # Put it back finally
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 data[prop.fullname] = logits_value
 
         return data
