@@ -26,7 +26,7 @@ import pandas as pd
 if __package__ is None or __package__ == '':
     from regr.graph.concept import Concept, enum
     from regr.graph.graph import Graph
-    from regr.utils import printablesize
+    from regr.utils import printablesize, get_prop_result
 
     from regr.sensor.allennlp.sensor import SentenceEmbedderSensor
     from regr.graph.allennlp import *
@@ -36,7 +36,7 @@ if __package__ is None or __package__ == '':
 else:
     from ..graph.concept import Concept, enum
     from ..graph.graph import Graph
-    from ..utils import printablesize
+    from ..utils import printablesize, get_prop_result
     
     from ..sensor.allennlp.sensor import SentenceEmbedderSensor
     from ..graph.allennlp.base import *
@@ -907,207 +907,126 @@ class ilpOntSolver:
 
     DataInstance = Dict[str, Tensor]
     
-    def inferSelection(self, graph: Graph, data: DataInstance, vocab = None) -> DataInstance:
-        
-        concepts = []
-        relations = []
+    def inferSelection(self, graph: Graph, data: DataInstance, vocab=None) -> DataInstance:
+        # build concept (property) group by rank (# of has-a)
+        prop_dict = defaultdict(list)
 
         for prop in graph.poi:
             concept = prop.sup
-            if concept.has_a():
-                relations.append(concept.name)
-            else:
-                concepts.append(concept.name)
+            prop_dict[len(concept.has_a()) or 1].append(prop)
+        max_rank = max(prop_dict.keys())
 
-        groups = [
-            concepts,
-            relations
-        ]
-    
+        # find base, assume only one base for now
+        # FIXME: that means we are only considering problems with only one sentence
         tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
-        name, tokens_sensor = tokens_sensors[0] # FIXME: considering problems with only one sentence
-    
+        name, tokens_sensor = tokens_sensors[0]
+        namespace = tokens_sensor.key
+
         mask = tokens_sensor.get_mask(data)
-        mask_len = mask.sum(dim=1).clone().cpu().detach().numpy() # (b, )
-    
-        sentence = data[tokens_sensor.fullname + '_index'][tokens_sensor.key] # (b, l)
-    
-        # Table columns, as many table columns as groups
-        tables = [[] for _ in groups]
-        wild = []  # For those not in any group
-        
-        # For each subgraph.concept[prop] that has multiple assignment
-        for prop in graph.get_multiassign(): # order? always check with table
-            # find the group it goes to
-            # TODO: update later with group discover?
-            # For each assignment, [0] for label, [1] for pred consider only prediction here
-            sensor = list(prop.values())[1]
-            
-            # How about conf?
-            for group, table in zip(groups, tables):
-                if prop.sup.name in group:
-                    table.append(sensor)
-                    break
-            else: 
-                # For group, table, no break belongs to no group still do something, differently
-                wild.append(sensor)
-    
-        # Now we have (batch, ) in predictions, but inference may process one item at a time should organize in this way (batch, len, ..., t/f, column), then we can iter through batches
-        # note that, t/f is a redundant dim, that gives 2 scalars: [1-p, p], maybe needed to squeeze using the pindex and index_select requires the above facts
-        valuetables = []
-        batch_size = None
-        for table in tables:
-            if len(table) == 0:
-                continue
-            
-            # Assume all of them give same dims of output: (batch, len, ..., t/f)
-            values = []
-            for sensor in table:
-                sensor(data)  # (batch, len, ..., t/f)
-                value = data[sensor.fullname]
-                # (b, l, c) - dim=2 / (b, l, l, c) - dim=3
-                #value = torch.exp(value)
-                value = torch.nn.functional.softmax(value, dim=-1)
-                    
-                # At t/f dim, 0 for 1-p, 1 for p
-                pindex = torch.tensor(1, device=value.device).long()
-                
-                # (batch, len, ..., 1) # need tailing 1 for cat
-                value = value.index_select(-1, pindex)
-                
-                # Get/check the batch_size
-                if batch_size is None:
-                    batch_size = value.size()[0]
-                else:
-                    assert batch_size == value.size()[0]
-                values.append(value)
-                
-            values = torch.cat(values, dim=-1)  # (batch, len, ..., ncls)
-            
-            # Then it has the same order as tables, where we can refer to related concept
-            valuetables.append(values)
-            
-        # We need all columns to be placed, for all tables, before inference now we have
-    
-        updated_valuetables_batch = [[] for _ in valuetables]
-        
-        # For each batch
-        for batch_index in torch.arange(batch_size, device=values.device):
-            inference_tables = []
-            for values, table in zip(valuetables, tables):
-                # Use only current batch 0 for batch, resulting (len, ..., ncls)
-                values = values.index_select(0, batch_index)
-                values = values.squeeze(dim=0)
-                
-                # Now values is the table we need and names is the list of grouped concepts (name of the columns)
-                inference_tables.append((table, values))
-    
-            # Data structure convert
-            phrase = None  # TODO: since it not using now. if it is needed later, will pass it somewhere else
-    
-            phrasetable = inference_tables[0][1].clone().cpu().detach().numpy()
-            
-            # Apply mask for phrase
-            phrasetable = phrasetable[:mask_len[batch_index], :]
+        mask_len = mask.sum(dim=1).clone().cpu().detach().numpy()  # (b, )
+
+        # (b, l) # FIXME '_index' is tricky
+        sentence = data[tokens_sensor.fullname + '_index'][namespace]
+        batch_size, length = sentence.shape
+        device = sentence.device
+
+        values = [defaultdict(dict) for _ in range(batch_size)]
+        for rank, props in prop_dict.items():
+            for prop in props:
+                #name = '{}_{}'.format(prop.sup.name, prop.name)
+                name = prop.name  # current implementation has concept name in prop name
+                # pred_logit - (b, l...*r, c) - for dim-c, [0] is neg, [1] is pos
+                # mask - (b, l...*r)
+                label, pred_logit, mask = get_prop_result(prop, data)
+                # pred - (b, l...*r, c)
+                pred = torch.nn.functional.softmax(pred_logit, dim=-1)
+                pos_index = torch.tensor(1, device=device).long()
+                # (b, l...*r)
+                batched_value = pred.index_select(-1, pos_index).squeeze(dim=-1)
+                # copy and detach, time consuming I/O
+                batched_value = batched_value.clone().cpu().detach().numpy()
+
+                for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
+                    # (l...*r)
+                    value = batched_value[batch_index_d]
+                    # apply mask
+                    # (l'...*r)
+                    value = value[(slice(0, mask_len[batch_index]),) * rank]
+                    values[batch_index][rank][name] = value
+        #import pdb; pdb.set_trace()
+
+        results = []
+        # inference per instance
+        for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
+            # prepare tokens
             if vocab:
-                tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index,i]), namespace=tokens_sensor.key))
-                          for i in torch.arange(phrasetable.shape[0], device=values.device)]
+                tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index_d, i_d]),
+                                                                       namespace=namespace))
+                          for i, i_d in zip(range(mask_len[batch_index]), torch.arange(mask_len[batch_index], dtype=torch.long, device=device))]
             else:
-                tokens = [str(j) for j in range(phrasetable.shape[0])]
-            concept_names = [sensor.sup.sup.name for sensor in tables[0]]
-            
-            graphResultsForPhraseToken = pd.DataFrame(phrasetable, index=tokens, columns=concept_names)
-    
-            graphResultsForPhraseRelation = dict()
-            if len(tables[1]) > 0:
-                graphtable = inference_tables[1][1].clone().cpu().detach().numpy()
-                
-                for i, sensor in enumerate(tables[1]):
-                    # each relation - apply mask
-                    graphResultsForPhraseRelation[sensor.sup.sup.name] = pd.DataFrame(graphtable[:mask_len[batch_index], :mask_len[batch_index], i], index=tokens, columns=tokens)
-    
+                tokens = [str(i) for i in range(mask_len[batch_index])]
+            # prepare tables
+            table_list = []
+            for rank in range(1, max_rank + 1):
+                if rank in values[batch_index]:
+                    table_list.append(values[batch_index][rank])
+                else:
+                    table_list.append(None)
+            import pdb; pdb.set_trace()
             # Do inference
             try:
-                tokenResult, relationsResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation)
-                
-                if tokenResult is None and relationsResult is None:
+                # following statement should be equivalent to
+                # - EMR:
+                # result_list = self.calculateILPSelection(tokens, concept_dict, relation_dict)
+                # - SPRL:
+                # result_list = self.calculateILPSelection(tokens, concept_dict, None, triplet_dict)
+                result_table_list = self.calculateILPSelection(tokens, *table_list)
+
+                if all([result_table == None for result_table in result_table_list]):
                     raise RuntimeError('No result from solver. Check any log from the solver.')
             except:
-                print('-'*40)
-                print(phrasetable)
-                print(tokens)
-                print(concept_names)
-                print(graphResultsForPhraseToken)
-                print(graphResultsForPhraseRelation)
-                print(tokenResult, relationsResult)
-                print('-'*40)
+                # whatever, raise it
                 raise
-    
-            # Convert back
-            for i, (updated_batch, (table, values)) in enumerate(zip(updated_valuetables_batch, inference_tables)):
-                # Values: tensor (len, ..., ncls) updated_batch: list of batches of result of tensor (len, ..., ncls)
-                updated = torch.zeros(values.size(), device=values.device)
-                
-                # do something to query iplResults to fill updated - implement below
-                if i == 0:
-                    # tokenResult: [len, ncls], notice the order of ncls - updated: tensor(len, ncls)
-                    result = tokenResult[[sensor.sup.sup.name for sensor in table]].to_numpy() # use the names to control the order
-                    updated[:mask_len[batch_index],:] = torch.from_numpy(result)
-                elif i == 1:
-                    # relationsResult: dict(ncls)[len, len], order of len should not be changed - updated: tensor(len, len, ncls)
-                    for j, sensor in zip(torch.arange(len(table)), table):
-                        try:
-                            result = relationsResult[sensor.sup.sup.name][tokens].to_numpy() # Use the tokens to enforce the order
-                        except:
-                            print('-'*40)
-                            print(tokens)
-                            print(graphResultsForPhraseToken)
-                            print(graphResultsForPhraseRelation)
-                            print(tokenResult)
-                            print(relationsResult)
-                            print(i)
-                            print(name)
-                            print('-'*40)
-                            raise
-    
-                        updated[:mask_len[batch_index],:mask_len[batch_index],j] = torch.from_numpy(result)
-                else:
-                    # Should be nothing here
-                    pass
-    
-                # Add to updated batch
-                updated_batch.append(updated)
-                
-        # updated_valuetables_batch is List(tables)[List(batch_size)[Tensor(len, ..., ncls)]]
-    
-        # Put it back into one piece - we want List(tables)[List(ncls)[Tensor(batch, len, ..., 2)]] be careful of that the 2 need extra manipulation
-        for updated_batch, table in zip(updated_valuetables_batch, tables):
-            # No update then continue
-            if len(table) == 0 or len(updated_batch) == 0:
-                continue
-    
-            # Updated_batch: List(batch_size)[Tensor(len, ..., ncls)]
-            updated_batch = [updated.unsqueeze(dim=0) for updated in updated_batch]
-           
-            # Tensor(batch, len, ..., ncls)
-            updated_batch_tensor = torch.cat(updated_batch, dim=0)
-    
-            # For each class in ncls
-            ncls = updated_batch_tensor.size()[-1]
-            for icls, sensor in zip(torch.arange(ncls, device=updated_batch_tensor.device), table):
-                # Tensor(batch, len, ..., 1)
-                value = updated_batch_tensor.index_select(-1, icls)
-               
-                # Tensor(batch, len, ..., 2)
-                value = torch.cat([1 - value, value], dim=-1)
-    
+
+            # collect result in batch
+            result = defaultdict[dict]
+            for rank, props in prop_dict.items():
+                for prop in props:
+                    name = prop.name
+                    # (l'...*r)
+                    # return structure is a pd?
+                    result[rank][name] = result_table_list[rank][name]
+            results.append(result)
+        import pdb; pdb.set_trace()
+
+        # put results back
+        for rank, props in prop_dict.items():
+            for prop in props:
+                name = prop.name
+                instance_value_list = []
+                for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
+                    # (l'...*r)
+                    instance_value = results[batch_index][rank][name]
+                    shape = [1, ]
+                    shape.extend([length, ] * rank)
+                    # (l...*r)
+                    instance_value_pad = np.empty(shape)
+                    instance_value_pad[(slice(0, mask_len[batch_index]),) * rank] = instance_value
+                    # (l...*r)
+                    instance_value_d = torch.tensor(instance_value_pad, device=device)
+                    instance_value_list.append(instance_value_d)
+                # (b, l...*r)
+                batched_value = torch.stack(instance_value_list, dim=0)
+                # (b, l...*r, 2)
+                batched_value = torch.stack([1 - batched_value, batched_value], dim=-1)
+                # undo softmax
+                logits_value = torch.log(batched_value / (1 - batched_value))  # Go to +- inf
                 # Put it back finally
-                logits_value = torch.log(value/(1-value)) # Go to +- inf
-                
-                data[sensor.sup.fullname] = logits_value
-                data[sensor.fullname] = logits_value
-    
+                import pdb; pdb.set_trace()
+                data[prop.fullname] = logits_value
+
         return data
+
 
 def setup_solver_logger(log_filename='ilpOntSolver.log'):
     logger = logging.getLogger(__name__)
