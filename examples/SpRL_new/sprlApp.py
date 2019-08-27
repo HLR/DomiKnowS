@@ -85,7 +85,6 @@ def model_declaration(graph, config):
     #
     #pair['all'] = ConcatSensor(pair['cat'],  pair['word_dist'])
     #pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
-    #
     region['label'] = LabelSensor(reader, 'region', output_only=True)
     relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
     direction['label'] = LabelSensor(reader, 'direction', output_only=True)
