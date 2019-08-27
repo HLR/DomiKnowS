@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:mlgraph="http://ontology.ihmc.us/ML/MLGraph.owl#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:emr="http://ontology.ihmc.us/ML/SPRL.owl#"
+    xml:base="http://ontology.ihmc.us/ML/SPRL.owl">
+  <owl:Ontology rdf:about="">
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/PhraseGraph.owl"/>
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/MLGraph.owl"/>
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >This ontology contains SPRL concepts.</rdfs:comment>
+  </owl:Ontology>
+  <owl:Class rdf:ID="TRAJECTOR">
+    <rdfs:subClassOf rdf:resource="#phrase"/>
+    <owl:disjointWith rdf:resource="#NONE" />
+    <owl:disjointWith rdf:resource="#SPATIALINDICATOR" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >SPRL ontology TRAJECTOR.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="LANDMARK">
+    <rdfs:subClassOf rdf:resource="#phrase"/>
+    <owl:disjointWith rdf:resource="#NONE" />
+    <owl:disjointWith rdf:resource="#SPATIALINDICATOR" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >SPRL ontology LANDMARK.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="NONE">
+    <rdfs:subClassOf rdf:resource="#phrase"/>
+    <owl:disjointWith rdf:resource="#TRAJECTOR" />
+    <owl:disjointWith rdf:resource="#LANDMARK" />
+    <owl:disjointWith rdf:resource="#SPATIALINDICATOR" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >SPRL ontology NONE.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="SPATIALINDICATOR">
+      <rdfs:subClassOf rdf:resource="#phrase"/>
+      <owl:disjointWith rdf:resource="#TRAJECTOR" />
+      <owl:disjointWith rdf:resource="#LANDMARK" />
+      <owl:disjointWith rdf:resource="#NONE" />
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology SPATIALINDICATOR.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="triplet">
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology triplet.</rdfs:comment>
+  </owl:Class>
+  
+  <owl:ObjectProperty rdf:ID="first">
+    <rdfs:domain rdf:resource="#triplet"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="second">
+    <rdfs:domain rdf:resource="#triplet"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="third">
+    <rdfs:domain rdf:resource="#triplet"/>
+  </owl:ObjectProperty>
+  
+  <owl:ObjectProperty rdf:ID="triplet-LANDMARK">
+    <rdfs:subPropertyOf rdf:resource="#first"/>
+    <rdfs:domain rdf:resource="#triplet"/>
+    <rdfs:range rdf:resource="#LANDMARK"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="triplet-TRAJECTOR">
+    <rdfs:subPropertyOf rdf:resource="#second"/>
+    <rdfs:domain rdf:resource="#triplet"/>
+    <rdfs:range rdf:resource="#TRAJECTOR"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="triplet-SPATIALINDICATOR">
+     <rdfs:subPropertyOf rdf:resource="#third"/>
+    <rdfs:domain rdf:resource="#triplet"/>
+    <rdfs:range rdf:resource="#SPATIALINDICATOR"/>
+  </owl:ObjectProperty>
+  
+  <owl:Class rdf:ID="region">
+      <rdfs:subClassOf rdf:resource="#triplet"/>
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology region.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="relation_none">
+      <rdfs:subClassOf rdf:resource="#triplet"/>
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology relation_none.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="distance">
+      <rdfs:subClassOf rdf:resource="#triplet"/>
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology distance.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="direction">
+      <rdfs:subClassOf rdf:resource="#triplet"/>
+      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+      >SPRL ontology direction.</rdfs:comment>
+  </owl:Class>
+</rdf:RDF>
