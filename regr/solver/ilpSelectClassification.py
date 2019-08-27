@@ -123,15 +123,22 @@ class ilpOntSolver:
         return self.myOnto
     
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
+        if graphResultsForPhraseToken is None:
+            return None
+        
         # Create variables for token - concept and negative variables
-        for token in tokens:            
+        for tokenIndex, token in enumerate(tokens):            
             for conceptName in conceptNames: 
                 if self.ilpSolver == "Gurobi":
                     x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
                 elif self.ilpSolver == "GEKKO":
                     x[token, conceptName]=m.Var(0, lb=0, ub=1, integer=True, name="x_%s_%s"%(token, conceptName))
                 
-                if graphResultsForPhraseToken[conceptName][token] < ilpOntSolver.__negVarTrashhold:
+                #it = np.nditer(graphResultsForPhraseToken[conceptName], flags=['c_index', 'multi_index'])
+                
+                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                if currentProbability < ilpOntSolver.__negVarTrashhold:
                     if self.ilpSolver == "Gurobi":
                         x[token, conceptName+'-neg']=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName+'-neg'))
                     elif self.ilpSolver == "GEKKO":
@@ -361,30 +368,34 @@ class ilpOntSolver:
         
         # Add objectives
         X_Q = None
-        for token in tokens:
+        for tokenIndex, token in enumerate(tokens):
             for conceptName in conceptNames:
                 if self.ilpSolver == "Gurobi":
-                    X_Q += graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
+                    X_Q += graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
                 elif self.ilpSolver == "GEKKO":
                     if X_Q is None:
-                        X_Q = graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
+                        X_Q = graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
                     else:
-                        X_Q += graphResultsForPhraseToken[conceptName][token]*x[token, conceptName]
+                        X_Q += graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
 
                 if (token, conceptName+'-neg') in x: 
                     if self.ilpSolver == "Gurobi":
-                        X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
+                        X_Q += (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, conceptName+'-neg']
                     elif self.ilpSolver == "GEKKO":
                         if X_Q is None:
-                            X_Q = (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
+                            X_Q = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, conceptName+'-neg']
                         else:
-                            X_Q += (1-graphResultsForPhraseToken[conceptName][token])*x[token, conceptName+'-neg']
+                            X_Q += (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, conceptName+'-neg']
 
         return X_Q
      
     def addRelationsConstrains(self, m, tokens, conceptNames, x, y, graphResultsForPhraseRelation):
+        if graphResultsForPhraseRelation is None:
+            return None
+        
         relationNames = graphResultsForPhraseRelation.keys()
             
+        # Create variables for relation - token - token and negative variables
         for relationName in relationNames:            
             for token in tokens: 
                 for token1 in tokens:
@@ -735,23 +746,134 @@ class ilpOntSolver:
                                 Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
         
         return Y_Q
+    
+    def addTripleRelationsConstrains(self, m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation):
+        tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
+            
+        # Create variables for relation - token - token -token and negative variables
+        for tripleRelationName in tripleRelationNames:            
+            for tokenIndex, token in enumerate(tokens): 
+                for token1Index, token1 in enumerate(tokens):
+                    if token1 == token:
+                        continue
+                        
+                    for token2Index, token2 in enumerate(tokens):
+                        if token2 == token:
+                            continue
+                        
+                        if token2 == token1:
+                            continue
+                    
+                        if self.ilpSolver == "Gurobi":
+                            z[tripleRelationName, token, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+                        elif self.ilpSolver == "GEKKO":
+                            z[tripleRelationName, token, token1, token2]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+    
+                        if graphResultsForPhraseTripleRelation[tripleRelationName][token2Index][token1Index][tokenIndex] < ilpOntSolver.__negVarTrashhold:
+                            if self.ilpSolver == "Gurobi":
+                                z[tripleRelationName+'-neg', token, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+                            elif self.ilpSolver == "GEKKO":
+                                z[tripleRelationName+'-neg', token, token1, token2]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s-neg_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+                        
+        # Add constraints forcing decision between variable and negative variables 
+        for tripleRelationName in tripleRelationNames:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token1 == token:
+                        continue
+                        
+                    for token2 in tokens:
+                        if token2 == token:
+                            continue
+                        
+                        if token2 == token1:
+                            continue
+                
+                        if (tripleRelationName+'-neg', token, token1, token2) in z: 
+                            if self.ilpSolver == "Gurobi":
+                                constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token, token1, token2, tripleRelationName)
+                                m.addConstr(z[tripleRelationName, token, token1, token2] + z[tripleRelationName+'-neg', token, token1, token2], GRB.LESS_EQUAL, 1, name=constrainName)
+                        elif self.ilpSolver == "GEKKO":
+                            m.Equation(z[tripleRelationName, token, token1, token2] + z[tripleRelationName+'-neg', token, token1, token2] <= 1)
+                            
+        if self.ilpSolver == "Gurobi":
+            m.update()
+        elif self.ilpSolver == "GEKKO":
+            pass
+    
+        ilpOntSolver.__logger.info("Created %i ilp variables for relations"%(len(y)))
+
+        # -- Add constraints 
+        for tripleRelationName in graphResultsForPhraseTripleRelation:
+            currentTripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
+                
+            if currentTripleRelation is None:
+                continue
+    
+            ilpOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
+            
+        if self.ilpSolver == "Gurobi":
+            m.update()
+        elif self.ilpSolver == "GEKKO":
+            pass
+    
+        # Add objectives
+        Z_Q  = None
+        for tripleRelationName in tripleRelationNames:
+            for token in tokens: 
+                for token1 in tokens:
+                    if token1 == token:
+                        continue
+                        
+                        for token2 in tokens:
+                            if token2 == token:
+                                continue
+                            
+                            if token2 == token1:
+                                continue
+    
+                        if self.ilpSolver == "Gurobi":
+                            Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+                        elif self.ilpSolver == "GEKKO":
+                            if Z_Q is None:
+                                Z_Q = graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+                            else:
+                                Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+    
+            
+                        if (tripleRelationName+'-neg', token, token1, token2) in z: 
+                            if self.ilpSolver == "Gurobi":
+                                Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
+                            elif self.ilpSolver == "GEKKO":
+                                if Z_Q is None:
+                                    Z_Q = (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
+                                else:
+                                    z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
+                
+        return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
     
         if self.ilpSolver == None:
             ilpOntSolver.__logger.info('ILP solver not provided - returning unchanged results')
-            return graphResultsForPhraseToken, graphResultsForPhraseRelation
+            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
         start = datetime.datetime.now()
         ilpOntSolver.__logger.info('Start for phrase %s'%(phrase))
         ilpOntSolver.__logger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
-        
-        for relation in graphResultsForPhraseRelation:
-            ilpOntSolver.__logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
+        ilpOntSolver.__logger.info('graphResultsForPhraseTripleRelation \n%s'%(graphResultsForPhraseTripleRelation))
 
-        tokenResult = None
-        relationsResult = None
+        if graphResultsForPhraseRelation is not None:
+            for relation in graphResultsForPhraseRelation:
+                ilpOntSolver.__logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
         
+        if graphResultsForPhraseTripleRelation is not None:
+            for relation in graphResultsForPhraseTripleRelation:
+                ilpOntSolver.__logger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseTripleRelation[relation]))
+
+        conceptNames = graphResultsForPhraseToken.keys()
+        tokens = [x for x, _ in phrase]
+                    
         try:
             if self.ilpSolver == "Gurobi":
                 # Create a new Gurobi model
@@ -766,16 +888,15 @@ class ilpOntSolver:
                 #m.options.CSV_WRITE = 0 # no result files are written
                 m.options.WEB  = 0
                 gekkoTresholdForTruth = 0.5
-                
-            # Get list of tokens and concepts from panda dataframe graphResultsForPhraseToken
-            tokens = graphResultsForPhraseToken.index.tolist()
-            conceptNames = graphResultsForPhraseToken.columns.tolist()
             
             # Variables for concept - token
             x={}
     
             # Variables for relation - token, token
             y={}
+            
+            # Variables for relation - token, token, token
+            z={}
                 
             # -- Set objective
             Q = None
@@ -790,6 +911,10 @@ class ilpOntSolver:
             Y_Q = self.addRelationsConstrains(m, tokens, conceptNames, x, y, graphResultsForPhraseRelation)
             if Y_Q is not None:
                 Q += Y_Q
+                
+            Z_Q = self.addTripleRelationsConstrains(m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation)
+            if Z_Q is not None:
+                Q += Z_Q
             
             if self.ilpSolver  == "Gurobi":
                 m.setObjective(Q, GRB.MAXIMIZE)
@@ -858,42 +983,77 @@ class ilpOntSolver:
 
             # Collect results for relations
             relationsResult = {}
-            relationNames = graphResultsForPhraseRelation.keys()
-            if self.ilpSolver == "Gurobi":
-                if y or True:
-                    if m.status == GRB.Status.OPTIMAL:
-                        solution = m.getAttr('x', y)
-                        
-                        for relationName in relationNames:
-                            relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
+            if graphResultsForPhraseRelation is not None: 
+                relationNames = graphResultsForPhraseRelation.keys()
+                if self.ilpSolver == "Gurobi":
+                    if y or True:
+                        if m.status == GRB.Status.OPTIMAL:
+                            solution = m.getAttr('x', y)
                             
-                            for token in tokens :
-                                for token1 in tokens:
-                                    if token == token1:
-                                        continue
-                                    
-                                    if solution[relationName, token, token1] == 1:
-                                        relationResult[token1][token] = 1
-                                        
-                                        ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
-    
-                            relationsResult[relationName] = relationResult
-            elif self.ilpSolver == "GEKKO":
-                for relationName in relationNames:
-                    relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
-                    
-                    for token in tokens :
-                        for token1 in tokens:
-                            if token == token1:
-                                continue
-                            
-                            if y[relationName, token, token1].value[0] > gekkoTresholdForTruth:
-                                relationResult[token1][token] = 1
+                            for relationName in relationNames:
+                                relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
                                 
-                                ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
-
-                    relationsResult[relationName] = relationResult
+                                for token in tokens :
+                                    for token1 in tokens:
+                                        if token == token1:
+                                            continue
+                                        
+                                        if solution[relationName, token, token1] == 1:
+                                            relationResult[token1][token] = 1
+                                            
+                                            ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+        
+                                relationsResult[relationName] = relationResult
+                elif self.ilpSolver == "GEKKO":
+                    for relationName in relationNames:
+                        relationResult = pd.DataFrame(0, index=tokens, columns=tokens)
                         
+                        for token in tokens:
+                            for token1 in tokens:
+                                if token == token1:
+                                    continue
+                                
+                                if y[relationName, token, token1].value[0] > gekkoTresholdForTruth:
+                                    relationResult[token1][token] = 1
+                                    
+                                    ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+    
+                        relationsResult[relationName] = relationResult
+                    
+            # Collect results for triple relations
+            tripleRelationsResult = {}
+            
+            if graphResultsForPhraseTripleRelation is not None:
+                tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
+                
+                for tripleRelationName in tripleRelationNames:
+                    tripleRelationsResult[tripleRelationName] = np.zeros((len(tokens), len(tokens), len(tokens)))
+                
+                if self.ilpSolver == "Gurobi":
+                    if z or True:
+                        if m.status == GRB.Status.OPTIMAL:
+                            solution = m.getAttr('x', z)
+                            
+                            for tripleRelationName in tripleRelationNames:
+                                
+                                for tokenIndex, token in enumerate(tokens):
+                                    for token1Index, token1 in enumerate(tokens):
+                                        if token == token1:
+                                            continue
+                                        
+                                        for token2Index, token2 in enumerate(tokens):
+                                            if token2 == token:
+                                                continue
+                                            
+                                            if token2 == token1:
+                                                continue
+                                        
+                                            currentSolutionValue = solution[tripleRelationName, token, token1, token2]
+                                            if solution[tripleRelationName, token, token1, token2] == 1:
+                                                tripleRelationsResult[tripleRelationName][tokenIndex, token1Index, token2Index]= 1
+                                            
+                                            ilpOntSolver.__logger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
+        
         except:
             ilpOntSolver.__logger.error('Error')
             raise
@@ -903,7 +1063,7 @@ class ilpOntSolver:
         ilpOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         # return results of ILP optimization
-        return tokenResult, relationsResult
+        return tokenResult, relationsResult, tripleRelationsResult
 
     DataInstance = Dict[str, Tensor]
     
@@ -1208,7 +1368,8 @@ def main():
     myData = inferSelection(allenEmrGraph, data, vocab=myVocab)
 
 def mainOld():
-    
+    setup_solver_logger()
+
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
 
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
@@ -1270,6 +1431,183 @@ def mainOld():
             print("\n")
             print(name)
             print(result)
+            
+def sprlMain():
+    setup_solver_logger()
+
+    import numpy as np
+
+    from regr.graph import Graph, Concept, Relation
+
+    Graph.clear()
+    Concept.clear()
+
+    with Graph('spLanguage') as splang_Graph:
+        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
     
+        with Graph('linguistic') as ling_graph:
+            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
+            word = Concept(name ='word')
+            phrase = Concept(name = 'phrase')
+            sentence = Concept(name = 'sentence')
+            phrase.has_many(word)
+            sentence.has_many(phrase)
+    
+        with Graph('application') as app_graph:
+            splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+    
+            trajector = Concept(name='TRAJECTOR')
+            landmark = Concept(name='LANDMARK')
+            noneentity = Concept(name='NONE')
+            spatialindicator = Concept(name='SPATIALINDICATOR')
+            trajector.is_a(phrase)
+            landmark.is_a(phrase)
+            noneentity.is_a(phrase)
+            spatialindicator.is_a(phrase)
+    
+            trajector.not_a(noneentity)
+            trajector.not_a(spatialindicator)
+            landmark.not_a(noneentity)
+            landmark.not_a(spatialindicator)
+            noneentity.not_a(trajector)
+            noneentity.not_a(landmark)
+            noneentity.not_a(spatialindicator)
+            spatialindicator.not_a(trajector)
+            spatialindicator.not_a(landmark)
+            spatialindicator.not_a(noneentity)
+    
+            triplet = Concept(name='triplet')
+            region = Concept(name='region')
+            region.is_a(triplet)
+            relation_none= Concept(name='relation_none')
+            relation_none.is_a(triplet)
+            distance = Concept(name='distance')
+            distance.is_a(triplet)
+            direction = Concept(name='direction')
+            direction.is_a(triplet)
+
+    #------------------
+    # sample input
+    #------------------
+    sentence = "About 20 kids in traditional clothing and hats waiting on stairs ."
+    
+    # NB
+    # Input to the inference in SPRL example is a bit different.
+    # After processing the original sentence, only phrases (with feature extracted) remain.
+    # They might not come in the original order.
+    # There could be repeated token in different phrase.
+    # However, those should not influence the design of inference interface.
+    phrases = ["stairs",                 # s     - GT: LANDMARK
+                "About 20 kids ",        # a/2/k - GT: TRAJECTOR
+                "About 20 kids",         # a/2/k - GT: TRAJECTOR
+                "on",                    # o     - GT: SPATIALINDICATOR
+                "hats",                  # h     - GT: NONE
+                "traditional clothing"]  # tc    - GT: NONE
+    # SPRL relations are triplet with this combination
+    # (landmark, trajector, spatialindicator)
+    # Relation GT:
+    # ("stairs", "About 20 kids ", "on") : direction (and other? @Joslin please confirm if there is any other)
+    # ("stairs", "About 20 kids", "on") : direction
+    
+    test_phrase = [(phrase, 'NP') for phrase in phrases] # Not feasible to have POS-tag. Usually they are noun phrase.
+    
+    #------------------
+    # sample inference setup
+    #------------------
+    conceptNamesList = ["TRAJECTOR", "LANDMARK", "SPATIALINDICATOR", "NONE"]
+    relationNamesList = ["direction", "distance", "region", "relation_none"]
+    
+    #------------------
+    # sample output from learners
+    #------------------
+    # phrase
+
+    phrase_table = dict()
+    #                                             s    a/2/k a/2/k o     h     t/c
+    phrase_table['TRAJECTOR']        = np.array([0.37, 0.72, 0.78, 0.01, 0.42, 0.22])
+    phrase_table['LANDMARK']         = np.array([0.68, 0.15, 0.33, 0.03, 0.43, 0.13])
+    phrase_table['SPATIALINDICATOR'] = np.array([0.05, 0.03, 0.02, 0.93, 0.03, 0.01])
+    phrase_table['NONE']             = np.array([0.2 , 0.61, 0.48, 0.03, 0.5 , 0.52])
+ 
+    relation_triple_tables = dict()
+    
+    # direction
+    # triplet relation is a 3D array
+    direction_relation_table = np.random.rand(6, 6, 6) * 0.2
+    direction_relation_table[0, 1, 3] = 0.85 # ("stairs", "About 20 kids ", "on") - GT
+    direction_relation_table[0, 2, 3] = 0.78 # ("stairs", "About 20 kids", "on") - GT
+    direction_relation_table[1, 0, 3] = 0.32 # ("About 20 kids ", "stairs", "on")
+    direction_relation_table[1, 2, 3] = 0.30 # ("About 20 kids ", "About 20 kids", "on")
+    direction_relation_table[2, 0, 3] = 0.31 # ("About 20 kids", "stairs", "on")
+    direction_relation_table[2, 1, 3] = 0.30 # ("About 20 kids", "About 20 kids ", "on")
+    direction_relation_table[0, 4, 3] = 0.42 # ("stairs", "hat", "on")
+    direction_relation_table[0, 5, 3] = 0.52 # ("stairs", "traditional clothing", "on")
+    direction_relation_table[1, 4, 3] = 0.32 # ("About 20 kids ", "hat", "on")
+    direction_relation_table[1, 5, 3] = 0.29 # ("About 20 kids ", "traditional clothing", "on")
+    direction_relation_table[2, 4, 3] = 0.25 # ("About 20 kids ", "hat", "on")
+    direction_relation_table[2, 5, 3] = 0.27 # ("About 20 kids ", "traditional clothing", "on")
+    # ... can be more
+    relation_triple_tables["direction"] = direction_relation_table
+    
+    # distance
+    # triplet relation is a 3D array
+    distance_relation_table = np.random.rand(6, 6, 6) * 0.2
+    distance_relation_table[0, 1, 3] = 0.25 # ("stairs", "About 20 kids ", "on")
+    distance_relation_table[0, 2, 3] = 0.38 # ("stairs", "About 20 kids", "on")
+    distance_relation_table[1, 0, 3] = 0.32 # ("About 20 kids ", "stairs", "on")
+    distance_relation_table[1, 2, 3] = 0.30 # ("About 20 kids ", "About 20 kids", "on")
+    distance_relation_table[2, 0, 3] = 0.31 # ("About 20 kids", "stairs", "on")
+    distance_relation_table[2, 1, 3] = 0.30 # ("About 20 kids", "About 20 kids ", "on")
+    distance_relation_table[0, 4, 3] = 0.22 # ("stairs", "hat", "on")
+    distance_relation_table[0, 5, 3] = 0.12 # ("stairs", "traditional clothing", "on")
+    distance_relation_table[1, 4, 3] = 0.22 # ("About 20 kids ", "hat", "on")
+    distance_relation_table[1, 5, 3] = 0.39 # ("About 20 kids ", "traditional clothing", "on")
+    distance_relation_table[2, 4, 3] = 0.15 # ("About 20 kids ", "hat", "on")
+    distance_relation_table[2, 5, 3] = 0.27 # ("About 20 kids ", "traditional clothing", "on")
+    # ... can be more
+    relation_triple_tables["distance"] = distance_relation_table
+    
+    # region
+    # triplet relation is a 3D array
+    region_relation_table = np.random.rand(6, 6, 6) * 0.2
+    region_relation_table[0, 1, 3] = 0.25 # ("stairs", "About 20 kids ", "on")
+    region_relation_table[0, 2, 3] = 0.38 # ("stairs", "About 20 kids", "on")
+    region_relation_table[1, 0, 3] = 0.32 # ("About 20 kids ", "stairs", "on")
+    region_relation_table[1, 2, 3] = 0.30 # ("About 20 kids ", "About 20 kids", "on")
+    region_relation_table[2, 0, 3] = 0.31 # ("About 20 kids", "stairs", "on")
+    region_relation_table[2, 1, 3] = 0.30 # ("About 20 kids", "About 20 kids ", "on")
+    region_relation_table[0, 4, 3] = 0.22 # ("stairs", "hat", "on")
+    region_relation_table[0, 5, 3] = 0.12 # ("stairs", "traditional clothing", "on")
+    region_relation_table[1, 4, 3] = 0.22 # ("About 20 kids ", "hat", "on")
+    region_relation_table[1, 5, 3] = 0.39 # ("About 20 kids ", "traditional clothing", "on")
+    region_relation_table[2, 4, 3] = 0.15 # ("About 20 kids ", "hat", "on")
+    region_relation_table[2, 5, 3] = 0.27 # ("About 20 kids ", "traditional clothing", "on")
+    # ... can be more
+    relation_triple_tables["region"] = region_relation_table
+    
+    # relation_none
+    # triplet relation is a 3D array
+    relation_none_relation_table = np.random.rand(6, 6, 6) * 0.8
+    relation_none_relation_table[0, 1, 3] = 0.15 # ("stairs", "About 20 kids ", "on")
+    relation_none_relation_table[0, 2, 3] = 0.08 # ("stairs", "About 20 kids", "on")
+    relation_triple_tables["relation_none"] = relation_none_relation_table
+    
+    solver = ilpOntSolver.getInstance(splang_Graph)
+    
+    phrase_table, _, relation_triple_tables = solver.calculateILPSelection(
+    test_phrase,       # original phrase, for reference purpose
+    phrase_table,      # single concept table
+    None,              # relation as tuple of concepts, used in EMR
+    relation_triple_tables)   # relation as triplet of concetps, used in SPRL
+
+    print("\nResults - ")
+    print(phrase_table)
+    
+    if relation_triple_tables != None :
+        for name, result in relation_triple_tables.items():
+            print("\n")
+            print(name)
+            print(result)
+            
 if __name__ == '__main__' :
-    main()
+    sprlMain()
