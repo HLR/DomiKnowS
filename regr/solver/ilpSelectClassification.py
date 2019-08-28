@@ -372,9 +372,9 @@ class ilpOntSolver:
                         
         # ---- No supported yet
     
-            # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
+        # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
         
-            # -- Add constraints based on concept oneOf statements in ontology - ?
+        # -- Add constraints based on concept oneOf statements in ontology - ?
     
         if self.ilpSolver == "Gurobi":  
             m.update()
@@ -750,7 +750,6 @@ class ilpOntSolver:
                         else:
                             Y_Q += graphResultsForPhraseRelation[relationName][token2Index][token1Index]*y[relationName, token1, token2]
 
-        
                     if (relationName+'-neg', token, token1) in y: 
                         if self.ilpSolver == "Gurobi":
                             Y_Q += (1-graphResultsForPhraseRelation[relationName][token2Index][token1Index])*y[relationName+'-neg', token1, token2]
@@ -936,7 +935,6 @@ class ilpOntSolver:
                             else:
                                 Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
     
-            
                         if (tripleRelationName+'-neg', token, token1, token2) in z: 
                             if self.ilpSolver == "Gurobi":
                                 Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
@@ -1069,14 +1067,14 @@ class ilpOntSolver:
                                 for conceptName in conceptNames:
                                     if solution[token, conceptName] == 1:                                    
                                         tokenResult[conceptName][token] = 1
-                                        ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+                                        self.myLogger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
 
                 elif self.ilpSolver == "GEKKO":
                     for token in tokens :
                         for conceptName in conceptNames:
                             if x[token, conceptName].value[0] > gekkoTresholdForTruth:
                                 tokenResult[conceptName][token] = 1
-                                ilpOntSolver.__logger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+                                self.myLogger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
 
             # Collect results for relations
             relationsResult = None
@@ -1172,7 +1170,10 @@ class ilpOntSolver:
         for prop in graph.poi:
             concept = prop.sup
             prop_dict[len(concept.has_a()) or 1].append(prop)
-        max_rank = max(prop_dict.keys())
+        max_rank = 0
+
+        if (len(prop_dict.keys())) != 0:
+            max_rank = max(prop_dict.keys())
 
         # find base, assume only one base for now
         # FIXME: that means we are only considering problems with only one sentence
@@ -1218,9 +1219,8 @@ class ilpOntSolver:
         for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
             # prepare tokens
             if vocab:
-                tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index_d, i_d]),
-                                                                       namespace=namespace))
-                          for i, i_d in zip(range(mask_len[batch_index]), torch.arange(mask_len[batch_index], dtype=torch.long, device=device))]
+                tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index_d, i_d]),namespace=namespace))
+                for i, i_d in zip(range(mask_len[batch_index]), torch.arange(mask_len[batch_index], dtype=torch.long, device=device))]
             else:
                 tokens = [str(i) for i in range(mask_len[batch_index])]
             # prepare tables
@@ -1284,7 +1284,6 @@ class ilpOntSolver:
                 data[prop.fullname] = logits_value
 
         return data
-
 
 # --------- Testing
 
@@ -1362,9 +1361,8 @@ def main():
     data = None
     myVocab = None
     allenEmrGraph = AllenNlpGraph(emrGraph)
-    myilpOntSolver = ilpOntSolver.getInstance(allenEmrGraph)
 
-    myData = myilpOntSolver.inferSelection(allenEmrGraph, data, vocab=myVocab)
+    myData = allenEmrGraph.solver.inferSelection(allenEmrGraph, data, vocab=myVocab)
 
 def mainOld():
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
@@ -1605,4 +1603,4 @@ def sprlMain():
             print(result)
             
 if __name__ == '__main__' :
-    mainOld()
+    sprlMain()
