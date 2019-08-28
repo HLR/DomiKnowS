@@ -43,7 +43,7 @@ class GraphModel(Model):
         balance_factor: float = 0.5,
         label_smoothing: float = 0.1,
         focal_gamma: float = 2.,
-        inference_interval: int = 50,
+        inference_interval: int = 10,
         inference_training_set: bool = False
     ) -> None:
         super().__init__(vocab)

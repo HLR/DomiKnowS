@@ -3,6 +3,7 @@ import torch
 from torch.nn import Module, GRU, Dropout
 from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
 from ...utils import find_base
+import itertools
 
 
 class WrapperModule(Module):
@@ -217,6 +218,50 @@ class PairTokenDependencyRelation(BaseModule):
                     dep[i, j, r_token.i, 5] = 1
 
         return dep
+
+
+class TripPhraseDistRelation(BaseModule):
+    def __init__(self, emb_num, window):
+        BaseModule.__init__(self, emb_num)
+        self.emb_num = emb_num # must define emb_num (to have lb and ub) before window
+
+    def forward(self, x):
+        batch = len(x)
+        length = max(len(xx) for xx in x)
+        dist = torch.ones(batch, length, length, length, self.emb_num) * -1
+
+        for phraselist in x:
+            batch_num=0
+            combination=list(itertools.combinations(range(0, len(phraselist)), 3))
+            for each in combination:
+                temp_list1 = []
+                temp_list2 = []
+                start = each[0]
+                middle = each[1]
+                end = each[2]
+
+                if middle-start==1 and end-middle == 1:
+                    temp1_vector = phraselist[start]
+                    temp2_vector = phraselist[middle]
+                    dist[batch_num, start, middle, end] = torch.cat((temp1_vector,temp2_vector))
+
+                else:
+                    for index in range(start, middle):
+                            temp_list1.append(index)
+                    for index in range(middle, end):
+                            temp_list2.append(index)
+                    dist_vector = tuple((tuple(temp_list1),tuple(temp_list2)))
+                    temp3_vector = torch.zeros(8)
+                    temp4_vector = torch.zeros(8)
+                    for vector in dist_vector[0]:
+                            temp3_vector.add_(phraselist[vector])
+                    for vector in dist_vector[1]:
+                            temp4_vector.add_(phraselist[vector])
+                    dist[batch_num, start, middle, end] = torch.cat((temp3_vector, temp4_vector))
+
+            batch_num+=1
+        return dist
+
 
 
 class LowestCommonAncestor(Module):

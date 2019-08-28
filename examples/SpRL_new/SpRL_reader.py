@@ -127,10 +127,6 @@ class SpRLReader(SensableReader):
 
         phrase_list = self.parseSprlXML(file_path)
         raw_examples = self.getCorpus(self.negative_entity_generation(phrase_list))
-        #raw_examples = self.getCorpus(phrase_list)
-
-
-
         for raw_sample in raw_examples:
             yield raw_sample
 
@@ -413,7 +409,6 @@ class SpRLReader(SensableReader):
         # print(
         #     f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
         # print(f" negative entity number is {negative_entity} ")
-
         return new_phraselist
 
 
@@ -539,7 +534,8 @@ class NewAdjacencyField(AdjacencyField):
                                             padding_value=self._padding_value)
         return adjacency_field
 
-# sp=SpRLReader()
+#sp=SpRLReader()
+#sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
 #sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 #sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))

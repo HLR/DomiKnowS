@@ -79,11 +79,6 @@
       <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
       >SPRL ontology region.</rdfs:comment>
   </owl:Class>
-  <owl:Class rdf:ID="relation_none">
-      <rdfs:subClassOf rdf:resource="#triplet"/>
-      <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
-      >SPRL ontology relation_none.</rdfs:comment>
-  </owl:Class>
   <owl:Class rdf:ID="distance">
       <rdfs:subClassOf rdf:resource="#triplet"/>
       <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"

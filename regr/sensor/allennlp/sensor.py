@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor
+from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, TripPhraseDistRelation
 
 
 class SentenceSensor(ReaderSensor):
@@ -227,9 +227,9 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         return super().forward(context)
 
 
-class WordDistantSensor(SinglePreArgMaskedPairSensor):
+class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
-        return WordDistance(self.emb_num, self.window)
+        return TripPhraseDistRelation(self.emb_num, self.window)
 
     def __init__(
         self,
@@ -292,7 +292,7 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         output_only: bool=False
     ) -> NoReturn:
         self.emb_num = emb_num
-        self.window = window
+        self.window  = window
         SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
 
     def forward(
