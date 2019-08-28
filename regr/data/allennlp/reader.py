@@ -31,6 +31,7 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
         cls = type(self)
         fields = {}
         if metas is not None:
+
             for key, value in metas.items():
                 fields[key] = MetadataField(value)
 
@@ -50,6 +51,7 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
 
     def _read(self, file_path, metas=None) -> Iterator[Instance]:
         for raw_sample in self.raw_read(file_path):
+
             yield self._to_instance(raw_sample, metas)
 
     def read(self, file_path, metas=None) -> Iterator[Instance]:
@@ -108,8 +110,10 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
                     field = func(self_, fields, tokens)
                     if field is not None:
                         fields[sensor.fullname] = field
+
                 return fields
             cls.textfield_dict[key] = update_textfield
+
             return update_textfield
         return decorator
 

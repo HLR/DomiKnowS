@@ -4,7 +4,7 @@ This is an example of the Entity Mention Relation (EMR) problem.
 
 ## Problem description
 
-To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](https://www.clips.uantwerpen.be/conll2003/ner/).
+To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](http://cogcomp.org/page/resource_view/43).
 The task is as follow:
 > **given** an input text such as 
 >> *"Washington works for Associated Press."*,
@@ -48,6 +48,8 @@ By [solving the generated ILP problem](../../regr/solver/ilpSelectClassification
 
 ## Run the example
 
+**Be sure to run anything in this instruction from current directory `examples/emr`, rather than from the project root.**
+
 ### Prepare
 
 #### Tools
@@ -68,17 +70,55 @@ sudo python3 -m pip install -r requirements.txt
 
 #### Data
 
-The Conll04 data is located in [`data/EntityMentionRelation/conll.corp`](data/EntityMentionRelation/conll.corp).
+The Conll04 data is located in [`data/EntityMentionRelation/conll04.corp`](data/EntityMentionRelation/conll04.corp).
 Please consider resplit the data set.
 A handy tool `conll_split` it provided in this example to split dataset for n-fold corss-validation.
 ```bash
-python3 -m emr.conll_split data/EntityMentionRelation/conll.corp
+python3 -m emr.conll_split data/EntityMentionRelation/conll04.corp
 ```
 
-It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
+It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll04.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
 For more options like folds or output format, please use `-h`: `python3 -m emr.conll_split -h`.
 
 
+Some basic statistics of a data file can be obtained by
+```bash
+python3 -m emr.conll_stat data/EntityMentionRelation/conll04.corp
+```
+You will see the something like this
+```
+- Sentence length / min 1
+- Sentence length / max 169
+- Sentence length / mean 23.41569978245105
+- Sentence length / mid 23.0
+- Sentence length / hist
+             1.0     17.8    34.6    51.4    68.2    85.0    101.8   118.6   135.4   152.2  169.0
+length        1.0    17.8    34.6    51.4    68.2    85.0   101.8   118.6   135.4   152.2  169.0
+count      1957.0  2522.0   867.0   113.0    29.0    15.0     9.0     0.0     0.0     4.0    NaN
+cum_count  1957.0  4479.0  5346.0  5459.0  5488.0  5503.0  5512.0  5512.0  5512.0  5516.0    NaN
+- Labels count / O 114984
+- Labels count / Loc 4765
+- Labels count / Peop 3918
+- Labels count / Other 2995
+- Labels count / Org 2499
+- Relation count / Live_In 521
+- Relation count / OrgBased_In 452
+- Relation count / Located_In 406
+- Relation count / Work_For 401
+- Relation count / Kill 268
+```
+You can show statistics on splited data sets by replacing the file name in above command.
+
+#### Word2vec
+
+We use [GloVe](https://nlp.stanford.edu/projects/glove/) (glove.6B.50d) in this example.
+Please download [glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip) and extract to `data/glove.6B`.
+You can use the following commands
+```bash
+wget http://nlp.stanford.edu/data/glove.6B.zip
+unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "data/glove.6B"
+```
+You can also download and extract other word representation, and setup in [`emr/config.py`](emr/config.py) correspondingly.
 
 ### The example
 
@@ -95,3 +135,38 @@ python3 -m emr -s
 ```
 
 Please also checkout configuration of the program in [`emr/config.py`](emr/config.py).
+
+
+#### Logs
+
+Tensorboard style log is generated in `log.<starting date and time>`. To visualize the training process, use Tensorboard:
+```bash
+# replace log.<starting date and time> with your actural log directory
+tensorboard --logdir=log.<starting date and time>
+```
+
+
+Tensorboard service will start at local port `6006` by default. Visit ['http://localhost:6006/'](http://localhost:6006/) using a modern browser.
+
+Some useful filters:
+* `(people|organization|location|other)-F1` show F1 score on entities.
+* `(work_for|live_in|located_in|orgbase_on|kill)-F1` show F1 score on composed entities (relations).
+
+Solver log can be find in the same `log.<starting date and time>` directory and named `solver.log`. It could be too large to load at once after a long-term training and testing. You can try to show the last one solution by `tail`:
+```bash
+# replace log.<starting date and time> with your actural log directory
+tail -n 1000 log.<starting date and time>/solver.log
+```
+Usually last 1000 lines, with option `-n 1000`, is enough for one solution.
+
+
+### Evaluation
+
+To evaluate a trained model with specific dataset,
+```bash
+python3 -m emr.emr_testing -m log.<starting date and time> -d <path to data corp> -b <batch size>
+```
+You may want to avoid using GPU because they are used by a training procees. Here is a complete example:
+```bash
+CUDA_VISIBLE_DEVICES=none python3 -m emr.emr_testing -m ./log.20190724-174229 -d ./data/EntityMentionRelation/conll04.corp_1_test.corp -b=16
+```
