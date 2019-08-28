@@ -818,7 +818,7 @@ class ilpOntSolver:
         elif self.ilpSolver == "GEKKO":
             pass
     
-        self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
+        self.myLogger.info("Created %i ilp variables for triple relations"%(len(z)))
 
         # -- Add constraints 
         for tripleRelationName in graphResultsForPhraseTripleRelation:
@@ -827,7 +827,7 @@ class ilpOntSolver:
             if currentTripleRelation is None:
                 continue
     
-            self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
+            self.myLogger.debug("Triple Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
             
             ancestorConcept = None
             for _ancestorConcept in currentTripleRelation.ancestors(include_self = False):
@@ -915,35 +915,35 @@ class ilpOntSolver:
         # Add objectives
         Z_Q  = None
         for tripleRelationName in tripleRelationNames:
-            for token in tokens: 
-                for token1 in tokens:
-                    if token1 == token:
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
+                    if token2 == token1:
                         continue
                         
-                        for token2 in tokens:
-                            if token2 == token:
-                                continue
-                            
-                            if token2 == token1:
-                                continue
-    
+                    for token3Index, token3 in enumerate(tokens):
+                        if token3 == token1:
+                            continue
+                        
+                        if token3 == token2:
+                            continue
+
                         if self.ilpSolver == "Gurobi":
-                            Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+                            Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index]*z[tripleRelationName, token1, token2, token3]
                         elif self.ilpSolver == "GEKKO":
                             if Z_Q is None:
-                                Z_Q = graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+                                Z_Q = graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index]*z[tripleRelationName, token1, token2, token3]
                             else:
-                                Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*y[tripleRelationName, token, token1, token2]
+                                Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token]*z[tripleRelationName, token, token1, token2]
     
                         if (tripleRelationName+'-neg', token, token1, token2) in z: 
                             if self.ilpSolver == "Gurobi":
-                                Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
+                                Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index])*z[tripleRelationName+'-neg', token1, token2, token3]
                             elif self.ilpSolver == "GEKKO":
                                 if Z_Q is None:
-                                    Z_Q = (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
+                                    Z_Q = (1-graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index])*z[tripleRelationName+'-neg', token1, token2, token3]
                                 else:
-                                    z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token2][token1][token])*y[tripleRelationName+'-neg', token, token1, token2]
-                
+                                    z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index])*z[tripleRelationName+'-neg', token1, token2, token3]
+            
         return Z_Q
         
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
@@ -954,16 +954,14 @@ class ilpOntSolver:
         
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
-        self.myLogger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
-        self.myLogger.info('graphResultsForPhraseTripleRelation \n%s'%(graphResultsForPhraseTripleRelation))
 
         if graphResultsForPhraseRelation is not None:
             for relation in graphResultsForPhraseRelation:
                 self.myLogger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
         
         if graphResultsForPhraseTripleRelation is not None:
-            for relation in graphResultsForPhraseTripleRelation:
-                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseTripleRelation[relation]))
+            for tripleRelation in graphResultsForPhraseTripleRelation:
+                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(tripleRelation, graphResultsForPhraseTripleRelation[tripleRelation]))
 
         conceptNames = graphResultsForPhraseToken.keys()
         tokens = [x for x, _ in phrase]
@@ -1146,9 +1144,9 @@ class ilpOntSolver:
                                         
                                             currentSolutionValue = solution[tripleRelationName, token, token1, token2]
                                             if solution[tripleRelationName, token, token1, token2] == 1:
-                                                tripleRelationsResult[tripleRelationName][tokenIndex, token1Index, token2Index]= 1
+                                                tripleRelationsResult[tripleRelationName][tokenIndex, token1Index, token2Index] = 1
                                             
-                                            self.myLogger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
+                                                self.myLogger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
         
         except:
             self.myLogger.error('Error')
