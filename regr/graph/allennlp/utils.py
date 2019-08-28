@@ -9,6 +9,7 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
                                        average: str = "batch",
                                        label_smoothing: float = None,
                                        gamma: float = None,
+                                       eps: float = 1e-8,
                                        alpha: Union[float, List[float], torch.FloatTensor] = None
                                       ) -> torch.FloatTensor:
     """
@@ -78,6 +79,9 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
     if gamma:
         # shape : (batch * sequence_length, num_classes)
         probs_flat = log_probs_flat.exp()
+        eps = torch.tensor(eps, device=probs_flat.device)
+        probs_flat = probs_flat.min(1 - eps)
+        probs_flat = probs_flat.max(eps)
         # shape : (batch * sequence_length,)
         probs_flat = torch.gather(probs_flat, dim=1, index=targets_flat)
         # shape : (batch * sequence_length,)

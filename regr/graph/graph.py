@@ -4,7 +4,6 @@ if __package__ is None or __package__ == '':
 else:
     from .base import BaseGraphTree
 
-
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
     def __init__(self, name=None, ontology=None, iri=None, local=None):
@@ -70,7 +69,7 @@ class Graph(BaseGraphTree):
     # NB: for namedtuple, defaults are right-most first
     # `local` default to None, 
     # python 3.7+
-    #Ontology = namedtuple('Ontology', ('iri', 'local'), defaults=(None,))
+    # Ontology = namedtuple('Ontology', ('iri', 'local'), defaults=(None,))
     # python 2.6+
     Ontology = namedtuple('Ontology', ('iri', 'local'))
     Ontology.__new__.__defaults__ = (None,) 

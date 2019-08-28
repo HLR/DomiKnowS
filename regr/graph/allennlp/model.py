@@ -12,7 +12,7 @@ from .metrics import Epoch
 
 from .. import Graph
 from ..property import Property
-from ...utils import prod
+from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
 from ...solver.allennlp.inference import inference
@@ -23,23 +23,6 @@ DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
 DataInstance = Dict[str, Tensor]
-
-
-def get_prop_result(prop, data):
-    vals = []
-    mask = None
-    for name, sensor in prop.items():
-        sensor(data)
-        if hasattr(sensor, 'get_mask'):
-            if mask is None:
-                mask = sensor.get_mask(data)
-            else:
-                assert mask == sensor.get_mask(data)
-        tensor = data[sensor.fullname]
-        vals.append(tensor)
-    label = vals[0]  # TODO: from readersensor
-    pred = vals[1]  # TODO: from learner
-    return label, pred, mask
 
 
 def update_metrics(
@@ -99,11 +82,11 @@ class GraphModel(Model):
                             self.metrics.append((metric_name, class_index, prop, MetricClass(class_index)))
                             self.metrics_inferenced.append((metric_name, class_index, prop, MetricClass(class_index)))
 
-        i = 0  # TODO: this looks too bad
+        #i = 0  # TODO: this looks too bad
         for prop in self.graph.poi:
             for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
-                self.add_module(str(i), sensor.module)
-                i += 1
+                self.add_module(name, sensor.module)
+                #i += 1
 
     def _need_inference(
         self,
@@ -117,6 +100,9 @@ class GraphModel(Model):
             dataset_type_key in data and
             all(dataset_type == 'train' for dataset_type in data[dataset_type_key])):
             return False
+        if (dataset_type_key in data and
+            all(dataset_type == 'test' for dataset_type in data[dataset_type_key])):
+            return True
         epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
         if epoch_key not in data:
             return True  # no epoch record, then always inference
@@ -212,7 +198,9 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
-        data = inference(self.graph, self.graph.solver, data, self.vocab)
+        #data = inference(self.graph, self.graph.solver, data, self.vocab)
+        data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
+        
         return data
 
     def loss_func(

@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, WordDistance
+from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor
 
 
 class SentenceSensor(ReaderSensor):
@@ -181,7 +181,6 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
 
     def get_mask(self, context: Dict[str, Any]):
         # TODO: make sure update_context has been called
-
         return get_text_field_mask(context[self.fullname + '_index'])
 
 
@@ -223,12 +222,9 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
-
         device, _ = guess_device(context).most_common(1)[0]
+        self.module.main_module.default_device = device
         return super().forward(context)
-        with torch.cuda.device(device):
-            return super().forward(context)
-
 
 
 class WordDistantSensor(SinglePreArgMaskedPairSensor):
@@ -255,7 +251,6 @@ class WordDistantSensor(SinglePreArgMaskedPairSensor):
       return super().forward(context)
 
 
-
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
         return PairTokenDependencyRelation()
@@ -266,8 +261,8 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)
 
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
@@ -305,5 +300,5 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)

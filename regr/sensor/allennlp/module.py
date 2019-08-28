@@ -26,6 +26,7 @@ class BaseModule(Module):
     def __init__(self, output_dim):
         Module.__init__(self)
         self.output_dim = output_dim
+        self.default_device = None
 
     def get_output_dim(self):
         return self.output_dim
@@ -153,12 +154,10 @@ class PairTokenDistance(BaseModule):
         return self._ub
 
     def forward(self, x):
-        print(x)
-        print("%%%%%%%%%%%%%")
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(l*2)
-        dist = torch.arange(-length + 1, length)
+        dist = torch.arange(-length + 1, length, device=self.default_device)
         rows = []
         for i in range(length):
             rows.append(dist[i:i + length].view(1, -1))
@@ -187,85 +186,6 @@ class PairTokenDistance(BaseModule):
         return dist
 
 
-class WordDistance(BaseModule):
-    def __init__(self, emb_num, window):
-        BaseModule.__init__(self, emb_num)
-        self.emb_num = emb_num # must define emb_num (to have lb and ub) before window
-        self.window = window
-
-    @property
-    def window(self):
-        return self._window
-
-    @window.setter
-    def window(self, window):
-        self._window = window
-        ul = np.floor(window / 2)
-        self._base = find_base(ul, self.ub - 1)
-
-    @property
-    def base(self):
-        return self._base
-
-    @property
-    def emb_num(self):
-        return self._emb_num
-
-    @emb_num.setter
-    def emb_num(self, emb_num):
-        self._emb_num = emb_num
-        self._lb = -np.floor((emb_num - 1) / 2)
-        self._ub = np.ceil((emb_num - 1) / 2)
-
-    @property
-    def lb(self):
-        return self._lb
-
-    @property
-    def ub(self):
-        return self._ub
-
-    def forward(self, x):
-        print(x)
-        print("%%%%%%%%%%%%%")
-        batch = len(x)
-        length = max(len(xx) for xx in x)
-        print(length)
-        print('^^^^^^^^')
-        dist = torch.arange(-length+1, length)
-        dist = dist.repeat(batch, 1, 1, 1)
-        return dist
-
-        # length = max(len(xx) for xx in x)
-        # #(l*2)
-        # dist = torch.arange(-length + 1, length)
-        # rows = []
-        # for i in range(length):
-        #     rows.append(dist[i:i + length].view(1, -1))
-        # #(l, l)
-        # dist = torch.cat(tuple(reversed(rows)))
-        # #print(dist)
-        # sign = dist.sign()
-        # dist = dist.abs()
-        # dist = dist.float()
-        # dist = (dist.log() / np.log(self.base) + 1).floor()
-        # #print(dist)
-        # dist[dist < 0] = 0
-        # dist = dist * sign.to(dtype=dist.dtype, device=dist.device)
-        # dist[dist < self.lb] = self.lb
-        # dist[dist > self.ub] = self.ub
-        # dist = dist - self.lb
-        # dist = dist.long()
-        # #print(dist)
-        # #(n, n)
-        # eye = torch.eye(self.emb_num, device=dist.device)
-        # #import pdb; pdb.set_trace()
-        # #(1, l, l, n)
-        # dist = eye.index_select(0, dist.view(-1)).view(1, length, length, -1)
-        # #(b, l, l, n)
-        # dist = dist.repeat(batch, 1, 1, 1)
-        # return dist
-
 class PairTokenDependencyRelation(BaseModule):
     def __init__(self):
         BaseModule.__init__(self, 6)
@@ -275,7 +195,7 @@ class PairTokenDependencyRelation(BaseModule):
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(b,l,l,f)
-        dep = torch.zeros((batch, length, length, self.get_output_dim()))
+        dep = torch.zeros((batch, length, length, self.get_output_dim()), device=self.default_device)
         for i, span in enumerate(x):
             for j, token in enumerate(span):
                 # children: immediate syntactic children
@@ -290,9 +210,9 @@ class PairTokenDependencyRelation(BaseModule):
                 # conjuncts: coordinated tokens
                 for r_token in token.conjuncts:
                     dep[i, j, r_token.i, 3] = 1
-                # head: syntactic parent, or “governor”
+                # head: syntactic parent, or "governor"
                 dep[i, j, token.head.i, 4] = 1
-                # ancestors: rightmost token of this token’s syntactic descendants
+                # ancestors: rightmost token of this toke's syntactic descendants
                 for r_token in token.ancestors:
                     dep[i, j, r_token.i, 5] = 1
 
@@ -372,7 +292,8 @@ class PairTokenDependencyDistance(BaseModule):
             docs.append(doc)
 
         # (b,lx,lx)
-        lcas = torch.zeros((batch, length, length), device=torch.cuda.current_device(), dtype=torch.long)
+        lcas = torch.zeros((batch, length, length), device=self.default_device, dtype=torch.long)
+
         for doc, lca in zip(docs, lcas):
             # (l,l) ~ [-1, l-1]
             lca_np = doc.get_lca_matrix()
