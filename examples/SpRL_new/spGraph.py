@@ -38,6 +38,9 @@ with Graph('spLanguage') as splang_Graph:
         spatialindicator.not_a(noneentity)
 
         triplet = Concept(name='triplet')
+        triplet.has_a(landmark)
+        triplet.has_a(trajector)
+        triplet.has_a(spatialindicator)
         region = Concept(name='region')
         region.is_a(triplet)
         relation_none= Concept(name='relation_none')

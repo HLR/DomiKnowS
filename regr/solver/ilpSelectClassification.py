@@ -1154,9 +1154,15 @@ class ilpOntSolver:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
+        def concept_rank(concept):
+            rank = len(concept.has_a())
+            for is_a in concept.is_a():
+                rank += concept_rank(is_a.dst)
+            return rank or 1
+
         for prop in graph.poi:
             concept = prop.sup
-            prop_dict[len(concept.has_a()) or 1].append(prop)
+            prop_dict[concept_rank(concept)].append(prop)
         max_rank = max(prop_dict.keys())
 
         # find base, assume only one base for now
