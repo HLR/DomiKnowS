@@ -49,45 +49,60 @@ import datetime
 
 class ilpOntSolver:
     __instances = {}
-    __logger = logging.getLogger(__name__)
     
     __negVarTrashhold = 1.0
     
+    myLogger = None
+
     ilpSolver = None
     myIlpBooleanProcessor = None
     
     def __init__(self) -> None:
-        super().__init__(lazy=False)
-       
-    def __init__(self, ontologyURL, ontologyPathname=None, _iplConfig = ilpConfig) -> None:
-
-        if ontologyURL in ilpOntSolver.__instances:
-             pass
-        else:  
-            ilpOntSolver.__logger.info("Creating new ilpOntSolver for ontology: %s"%(ontologyURL))
-
-            self.loadOntology(ontologyURL, ontologyPathname)
-            ilpOntSolver.__instances[ontologyURL] = self 
-            
-            if _iplConfig is not None:
-                self.ilpSolver = _iplConfig['ilpSolver']
-            
-            self.myIlpBooleanProcessor = ilpBooleanProcessor(_iplConfig)
+        super().__init__()
                
     @staticmethod
     def getInstance(graph, _iplConfig = ilpConfig):
         if (graph is not None) and (graph.ontology is not None):
             if graph.ontology.iri not in ilpOntSolver.__instances:
-                ilpOntSolver(graph.ontology.iri, graph.ontology.local, _iplConfig = ilpConfig)
+                ilpOntSolver.__instances[graph.ontology.iri] = ilpOntSolver()
+                ilpOntSolver.__instances[graph.ontology.iri].setup_solver_logger() 
+
                 ilpOntSolver.__instances[graph.ontology.iri].myGraph = graph
+                    
+                ilpOntSolver.__instances[graph.ontology.iri].loadOntology(graph.ontology.iri, graph.ontology.local)
+            
+                if _iplConfig is not None:
+                    ilpOntSolver.__instances[graph.ontology.iri].ilpSolver = _iplConfig['ilpSolver']
+            
+                ilpOntSolver.__instances[graph.ontology.iri].myIlpBooleanProcessor = ilpBooleanProcessor(_iplConfig)
+                ilpOntSolver.__instances[graph.ontology.iri].myLogger.info("Returning existing new ilpOntSolver for %s"%(graph.ontology.iri))
             else:
-                ilpOntSolver.__logger.info("Returning existing ilpOntSolver for %s"%(graph.ontology))
+                ilpOntSolver.__instances[graph.ontology.iri].myLogger.info("Returning existing ilpOntSolver for %s"%(graph.ontology.iri))
             
         return ilpOntSolver.__instances[graph.ontology.iri]
-       
+    
+    def setup_solver_logger(self, log_filename='ilpOntSolver.log'):
+        logger = logging.getLogger(__name__)
+    
+        # create file handler and set level to info
+        ch = logging.FileHandler(log_filename)
+        logger.setLevel(logging.DEBUG)
+    
+        # create formatter
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+    
+        # add formatter to ch
+        ch.setFormatter(formatter)
+    
+        # add ch to logger
+        logger.addHandler(ch)
+        
+        print("Log file is in: ", ch.baseFilename)
+        self.myLogger = logger
+            
     def loadOntology(self, ontologyURL, ontologyPathname=None):
         start = datetime.datetime.now()
-        ilpOntSolver.__logger.info('Start')
+        self.myLogger.info('Start')
         
         currentPath = Path(os.path.normpath("./")).resolve()
         
@@ -95,7 +110,7 @@ class ilpOntSolver:
         graphMetaOntologyPath = Path(os.path.normpath(graphMetaOntologyPathname))
         graphMetaOntologyPath = graphMetaOntologyPath.resolve()
         if not os.path.isdir(graphMetaOntologyPath):
-            ilpOntSolver.__logger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
+            self.myLogger.error("Path to load Graph ontology: %s does not exists in current directory %s"%(graphMetaOntologyPath,currentPath))
             exit()
             
         if ontologyPathname is not None:
@@ -103,7 +118,7 @@ class ilpOntSolver:
             ontologyPath = Path(os.path.normpath(ontologyPathname))
             ontologyPath = ontologyPath.resolve()
             if not os.path.isdir(ontologyPath):
-                ilpOntSolver.__logger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
+                self.myLogger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
                 exit()
 
             onto_path.append(graphMetaOntologyPath)  # the folder with the Graph Meta ontology
@@ -114,11 +129,11 @@ class ilpOntSolver:
             self.myOnto = get_ontology(ontologyURL)
             self.myOnto.load(only_local = True, fileobj = None, reload = False, reload_if_newer = False)
         except FileNotFoundError as e:
-            ilpOntSolver.__logger.warning("Error when loading - %s from: %s"%(ontologyURL, ontologyPathname))
+            self.myLogger.warning("Error when loading - %s from: %s"%(ontologyURL, ontologyPathname))
     
         end = datetime.datetime.now()
         elapsed = end - start
-        ilpOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
+        self.myLogger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         return self.myOnto
     
@@ -160,7 +175,7 @@ class ilpOntSolver:
         elif self.ilpSolver == "GEKKO":
             pass
          
-        ilpOntSolver.__logger.info("Created %i ilp variables for tokens"%(len(x)))
+        self.myLogger.info("Created %i ilp variables for tokens"%(len(x)))
         
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
         foundDisjoint = dict() # too eliminate duplicates
@@ -171,7 +186,7 @@ class ilpOntSolver:
             if currentConcept is None :
                 continue
             
-            ilpOntSolver.__logger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
+            self.myLogger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
                 
             for d in currentConcept.disjoints():
                 disjointConcept = d.entities[1]._name
@@ -215,7 +230,7 @@ class ilpOntSolver:
                     foundDisjoint[conceptName].add(disjointConcept)
                            
             if conceptName in foundDisjoint:
-                ilpOntSolver.__logger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+                self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
 
         # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
         foundEquivalent = dict() # too eliminate duplicates
@@ -252,7 +267,7 @@ class ilpOntSolver:
                     foundEquivalent[conceptName].add(equivalentConcept.name)
            
             if conceptName in foundEquivalent:
-                ilpOntSolver.__logger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
+                self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
     
         # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
         for conceptName in conceptNames :
@@ -274,7 +289,7 @@ class ilpOntSolver:
                     elif self.ilpSolver == "GEKKO":
                         m.Equation(self.myIlpBooleanProcessor.ifVar(m, x[token, conceptName], x[token, ancestorConcept]) >= 1)
 
-                ilpOntSolver.__logger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+                self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
 
         # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
         for conceptName in conceptNames :
@@ -353,7 +368,7 @@ class ilpOntSolver:
                         elif self.ilpSolver == "GEKKO":
                             m.Equation(self.myIlpBooleanProcessor.xorVar(m, x[token, conceptName], x[token, complementClass.name]) >= 1)
 
-                    ilpOntSolver.__logger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
+                    self.myLogger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
         # ---- No supported yet
     
@@ -397,21 +412,21 @@ class ilpOntSolver:
             
         # Create variables for relation - token - token and negative variables
         for relationName in relationNames:            
-            for token in tokens: 
-                for token1 in tokens:
-                    if token == token1:
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
+                    if token1 == token2:
                         continue
     
                     if self.ilpSolver == "Gurobi":
-                        y[relationName, token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token, token1))
+                        y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token1, token2))
                     elif self.ilpSolver == "GEKKO":
-                        y[relationName, token, token1]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s_%s_%s"%(relationName, token, token1))
+                        y[relationName, token1, token2]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s_%s_%s"%(relationName, token1, token2))
 
-                    if graphResultsForPhraseRelation[relationName][token1][token] < ilpOntSolver.__negVarTrashhold:
+                    if graphResultsForPhraseRelation[relationName][token2Index][token1Index] < ilpOntSolver.__negVarTrashhold:
                         if self.ilpSolver == "Gurobi":
-                            y[relationName+'-neg', token, token1]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token, token1))
+                            y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token1, token2))
                         elif self.ilpSolver == "GEKKO":
-                            y[relationName+'-neg', token, token1]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s-neg_%s_%s"%(relationName, token, token1))
+                            y[relationName+'-neg', token1, token2]=m.Var(0, lb=0, ub=1, integer=True, name="y_%s-neg_%s_%s"%(relationName, token1, token2))
                         
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
@@ -432,7 +447,7 @@ class ilpOntSolver:
         elif self.ilpSolver == "GEKKO":
             pass
     
-        ilpOntSolver.__logger.info("Created %i ilp variables for relations"%(len(y)))
+        self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
 
         # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
         for relationName in graphResultsForPhraseRelation:
@@ -441,7 +456,7 @@ class ilpOntSolver:
             if currentRelation is None:
                 continue
     
-            ilpOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
+            self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
     
             currentRelationDomain = currentRelation.get_domain() # domains_indirect()
             currentRelationRange = currentRelation.get_range()
@@ -477,7 +492,7 @@ class ilpOntSolver:
                                 m.Equation(x[token, domain._name] - y[currentRelation._name, token, token1] >= 0)
                                 m.Equation(x[token1, range._name] - y[currentRelation._name, token, token1] >= 0)
                                 
-                    ilpOntSolver.__logger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+                    self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
           # -- Add constraints based on property subProperty statements in ontology R subproperty of S - R(x, y) -> S(x, y)
         for relationName in graphResultsForPhraseRelation:
@@ -722,34 +737,35 @@ class ilpOntSolver:
         # Add objectives
         Y_Q  = None
         for relationName in relationNames:
-            for token in tokens:
-                for token1 in tokens:
-                    if token == token1 :
+            for token1 in  enumerate(tokens):
+                for token2 in  enumerate(tokens):
+                    if token1 == token2 :
                         continue
     
                     if self.ilpSolver == "Gurobi":
-                        Y_Q += graphResultsForPhraseRelation[relationName][token1][token]*y[relationName, token, token1]
+                        Y_Q += graphResultsForPhraseRelation[relationName][token2Index][token1Index]*y[relationName, token1, token2]
                     elif self.ilpSolver == "GEKKO":
                         if Y_Q is None:
-                            Y_Q = graphResultsForPhraseRelation[relationName][token1][token]*y[relationName, token, token1]
+                            Y_Q = graphResultsForPhraseRelation[relationName][token2Index][token1Index]*y[relationName, token1, token2]
                         else:
-                            Y_Q += graphResultsForPhraseRelation[relationName][token1][token]*y[relationName, token, token1]
+                            Y_Q += graphResultsForPhraseRelation[relationName][token2Index][token1Index]*y[relationName, token1, token2]
 
         
                     if (relationName+'-neg', token, token1) in y: 
                         if self.ilpSolver == "Gurobi":
-                            Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
+                            Y_Q += (1-graphResultsForPhraseRelation[relationName][token2Index][token1Index])*y[relationName+'-neg', token1, token2]
                         elif self.ilpSolver == "GEKKO":
                             if Y_Q is None:
-                                Y_Q = (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
+                                Y_Q = (1-graphResultsForPhraseRelation[relationName][token2Index][token1Index])*y[relationName+'-neg', token1, token2]
                             else:
-                                Y_Q += (1-graphResultsForPhraseRelation[relationName][token1][token])*y[relationName+'-neg', token, token1]
+                                Y_Q += (1-graphResultsForPhraseRelation[relationName][token2Index][token1Index])*y[relationName+'-neg', token1, token2]
         
         return Y_Q
     
     def addTripleRelationsConstrains(self, m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation):
         if graphResultsForPhraseTripleRelation is None:
             return None
+        
         tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
             
         # Create variables for relation - token - token -token and negative variables
@@ -803,7 +819,7 @@ class ilpOntSolver:
         elif self.ilpSolver == "GEKKO":
             pass
     
-        ilpOntSolver.__logger.info("Created %i ilp variables for relations"%(len(y)))
+        self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
 
         # -- Add constraints 
         for tripleRelationName in graphResultsForPhraseTripleRelation:
@@ -812,7 +828,7 @@ class ilpOntSolver:
             if currentTripleRelation is None:
                 continue
     
-            ilpOntSolver.__logger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
+            self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
             
             ancestorConcept = None
             for _ancestorConcept in currentTripleRelation.ancestors(include_self = False):
@@ -889,7 +905,7 @@ class ilpOntSolver:
                             #m.Equation(x[token1, range._name] - y[currentRelation._name, token, token1] >= 0)
                             pass
                                     
-                        ilpOntSolver.__logger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+                        self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
     
                 
         if self.ilpSolver == "Gurobi":
@@ -932,28 +948,27 @@ class ilpOntSolver:
                 
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
     
         if self.ilpSolver == None:
-            ilpOntSolver.__logger.info('ILP solver not provided - returning unchanged results')
+            self.myLogger.info('ILP solver not provided - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
         start = datetime.datetime.now()
-        ilpOntSolver.__logger.info('Start for phrase %s'%(phrase))
-        ilpOntSolver.__logger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
-        ilpOntSolver.__logger.info('graphResultsForPhraseTripleRelation \n%s'%(graphResultsForPhraseTripleRelation))
+        self.myLogger.info('Start for phrase %s'%(phrase))
+        self.myLogger.info('graphResultsForPhraseToken \n%s'%(graphResultsForPhraseToken))
+        self.myLogger.info('graphResultsForPhraseTripleRelation \n%s'%(graphResultsForPhraseTripleRelation))
 
         if graphResultsForPhraseRelation is not None:
             for relation in graphResultsForPhraseRelation:
-                ilpOntSolver.__logger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
+                self.myLogger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
         
         if graphResultsForPhraseTripleRelation is not None:
             for relation in graphResultsForPhraseTripleRelation:
-                ilpOntSolver.__logger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseTripleRelation[relation]))
+                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseTripleRelation[relation]))
 
         conceptNames = graphResultsForPhraseToken.keys()
-        #tokens = [x for x, _ in phrase]
-        tokens = phrase
+        tokens = [x for x, _ in phrase]
                     
         try:
             if self.ilpSolver == "Gurobi":
@@ -1014,7 +1029,7 @@ class ilpOntSolver:
             
             startOptimize = datetime.datetime.now()
             if self.ilpSolver == "Gurobi":
-                ilpOntSolver.__logger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
+                self.myLogger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
             elif self.ilpSolver == "GEKKO":
                 pass
 
@@ -1028,17 +1043,17 @@ class ilpOntSolver:
 
             if self.ilpSolver == "Gurobi":
                 if m.status == GRB.Status.OPTIMAL:
-                    ilpOntSolver.__logger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
                 elif m.status == GRB.Status.INFEASIBLE:
-                     ilpOntSolver.__logger.warning('Model was proven to be infeasible.')
+                     self.myLogger.warning('Model was proven to be infeasible.')
                 elif m.status == GRB.Status.INF_OR_UNBD:
-                     ilpOntSolver.__logger.warning('Model was proven to be infeasible or unbound.')
+                     self.myLogger.warning('Model was proven to be infeasible or unbound.')
                 elif m.status == GRB.Status.UNBOUNDED:
-                     ilpOntSolver.__logger.warning('Model was proven to be unbound.')
+                     self.myLogger.warning('Model was proven to be unbound.')
                 else:
-                     ilpOntSolver.__logger.warning('Optimal solution not was found - error code %i'%(m.status))
+                     self.myLogger.warning('Optimal solution not was found - error code %i'%(m.status))
             elif self.ilpSolver == "GEKKO":
-                ilpOntSolver.__logger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
+                self.myLogger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
 
             # Collect results for tokens
             tokenResult = None
@@ -1084,7 +1099,7 @@ class ilpOntSolver:
                                         if solution[relationName, token, token1] == 1:
                                             relationResult[token1][token] = 1
                                             
-                                            ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+                                            self.myLogger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
         
                                 relationsResult[relationName] = relationResult
                 elif self.ilpSolver == "GEKKO":
@@ -1099,7 +1114,7 @@ class ilpOntSolver:
                                 if y[relationName, token, token1].value[0] > gekkoTresholdForTruth:
                                     relationResult[token1][token] = 1
                                     
-                                    ilpOntSolver.__logger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
+                                    self.myLogger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token1,relationName,token))
     
                         relationsResult[relationName] = relationResult
                     
@@ -1135,15 +1150,15 @@ class ilpOntSolver:
                                             if solution[tripleRelationName, token, token1, token2] == 1:
                                                 tripleRelationsResult[tripleRelationName][tokenIndex, token1Index, token2Index]= 1
                                             
-                                            ilpOntSolver.__logger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
+                                            self.myLogger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
         
         except:
-            ilpOntSolver.__logger.error('Error')
+            self.myLogger.error('Error')
             raise
            
         end = datetime.datetime.now()
         elapsed = end - start
-        ilpOntSolver.__logger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
+        self.myLogger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         # return results of ILP optimization
         return tokenResult, relationsResult, tripleRelationsResult
@@ -1271,28 +1286,9 @@ class ilpOntSolver:
         return data
 
 
-def setup_solver_logger(log_filename='ilpOntSolver.log'):
-    logger = logging.getLogger(__name__)
-
-    # create file handler and set level to info
-    ch = logging.FileHandler(log_filename)
-
-    # create formatter
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
-
-    # add formatter to ch
-    ch.setFormatter(formatter)
-
-    # add ch to logger
-    logger.addHandler(ch)
-
-setup_solver_logger()
-
 # --------- Testing
 
 def main():
-    setup_solver_logger()
-
     with Graph('global') as emrGraph:
         emrGraph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
     
@@ -1366,12 +1362,11 @@ def main():
     data = None
     myVocab = None
     allenEmrGraph = AllenNlpGraph(emrGraph)
-    
-    myData = inferSelection(allenEmrGraph, data, vocab=myVocab)
+    myilpOntSolver = ilpOntSolver.getInstance(allenEmrGraph)
+
+    myData = myilpOntSolver.inferSelection(allenEmrGraph, data, vocab=myVocab)
 
 def mainOld():
-    setup_solver_logger()
-
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
 
     test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
@@ -1423,7 +1418,7 @@ def mainOld():
     # ------Call solver -------
     
     myilpOntSolver = ilpOntSolver.getInstance(test_graph)
-    tokenResult, relationsResult = myilpOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    tokenResult, relationsResult, _ = myilpOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
 
     print("\nResults - ")
     print(tokenResult)
@@ -1435,8 +1430,6 @@ def mainOld():
             print(result)
             
 def sprlMain():
-    setup_solver_logger()
-
     import numpy as np
 
     from regr.graph import Graph, Concept, Relation
@@ -1612,4 +1605,4 @@ def sprlMain():
             print(result)
             
 if __name__ == '__main__' :
-    sprlMain()
+    mainOld()
