@@ -23,10 +23,14 @@ from regr.graph.allennlp import AllenNlpGraph
 #### * `Config` contains configurations for model, data, and training.
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 #from .data import Conll04SensorReader as Reader
-from .data_spacy import Conll04SpaCyBinaryReader as Reader
-from .config import Config
-from .utils import seed
-
+if __package__ is None or __package__ == '':
+    from data_spacy import Conll04SpaCyBinaryReader as Reader
+    from config import Config
+    from utils import seed
+else:
+    from .data_spacy import Conll04SpaCyBinaryReader as Reader
+    from .config import Config
+    from .utils import seed
 
 #### "*Ontology Declaration*" is the first step in our pipeline.
 #### A graph of the concepts, representing the ontology in this application, is declared.
@@ -34,7 +38,11 @@ from .utils import seed
 #### Here we just import the graph from `graph.py`.
 #### Please also refer to `graph.py` for details.
 def ontology_declaration():
-    from .graph import graph
+    if __package__ is None or __package__ == '':
+        from graph import graph
+    else:
+        from .graph import graph
+        
     return graph
 
 
@@ -92,20 +100,20 @@ def model_declaration(graph, config):
     #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
     #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
     word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
+    word['encode'] = RNNLearner(word['ngram'], layers=config.rnn.layers, bidirectional=config.rnn.bidirectional, dropout=config.dropout)
     #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
     #### This process takes no parameters.
     #### But there is still a PyTorch module associated with it.
-    word['compact'] = MLPLearner([64,], word['encode'])
+    word['compact'] = MLPLearner(config.compact.layers, word['encode'], activation=config.activation)
     pair['cat'] = CartesianProductSensor(word['compact'])
-    pair['tkn_dist'] = TokenDistantSensor(16, 64, sentence['raw'])
+    pair['tkn_dist'] = TokenDistantSensor(config.distance_emb_size * 2, config.max_distance, sentence['raw'])
     pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(8, 64, sentence['raw'])
+    pair['tkn_dep_dist'] = TokenDepDistSensor(config.distance_emb_size, config.max_distance, sentence['raw'])
     pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    pair['emb'] = MLPLearner([128,], pair['onehots'], activation=None)
+    pair['emb'] = MLPLearner([config.relemb.emb_size,], pair['onehots'], activation=None)
     pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
     pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    pair['encode'] = ConvLearner([None, None], 5, pair['all'], dropout=config.dropout)
+    pair['encode'] = ConvLearner(config.relconv.layers, config.relconv.kernel_size, pair['all'], activation=config.activation, dropout=config.dropout)
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
@@ -157,6 +165,7 @@ def model_declaration(graph, config):
 
 #### The main entrance of the program.
 def main():
+    save_config = Config.deepclone()
     #### 1. "Ontology Declaration" to get a graph, as a partial program.
     graph = ontology_declaration()
 
@@ -170,7 +179,8 @@ def main():
     #### Train the model with inference functionality inside.
     lbp.train(Config.Data, Config.Train)
     #### Save the model, including vocabulary use to index the tokens.
-    lbp.save('/tmp/emr')
+    save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
+    lbp.save(save_to, config=save_config)
 
 ####
 """

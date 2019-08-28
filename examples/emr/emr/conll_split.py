@@ -64,7 +64,7 @@ class Conll04Splitter():
         for split_index in range(reminder, splits_num):
             yield index_list[offset:(offset + step)]
             offset += step
-        assert offset == total_numsplitt
+        assert offset == total_num
 
     def sample_by_splits(self, examples, splits):
         for split in splits:

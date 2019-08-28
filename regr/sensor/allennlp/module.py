@@ -26,6 +26,7 @@ class BaseModule(Module):
     def __init__(self, output_dim):
         Module.__init__(self)
         self.output_dim = output_dim
+        self.default_device = None
 
     def get_output_dim(self):
         return self.output_dim
@@ -74,6 +75,26 @@ class CartesianProduct(Module):
 class SelfCartesianProduct(CartesianProduct):
     def forward(self, x):
         return CartesianProduct.forward(self, x, x)
+
+
+class CartesianProduct3(Module):
+    # (b,l1,f1) x (b,l2,f2) -> (b, l1, l2, l3, f1+f2+f3)
+    def forward(self, x, y, z):
+        # TODO: flatten
+        xs = x.size()
+        ys = y.size()
+        zs = z.size()
+        assert xs[0] == ys[0] and ys[0] == zs[0]
+        # torch cat is not broadcasting, do repeat manually
+        xx = x.view(xs[0], xs[1], 1, 1, xs[2]).repeat(1, 1, ys[1], zs[1], 1)
+        yy = y.view(ys[0], 1, ys[1], 1, ys[2]).repeat(1, xs[1], 1, zs[1], 1)
+        zz = z.view(ys[0], 1, 1, ys[1], zs[2]).repeat(1, xs[1], ys[1], 1, 1)
+        return torch.cat([xx, yy, zz], dim=-1)
+
+
+class SelfCartesianProduct3(CartesianProduct3):
+    def forward(self, x):
+        return CartesianProduct3.forward(self, x, x, x)
 
 
 class NGram(Module):
@@ -136,7 +157,7 @@ class PairTokenDistance(BaseModule):
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(l*2)
-        dist = torch.arange(-length + 1, length, device=torch.cuda.current_device())
+        dist = torch.arange(-length + 1, length, device=self.default_device)
         rows = []
         for i in range(length):
             rows.append(dist[i:i + length].view(1, -1))
@@ -174,7 +195,7 @@ class PairTokenDependencyRelation(BaseModule):
         batch = len(x)
         length = max(len(xx) for xx in x)
         #(b,l,l,f)
-        dep = torch.zeros((batch, length, length, self.get_output_dim()), device=torch.cuda.current_device())
+        dep = torch.zeros((batch, length, length, self.get_output_dim()), device=self.default_device)
         for i, span in enumerate(x):
             for j, token in enumerate(span):
                 # children: immediate syntactic children
@@ -189,9 +210,9 @@ class PairTokenDependencyRelation(BaseModule):
                 # conjuncts: coordinated tokens
                 for r_token in token.conjuncts:
                     dep[i, j, r_token.i, 3] = 1
-                # head: syntactic parent, or “governor”
+                # head: syntactic parent, or "governor"
                 dep[i, j, token.head.i, 4] = 1
-                # ancestors: rightmost token of this token’s syntactic descendants
+                # ancestors: rightmost token of this toke's syntactic descendants
                 for r_token in token.ancestors:
                     dep[i, j, r_token.i, 5] = 1
 
@@ -271,7 +292,8 @@ class PairTokenDependencyDistance(BaseModule):
             docs.append(doc)
 
         # (b,lx,lx)
-        lcas = torch.zeros((batch, length, length), device=torch.cuda.current_device(), dtype=torch.long)
+        lcas = torch.zeros((batch, length, length), device=self.default_device, dtype=torch.long)
+
         for doc, lca in zip(docs, lcas):
             # (l,l) ~ [-1, l-1]
             lca_np = doc.get_lca_matrix()

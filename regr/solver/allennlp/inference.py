@@ -19,8 +19,8 @@ def inference(
 ) -> DataInstance:
     groups = [  # TODO: replace by constraint in graph, or group discover, later
         # order of table follows order of group
-        ['people', 'organization', 'location', 'other', 'O'],
-        ['work_for', 'located_in', 'live_in', 'orgbase_on', 'kill']
+        ['TRAJECTOR', 'LANDMARK', "NONE", "SPATIALINDICATOR"],
+        ['region', 'direction', 'distance','relation_none']
     ]
 
     tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
@@ -57,6 +57,7 @@ def inference(
     # using the pindex and index_select requires the above facts
     valuetables = []
     batch_size = None
+
     for table in tables:
         if len(table) == 0:
             continue
@@ -87,14 +88,17 @@ def inference(
                 assert batch_size == value.size()[0]
             values.append(value)
         values = torch.cat(values, dim=-1)  # (batch, len, ..., ncls)
+
         # then it has the same order as tables, where we can refer to related concept
         valuetables.append(values)
     # we need all columns to be placed, for all tables, before inference
     # now we have
 
     updated_valuetables_batch = [[] for _ in valuetables]
+
     # for each batch
     for batch_index in torch.arange(batch_size, device=values.device):
+
         inference_tables = []
         for values, table in zip(valuetables, tables):
             # use only current batch

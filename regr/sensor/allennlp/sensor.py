@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor
+from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor
 
 
 class SentenceSensor(ReaderSensor):
@@ -92,6 +92,45 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
             output_dim = prod(self.pre_dim) * 2 # assume flatten
         return (output_dim,)
 
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        mask = mask.view(ms[0], ms[1], 1).matmul(
+            mask.view(ms[0], 1, ms[1]))  # (b,l,l)
+        return mask
+
+class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
+    def create_module(self):
+        return SelfCartesianProduct3()
+
+    @property
+    def output_dim(self):
+        if len(self.pre_dim) == 0:
+            output_dim = 3
+        else:
+            output_dim = prod(self.pre_dim) * 3 # assume flatten
+        return (output_dim,)
+
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        #(b,l,l)
+        mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
+        mask2 = mask1.view(ms[0], ms[1], ms[1], 1).matmul(mask.view(ms[0], 1, 1, ms[1]))
+        
+        return mask2
 
 class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
     def create_module(self):
@@ -184,8 +223,32 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)
+
+
+class WordDistantSensor(SinglePreArgMaskedPairSensor):
+    def create_module(self):
+        return WordDistance(self.emb_num, self.window)
+
+    def __init__(
+        self,
+        emb_num: int,
+        window: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.emb_num = emb_num
+        self.window = window
+        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+
+      device, _ = guess_device(context).most_common(1)[0]
+      return super().forward(context)
 
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
@@ -198,8 +261,8 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)
 
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
@@ -237,5 +300,5 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        with torch.cuda.device(device):
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)

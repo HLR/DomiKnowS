@@ -1,6 +1,6 @@
 import os
 from regr.graph.allennlp import AllenNlpGraph
-from regr.sensor.allennlp.sensor import SequenceSensor, TokenInSequenceSensor, LabelSensor, CartesianProductSensor
+from regr.sensor.allennlp.sensor import SequenceSensor, TokenInSequenceSensor, LabelSensor, CartesianProductSensor,SentenceSensor
 from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
 from allennlp.data import Vocabulary
 

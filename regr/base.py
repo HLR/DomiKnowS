@@ -78,6 +78,7 @@ class Named(Scoped):
         Scoped.__init__(self, blocking=False)
         self.name = name
 
+
     def __repr__(self):
         cls = type(self)
         with self.scope() as detailed:
@@ -88,6 +89,7 @@ class Named(Scoped):
             else:
                 repr_str = '{class_name}(name=\'{name}\')'.format(class_name=cls.__name__,
                                                                   name=self.name)
+
         return repr_str
 
 
@@ -130,6 +132,7 @@ class AutoNamed(Named):
         cls._names[name] += 1
         self.name = name
         cls._objs[name] = self
+
 
     def __init__(self, name=None):
         Named.__init__(self, name)  # temporary name may apply
