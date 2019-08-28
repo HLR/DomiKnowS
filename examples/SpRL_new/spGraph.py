@@ -6,7 +6,6 @@ Concept.clear()
 with Graph('spLanguage') as splang_Graph:
     splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
 
-
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
         word = Concept(name ='word')
@@ -40,7 +39,6 @@ with Graph('spLanguage') as splang_Graph:
 
         triplet = Concept(name='triplet')
         region = Concept(name='region')
-
         region.is_a(triplet)
         relation_none= Concept(name='relation_none')
         relation_none.is_a(triplet)

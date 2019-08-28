@@ -12,12 +12,6 @@ config = {
         'embedding_dim': 8,
         'ngram': 5,
         'dropout': 0.5,
-        'pretrained_files': {
-            'word': 'data/glove.6B/glove.6B.50d.txt'
-        },
-        'pretrained_dims': {
-            'word': 50
-        },
         'graph': {
             'balance_factor': 0.25,
             'label_smoothing': 0.1,
@@ -27,15 +21,23 @@ config = {
         }
     },
     'Train': {
-        'pretrained_files':
-            None,
+        'pretrained_files': None,
         'trainer':{
-            'lr':0.001,
-            'wd':0.0001,
-            'batch': 8,
-            'epoch': 50,
+            'num_epochs': 50,
             'patience': None,
             'serialization_dir':None
+        },
+        'optimizer': {
+            'type': 'adam',
+            'lr': 0.001,
+            'weight_decay': 0.0001
+        },
+        'scheduler': {
+            'type': 'reduce_on_plateau',
+            'patience': 10
+        },
+        'iterator': {
+            'batch_size': 8,
         }
     }
 }
