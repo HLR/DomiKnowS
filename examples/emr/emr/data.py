@@ -6,6 +6,8 @@ from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, De
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
 from regr.data.allennlp.reader import SensableReader, keep_keys
 import cls
+from typing import Iterator
+from allennlp.data import Instance
 from .conll import Conll04CorpusReader
 from typing import Iterator
 from allennlp.data import Instance
@@ -98,14 +100,11 @@ class Conll04Reader(SensableReader):
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
+      
     def _read(self, *args, **kwargs) -> Iterator[Instance]:
-
         for raw_sample in self.raw_read(*args, **kwargs):
-            raw_sample=self.negative_entity_generation(raw_sample)
+            #raw_sample=self.negative_entity_generation(raw_sample)
             yield self._to_instance(raw_sample)
-
-
-
 
     def negative_entity_generation(self,raw_sample):
         temp_num=0
