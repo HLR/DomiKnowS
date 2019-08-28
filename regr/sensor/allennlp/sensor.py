@@ -223,11 +223,33 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)
+
+
+class WordDistantSensor(SinglePreArgMaskedPairSensor):
+    def create_module(self):
+        return WordDistance(self.emb_num, self.window)
+
+    def __init__(
+        self,
+        emb_num: int,
+        window: int,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.emb_num = emb_num
+        self.window = window
+        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+
+      device, _ = guess_device(context).most_common(1)[0]
+      return super().forward(context)
+
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -239,12 +261,9 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
     ) -> Any:
         #import pdb; pdb.set_trace()
         device, _ = guess_device(context).most_common(1)[0]
-        
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)
+
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
@@ -281,9 +300,5 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         context: Dict[str, Any]
     ) -> Any:
         device, _ = guess_device(context).most_common(1)[0]
-        
-        if device.type == 'cuda':
-            with torch.cuda.device(device):
-                return super().forward(context)
-        else:
-            return super().forward(context)
+        self.module.main_module.default_device = device
+        return super().forward(context)

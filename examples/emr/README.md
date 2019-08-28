@@ -48,6 +48,8 @@ By [solving the generated ILP problem](../../regr/solver/ilpSelectClassification
 
 ## Run the example
 
+**Be sure to run anything in this instruction from current directory `examples/emr`, rather than from the project root.**
+
 ### Prepare
 
 #### Tools
@@ -68,14 +70,14 @@ sudo python3 -m pip install -r requirements.txt
 
 #### Data
 
-The Conll04 data is located in [`data/EntityMentionRelation/conll.corp`](data/EntityMentionRelation/conll.corp).
+The Conll04 data is located in [`data/EntityMentionRelation/conll04.corp`](data/EntityMentionRelation/conll04.corp).
 Please consider resplit the data set.
 A handy tool `conll_split` it provided in this example to split dataset for n-fold corss-validation.
 ```bash
-python3 -m emr.conll_split data/EntityMentionRelation/conll.corp
+python3 -m emr.conll_split data/EntityMentionRelation/conll04.corp
 ```
 
-It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
+It will generate the datasets for trainging and testing [`data/EntityMentionRelation/conll04.corp_<fold_id>_<train/test>.corp`](data/EntityMentionRelation/).
 For more options like folds or output format, please use `-h`: `python3 -m emr.conll_split -h`.
 
 
@@ -107,6 +109,16 @@ cum_count  1957.0  4479.0  5346.0  5459.0  5488.0  5503.0  5512.0  5512.0  5512.
 ```
 You can show statistics on splited data sets by replacing the file name in above command.
 
+#### Word2vec
+
+We use [GloVe](https://nlp.stanford.edu/projects/glove/) (glove.6B.50d) in this example.
+Please download [glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip) and extract to `data/glove.6B`.
+You can use the following commands
+```bash
+wget http://nlp.stanford.edu/data/glove.6B.zip
+unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "data/glove.6B"
+```
+You can also download and extract other word representation, and setup in [`emr/config.py`](emr/config.py) correspondingly.
 
 ### The example
 
@@ -151,10 +163,10 @@ Usually last 1000 lines, with option `-n 1000`, is enough for one solution.
 ### Evaluation
 
 To evaluate a trained model with specific dataset,
-```
+```bash
 python3 -m emr.emr_testing -m log.<starting date and time> -d <path to data corp> -b <batch size>
 ```
 You may want to avoid using GPU because they are used by a training procees. Here is a complete example:
-```
+```bash
 CUDA_VISIBLE_DEVICES=none python3 -m emr.emr_testing -m ./log.20190724-174229 -d ./data/EntityMentionRelation/conll04.corp_1_test.corp -b=16
 ```

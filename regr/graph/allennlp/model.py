@@ -12,7 +12,7 @@ from .metrics import Epoch
 
 from .. import Graph
 from ..property import Property
-from ...utils import prod
+from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
 from ...solver.allennlp.inference import inference
@@ -23,23 +23,6 @@ DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
 
 
 DataInstance = Dict[str, Tensor]
-
-
-def get_prop_result(prop, data):
-    vals = []
-    mask = None
-    for name, sensor in prop.items():
-        sensor(data)
-        if hasattr(sensor, 'get_mask'):
-            if mask is None:
-                mask = sensor.get_mask(data)
-            else:
-                assert mask == sensor.get_mask(data)
-        tensor = data[sensor.fullname]
-        vals.append(tensor)
-    label = vals[0]  # TODO: from readersensor
-    pred = vals[1]  # TODO: from learner
-    return label, pred, mask
 
 
 def update_metrics(
@@ -60,7 +43,7 @@ class GraphModel(Model):
         balance_factor: float = 0.5,
         label_smoothing: float = 0.1,
         focal_gamma: float = 2.,
-        inference_interval: int = 10,
+        inference_interval: int = 50,
         inference_training_set: bool = False
     ) -> None:
         super().__init__(vocab)
@@ -215,7 +198,9 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
-        data = inference(self.graph, self.graph.solver, data, self.vocab)
+        #data = inference(self.graph, self.graph.solver, data, self.vocab)
+        data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
+        
         return data
 
     def loss_func(

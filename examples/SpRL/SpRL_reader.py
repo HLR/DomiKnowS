@@ -28,10 +28,10 @@ def parseSprlXML(sprlxmlfile):
              if child.tag == 'TEXT':
                  sentence_dic[child.tag] = child.text
              elif child.tag == 'LANDMARK' or child.tag == 'TRAJECTOR':
-                if "text" in child.attrib:
-                     sentence_dic[child.tag] = child.attrib["text"]
+                if "lemma.py" in child.attrib:
+                     sentence_dic[child.tag] = child.attrib["lemma.py"]
                      if "start" in child.attrib:
-                         padded_str = ' ' * int(child.attrib["start"]) + child.attrib["text"]
+                         padded_str = ' ' * int(child.attrib["start"]) + child.attrib["lemma.py"]
                          sentence_dic[child.tag + "padded"] = padded_str
 
          sentences_list.append(sentence_dic)
