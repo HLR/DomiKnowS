@@ -1,6 +1,6 @@
 # ILP Solver based on constrains extracted from ontology
 
-The OWL ontology, on which the learning system graph was build is loaded into the ilpOntSolver and parsed. 
+The OWL ontology, on which the learning system graph was build is loaded into the ilpOntSolver and parsed using owlready2. 
 
 The OWL ontology language allows to specify constrains on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). The solver extracts these constrains.   
 
@@ -40,10 +40,9 @@ The solver is using this module's methods to add ILP constrains to the ILP model
 
 - **[disjonitUnion](https://www.w3.org/TR/owl2-syntax/#Disjoint_Union_of_Class_Expressions "OWL example of disjointUnion of classes")** statement between classes *Concept1*, *Concept2*, *Concept3*, ... is Not yet supported by owlready2 Python ontology parser used inside the solver
 
-
 - **[oneOf](https://www.w3.org/TR/owl2-syntax/#Enumeration_of_Individuals "OWL example of enumeration of individuals for classes")** statements for a class *Concept* in ontology 
    
-## Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)
+# Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)
 
 - **[domain](https://www.w3.org/TR/owl2-syntax/#Object_Property_Domain "OWL example of domain statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
 
