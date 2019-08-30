@@ -32,6 +32,7 @@ else:
     from .config import Config
     from .utils import seed
 
+
 #### "*Ontology Declaration*" is the first step in our pipeline.
 #### A graph of the concepts, representing the ontology in this application, is declared.
 #### It can be compile from standard ontology formats like `OWL`, writen with python grammar directly, or combine both way.
@@ -42,7 +43,6 @@ def ontology_declaration():
         from graph import graph
     else:
         from .graph import graph
-        
     return graph
 
 
