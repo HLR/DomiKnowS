@@ -1170,7 +1170,7 @@ class ilpOntSolver:
             # get inheritance rank
             in_rank = 0
             for is_a in concept.is_a():
-                rank += concept_rank(is_a.dst)
+                in_rank += concept_rank(is_a.dst)
             # get self rank
             rank = len(concept.has_a())
             # TODO: it would be better to have new syntax to support override
