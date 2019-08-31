@@ -1168,6 +1168,8 @@ class ilpOntSolver:
 
         def concept_rank(concept):
             rank = len(concept.has_a())
+            if rank > 0: # TODO: need new syntax to support override
+                return rank
             for is_a in concept.is_a():
                 rank += concept_rank(is_a.dst)
             return rank or 1
