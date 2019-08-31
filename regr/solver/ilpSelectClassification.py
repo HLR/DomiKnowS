@@ -1167,11 +1167,16 @@ class ilpOntSolver:
         prop_dict = defaultdict(list)
 
         def concept_rank(concept):
-            rank = len(concept.has_a())
-            if rank > 0: # TODO: need new syntax to support override
-                return rank
+            # get inheritance rank
+            in_rank = 0
             for is_a in concept.is_a():
                 rank += concept_rank(is_a.dst)
+            # get self rank
+            rank = len(concept.has_a())
+            # TODO: it would be better to have new syntax to support override
+            # determine override condition
+            if in_rank > rank:
+                rank = in_rank
             return rank or 1
 
         for prop in graph.poi:
