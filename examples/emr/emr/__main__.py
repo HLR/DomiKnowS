@@ -33,7 +33,7 @@ def main():
             from emr_full import main
         else:
             from .emr_full import main
-
+    return main()
 
 
 if __name__ == '__main__':
