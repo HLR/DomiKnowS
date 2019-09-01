@@ -946,7 +946,7 @@ class ilpOntSolver:
             
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
     
         if self.ilpSolver == None:
             self.myLogger.info('ILP solver not provided - returning unchanged results')
@@ -1167,9 +1167,16 @@ class ilpOntSolver:
         prop_dict = defaultdict(list)
 
         def concept_rank(concept):
-            rank = len(concept.has_a())
+            # get inheritance rank
+            in_rank = 0
             for is_a in concept.is_a():
-                rank += concept_rank(is_a.dst)
+                in_rank += concept_rank(is_a.dst)
+            # get self rank
+            rank = len(concept.has_a())
+            # TODO: it would be better to have new syntax to support override
+            # determine override condition
+            if in_rank > rank:
+                rank = in_rank
             return rank or 1
 
         for prop in graph.poi:
@@ -1373,8 +1380,6 @@ def main():
 def mainOld():
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
 
-    test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
-
     tokenList = ["John", "works", "for", "IBM"]
     conceptNamesList = ["people", "organization", "other", "location", "O"]
     relationNamesList = ["work_for", "live_in", "located_in"]
@@ -1507,9 +1512,7 @@ def sprlMain():
     # Relation GT:
     # ("stairs", "About 20 kids ", "on") : direction (and other? @Joslin please confirm if there is any other)
     # ("stairs", "About 20 kids", "on") : direction
-    
-    test_phrase = [(phrase, 'NP') for phrase in phrases] # Not feasible to have POS-tag. Usually they are noun phrase.
-    
+
     #------------------
     # sample inference setup
     #------------------
@@ -1594,10 +1597,10 @@ def sprlMain():
     solver = ilpOntSolver.getInstance(splang_Graph)
     
     phrase_table, _, relation_triple_tables = solver.calculateILPSelection(
-    test_phrase,       # original phrase, for reference purpose
-    phrase_table,      # single concept table
-    None,              # relation as tuple of concepts, used in EMR
-    relation_triple_tables)   # relation as triplet of concetps, used in SPRL
+        phrases,       # original phrase, for reference purpose
+        phrase_table,      # single concept table
+        None,              # relation as tuple of concepts, used in EMR
+        relation_triple_tables)   # relation as triplet of concetps, used in SPRL
 
     print("\nResults - ")
     print(phrase_table)

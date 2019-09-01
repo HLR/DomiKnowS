@@ -1,31 +1,24 @@
 import pytest
 
 @pytest.fixture()
-def ilp_input(request):
+def emr_input(request):
     import numpy as np
     import pandas as pd
-
-    test_phrase = [("John", "NNP"),
-                   ("works", "VBN"),
-                   ("for", "IN"),
-                   ("IBM", "NNP")]
 
     tokenList = ["0_John", "1_works", "2_for", "3_IBM"]
     conceptNamesList = ["people", "organization", "other", "location", "O"]
     relationNamesList = ["work_for", "live_in", "located_in"]
 
     # tokens
-    #                         peop  org   other loc   O
-    phrase_table = np.array([[0.70, 0.98, 0.95, 0.02, 0.00],  # John
-                             [0.00, 0.50, 0.40, 0.60, 0.90],  # works
-                             [0.02, 0.03, 0.05, 0.10, 0.90],  # for
-                             [0.92, 0.93, 0.93, 0.90, 0.00],  # IBM
-                             ])
-    test_graphResultsForPhraseToken = pd.DataFrame(
-        phrase_table, index=tokenList, columns=conceptNamesList)
-
+    test_graphResultsForPhraseToken = {}
+    #                                                  John  works for   IBM
+    test_graphResultsForPhraseToken["people"] =       [0.7 , 0.  , 0.02, 0.92]
+    test_graphResultsForPhraseToken["organization"] = [0.98, 0.5 , 0.03, 0.93]
+    test_graphResultsForPhraseToken["other"] =        [0.95, 0.4 , 0.05, 0.93]
+    test_graphResultsForPhraseToken["location"] =     [0.02, 0.6 , 0.1 , 0.9 ]
+    test_graphResultsForPhraseToken["O"] =            [0.  , 0.9 , 0.9 , 0.  ]
+    
     test_graphResultsForPhraseRelation = dict()
-
     # work_for
     #                                    John  works for   IBM
     work_for_relation_table = np.array([[0.50, 0.20, 0.20, 0.63],  # John
@@ -33,9 +26,7 @@ def ilp_input(request):
                                         [0.02, 0.03, 0.05, 0.10],  # for
                                         [0.26, 0.20, 0.10, 0.90],  # IBM
                                         ])
-    work_for_current_graphResultsForPhraseRelation = pd.DataFrame(
-        work_for_relation_table, index=tokenList, columns=tokenList)
-    test_graphResultsForPhraseRelation["work_for"] = work_for_current_graphResultsForPhraseRelation
+    test_graphResultsForPhraseRelation["work_for"] = work_for_relation_table
 
     # live_in
     #                                   John  works for   IBM
@@ -44,9 +35,7 @@ def ilp_input(request):
                                        [0.02, 0.03, 0.05, 0.10],  # for
                                        [0.10, 0.20, 0.10, 0.00],  # IBM
                                        ])
-    live_in_current_graphResultsForPhraseRelation = pd.DataFrame(
-        live_in_relation_table, index=tokenList, columns=tokenList)
-    test_graphResultsForPhraseRelation["live_in"] = live_in_current_graphResultsForPhraseRelation
+    test_graphResultsForPhraseRelation["live_in"] = live_in_relation_table
 
     # located_in
     #                                      John  works for   IBM
@@ -55,26 +44,24 @@ def ilp_input(request):
                                           [0.02, 0.03, 0.05, 0.10],  # for
                                           [0.03, 0.20, 0.10, 0.00],  # IBM
                                           ])
-    located_in_current_graphResultsForPhraseRelation = pd.DataFrame(
-        located_in_relation_table, index=tokenList, columns=tokenList)
-    test_graphResultsForPhraseRelation["located_in"] = located_in_current_graphResultsForPhraseRelation
+    test_graphResultsForPhraseRelation["located_in"] = located_in_relation_table
 
-    yield test_phrase, tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation
+    yield tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation
 
 
 @pytest.mark.gurobi
-def test_main_emr_owl(ilp_input):
+def test_main_emr_owl(emr_input):
     from regr.solver.ilpSelectClassification import ilpOntSolver
     from regr.graph import Graph
 
-    test_phrase, tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = ilp_input
+    tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 
     # ------Call solver -------
     test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
     
     myilpOntSolver = ilpOntSolver.getInstance(test_graph)
-    tokenResult, relationsResult = myilpOntSolver.calculateILPSelection(
-        test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    tokenResult, relationsResult, _ = myilpOntSolver.calculateILPSelection(
+        tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
 
     # -------Evaluate results
     # token results:
@@ -101,18 +88,18 @@ def test_main_emr_owl(ilp_input):
 
 
 @pytest.mark.gurobi
-def test_main_ont(ilp_input):
+def test_main_ont(emr_input):
     from regr.solver.ilpSelectClassification import ilpOntSolver
     from regr.graph import Graph
 
-    test_phrase, tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = ilp_input
+    tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 
     # ------Call solver -------
     test_graph = Graph(iri='http://trips.ihmc.us/ont', local='./examples/emr/')
     
     myilpOntSolver = ilpOntSolver.getInstance(test_graph)
-    tokenResult, relationsResult = myilpOntSolver.calculateILPSelection(
-        test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
+    tokenResult, relationsResult, _ = myilpOntSolver.calculateILPSelection(
+        tokenList, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation)
 
     # -------Evaluate results
     # token results:
