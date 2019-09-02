@@ -4,11 +4,11 @@ from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, Lo
 
 from regr.graph.allennlp import AllenNlpGraph
 from SpRL_reader import SpRLSensorReader as Reader
+#from reader_new import SpRLSensorReader as Reader
 from config import Config
 from utils import seed
 
 
-REGR_DEBUG=1
 def ontology_declaration():
     from spGraph import splang_Graph
     return splang_Graph
@@ -47,11 +47,10 @@ def model_declaration(graph, config):
 
     word['all'] = ConcatSensor(word['raw'], word['dep'], word['pos'], word['lemma'], word['headword'], word['phrasepos'])
     #word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = MLPLearner(word['all'], layers=2, dropout=config.dropout)
+    word['encode'] = MLPLearner(config.encode.layers, word['all'], dropout=config.dropout)
 
     landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)
-
     spatialindicator['label'] = LabelSensor(reader, 'SPATIALINDICATOR', output_only=True)
     none['label'] = LabelSensor(reader, 'NONE', output_only=True)
 
@@ -60,14 +59,22 @@ def model_declaration(graph, config):
     spatialindicator['label'] = LogisticRegressionLearner(word['encode'])
     none['label'] = LogisticRegressionLearner(word['encode'])
 
-    word['compact'] = MLPLearner([64,], word['encode'])
+    word['compact'] = MLPLearner([config.compact,], word['encode'], activation=None)
     triplet['cat'] = CartesianProduct3Sensor(word['compact'])
-    triplet['raw_dist'] = TripPhraseDistSensor(16, 64,word['raw'])
-    triplet['pos_dist'] = TripPhraseDistSensor(16, 64, word['pos'])
-    triplet['lemma_dist'] =TripPhraseDistSensor(16, 64, word['lemma'])
-    triplet['headword_dist'] = TripPhraseDistSensor(16, 64, word['headword'])
-    triplet['phrasepos_dist'] = TripPhraseDistSensor(16, 64, word['phrasepos'])
-    triplet['all'] = ConcatSensor(triplet['cat'], triplet['raw_dist'], triplet['pos_dist'], triplet['lemma_dist'], triplet['headword_dist'], triplet['phrasepos_dist'])
+    #triplet['compact_dist'] = TripPhraseDistSensor(word['compact'])
+    triplet['raw_dist'] = TripPhraseDistSensor(word['raw'])
+    triplet['pos_dist'] = TripPhraseDistSensor(word['pos'])
+    triplet['lemma_dist'] =TripPhraseDistSensor(word['lemma'])
+    triplet['headword_dist'] = TripPhraseDistSensor(word['headword'])
+    triplet['phrasepos_dist'] = TripPhraseDistSensor(word['phrasepos'])
+    triplet['all'] = ConcatSensor(triplet['cat'],
+                                  #triplet['compact_dist'],
+                                  triplet['raw_dist'],
+                                  triplet['pos_dist'],
+                                  triplet['lemma_dist'],
+                                  triplet['headword_dist'],
+                                  triplet['phrasepos_dist'],
+                                 )
 
     triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
     region['label'] = LabelSensor(reader, 'region', output_only=True)
@@ -81,7 +88,7 @@ def model_declaration(graph, config):
     direction['label'] = LogisticRegressionLearner(triplet['all'])
     distance['label'] = LogisticRegressionLearner(triplet['all'])
 
-    lbp = AllenNlpGraph(graph)
+    lbp = AllenNlpGraph(graph, **config.graph)
     return lbp
 
 
@@ -93,7 +100,8 @@ def main():
 
     seed()
     lbp.train(Config.Data, Config.Train)
-    lbp.save('/tmp/emr')
+    save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
+    lbp.save(save_to, config=Config)
 
 ####
 """

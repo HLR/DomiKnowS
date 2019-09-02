@@ -220,48 +220,23 @@ class PairTokenDependencyRelation(BaseModule):
         return dep
 
 
-class TripPhraseDistRelation(BaseModule):
-    def __init__(self, emb_num, window):
-        BaseModule.__init__(self, emb_num)
-        self.emb_num = emb_num # must define emb_num (to have lb and ub) before window
-
+class TripPhraseDistRelation(Module):
     def forward(self, x):
-        batch = len(x)
-        length = max(len(xx) for xx in x)
-        dist = torch.ones(batch, length, length, length, self.emb_num) * -1
+        #import pdb; pdb.set_trace()
+        batch, length, feat = x.shape
+        device = x.device
+        dist = torch.ones(batch, length, length, length, feat * 2, device=device) * 0
 
-        for phraselist in x:
-            batch_num=0
-            combination=list(itertools.combinations(range(0, len(phraselist)), 3))
-            for each in combination:
-                temp_list1 = []
-                temp_list2 = []
-                start = each[0]
-                middle = each[1]
-                end = each[2]
+        combination = list(itertools.combinations(range(0, length), 3))
+        # start < middle < end is guaranteed by combination
+        for start, middle, end in combination:
+            # (batch, start:middle, feat)
+            s2m = x.index_select(1, torch.arange(start, middle, device=device))
+            m2e = x.index_select(1, torch.arange(middle, end, device=device))
+            # (batch, feat)
+            dist[:, start, middle, end, :] = torch.cat((s2m.mean(dim=1), m2e.mean(dim=1)), dim=1)
 
-                if middle-start==1 and end-middle == 1:
-                    temp1_vector = phraselist[start]
-                    temp2_vector = phraselist[middle]
-                    dist[batch_num, start, middle, end] = torch.cat((temp1_vector,temp2_vector))
-
-                else:
-                    for index in range(start, middle):
-                            temp_list1.append(index)
-                    for index in range(middle, end):
-                            temp_list2.append(index)
-                    dist_vector = tuple((tuple(temp_list1),tuple(temp_list2)))
-                    temp3_vector = torch.zeros(8)
-                    temp4_vector = torch.zeros(8)
-                    for vector in dist_vector[0]:
-                            temp3_vector.add_(phraselist[vector])
-                    for vector in dist_vector[1]:
-                            temp4_vector.add_(phraselist[vector])
-                    dist[batch_num, start, middle, end] = torch.cat((temp3_vector, temp4_vector))
-
-            batch_num+=1
         return dist
-
 
 
 class LowestCommonAncestor(Module):

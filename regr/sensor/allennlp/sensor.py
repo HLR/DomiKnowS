@@ -229,26 +229,26 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
 
 class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
-        return TripPhraseDistRelation(self.emb_num, self.window)
+        return TripPhraseDistRelation()
 
-    def __init__(
-        self,
-        emb_num: int,
-        window: int,
-        pre: Property,
-        output_only: bool=False
-    ) -> NoReturn:
-        self.emb_num = emb_num
-        self.window = window
-        SinglePreArgMaskedPairSensor.__init__(self, pre, output_only=output_only)
+    @property
+    def output_dim(self):
+        return (self.pre_dim[0] * 2,)
 
-    def forward(
-        self,
-        context: Dict[str, Any]
-    ) -> Any:
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
 
-      device, _ = guess_device(context).most_common(1)[0]
-      return super().forward(context)
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        #(b,l,l)
+        mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
+        mask2 = mask1.view(ms[0], ms[1], ms[1], 1).matmul(mask.view(ms[0], 1, 1, ms[1]))
+
+        return mask2
 
 
 class TokenDepSensor(SinglePreArgMaskedPairSensor):
