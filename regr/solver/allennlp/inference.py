@@ -5,7 +5,7 @@ import pandas as pd
 from ...utils import printablesize
 from ...graph import Graph
 from ...sensor.allennlp.sensor import SentenceEmbedderSensor
-from ..ilpSelectClassification import ilpOntSolver
+from ..ilpOntSolver import ilpOntSolver
 
 
 DataInstance = Dict[str, Tensor]
