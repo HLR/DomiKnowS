@@ -8,7 +8,7 @@ from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
 
 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
-from .metrics import Epoch
+from .metrics import Epoch, DatasetType
 
 from .. import Graph
 from ..property import Property
@@ -60,6 +60,8 @@ class GraphModel(Model):
         self.graph = graph
 
         self.meta.append(('epoch', Epoch()))
+        self.meta.append(('type', DatasetType()))
+
         whole_metrics = {
             'Accuracy': CategoricalAccuracy,
         }
@@ -172,8 +174,8 @@ class GraphModel(Model):
             pretty_name = '{}{:>{max_len}}'.format(lspace, name, max_len=max_len)
             pretty_metrics[pretty_name] = metric
 
-        for metric_name, metric in self.meta:
-            pretty_metrics['\n[ {} ]'.format(metric_name)] = metric.get_metric(reset)
+        for i, (metric_name, metric) in enumerate(self.meta):
+            pretty_metrics['{}[ {} ]'.format('\n' if not i else '', metric_name)] = metric.get_metric(reset)
         return pretty_metrics
 
     def _update_loss(self, data):

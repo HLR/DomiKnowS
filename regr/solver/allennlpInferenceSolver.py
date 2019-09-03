@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from ..graph import Graph
 from ..sensor.allennlp.sensor import SentenceEmbedderSensor
+from ..sensor.allennlp.base import AllenNlpLearner
 from ..utils import get_prop_result
 from .ilpOntSolver import ilpOntSolver
 
@@ -148,6 +149,7 @@ class AllennlpInferenceSolver(ilpOntSolver):
                 # Put it back finally
                 #import pdb; pdb.set_trace()
                 data[prop.fullname] = logits_value
-                data[prop.sup.fullname] = logits_value
+                for name, learner in prop.find(AllenNlpLearner):
+                    data[learner.fullname] = logits_value
 
         return data
