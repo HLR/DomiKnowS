@@ -3,8 +3,8 @@ from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, Lo
 
 
 from regr.graph.allennlp import AllenNlpGraph
-from SpRL_reader import SpRLSensorReader as Reader
-#from reader_new import SpRLSensorReader as Reader
+#from SpRL_reader import SpRLSensorReader as Reader
+from reader_new import SpRLSensorReader as Reader
 from config import Config
 from utils import seed
 
@@ -46,8 +46,8 @@ def model_declaration(graph, config):
     word['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
     word['all'] = ConcatSensor(word['raw'], word['dep'], word['pos'], word['lemma'], word['headword'], word['phrasepos'])
-    #word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = MLPLearner(config.encode.layers, word['all'], dropout=config.dropout)
+    word['ngram'] = NGramSensor(config.ngram, word['all'])
+    word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
 
     landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)

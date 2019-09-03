@@ -13,6 +13,7 @@ config = {
     'Model': {  # model setting
         'embedding_dim': 8,
         'dropout': 0.5,
+        'ngram': 5,
         'encode': {
             'layers': [64, 64],
         },
@@ -23,13 +24,7 @@ config = {
             'focal_gamma': 2,
             'inference_interval': 50,
             'inference_training_set': False
-        },
-        'pretrained_files':{
-            'word': 'data/glove.6B.50d.txt'
-        },
-        'pretrained_dims': {
-            'word': 50
-        },
+        }
     },
     'Train': {
         'pretrained_files':{
