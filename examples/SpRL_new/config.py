@@ -27,13 +27,11 @@ config = {
         }
     },
     'Train': {
-        'pretrained_files':{
-            'word': 'data/glove.6B.50d.txt'
-        },
+        'pretrained_files': None,
         'trainer':{
             'num_epochs': 50,
             'patience': None,
-            'serialization_dir':'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
             #'serialization_dir':None,
         },
         'optimizer': {

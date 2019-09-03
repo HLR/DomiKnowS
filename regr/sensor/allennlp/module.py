@@ -225,16 +225,17 @@ class TripPhraseDistRelation(Module):
         #import pdb; pdb.set_trace()
         batch, length, feat = x.shape
         device = x.device
-        dist = torch.ones(batch, length, length, length, feat * 2, device=device) * 0
+        dist = torch.zeros(batch, length, length, length, feat * 2, device=device)
 
-        combination = list(itertools.combinations(range(0, length), 3))
-        # start < middle < end is guaranteed by combination
-        for start, middle, end in combination:
-            # (batch, start:middle, feat)
-            s2m = x.index_select(1, torch.arange(start, middle, device=device))
-            m2e = x.index_select(1, torch.arange(middle, end, device=device))
+        permutations = itertools.permutations(range(0, length), 3)
+        # permutations ensure no repeat index at the same time
+        for lm, tr, sp in permutations:
+            # (batch, lm:sp, feat)
+            lm2sp = x[:, min(lm, sp):max(lm, sp), :]
+            # (batch, tr:sp, feat)
+            tr2sp = x[:, min(tr, sp):max(tr, sp), :]
             # (batch, feat)
-            dist[:, start, middle, end, :] = torch.cat((s2m.mean(dim=1), m2e.mean(dim=1)), dim=1)
+            dist[:, lm, tr, sp, :] = torch.cat((lm2sp.mean(dim=1), tr2sp.mean(dim=1)), dim=1)
 
         return dist
 

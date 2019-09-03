@@ -24,7 +24,7 @@ nlpmodel = spacy.load("en_core_web_sm")
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
     relation_names = ['region', 'direction', 'distance', 'relation_none']
-    triplet_neames = ['is_triplet', 'is_not_triplet']
+    triplet_names = ['is_triplet', 'is_not_triplet']
 
     def __init__(self) -> None:
         super().__init__(lazy=False)
@@ -445,9 +445,9 @@ class SpRLBinaryReader(SpRLReader):
 
             relation_labels.append(rel[0])
             if rel[0] != "relation_none":
-                triplet_labels.append(self.triplet_neames[0])
+                triplet_labels.append(self.triplet_names[0])
             else:
-                triplet_labels.append(self.triplet_neames[1])
+                triplet_labels.append(self.triplet_names[1])
 
         for relation_name in self.relation_names:
             cur_indices = []
@@ -461,7 +461,7 @@ class SpRLBinaryReader(SpRLReader):
                 padding_value=0
             )
 
-        for triplet_name in self.triplet_neames:
+        for triplet_name in self.triplet_names:
             cur_indices = []
             for index, label in zip(relation_indices, triplet_labels):
                 if label == triplet_name:
@@ -528,9 +528,9 @@ class NewAdjacencyField(AdjacencyField):
         return adjacency_field
 
 
-sp = SpRLReader()
+#sp = SpRLReader()
 #sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml'))
-sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
+#sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
 # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 

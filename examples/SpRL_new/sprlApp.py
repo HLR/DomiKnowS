@@ -17,9 +17,8 @@ def ontology_declaration():
 def model_declaration(graph, config):
     graph.detach()
 
-
     sentence = graph['linguistic/sentence']
-    word = graph['linguistic/phrase']
+    phrase = graph['linguistic/phrase']
 
     landmark = graph['application/LANDMARK']
     trajector = graph['application/TRAJECTOR']
@@ -28,45 +27,45 @@ def model_declaration(graph, config):
 
 
     region = graph['application/region']
-    relation_none=graph['application/relation_none']
+    relation_none = graph['application/relation_none']
     direction = graph['application/direction']
-    distance=graph['application/distance']
+    distance = graph['application/distance']
 
-    triplet=graph['application/triplet']
+    triplet = graph['application/triplet']
     # is_not_triplet=graph['application/is_not_triplet']
 
     reader = Reader()
 
     sentence['raw'] = SentenceSensor(reader, 'sentence')
-    word['raw']=SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
-    word['dep']=SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
-    word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
-    word['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])
-    word['headword'] = SentenceEmbedderLearner('headword_tag', config.embedding_dim, sentence['raw'])
-    word['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
+    phrase['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    phrase['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
+    phrase['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
+    phrase['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])
+    phrase['headword'] = SentenceEmbedderLearner('headword_tag', config.embedding_dim, sentence['raw'])
+    phrase['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
-    word['all'] = ConcatSensor(word['raw'], word['dep'], word['pos'], word['lemma'], word['headword'], word['phrasepos'])
-    word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = RNNLearner(word['ngram'], layers=2, dropout=config.dropout)
+    phrase['all'] = ConcatSensor(phrase['raw'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
+    phrase['ngram'] = NGramSensor(config.ngram, phrase['all'])
+    phrase['encode'] = RNNLearner(phrase['ngram'], layers=2, dropout=config.dropout)
 
     landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)
     spatialindicator['label'] = LabelSensor(reader, 'SPATIALINDICATOR', output_only=True)
     none['label'] = LabelSensor(reader, 'NONE', output_only=True)
 
-    landmark['label'] = LogisticRegressionLearner(word['encode'])
-    trajector['label'] = LogisticRegressionLearner(word['encode'])
-    spatialindicator['label'] = LogisticRegressionLearner(word['encode'])
-    none['label'] = LogisticRegressionLearner(word['encode'])
+    landmark['label'] = LogisticRegressionLearner(phrase['encode'])
+    trajector['label'] = LogisticRegressionLearner(phrase['encode'])
+    spatialindicator['label'] = LogisticRegressionLearner(phrase['encode'])
+    none['label'] = LogisticRegressionLearner(phrase['encode'])
 
-    word['compact'] = MLPLearner([config.compact,], word['encode'], activation=None)
-    triplet['cat'] = CartesianProduct3Sensor(word['compact'])
-    #triplet['compact_dist'] = TripPhraseDistSensor(word['compact'])
-    triplet['raw_dist'] = TripPhraseDistSensor(word['raw'])
-    triplet['pos_dist'] = TripPhraseDistSensor(word['pos'])
-    triplet['lemma_dist'] =TripPhraseDistSensor(word['lemma'])
-    triplet['headword_dist'] = TripPhraseDistSensor(word['headword'])
-    triplet['phrasepos_dist'] = TripPhraseDistSensor(word['phrasepos'])
+    phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
+    triplet['cat'] = CartesianProduct3Sensor(phrase['compact'])
+    #triplet['compact_dist'] = TripPhraseDistSensor(phrase['compact'])
+    triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
+    triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
+    triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
+    triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
+    triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
     triplet['all'] = ConcatSensor(triplet['cat'],
                                   #triplet['compact_dist'],
                                   triplet['raw_dist'],
@@ -93,7 +92,6 @@ def model_declaration(graph, config):
 
 
 def main():
-
     graph = ontology_declaration()
 
     lbp = model_declaration(graph, Config.Model)
@@ -102,6 +100,7 @@ def main():
     lbp.train(Config.Data, Config.Train)
     save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
     lbp.save(save_to, config=Config)
+
 
 ####
 """
