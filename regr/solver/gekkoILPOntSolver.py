@@ -686,7 +686,7 @@ class gekkoILPOntSolver(ilpOntSolver):
             
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
     
         if self.ilpSolver == None:
             self.myLogger.info('ILP solver not provided - returning unchanged results')

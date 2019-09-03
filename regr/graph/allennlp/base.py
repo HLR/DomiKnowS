@@ -17,6 +17,7 @@ from ...utils import WrapperMetaClass
 from ...solver import ilpOntSolverFactory
 from ...solver.ilpOntSolverFactory import ilpOntSolverFactory
 from ...solver.ilpOntSolver import ilpOntSolver
+from ...solver.allennlpInferenceSolver import AllennlpInferenceSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
 from .. import Graph, Property
@@ -36,7 +37,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     ):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
-        self.solver = ilpOntSolverFactory.getOntSolverInstance(self)
+        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
         self.solver_log_to(None)
         # do not invoke super().__init__() here
 
@@ -65,7 +66,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         return sensors
 
     def solver_log_to(self, log_path:str=None):
-        solver_logger = logging.getLogger(ilpOntSolver.__name__)
+        solver_logger = logging.getLogger(ilpOntSolver.__module__)
         solver_logger.propagate = False
         if DEBUG_TRAINING or True:
             solver_logger.setLevel(logging.DEBUG)

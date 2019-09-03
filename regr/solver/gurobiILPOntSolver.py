@@ -717,7 +717,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
     
         if self.ilpSolver == None:
             self.myLogger.info('ILP solver not provided - returning unchanged results')
@@ -735,7 +735,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(tripleRelation, graphResultsForPhraseTripleRelation[tripleRelation]))
 
         conceptNames = graphResultsForPhraseToken.keys()
-        tokens = [x for x, _ in phrase]
+        tokens = phrase
                     
         try:
             # Create a new Gurobi model

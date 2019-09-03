@@ -13,20 +13,29 @@ else:
 
 class ilpOntSolverFactory:
     __instances = {}
+    __classes = {}
     
+    @classmethod
+    def getClass(cls, *SolverClasses):
+        if SolverClasses not in cls.__classes:
+            class ImplClass(*SolverClasses): pass
+            cls.__classes[SolverClasses] = ImplClass
+        return cls.__classes[SolverClasses]
+
     @staticmethod
-    def getOntSolverInstance(graph, _iplConfig = ilpConfig):
+    def getOntSolverInstance(graph, *SupplementalClasses, _iplConfig = ilpConfig):
         if (graph is not None) and (graph.ontology is not None):
             
             if graph.ontology.iri not in ilpOntSolverFactory.__instances:
                 
                 if _iplConfig is not None:
                     if ilpConfig['ilpSolver'] == "Gurobi":
-                        ilpOntSolverFactory.__instances[graph.ontology.iri] = gurobiILPOntSolver()
+                        SolverClass = ilpOntSolverFactory.getClass(gurobiILPOntSolver, *SupplementalClasses)
                     elif ilpConfig['ilpSolver'] == "GEKKO":
-                        ilpOntSolverFactory.__instances[graph.ontology.iri] = gekkoILPOntSolver()
+                        SolverClass = ilpOntSolverFactory.getClass(gekkoILPOntSolver, *SupplementalClasses)
                     else:
-                        ilpOntSolverFactory.__instances[graph.ontology.iri] = dummyILPOntSolver()
+                        SolverClass = ilpOntSolverFactory.getClass(dummyILPOntSolver, *SupplementalClasses)
+                    ilpOntSolverFactory.__instances[graph.ontology.iri] = SolverClass()
 
                 ilpOntSolverFactory.__instances[graph.ontology.iri].setup_solver_logger() 
 

@@ -24,8 +24,6 @@ class ilpOntSolver(object):
 
     myIlpBooleanProcessor = None
     
-    DataInstance = Dict[str, Tensor]
-
     def setup_solver_logger(self, log_filename='ilpOntSolver.log'):
         logger = logging.getLogger(__name__)
     
@@ -44,7 +42,7 @@ class ilpOntSolver(object):
         
         print("Log file is in: ", ch.baseFilename)
         self.myLogger = logger
-            
+
     def loadOntology(self, ontologyURL, ontologyPathname=None):
         start = datetime.datetime.now()
         self.myLogger.info('')
@@ -83,9 +81,9 @@ class ilpOntSolver(object):
         self.myLogger.info('Finished loading ontology - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         return self.myOnto
+
+    @abc.abstractmethod
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None): pass
     
     @abc.abstractmethod
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation): pass
-    
-    @abc.abstractmethod
-    def inferSelection(self, graph: Graph, data: DataInstance, vocab=None) -> DataInstance: pass
+    def inferSelection(self, graph: Graph, *args, **kwargs): pass
