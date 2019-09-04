@@ -60,7 +60,9 @@ class AllennlpInferenceSolver(ilpOntSolver):
         for rank, props in prop_dict.items():
             for prop in props:
                 #name = '{}_{}'.format(prop.sup.name, prop.name)
-                name = prop.name  # current implementation has concept name in prop name
+                #name = prop.name  # current implementation has concept name in prop name
+                name = prop.sup.name # we need concept name to match that in OWL
+                # TODO: what if a concept has several properties to be predict?
                 # pred_logit - (b, l...*r, c) - for dim-c, [0] is neg, [1] is pos
                 # mask - (b, l...*r)
                 label, pred_logit, mask = get_prop_result(prop, data)
@@ -118,7 +120,7 @@ class AllennlpInferenceSolver(ilpOntSolver):
             result = defaultdict(dict)
             for rank, props in prop_dict.items():
                 for prop in props:
-                    name = prop.name
+                    name = prop.sup.name
                     # (l'...*r)
                     # return structure is a pd?
                     # result_table_list started from 0
@@ -129,7 +131,7 @@ class AllennlpInferenceSolver(ilpOntSolver):
         # put results back
         for rank, props in prop_dict.items():
             for prop in props:
-                name = prop.name
+                name = prop.sup.name
                 instance_value_list = []
                 for batch_index in range(batch_size):
                     # (l'...*r)
