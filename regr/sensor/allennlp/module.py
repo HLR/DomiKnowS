@@ -361,3 +361,50 @@ class Permute(Module):
 
     def forward(self, x):
         return x.permute(self.dims)
+
+
+class Uncap(Module):
+    def __init__(self, dim, pre_module=None):
+        Module.__init__(self)
+        self.dim = dim
+        self.pre_module = pre_module
+
+    def forward(self, x, mask):
+        if self.pre_module:
+            x = self.pre_module(x)
+
+        #import pdb; pdb.set_trace()
+        batch, en_len, feat = x.shape
+        device = x.device
+        # note that mask is generated to match this module already
+
+        # estimate ul
+        un_len = en_len ** (1. / self.dim)
+        # should always be a natural number if dim is matched as input config
+        # could be some slight different due to numerical stability
+        un_len = int(np.round(un_len))
+
+        dist = torch.zeros_like(x).reshape((batch, *((un_len,) * self.dim), feat))
+        # process each differnt length base on mask
+        for dd, xx, mm in zip(dist, x, mask):
+            # dd - (ul..., f)
+            # xx - (el, f)
+            # mm - (ul...,)
+
+            # ()
+            ull = mm.sum().float() ** (1. / 3)
+            ull = ull.round().int()
+
+            # convert ijk index to 1-d array index
+            def encap_index(*indices):
+                return sum(i * un_len ** j for j, i in enumerate(reversed(indices)))
+
+            # headfirst solution
+            # iter through all and move only the last dim together
+            for indices in itertools.product(range(ull), repeat=self.dim-1):
+                dd[indices] = xx[encap_index(*indices)]
+
+            # more efficient solution:
+            # try torch.unfold or torch.as_strided
+
+        return dist

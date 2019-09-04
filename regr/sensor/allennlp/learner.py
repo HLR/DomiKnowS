@@ -1,14 +1,15 @@
 from typing import List, Dict, Any, Union, NoReturn
 from collections.abc import Iterable
-import math
+import numpy as np
+import torch
 from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from torch.nn import Module, Dropout, Sequential, Linear, ZeroPad2d, Conv2d, LogSoftmax, ReLU
 from ...utils import prod
 from ...graph import Property
-from .base import AllenNlpLearner, SinglePreLearner, SinglePreMaskedLearner
+from .base import AllenNlpLearner, SinglePreLearner, SinglePreMaskedLearner, MaskedSensor
 from .sensor import SentenceSensor, SinglePreMaskedSensor, SentenceEmbedderSensor
-from .module import DropoutRNN, Permute
+from .module import DropoutRNN, Permute, Uncap
 
 
 class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
@@ -22,6 +23,37 @@ class SentenceEmbedderLearner(SentenceEmbedderSensor, AllenNlpLearner):
         )
         return BasicTextFieldEmbedder({self.key: self.embedding})
 
+
+class TripletEmbedderLearner(SentenceEmbedderLearner):
+    def create_module(self):
+        embedder = super().create_module()
+        uncapper = Uncap(3, embedder)
+        return uncapper
+
+    @property
+    def output_dim(self):
+        return (self.embedding_dim,)
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        return self.module(context[self.fullname], self.get_mask(context))
+
+    def get_mask(self, context: Dict[str, Any]):
+        en_mask = super().get_mask(context)
+        #import pdb; pdb.set_trace()
+        batch, en_len = en_mask.shape
+        un_len = en_len ** (1. / 3)
+        un_len = int(np.round(un_len))
+        # (b, ul, ul, ul)
+        un_mask = torch.zeros_like(en_mask).reshape((batch, un_len, un_len, un_len))
+        # (b,)
+        ul = en_mask.sum(dim=1).float() ** (1. / 3)
+        ul = ul.round().int()
+        for mm, ull in zip(un_mask, ul):
+            mm[:ull,:ull,:ull] = 1
+        return un_mask
 
 class RNNLearner(SinglePreMaskedLearner):
     def create_module(self):
@@ -113,8 +145,8 @@ class ConvLearner(MLPLearner):
         layers = []
         for dim_in, dim_out, kernel_size, activation, dropout in zip(dims[:-1], dims[1:], kernel_sizes, activations, dropouts):
             layers.append(Permute(0, 3, 1, 2)) # (b,l,l,c) -> (b,c,l,l)
-            padding_t = padding_l = math.floor((float(kernel_size) - 1) / 2)
-            padding_b = padding_r = math.ceil((float(kernel_size) - 1) / 2)
+            padding_t = padding_l = np.floor((float(kernel_size) - 1) / 2)
+            padding_b = padding_r = np.ceil((float(kernel_size) - 1) / 2)
             layers.append(ZeroPad2d(padding=(padding_l, padding_r, padding_t, padding_b)))
             layers.append(Conv2d(in_channels=dim_in, out_channels=dim_out, kernel_size=kernel_size))
             layers.append(Permute(0, 2, 3, 1)) # (b,c,l,l) -> (b,l,l,c)

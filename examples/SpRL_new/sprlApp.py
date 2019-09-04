@@ -1,5 +1,5 @@
 from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor,ConcatSensor,NGramSensor,CartesianProductSensor,TokenDepDistSensor,TokenDepSensor,TokenDistantSensor,TokenLcaSensor,TripPhraseDistSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner,MLPLearner,ConvLearner
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner,MLPLearner,ConvLearner,TripletEmbedderLearner
 
 
 from regr.graph.allennlp import AllenNlpGraph
@@ -66,6 +66,8 @@ def model_declaration(graph, config):
     triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
     triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
     triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
+    # new feature example
+    triplet['dummy'] = TripletEmbedderLearner('triplet_dummy', config.embedding_dim, sentence['raw'])
     triplet['all'] = ConcatSensor(triplet['cat'],
                                   #triplet['compact_dist'],
                                   triplet['raw_dist'],
@@ -73,6 +75,7 @@ def model_declaration(graph, config):
                                   triplet['lemma_dist'],
                                   triplet['headword_dist'],
                                   triplet['phrasepos_dist'],
+                                  triplet['dummy']
                                  )
 
     triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)

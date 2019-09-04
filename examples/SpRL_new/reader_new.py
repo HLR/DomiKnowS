@@ -116,6 +116,34 @@ class SpRLReader(SensableReader):
         textfield = TextField(tokens, indexers)
         return textfield
 
+    @cls.textfield('triplet_dummy')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        import itertools
+
+        length = len(tokens)
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            return ':'.join((tokens[lm]._.pos_, tokens[tr]._.tag_, tokens[sp]._.lemma_))
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_dummy': SingleIdTokenIndexer(namespace='triplet_dummy')}
+        textfield = TextField(encap_tokens, indexers)
+        #import pdb; pdb.set_trace()
+        return textfield
+
     def raw_read(
             self,
             file_path: str
