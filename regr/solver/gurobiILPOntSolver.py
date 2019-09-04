@@ -1,3 +1,5 @@
+from six import string_types
+
 # numpy
 import numpy as np
 
@@ -760,7 +762,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         tokens = None
         if all(isinstance(item, tuple) for item in phrase):
             tokens = [x for x, _ in phrase]
-        elif all(isinstance(item, basestring) for item in phrase):
+        elif all(isinstance(item, string_types) for item in phrase):
             tokens = phrase
         else:
             self.myLogger.info('Phrase type is not supported %s - returning unchanged results'%(phrase))

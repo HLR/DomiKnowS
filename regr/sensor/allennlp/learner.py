@@ -145,8 +145,8 @@ class ConvLearner(MLPLearner):
         layers = []
         for dim_in, dim_out, kernel_size, activation, dropout in zip(dims[:-1], dims[1:], kernel_sizes, activations, dropouts):
             layers.append(Permute(0, 3, 1, 2)) # (b,l,l,c) -> (b,c,l,l)
-            padding_t = padding_l = np.floor((float(kernel_size) - 1) / 2)
-            padding_b = padding_r = np.ceil((float(kernel_size) - 1) / 2)
+            padding_t = padding_l = int(np.floor((float(kernel_size) - 1) / 2))
+            padding_b = padding_r = int(np.ceil((float(kernel_size) - 1) / 2))
             layers.append(ZeroPad2d(padding=(padding_l, padding_r, padding_t, padding_b)))
             layers.append(Conv2d(in_channels=dim_in, out_channels=dim_out, kernel_size=kernel_size))
             layers.append(Permute(0, 2, 3, 1)) # (b,c,l,l) -> (b,l,l,c)
