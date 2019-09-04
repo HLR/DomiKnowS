@@ -15,7 +15,6 @@ from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
-from ...solver.allennlp.inference import inference
 from .utils import sequence_cross_entropy_with_logits
 
 
