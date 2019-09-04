@@ -78,6 +78,6 @@ def test_main_emr_owl(emr_input):
     # relation results:
     # (John, IBM)[work_for]
     assert relationsResult['work_for'].sum().sum() == 1
-    assert relationsResult['work_for'][3][0] == 1 # IBM - John
+    assert relationsResult['work_for'][0][3] == 1 # John - IBM
     assert relationsResult['live_in'].sum().sum() == 0
     assert relationsResult['located_in'].sum().sum() == 0

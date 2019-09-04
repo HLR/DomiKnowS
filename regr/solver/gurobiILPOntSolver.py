@@ -4,7 +4,9 @@ import numpy as np
 # ontology
 from owlready2 import *
 
+# Gurobi
 from gurobipy import *
+from examples.emr.emr.graph import phrase
 
 if __package__ is None or __package__ == '': 
     from regr.solver.ilpConfig import ilpConfig
@@ -29,29 +31,34 @@ class gurobiILPOntSolver(ilpOntSolver):
         if graphResultsForPhraseToken is None:
             return None
         
+        self.myLogger.info('Starting method addTokenConstrains')
+        self.myLogger.info('graphResultsForPhraseToken')
+        self.myLogger.info('\t\t\t%s'%(tokens))
+        for concept, tokenTable in graphResultsForPhraseToken.items():
+            self.myLogger.info('%s \t\t%s'%(concept, tokenTable))
+
         # Create variables for token - concept and negative variables
         for tokenIndex, token in enumerate(tokens):            
             for conceptName in conceptNames: 
-                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName))
-                
-                #it = np.nditer(graphResultsForPhraseToken[conceptName], flags=['c_index', 'multi_index'])
-                
+                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))
+                                
                 currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 self.myLogger.info("Probability for concept %s and token %s is %f"%(conceptName,token,currentProbability))
 
                 if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
-                    x[token, conceptName+'-neg']=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(token, conceptName+'-neg'))
+                    x[token, 'Not_'+conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
 
         # Add constraints forcing decision between variable and negative variables 
         for conceptName in conceptNames:
             for token in tokens:
-                if (token, conceptName+'-neg') in x:
-                    constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)    
-                    m.addConstr(x[token, conceptName] + x[token, conceptName+'-neg'], GRB.LESS_EQUAL, 1, name=constrainName)
+                if (token, 'Not_'+conceptName) in x:
+                    constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
+                    currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
+                    m.addConstr(currentConstrLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept %s - %s %i"%(token,conceptName,token,'Not_'+conceptName,GRB.LESS_EQUAL,1))
                     
         m.update()
 
-         
         self.myLogger.info("Created %i ILP variables for tokens"%(len(x)))
         
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
@@ -93,7 +100,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                     currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
-                    m.addConstr(currentConstrLinExpr, GRB.LESS_EQUAL, 1, name=currentConstrName)                 
+                    m.addConstr(currentConstrLinExpr, GRB.LESS_EQUAL, 1, name=currentConstrName)
                     self.myLogger.info("Disjoint constrain between concept \"%s\" and concept %s - %s %s %i"%(conceptName,disjointConcept,currentConstrLinExpr,GRB.LESS_EQUAL,1))
                                
                 if not (conceptName in foundDisjoint):
@@ -238,8 +245,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info("Created objective element %s"%(currentQElement))
                 X_Q += currentQElement
 
-                if (token, conceptName+'-neg') in x: 
-                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, conceptName+'-neg']
+                if (token, 'Not_'+conceptName) in x: 
+                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, 'Not_'+conceptName]
                     self.myLogger.info("Created objective element %s"%(currentQElement))
                     X_Q += currentQElement
 
@@ -249,7 +256,13 @@ class gurobiILPOntSolver(ilpOntSolver):
         if graphResultsForPhraseRelation is None:
             return None
         
-        relationNames = graphResultsForPhraseRelation.keys()
+        self.myLogger.info('Starting method addRelationsConstrains with graphResultsForPhraseToken')
+
+        if graphResultsForPhraseRelation is not None:
+            for relation in graphResultsForPhraseRelation:
+                self.myLogger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseRelation[relation])))) ))
+                
+        relationNames = list(graphResultsForPhraseRelation)
             
         # Create variables for relation - token - token and negative variables
         for relationName in relationNames:            
@@ -258,11 +271,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if token1 == token2:
                         continue
     
-                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(relationName, token1, token2))
+                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
 
-
-                    if graphResultsForPhraseRelation[relationName][token2Index][token1Index] < 1.0: # ilpOntSolver.__negVarTrashhold:
-                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s"%(relationName, token1, token2))
+                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                    self.myLogger.info("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
+                    
+                    if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
+                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
+                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens %s %s  - %s %i"%(relationName,relationName,token1,token2,GRB.LESS_EQUAL,1))
 
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
@@ -276,8 +292,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1], GRB.LESS_EQUAL, 1, name=constrainName)
                         
         m.update()
-
-    
+   
         self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
 
         # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
@@ -552,12 +567,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if token1 == token2 :
                         continue
     
-                    currentQElement = graphResultsForPhraseRelation[relationName][token2Index][token1Index]*y[relationName, token1, token2]
+                    currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index]*y[relationName, token1, token2]
                     self.myLogger.info("Created objective element %s"%(currentQElement))
                     Y_Q += currentQElement
                     
                     if (relationName+'-neg', token, token1) in y: 
-                        currentQElement = (1-graphResultsForPhraseRelation[relationName][token2Index][token1Index])*y[relationName+'-neg', token1, token2]
+                        currentQElement = (1-graphResultsForPhraseRelation[relationName][token1Index][token2Index])*y[relationName+'-neg', token1, token2]
                         self.myLogger.info("Created objective element %s"%(currentQElement))
                         Y_Q += currentQElement
         
@@ -567,44 +582,55 @@ class gurobiILPOntSolver(ilpOntSolver):
         if graphResultsForPhraseTripleRelation is None:
             return None
         
-        tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
+        self.myLogger.info('Starting method addTripleRelationsConstrains with graphResultsForPhraseTripleRelation')
+        if graphResultsForPhraseTripleRelation is not None:
+            for tripleRelation in graphResultsForPhraseTripleRelation:
+                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s"'%(tripleRelation))
+
+                for token1Index, token1 in enumerate(tokens):
+                    self.myLogger.info('for token \"%s \n%s"'%(token1, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseTripleRelation[tripleRelation][token1Index]))))))
+
+        tripleRelationNames = list(graphResultsForPhraseTripleRelation)
             
         # Create variables for relation - token - token -token and negative variables
         for tripleRelationName in tripleRelationNames:            
-            for tokenIndex, token in enumerate(tokens): 
-                for token1Index, token1 in enumerate(tokens):
-                    if token1 == token:
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
+                    if token2 == token1:
                         continue
                         
-                    for token2Index, token2 in enumerate(tokens):
-                        if token2 == token:
+                    for token3Index, token3 in enumerate(tokens):
+                        if token3 == token2:
                             continue
                         
-                        if token2 == token1:
+                        if token3 == token1:
                             continue
                     
-                        z[tripleRelationName, token, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+                        z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
     
-                        if graphResultsForPhraseTripleRelation[tripleRelationName][token2Index][token1Index][tokenIndex] < 1.0: #ilpOntSolver.__negVarTrashhold:
-                            z[tripleRelationName+'-neg', token, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s-neg_%s_%s_%s"%(tripleRelationName, token, token1, token2))
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        self.myLogger.info("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
+
+                        if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
+                            z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
 
         # Add constraints forcing decision between variable and negative variables 
-        for tripleRelationName in tripleRelationNames:
-            for token in tokens: 
-                for token1 in tokens:
-                    if token1 == token:
+        for tripleRelationName in tripleRelationNames:            
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
+                    if token2 == token1:
                         continue
                         
-                    for token2 in tokens:
-                        if token2 == token:
+                    for token3Index, token3 in enumerate(tokens):
+                        if token3 == token2:
                             continue
                         
-                        if token2 == token1:
+                        if token3 == token1:
                             continue
                 
-                        if (tripleRelationName+'-neg', token, token1, token2) in z: 
-                            constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token, token1, token2, tripleRelationName)
-                            m.addConstr(z[tripleRelationName, token, token1, token2] + z[tripleRelationName+'-neg', token, token1, token2], GRB.LESS_EQUAL, 1, name=constrainName)
+                        if (tripleRelationName+'-neg', token1, token2, token3) in z: 
+                            constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
+                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3], GRB.LESS_EQUAL, 1, name=constrainName)
                             
         m.update()
     
@@ -673,16 +699,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                             range = _range[0]._name
                             triplePropertiesRanges['3'] = range
                                         
-            for toke1n in tokens:
+            for toke1 in tokens:
                 for token2 in tokens:
                     if token2 == token1:
                         continue
                         
                     for token3 in tokens:
-                        if token3 == token1:
+                        if token3 == token2:
                             continue
                         
-                        if token3 == token2:
+                        if token3 == token1:
                             continue
                      
                         constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
@@ -709,11 +735,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if token3 == token2:
                             continue
 
-                        Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index]*z[tripleRelationName, token1, token2, token3]
-
+                        Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]*z[tripleRelationName, token1, token2, token3]
     
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
-                            Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token3Index][token2Index][token1Index])*z[tripleRelationName+'-neg', token1, token2, token3]
+                            Z_Q += (1-graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index])*z[tripleRelationName+'-neg', token1, token2, token3]
 
         return Z_Q
         
@@ -726,17 +751,21 @@ class gurobiILPOntSolver(ilpOntSolver):
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
 
-        if graphResultsForPhraseRelation is not None:
-            for relation in graphResultsForPhraseRelation:
-                self.myLogger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, graphResultsForPhraseRelation[relation]))
+        if graphResultsForPhraseToken is None:
+            self.myLogger.info('graphResultsForPhraseToken is None - returning unchanged results')
+            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
-        if graphResultsForPhraseTripleRelation is not None:
-            for tripleRelation in graphResultsForPhraseTripleRelation:
-                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s\" \n%s'%(tripleRelation, graphResultsForPhraseTripleRelation[tripleRelation]))
+        conceptNames = list(graphResultsForPhraseToken)
+        
+        tokens = None
+        if all(isinstance(item, tuple) for item in phrase):
+            tokens = [x for x, _ in phrase]
+        elif all(isinstance(item, basestring) for item in phrase):
+            tokens = phrase
+        else:
+            self.myLogger.info('Phrase type is not supported %s - returning unchanged results'%(phrase))
+            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
 
-        conceptNames = graphResultsForPhraseToken.keys()
-        tokens = phrase
-                    
         try:
             # Create a new Gurobi model
             m = Model("decideOnClassificationResult")
@@ -805,6 +834,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', x)
 
+                        self.myLogger.info('Token Solutions\n')
+
                         for conceptName in conceptNames:
                             tokenResult[conceptName] = np.zeros(len(tokens))
                             
@@ -822,7 +853,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if y or True:
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', y)
-                        
+                        self.myLogger.info('Relation Solutions\n')
+
                         for relationName in relationNames:
                             relationResult[relationName] = np.zeros((len(tokens), len(tokens)))
                             
@@ -832,9 +864,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         continue
                                     
                                     if solution[relationName, token1, token2] == 1:
-                                        relationResult[relationName][token2Index][token1Index] = 1
+                                        relationResult[relationName][token1Index][token2Index] = 1
                                         
-                                        self.myLogger.info('Solution \"%s\" is in relation \"%s\" with \"%s\"'%(token2,relationName,token1))
+                                        self.myLogger.info('Solution \"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
         
             # Collect results for triple relations
             tripleRelationResult = None
@@ -848,26 +880,28 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if z or True:
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', z)
-                        
+                        self.myLogger.info('Triple Relation Solutions\n')
+
                         for tripleRelationName in tripleRelationNames:
-                            
-                            for tokenIndex, token in enumerate(tokens):
-                                for token1Index, token1 in enumerate(tokens):
-                                    if token == token1:
+                            self.myLogger.info('Solutions for relation %s\n'%(tripleRelationName))
+
+                            for token1Index, token1 in enumerate(tokens):
+                                for token2Index, token2 in enumerate(tokens):
+                                    if token1 == token2:
                                         continue
                                     
-                                    for token2Index, token2 in enumerate(tokens):
-                                        if token2 == token:
+                                    for token3Index, token3 in enumerate(tokens):
+                                        if token3 == token2:
                                             continue
                                         
-                                        if token2 == token1:
+                                        if token3 == token1:
                                             continue
                                     
-                                        currentSolutionValue = solution[tripleRelationName, token, token1, token2]
-                                        if solution[tripleRelationName, token, token1, token2] == 1:
-                                            tripleRelationResult[tripleRelationName][tokenIndex, token1Index, token2Index] = 1
+                                        currentSolutionValue = solution[tripleRelationName, token1, token2, token3]
+                                        if solution[tripleRelationName, token1, token2, token3] == 1:
+                                            tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
                                         
-                                            self.myLogger.info('Solution \"%s\" is in triple relation \"%s\" with \"%s\" and \"%s\"'%(token1,tripleRelationName,token, token2))
+                                            self.myLogger.info('Solution \"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
         
         except:
             self.myLogger.error('Error')
