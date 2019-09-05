@@ -1,4 +1,4 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor,ConcatSensor,NGramSensor,CartesianProductSensor,TokenDepDistSensor,TokenDepSensor,TokenDistantSensor,TokenLcaSensor,TripPhraseDistSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor,ConcatSensor,NGramSensor,CartesianProductSensor,TokenDepDistSensor,TokenDepSensor,TokenDistantSensor,TokenLcaSensor,TripPhraseDistSensor,LabelMaskSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner,MLPLearner,ConvLearner,TripletEmbedderLearner
 
 
@@ -89,6 +89,7 @@ def model_declaration(graph, config):
                                  )
 
     triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
+    triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
     region['label'] = LabelSensor(reader, 'region', output_only=True)
     relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
     direction['label'] = LabelSensor(reader, 'direction', output_only=True)

@@ -17,7 +17,7 @@ config = {
         'encode': {
             'layers': [64, 64],
         },
-        'compact': 64,
+        'compact': 32,
         'graph': {
             'balance_factor': 0.5,
             'label_smoothing': 0.1,
@@ -36,7 +36,7 @@ config = {
         },
         'optimizer': {
             'type': 'adam',
-            'lr': 0.001,
+            'lr': 0.005,
             'weight_decay': 0.0005,
         },
 
@@ -45,7 +45,7 @@ config = {
             'patience': 10
         },
         'iterator': {
-            'batch_size': 8,
+            'batch_size': 4,
         }
     }
 }

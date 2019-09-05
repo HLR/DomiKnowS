@@ -630,7 +630,27 @@ class SpRLBinaryReader(SpRLReader):
 
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
-    pass
+    @cls.field('triplet_mask')
+    def update_relations(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        (phrase, labels), relations, sentence = raw_sample
+        if relations is None:
+            return None
+        relation_indices = set()
+        for rel in relations:
+            src_index = rel[1][0]
+            mid_index = rel[2][0]
+            dst_index = rel[3][0]
+            relation_indices.add((src_index, mid_index, dst_index))
+        return NewAdjacencyField(
+            list(relation_indices),
+            fields[self.get_fieldname('word')],
+            padding_value=0
+        )
+      
 
 
 class NewAdjacencyField(AdjacencyField):

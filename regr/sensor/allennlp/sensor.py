@@ -51,6 +51,11 @@ class LabelSensor(ReaderSensor):
     def output_dim(self):
         return ()
 
+    
+class LabelMaskSensor(LabelSensor):
+    pass
+
+
 class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
     def create_module(self):
         return Concat()
