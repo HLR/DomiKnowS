@@ -39,10 +39,13 @@ with Graph('spLanguage') as splang_Graph:
 
         triplet = Concept(name='triplet')
         triplet.has_a(first=phrase, second=phrase, third=phrase)
+
         spatial_triplet = Concept(name='spatial_triplet')
-        triplet.has_a(first=landmark)
-        triplet.has_a(second=trajector)
-        triplet.has_a(third=spatial_indicator)
+        spatial_triplet.is_a(triplet)
+        spatial_triplet.has_a(first=landmark)
+        spatial_triplet.has_a(second=trajector)
+        spatial_triplet.has_a(third=spatial_indicator)
+
         region = Concept(name='region')
         region.is_a(spatial_triplet)
         distance = Concept(name='distance')
@@ -52,4 +55,5 @@ with Graph('spLanguage') as splang_Graph:
 
         none_relation= Concept(name='none_relation')
         none_relation.is_a(triplet)
+        none_relation.has_a(first=landmark, second=trajector, third=spatial_indicator)
         none_relation.not_a(spatial_triplet)
