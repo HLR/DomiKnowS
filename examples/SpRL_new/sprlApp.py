@@ -1,5 +1,5 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor,ConcatSensor,NGramSensor,CartesianProductSensor,TokenDepDistSensor,TokenDepSensor,TokenDistantSensor,TokenLcaSensor,TripPhraseDistSensor,LabelMaskSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner,MLPLearner,ConvLearner,TripletEmbedderLearner
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner, MLPLearner, ConvLearner, TripletEmbedderLearner
 
 
 from regr.graph.allennlp import AllenNlpGraph
@@ -88,7 +88,8 @@ def model_declaration(graph, config):
                                  )
 
     triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
-    
+    spatial_triplet['candidate'] = JointCandidateSensor(landmark['label'], trajector['label'], spatial_indicator['label'])
+
     spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
     none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)
 

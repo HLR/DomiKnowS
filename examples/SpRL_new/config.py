@@ -5,8 +5,8 @@ from utils import Namespace
 config = {
     'Data': { # data setting
         'relative_path': "data",
-        # 'train_path': "new_train.xml",
-        # 'valid_path': "new_gold.xml",
+#         'train_path': "new_train.xml",
+#         'valid_path': "new_gold.xml",
         'train_path': "sprl2017_train.xml",
         'valid_path': "sprl2017_gold.xml"
     },
@@ -19,7 +19,7 @@ config = {
         },
         'compact': 32,
         'graph': {
-            'balance_factor': 0.5,
+            'balance_factor': 1,
             'label_smoothing': 0.1,
             'focal_gamma': 2,
             'inference_interval': 50,
@@ -32,12 +32,12 @@ config = {
             'num_epochs': 50,
             'patience': None,
             'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
-            #'serialization_dir':None,
+#             'serialization_dir':None,
         },
         'optimizer': {
             'type': 'adam',
             'lr': 0.005,
-            'weight_decay': 0.0005,
+            'weight_decay': 0.001,
         },
 
         'scheduler': {
@@ -45,7 +45,7 @@ config = {
             'patience': 10
         },
         'iterator': {
-            'batch_size': 4,
+            'batch_size': 2,
         }
     }
 }

@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, TripPhraseDistRelation
+from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, TripPhraseDistRelation, JointCandidate
 
 
 class SentenceSensor(ReaderSensor):
@@ -109,6 +109,36 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
         mask = mask.view(ms[0], ms[1], 1).matmul(
             mask.view(ms[0], 1, ms[1]))  # (b,l,l)
         return mask
+
+
+class JointCandidateSensor(PreArgsModuleSensor, MaskedSensor):
+    def create_module(self):
+        return JointCandidate()
+
+    @property
+    def output_dim(self):
+        return ()
+
+    def get_mask(self, context: Dict[str, Any]):
+        masks = []
+        for pre in self.pres:
+            for name, sensor in pre.find(MaskedSensor):
+                break
+            else:
+                print(self.pre)
+                raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+            # (b,l)
+            mask = sensor.get_mask(context).float()
+            masks.append(mask)
+
+        masks_num = len(masks)
+        mask = masks[0]
+        for i in range(1, masks_num):
+            for j in range(i, masks_num):
+                masks[j].unsqueeze_(-2)
+            mask = mask.unsqueeze_(-1).matmul(masks[i])
+        return mask
+
 
 class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
     def create_module(self):

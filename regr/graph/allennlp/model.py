@@ -15,7 +15,7 @@ from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
-from ...sensor.allennlp.sensor import LabelMaskSensor
+from ...sensor.allennlp.sensor import LabelMaskSensor, JointCandidateSensor
 from .utils import sequence_cross_entropy_with_logits
 
 
@@ -31,14 +31,15 @@ def update_metrics(
     metrics: List[Tuple[str, Property, callable]]
 ) -> DataInstance:
     label_masks = {}
-    for name, sensor in graph.get_sensors(LabelMaskSensor):
-        mask = data[sensor.fullname]
+    for name, sensor in graph.get_sensors(JointCandidateSensor):
+        sensor(data)
+        mask = data[sensor.fullname].clone().detach()
         label_masks[mask.shape] = mask
     for metric_name, class_index, prop, metric in metrics:
         label, pred, mask = get_prop_result(prop, data)
         label_mask = label_masks.get(mask.shape)
         if label_mask is not None:
-            mask = mask * label_mask
+            mask = mask * label_mask.float()
         metric(pred, label, mask)
     return data
 
@@ -219,8 +220,9 @@ class GraphModel(Model):
     ) -> DataInstance:
         loss = 0
         label_masks = {}
-        for name, sensor in self.graph.get_sensors(LabelMaskSensor):
-            mask = data[sensor.fullname]
+        for name, sensor in self.graph.get_sensors(JointCandidateSensor):
+            sensor(data)
+            mask = data[sensor.fullname].clone().detach()
             label_masks[mask.shape] = mask
         for prop in self.graph.poi:
             # label (b, l)
@@ -231,7 +233,7 @@ class GraphModel(Model):
             mask = mask.clone().float()
             label_mask = label_masks.get(mask.shape)
             if label_mask is not None:
-                mask = mask * label_mask
+                mask = mask * label_mask.float()
             #import pdb; pdb.set_trace()
 
             # class balance weighted

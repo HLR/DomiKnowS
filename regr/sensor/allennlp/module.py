@@ -98,6 +98,27 @@ class SelfCartesianProduct3(CartesianProduct3):
         return CartesianProduct3.forward(self, x, x, x)
 
 
+class JointCandidate(Module):
+    def forward(self, *tensors):
+        #import pdb; pdb.set_trace()
+        batch = tensors[0].shape[0]
+        num = len(tensors)
+        logits_sum = tensors[0].clone()
+        addends = [ logits.clone() for logits in tensors[1:] ]
+        for i, logits in enumerate(addends):
+            for tensor in addends[i:]:
+                tensor.unsqueeze_(-3)
+            logits_sum = logits_sum.unsqueeze_(-2) + logits # this are the logits
+        candidate = logits_sum.argmax(-1) # find the largest index along logits dim
+        # self pair
+        candidate_2 = torch.zeros_like(candidate)[0]
+        for indices in itertools.product( *(range(d) for d in candidate.shape[1:]) ) :
+            if len(indices) == len(set(indices)):
+                candidate_2[indices] = 1
+        candidate_2 = candidate_2.expand(batch, *((-1,) * num))
+        return candidate * candidate_2
+
+
 class NGram(Module):
     def __init__(self, ngram):
         Module.__init__(self)
