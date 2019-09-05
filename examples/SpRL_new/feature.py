@@ -1,5 +1,5 @@
 import spacy
-from allennlp.data.tokenizers import Token
+import networkx as nx
 nlpmodel=spacy.load("en_core_web_sm")
 
 
@@ -21,7 +21,7 @@ class DataFeature():
         return new_chunk
 
     def getSentence(self):
-        pass
+        return self.sentence
 
 
     #get tokens
@@ -48,6 +48,7 @@ class DataFeature():
        else:
            for doc in self.parse_phrase.noun_chunks:
                     return str(doc.root.head.text).lower()
+
 
     #pos feature
     def getPos(self):
@@ -104,6 +105,16 @@ class DataFeature():
             phrasepos=doc.pos_
         return phrasepos
 
+    def getShortestDependencyPath(self, entity1, entity2):
+        edges = []
+        for token in self.parse_sentence:
+            for child in token.children:
+                edges.append(('{0}'.format(token.lower_),
+                              '{0}'.format(child.lower_)))
+        graph = nx.Graph(edges)
+
+        return nx.shortest_path(graph, source=entity1, target=entity2)
+
     #wordform
     def getWordform(self):
         return self.getLower()
@@ -127,8 +138,11 @@ class DataFeature():
 #     print(i._.pos_)
 
 
-# sentence="About 20 kids in traditional clothing and hats waiting on stairs ."
-# phrase="About 20 kids ."
-# data=DataFeature(sentence,phrase)
-# print(data.getHeadword())
+sentence="Convulsions that occur after DTaP are caused by a fever."
+phrase="in the front of"
+# entity1 = 'Convulsions'.lower()
+# entity2 = 'fever'
+data=DataFeature(sentence,phrase)
+print(data.getHeadword())
+# print(data.getShortestDependencyPath(entity1, entity2))
 

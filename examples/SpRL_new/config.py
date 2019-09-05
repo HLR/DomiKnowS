@@ -5,8 +5,8 @@ from utils import Namespace
 config = {
     'Data': { # data setting
         'relative_path': "data",
-#         'train_path': "new_train.xml",
-#         'valid_path': "new_gold.xml",
+        # 'train_path': "new_train.xml",
+        # 'valid_path': "new_gold.xml",
         'train_path': "sprl2017_train.xml",
         'valid_path': "sprl2017_gold.xml"
     },
@@ -37,7 +37,7 @@ config = {
         'optimizer': {
             'type': 'adam',
             'lr': 0.001,
-            'weight_decay': 0.0001,
+            'weight_decay': 0.0005,
         },
 
         'scheduler': {
