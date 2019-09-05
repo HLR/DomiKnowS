@@ -35,9 +35,11 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         self.myLogger.info('Starting method addTokenConstrains')
         self.myLogger.info('graphResultsForPhraseToken')
-        self.myLogger.info('\t\t\t%s'%(tokens))
+        padding = max([len(x) for x in tokens])
+        spacing = max([len(x) for x in conceptNames]) + 1
+        self.myLogger.info("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ t + '\'' for t in tokens])))
         for concept, tokenTable in graphResultsForPhraseToken.items():
-            self.myLogger.info('%s \t\t%s'%(concept, tokenTable))
+            self.myLogger.info("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
 
         # Create variables for token - concept and negative variables
         for tokenIndex, token in enumerate(tokens):            
@@ -648,7 +650,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.debug("Triple Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
             
             ancestorConcept = None
-            for _ancestorConcept in currentTripleRelation.ancestors(include_self = False):
+            for _ancestorConcept in currentTripleRelation.ancestors(include_self = True):
                 if _ancestorConcept.name == "Thing":
                      continue
                  
@@ -673,6 +675,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if superProperty is None:
                             continue
                         
+                        if superProperty.name == "ObjectProperty":
+                            continue
+                         
                         if superProperty.name == 'first':
                             tripleProperties['1'] = property
                             _range = property.range
@@ -701,7 +706,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             range = _range[0]._name
                             triplePropertiesRanges['3'] = range
                                         
-            for toke1 in tokens:
+            for token1 in tokens:
                 for token2 in tokens:
                     if token2 == token1:
                         continue
@@ -714,9 +719,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                      
                         constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
-                            
-                        m.addConstr(x[token1, triplePropertiesRanges['1']] + x[token2, triplePropertiesRanges['2']] + x[token3, triplePropertiesRanges['3']] - z[tripleRelationName, token1, token2, token3], 
-                                    GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
+                        r1 = x[token1, triplePropertiesRanges['1']]
+                        r2 = x[token2, triplePropertiesRanges['2']] 
+                        r3 = x[token3, triplePropertiesRanges['3']]
+                        rel = z[tripleRelationName, token1, token2, token3]
+                        
+                        currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
+                        m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
                                     
                         self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
     
