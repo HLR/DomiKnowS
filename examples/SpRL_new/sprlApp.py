@@ -90,14 +90,14 @@ def model_declaration(graph, config):
     triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
     
     spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
-    relation_none['label'] = LabelSensor(reader, 'relation_none', output_only=True)
+    none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)
 
     region['label'] = LabelSensor(reader, 'region', output_only=True)
     direction['label'] = LabelSensor(reader, 'direction', output_only=True)
     distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
     spatial_triplet['label'] = LogisticRegressionLearner(triplet['all'])
-    relation_none['label'] = LogisticRegressionLearner(triplet['all'])
+    none_relation['label'] = LogisticRegressionLearner(triplet['all'])
 
     region['label'] = LogisticRegressionLearner(triplet['all'])
     direction['label'] = LogisticRegressionLearner(triplet['all'])
