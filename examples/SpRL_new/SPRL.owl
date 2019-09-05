@@ -62,9 +62,9 @@
     <rdfs:range rdf:resource="#TRAJECTOR"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="triplet-third">
-     <rdfs:subPropertyOf rdf:resource="#third"/>
+    <rdfs:subPropertyOf rdf:resource="#third"/>
     <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#SPATIALINDICATOR"/>
+    <rdfs:range rdf:resource="#SPATIAL_INDICATOR"/>
   </owl:ObjectProperty>
 
   <owl:Class rdf:ID="spatial_triplet">
