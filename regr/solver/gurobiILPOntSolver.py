@@ -662,7 +662,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             tripleProperties = {}
             triplePropertiesRanges = {}    
-
+            noTriplePropertiesRanges = 0 
+             
             for property in self.myOnto.object_properties():
                 _domain = property.domain
                 
@@ -687,6 +688,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                             range = _range[0]._name
                             triplePropertiesRanges['1'] = range
+                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
                         elif superProperty.name == 'second':
                             tripleProperties['2'] = property
                             _range = property.range
@@ -696,6 +698,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                             range = _range[0]._name
                             triplePropertiesRanges['2'] = range
+                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
                         elif superProperty.name == 'third':
                             tripleProperties['3'] = property
                             _range = property.range
@@ -705,7 +708,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                             range = _range[0]._name
                             triplePropertiesRanges['3'] = range
-                                        
+                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
+                              
+            if noTriplePropertiesRanges < 3:
+                self.myLogger.warn("Problem with creation of - triple - constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
+                self.myLogger.warn("Abandon it - going to the next relation")
+
+                break
+            else:
+                self.myLogger.info("Found definition for relation %s - %s"%(tripleRelationName,triplePropertiesRanges))
+
             for token1 in tokens:
                 for token2 in tokens:
                     if token2 == token1:
