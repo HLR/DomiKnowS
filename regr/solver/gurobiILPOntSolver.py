@@ -706,29 +706,31 @@ class gurobiILPOntSolver(ilpOntSolver):
                             range = _range[0]._name
                             triplePropertiesRanges['3'] = range
                                         
-            for token1 in tokens:
-                for token2 in tokens:
-                    if token2 == token1:
-                        continue
-                        
-                    for token3 in tokens:
-                        if token3 == token2:
+            if triplePropertiesRanges and tripleProperties:
+                for token1 in tokens:
+                    for token2 in tokens:
+                        if token2 == token1:
                             continue
-                        
-                        if token3 == token1:
-                            continue
-                     
-                        constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
-                        r1 = x[token1, triplePropertiesRanges['1']]
-                        r2 = x[token2, triplePropertiesRanges['2']] 
-                        r3 = x[token3, triplePropertiesRanges['3']]
-                        rel = z[tripleRelationName, token1, token2, token3]
-                        
-                        currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
-                        m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
-                                    
-                        self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
-    
+
+                        for token3 in tokens:
+                            if token3 == token2:
+                                continue
+
+                            if token3 == token1:
+                                continue
+
+                            constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
+                            #import pdb; pdb.set_trace()
+                            r1 = x[token1, triplePropertiesRanges['1']]
+                            r2 = x[token2, triplePropertiesRanges['2']] 
+                            r3 = x[token3, triplePropertiesRanges['3']]
+                            rel = z[tripleRelationName, token1, token2, token3]
+
+                            currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
+                            m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
+
+                            self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+
         m.update()
 
         # Add objectives
