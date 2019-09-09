@@ -14,6 +14,7 @@ import spacy
 import torch
 from featureIndexer import PosTaggerIndexer, LemmaIndexer, DependencyIndexer, HeadwordIndexer, PhrasePosIndexer
 from feature import DataFeature
+from dictionaries import dictionary
 
 # sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
@@ -45,12 +46,14 @@ class SpRLReader(SensableReader):
             token.set_extension('dep_', default=False, force=True)
             token.set_extension('headword_', default=False, force=True)
             token.set_extension('phrasepos_', default=False, force=True)
+            token.set_extension('sentence_', default=False, force=True)
             token._.set('lemma_', DataFeature(sentence, phrase).getLemma())
             token._.set('pos_', DataFeature(sentence, phrase).getPos())
             token._.set('tag_', DataFeature(sentence, phrase).getTag())
             token._.set('dep_', DataFeature(sentence, phrase).getDenpendency())
             token._.set('headword_', DataFeature(sentence, phrase).getHeadword())
             token._.set('phrasepos_', DataFeature(sentence, phrase).getPhrasepos())
+            token._.set('sentence_', DataFeature(sentence, phrase).getSentence())
 
             newtoken.append(token)
         return newtoken
@@ -114,6 +117,157 @@ class SpRLReader(SensableReader):
     ) -> Field:
         indexers = {'phrasepos_tag': PhrasePosIndexer(namespace='phrasepos_tag')}
         textfield = TextField(tokens, indexers)
+        return textfield
+
+    @cls.textfield('triplet_feature1')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+
+        length = len(tokens)
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            return '::'.join((tokens[tr].text.lower(), tokens[sp].text.lower(), tokens[lm].text.lower()))
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature1': SingleIdTokenIndexer(namespace='triplet_feature1')}
+        textfield = TextField(encap_tokens, indexers)
+        #import pdb; pdb.set_trace()
+        return textfield
+
+    @cls.textfield('triplet_feature2')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+
+        length = len(tokens)
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            if tokens[sp].text.lower() in dictionary.prepositions:
+                return "true"
+            else:
+                return "false"
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature2': SingleIdTokenIndexer(namespace='triplet_feature2')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
+
+    @cls.textfield('triplet_feature3')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+
+        length = len(tokens)
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+
+            return '::'.join((tokens[tr]._.headword_.lower(), tokens[lm]._.headword_.lower(), tokens[sp].text.lower()))
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature3': SingleIdTokenIndexer(namespace='triplet_feature3')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
+
+    @cls.textfield('triplet_feature4')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0]._.sentence_
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            entity1 = tokens[tr]._.headword_.lower()
+            entity2 = tokens[sp]._.headword_.lower()
+            entity1 = entity1.split(' ')[0]
+            entity2 = entity2.split(' ')[0]
+            shortestdepedenceylist = DataFeature(sentence=sentence,phrase='').getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].text)
+            return "::".join(shortestdepedenceylist)
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature4': SingleIdTokenIndexer(namespace='triplet_feature4')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
+
+    @cls.textfield('triplet_feature5')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0]._.sentence_
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            entity1 = tokens[sp]._.headword_.lower()
+            entity2 = tokens[lm]._.headword_.lower()
+            entity1 = entity1.split(' ')[0]
+            entity2 = entity2.split(' ')[0]
+            shortestdepedenceylist = DataFeature(sentence=sentence, phrase='').getShortestDependencyPath(entity1,
+                                                                                                         entity2)
+            shortestdepedenceylist.insert(0, tokens[sp].text)
+            return "::".join(shortestdepedenceylist)
+
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
         return textfield
 
     def raw_read(
@@ -256,12 +410,12 @@ class SpRLReader(SensableReader):
             final_relationship.append(relation_tuple)
 
         self.negative_relation_generation(final_relationship)
-        for i in final_relationship:
-            numnum=0
-            for m in i[0][0]:
-                print(f"{m},{i[0][1][numnum]}")
-                numnum +=1
-            print('\n', end='')
+        # for i in final_relationship:
+        #     numnum=0
+        #     for m in i[0][0]:
+        #         print(f"{m},{i[0][1][numnum]}")
+        #         numnum +=1
+        #     print('\n', end='')
         #print(final_relationship)
         return final_relationship
 
@@ -476,7 +630,27 @@ class SpRLBinaryReader(SpRLReader):
 
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
-    pass
+    @cls.field('triplet_mask')
+    def update_relations(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        (phrase, labels), relations, sentence = raw_sample
+        if relations is None:
+            return None
+        relation_indices = set()
+        for rel in relations:
+            src_index = rel[1][0]
+            mid_index = rel[2][0]
+            dst_index = rel[3][0]
+            relation_indices.add((src_index, mid_index, dst_index))
+        return NewAdjacencyField(
+            list(relation_indices),
+            fields[self.get_fieldname('word')],
+            padding_value=0
+        )
+      
 
 
 class NewAdjacencyField(AdjacencyField):

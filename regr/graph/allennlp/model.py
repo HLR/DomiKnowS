@@ -15,6 +15,7 @@ from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
+from ...sensor.allennlp.sensor import LabelMaskSensor, JointCandidateSensor
 from .utils import sequence_cross_entropy_with_logits
 
 
@@ -25,11 +26,20 @@ DataInstance = Dict[str, Tensor]
 
 
 def update_metrics(
+    graph: Graph,
     data: DataInstance,
     metrics: List[Tuple[str, Property, callable]]
 ) -> DataInstance:
+    label_masks = {}
+    for name, sensor in graph.get_sensors(JointCandidateSensor):
+        sensor(data)
+        mask = data[sensor.fullname].clone().detach()
+        label_masks[mask.shape] = mask
     for metric_name, class_index, prop, metric in metrics:
         label, pred, mask = get_prop_result(prop, data)
+        label_mask = label_masks.get(mask.shape)
+        if label_mask is not None:
+            mask = mask * label_mask.float()
         metric(pred, label, mask)
     return data
 
@@ -117,11 +127,11 @@ class GraphModel(Model):
     ) -> DataInstance:
         for metric_name, metric in self.meta:
             metric(data)
-        data = update_metrics(data, self.metrics)
+        data = update_metrics(self.graph, data, self.metrics)
         if self._need_inference(data):
             #import pdb; pdb.set_trace()
             data = self._inference(data)
-            data = update_metrics(data, self.metrics_inferenced)
+            data = update_metrics(self.graph, data, self.metrics_inferenced)
         return data
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
@@ -209,6 +219,11 @@ class GraphModel(Model):
         data: DataInstance
     ) -> DataInstance:
         loss = 0
+        label_masks = {}
+        for name, sensor in self.graph.get_sensors(JointCandidateSensor):
+            sensor(data)
+            mask = data[sensor.fullname].clone().detach()
+            label_masks[mask.shape] = mask
         for prop in self.graph.poi:
             # label (b, l)
             # pred  (b, l, c)
@@ -216,6 +231,9 @@ class GraphModel(Model):
             label, pred, mask = get_prop_result(prop, data)
             label = label.clone().detach()
             mask = mask.clone().float()
+            label_mask = label_masks.get(mask.shape)
+            if label_mask is not None:
+                mask = mask * label_mask.float()
             #import pdb; pdb.set_trace()
 
             # class balance weighted
