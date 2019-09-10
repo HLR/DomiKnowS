@@ -1,6 +1,6 @@
-# Entity Mention Relation
+# Spatial Role Labeling
 
-This is an example of the Entity Mention Relation (EMR) problem.
+This is an example of the Spatial Role Labeling (SpRL) task.
 
 ## Problem description
 
