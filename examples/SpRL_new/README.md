@@ -4,15 +4,16 @@ This is an example of the Spatial Role Labeling (SpRL) task.
 
 ## Problem description
 
-To showcase the effectiveness of the current framework and the components of our pipeline, we use the entity-mention-relation extraction (EMR) task and validate on [CoNLL data](http://cogcomp.org/page/resource_view/43).
+To showcase the effectiveness of the current framework and the components of our pipeline, we perform the spatial entity labeling and spatial role relationship extraction task and validate on CLEF 2017 mSpRL datasets.
+
 The task is as follow:
 > **given** an input text such as 
->> *"Washington works for Associated Press."*,
+>> *"About 20 kids in traditional clothing and hats waiting on stairs."*,
 >
-> **find** a model that is able to extract the semantic entity types *(e.g., people, organizations, and locations)* as well as relations between them *(e.g., works for, lives in)*, and
+> **find** a model that is able to extract the semantic entity types *(e.g., Landmark, Trajector, and SpatialIndicator)* as well as relations between them *(e.g., region, direction, distance)*, and
 >
 > **generate** the following output:
->> *[Washington]*<sub>people</sub> *[works for]*<sub>worksFor</sub> *[Associated Press]*<sub>organization</sub>.
+>> *[About 20 kids]*<sub>Trajector</sub> in tradirional clothing and hats waiting *[on]*<sub>SpatialIndicator</sub> *[stairs]*<sub>Landmark</sub>.
 
 
 [//]: # (description of the problem to be added here)
