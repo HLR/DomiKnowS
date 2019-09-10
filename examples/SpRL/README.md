@@ -73,18 +73,7 @@ sudo python3 -m pip install -r requirements.txt
 The SpRL data is located in [`SpRL/data`](SpRL/data), and the training set is [SpRL/data/sprl2017_train.xml], and the testing set is [SpRL/data/sprl2017_test.xml].
 If you want to change the dataset directories, you can update [SpRL/config.py] (SpRL/config.py) to update the train and test directories.
 
-#### Word2vec
-
-We use [GloVe](https://nlp.stanford.edu/projects/glove/) (glove.6B.50d) in this example.
-Please download [glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip) and extract to `data/glove.6B`.
-You can use the following commands
-```bash
-wget http://nlp.stanford.edu/data/glove.6B.zip
-unzip -j "glove.6B.zip" "glove.6B.50d.txt" -d "data/glove.6B"
-```
-You can also download and extract other word representation, and setup in [`emr/config.py`](emr/config.py) correspondingly.
-
-### The example
+### Run 
 
 The implement of the example is in package `SpRL`. 
 
