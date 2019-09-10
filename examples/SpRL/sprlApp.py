@@ -1,144 +1,126 @@
-import os
-import torch
-from allennlp.models.model import Model
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor
+from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner, MLPLearner, ConvLearner, TripletEmbedderLearner
+
+
 from regr.graph.allennlp import AllenNlpGraph
-from regr.sensor.allennlp.sensor import PhraseSequenceSensor, LabelSequenceSensor, CartesianProductSensor
-from regr.sensor.allennlp.learner import W2VLearner, RNNLearner, LogisticRegressionLearner
-from allennlp.data import Vocabulary
+from SpRL_reader import SpRLSensorReader as Reader
+from config import Config
+from utils import seed
 
 
-
-if __package__ is None or __package__ == '':
-    # uses current directory visibility
-    from data import Data, Conll04BinaryReader as Reader
-    from graph import graph
-else:
-    # uses current package visibility
-    from .data import Data, Conll04BinaryReader as Reader
-    from .models import get_trainer, datainput, word2vec, word2vec_rnn, fullyconnected, cartesianprod_concat, logsm
-    from .spGraph import graph
+def ontology_declaration():
+    from spGraph import splang_Graph
+    return splang_Graph
 
 
-# data setting
-relative_path = "examples/SpRL/data/newSprl2017_all.xml"
-train_path = "newSprl2017_all.xml"
-valid_path = "newSprl2017_all.xml"
+def model_declaration(graph, config):
+    graph.detach()
 
-# model setting
-EMBEDDING_DIM = 8
-
-# training setting
-LR = 0.001
-WD = 0.0001
-BATCH = 8
-EPOCH = 50
-PATIENCE = None
-
-
-# develop by an ML programmer to wire nodes in the graph and ML Models
-def model_declaration(graph, vocab, config):    # initialize the graph
-    graph.detach()  # release anything binded before new assignment
-
-    # get concepts from graph
+    sentence = graph['linguistic/sentence']
     phrase = graph['linguistic/phrase']
-    pair = graph['linguistic/pair']
-    # concepts
-    tr = graph['application/tr']
-    lm = graph['application/lm']
-    o = graph['application/O']
 
-    # composed concepts
-    sp_tr = graph['application/sp_tr']
+    landmark = graph['application/LANDMARK']
+    trajector = graph['application/TRAJECTOR']
+    spatial_indicator = graph['application/SPATIAL_INDICATOR']
+    none_entity = graph['application/NONE_ENTITY']
 
-    phrase['raw'] = PhraseSequenceSensor(vocab, 'sentence', 'phrase')
-    phrase['w2v'] = W2VLearner(config.embedding_dim, phrase['raw'])
-    phrase['emb'] = RNNLearner(config.embedding_dim, phrase['w2v'])
-    pair['emb'] = CartesianProductSensor(phrase['emb'])
+    triplet = graph['application/triplet']
+    spatial_triplet = graph['application/spatial_triplet']
+    none_relation = graph['application/none_relation']
 
+    region = graph['application/region']
+    direction = graph['application/direction']
+    distance = graph['application/distance']
 
+    reader = Reader()
 
-    # concept labels
+    sentence['raw'] = SentenceSensor(reader, 'sentence')
+    phrase['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    phrase['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
+    phrase['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
+    phrase['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])
+    phrase['headword'] = SentenceEmbedderLearner('headword_tag', config.embedding_dim, sentence['raw'])
+    phrase['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
-    # concept label
-    tr['label'] = LabelSequenceSensor('tr', output_only=True)
-    lm['label'] = LabelSequenceSensor('lm', output_only=True)
-    o['label'] = LabelSequenceSensor('O', output_only=True)
+    phrase['all'] = ConcatSensor(phrase['raw'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
+    phrase['ngram'] = NGramSensor(config.ngram, phrase['all'])
+    phrase['encode'] = RNNLearner(phrase['ngram'], layers=2, dropout=config.dropout)
 
-    tr['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    lm['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
-    o['label'] = LogisticRegressionLearner(config.embedding_dim * 2, phrase['emb'])
+    landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
+    trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)
+    spatial_indicator['label'] = LabelSensor(reader, 'SPATIALINDICATOR', output_only=True)
+    none_entity['label'] = LabelSensor(reader, 'NONE', output_only=True)
 
-    sp_tr['label'] = LabelSequenceSensor('sp_tr', output_only=True)
+    landmark['label'] = LogisticRegressionLearner(phrase['encode'])
+    trajector['label'] = LogisticRegressionLearner(phrase['encode'])
+    spatial_indicator['label'] = LogisticRegressionLearner(phrase['encode'])
+    none_entity['label'] = LogisticRegressionLearner(phrase['encode'])
 
-    # composed-concept prediction
-    sp_tr['label'] = LogisticRegressionLearner(config.embedding_dim * 4, pair['emb'])
+    phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
+    triplet['cat'] = CartesianProduct3Sensor(phrase['compact'])
+    #triplet['compact_dist'] = TripPhraseDistSensor(phrase['compact'])
+    triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
+    triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
+    triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
+    triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
+    triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
+    triplet['dependency_dist'] = TripPhraseDistSensor(phrase['dep'])
+    # new feature example
+    triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
+    triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
+    triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
+    triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
+    triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
+    triplet['all'] = ConcatSensor(triplet['cat'],
+                                  #triplet['compact_dist'],
+                                  triplet['raw_dist'],
+                                  triplet['pos_dist'],
+                                  triplet['lemma_dist'],
+                                  triplet['headword_dist'],
+                                  triplet['phrasepos_dist'],
+                                  triplet['dependency_dist'],
+                                  triplet['tr_1'],
+                                  triplet['tr_2'],
+                                  triplet['tr_3'],
+                                  triplet['tr_4'],
+                                  triplet['tr_5']
+                                 )
 
-    # building model
-    # embedding
+    triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
+    spatial_triplet['candidate'] = JointCandidateSensor(landmark['label'], trajector['label'], spatial_indicator['label'])
 
+    spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
+    none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)
 
-    lbp= AllenNlpGraph(graph, vocab)
+    region['label'] = LabelSensor(reader, 'region', output_only=True)
+    direction['label'] = LabelSensor(reader, 'direction', output_only=True)
+    distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
+    spatial_triplet['label'] = LogisticRegressionLearner(triplet['all'])
+    none_relation['label'] = LogisticRegressionLearner(triplet['all'])
+
+    region['label'] = LogisticRegressionLearner(triplet['all'])
+    direction['label'] = LogisticRegressionLearner(triplet['all'])
+    distance['label'] = LogisticRegressionLearner(triplet['all'])
+
+    lbp = AllenNlpGraph(graph, **config.graph)
     return lbp
 
 
-# envionment setup
-def ontology_declaration():
-    from .spGraph import splang_Graph
-    return splang_Graph
-#import logging
-# logging.basicConfig(level=logging.INFO)
-
-
-def seed():
-    import random
-    import numpy as np
-    import torch
-
-    np.random.seed(1)
-    random.seed(1)
-    torch.manual_seed(1)
-
-
-seed()
-
-
 def main():
-    Config = {
-        'Data': {  # data setting
-            'relative_path': "data/EntityMentionRelation",
-            'train_path': "conll04_train.corp",
-            'valid_path': "conll04_test.corp"
-        },
-        'Model': {  # model setting
-            'embedding_dim': 8
-        },
-        'Train': {
-            'lr': 0.001,
-            'wd': 0.0001,
-            'batch': 8,
-            'epoch': 50,
-            'patience': None
-        }
-    }
-    reader = Reader()
-    train_dataset = reader.read(os.path.join(relative_path, train_path))
-    valid_dataset = reader.read(
-        os.path.join(relative_path, valid_path))
-
-    vocab = Vocabulary.from_instances(train_dataset + valid_dataset)
-
-    # 1. Ontology Declaration
     graph = ontology_declaration()
 
-    # 2. Model Declaration
-    lbp = model_declaration(graph, vocab, Config.Model)
+    lbp = model_declaration(graph, Config.Model)
 
-    # 2.5/3. Train and save the model (Explicit inference done automatically)
-    seed()  # initial the random seeds of all subsystems
-    lbp.train(train_dataset, valid_dataset, Config.Train)
-    lbp.save('/tmp/srl')
+    seed()
+    lbp.train(Config.Data, Config.Train)
+    save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
+    lbp.save(save_to, config=Config)
 
 
+####
+"""
+This example show a full pipeline how to work with `regr`.
+"""
 if __name__ == '__main__':
     main()
