@@ -1,0 +1,5 @@
+#regr
+allennlp>=0.8.5
+tqdm
+spacy==2.1.4
+networkx==2.3
