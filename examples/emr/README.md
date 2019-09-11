@@ -56,7 +56,7 @@ By [solving the generated ILP problem](../../regr/solver/ilpSelectClassification
 
 * Python 3: Python 3 is required by `allennlp`. Install by package management. Remember to mention the version in installation.
 * `pip`: to install other required python packages. Follow the [installation instruction](https://pip.pypa.io/en/stable/installing/) and make sure you install it with your Python 3.
-* `pytorch`: model calculation behind `allennlp`. There is a bunch of selection other than the standard pip package.
+* `pytorch`: model calculation behind `allennlp`. There is a bunch of selection other than the standard pip package. Please note that AllenNLP requires pytorch < 1.2.
 Follow the [installation instruction](https://pytorch.org/get-started/locally/) and select the correct CUDA version if any available to you.
 * Anything else will be installed properly with `pip` (including `allennlp`). No worry here.
 
