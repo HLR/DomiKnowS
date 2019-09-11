@@ -27,7 +27,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 
 The steps are broken down into parts of the program.
 
-## Composition
+## Components
 
 The example consists of several parts.
 
