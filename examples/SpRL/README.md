@@ -4,7 +4,7 @@ This is an example of the Spatial Role Labeling (SpRL) task.
 
 ## Problem description
 
-To showcase the effectiveness of the current framework and the components of our pipeline, we perform the spatial entity labeling and spatial role relationship extraction task and validate on CLEF 2017 mSpRL datasets.
+To showcase the effectiveness of the current framework and the components of our pipeline, we perform the spatial role labeling and spatial relation extraction task and validate on CLEF 2017 mSpRL datasets.
 
 The task is as follow:
 > **given** an input text such as 
