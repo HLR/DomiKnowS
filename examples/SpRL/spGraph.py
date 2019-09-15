@@ -8,11 +8,8 @@ with Graph('spLanguage') as splang_Graph:
 
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
-        word = Concept(name ='word')
         phrase = Concept(name = 'phrase')
         sentence = Concept(name = 'sentence')
-        phrase.has_many(word)
-        sentence.has_many(phrase)
 
     with Graph('application') as app_graph:
         splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
@@ -25,17 +22,6 @@ with Graph('spLanguage') as splang_Graph:
         landmark.is_a(phrase)
         none_entity.is_a(phrase)
         spatial_indicator.is_a(phrase)
-
-        trajector.not_a(none_entity)
-        trajector.not_a(spatial_indicator)
-        landmark.not_a(none_entity)
-        landmark.not_a(spatial_indicator)
-        none_entity.not_a(trajector)
-        none_entity.not_a(landmark)
-        none_entity.not_a(spatial_indicator)
-        spatial_indicator.not_a(trajector)
-        spatial_indicator.not_a(landmark)
-        spatial_indicator.not_a(none_entity)
 
         triplet = Concept(name='triplet')
         triplet.has_a(first=phrase, second=phrase, third=phrase)
@@ -56,4 +42,3 @@ with Graph('spLanguage') as splang_Graph:
         none_relation= Concept(name='none_relation')
         none_relation.is_a(triplet)
         none_relation.has_a(first=landmark, second=trajector, third=spatial_indicator)
-        none_relation.not_a(spatial_triplet)
