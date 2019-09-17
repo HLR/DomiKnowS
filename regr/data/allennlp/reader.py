@@ -3,6 +3,7 @@ from collections import OrderedDict, defaultdict
 import uuid
 from six import with_metaclass
 from allennlp.data.dataset_readers import DatasetReader
+from allennlp.data.fields import MetadataField
 from allennlp.data import Instance
 import cls
 from ...utils import optional_arg_decorator, optional_arg_decorator_for
@@ -26,9 +27,13 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
         self.key_tokens = {}
         self.token_indexers = defaultdict(dict)
 
-    def _to_instance(self, raw_sample) -> Instance:
+    def _to_instance(self, raw_sample, metas=None) -> Instance:
         cls = type(self)
         fields = {}
+        if metas is not None:
+
+            for key, value in metas.items():
+                fields[key] = MetadataField(value)
 
         # prepare tokens
         for key, update_tokens in cls.tokens_dict.items():
@@ -44,9 +49,16 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
 
         return Instance(fields)
 
-    def _read(self, *args, **kwargs) -> Iterator[Instance]:
-        for raw_sample in self.raw_read(*args, **kwargs):
-            yield self._to_instance(raw_sample)
+    def _read(self, file_path, metas=None) -> Iterator[Instance]:
+        for raw_sample in self.raw_read(file_path):
+
+            yield self._to_instance(raw_sample, metas)
+
+    def read(self, file_path, metas=None) -> Iterator[Instance]:
+        from copy import copy
+        sub = copy(self)
+        sub._read = lambda file_path: self._read(file_path, metas=metas)
+        return DatasetReader.read(sub, file_path)
 
     @cls
     def field(cls, key):
@@ -76,6 +88,9 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
                 tokens = func(self_, fields, raw_sample)
                 if tokens is not None:
                     self_.key_tokens[key] = tokens
+                    # an additional metafield for the token list
+                    for sensor in self_.key_sensors[key]:
+                        fields[sensor.fullname] = MetadataField(tokens)
                 return tokens
             cls.tokens_dict[key] = update_tokens
             return update_tokens
@@ -95,8 +110,10 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
                     field = func(self_, fields, tokens)
                     if field is not None:
                         fields[sensor.fullname] = field
+
                 return fields
             cls.textfield_dict[key] = update_textfield
+
             return update_textfield
         return decorator
 
@@ -121,7 +138,7 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
 
 
 @optional_arg_decorator_for(lambda cls: issubclass(cls, SensableReader))
-def keep_fields(cls, *keys):
+def keep_keys(cls, *keys, exclude=[]):
     tokens_dict = OrderedDict()
     textfield_dict = OrderedDict()
     field_dict = OrderedDict()
@@ -130,11 +147,13 @@ def keep_fields(cls, *keys):
     for base in reversed(cls.__bases__):
         if issubclass(base, SensableReader):
             if len(keys) == 0:
-                tokens_dict.update(base.tokens_dict)
-                textfield_dict.update(base.textfield_dict)
-                field_dict.update(base.field_dict)
+                tokens_dict.update({k:v for k, v in base.tokens_dict.items() if k not in exclude})
+                textfield_dict.update({k:v for k, v in base.textfield_dict.items() if k not in exclude})
+                field_dict.update({k:v for k, v in base.field_dict.items() if k not in exclude})
             else:
                 for key in keys:
+                    if key in exclude:
+                        continue
                     if key in base.tokens_dict:
                         tokens_dict[key] = base.tokens_dict[key]
                     if key in base.textfield_dict:
@@ -142,7 +161,7 @@ def keep_fields(cls, *keys):
                     if key in base.field_dict:
                         field_dict[key] = base.field_dict[key]
     for key in keys:
-        if (key not in tokens_dict) and (key not in textfield_dict) and (key not in field_dict):
+        if (key not in tokens_dict) and (key not in textfield_dict) and (key not in field_dict) and (key not in exclude):
             raise ValueError('Cannot find key {} from any of the bases of {}'.format(key, cls.__name__))
 
     # update with current lastly

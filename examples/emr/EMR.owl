@@ -94,6 +94,10 @@
     <rdfs:domain rdf:resource="#people"/>
     <rdfs:range rdf:resource="#location"/>
   </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="kill">
+    <rdfs:domain rdf:resource="#people"/>
+    <rdfs:range rdf:resource="#people"/>
+  </owl:ObjectProperty>
 </rdf:RDF>
 
 <!-- Created with TopBraid -->
