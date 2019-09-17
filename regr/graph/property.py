@@ -28,7 +28,7 @@ class Property(BaseGraphShallowTree):
                 sensor_type = sensor_tests[i] # need a new variable to avoid closure
                 sensor_tests[i] = lambda s: isinstance(s, sensor_type)
             if not callable(sensor_tests[i]):
-                raise ValueError('Unsupported test {} to find.'.format(sensor_tests[i]))
+                raise ValueError('Unsupported feature.py {} to find.'.format(sensor_tests[i]))
 
         for name, sensor in self.items():
             for sensor_test in sensor_tests:

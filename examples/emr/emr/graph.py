@@ -6,7 +6,7 @@ Concept.clear()
 Relation.clear()
 
 with Graph('global') as graph:
-    graph.ontology = 'http://ontology.ihmc.us/ML/EMR.owl'
+    graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
 
     with Graph('linguistic') as ling_graph:
         word = Concept(name='word')
@@ -70,3 +70,7 @@ with Graph('global') as graph:
         orgbase_on = Concept(name='orgbase_on')
         orgbase_on.is_a(pair)
         orgbase_on.has_a(organization, location)
+
+        kill = Concept(name='kill')
+        kill.is_a(pair)
+        kill.has_a(people, people)

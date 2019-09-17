@@ -1,23 +1,32 @@
-from typing import List, Dict, NoReturn, Any, Optional
+from typing import List, Dict, Tuple, NoReturn, Any
 import torch
-from torch.nn import Module
 from ...graph import Property
 from .. import Sensor, Learner
+from .module import WrapperModule
 
 
 class AllenNlpSensor(Sensor):
     def __init__(
         self,
         *pres: List[Property],
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
         Sensor.__init__(self)
         self.pres = pres
         self.output_only = output_only
+        self.pre_dims = []
+        for pre in pres:
+            for name, sensor in pre.find(AllenNlpSensor):
+                dim = sensor.output_dim
+                self.pre_dims.append(dim)
+                break
+            else:
+                raise RuntimeError('Could not determin input dim for {} from pre-requirement {}'.format(self.fullname, pre.fullname))
 
     def update_context(
         self,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        force=False
     ) -> Dict[str, Any]:
         # update prerequired first
         for pre in self.pres:
@@ -34,15 +43,18 @@ class AllenNlpSensor(Sensor):
                     pre.fullname, self.fullname))
 
         # then call forward
-        return Sensor.update_context(self, context)
+        return Sensor.update_context(self, context, force)
 
+    @property
+    def output_dim(self):
+        return None
 
-class AllenNlpReaderSensor(AllenNlpSensor):
+class ReaderSensor(AllenNlpSensor):
     def __init__(
         self,
         reader,
         key: str,
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, output_only=output_only) # *pres=[]
         self.key = key
@@ -56,36 +68,37 @@ class AllenNlpReaderSensor(AllenNlpSensor):
         return context[self.fullname]
 
 
-class AllenNlpModuleSensor(AllenNlpSensor):
-    class WrapperModule(Module):
-        # use a wrapper to keep pre-requireds and avoid side-effect of sequencial or other modules
-        def __init__(self, module):
-            super(AllenNlpModuleSensor.WrapperModule, self).__init__()
-            self.main_module = module
 
-        def forward(self, *args, **kwargs):
-            return self.main_module(*args, **kwargs)
-
+class ModuleSensor(AllenNlpSensor):
     def __init__(
         self,
-        module: Module,
         *pres: List[Property],
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, *pres, output_only=output_only)
-        self.module = AllenNlpModuleSensor.WrapperModule(module)
-        for pre in pres:
-            for name, sensor in pre.items():
-                if isinstance(sensor, AllenNlpModuleSensor) and not sensor.output_only:
-                    self.module.add_module(sensor.fullname, sensor.module)
+        self._module = None
+
+    def create_module(self):
+        raise NotImplementedError('Implemented of create_module is required in subclass of ModuleSensor.')
+
+    @property
+    def module(self):
+        if self._module is None:
+            module = self.create_module()
+            self._module = WrapperModule(module, self.pres)
+        return self._module
+
+    @property
+    def output_dim(self):
+        return (self.module.get_output_dim(),)
 
 
-class AllenNlpLearner(AllenNlpModuleSensor, Learner):
+class AllenNlpLearner(ModuleSensor, Learner):
     def parameters(self):
         return self.module.parameters()
 
 
-class PreArgsModuleSensor(AllenNlpModuleSensor):
+class PreArgsModuleSensor(ModuleSensor):
     def forward(
         self,
         context: Dict[str, Any]
@@ -107,26 +120,31 @@ class SinglePreSensor(AllenNlpSensor):
     def __init__(
         self,
         pre: Property,
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
         AllenNlpSensor.__init__(self, pre, output_only=output_only)
-        self.pre = pre
+
+    @property
+    def pre(self):
+        return self.pres[0]
+
+    @property
+    def pre_dim(self):
+        return self.pre_dims[0]
 
 
 class SinglePreLearner(SinglePreSensor, PreArgsModuleLearner):
     def __init__(
         self,
-        module: Module,
         pre: Property,
-        output_only: Optional[bool]=False
+        output_only: bool=False
     ) -> NoReturn:
-        SinglePreSensor.__init__(self, pre, output_only=output_only)
-        PreArgsModuleLearner.__init__(self, module, pre, output_only=output_only)
+        PreArgsModuleLearner.__init__(self, pre, output_only=output_only)
 
 
 class MaskedSensor(AllenNlpSensor):
     def get_mask(self, context: Dict[str, Any]):
-        pass
+        raise NotImplementedError('Implement get_mask in subclass of MaskedSensor.')
 
 
 class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
@@ -139,10 +157,13 @@ class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
         return sensor.get_mask(context)
 
 
-
 class SinglePreMaskedLearner(SinglePreMaskedSensor, SinglePreLearner):
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
         return self.module(context[self.pre.fullname], self.get_mask(context))
+
+
+class SinglePreArgMaskedPairSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
+    pass

@@ -266,3 +266,18 @@ class Epoch(Metric):
 
     def get_metric(self, reset: bool = False):
         return self.epoch_num
+
+@Metric.register("dataset_type")
+class DatasetType(Metric):
+    def __init__(self):
+        super(DatasetType, self).__init__()
+        self.dataset_type = None
+        self.dataset_types = {}
+
+    def __call__(self, data):
+        self.dataset_type = data['dataset_type'][0]  # (batch,) there are copies
+        if self.dataset_type not in self.dataset_types:
+            self.dataset_types[self.dataset_type] = len(self.dataset_types)
+
+    def get_metric(self, reset: bool = False):
+        return self.dataset_types[self.dataset_type]

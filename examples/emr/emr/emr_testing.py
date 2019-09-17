@@ -1,50 +1,42 @@
-from .emr import *
-from allennlp.data.iterators import BucketIterator
-from allennlp.data.vocabulary import Vocabulary
-from regr.scaffold.inference import inference
+import os
+import pickle
+from argparse import ArgumentParser
 
-# TODO: fix this testing model example
+if __package__ is None or __package__ == '':
+    from emr_full import ontology_declaration, model_declaration
+    from utils import seed
+else:
+    from .emr_full import ontology_declaration, model_declaration
+    from .utils import seed
 
+parser = ArgumentParser(description='Test a trained model.')
+parser.add_argument('--model-path', '-m', type=str,
+                    help='Path to the model serialization_dir.')
+parser.add_argument('--data-path', '-d', type=str,
+                    help='Path to the data.')
+parser.add_argument('--log-solver', '-s', type=str, default='solver.log',
+                    help='Path save inference log.')
+parser.add_argument('--batch-size', '-b', type=int, default=1,
+                    help='Batch size in testing.')
 
-saved_path = './saved/20190512-1'
+args = parser.parse_args()
 
+def test(model_path, data_path, log_solver, batch_size):
+    with open(os.path.join(model_path, 'config.pkl'), 'rb') as fin:
+        Config = pickle.load(fin)
 
-seed1()
+    graph = ontology_declaration()
+
+    lbp = model_declaration(graph, Config.Model)
+
+    seed()
+    lbp.load(model_path, 'last')
+    metrics = lbp.test(data_path, log_solver, batch_size)
+    print(metrics)
 
 
 def main():
-    # data
-    reader = Reader()
-    train_dataset = reader.read(os.path.join(relative_path, train_path))
-    valid_dataset = reader.read(os.path.join(relative_path, valid_path))
-    data = Data(train_dataset, valid_dataset)
-
-    scaffold = AllennlpScaffold()
-    model = make_model(graph, data, scaffold)
-
-    with open(saved_path + '/model_emr.th', 'rb') as fin:
-        model.load_state_dict(torch.load(fin))
-    data.vocab = Vocabulary.from_files(saved_path + '/vocab_emr')
-
-    iterator = BucketIterator(batch_size=2, sorting_keys=[('sentence', 'num_tokens')], track_epoch=True)
-    iterator.index_with(data.vocab)
-    gen = iter(iterator(train_dataset, 1, shuffle=False))
-
-    for _ in range(256): next(gen) # skip some samples
-    for instance in gen:
-        if instance['Work_For'].sum() == 0: continue # skip unwanted samples
-        print(instance)
-        instance = model(**instance)
-        print(instance['global/application/people[label]-1'])
-        print(instance['global/application/organization[label]-1'])
-        print(instance['global/application/work_for[label]-1'])
-        instance = inference(graph, instance, data.vocab)
-        print(instance['global/application/people[label]-1'])
-        print(instance['global/application/organization[label]-1'])
-        print(instance['global/application/work_for[label]-1'])
-        print(instance.keys())
-        break
-
+    return test(args.model_path, args.data_path, args.log_solver, args.batch_size)
 
 
 if __name__ == '__main__':
