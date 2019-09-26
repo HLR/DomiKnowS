@@ -5,19 +5,12 @@ else:
     
 # Class representing single data instance
 class DataNode:
-    instance = None                        # The data instance (e.g. paragraph number, sentence number, token number, etc.)
-    
-    ontologyNode = None                    # Reference to the ontology graph node which this instance of 
    
-    childInstanceNodes =  list()           # List child data nodes this instance was segmented into
-    learnedModel = None                    # Reference to learned model able to provide probability for instance classification or relation
-    calculatedTypesOfPredictions = dict()  # Dictionary with types of calculated predictions (for learned model, from constrain solver, etc.) results for elements of the instance
-    
-    def __init__(self, instance = None, ontologyNode = None, childInstanceNodes = None, learnedModel = None):
-        self.instance = instance
-        self.ontologyNode = ontologyNode
-        self.childInstanceNodes = childInstanceNodes
-        self.learnedModel = learnedModel
+    def __init__(self, instance = None, ontologyNode = None, childInstanceNodes = None):
+        self.instance = instance                     # The data instance (e.g. paragraph number, sentence number, token number, etc.)
+        self.ontologyNode = ontologyNode             # Reference to the ontology graph node which this instance of 
+        self.childInstanceNodes = childInstanceNodes # List child data nodes this instance was segmented into
+        self.calculatedTypesOfPredictions = dict()   # Dictionary with types of calculated predictions (for learned model, from constrain solver, etc.) results for elements of the instance
         
     def getInstance(self):
         return self.instance
@@ -32,29 +25,28 @@ class DataNode:
     def getCalculatedTypesOfPredictions(self):
         return self.calculatedTypesOfPredictions
 
-
     # Set the prediction result data of the given type for the given concept
-    def setPredictionResultForConcept(self, typeOfPrediction, conceptName, prediction=None):
+    def setPredictionResultForConcept(self, typeOfPrediction, concept, prediction=None):
         if typeOfPrediction not in self.calculatedTypesOfPredictions:
             self.calculatedTypesOfPredictions[typeOfPrediction] = dict()
             
         if "Concept" not in self.calculatedTypesOfPredictions[typeOfPrediction]:
             self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"] = dict()
         
-        self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"][conceptName] = prediction
+        self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"][concept.name()] = prediction
    
     # Set the prediction result data of the given type for the given relation, positionInRelation indicates where is the current instance
-    def setPredictionResultForRelation(self, typeOfPrediction, positionInRelation, relationName, *instances, prediction=None):
+    def setPredictionResultForRelation(self, typeOfPrediction, positionInRelation, relation, *instances, prediction=None):
         if typeOfPrediction not in self.calculatedTypesOfPredictions:
             self.calculatedTypesOfPredictions[typeOfPrediction] = dict()
             
         if "Relation" not in self.calculatedTypesOfPredictions[typeOfPrediction]:
             self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"] = dict()
              
-        if relationName not in self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"]:
-            self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relationName] = dict()
+        if relation.name() not in self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"]:
+            self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relation.name()] = dict()
             
-        instanceRelationDict = self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relationName]
+        instanceRelationDict = self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relation.name()]
                
         updatedInstances = instances[0 : positionInRelation - 1] + (self.instance,) + instances[positionInRelation-1: ]
         
@@ -69,28 +61,28 @@ class DataNode:
         instanceRelationDict[updatedInstances[len(updatedInstances) - 1]] = prediction
    
     # Get the prediction result data of the given type for the given concept
-    def getPredictionResultForConcept(self, typeOfPrediction, conceptName):
+    def getPredictionResultForConcept(self, typeOfPrediction, concept):
         myReturn = None
         
         if typeOfPrediction not in self.calculatedTypesOfPredictions:
             pass
         elif "Concept" not in self.calculatedTypesOfPredictions[typeOfPrediction]:
             pass
-        elif conceptName not in self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"]:
+        elif concept.name() not in self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"]:
             pass
         else:
-            myReturn = self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"][conceptName]
+            myReturn = self.calculatedTypesOfPredictions[typeOfPrediction]["Concept"][concept.name()]
                                                                                          
         if (myReturn is None) and (self.learnedModel is not None):
-            myReturn = self.learnedModel.getPredictionResultForConcept(self.instance, conceptName)
+            myReturn = concept.getPredictionFor(self.instance)
             
             if myReturn != None:
-                self.setPredictionResultForConcept(typeOfPrediction, conceptName, prediction = myReturn)
+                self.setPredictionResultForConcept(typeOfPrediction, concept.name(), prediction = myReturn)
             
         return myReturn
             
     # Get the prediction result data of the given type for the given concept or relation (then *tokens is not empty)
-    def getPredictionResultForRelation(self, typeOfPrediction, positionInRelation, relationName, *instances):
+    def getPredictionResultForRelation(self, typeOfPrediction, positionInRelation, relation, *instances):
         myReturn = None
 
         if typeOfPrediction not in self.calculatedTypesOfPredictions:
@@ -98,7 +90,7 @@ class DataNode:
         elif "Relation" not in self.calculatedTypesOfPredictions[typeOfPrediction]:
             pass
         else:
-            instanceRelationDict = self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relationName]
+            instanceRelationDict = self.calculatedTypesOfPredictions[typeOfPrediction]["Relation"][relation.name()]
             
             updatedInstances = instances[0 : positionInRelation - 1] + (self.instance,) + instances[positionInRelation-1: ]
 
@@ -114,9 +106,10 @@ class DataNode:
                     myReturn = instanceRelationDict[updatedInstances[len(updatedInstances) - 1]]
             
         if (myReturn is None) and (self.learnedModel is not None):
-            myReturn = self.learnedModel.getPredictionResultForRelation(self.instance, relationName, instances)
+            updatedInstances = instances[0 : positionInRelation - 1] + (self.instance,) + instances[positionInRelation-1: ]
+            myReturn = relation.getPredictionFor(updatedInstances)
             
             if myReturn != None:
-                self.setPredictionResultForRelation(typeOfPrediction, relationName, instances, prediction = myReturn)
+                self.setPredictionResultForRelation(typeOfPrediction, relation.name(), instances, prediction = myReturn)
             
         return myReturn       
