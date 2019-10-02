@@ -3,12 +3,16 @@ import abc
 from pkg_resources import resource_filename
 from typing import Dict
 from torch import Tensor
-import numpy as np
 import logging
 
 # ontology
 from owlready2 import *
 
+if __package__ is None or __package__ == '':
+    from graph import DataNode
+else:
+    from .graph import DataNode
+    
 # path to Meta Graph ontology
 graphMetaOntologyPathname = resource_filename('regr', 'ontology/ML')
 
@@ -19,10 +23,6 @@ class ilpOntSolver(object):
     __metaclass__ = abc.ABCMeta
     
     __negVarTrashhold = 1.0
-    
-    myLogger = None
-
-    myIlpBooleanProcessor = None
     
     def setup_solver_logger(self, log_filename='ilpOntSolver.log'):
         logger = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ class ilpOntSolver(object):
 
     def loadOntology(self, ontologyURL, ontologyPathname=None):
         start = datetime.datetime.now()
+        
+        if self.myLogger is None:
+            self.setup_solver_logger()
+            
         self.myLogger.info('')
         self.myLogger.info('-----------------------------------------------')
         self.myLogger.info('Start Loading ontology %s'%(ontologyURL))
@@ -84,6 +88,3 @@ class ilpOntSolver(object):
 
     @abc.abstractmethod
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None): pass
-    
-    @abc.abstractmethod
-    def inferSelection(self, graph: Graph, *args, **kwargs): pass

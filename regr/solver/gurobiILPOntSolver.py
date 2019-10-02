@@ -44,9 +44,13 @@ class gurobiILPOntSolver(ilpOntSolver):
         # Create variables for token - concept and negative variables
         for tokenIndex, token in enumerate(tokens):            
             for conceptName in conceptNames: 
+                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                if currentProbability == 0:
+                    continue
+
                 x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))
                                 
-                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 self.myLogger.info("Probability for concept %s and token %s is %f"%(conceptName,token,currentProbability))
 
                 if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
@@ -96,7 +100,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if conceptName in foundDisjoint[disjointConcept]:
                         continue
                             
-                for token in tokens:
+                for tokenIndex, token in enumerate(tokens):
+                    currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                    if currentProbability == 0:
+                        continue
+                
                     currentConstrName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
                         
                     # Version of the disjoint constrain using logical function library
@@ -136,7 +145,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if conceptName in foundEquivalent[equivalentConcept.name]:
                         continue
                             
-                for token in tokens:
+                for tokenIndex, token in enumerate(tokens):
+                    currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                    if currentProbability == 0:
+                        continue
+                    
                     constrainName = 'c_%s_%s_Equivalent_%s'%(token, conceptName, equivalentConcept.name)
                     m.addConstr(self.myIlpBooleanProcessor.andVar(m, x[token, conceptName], x[token, equivalentConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
 
@@ -160,7 +174,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if ancestorConcept.name not in conceptNames :
                      continue
                             
-                for token in tokens:
+                for tokenIndex, token in enumerate(tokens):
+                    currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                    if currentProbability == 0:
+                        continue
+                    
                     constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
                     m.addConstr(self.myIlpBooleanProcessor.ifVar(m, x[token, conceptName], x[token, ancestorConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
 
@@ -177,7 +196,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             for conceptConstruct in currentConcept.constructs(Prop = None) :
                 if type(conceptConstruct) is And :
                     
-                    for token in tokens:
+                    for tokenIndex, token in enumerate(tokens):
+                        currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                        if currentProbability == 0:
+                            continue
+                        
                         _varAnd = m.addVar(name="andVar_%s"%(constrainName))
         
                         andList = []
@@ -201,7 +225,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             for conceptConstruct in currentConcept.constructs(Prop = None) :
                 if type(conceptConstruct) is Or :
                     
-                    for token in tokens:
+                    for tokenIndex, token in enumerate(tokens):
+                        currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                        if currentProbability == 0:
+                            continue
+                    
                         _varOr = m.addVar(name="orVar_%s"%(constrainName))
         
                         orList = []
@@ -227,7 +256,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     complementClass = conceptConstruct.Class
 
-                    for token in tokens:       
+                    for tokenIndex, token in enumerate(tokens):
+                        currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                        if currentProbability == 0:
+                            continue   
+                            
                         constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name) 
                         m.addConstr(self.myIlpBooleanProcessor.xorVar(m, x[token, conceptName], x[token, complementClass.name]), GRB.GREATER_EQUAL, 1, name=constrainName)
 
@@ -245,6 +279,12 @@ class gurobiILPOntSolver(ilpOntSolver):
         X_Q = None
         for tokenIndex, token in enumerate(tokens):
             for conceptName in conceptNames:
+                
+                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                if currentProbability == 0:
+                     continue   
+                        
                 currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
                 self.myLogger.info("Created objective element %s"%(currentQElement))
                 X_Q += currentQElement
@@ -275,9 +315,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if token1 == token2:
                         continue
     
+                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                    if currentProbability == 0:
+                        continue   
+
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
 
-                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     self.myLogger.info("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
                     
                     if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
@@ -319,24 +362,28 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if range.name not in conceptNames:
                         continue
                             
-                    for token in tokens:
-                        for token1 in tokens:
-                            if token == token1:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
                                 continue
+    
+                            currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                            if currentProbability == 0:
+                                continue   
                              
-                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token, token1)
-                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token, token1)
+                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
+                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                                 
                             # Version of the domain and range constrains using logical function library
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token, token1], x[token, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token, token1], x[token1, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
+                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
+                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
                                 
                             # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
-                            currentConstrLinExprDomain = x[token, domain._name] - y[currentRelation._name, token, token1]
+                            currentConstrLinExprDomain = x[token1, domain._name] - y[currentRelation._name, token1, token2]
                             m.addConstr(currentConstrLinExprDomain, GRB.GREATER_EQUAL, 0, name=currentConstrNameDomain)
                             self.myLogger.info("Domain constrain between relation \"%s\" and domain %s - %s %s %i"%(relationName,domain._name,currentConstrLinExprDomain,GRB.GREATER_EQUAL,0))
 
-                            currentConstrLinExprRange = x[token1, range._name] - y[currentRelation._name, token, token1]
+                            currentConstrLinExprRange = x[token2, range._name] - y[currentRelation._name, token1, token2]
                             m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=currentConstrNameRange)
                             self.myLogger.info("Range constrain between relation \"%s\" and range %s - %s %s %i"%(relationName,range._name,currentConstrLinExprRange,GRB.GREATER_EQUAL,0))
                                 
@@ -353,15 +400,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if superProperty.name not in graphResultsForPhraseRelation:
                     continue
                 
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token, token1, relationName, superProperty.name)
+                        constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token1, token2, relationName, superProperty.name)
                             
-                        #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[relationName, token, token1], y[superProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
-                        m.addConstr(y[superProperty.name, token, token1] - y[relationName, token, token1], GRB.GREATER_EQUAL, 0, name=constrainName)
+                        #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], y[superProperty.name, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addConstr(y[superProperty.name, token1, token2] - y[relationName, token1, token2], GRB.GREATER_EQUAL, 0, name=constrainName)
             
         # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
         foundEquivalent = dict() # too eliminate duplicates
@@ -383,13 +434,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if relationName in foundEquivalent[equivalentProperty.name]:
                         continue
                             
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token, token1, relationName, equivalentProperty.name)
-                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, y[relationName, token, token1], y[equivalentProperty.name, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token1, token2, relationName, equivalentProperty.name)
+                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, y[relationName, token1, token2], y[equivalentProperty.name, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
                             
                     if not (relationName in foundEquivalent):
                         foundEquivalent[relationName] = {equivalentProperty.name}
@@ -412,14 +467,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue
                  
             if currentRelationInverse is not None:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_InverseProperty'%(token, token1, relationName)
-                        m.addGenConstrIndicator(y[relationName, token, token1], True, y[currentRelationInverse.name, token1, token], GRB.EQUAL, 1)
-                        m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[equivalentProperty.name, token, token1], y[relationName, token, token1]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        constrainName = 'c_%s_%s_%s_InverseProperty'%(token1, token2, relationName)
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[currentRelationInverse.name, token2, token1], GRB.EQUAL, 1)
+                        m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[equivalentProperty.name, token1, token2], y[relationName, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
                             
         # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
         for relationName in graphResultsForPhraseRelation:
@@ -431,15 +490,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             functionalLinExpr =  LinExpr()
 
             if FunctionalProperty in currentRelation.is_a:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        functionalLinExpr += y[relationName, token, token1]
+                        functionalLinExpr += y[relationName, token1, token2]
                 
-                constrainName = 'c_%s_%s_%s_FunctionalProperty'%(token, token1, relationName)
-                m.addConstr(newLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+                constrainName = 'c_%s_%s_%s_FunctionalProperty'%(token1, token2, relationName)
+                m.addConstr(functionalLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
         
         # -- Add constraints based on property inverseFunctionaProperty statements in ontology - at most one P(x,y) for y
         for relationName in graphResultsForPhraseRelation:
@@ -449,15 +512,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if InverseFunctionalProperty in currentRelation.is_a:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        functionalLinExpr += y[relationName, token1, token]
+                        functionalLinExpr += y[relationName, token2, token1]
     
-                constrainName = 'c_%s_%s_%s_InverseFunctionalProperty'%(token, token1, relationName)
-                m.addConstr(newLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+                constrainName = 'c_%s_%s_%s_InverseFunctionalProperty'%(token1, token2, relationName)
+                m.addConstr(functionalLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
         
         # -- Add constraints based on property reflexiveProperty statements in ontology - P(x,x)
         for relationName in graphResultsForPhraseRelation:
@@ -467,7 +534,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if ReflexiveProperty in currentRelation.is_a:
-                for token in tokens: 
+                for tokenIndex, token in enumerate(tokens):
+                    
+                    currentProbability = graphResultsForPhraseRelation[relationName][tokenIndex][tokenIndex]
+                    if currentProbability == 0:
+                        continue
+                        
                     constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
                     m.addConstr(y[relationName, token, token], GRB.EQUAL, 1, name=constrainName)  
                         
@@ -479,7 +551,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if IrreflexiveProperty in currentRelation.is_a:
-                for token in tokens: 
+                for tokenIndex, token in enumerate(tokens):
+                    
+                    currentProbability = graphResultsForPhraseRelation[relationName][tokenIndex][tokenIndex]
+                    if currentProbability == 0:
+                        continue
+                    
                     constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
                     m.addConstr(y[relationName, token, token], GRB.EQUAL, 0, name=constrainName)  
                     
@@ -491,13 +568,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if SymmetricProperty in currentRelation.is_a:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token, token1, relationName)
-                        m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 1)
+                        constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token1, token2, relationName)
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1], GRB.EQUAL, 1)
         
         # -- Add constraints based on property asymetricProperty statements in ontology - not R(x, y) -> R(y,x)
         for relationName in graphResultsForPhraseRelation:
@@ -507,13 +588,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if AsymmetricProperty in currentRelation.is_a:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token, token1, relationName)
-                        m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 0)  
+                        constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token1, token2, relationName)
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1], GRB.EQUAL, 0)  
                         
         # -- Add constraints based on property transitiveProperty statements in ontology - P(x,y) and P(y,z) - > P(x,z)
         for relationName in graphResultsForPhraseRelation:
@@ -523,12 +608,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue   
             
             if TransitiveProperty in currentRelation.is_a:
-                for token in tokens: 
-                    for token1 in tokens:
-                        if token == token1:
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token1 == token2:
+                            continue
+    
+                        currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                        if currentProbability == 0:
                             continue
                         
-                        constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token, token1, relationName)
+                        constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token1, token2, relationName)
                         #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 1)  
                                
         # -- Add constraints based on property allValueFrom statements in ontology
@@ -571,6 +660,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if token1 == token2 :
                         continue
     
+                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                    if currentProbability == 0:
+                        continue
+                        
                     currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index]*y[relationName, token1, token2]
                     self.myLogger.info("Created objective element %s"%(currentQElement))
                     Y_Q += currentQElement
@@ -609,7 +702,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         if token3 == token1:
                             continue
-                    
+                        
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        if currentProbability == 0:
+                            continue
+                        
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
     
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
@@ -631,7 +728,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         if token3 == token1:
                             continue
-                
+                        
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        if currentProbability == 0:
+                            continue
+                        
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
                             constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
                             m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3], GRB.LESS_EQUAL, 1, name=constrainName)
@@ -730,6 +831,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if token3 == token1:
                             continue
                      
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        if currentProbability == 0:
+                            continue
+                        
                         constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
                         r1 = x[token1, triplePropertiesRanges['1']]
                         r2 = x[token2, triplePropertiesRanges['2']] 
@@ -758,6 +863,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if token3 == token2:
                             continue
 
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        if currentProbability == 0:
+                            continue
+                        
                         Z_Q += graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]*z[tripleRelationName, token1, token2, token3]
     
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
