@@ -8,10 +8,7 @@ import logging
 # ontology
 from owlready2 import *
 
-if __package__ is None or __package__ == '':
-    from graph import DataNode
-else:
-    from .graph import DataNode
+from regr.graph import DataNode
     
 # path to Meta Graph ontology
 graphMetaOntologyPathname = resource_filename('regr', 'ontology/ML')
