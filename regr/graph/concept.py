@@ -167,6 +167,11 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, *dataNodes, trial=None):
+    def predict(self, data, trial=None):
         if not trial:
             trial = Trial._context[-1]
+
+        try:
+            return trail[self, data]
+        except (AttributeError, KeyError):
+            return None
