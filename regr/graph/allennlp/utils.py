@@ -149,8 +149,8 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
 
 def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
                                             targets: torch.LongTensor,
-                                            inferences: torch.LongTensor,
                                             weights: torch.FloatTensor,
+                                            inferences: torch.FloatTensor,
                                             average: str = "batch",
                                             label_smoothing: float = None,
                                             gamma: float = None,
@@ -173,6 +173,19 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
     log_probs_flat = torch.nn.functional.log_softmax(logits_flat, dim=-1)
     # shape : (batch * max_len, 1)
     targets_flat = targets.view(-1, 1).long()
+
+    # inference coefficient
+    if inferences:
+        if True: # inferences shape: (batch, sequence_length, num_classes)
+            # shape: (batch, sequence_length, num_classes)
+            inferences_weights = inferences
+        else: # inferences shape: (batch, sequence_length)
+            # shape: (batch, sequence_length, num_classes)
+            inferences_weights = torch.zeros_like(weights)
+            inferences_weights.scatter_(-1, inferences, 1.)
+        inferences_weights = inferences_weights.float()
+        weights = weights * inferences_weights
+
     # focal loss coefficient
     if gamma:
         # shape : (batch * sequence_length, num_classes)
@@ -226,8 +239,7 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
         # of the targets, as the target distributions are one-hot. Here we use torch.gather
         # to extract the indices of the num_classes dimension which contribute to the loss.
         # shape : (batch * sequence_length, 1)
-        negative_log_likelihood_flat = torch.gather(log_probs_flat, dim=1, index=inferences) \
-                                     - torch.gather(log_probs_flat, dim=1, index=targets_flat)
+        negative_log_likelihood_flat = - torch.gather(log_probs_flat, dim=1, index=targets_flat)
     # shape : (batch, sequence_length)
     negative_log_likelihood = negative_log_likelihood_flat.view(*targets.size())
     # shape : (batch, sequence_length)
