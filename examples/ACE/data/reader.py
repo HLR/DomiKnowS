@@ -1,26 +1,12 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import numpy as np
-import math
-import nltk
-import gensim
-from nltk.tokenize import sent_tokenize, word_tokenize
 import glob
 from bs4 import BeautifulSoup
-import lxml
-import torch
-import torchtext.vocab as vocab
-import random
-import flair
-from sys import exit
-from flair.embeddings import WordEmbeddings, CharacterEmbeddings, FlairEmbeddings, StackedEmbeddings, BertEmbeddings, ELMoEmbeddings
 from flair.data import Sentence
 from segtok.segmenter import split_single
 
 class DataLoader:
-    def __init__(self, _paths, _hint, _vocabulary):
+    def __init__(self, _paths, _hint):
         self.paths = _paths
         self.files = []
         self.inputs = []
@@ -32,7 +18,6 @@ class DataLoader:
         self.splitTest = []
         self.splitValid = []
         self.splitTrain = []
-        self.vocabulary = _vocabulary
 
     def listFiles(self):
         for path in self.paths:

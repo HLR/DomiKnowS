@@ -9,16 +9,17 @@ with Graph('global') as graph:
     graph.ontology = ('http://ontology.ihmc.us/ML/ACE.owl', './')
 
     with Graph('linguistic') as ling_graph:
-        phrase = Concept(name='phrase')
+        # phrase = Concept(name='phrase')
+        word = Concept(name='word')
         sentence = Concept(name='sentence')
-        sentence.has_many(phrase)
+        # sentence.has_many(phrase)
 
-        pair = Concept(name='pair')
-        pair.has_a(phrase, phrase)
+        # pair = Concept(name='pair')
+        # pair.has_a(phrase, phrase)
 
     with Graph('application') as app_graph:
         entity = Concept(name='entity')
-        entity.is_a(phrase)
+        # entity.is_a(phrase)
 
         FAC = Concept(name='FAC')
         GPE = Concept(name='GPE')
