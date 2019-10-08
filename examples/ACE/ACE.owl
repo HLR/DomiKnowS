@@ -5,8 +5,8 @@
     xmlns:owl="http://www.w3.org/2002/07/owl#"
     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-    xmlns:emr="http://ontology.ihmc.us/ML/EMR.owl#"
-  xml:base="http://ontology.ihmc.us/ML/EMR.owl">
+    xmlns:ace="http://ontology.ihmc.us/ML/ACE.owl#"
+  xml:base="http://ontology.ihmc.us/ML/ACE.owl">
   <owl:Ontology rdf:about="">
     <owl:imports rdf:resource="http://ontology.ihmc.us/ML/PhraseGraph.owl"/>
     <owl:imports rdf:resource="http://ontology.ihmc.us/ML/MLGraph.owl"/>
