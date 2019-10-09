@@ -16,18 +16,47 @@ def ontology_graph(request):
     #------------------
     # create graphs
     #------------------
-    ontology_graph = Graph(iri='http://ontology.ihmc.us/ML/SPRL.owl', local='./examples/SpRL_new/')
-    with ontology_graph:
-        trajector = Concept()
-        landmark = Concept()
-        spatial_indicator = Concept()
-        none_entity = Concept()
-
-        triplet = Concept()
-        spatial_triplet = Concept()
-        region = Concept()
-        none_relation = Concept()
-    yield ontology_graph
+    with Graph('spLanguage') as splang_Graph:
+        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+    
+        with Graph('linguistic') as ling_graph:
+            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
+            phrase = Concept(name = 'phrase')
+            sentence = Concept(name = 'sentence')
+    
+        with Graph('application') as app_graph:
+            app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+    
+            trajector = Concept(name='TRAJECTOR')
+            landmark = Concept(name='LANDMARK')
+            none_entity = Concept(name='NONE_ENTITY')
+            spatial_indicator = Concept(name='SPATIAL_INDICATOR')
+            trajector.is_a(phrase)
+            landmark.is_a(phrase)
+            none_entity.is_a(phrase)
+            spatial_indicator.is_a(phrase)
+    
+            triplet = Concept(name='triplet')
+            triplet.has_a(first=phrase, second=phrase, third=phrase)
+    
+            spatial_triplet = Concept(name='spatial_triplet')
+            spatial_triplet.is_a(triplet)
+            spatial_triplet.has_a(first=landmark)
+            spatial_triplet.has_a(second=trajector)
+            spatial_triplet.has_a(third=spatial_indicator)
+    
+            region = Concept(name='region')
+            region.is_a(spatial_triplet)
+            distance = Concept(name='distance')
+            distance.is_a(spatial_triplet)
+            direction = Concept(name='direction')
+            direction.is_a(spatial_triplet)
+    
+            none_relation= Concept(name='none_relation')
+            none_relation.is_a(triplet)
+            none_relation.has_a(first=landmark, second=trajector, third=spatial_indicator)
+            
+    yield splang_Graph
 
     #------------------
     # tear down
@@ -44,7 +73,7 @@ def sprl_input(ontology_graph):
     #------------------
     # sample input
     #------------------
-    sentence = "About 20 kids in traditional clothing and hats waiting on stairs ."
+    sentence0 = "About 20 kids in traditional clothing and hats waiting on stairs ."
 
     # NB
     # Input to the inference in SPRL example is a bit different.
@@ -66,9 +95,15 @@ def sprl_input(ontology_graph):
 
     test_phrase = [(phrase, 'NP') for phrase in phrases] # Not feasible to have POS-tag. Usually they are noun phrase
 
-    test_data_graph = DataGraph(test_phrase, ontology_graph)
+    test_dataNode = DataNode(instanceID = 0, instanceValue = sentence0, ontologyNode = sentence, \
+                             childInstanceNodes = [DataNode(instanceID = 0, instanceValue = phrases[0], ontologyNode = phrase, childInstanceNodes = []), 
+                                                   DataNode(instanceID = 1, instanceValue = phrases[1], ontologyNode = phrase, childInstanceNodes = []),
+                                                   DataNode(instanceID = 2, instanceValue = phrases[2], ontologyNode = phrase, childInstanceNodes = []),
+                                                   DataNode(instanceID = 3, instanceValue = phrases[3], ontologyNode = phrase, childInstanceNodes = []),
+                                                   DataNode(instanceID = 4, instanceValue = phrases[4], ontologyNode = phrase, childInstanceNodes = []),
+                                                   DataNode(instanceID = 5, instanceValue = phrases[5], ontologyNode = phrase, childInstanceNodes = [])])
 
-    yield test_data_graph
+    yield test_dataNode
 
 def model_trial():
     from regr.graph import Trial
@@ -157,21 +192,13 @@ def model_trial():
 
 @pytest.mark.gurobi
 def test_main_sprl(sprl_input, model_trial):
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.ilpOntSolver import ilpOntSolver
 
-    test_data_graph = sprl_input
+    test_data_node = sprl_input
 
     #------------------
-    # Call solver
+    # Call solver on data Node for sentence 0
     #------------------
-    # @Andrzej, are you going to update the following lines with the new interface?
-    # You can use model_trial to retrieve prediction from model,
-    # or use concept.predict(1, trial=model_trial), which will use model_trial to retrieve the cached values.
-    # and please return a inference trial
-    myilpSolver = ilpOntSolverFactory.getOntSolverInstance(test_data_graph.getOntologyGraph())
-    test_data_graph_updated = myilpSolver.calculateILPSelection(instance = test_phrase, ontologyGraph = test_data_graph)
-    inference_trial = ...
+    inference_trial = test_data_node.inferILPConstrains(model_trial, trajector, landmark, spatial_indicator, none_entity, triplet, spatial_triplet, none_relation)
 
     #------------------
     # evaluate

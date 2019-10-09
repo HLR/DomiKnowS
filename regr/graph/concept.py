@@ -2,6 +2,7 @@ from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import chain
 from .base import Scoped, BaseGraphTree
+from .trial import Trial
 from ..utils import enum
 
 
@@ -167,11 +168,14 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, data, trial=None):
+    def predict(self, key, trial=None):
         if not trial:
             trial = Trial._context[-1]
 
         try:
-            return trail[self, data]
+            return trial[self, key]
         except (AttributeError, KeyError):
             return None
+        
+    def candidates(self, key, trial=None):
+        return None

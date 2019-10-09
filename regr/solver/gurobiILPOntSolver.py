@@ -1045,3 +1045,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # return results of ILP optimization
         return tokenResult, relationResult, tripleRelationResult
+    
+        def inferILPConstrains(self, model_trail, *conceptsRelations): 
+            if len(conceptsRelations) == 0:
+                return model_trail
+            
+            return conceptsRelations[0].inferILPConstrains(self, model_trail, conceptsRelations[1:])
