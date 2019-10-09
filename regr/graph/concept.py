@@ -168,14 +168,20 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, key, trial=None):
+    def predict(self, root_data, data, trial=None):
         if not trial:
             trial = Trial._context[-1]
 
         try:
-            return trial[self, key]
+            return trial[self, data]
         except (AttributeError, KeyError):
             return None
         
-    def candidates(self, key, trial=None):
+    def candidates(self, root_data, trial=None):
         return None
+
+    def getOntologyGraph(self):  # lowest sub-graph
+        node = self
+        while isinstance(node, Concept):  # None is not instance of Concept, If this concept has no graph, it will end up None
+            node = node.sup
+        return node
