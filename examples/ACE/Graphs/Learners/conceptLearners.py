@@ -1,5 +1,6 @@
 from Graphs.Learners.mainLearners import CallingLearner
 from torch import nn
+import torch.nn.functional as F
 from typing import Dict, Any
 import torch
 import pdb
@@ -30,6 +31,14 @@ class LSTMFlair(nn.Module):
 
         return lstm_out
 
+class PytorchFC(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(PytorchFC, self).__init__()
+        self.fc1 = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        return F.softmax(x)
 
 class LSTMLearner(CallingLearner):
     def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False):
@@ -45,18 +54,29 @@ class LSTMLearner(CallingLearner):
         context: Dict[str, Any]
     ) -> Any:
         super(LSTMLearner, self).forward(context=context)
-        print(context)
         _list = []
         for token in context[self.pres[0].fullname]:
             _list.append(token.embedding.view(1, self.input_dim))
         _tensor = torch.stack(_list)
         output = self.model(_tensor)
-        pdb.set_trace()
         return output
 
 
 class FullyConnectedLearner(CallingLearner):
-    pass
+    def __init__(self, *pres, input_dim, output_dim):
+        super(FullyConnectedLearner, self).__init__(*pres)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.model = PytorchFC(input_dim=self.input_dim, output_dim=self.output_dim)
+
+    def forward(
+            self,
+            context: Dict[str, Any]
+    ) -> Any:
+        super(FullyConnectedLearner, self).forward(context=context)
+        _tensor = context[self.pres[0].fullname]
+        output = self.model(_tensor)
+        return output
 
 
 
