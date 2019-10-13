@@ -18,15 +18,15 @@ def ontology_graph(request):
     #------------------
     with Graph('spLanguage') as splang_Graph:
         splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
-    
+
         with Graph('linguistic') as ling_graph:
             ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
             phrase = Concept(name = 'phrase')
             sentence = Concept(name = 'sentence')
-    
+
         with Graph('application') as app_graph:
             app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
-    
+
             trajector = Concept(name='TRAJECTOR')
             landmark = Concept(name='LANDMARK')
             none_entity = Concept(name='NONE_ENTITY')
@@ -35,27 +35,27 @@ def ontology_graph(request):
             landmark.is_a(phrase)
             none_entity.is_a(phrase)
             spatial_indicator.is_a(phrase)
-    
+
             triplet = Concept(name='triplet')
             triplet.has_a(first=phrase, second=phrase, third=phrase)
-    
+
             spatial_triplet = Concept(name='spatial_triplet')
             spatial_triplet.is_a(triplet)
             spatial_triplet.has_a(first=landmark)
             spatial_triplet.has_a(second=trajector)
             spatial_triplet.has_a(third=spatial_indicator)
-    
+
             region = Concept(name='region')
             region.is_a(spatial_triplet)
             distance = Concept(name='distance')
             distance.is_a(spatial_triplet)
             direction = Concept(name='direction')
             direction.is_a(spatial_triplet)
-    
+
             none_relation= Concept(name='none_relation')
             none_relation.is_a(triplet)
             none_relation.has_a(first=landmark, second=trajector, third=spatial_indicator)
-            
+
     yield splang_Graph
 
     #------------------
@@ -66,7 +66,7 @@ def ontology_graph(request):
 
 @pytest.fixture()
 def sprl_input(ontology_graph):
-    from regr.graph import DataGraph
+    from regr.graph import DataNode
 
     test_ont_graph = ontology_graph
 
@@ -96,7 +96,7 @@ def sprl_input(ontology_graph):
     test_phrase = [(phrase, 'NP') for phrase in phrases] # Not feasible to have POS-tag. Usually they are noun phrase
 
     test_dataNode = DataNode(instanceID = 0, instanceValue = sentence0, ontologyNode = sentence, \
-                             childInstanceNodes = [DataNode(instanceID = 0, instanceValue = phrases[0], ontologyNode = phrase, childInstanceNodes = []), 
+                             childInstanceNodes = [DataNode(instanceID = 0, instanceValue = phrases[0], ontologyNode = phrase, childInstanceNodes = []),
                                                    DataNode(instanceID = 1, instanceValue = phrases[1], ontologyNode = phrase, childInstanceNodes = []),
                                                    DataNode(instanceID = 2, instanceValue = phrases[2], ontologyNode = phrase, childInstanceNodes = []),
                                                    DataNode(instanceID = 3, instanceValue = phrases[3], ontologyNode = phrase, childInstanceNodes = []),
@@ -205,7 +205,7 @@ def test_main_sprl(sprl_input, model_trial):
     #------------------
     # -- phrase results:
     assert inference_trial[landmark, 0] == 1  # "stairs" - LANDMARK
-    # same thing as 
+    # same thing as
     assert landmark.predict(0, trial=inference_trial) == 1  # "stairs" - LANDMARK
 
     assert inference_trial[trajector, 1] == 1  # "About 20 kids " - TRAJECTOR
@@ -217,9 +217,9 @@ def test_main_sprl(sprl_input, model_trial):
     assert inference_trial[none_entity, 5] == 1 # "traditional clothing" - NONE
 
     # -- relation results:
-    
+
     assert inference_trial[triplet, (0, 1, 3)] == 1 # ("stairs", "About 20 kids ", "on")
     assert inference_trial[triplet, (0, 2, 3)] == 1 # ("stairs", "About 20 kids", "on")
-            
+
     assert inference_trial[none_relation, (0, 1, 3)] == 0 # ("stairs", "About 20 kids ", "on")
     assert inference_trial[none_relation, (0, 2, 3)] == 0 # ("stairs", "About 20 kids", "on")
