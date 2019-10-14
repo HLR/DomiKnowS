@@ -7,28 +7,44 @@ This example follows the pipeline we discussed in our preliminary paper.
 3. Explicit inference
 '''
 
-#### With `regr`, we assign sensors to properties of concept.
-#### There are two types of sensor: `Sensor`s and `Learner`s.
-#### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
 
-#### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
-from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, CallingSensor
+from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+# from .Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+from Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor
+# from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor
 from Graphs.Learners.conceptLearners import LSTMLearner
+# from .Graphs.Learners.conceptLearners import LSTMLearner
+from data.reader import DataLoader, ACEReader
+# from .data.reader import DataLoader, ACEReader
 
 
 def ontology_declaration():
     from Graphs.graph import graph
+    # from .Graphs.graph import graph
     return graph
 
 
-def reader_declaration(data_path, splitter_path):
-    from data.reader import DataLoader
-    reader = DataLoader(data_path, splitter_path)
-    reader.fire()
+def dataloader(data_path, splitter_path):
+    loader = DataLoader(data_path, splitter_path)
+    loader.fire()
+    return loader
+
+
+def reader_declaration(loader):
+    reader = ACEReader(loader.data)
     return reader
 
 
-def model_declaration(graph, reader):
+def reader_start(reader, mode):
+    if mode == "train":
+        return reader.readTrain()
+    elif mode == "valid":
+        return reader.readValid()
+    elif mode == "test":
+        return reader.readTest
+
+
+def model_declaration(graph, data, reader):
     graph.detach()
 
     sentence = graph['linguistic/sentence']
@@ -44,17 +60,19 @@ def model_declaration(graph, reader):
     WEA = graph['application/WEA']
 
     print(" I am here")
-    sentence['raw'] = SentenceReaderSensor(reader)
+    sentence['raw'] = SentenceReaderSensor(data)
     sentence['bert'] = SentenceBertEmbedderSensor(sentence['raw'])
     sentence['glove'] = SentenceGloveEmbedderSensor(sentence['raw'])
     sentence['flair'] = SentenceFlairEmbedderSensor(sentence['raw'])
-
+    sentence['pos'] = SentencePosTaggerSensor(sentence['raw'], reader=reader)
     # next(sentence['flair'].find(SentenceFlairEmbedderSensor))[1](context={})
 
-    sentence['output'] = CallingSensor(sentence['bert'], sentence['glove'], sentence['flair'], output=sentence['raw'])
+    sentence['raw_ready'] = CallingSensor(sentence['bert'], sentence['glove'], sentence['flair'], output=sentence['raw'])
+    sentence['embedding'] = FlairEmbeddingSensor(sentence['raw_ready'], embedding_dim=5220)
+    sentence['all'] = SequenceConcatSensor(sentence['embedding'], sentence['pos'])
     # next(sentence['output'].find(CallingSensor))[1](context={})
     #
-    sentence['encode'] = LSTMLearner(sentence['output'], input_dim=5220, hidden_dim=240, num_layers=1, bidirectional=True)
+    sentence['encode'] = LSTMLearner(sentence['all'], input_dim=5228, hidden_dim=240, num_layers=1, bidirectional=True)
     #
     next(sentence['encode'].find(CallingSensor))[1](context={})
 
@@ -157,9 +175,12 @@ def main():
 
     hint_path = "/home/hfaghihi/LDC2006T06/split"
 
-    # reader = reader_declaration(data_path=data_path, splitter_path=hint_path)
+    # loader = dataloader(data_path=data_path, splitter_path=hint_path)
+    # reader = reader_declaration(loader=loader)
+    # train = reader_start(reader=reader, mode="train")
+    train = None
     reader = None
-    lbp = model_declaration(graph, reader)
+    lbp = model_declaration(graph, data=train, reader=reader)
 
 
     #### 3. Train and save the model

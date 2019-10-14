@@ -1,5 +1,6 @@
 from regr.sensor.sensor import Sensor
 from typing import Dict, Any
+import torch
 
 class ReaderSensor(Sensor):
     def __init__(self, reader):
@@ -22,3 +23,37 @@ class CallingSensor(Sensor):
                 sensor(context=context)
         if self.output:
             return context[self.output.fullname]
+
+
+class SequenceConcatSensor(CallingSensor):
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        super(SequenceConcatSensor, self).forward(context=context)
+        _list = []
+        for item in self.pres:
+            _list.append(context[item.fullname])
+        it = 0
+        _data = []
+        for item in _list[0]:
+            _data.append(torch.cat((item, _list[1][it]), 1))
+            it += 1
+        return torch.stack(_data)
+
+
+class FlairEmbeddingSensor(CallingSensor):
+    def __init__(self, *pres, embedding_dim):
+        super(FlairEmbeddingSensor, self).__init__(*pres)
+        self.embedding_dim = embedding_dim
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        super(FlairEmbeddingSensor, self).forward(context=context)
+        _list = []
+        for token in context[self.pres[0].fullname]:
+            _list.append(token.embedding.view(1, self.embedding_dim))
+        _tensor = torch.stack(_list)
+        return _tensor

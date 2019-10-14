@@ -3,7 +3,6 @@ from Graphs.Sensors.mainSensors import ReaderSensor, CallingSensor
 # from .mainSensors import ReaderSensor, CallingSensor
 from typing import Dict, Any
 from flair.embeddings import WordEmbeddings, CharacterEmbeddings, FlairEmbeddings, StackedEmbeddings, BertEmbeddings, ELMoEmbeddings
-from flair.models import SequenceTagger
 import torch
 from sys import exit
 import pdb
@@ -12,15 +11,14 @@ from flair.data import Sentence
 
 
 
-class SentenceReaderSensor(ReaderSensor):
+class wordReaderSensor(ReaderSensor):
     def __init__(self,reader):
         super().__init__(reader)
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        # return next(self.reader)
-        return Sentence("I am highly motivated to capture the relationships of washington with berlin")
+        return next(self.reader)
 
 
 class SentenceSensor(CallingSensor):
@@ -69,30 +67,3 @@ class SentenceFlairEmbedderSensor(SentenceSensor):
         return None
 
 
-def translator(label):
-    items = ['PRON', 'VERB', 'ADV', 'ADJ', 'PART', 'DET', 'NOUN', 'ADP']
-    vector = torch.zeros(len(items))
-    for item in range(len(items)):
-        if label == items[item]:
-            vector[item] = 1
-    return vector.view(1, len(items))
-
-
-class SentencePosTaggerSensor(SentenceSensor):
-    def __init__(self, *pres, reader):
-        super().__init__(*pres)
-        self.reader = reader
-
-    def forward(
-            self,
-            context: Dict[str, Any]
-    ) -> Any:
-        super(SentencePosTaggerSensor, self).forward(context=context)
-        tagger = SequenceTagger.load('pos')
-        tagger.predict(context[self.sentencesensor.fullname])
-        _dict = context[self.sentencesensor.fullname].to_dict(tag_type='pos')
-        _list = []
-        for item in _dict['entities']:
-            # _list.append(self.reader.posTagEncoder(item['type']))
-            _list.append(translator(item['type']))
-        return torch.stack(_list)

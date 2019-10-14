@@ -4,8 +4,11 @@ import glob
 from bs4 import BeautifulSoup
 from flair.data import Sentence
 from segtok.segmenter import split_single
+import random
+from flair.models import SequenceTagger
 
-class DataLoader:
+
+class DataLoader :
     def __init__(self, _paths, _hint):
         self.paths = _paths
         self.files = []
@@ -186,4 +189,126 @@ class DataLoader:
         self.prepareLables()
         self.readLables()
         self.lableInputs()
+
+
+class ACEReader :
+    def __init__(self, _data):
+        self.data = _data
+        self.lables = []
+        self.total = 0
+        self.makeLables()
+        self.lablesCount = np.zeros(len(self.lables))
+        self.ratio = np.zeros(len(self.lables))
+        self.weights = np.zeros(len(self.lables))
+        self.lableCount()
+        self.lableRatio()
+        self.outputWeights()
+        self.train = []
+        self.valid = []
+        self.postags = []
+        self.test = []
+        self.splitSet()
+        self.posTagFinder()
+
+    def makeLables(self):
+        for item in self.data:
+            for word in item[0]:
+                if word['type'] not in self.lables:
+                    self.lables.append(word['type'])
+
+    def count(self):
+        return len(self.data)
+
+    def lablesCount(self):
+        return len(self.lables)
+
+    def lableToArray(self, lable):
+        array = torch.zeros(1, len(self.lables))
+        for k in range(len(self.lables)):
+            if lable == self.lables[k]:
+                array[0][k] = 1
+                break
+        return array
+
+    def lableToInt(self, lable):
+        for k in range(len(self.lables)):
+            if lable == self.lables[k]:
+                return k
+
+    def readTrain(self):
+        for item in self.train:
+            sentence = item[1]
+            lables = [x['type'] for x in item[0]]
+            yield sentence, lables
+
+    def readValid(self):
+        for item in self.valid:
+            sentence = item[1]
+            lables = [x['type'] for x in item[0]]
+            yield sentence, lables
+
+    def readTest(self):
+        for item in self.test:
+            sentence = item[1]
+            lables = [x['type'] for x in item[0]]
+            yield sentence, lables
+
+    def lableCount(self):
+        for item in self.data:
+            for word in item[0]:
+                for k in range(len(self.lables)):
+                    if word['type'] == self.lables[k]:
+                        self.lablesCount[k] += 1
+                        self.total += 1
+
+    def lableRatio(self):
+        for index in range(len(self.lables)):
+            self.ratio[index] = self.lablesCount[index] / self.total
+
+    def outputWeights(self):
+        un = 1 / len(self.lables)
+        for index in range(len(self.lables)):
+            self.weights[index] = un / self.ratio[index]
+        id1 = self.lableToInt('FAC')
+        id2 = self.lableToInt('-O-')
+        self.weights[id1] /= 2
+        self.weights[id2] *= 2
+
+    def intToLable(self, integer):
+        return self.lables[integer]
+
+    def splitInputs(self):
+        split_frac = 0.8
+        random.shuffle(self.data)
+        self.train = [x for x in self.data[0:int(split_frac * len(self.data))]]
+        remaining = [x for x in self.data[int(split_frac * len(self.data)):]]
+        self.valid = remaining[0:int(len(remaining) * 0.5)]
+        self.test = remaining[int(len(remaining) * 0.5):]
+
+    def splitSet(self):
+        for item in self.data:
+            if item[0][0]['set'] == "train":
+                self.train.append(item)
+            elif item[0][0]['set'] == "test":
+                self.test.append(item)
+            elif item[0][0]['set'] == "valid":
+                self.valid.append(item)
+
+    def posTagFinder(self):
+        for item in self.data:
+
+            tagger = SequenceTagger.load('pos')
+            tagger.predict(item[1])
+            _dict = item[1].to_dict(tag_type='pos')
+            for sample in _dict['entities']:
+                if sample not in self.postags:
+                    self.postags.append(sample['type'])
+
+    def postagEncoder(self, pos):
+        encode = torch.zeros(len(self.postags)).view(len(self.postags), 1)
+        for it in range(len(self.postags)):
+            if pos == self.postags[it]:
+                encode[it] = 1
+                break
+        return encode
 
