@@ -12,14 +12,12 @@ from flair.data import Sentence
 
 
 
-class SentenceReaderSensor(ReaderSensor):
-    def __init__(self,reader):
-        super().__init__(reader)
+class SentenceReaderSensor(CallingSensor):
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        # return next(self.reader)
+        # return context[self.pres[0].fullname][0]
         return Sentence("I am highly motivated to capture the relationships of washington with berlin")
 
 

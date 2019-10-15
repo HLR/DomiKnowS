@@ -8,19 +8,21 @@ This example follows the pipeline we discussed in our preliminary paper.
 '''
 
 
-from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
-# from .Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
-from Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor
-# from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor
-from Graphs.Learners.conceptLearners import LSTMLearner
-# from .Graphs.Learners.conceptLearners import LSTMLearner
-from data.reader import DataLoader, ACEReader
-# from .data.reader import DataLoader, ACEReader
+# from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+from .Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+# from Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
+from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
+# from Graphs.Sensors.conceptSensors import LabelSensor
+from .Graphs.Sensors.conceptSensors import LabelSensor
+# from .Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
+from .Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
+# from data.reader import DataLoader, ACEReader
+from .data.reader import DataLoader, ACEReader
 
 
 def ontology_declaration():
-    from Graphs.graph import graph
-    # from .Graphs.graph import graph
+    # from Graphs.graph import graph
+    from .Graphs.graph import graph
     return graph
 
 
@@ -60,7 +62,8 @@ def model_declaration(graph, data, reader):
     WEA = graph['application/WEA']
 
     print(" I am here")
-    sentence['raw'] = SentenceReaderSensor(data)
+    sentence['info'] = ReaderSensor(reader=data)
+    sentence['raw'] = SentenceReaderSensor(sentence['info'])
     sentence['bert'] = SentenceBertEmbedderSensor(sentence['raw'])
     sentence['glove'] = SentenceGloveEmbedderSensor(sentence['raw'])
     sentence['flair'] = SentenceFlairEmbedderSensor(sentence['raw'])
@@ -72,9 +75,27 @@ def model_declaration(graph, data, reader):
     sentence['all'] = SequenceConcatSensor(sentence['embedding'], sentence['pos'])
     # next(sentence['output'].find(CallingSensor))[1](context={})
     #
-    sentence['encode'] = LSTMLearner(sentence['all'], input_dim=5228, hidden_dim=240, num_layers=1, bidirectional=True)
+    word['encode'] = LSTMLearner(sentence['all'], input_dim=5228, hidden_dim=240, num_layers=1, bidirectional=True)
+
+    FAC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    GPE['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    PER['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    ORG['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    LOC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    VEH['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    WEA['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+
+    FAC['label'] = LabelSensor(sentence['info'], target=FAC.name)
+    GPE['label'] = LabelSensor(sentence['info'], target=GPE.name)
+    PER['label'] = LabelSensor(sentence['info'], target=PER.name)
+    ORG['label'] = LabelSensor(sentence['info'], target=ORG.name)
+    LOC['label'] = LabelSensor(sentence['info'], target=LOC.name)
+    VEH['label'] = LabelSensor(sentence['info'], target=VEH.name)
+    WEA['label'] = LabelSensor(sentence['info'], target=WEA.name)
+
+    return graph
     #
-    next(sentence['encode'].find(CallingSensor))[1](context={})
+    # next(sentence['encode'].find(CallingSensor))[1](context={})
 
     # sentence['all'] = ConcatSensor(sentence['flair'], sentence['bert'], sentence['glove'])
     # #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.
@@ -180,7 +201,8 @@ def main():
     # train = reader_start(reader=reader, mode="train")
     train = None
     reader = None
-    lbp = model_declaration(graph, data=train, reader=reader)
+    updated_graph = model_declaration(graph, data=train, reader=reader)
+
 
 
     #### 3. Train and save the model

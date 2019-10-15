@@ -1,11 +1,7 @@
 from regr.sensor.sensor import Sensor
 from typing import Dict, Any
 import torch
-
-class ReaderSensor(Sensor):
-    def __init__(self, reader):
-        super().__init__()
-        self.reader = reader
+from flair.data import Sentence
 
 
 class CallingSensor(Sensor):
@@ -23,6 +19,20 @@ class CallingSensor(Sensor):
                 sensor(context=context)
         if self.output:
             return context[self.output.fullname]
+
+
+class ReaderSensor(CallingSensor):
+    def __init__(self, *pres, reader):
+        super().__init__(pres)
+        self.reader = reader
+
+    def forward(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        super(ReaderSensor, self).forward(context=context)
+        # return next(self.reader)
+        return Sentence("I am highly motivated to capture the relationships of washington with berlin"), ["FAC", 'LOC', 'NONE', 'NONE', "FAC", 'LOC', 'NONE', 'NONE', "FAC", 'LOC', 'NONE', 'NONE']
 
 
 class SequenceConcatSensor(CallingSensor):

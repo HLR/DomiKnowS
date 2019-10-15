@@ -70,19 +70,7 @@ class DataLoader :
             splitted = [data for data in splitted if data]
             sentences = [Sentence(sent) for sent in splitted]
             sentences = [sentence for sentence in sentences if len(sentence) >= 3]
-            #             sentences = sample['parse'].text.replace('\n\n', '. ').split(". ")
-            #             sample['sentences'] = [x for x in sentences if x]
             sample['sentences'] = sentences
-            #             while iteration < 3:
-            #                 print(sentences)
-            #             if iteration == 5:
-            #                 exit(0)
-            #             sample['data'] = []
-            #             for sentence in sample['sentences']:
-            #                 sample['data'].append([word for word in sentence if word and word != "\n"])
-            #             sample['lower_sentences'] = []
-            #             for item in sample['data']:
-            #                 sample['lower_sentences'].append([w.lower() for w in item])
             self.inputs.append(sample)
             file1.close()
             iteration += 1
