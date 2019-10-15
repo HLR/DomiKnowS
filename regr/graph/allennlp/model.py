@@ -8,9 +8,11 @@ from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
 
 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
+
 from .metrics import Epoch, DatasetType
 
 from .. import Graph
+from ..trial import Trial
 from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
@@ -199,9 +201,15 @@ class GraphModel(Model):
         for prop in self.graph.poi:
             for name, sensor in prop.items():
                 sensor(data)
+        trivial_trial = Trial(data)
 
-        data = self._update_loss(data)
-        data = self._update_metrics(data)
+        with trivial_trial:
+            if self._need_inference(trivial_trial):
+                trial = Trial()
+            else:
+                trial = trivial_trial
+        self._update_loss(trivial_trial, trial)
+        self._update_metrics(trivial_trial, trial)
 
         return data
 
@@ -211,7 +219,7 @@ class GraphModel(Model):
     ) -> DataInstance:
         #data = inference(self.graph, self.graph.solver, data, self.vocab)
         data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
-        
+
         return data
 
     def loss_func(
