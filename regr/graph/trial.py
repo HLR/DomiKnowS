@@ -58,3 +58,14 @@ class Trial():
 
     def __len__(self):
         return len(list(iter(self)))
+
+    def items(self):
+        for key in iter(self):
+            yield key, self[key]
+
+    def keys(self):
+        yield from iter(self)
+
+    def values(self):
+        for key in iter(self):
+            yield self[key]
