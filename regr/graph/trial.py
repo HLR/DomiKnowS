@@ -3,10 +3,10 @@ from .base import BaseGraphTree
 
 @BaseGraphTree.localize_context
 class Trial(BaseGraphTree):
-    def __init__(self, name=None):
+    def __init__(self, data=dict(), obsoleted=set(), name=None):
         BaseGraphTree.__init__(self, name)  # name may be update
-        self.data = dict()
-        self.obsoleted = set()
+        self.data = data
+        self.obsoleted = obsoleted
 
     def __getitem__(self, key):
         try:
