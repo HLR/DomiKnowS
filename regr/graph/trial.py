@@ -7,6 +7,7 @@ class TrialTree(BaseGraphTree):
         super().__init__(name=name)
         self.trial = trial
 
+
 class Trial():
     @classmethod
     def default(cls):
