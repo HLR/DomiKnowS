@@ -2,6 +2,8 @@ import pytest
 
 @pytest.fixture()
 def sprl_input(request):
+    import numpy as np
+
     #------------------
     # sample input
     #------------------

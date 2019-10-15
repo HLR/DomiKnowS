@@ -3,6 +3,8 @@ import pytest
 @pytest.fixture()
 def ontology_graph(request):
     from regr.graph import Graph, Concept
+    Graph.clear()
+    Concept.clear()
 
     #------------------
     # sample inference setup
@@ -69,6 +71,8 @@ def sprl_input(ontology_graph):
     from regr.graph import DataNode
 
     test_ont_graph = ontology_graph
+    sentence = test_ont_graph['linguistic/sentence']
+    phrase = test_ont_graph['linguistic/phrase']
 
     #------------------
     # sample input
@@ -105,8 +109,17 @@ def sprl_input(ontology_graph):
 
     yield test_dataNode
 
-def model_trial():
+@pytest.fixture()
+def model_trial(ontology_graph):
     from regr.graph import Trial
+
+    application_graph = ontology_graph['application']
+    trajector = application_graph['TRAJECTOR']
+    landmark = application_graph['LANDMARK']
+    spatial_indicator = application_graph['SPATIAL_INDICATOR']
+    none_entity = application_graph['NONE_ENTITY']
+    triplet = application_graph['triplet']
+    spatial_triplet = application_graph['spatial_triplet']
 
     #------------------
     # sample output from learners
@@ -190,8 +203,18 @@ def model_trial():
     model_trial[spatial_triplet, (0, 1, 3)] = 0.15  # ("stairs", "About 20 kids ", "on")
     model_trial[spatial_triplet, (0, 2, 3)] = 0.08  # ("stairs", "About 20 kids", "on")
 
+    return model_trial
+
 @pytest.mark.gurobi
-def test_main_sprl(sprl_input, model_trial):
+def test_main_sprl(ontology_graph, sprl_input, model_trial):
+    application_graph = ontology_graph['application']
+    trajector = application_graph['TRAJECTOR']
+    landmark = application_graph['LANDMARK']
+    spatial_indicator = application_graph['SPATIAL_INDICATOR']
+    none_entity = application_graph['NONE_ENTITY']
+    triplet = application_graph['triplet']
+    spatial_triplet = application_graph['spatial_triplet']
+    none_relation = application_graph['none_relation']
 
     test_data_node = sprl_input
 

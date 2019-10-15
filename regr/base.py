@@ -171,6 +171,12 @@ class NamedTreeNode(Named):
         cls_._context = cls._context
         return cls_
 
+    @classmethod
+    def default(cls):
+        if cls._context:
+            return cls._context[-1]
+        return None
+
     def __init__(self, name=None):
         Named.__init__(self, name)
         cls = type(self)

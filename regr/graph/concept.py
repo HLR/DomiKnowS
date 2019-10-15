@@ -171,7 +171,7 @@ class Concept(BaseGraphTree):
     def predict(self, root_data, data, trial=None):
         # TODO: make use of root_data to find the best proper trial in the stack
         if not trial:
-            trial = Trial._context[-1]
+            trial = Trial.default()
 
         try:
             return trial[self, data]
