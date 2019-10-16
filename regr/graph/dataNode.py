@@ -186,7 +186,7 @@ class DataNode:
                             graphResultsForTripleRelations[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, no_candidateds))
                             
                         currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID, currentCandidate[2].instanceID))
-                        graphResultsForTripleRelations[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID]][infer_candidates[currentCandidate[1].instanceID]][infer_candidates[currentCandidate[2].instanceID]] = currentProbability
+                        graphResultsForTripleRelations[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID].instanceID][infer_candidates[currentCandidate[1].instanceID].instanceID][infer_candidates[currentCandidate[2].instanceID].instanceID]= currentProbability
                         
                     else: # No support for more then three candidates yet
                         pass
@@ -214,7 +214,7 @@ class DataNode:
                 for infer_candidate1 in infer_candidates:
                     for infer_candidate2 in infer_candidates:
                         if infer_candidate1 != infer_candidate2:
-                            infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID)] = tokenResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID] 
+                            infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID)] = pairResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID] 
                             
             for concept in tripleResult:
                 for infer_candidate1 in infer_candidates:
@@ -222,7 +222,7 @@ class DataNode:
                         if infer_candidate1 != infer_candidate2:
                             for infer_candidate3 in infer_candidates:
                                 if infer_candidate2 != infer_candidate3:
-                                    infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID)] = tokenResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID] 
+                                    infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID)] = tripleResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID] 
                 
             return infered_trial
         
