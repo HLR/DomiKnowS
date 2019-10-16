@@ -1,5 +1,7 @@
-from ..base import Scoped, AutoNamed, NamedTreeNode, NamedTree
-
+if __package__ is None or __package__ == '':
+    from regr.base import Scoped, AutoNamed, NamedTreeNode, NamedTree
+else:
+    from ..base import Scoped, AutoNamed, NamedTreeNode, NamedTree
 
 @NamedTreeNode.localize_context
 class BaseGraphTreeNode(AutoNamed, NamedTreeNode):

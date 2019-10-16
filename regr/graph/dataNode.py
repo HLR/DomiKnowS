@@ -2,17 +2,22 @@ import numpy as np
 
 if __package__ is None or __package__ == '':
     from graph import Graph
+    from graph import Trial
+    from solver import ilpOntSolverFactory
 else:
     from .graph import Graph
-    
+    from . import Trial
+    from ..solver import ilpOntSolverFactory
+
 # Class representing single data instance and links to the children data nodes which represent sub instances this instance was segmented into 
 class DataNode:
    
-    def __init__(self, instanceID = None, instanceValue= None, ontologyNode = None, childInstanceNodes = None):
+    def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, childInstanceNodes = None, attributes = None):
         self.instanceID = instanceID                 # The data instance id (e.g. paragraph number, sentence number, token number, etc.)
         self.instanceValue = instanceValue           # Optional value of the instance 
         self.ontologyNode = ontologyNode             # Reference to the ontology graph node (e.g. Concept) which is the type of this instance
         self.childInstanceNodes = childInstanceNodes # List of child data nodes this instance was segmented into
+        self.attributes = attributes                 # Dictionary with additional node's attributes
         self.calculatedTypesOfPredictions = dict()   # Dictionary with types of calculated predictions results (for learned model, from constrain solver, etc.)
         
     def getInstanceID(self):
@@ -24,6 +29,15 @@ class DataNode:
     def getOntologyNode(self):
         return self.ontologyNode
     
+    def getAttributes(self):
+        return self.attributes.kesy()
+    
+    def getAttribute(self, key):
+        if key in self.attributes:
+            return self.attributes[key]
+        else:
+            return None
+            
     def getChildInstanceNodes(self):
         return self.childInstanceNodes
     
@@ -154,31 +168,39 @@ class DataNode:
                 
                 for currentCandidate in currentCandidates:
                     if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                        if currentConceptOrRelation not in graphResultsForPhraseToken:
-                            graphResultsForPhraseToken[currentConceptOrRelation] = np.zeros((no_candidateds, ))
+                        if currentConceptOrRelation.name not in graphResultsForPhraseToken:
+                            graphResultsForPhraseToken[currentConceptOrRelation.name] = np.zeros((no_candidateds, ))
                         
-                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0], ))
-                        graphResultsForPhraseToken[currentConceptOrRelation][infer_candidates.index(currentCandidate[0])] = currentProbability
+                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, ))
+                        graphResultsForPhraseToken[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID].instanceID] = currentProbability
                         
                     elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
-                        if currentConceptOrRelation not in graphResultsForPhraseRelation:
-                            graphResultsForPhraseRelation[currentConceptOrRelation] = np.zeros((no_candidateds, no_candidateds))
+                        if currentConceptOrRelation.name not in graphResultsForPhraseRelation:
+                            graphResultsForPhraseRelation[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds))
                         
-                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0], currentCandidate[1]))
-                        graphResultsForPhraseRelation[currentConceptOrRelation][infer_candidates.index(currentCandidate[0])][infer_candidates.index(currentCandidate[1])] = currentProbability
+                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID))
+                        graphResultsForPhraseRelation[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID]][infer_candidates[currentCandidate[1].instanceID]] = currentProbability
     
                     elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element
-                        if currentConceptOrRelation not in graphResultsForTripleRelations:
-                            graphResultsForTripleRelations[currentConceptOrRelation] = np.zeros((no_candidateds, no_candidateds, no_candidateds))
+                        if currentConceptOrRelation.name not in graphResultsForTripleRelations:
+                            graphResultsForTripleRelations[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, no_candidateds))
                             
-                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0], currentCandidate[1], currentCandidate[2]))
-                        graphResultsForTripleRelations[currentConceptOrRelation][infer_candidates.index(currentCandidate[0])][infer_candidates.index(currentCandidate[1])][infer_candidates.index(currentCandidate[2])] = currentProbability
+                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID, currentCandidate[2].instanceID))
+                        graphResultsForTripleRelations[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID]][infer_candidates[currentCandidate[1].instanceID]][infer_candidates[currentCandidate[2].instanceID]] = currentProbability
                         
                     else: # No support for more then three candidates yet
                         pass
     
             # Call ilpOntsolver with the collected probabilities for chosen candidates
-            myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(self.ontologyNode.getOntologGraph())
+            myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
+            
+            for currentConceptOrRelation in conceptsRelations:
+                currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
+                
+                if currentOntologyGraph is not None:
+                    myOntologyGraphs.add(currentOntologyGraph)
+                    
+            myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
             tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidates, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
             
             #  Create Trail with returned results
@@ -186,13 +208,13 @@ class DataNode:
 
             for concept in tokenResult:
                 for infer_candidate in infer_candidates:
-                    infered_trial[concept, (infer_candidate, )] = tokenResult[concept][infer_candidate] 
+                    infered_trial[concept, (infer_candidate.instanceID, )] = tokenResult[concept][infer_candidate.instanceID] 
                     
             for concept in pairResult:
                 for infer_candidate1 in infer_candidates:
                     for infer_candidate2 in infer_candidates:
                         if infer_candidate1 != infer_candidate2:
-                            infered_trial[concept, (infer_candidate1, infer_candidate2)] = tokenResult[concept][infer_candidate1, infer_candidate2] 
+                            infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID)] = tokenResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID] 
                             
             for concept in tripleResult:
                 for infer_candidate1 in infer_candidates:
@@ -200,7 +222,7 @@ class DataNode:
                         if infer_candidate1 != infer_candidate2:
                             for infer_candidate3 in infer_candidates:
                                 if infer_candidate2 != infer_candidate3:
-                                    infered_trial[concept, (infer_candidate1, infer_candidate2, infer_candidate3)] = tokenResult[concept][infer_candidate1, infer_candidate2, infer_candidate3] 
+                                    infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID)] = tokenResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID] 
                 
             return infered_trial
         
