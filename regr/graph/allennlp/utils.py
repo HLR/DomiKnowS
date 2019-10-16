@@ -150,7 +150,7 @@ def sequence_cross_entropy_with_logits(logits: torch.FloatTensor,
 def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
                                             targets: torch.LongTensor,
                                             weights: torch.FloatTensor,
-                                            inferences: torch.FloatTensor,
+                                            inferences: torch.FloatTensor = None,
                                             average: str = "batch",
                                             label_smoothing: float = None,
                                             gamma: float = None,
@@ -175,14 +175,13 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
     targets_flat = targets.view(-1, 1).long()
 
     # inference coefficient
-    if inferences:
-        if True: # inferences shape: (batch, sequence_length, num_classes)
-            # shape: (batch, sequence_length, num_classes)
+    if inferences is not None:
+        if len(inferences.shape) == len(logits): # inferences shape: (batch, sequence_length, ..., num_classes)
+            # shape: (batch, sequence_length, ...)
+            inferences_weights = inferences.select(-1, 1)
+        else: # inferences shape: (batch, sequence_length, ...)
+            # shape: (batch, sequence_length, ...)
             inferences_weights = inferences
-        else: # inferences shape: (batch, sequence_length)
-            # shape: (batch, sequence_length, num_classes)
-            inferences_weights = torch.zeros_like(weights)
-            inferences_weights.scatter_(-1, inferences, 1.)
         inferences_weights = inferences_weights.float()
         weights = weights * inferences_weights
 
