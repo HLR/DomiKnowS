@@ -204,6 +204,7 @@ class GraphModel(Model):
         for prop in self.graph.poi:
             for name, sensor in prop.items():
                 sensor(data)
+        Trial.clear() # reset at every epoch
         trivial_trial = Trial(data)
 
         with trivial_trial:

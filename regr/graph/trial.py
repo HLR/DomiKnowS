@@ -10,6 +10,10 @@ class TrialTree(BaseGraphTree):
 
 class Trial():
     @classmethod
+    def clear(cls):
+        TrialTree.clear()
+
+    @classmethod
     def default(cls):
         default_tree = TrialTree.default()
         if default_tree is not None:
