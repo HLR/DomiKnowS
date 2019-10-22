@@ -35,9 +35,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         self.myLogger.info('Starting method addTokenConstrains')
         self.myLogger.info('graphResultsForPhraseToken')
-        padding = max([len(x) for x in tokens])
-        spacing = max([len(x) for x in conceptNames]) + 1
-        self.myLogger.info("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ t + '\'' for t in tokens])))
+        padding = max([len(str(x)) for x in tokens])
+        spacing = max([len(str(x)) for x in conceptNames]) + 1
+        self.myLogger.info("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ str(t) + '\'' for t in tokens])))
         for concept, tokenTable in graphResultsForPhraseToken.items():
             self.myLogger.info("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
 
@@ -892,7 +892,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         tokens = None
         if all(isinstance(item, tuple) for item in phrase):
             tokens = [x for x, _ in phrase]
-        elif all(isinstance(item, string_types) for item in phrase):
+        elif all((isinstance(item, string_types) or isinstance(item, int)) for item in phrase):
             tokens = phrase
         else:
             self.myLogger.info('Phrase type is not supported %s - returning unchanged results'%(phrase))
@@ -972,7 +972,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             tokenResult[conceptName] = np.zeros(len(tokens))
                             
                             for tokenIndex, token in enumerate(tokens):
-                                if solution[token, conceptName] == 1:                                    
+                                if ((token, conceptName) in solution) and (solution[token, conceptName] == 1):                                    
                                     tokenResult[conceptName][tokenIndex] = 1
                                     self.myLogger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
 
@@ -995,7 +995,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     if token2 == token1:
                                         continue
                                     
-                                    if solution[relationName, token1, token2] == 1:
+                                    if ((relationName, token1, token2) in solution) and (solution[relationName, token1, token2] == 1):
                                         relationResult[relationName][token1Index][token2Index] = 1
                                         
                                         self.myLogger.info('Solution \"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
@@ -1029,8 +1029,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         if token3 == token1:
                                             continue
                                     
-                                        currentSolutionValue = solution[tripleRelationName, token1, token2, token3]
-                                        if solution[tripleRelationName, token1, token2, token3] == 1:
+                                        if ((tripleRelationName, token1, token2, token3) in solution) and (solution[tripleRelationName, token1, token2, token3] == 1):
                                             tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
                                         
                                             self.myLogger.info('Solution \"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))

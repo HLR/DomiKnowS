@@ -26,11 +26,14 @@ class ilpOntSolverFactory:
             
         ontologies = []
         
+        graphOntologyError = set()
         for currentGraph in graph:
-            if currentGraph.ontology is not None:
+            if (currentGraph.ontology is not None) and (currentGraph.ontology.iri is not None):
                 if currentGraph.ontology not in ontologies:
                     ontologies.append(currentGraph.ontology)
-        
+            else:
+                graphOntologyError.add(currentGraph)
+                
         if not ontologies:
             return None
             
@@ -67,6 +70,10 @@ class ilpOntSolverFactory:
             cls.__instances[ontologiesTuple].loadOntology(ontologiesTuple)
 
             cls.__instances[ontologiesTuple].ilpSolver = _iplConfig['ilpSolver']
+
+            if graphOntologyError:
+                for currentGraph in graphOntologyError:
+                    cls.__instances[ontologiesTuple].myLogger.error("Problem graph %s ontology is not correctly defined %s"%(currentGraph.name,currentGraph.ontology))
 
             cls.__instances[ontologiesTuple].myLogger.info("Returning new ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
             return cls.__instances[ontologiesTuple]

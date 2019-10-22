@@ -66,7 +66,7 @@ class ilpOntSolver(object):
                 ontologyPath = Path(os.path.normpath(currentOntology.local))
                 ontologyPath = ontologyPath.resolve()
                 if not os.path.isdir(ontologyPath):
-                    self.myLogger.error("Path to load ontology: %s does not exists in current directory %s"%(ontologyURL,currentPath))
+                    self.myLogger.error("Path to load ontology: %s does not exists in current directory %s"%(currentOntology.iri, currentOntology.local))
                     exit()
     
                 onto_path.append(ontologyPath) # the folder with the ontology for the specific  graph
