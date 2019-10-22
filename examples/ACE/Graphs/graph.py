@@ -1,5 +1,5 @@
-from regr.graph import Graph, Concept, Relation
-
+from regr.graph import Concept, Relation, Graph
+# from .base import NewGraph as Graph
 
 Graph.clear()
 Concept.clear()

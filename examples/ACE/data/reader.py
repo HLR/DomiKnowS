@@ -256,11 +256,12 @@ class ACEReader :
     def outputWeights(self):
         un = 1 / len(self.lables)
         for index in range(len(self.lables)):
-            self.weights[index] = un / self.ratio[index]
-        id1 = self.lableToInt('FAC')
-        id2 = self.lableToInt('-O-')
-        self.weights[id1] /= 2
-        self.weights[id2] *= 2
+            # self.weights[index] = un / self.ratio[index]
+            self.weights[index] = 1 - self.ratio[index]
+        # id1 = self.lableToInt('FAC')
+        # id2 = self.lableToInt('-O-')
+        # self.weights[id1] /= 2
+        # self.weights[id2] *= 2
 
     def intToLable(self, integer):
         return self.lables[integer]
@@ -283,14 +284,16 @@ class ACEReader :
                 self.valid.append(item)
 
     def posTagFinder(self):
+        tagger = SequenceTagger.load('pos')
+        _it = 0
         for item in self.data:
-
-            tagger = SequenceTagger.load('pos')
+            if _it >= 20:
+                break
             tagger.predict(item[1])
             _dict = item[1].to_dict(tag_type='pos')
-            for sample in _dict['entities']:
-                if sample not in self.postags:
-                    self.postags.append(sample['type'])
+            self.postags.extend([sample['type'] for sample in _dict['entities'] if sample['type'] not in self.postags])
+            _it += 1
+        self.postags = list(set(self.postags))
 
     def postagEncoder(self, pos):
         encode = torch.zeros(len(self.postags)).view(len(self.postags), 1)
@@ -298,5 +301,5 @@ class ACEReader :
             if pos == self.postags[it]:
                 encode[it] = 1
                 break
-        return encode
+        return encode.view(1, len(self.postags))
 

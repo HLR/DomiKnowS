@@ -17,8 +17,8 @@ class SentenceReaderSensor(CallingSensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
-        # return context[self.pres[0].fullname][0]
-        return Sentence("I am highly motivated to capture the relationships of washington with berlin")
+        return context[self.pres[0].fullname][0]
+        # return Sentence("I am highly motivated to capture the relationships of washington with berlin")
 
 
 class SentenceSensor(CallingSensor):
@@ -62,7 +62,7 @@ class SentenceFlairEmbedderSensor(SentenceSensor):
     ) -> Any:
         super(SentenceFlairEmbedderSensor, self).forward(context=context)
         flair_embedding_backward = FlairEmbeddings('news-backward')
-        print("flair")
+        # print("flair")
         flair_embedding_backward.embed(context[self.sentencesensor.fullname])
         return None
 
@@ -80,17 +80,18 @@ class SentencePosTaggerSensor(SentenceSensor):
     def __init__(self, *pres, reader):
         super().__init__(*pres)
         self.reader = reader
-
+        self.tagger = SequenceTagger.load('pos')
     def forward(
             self,
             context: Dict[str, Any]
     ) -> Any:
         super(SentencePosTaggerSensor, self).forward(context=context)
-        tagger = SequenceTagger.load('pos')
-        tagger.predict(context[self.sentencesensor.fullname])
+        self.tagger.predict(context[self.sentencesensor.fullname])
         _dict = context[self.sentencesensor.fullname].to_dict(tag_type='pos')
         _list = []
+
         for item in _dict['entities']:
             # _list.append(self.reader.posTagEncoder(item['type']))
-            _list.append(translator(item['type']))
+            _list.append(self.reader.postagEncoder(item['type']))
+        print(_list[-1].shape)
         return torch.stack(_list)

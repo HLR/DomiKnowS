@@ -1,4 +1,5 @@
-from Graphs.Learners.mainLearners import CallingLearner
+# from Graphs.Learners.mainLearners import CallingLearner
+from .mainLearners import CallingLearner
 from torch import nn
 import torch.nn.functional as F
 from typing import Dict, Any
@@ -38,8 +39,9 @@ class PytorchFC(nn.Module):
         self.fc1 = nn.Linear(input_dim, output_dim)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        return F.softmax(x)
+        # x = F.relu(self.fc1(x))
+        x = self.fc1(x[:, -1, :])
+        return F.softmax(x, dim=1)
 
 
 class LSTMLearner(CallingLearner):

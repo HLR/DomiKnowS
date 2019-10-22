@@ -23,7 +23,7 @@ class CallingSensor(Sensor):
 
 class ReaderSensor(CallingSensor):
     def __init__(self, *pres, reader):
-        super().__init__(pres)
+        super().__init__(*pres)
         self.reader = reader
 
     def forward(
@@ -31,8 +31,19 @@ class ReaderSensor(CallingSensor):
         context: Dict[str, Any]
     ) -> Any:
         super(ReaderSensor, self).forward(context=context)
-        # return next(self.reader)
-        return Sentence("I am highly motivated to capture the relationships of washington with berlin"), ["FAC", 'LOC', 'NONE', 'NONE', "FAC", 'LOC', 'NONE', 'NONE', "FAC", 'LOC', 'NONE', 'NONE']
+        # return Sentence("I am highly motivated to capture the relationships of washington with berlin"), ["FAC",
+        #                                                                                                       'LOC',
+        #                                                                                                       'NONE',
+        #                                                                                                       'NONE',
+        #                                                                                                       "FAC",
+        #                                                                                                       'LOC',
+        #                                                                                                       'NONE',
+        #                                                                                                       'NONE',
+        #                                                                                                       "FAC",
+        #                                                                                                       'LOC',
+        #                                                                                                       'NONE',
+        #                                                                                                       'NONE']
+        return next(self.reader)
 
 
 class SequenceConcatSensor(CallingSensor):

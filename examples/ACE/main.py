@@ -8,21 +8,23 @@ This example follows the pipeline we discussed in our preliminary paper.
 '''
 
 
-# from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
-from .Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
-# from Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
-from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
-# from Graphs.Sensors.conceptSensors import LabelSensor
-from .Graphs.Sensors.conceptSensors import LabelSensor
+from Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+# from .Graphs.Sensors.sentenceSensors import SentenceReaderSensor, SentenceBertEmbedderSensor, SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, SentencePosTaggerSensor
+from Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
+# from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
+from Graphs.Sensors.conceptSensors import LabelSensor
+# from .Graphs.Sensors.conceptSensors import LabelSensor
+from Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
 # from .Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
-from .Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
-# from data.reader import DataLoader, ACEReader
-from .data.reader import DataLoader, ACEReader
+from data.reader import DataLoader, ACEReader
+# from .data.reader import DataLoader, ACEReader
+from Graphs.base import PytorchSolverGraph, NewGraph
+# from .Graphs.base import PytorchSolverGraph
 
 
 def ontology_declaration():
-    # from Graphs.graph import graph
-    from .Graphs.graph import graph
+    from Graphs.graph import graph
+    # from .Graphs.graph import graph
     return graph
 
 
@@ -47,6 +49,7 @@ def reader_start(reader, mode):
 
 
 def model_declaration(graph, data, reader):
+    print("model started")
     graph.detach()
 
     sentence = graph['linguistic/sentence']
@@ -61,7 +64,6 @@ def model_declaration(graph, data, reader):
     VEH = graph['application/VEH']
     WEA = graph['application/WEA']
 
-    print(" I am here")
     sentence['info'] = ReaderSensor(reader=data)
     sentence['raw'] = SentenceReaderSensor(sentence['info'])
     sentence['bert'] = SentenceBertEmbedderSensor(sentence['raw'])
@@ -75,15 +77,15 @@ def model_declaration(graph, data, reader):
     sentence['all'] = SequenceConcatSensor(sentence['embedding'], sentence['pos'])
     # next(sentence['output'].find(CallingSensor))[1](context={})
     #
-    word['encode'] = LSTMLearner(sentence['all'], input_dim=5228, hidden_dim=240, num_layers=1, bidirectional=True)
+    word['encode'] = LSTMLearner(sentence['all'], input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
 
-    FAC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    GPE['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    PER['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    ORG['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    LOC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    VEH['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
-    WEA['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=1)
+    FAC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    GPE['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    PER['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    ORG['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    LOC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    VEH['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    WEA['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
 
     FAC['label'] = LabelSensor(sentence['info'], target=FAC.name)
     GPE['label'] = LabelSensor(sentence['info'], target=GPE.name)
@@ -93,7 +95,13 @@ def model_declaration(graph, data, reader):
     VEH['label'] = LabelSensor(sentence['info'], target=VEH.name)
     WEA['label'] = LabelSensor(sentence['info'], target=WEA.name)
 
-    return graph
+
+    from Graphs.base import ACEGraph
+    # from .Graphs.base import ACEGraph
+
+    ACEsolver = ACEGraph(PytorchSolverGraph(NewGraph(graph)))
+    ACEsolver.set_reader_instance(reader=reader)
+    return ACEsolver
     #
     # next(sentence['encode'].find(CallingSensor))[1](context={})
 
@@ -178,32 +186,32 @@ def model_declaration(graph, data, reader):
 
 #### The main entrance of the program.
 def main():
-    print("salam")
+    # print("salam")
     graph = ontology_declaration()
 
-    data_path = ["/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bc/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bc/fp2/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp2/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp2/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp2/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp2/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp1/",
-                 "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp2/", ]
+    data_path = ["LDC2006T06/ace_2005_td_v7/data/English/bc/fp1/",
+                 "LDC2006T06/ace_2005_td_v7/data/English/bc/fp2/", ]
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp1/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp2/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp1/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp2/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp1/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp2/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp1/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp2/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp1/",
+                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp2/", ]
 
-    hint_path = "/home/hfaghihi/LDC2006T06/split"
+    hint_path = "data"
 
-    # loader = dataloader(data_path=data_path, splitter_path=hint_path)
-    # reader = reader_declaration(loader=loader)
-    # train = reader_start(reader=reader, mode="train")
-    train = None
-    reader = None
+    loader = dataloader(data_path=data_path, splitter_path=hint_path)
+    reader = reader_declaration(loader=loader)
+    train = reader_start(reader=reader, mode="train")
+    # train = None
+    # reader = None
     updated_graph = model_declaration(graph, data=train, reader=reader)
 
-
+    updated_graph.train(100)
 
     #### 3. Train and save the model
     #### "Explicit inference" is done automatically in every call to the model.
@@ -219,5 +227,4 @@ def main():
 """
 This example show a full pipeline how to work with `regr`.
 """
-print("hello")
 main()
