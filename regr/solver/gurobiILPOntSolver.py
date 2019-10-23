@@ -709,7 +709,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
     
-                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
                         self.myLogger.info("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
@@ -819,18 +818,18 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.info("Found definition for relation %s - %s"%(tripleRelationName,triplePropertiesRanges))
 
-            for token1 in tokens:
-                for token2 in tokens:
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
                     if token2 == token1:
                         continue
                         
-                    for token3 in tokens:
+                    for token3Index, token3 in enumerate(tokens):
                         if token3 == token2:
                             continue
                         
                         if token3 == token1:
                             continue
-                     
+                        
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
                         if currentProbability == 0:
                             continue
