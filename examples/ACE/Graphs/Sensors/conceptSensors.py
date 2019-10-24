@@ -28,7 +28,8 @@ class LabelSensor(CallingSensor):
             if labels[it] == self.target:
                 output[it] = 0
                 break
-        return torch.tensor(output)
+        return torch.tensor(output, device=self.device)
         
+
 
 

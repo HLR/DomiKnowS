@@ -197,6 +197,11 @@ class ACEReader :
         self.test = []
         self.splitSet()
         self.posTagFinder()
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
 
     def makeLables(self):
         for item in self.data:
@@ -296,7 +301,7 @@ class ACEReader :
         self.postags = list(set(self.postags))
 
     def postagEncoder(self, pos):
-        encode = torch.zeros(len(self.postags)).view(len(self.postags), 1)
+        encode = torch.zeros(len(self.postags), device=self.device).view(len(self.postags), 1)
         for it in range(len(self.postags)):
             if pos == self.postags[it]:
                 encode[it] = 1

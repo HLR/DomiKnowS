@@ -52,6 +52,9 @@ class LSTMLearner(CallingLearner):
         self.bidirectional = bidirectional
         self.input_dim = input_dim
         self.model = LSTMFlair(input_dim=self.input_dim, hidden_dim=self.hidden_dim, num_layers=self.num_layers, batch_size=1, bidirectional=self.bidirectional)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
 
     def forward(
         self,
@@ -68,7 +71,10 @@ class FullyConnectedLearner(CallingLearner):
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.model = PytorchFC(input_dim=self.input_dim, output_dim=self.output_dim)
-
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
+            
     def forward(
             self,
             context: Dict[str, Any]
@@ -77,6 +83,7 @@ class FullyConnectedLearner(CallingLearner):
         _tensor = context[self.pres[0].fullname]
         output = self.model(_tensor)
         return output
+
 
 
 

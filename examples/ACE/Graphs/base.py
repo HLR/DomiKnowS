@@ -169,7 +169,11 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
             *args,
             **kwargs
     ):
-        pass
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
 
     def get_multiassign(self):
         ma = []
@@ -230,7 +234,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         weights = []
         for item, value in info.items():
             weights.append([1,1])
-        return torch.tensor(weights)
+        return torch.tensor(weights, device=self.device)
 
 
     def train(self, iterations):
@@ -238,7 +242,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
         for i in tqdm(range(iterations), "Iterations: "):
             self.reader.reader = _array[i]
-            print("here")
+#             print("here")
             while True:
                 try:
                     truth = []
@@ -266,7 +270,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         truth[_it] = truth[_it].long()
                         pred[_it] = pred[_it].float()
                         total_loss += loss_fn[_it](pred[_it], truth[_it])
-                    print(total_loss)
+#                     print(total_loss)
                     total_loss.backward()
 
                     self.optimizer.step()
@@ -314,7 +318,8 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
         for item, value in info.items():
             weight = self.target_weights[item]
             weights.append([weight, 1 - weight])
-        return torch.tensor(weights)
+        return torch.tensor(weights, device=self.device)
+
 
 
 

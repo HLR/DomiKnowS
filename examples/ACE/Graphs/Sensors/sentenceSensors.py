@@ -28,13 +28,16 @@ class SentenceSensor(CallingSensor):
 
 
 class SentenceBertEmbedderSensor(SentenceSensor):
+        def __init__(self, *pres):
+        super().__init__(*pres)
+        self.bert_embedding = BertEmbeddings()
+ 
     def forward(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        super(SentenceBertEmbedderSensor, self).forward(context=context)
-        bert_embedding = BertEmbeddings()
-        bert_embedding.embed(context[self.sentencesensor.fullname])
+        super(SentenceBertEmbedderSensor, self).forward(context=context) 
+        self.bert_embedding.embed(context[self.sentencesensor.fullname])
         return None
 
 
@@ -45,25 +48,32 @@ class SentenceBertEmbedderSensor(SentenceSensor):
 
 
 class SentenceGloveEmbedderSensor(SentenceSensor):
+    def __init__(self, *pres):
+        super().__init__(*pres)
+        self.glove_embedding = WordEmbeddings('glove')
+                                                        
     def forward(
             self,
             context: Dict[str, Any]
     ) -> Any:
         super(SentenceGloveEmbedderSensor, self).forward(context=context)
-        glove_embedding = WordEmbeddings('glove')
-        glove_embedding.embed(context[self.sentencesensor.fullname])
+        self.glove_embedding.embed(context[self.sentencesensor.fullname])
         return None
 
 
 class SentenceFlairEmbedderSensor(SentenceSensor):
+    def __init__(self, *pres):
+        super().__init__(*pres)
+        self.flair_embedding_backward = FlairEmbeddings('news-backward')
+        
     def forward(
             self,
             context: Dict[str, Any]
     ) -> Any:
         super(SentenceFlairEmbedderSensor, self).forward(context=context)
-        flair_embedding_backward = FlairEmbeddings('news-backward')
+        
         # print("flair")
-        flair_embedding_backward.embed(context[self.sentencesensor.fullname])
+        self.flair_embedding_backward.embed(context[self.sentencesensor.fullname])
         return None
 
 
@@ -81,6 +91,7 @@ class SentencePosTaggerSensor(SentenceSensor):
         super().__init__(*pres)
         self.reader = reader
         self.tagger = SequenceTagger.load('pos')
+        
     def forward(
             self,
             context: Dict[str, Any]

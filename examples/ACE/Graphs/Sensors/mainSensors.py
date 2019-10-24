@@ -9,6 +9,11 @@ class CallingSensor(Sensor):
         super().__init__()
         self.pres = pres
         self.output = output
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
 
     def forward(
         self,
@@ -58,6 +63,8 @@ class SequenceConcatSensor(CallingSensor):
         it = 0
         _data = []
         for item in _list[0]:
+#             print(item.device)
+#             print(_list[1][it].device)
             _data.append(torch.cat((item, _list[1][it]), 1))
             it += 1
         return torch.stack(_data)
@@ -78,3 +85,4 @@ class FlairEmbeddingSensor(CallingSensor):
             _list.append(token.embedding.view(1, self.embedding_dim))
         _tensor = torch.stack(_list)
         return _tensor
+
