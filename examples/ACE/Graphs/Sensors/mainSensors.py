@@ -30,6 +30,7 @@ class ReaderSensor(CallingSensor):
     def __init__(self, *pres, reader):
         super().__init__(*pres)
         self.reader = reader
+        self.data = None
 
     def forward(
         self,
@@ -48,7 +49,7 @@ class ReaderSensor(CallingSensor):
         #                                                                                                       'LOC',
         #                                                                                                       'NONE',
         #                                                                                                       'NONE']
-        return next(self.reader)
+        return next(self.data)
 
 
 class SequenceConcatSensor(CallingSensor):

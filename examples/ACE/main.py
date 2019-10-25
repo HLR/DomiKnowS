@@ -64,7 +64,7 @@ def model_declaration(graph, data, reader):
     VEH = graph['application/VEH']
     WEA = graph['application/WEA']
 
-    sentence['info'] = ReaderSensor(reader=data)
+    sentence['info'] = ReaderSensor(reader=reader)
     sentence['raw'] = SentenceReaderSensor(sentence['info'])
     sentence['bert'] = SentenceBertEmbedderSensor(sentence['raw'])
     sentence['glove'] = SentenceGloveEmbedderSensor(sentence['raw'])

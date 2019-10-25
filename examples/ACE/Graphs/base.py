@@ -236,12 +236,12 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             weights.append([1,1])
         return torch.tensor(weights, device=self.device)
 
-
     def train(self, iterations):
-        _array = itertools.tee(self.reader.reader, iterations)
+        train_data = self.reader.reader.readTrain()
+        _array = itertools.tee(train_data, iterations)
 
         for i in tqdm(range(iterations), "Iterations: "):
-            self.reader.reader = _array[i]
+            self.reader.data = _array[i]
 #             print("here")
             while True:
                 try:
@@ -268,7 +268,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     for _it in range(len(truth)):
                         loss_fn.append(torch.nn.CrossEntropyLoss(weight=weights[_it]))
                         truth[_it] = truth[_it].long()
-                        pred[_it] = pred[_it].float()
+                        pred[_it] =+ pred[_it].float()
                         total_loss += loss_fn[_it](pred[_it], truth[_it])
 #                     print(total_loss)
                     total_loss.backward()
@@ -278,9 +278,32 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                 except StopIteration:
                     break
 
+    def test(self, mode):
+        if mode == "valid":
+            valid_data = self.reader.reader.readValid()
+            self.reader.data = valid_data
+        elif mode == "test":
+            test_data = self.reader.reader.readTest()
+            self.reader.data = test_data
+        else:
+            print("you have to specify one of valid or test to run this function")
+            raise
+
+        while True:
+            try:
+                truth = []
+                pred = []
+                context = {}
+                for prop1 in self.poi:
+                    list(prop1.find(LabelSensor))[0][1](context=context)
+                    list(prop1.find(CallingLearner))[0][1](context=context)
+                    truth.append(context[list(prop1.find(LabelSensor))[0][1].fullname])
+                    pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
+            except StopIteration:
+                break
+
 
 class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
-
     __metaclass__ = WrapperMetaClass
 
     def __init__(

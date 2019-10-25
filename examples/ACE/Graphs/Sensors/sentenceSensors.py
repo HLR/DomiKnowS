@@ -28,7 +28,7 @@ class SentenceSensor(CallingSensor):
 
 
 class SentenceBertEmbedderSensor(SentenceSensor):
-        def __init__(self, *pres):
+    def __init__(self, *pres):
         super().__init__(*pres)
         self.bert_embedding = BertEmbeddings()
  
