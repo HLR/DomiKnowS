@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.fixture()
 def ontology_graph(request):
     from regr.graph import Graph, Concept
@@ -19,15 +20,15 @@ def ontology_graph(request):
     # create graphs
     #------------------
     with Graph('spLanguage') as splang_Graph:
-        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './example/sprl')
 
         with Graph('linguistic') as ling_graph:
-            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
+            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './regr/')
             phrase = Concept(name = 'phrase')
             sentence = Concept(name = 'sentence')
 
         with Graph('application') as app_graph:
-            app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
+            app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './example/sprl')
 
             trajector = Concept(name='TRAJECTOR')
             landmark = Concept(name='LANDMARK')
@@ -65,6 +66,7 @@ def ontology_graph(request):
     #------------------
     Graph.clear()
     Concept.clear()
+
 
 @pytest.fixture()
 def sprl_input(ontology_graph):
@@ -108,6 +110,7 @@ def sprl_input(ontology_graph):
                                                    DataNode(instanceID = 5, instanceValue = phrases[5], ontologyNode = phrase, childInstanceNodes = [])])
 
     yield test_dataNode
+
 
 @pytest.fixture()
 def model_trial(ontology_graph):
@@ -205,6 +208,8 @@ def model_trial(ontology_graph):
 
     return model_trial
 
+
+@pytest.mark.skip
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input, model_trial):
     application_graph = ontology_graph['application']
