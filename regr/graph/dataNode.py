@@ -255,7 +255,6 @@ class DataNode:
                         if infer_candidate1 != infer_candidate2:
                             for infer_candidate3 in infer_candidatesID:
                                 if infer_candidate2 != infer_candidate3:
-                                    print(concept, infer_candidate1, infer_candidate2, infer_candidate3)
                                     infered_trial[conceptOrRelationDict[concept], (infer_candidate1, infer_candidate2, infer_candidate3)] = tripleResult[concept][infer_candidate1, infer_candidate2, infer_candidate3] 
                 
             return infered_trial
