@@ -65,12 +65,15 @@ class ilpOntSolver(object):
                 # Check if specific ontology path is correct
                 ontologyPath = Path(os.path.normpath(currentOntology.local))
                 ontologyPath = ontologyPath.resolve()
+                self.myLogger.info("Path to load ontology: %s is %s resolved to %s"%(currentOntology.iri, currentOntology.local, ontologyPath))
+
                 if not os.path.isdir(ontologyPath):
                     self.myLogger.error("Path to load ontology: %s does not exists in current directory %s"%(currentOntology.iri, currentOntology.local))
                     exit()
     
                 onto_path.append(ontologyPath) # the folder with the ontology for the specific  graph
-        
+                self.myLogger.info("Ontology: %s is appended"%(currentOntology.iri))
+
             # Load specific ontology
             try :
                 self.myOnto = get_ontology(currentOntology.iri)
@@ -89,4 +92,3 @@ class ilpOntSolver(object):
     
     @abc.abstractclassmethod
     def inferILPConstrains(self, model_trail, *conceptsRelations): pass
-
