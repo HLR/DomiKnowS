@@ -64,8 +64,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (token, 'Not_'+conceptName) in x:
                     constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
                     currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
-                    m.addConstr(currentConstrLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
-                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept %s - %s %i"%(token,conceptName,token,'Not_'+conceptName,GRB.LESS_EQUAL,1))
+                    m.addConstr(currentConstrLinExpr <= 1, name=constrainName)
+                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s <= %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
@@ -113,12 +113,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     currentConstrName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
                         
                     # Version of the disjoint constrain using logical function library
-                    #m.addConstr(self.myIlpBooleanProcessor.nandVar(m, x[token, conceptName], x[token, disjointConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                    #m.addConstr(self.myIlpBooleanProcessor.nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1, name=constrainName)
 
                     # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                     currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
-                    m.addConstr(currentConstrLinExpr, GRB.LESS_EQUAL, 1, name=currentConstrName)
-                    self.myLogger.info("Disjoint constrain between concept \"%s\" and concept %s - %s %s %i"%(conceptName,disjointConcept,currentConstrLinExpr,GRB.LESS_EQUAL,1))
+                    m.addConstr(currentConstrLinExpr <= 1, name=currentConstrName)
+                    self.myLogger.info("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -154,7 +154,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                     
                     constrainName = 'c_%s_%s_Equivalent_%s'%(token, conceptName, equivalentConcept.name)
-                    m.addConstr(self.myIlpBooleanProcessor.andVar(m, x[token, conceptName], x[token, equivalentConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                    m.addConstr(self.myIlpBooleanProcessor.andVar(m, x[token, conceptName], x[token, equivalentConcept]) >= 1, name=constrainName)
 
                 if not (conceptName in foundEquivalent):
                     foundEquivalent[conceptName] = {equivalentConcept.name}
@@ -181,7 +181,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                     
                     constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
-                    m.addConstr(self.myIlpBooleanProcessor.ifVar(m, x[token, conceptName], x[token, ancestorConcept]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                    m.addConstr(self.myIlpBooleanProcessor.ifVar(m, x[token, conceptName], x[token, ancestorConcept]) >= 1, name=constrainName)
 
                 self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
 
@@ -213,7 +213,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         andList.append(x[token, conceptName])
                         
                         constrainName = 'c_%s_%s_Intersection'%(token, conceptName)
-                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, andList), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, andList) >= 1, name=constrainName)
                         
         # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
         for conceptName in conceptNames :
@@ -243,7 +243,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         orList.append(x[token, conceptName])
                         
                         constrainName = 'c_%s_%s_Union'%(token, conceptName)
-                        m.addConstr(self.myIlpBooleanProcessor.orVar(m, orList), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addConstr(self.myIlpBooleanProcessor.orVar(m, orList) >= 1, name=constrainName)
         
         # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
         for conceptName in conceptNames :
@@ -266,7 +266,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                           
                         constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name) 
-                        m.addConstr(self.myIlpBooleanProcessor.xorVar(m, x[token, conceptName], x[token, complementClass.name]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addConstr(self.myIlpBooleanProcessor.xorVar(m, x[token, conceptName], x[token, complementClass.name]) >= 1, name=constrainName)
 
                     self.myLogger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
                         
@@ -336,7 +336,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     if (relationName+'-neg', token, token1) in y: 
                         constrainName = 'c_%s_%s_%sselfDisjoint'%(token, token1, relationName)
-                        m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1], GRB.LESS_EQUAL, 1, name=constrainName)
+                        m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1] <= 1, name=constrainName)
                         
         m.update()
    
@@ -380,17 +380,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                             currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                                 
                             # Version of the domain and range constrains using logical function library
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]), GRB.GREATER_EQUAL, 1, name=constrainNameDomain)
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]), GRB.GREATER_EQUAL, 1, name=constrainNameRange)
+                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]) >= 1, name=constrainNameDomain)
+                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]) >= 1, name=constrainNameRange)
                                 
                             # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                             currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
-                            m.addConstr(currentConstrLinExprDomain, GRB.GREATER_EQUAL, 0, name=currentConstrNameDomain)
-                            self.myLogger.info("Domain constrain between relation \"%s\" and domain %s - %s %s %i"%(relationName,domain.name,currentConstrLinExprDomain,GRB.GREATER_EQUAL,0))
+                            m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
+                            self.myLogger.info("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
 
                             currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
-                            m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=currentConstrNameRange)
-                            self.myLogger.info("Range constrain between relation \"%s\" and range %s - %s %s %i"%(relationName,range.name,currentConstrLinExprRange,GRB.GREATER_EQUAL,0))
+                            m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
+                            self.myLogger.info("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
                                 
                     self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
@@ -415,8 +415,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token1, token2, relationName, superProperty.name)
                             
-                        #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], y[superProperty.name, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
-                        m.addConstr(y[superProperty.name, token1, token2] - y[relationName, token1, token2], GRB.GREATER_EQUAL, 0, name=constrainName)
+                        #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], y[superProperty.name, token1, token2]) >= 1, name=constrainName)
+                        m.addConstr(y[superProperty.name, token1, token2] - y[relationName, token1, token2] >= 0, name=constrainName)
             
         # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
         foundEquivalent = dict() # too eliminate duplicates
@@ -450,7 +450,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token1, token2, relationName, equivalentProperty.name)
-                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, y[relationName, token1, token2], y[equivalentProperty.name, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, y[relationName, token1, token2], y[equivalentProperty.name, token1, token2]) >= 1, name=constrainName)
                             
                     if not (relationName in foundEquivalent):
                         foundEquivalent[relationName] = {equivalentProperty.name}
@@ -485,8 +485,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         constrainName = 'c_%s_%s_%s_InverseProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[currentRelationInverse.name, token2, token1], GRB.EQUAL, 1)
-                        m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelationInverse.name, token1, token2], y[relationName, token1, token2]), GRB.GREATER_EQUAL, 1, name=constrainName)
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[currentRelationInverse.name, token2, token1] == 1)
+                        m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelationInverse.name, token1, token2], y[relationName, token1, token2]) >= 1, name=constrainName)
                             
         # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
         for relationName in graphResultsForPhraseRelation:
@@ -510,7 +510,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                 if functionalLinExpr:
                     constrainName = 'c_%s_FunctionalProperty'%(relationName)
-                    m.addConstr(functionalLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+                    m.addConstr(functionalLinExpr <= 1, name=constrainName)
         
         # -- Add constraints based on property inverseFunctionaProperty statements in ontology - at most one P(x,y) for y
         for relationName in graphResultsForPhraseRelation:
@@ -532,7 +532,7 @@ class gurobiILPOntSolver(ilpOntSolver):
     
                 if functionalLinExpr:
                     constrainName = 'c_%s_InverseFunctionalProperty'%(relationName)
-                    m.addConstr(functionalLinExpr, GRB.LESS_EQUAL, 1, name=constrainName)
+                    m.addConstr(functionalLinExpr <= 1, name=constrainName)
         
         # -- Add constraints based on property reflexiveProperty statements in ontology - P(x,x)
         for relationName in graphResultsForPhraseRelation:
@@ -548,7 +548,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                         
                     constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
-                    m.addConstr(y[relationName, token, token], GRB.EQUAL, 1, name=constrainName)  
+                    m.addConstr(y[relationName, token, token] == 1, name=constrainName)  
                         
         # -- Add constraints based on property irreflexiveProperty statements in ontology - not P(x,x)
         for relationName in graphResultsForPhraseRelation:
@@ -564,7 +564,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                     
                     constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
-                    m.addConstr(y[relationName, token, token], GRB.EQUAL, 0, name=constrainName)  
+                    m.addConstr(y[relationName, token, token] == 0, name=constrainName)  
                     
         # -- Add constraints based on property symetricProperty statements in ontology - R(x, y) -> R(y,x)
         for relationName in graphResultsForPhraseRelation:
@@ -583,7 +583,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1], GRB.EQUAL, 1)
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 1)
         
         # -- Add constraints based on property asymetricProperty statements in ontology - not R(x, y) -> R(y,x)
         for relationName in graphResultsForPhraseRelation:
@@ -602,7 +602,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1], GRB.EQUAL, 0)  
+                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 0)  
                         
         # -- Add constraints based on property transitiveProperty statements in ontology - P(x,y) and P(y,z) - > P(x,z)
         for relationName in graphResultsForPhraseRelation:
@@ -621,7 +621,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token1, token2, relationName)
-                        #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token], GRB.EQUAL, 1)  
+                        #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token] == 1)  
                                
         # -- Add constraints based on property allValueFrom statements in ontology
     
@@ -736,7 +736,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
                             constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
-                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3], GRB.LESS_EQUAL, 1, name=constrainName)
+                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] <= 1, name=constrainName)
                             
         m.update()
     
@@ -845,7 +845,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         rel = z[tripleRelationName, token1, token2, token3]
                         
                         currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
-                        m.addConstr(currentConstrLinExprRange, GRB.GREATER_EQUAL, 0, name=constrainNameTriple)
+                        m.addConstr(currentConstrLinExprRange >= 0, name=constrainNameTriple)
                                     
                         self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
     
@@ -937,7 +937,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Token is associated with a single concept
             #for token in tokens:
             #   constrainName = 'c_%s'%(token)
-            #    m.addConstr(quicksum(x[token, conceptName] for conceptName in conceptNames), GRB.LESS_EQUAL, 1, name=constrainName)
+            #    m.addConstr(quicksum(x[token, conceptName] for conceptName in conceptNames) <= 1, name=constrainName)
             
             m.update()
 
