@@ -207,6 +207,7 @@ def model_trial(ontology_graph):
 
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input, model_trial):
+    print("You are here!")
     application_graph = ontology_graph['application']
     trajector = application_graph['TRAJECTOR']
     landmark = application_graph['LANDMARK']
