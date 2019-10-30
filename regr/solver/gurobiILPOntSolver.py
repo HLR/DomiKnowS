@@ -66,8 +66,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (token, 'Not_'+conceptName) in x:
                     constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
                     currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
-                    m.addConstr(currentConstrLinExpr <= 1, name=constrainName)
-                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s <= %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    m.addConstr(currentConstrLinExpr == 1, name=constrainName)
+                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
@@ -341,8 +341,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     if (relationName+'-neg', token1, token2) in y: 
                         constrainName = 'c_%s_%s_%sselfDisjoint'%(token1, token2, relationName)
-                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] <= 1, name=constrainName)
-                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s <= %i"%(relationName,relationName,token1,token2,1))
+                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name=constrainName)
+                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
 
         m.update()
    
@@ -716,17 +716,21 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if token3 == token1:
                             continue
                         
+                        # Check if probability not zero
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
                         if currentProbability == 0:
                             continue
                         
+                        # Create variable
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
-    
                         self.myLogger.info("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
+                        # Create negative variable
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
                             z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
-
+                        else:
+                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(relationName,token1,token2,token3))
+                            
         # Add constraints forcing decision between variable and negative variables 
         for tripleRelationName in tripleRelationNames:            
             for token1Index, token1 in enumerate(tokens): 
@@ -747,8 +751,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
                             constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
-                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] <= 1, name=constrainName)
-                            
+                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] == 1, name=constrainName)
+                            self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s %s == %i"%(tripleRelationName,tripleRelationName,token1,token2,token3,1))
+
         m.update()
     
         self.myLogger.info("Created %i ilp variables for triple relations"%(len(z)))
@@ -1047,7 +1052,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         
                                             self.myLogger.info('Solution \"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
         
-        except ex:
+        except:
             self.myLogger.error('Error')
             raise
            
