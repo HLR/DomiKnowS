@@ -66,8 +66,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (token, 'Not_'+conceptName) in x:
                     constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
                     currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
-                    m.addConstr(currentConstrLinExpr == 1, name=constrainName)
-                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    m.addConstr(currentConstrLinExpr <= 1, name=constrainName)
+                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s <= %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
