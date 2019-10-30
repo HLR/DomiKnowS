@@ -46,13 +46,15 @@ class gurobiILPOntSolver(ilpOntSolver):
             for conceptName in conceptNames: 
                 currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 
+                # Check if probability not zero
                 if currentProbability == 0:
                     continue
 
-                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))
-                                
+                # Create variable
+                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
                 self.myLogger.info("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
 
+                # Create negative variable
                 if currentProbability <= 1.0: # ilpOntSolver.__negVarTrashhold:
                     x[token, 'Not_'+conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
                 else:
@@ -64,8 +66,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (token, 'Not_'+conceptName) in x:
                     constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
                     currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
-                    m.addConstr(currentConstrLinExpr <= 1, name=constrainName)
-                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s <= %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    m.addConstr(currentConstrLinExpr == 1, name=constrainName)
+                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
@@ -315,29 +317,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if token1 == token2:
                         continue
     
+                    # Check if probability not zero
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     if currentProbability == 0:
                         continue   
 
+                    # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
-
                     self.myLogger.info("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
                     
+                    # Create negative variable
                     if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
                         y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
-                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens %s %s  - %s %i"%(relationName,relationName,token1,token2,GRB.LESS_EQUAL,1))
-
+                    else:
+                        self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s created"%(relationName,token1,token2))
+                        
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
-            for token in tokens: 
-                for token1 in tokens:
-                    if token == token1:
+            for token1 in tokens: 
+                for token2 in tokens:
+                    if token2 == token1:
                         continue
                     
-                    if (relationName+'-neg', token, token1) in y: 
-                        constrainName = 'c_%s_%s_%sselfDisjoint'%(token, token1, relationName)
-                        m.addConstr(y[relationName, token, token1] + y[relationName+'-neg', token, token1] <= 1, name=constrainName)
-                        
+                    if (relationName+'-neg', token1, token2) in y: 
+                        constrainName = 'c_%s_%s_%sselfDisjoint'%(token1, token2, relationName)
+                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] <= 1, name=constrainName)
+                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s <= %i"%(relationName,relationName,token1,token2,1))
+
         m.update()
    
         self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
@@ -376,18 +382,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if (currentRelation.name, token1, token2) not in y:
                                  continue
                              
-                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
-                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                                 
                             # Version of the domain and range constrains using logical function library
+                            #currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
                             #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]) >= 1, name=constrainNameDomain)
+                            #currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                             #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]) >= 1, name=constrainNameRange)
                                 
-                            # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
+                            # --- Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
+                            
+                            # Domain Constrain
+                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
                             currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
                             m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
                             self.myLogger.info("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
 
+                            # Range constrain
+                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                             currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
                             m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
                             self.myLogger.info("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
@@ -670,7 +681,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info("Created objective element %s"%(currentQElement))
                     Y_Q += currentQElement
                     
-                    if (relationName+'-neg', token, token1) in y: 
+                    if (relationName+'-neg', token1, token2) in y: 
                         currentQElement = (1-graphResultsForPhraseRelation[relationName][token1Index][token2Index])*y[relationName+'-neg', token1, token2]
                         self.myLogger.info("Created objective element %s"%(currentQElement))
                         Y_Q += currentQElement
