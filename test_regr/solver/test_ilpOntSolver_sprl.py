@@ -120,7 +120,7 @@ def test_main_sprl(sprl_input):
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForTripleRelations = sprl_input
 
     # ------Call solver -------
-    test_graph = Graph(iri='http://ontology.ihmc.us/ML/SPRL.owl', local='./examples/SpRL_new/')
+    test_graph = Graph(iri='http://ontology.ihmc.us/ML/SPRL.owl', local='./examples/SpRL/')
     
     myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(test_graph)
     tokenResult, _, tripleRelationsResult = myilpOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, None, test_graphResultsForTripleRelations)
@@ -139,7 +139,7 @@ def test_main_sprl(sprl_input):
     assert tokenResult['SPATIAL_INDICATOR'].sum() == 1
     assert tokenResult['SPATIAL_INDICATOR'][3] == 1 # "on" - SPATIALINDICATOR
 
-    assert tokenResult['NONE_ENTITY'].sum() == 3 # instead of 2
+    assert tokenResult['NONE_ENTITY'].sum() == 1 # instead of 2
     #assert tokenResult['NONE_ENTITY'][4] == 1 # "hats" - NONE
     assert tokenResult['NONE_ENTITY'][5] == 1  # "traditional clothing" - NONE
         

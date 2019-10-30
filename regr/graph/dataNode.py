@@ -138,7 +138,7 @@ class DataNode:
     def inferILPConstrains(self, model_trail, *conceptsRelations):
         with model_trail:
             # Collect all the candidates for concepts and relations in conceptsRelations
-            infer_candidates = set() # Stores all the candidates to consider in the ILP constrains
+            _instanceID = set() # Stores all the candidates to consider in the ILP constrains
             for currentConceptOrRelation in conceptsRelations:
                 
                 currentCandidates = currentConceptOrRelation.candidates(self)
@@ -147,13 +147,16 @@ class DataNode:
                 
                 for currentCandidate in currentCandidates:
                     for candidateElement in currentCandidate:
-                        infer_candidates.add(candidateElement)
+                        _instanceID.add(candidateElement)
     
-            if len(infer_candidates) == 0:
+            if len(_instanceID) == 0:
                 return 
             
-            infer_candidates = list(infer_candidates) # Change set to list
-            no_candidateds = len(infer_candidates)    # Number of candidates
+            infer_candidatesID = []
+            for currentCandidate in _instanceID:
+                infer_candidatesID.append(currentCandidate.instanceID)
+
+            no_candidateds = len(infer_candidatesID)    # Number of candidates
             
             # Collect probabilities for candidates 
             graphResultsForPhraseToken = dict()
@@ -168,25 +171,39 @@ class DataNode:
                 
                 for currentCandidate in currentCandidates:
                     if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                        if currentConceptOrRelation.name not in graphResultsForPhraseToken:
-                            graphResultsForPhraseToken[currentConceptOrRelation.name] = np.zeros((no_candidateds, ))
-                        
-                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, ))
-                        graphResultsForPhraseToken[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID].instanceID] = currentProbability
+                        graphResultsForPhraseToken[currentConceptOrRelation.name] = np.zeros((no_candidateds, ))
                         
                     elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
-                        if currentConceptOrRelation.name not in graphResultsForPhraseRelation:
-                            graphResultsForPhraseRelation[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds))
+                        graphResultsForPhraseRelation[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds))
                         
-                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID))
-                        graphResultsForPhraseRelation[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID]][infer_candidates[currentCandidate[1].instanceID]] = currentProbability
-    
                     elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element
-                        if currentConceptOrRelation.name not in graphResultsForTripleRelations:
-                            graphResultsForTripleRelations[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, no_candidateds))
+                        graphResultsForTripleRelations[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, no_candidateds))
                             
+                    else: # No support for more then three candidates yet
+                        pass
+                    
+            for currentConceptOrRelation in conceptsRelations:
+                currentCandidates = currentConceptOrRelation.candidates(self)
+                
+                if currentCandidates is None:
+                    continue
+                
+                for currentCandidate in currentCandidates:
+                    if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
+                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, ))
+                        if currentProbability:
+                            graphResultsForPhraseToken[currentConceptOrRelation.name][infer_candidatesID[currentCandidate[0].instanceID]] = currentProbability
+                        
+                    elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
+                        currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID))
+                        if currentProbability:
+                            graphResultsForPhraseRelation[currentConceptOrRelation.name][infer_candidatesID[currentCandidate[0].instanceID]][infer_candidatesID[currentCandidate[1].instanceID]] = currentProbability
+    
+                    elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element     
                         currentProbability = currentConceptOrRelation.predict(self, (currentCandidate[0].instanceID, currentCandidate[1].instanceID, currentCandidate[2].instanceID))
-                        graphResultsForTripleRelations[currentConceptOrRelation.name][infer_candidates[currentCandidate[0].instanceID].instanceID][infer_candidates[currentCandidate[1].instanceID].instanceID][infer_candidates[currentCandidate[2].instanceID].instanceID]= currentProbability
+                        if currentProbability:
+                            graphResultsForTripleRelations[currentConceptOrRelation.name] \
+                                [infer_candidatesID[currentCandidate[0].instanceID]][infer_candidatesID[currentCandidate[1].instanceID]][infer_candidatesID[currentCandidate[2].instanceID]]= currentProbability
                         
                     else: # No support for more then three candidates yet
                         pass
@@ -201,28 +218,28 @@ class DataNode:
                     myOntologyGraphs.add(currentOntologyGraph)
                     
             myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
-            tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidates, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
+            tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
             
             #  Create Trail with returned results
             infered_trial = Trial()
 
             for concept in tokenResult:
-                for infer_candidate in infer_candidates:
-                    infered_trial[concept, (infer_candidate.instanceID, )] = tokenResult[concept][infer_candidate.instanceID] 
+                for infer_candidate in infer_candidatesID:
+                    infered_trial[concept, (infer_candidate, )] = tokenResult[concept][infer_candidate] 
                     
             for concept in pairResult:
-                for infer_candidate1 in infer_candidates:
-                    for infer_candidate2 in infer_candidates:
+                for infer_candidate1 in infer_candidatesID:
+                    for infer_candidate2 in infer_candidatesID:
                         if infer_candidate1 != infer_candidate2:
-                            infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID)] = pairResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID] 
+                            infered_trial[concept, (infer_candidate1, infer_candidate2)] = pairResult[concept][infer_candidate1, infer_candidate2] 
                             
             for concept in tripleResult:
-                for infer_candidate1 in infer_candidates:
-                    for infer_candidate2 in infer_candidates:
+                for infer_candidate1 in infer_candidatesID:
+                    for infer_candidate2 in infer_candidatesID:
                         if infer_candidate1 != infer_candidate2:
-                            for infer_candidate3 in infer_candidates:
+                            for infer_candidate3 in infer_candidatesID:
                                 if infer_candidate2 != infer_candidate3:
-                                    infered_trial[concept, (infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID)] = tripleResult[concept][infer_candidate1.instanceID, infer_candidate2.instanceID, infer_candidate3.instanceID] 
+                                    infered_trial[concept, (infer_candidate1, infer_candidate2, infer_candidate3)] = tripleResult[concept][infer_candidate1, infer_candidate2, infer_candidate3] 
                 
             return infered_trial
         
@@ -230,10 +247,10 @@ class DataNode:
             # Add ILPConstrain results to appropriate dataNodes and create Trail with returned results
             for childDataNode in self.childInstanceNodes:
                 
-                if childDataNode.instance in infer_candidates:
+                if childDataNode.instance in infer_candidatesID:
                     
                     for concept in tokenResult:
-                        childDataNode.setPredictionResultForConcept("ILPConstrain", concept, prediction=tokenResult[concept][infer_candidates.index(childDataNode.instance)])
+                        childDataNode.setPredictionResultForConcept("ILPConstrain", concept, prediction=tokenResult[concept][infer_candidatesID.index(childDataNode.instance)])
                         
                     for concept in pairResult:
                         currentCandidates = concept.candidates(self)
@@ -242,7 +259,7 @@ class DataNode:
                                 continue
                             
                             if currentCandidate[0] == childDataNode.instance:
-                                prediction=tokenResult[concept][infer_candidates.index(childDataNode.instance)][infer_candidates.index(currentCandidate[1])]
+                                prediction=tokenResult[concept][infer_candidatesID.index(childDataNode.instance)][infer_candidatesID.index(currentCandidate[1])]
                                 childDataNode.setPredictionResultForConcept("ILPConstrain", 1, concept, currentCandidate[1], prediction=current_prediction)
                                 
                     for concept in tripleResult:
@@ -252,6 +269,6 @@ class DataNode:
                                 continue
                             
                             if currentCandidate[0] == childDataNode.instance:
-                                current_prediction=tokenResult[concept][infer_candidates.index(childDataNode.instance)][infer_candidates.index(currentCandidate[1])][infer_candidates.index(currentCandidate[2])]
+                                current_prediction=tokenResult[concept][infer_candidatesID.index(childDataNode.instance)][infer_candidatesID.index(currentCandidate[1])][infer_candidatesID.index(currentCandidate[2])]
                                 childDataNode.setPredictionResultForConcept("ILPConstrain", 1, concept, currentCandidate[1], currentCandidate[2], prediction=current_prediction)
             
