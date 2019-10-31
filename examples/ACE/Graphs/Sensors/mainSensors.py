@@ -64,8 +64,6 @@ class SequenceConcatSensor(CallingSensor):
         it = 0
         _data = []
         for item in _list[0]:
-#             print(item.device)
-#             print(_list[1][it].device)
             _data.append(torch.cat((item, _list[1][it]), 1))
             it += 1
         return torch.stack(_data)

@@ -1,7 +1,7 @@
 from Graphs.Sensors.mainSensors import CallingSensor
 import abc
 from typing import Any
-
+import torch
 
 class CallingLearner(CallingSensor):
     __metaclass__ = abc.ABCMeta
@@ -24,3 +24,9 @@ class CallingLearner(CallingSensor):
                     self.model.add_module(name=name, module=learner.model)
             self.updated = True
 
+    def save(self, filepath):
+        torch.save(self.model.state_dict(), filepath+"/"+self.name)
+
+    def load(self, filepath):
+        self.model.load_state_dict(torch.load(filepath+"/"+self.name))
+        self.model.eval()

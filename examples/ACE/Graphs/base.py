@@ -216,7 +216,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             *args,
             **kwargs
     ):
-        pass
+        self.filename = "saves"
 
     @property
     def parameters(self):
@@ -277,6 +277,12 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     self.optimizer.zero_grad()
                 except StopIteration:
                     break
+
+    def save(self, ):
+        learners = self.get_sensors(CallingLearner)
+        _learners = [learner for name, learner in learners]
+        for item in _learners:
+            item.save(self.filename)
 
     def test(self, mode):
         if mode == "valid":
