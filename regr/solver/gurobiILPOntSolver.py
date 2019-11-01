@@ -34,12 +34,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             return None
         
         self.myLogger.info('Starting method addTokenConstrains')
-        self.myLogger.info('graphResultsForPhraseToken')
+        self.myLogger.debug('graphResultsForPhraseToken')
         padding = max([len(str(t)) for t in tokens])
         spacing = max([len(str(c)) for c in conceptNames]) + 1
-        self.myLogger.info("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ str(t) + '\'' for t in tokens])))
+        self.myLogger.debug("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ str(t) + '\'' for t in tokens])))
         for concept, tokenTable in graphResultsForPhraseToken.items():
-            self.myLogger.info("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
+            self.myLogger.debug("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
 
         # Create variables for token - concept and negative variables
         for tokenIndex, token in enumerate(tokens):            
@@ -52,7 +52,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                 # Create variable
                 x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
-                self.myLogger.info("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
+                self.myLogger.debug("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
 
                 # Create negative variable
                 if currentProbability <= 1.0: # ilpOntSolver.__negVarTrashhold:
@@ -67,14 +67,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                     constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
                     currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
                     m.addConstr(currentConstrLinExpr == 1, name=constrainName)
-                    self.myLogger.info("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
         if len(x):
             self.myLogger.info("Created %i ILP variables for tokens"%(len(x)))
         else:
-            self.myLogger.warn("No ILP variables created for tokens")
+            self.myLogger.warning("No ILP variables created for tokens")
             return
 
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
@@ -120,7 +120,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                     currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
                     m.addConstr(currentConstrLinExpr <= 1, name=currentConstrName)
-                    self.myLogger.info("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
+                    self.myLogger.debug("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -288,12 +288,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                            
                 currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
-                self.myLogger.info("Created objective element %s"%(currentQElement))
+                self.myLogger.debug("Created objective element %s"%(currentQElement))
                 X_Q += currentQElement
 
                 if (token, 'Not_'+conceptName) in x: 
                     currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, 'Not_'+conceptName]
-                    self.myLogger.info("Created objective element %s"%(currentQElement))
+                    self.myLogger.debug("Created objective element %s"%(currentQElement))
                     X_Q += currentQElement
 
         return X_Q
@@ -306,7 +306,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         if graphResultsForPhraseRelation is not None:
             for relation in graphResultsForPhraseRelation:
-                self.myLogger.info('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseRelation[relation])))) ))
+                self.myLogger.debug('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseRelation[relation])))) ))
                 
         relationNames = list(graphResultsForPhraseRelation)
             
@@ -324,7 +324,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
-                    self.myLogger.info("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
+                    self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
                     
                     # Create negative variable
                     if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
@@ -342,7 +342,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if (relationName+'-neg', token1, token2) in y: 
                         constrainName = 'c_%s_%s_%sselfDisjoint'%(token1, token2, relationName)
                         m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name=constrainName)
-                        self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
+                        self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
 
         m.update()
    
@@ -395,13 +395,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                             currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
                             currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
                             m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
-                            self.myLogger.info("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
+                            self.myLogger.debug("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
 
                             # Range constrain
                             currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
                             currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
                             m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
-                            self.myLogger.info("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
+                            self.myLogger.debug("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
                                 
                     self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
@@ -678,12 +678,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                         
                     currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index]*y[relationName, token1, token2]
-                    self.myLogger.info("Created objective element %s"%(currentQElement))
+                    self.myLogger.debug("Created objective element %s"%(currentQElement))
                     Y_Q += currentQElement
                     
                     if (relationName+'-neg', token1, token2) in y: 
                         currentQElement = (1-graphResultsForPhraseRelation[relationName][token1Index][token2Index])*y[relationName+'-neg', token1, token2]
-                        self.myLogger.info("Created objective element %s"%(currentQElement))
+                        self.myLogger.debug("Created objective element %s"%(currentQElement))
                         Y_Q += currentQElement
         
         return Y_Q
@@ -695,10 +695,10 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('Starting method addTripleRelationsConstrains with graphResultsForPhraseTripleRelation')
         if graphResultsForPhraseTripleRelation is not None:
             for tripleRelation in graphResultsForPhraseTripleRelation:
-                self.myLogger.info('graphResultsForPhraseTripleRelation for relation \"%s"'%(tripleRelation))
+                self.myLogger.debug('graphResultsForPhraseTripleRelation for relation \"%s"'%(tripleRelation))
 
                 for token1Index, token1 in enumerate(tokens):
-                    self.myLogger.info('for token \"%s \n%s"'%(token1, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseTripleRelation[tripleRelation][token1Index]))))))
+                    self.myLogger.debug('for token \"%s \n%s"'%(token1, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseTripleRelation[tripleRelation][token1Index]))))))
 
         tripleRelationNames = list(graphResultsForPhraseTripleRelation)
             
@@ -723,7 +723,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         # Create variable
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
-                        self.myLogger.info("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
+                        self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         # Create negative variable
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
@@ -752,7 +752,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
                             constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
                             m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] == 1, name=constrainName)
-                            self.myLogger.info("Disjoint constrain between relation %s and not relation %s between tokens - %s %s %s == %i"%(tripleRelationName,tripleRelationName,token1,token2,token3,1))
+                            self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s %s == %i"%(tripleRelationName,tripleRelationName,token1,token2,token3,1))
 
         m.update()
     
@@ -829,8 +829,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                             noTriplePropertiesRanges = noTriplePropertiesRanges + 1
                               
             if noTriplePropertiesRanges < 3:
-                self.myLogger.warn("Problem with creation of - triple - constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
-                self.myLogger.warn("Abandon it - going to the next relation")
+                self.myLogger.warning("Problem with creation of - triple - constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
+                self.myLogger.warning("Abandon it - going to the next relation")
 
                 break
             else:
@@ -863,7 +863,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
                         m.addConstr(currentConstrLinExprRange >= 0, name=constrainNameTriple)
                                     
-                        self.myLogger.info("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+                        self.myLogger.debug("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
     
         m.update()
 
@@ -895,14 +895,14 @@ class gurobiILPOntSolver(ilpOntSolver):
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
     
         if self.ilpSolver == None:
-            self.myLogger.info('ILP solver not provided - returning unchanged results')
+            self.myLogger.warning('ILP solver not provided - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
 
         if graphResultsForPhraseToken is None:
-            self.myLogger.info('graphResultsForPhraseToken is None - returning unchanged results')
+            self.myLogger.warning('graphResultsForPhraseToken is None - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
         conceptNames = list(graphResultsForPhraseToken)
@@ -913,7 +913,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         elif all((isinstance(item, string_types) or isinstance(item, int)) for item in phrase):
             tokens = phrase
         else:
-            self.myLogger.info('Phrase type is not supported %s - returning unchanged results'%(phrase))
+            self.myLogger.warning('Phrase type is not supported %s - returning unchanged results'%(phrase))
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
 
         try:
