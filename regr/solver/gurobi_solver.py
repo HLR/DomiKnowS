@@ -17,7 +17,7 @@ class GurobiSolver(Solver):
         # predicates_list[i] is the dict of predicates of the objects of the base type to the power of i
         # predicates_list[i][concept] is the prediction result of the predicate for concept
         model = Model('solver')
-        #model.params.outputflag = 0
+        model.params.outputflag = 0
 
         # prepare candidates
         length = len(data)
@@ -105,7 +105,7 @@ class GurobiSolver(Solver):
             for predicates in predicates_list:
                 for concept in predicates:
                     for x in candidates[concept]:
-                        constr = model.addConstr(variables[concept, x] + variables_not[concept, x] <= 1,
+                        constr = model.addConstr(variables[concept, x] + variables_not[concept, x] == 1,
                                                name='lazy_not_{}_{}'.format(concept.name, str(x)))
                         #model.update()
 #                         print(concept.name, 'lazy_not')
@@ -120,9 +120,10 @@ class GurobiSolver(Solver):
                 for x in candidates[concept]:
                     objective += variables[concept, x] * predictions[concept, x]
         if self.lazy_not:
-            for concept in predicates:
-                for x in candidates[concept]:
-                    objective += variables_not[concept, x] * predictions_not[concept, x]
+            for predicates in predicates_list:
+                for concept in predicates:
+                    for x in candidates[concept]:
+                        objective += variables_not[concept, x] * predictions_not[concept, x]
         model.setObjective(objective, GRB.MAXIMIZE)
 
         # solve
