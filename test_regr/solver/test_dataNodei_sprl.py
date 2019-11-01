@@ -1,6 +1,5 @@
 import pytest
 
-
 @pytest.fixture()
 def ontology_graph(request):
     from regr.graph import Graph, Concept
@@ -20,15 +19,13 @@ def ontology_graph(request):
     # create graphs
     #------------------
     with Graph('spLanguage') as splang_Graph:
-        splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './example/sprl')
-
         with Graph('linguistic') as ling_graph:
-            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './regr/')
+            ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
             phrase = Concept(name = 'phrase')
             sentence = Concept(name = 'sentence')
 
         with Graph('application') as app_graph:
-            app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './example/sprl')
+            app_graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './examples/SpRL/')
 
             trajector = Concept(name='TRAJECTOR')
             landmark = Concept(name='LANDMARK')
@@ -66,7 +63,6 @@ def ontology_graph(request):
     #------------------
     Graph.clear()
     Concept.clear()
-
 
 @pytest.fixture()
 def sprl_input(ontology_graph):
@@ -111,7 +107,6 @@ def sprl_input(ontology_graph):
 
     yield test_dataNode
 
-
 @pytest.fixture()
 def model_trial(ontology_graph):
     from regr.graph import Trial
@@ -130,35 +125,35 @@ def model_trial(ontology_graph):
     model_trial = Trial()  # model_trail should come from model run
     # phrase
     # technically, we can change the 0, 1, 2, ... index with any other hashable object
-    model_trial[trajector,         0] = 0.37
-    model_trial[landmark,          0] = 0.68
-    model_trial[spatial_indicator, 0] = 0.05
-    model_trial[none_entity,       0] = 0.20
+    model_trial[trajector,         (0, )] = 0.37
+    model_trial[landmark,          (0, )] = 0.68
+    model_trial[spatial_indicator, (0, )] = 0.05
+    model_trial[none_entity,       (0, )] = 0.20
 
-    model_trial[trajector,         1] = 0.72
-    model_trial[landmark,          1] = 0.15
-    model_trial[spatial_indicator, 1] = 0.03
-    model_trial[none_entity,       1] = 0.61
+    model_trial[trajector,         (1, )] = 0.72
+    model_trial[landmark,          (1, )] = 0.15
+    model_trial[spatial_indicator, (1, )] = 0.03
+    model_trial[none_entity,       (1, )] = 0.61
 
-    model_trial[trajector,         2] = 0.78
-    model_trial[landmark,          2] = 0.33
-    model_trial[spatial_indicator, 2] = 0.02
-    model_trial[none_entity,       2] = 0.48
+    model_trial[trajector,         (2, )] = 0.78
+    model_trial[landmark,          (2, )] = 0.33
+    model_trial[spatial_indicator, (2, )] = 0.02
+    model_trial[none_entity,       (2, )] = 0.48
 
-    model_trial[trajector,         3] = 0.01
-    model_trial[landmark,          3] = 0.03
-    model_trial[spatial_indicator, 3] = 0.93
-    model_trial[none_entity,       3] = 0.03
+    model_trial[trajector,         (3, )] = 0.01
+    model_trial[landmark,          (3, )] = 0.03
+    model_trial[spatial_indicator, (3, )] = 0.93
+    model_trial[none_entity,       (3, )] = 0.03
 
-    model_trial[trajector,         4] = 0.42
-    model_trial[landmark,          4] = 0.43
-    model_trial[spatial_indicator, 4] = 0.03
-    model_trial[none_entity,       4] = 0.05
+    model_trial[trajector,         (4, )] = 0.42
+    model_trial[landmark,          (4, )] = 0.43
+    model_trial[spatial_indicator, (4, )] = 0.03
+    model_trial[none_entity,       (4, )] = 0.05
 
-    model_trial[trajector,         5] = 0.22
-    model_trial[landmark,          5] = 0.13
-    model_trial[spatial_indicator, 5] = 0.01
-    model_trial[none_entity,       5] = 0.52
+    model_trial[trajector,         (5, )] = 0.22
+    model_trial[landmark,          (5, )] = 0.13
+    model_trial[spatial_indicator, (5, )] = 0.01
+    model_trial[none_entity,       (5, )] = 0.52
 
     # triplet relation
     model_trial[triplet, (0, 1, 3)] = 0.85  # ("stairs", "About 20 kids ", "on") - GT
@@ -208,8 +203,6 @@ def model_trial(ontology_graph):
 
     return model_trial
 
-
-@pytest.mark.skip
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input, model_trial):
     application_graph = ontology_graph['application']
@@ -232,17 +225,11 @@ def test_main_sprl(ontology_graph, sprl_input, model_trial):
     # evaluate
     #------------------
     # -- phrase results:
-    assert inference_trial[landmark, 0] == 1  # "stairs" - LANDMARK
-    # same thing as
-    assert landmark.predict(0, trial=inference_trial) == 1  # "stairs" - LANDMARK
+    assert inference_trial[landmark, (0, )] == 1  # "stairs" - LANDMARK
+    assert inference_trial[trajector, (1, )] == 1  # "About 20 kids " - TRAJECTOR
+    assert inference_trial[trajector, (2, )] == 1  # "About 20 kids" - TRAJECTOR
 
-    assert inference_trial[trajector, 1] == 1  # "About 20 kids " - TRAJECTOR
-    assert inference_trial[trajector, 2] == 1  # "About 20 kids" - TRAJECTOR
-
-    assert inference_trial[spatial_indicator, 3] == 1  # "on" - SPATIALINDICATOR
-
-    assert inference_trial[none_entity, 4] == 1 # "hats" - NONE
-    assert inference_trial[none_entity, 5] == 1 # "traditional clothing" - NONE
+    assert inference_trial[spatial_indicator, (3, )] == 1  # "on" - SPATIALINDICATOR
 
     # -- relation results:
 
