@@ -208,5 +208,6 @@ def test_compare_emr(emr_graph, emr_input, solvers):
 
 
 @pytest.mark.gurobi
+@pytest.mark.benchmark
 def test_benchmark(emr_graph, emr_input, solver, benchmark):
     solver(emr_graph, *emr_input, benchmark=benchmark)
