@@ -1,5 +1,5 @@
 import pytest
-from itertools import chain
+from itertools import combinations
 import numpy as np
 
 @pytest.fixture()
@@ -90,153 +90,105 @@ def emr_graph(request):
     Relation.clear()
 
 
-@pytest.fixture()
-def emr_input(emr_graph):
+@pytest.fixture(params=range(1, 20), ids=lambda x: 'length={}'.format(x))
+def emr_input(emr_graph, request):
     import numpy as np
+    import random
 
-    test_phrase = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
+    length = request.param
+
     app_graph = emr_graph["application"]
-    conceptNamesList = [app_graph["people"],
-                        app_graph["organization"],
-                        app_graph["other"],
-                        app_graph["location"],
-                        app_graph["O"]]
-    relationNamesList = [app_graph["work_for"],
-                         app_graph["live_in"],
-                         app_graph["located_in"]]
 
-    # tokens
-    test_graphResultsForPhraseToken = {}
-    test_graphResultsForPhraseToken[app_graph["people"]] =       np.random.rand(4)
-    test_graphResultsForPhraseToken[app_graph["organization"]] = np.random.rand(4)
-    test_graphResultsForPhraseToken[app_graph["other"]] =        np.random.rand(4)
-    test_graphResultsForPhraseToken[app_graph["location"]] =     np.random.rand(4)
-    test_graphResultsForPhraseToken[app_graph["O"]] =            np.random.rand(4)
+    entities = [app_graph["people"],
+                app_graph["organization"],
+                app_graph["other"],
+                app_graph["location"],
+                app_graph["O"]]
     
-    test_graphResultsForPhraseRelation = dict()
+
+    relations = [app_graph["work_for"],
+                 app_graph["live_in"],
+                 app_graph["located_in"]]
+
+    tokens = [("John", "NNP"), ("works", "VBN"), ("for", "IN"), ("IBM", "NNP")]
+    phrase = [random.choice(tokens) for _ in range(length)]
+    phrase = [('{}_{}'.format(idx, token), pos_tag)
+              for idx, (token, pos_tag) in enumerate(phrase)]
+
+    entities_input = {entity : np.random.rand(length)
+                       for entity in entities}
     eye_cut = 0
-    work_for_relation_table = np.random.rand(4, 4) * (1 - np.eye(4,4)*eye_cut)
-    test_graphResultsForPhraseRelation[app_graph["work_for"]] = work_for_relation_table
-    live_in_relation_table = np.random.rand(4, 4) * (1 - np.eye(4,4)*eye_cut)
-    test_graphResultsForPhraseRelation[app_graph["live_in"]] = live_in_relation_table
-    located_in_relation_table = np.random.rand(4, 4) * (1 - np.eye(4,4)*eye_cut)
-    test_graphResultsForPhraseRelation[app_graph["located_in"]] = located_in_relation_table
+    relations_input = {relation : np.random.rand(length, length) * (1 - np.eye(length, length) * eye_cut)
+                        for relation in relations}
 
-    return test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation
+    return phrase, entities_input, relations_input
 
 
-def get_graph_result(emr_graph, emr_input):
+def mini_wrap(emr_graph, phrase, *inputs):
+    # prepare solver
     from regr.solver.gurobi_solver import GurobiSolver
-
-    test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
+    solver = GurobiSolver(lazy_not=True, self_relation=False)
     
-    test_graphResultsForPhraseToken_ = {k.name: v for k, v in test_graphResultsForPhraseToken.items()}
-    test_graphResultsForPhraseRelation_ = {k.name: v for k, v in test_graphResultsForPhraseRelation.items()}
-
-    # ------Call solver -------
-    test_graph = emr_graph
-
-    myilpOntSolver = GurobiSolver(lazy_not=True, self_relation=False)
-    tokenResult, relationsResult = myilpOntSolver.solve_legacy(test_phrase,
-                                                               test_graphResultsForPhraseToken,
-                                                               test_graphResultsForPhraseRelation
-                                                              )
-    return tokenResult, relationsResult
+    # call solver
+    results = solver.solve_legacy(phrase, *inputs)
+    return results
 
 
-@pytest.fixture()
-def graph_result(emr_graph, emr_input):
-    return get_graph_result(emr_graph, emr_input)
+def owl_wrap(emr_graph, phrase, *inputs):
+    if len(inputs) > 3:
+        raise NotImplemented
+    # prepare input
+    owl_inputs = []
+    key_maps = []
+    for input_ in inputs:
+        owl_input = {}
+        key_map = {}
+        for k, v in input_.items():
+            owl_input[k.name] = v
+            key_map[k.name] = k
+        owl_inputs.append(owl_input)
+        key_maps.append(key_map)
 
-
-def get_owl_result(emr_graph, emr_input):
+    # prepare solver
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.ilpOntSolver import ilpOntSolver
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph)
 
-    test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
+    # call solver
+    owl_results = solver.calculateILPSelection(phrase, *owl_inputs)
 
-    test_graphResultsForPhraseToken = {k.name: v for k, v in test_graphResultsForPhraseToken.items()}
-    test_graphResultsForPhraseRelation = {k.name: v for k, v in test_graphResultsForPhraseRelation.items()}
-
-    # ------Call solver -------
-    test_graph = emr_graph
-
-    myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(test_graph)
-    tokenResult, relationsResult, _ = myilpOntSolver.calculateILPSelection(test_phrase,
-                                                                           test_graphResultsForPhraseToken,
-                                                                           test_graphResultsForPhraseRelation
-                                                                          )
-    return tokenResult, relationsResult
+    # prepare result
+    results = [{key_map[k]:v for k, v in owl_result.items()}
+               for owl_result, key_map in zip(owl_results, key_maps)]
+    return results
 
 
 @pytest.fixture()
-def owl_result(emr_graph, emr_input):
-    return get_owl_result(emr_graph, emr_input)
+def solvers(request):
+    yield mini_wrap, owl_wrap
 
 
-#@pytest.mark.skip
-def test_compare_emr(emr_graph, emr_input, owl_result, graph_result):
-    test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
-    test_graphResultsForPhraseToken = {k.name: v for k, v in test_graphResultsForPhraseToken.items()}
-    test_graphResultsForPhraseRelation = {k.name: v for k, v in test_graphResultsForPhraseRelation.items()}
-
-    tokenResult, relationsResult = owl_result
-    graph_tokenResult, graph_relationsResult = graph_result
-    graph_tokenResult = {k.name: v for k, v in graph_tokenResult.items()}
-    graph_relationsResult = {k.name: v for k, v in graph_relationsResult.items()}
-
-    app_graph = emr_graph["application"]
-
-    print('input', '-'*10)
-    for k, v in test_graphResultsForPhraseToken.items():
-        print(k)
-        print(v)
-    for k, v in test_graphResultsForPhraseRelation.items():
-        print(k)
-        print(v)
-    print('owl', '-'*10)
-    for k, v in tokenResult.items():
-        print(k)
-        print(v)
-    for k, v in relationsResult.items():
-        print(k)
-        print(v)
-    print('graph', '-'*10)
-    for k, v in graph_tokenResult.items():
-        print(k)
-        print(v)
-    for k, v in graph_relationsResult.items():
-        print(k)
-        print(v)
-
-    # -------Compare objective
+def objective(emr_input, results, lazy_not=True):
+    _, *inputs = emr_input
     obj = 0
-    for key in set(chain(tokenResult, graph_tokenResult)):
-        obj += (tokenResult[key] * test_graphResultsForPhraseToken[key]).sum()
-        obj += ((1 - tokenResult[key]) * (1 - test_graphResultsForPhraseToken[key])).sum()
-    for key in set(chain(relationsResult, graph_relationsResult)):
-        obj += (relationsResult[key] * test_graphResultsForPhraseRelation[key]).sum()
-        obj += ((1 - relationsResult[key]) * (1 - test_graphResultsForPhraseRelation[key])).sum()
-    print('objective OWL:', obj)
-    obj = 0
-    for key in set(chain(tokenResult, graph_tokenResult)):
-        obj += (graph_tokenResult[key] * test_graphResultsForPhraseToken[key]).sum()
-        obj += ((1 - graph_tokenResult[key]) * (1 - test_graphResultsForPhraseToken[key])).sum()
-    for key in set(chain(relationsResult, graph_relationsResult)):
-        obj += (graph_relationsResult[key] * test_graphResultsForPhraseRelation[key] ).sum()
-        obj += ((1 - graph_relationsResult[key]) * (1 - test_graphResultsForPhraseRelation[key])).sum()
-    print('objective graph:', obj)
-
-    # -------Evaluate results
-    for key in set(chain(tokenResult, graph_tokenResult)):
-        assert (tokenResult[key] == graph_tokenResult[key]).all()
-    for key in set(chain(relationsResult, graph_relationsResult)):
-        assert (relationsResult[key] == graph_relationsResult[key]).all()
+    for input_, result in zip(inputs, results):
+        for key in result:
+            obj += (result[key] * input_[key]).sum()
+            if lazy_not:
+                obj += ((1 - result[key]) * (1 - input_[key])).sum()
+    return obj
 
 
-def test_benchmark_graph_result(emr_graph, emr_input, benchmark):
-    benchmark(get_graph_result, emr_graph, emr_input)
-
-
-def test_benchmark_owl_result(emr_graph, emr_input, benchmark):
-    benchmark(get_owl_result, emr_graph, emr_input)
+def test_compare_emr(emr_graph, emr_input, solvers, benchmark):
+    objs = []
+    for solver in solvers:
+        objs.append(solver(emr_graph, *emr_input))
+    # compare each two
+    for a, b in combinations(objs, 2):
+        # same number of arities
+        assert len(a) == len(b)
+        for aa, bb in zip(a, b):
+            # same number of predicates
+            assert len(aa) == len(bb)
+            for key in aa:
+                # just all the same
+                assert (aa[key] == bb[key]).all()
