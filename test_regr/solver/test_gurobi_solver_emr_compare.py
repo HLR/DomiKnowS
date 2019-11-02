@@ -90,7 +90,7 @@ def emr_graph(request):
     Relation.clear()
 
 
-@pytest.fixture(params=range(1, 20), ids=lambda x: 'length={}'.format(x))
+@pytest.fixture(params=range(1, 20))
 def emr_input(emr_graph, request):
     import numpy as np
     import random
@@ -124,17 +124,21 @@ def emr_input(emr_graph, request):
     return phrase, entities_input, relations_input
 
 
-def mini_wrap(emr_graph, phrase, *inputs):
+def passby(fn, *args, **kwargs):
+    return fn(*args, **kwargs)
+
+
+def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
     from regr.solver.gurobi_solver import GurobiSolver
     solver = GurobiSolver(lazy_not=True, self_relation=False)
     
     # call solver
-    results = solver.solve_legacy(phrase, *inputs)
+    results = benchmark(solver.solve_legacy, phrase, *inputs)
     return results
 
 
-def owl_wrap(emr_graph, phrase, *inputs):
+def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     if len(inputs) > 3:
         raise NotImplemented
     # prepare input
@@ -154,7 +158,7 @@ def owl_wrap(emr_graph, phrase, *inputs):
     solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph)
 
     # call solver
-    owl_results = solver.calculateILPSelection(phrase, *owl_inputs)
+    owl_results = benchmark(solver.calculateILPSelection, phrase, *owl_inputs)
 
     # prepare result
     results = [{key_map[k]:v for k, v in owl_result.items()}
@@ -162,9 +166,17 @@ def owl_wrap(emr_graph, phrase, *inputs):
     return results
 
 
-@pytest.fixture()
+solver_list = [mini_wrap, owl_wrap]
+
+
+@pytest.fixture(params=solver_list)
+def solver(request):
+    return request.param
+
+
+@pytest.fixture(params=combinations(solver_list, 2))
 def solvers(request):
-    yield mini_wrap, owl_wrap
+    return request.param
 
 
 def objective(emr_input, results, lazy_not=True):
@@ -178,7 +190,8 @@ def objective(emr_input, results, lazy_not=True):
     return obj
 
 
-def test_compare_emr(emr_graph, emr_input, solvers, benchmark):
+@pytest.mark.gurobi
+def test_compare_emr(emr_graph, emr_input, solvers):
     objs = []
     for solver in solvers:
         objs.append(solver(emr_graph, *emr_input))
@@ -192,3 +205,8 @@ def test_compare_emr(emr_graph, emr_input, solvers, benchmark):
             for key in aa:
                 # just all the same
                 assert (aa[key] == bb[key]).all()
+
+
+@pytest.mark.gurobi
+def test_benchmark(emr_graph, emr_input, solver, benchmark):
+    solver(emr_graph, *emr_input, benchmark=benchmark)
