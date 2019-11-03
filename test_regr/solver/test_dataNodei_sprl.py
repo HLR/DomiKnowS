@@ -1,4 +1,6 @@
+from itertools import combinations
 import pytest
+import numpy as np
 
 @pytest.fixture()
 def ontology_graph(request):
@@ -108,7 +110,7 @@ def sprl_input(ontology_graph):
     yield test_dataNode
 
 @pytest.fixture()
-def model_trial(ontology_graph):
+def model_trial(ontology_graph, sprl_input):
     from regr.graph import Trial
 
     application_graph = ontology_graph['application']
@@ -118,88 +120,63 @@ def model_trial(ontology_graph):
     none_entity = application_graph['NONE_ENTITY']
     triplet = application_graph['triplet']
     spatial_triplet = application_graph['spatial_triplet']
+    region = application_graph['region']
 
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sprl_input.childInstanceNodes
+    #stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing = [0,1,2,3,4,5]
     #------------------
     # sample output from learners
     #------------------
     model_trial = Trial()  # model_trail should come from model run
     # phrase
-    # technically, we can change the 0, 1, 2, ... index with any other hashable object
-    model_trial[trajector,         (0, )] = 0.37
-    model_trial[landmark,          (0, )] = 0.68
-    model_trial[spatial_indicator, (0, )] = 0.05
-    model_trial[none_entity,       (0, )] = 0.20
+    model_trial[trajector,         (stairs, )] = 0.37
+    model_trial[landmark,          (stairs, )] = 0.68
+    model_trial[spatial_indicator, (stairs, )] = 0.05
+    model_trial[none_entity,       (stairs, )] = 0.20
 
-    model_trial[trajector,         (1, )] = 0.72
-    model_trial[landmark,          (1, )] = 0.15
-    model_trial[spatial_indicator, (1, )] = 0.03
-    model_trial[none_entity,       (1, )] = 0.61
+    model_trial[trajector,         (about_20_kids_, )] = 0.72
+    model_trial[landmark,          (about_20_kids_, )] = 0.15
+    model_trial[spatial_indicator, (about_20_kids_, )] = 0.03
+    model_trial[none_entity,       (about_20_kids_, )] = 0.61
 
-    model_trial[trajector,         (2, )] = 0.78
-    model_trial[landmark,          (2, )] = 0.33
-    model_trial[spatial_indicator, (2, )] = 0.02
-    model_trial[none_entity,       (2, )] = 0.48
+    model_trial[trajector,         (about_20_kids, )] = 0.78
+    model_trial[landmark,          (about_20_kids, )] = 0.33
+    model_trial[spatial_indicator, (about_20_kids, )] = 0.02
+    model_trial[none_entity,       (about_20_kids, )] = 0.48
 
-    model_trial[trajector,         (3, )] = 0.01
-    model_trial[landmark,          (3, )] = 0.03
-    model_trial[spatial_indicator, (3, )] = 0.93
-    model_trial[none_entity,       (3, )] = 0.03
+    model_trial[trajector,         (on, )] = 0.01
+    model_trial[landmark,          (on, )] = 0.03
+    model_trial[spatial_indicator, (on, )] = 0.93
+    model_trial[none_entity,       (on, )] = 0.03
 
-    model_trial[trajector,         (4, )] = 0.42
-    model_trial[landmark,          (4, )] = 0.43
-    model_trial[spatial_indicator, (4, )] = 0.03
-    model_trial[none_entity,       (4, )] = 0.05
+    model_trial[trajector,         (hats, )] = 0.42
+    model_trial[landmark,          (hats, )] = 0.43
+    model_trial[spatial_indicator, (hats, )] = 0.03
+    model_trial[none_entity,       (hats, )] = 0.05
 
-    model_trial[trajector,         (5, )] = 0.22
-    model_trial[landmark,          (5, )] = 0.13
-    model_trial[spatial_indicator, (5, )] = 0.01
-    model_trial[none_entity,       (5, )] = 0.52
+    model_trial[trajector,         (traditional_clothing, )] = 0.22
+    model_trial[landmark,          (traditional_clothing, )] = 0.13
+    model_trial[spatial_indicator, (traditional_clothing, )] = 0.01
+    model_trial[none_entity,       (traditional_clothing, )] = 0.52
 
     # triplet relation
-    model_trial[triplet, (0, 1, 3)] = 0.85  # ("stairs", "About 20 kids ", "on") - GT
-    model_trial[triplet, (0, 2, 3)] = 0.78  # ("stairs", "About 20 kids", "on") - GT
-    model_trial[triplet, (0, 4, 3)] = 0.42  # ("stairs", "hat", "on")
-    model_trial[triplet, (0, 5, 3)] = 0.85  # ("stairs", "traditional clothing", "on")
-    model_trial[triplet, (1, 0, 3)] = 0.32  # ("About 20 kids ", "stairs", "on")
-    model_trial[triplet, (1, 2, 3)] = 0.30  # ("About 20 kids ", "About 20 kids", "on")
-    model_trial[triplet, (1, 4, 3)] = 0.32  # ("About 20 kids ", "hat", "on")
-    model_trial[triplet, (1, 5, 3)] = 0.29  # ("About 20 kids ", "traditional clothing", "on")
-    model_trial[triplet, (2, 0, 3)] = 0.31  # ("About 20 kids", "stairs", "on")
-    model_trial[triplet, (2, 1, 3)] = 0.30  # ("About 20 kids", "About 20 kids ", "on")
-    model_trial[triplet, (2, 4, 3)] = 0.25  # ("About 20 kids ", "hat", "on")
-    model_trial[triplet, (2, 5, 3)] = 0.27  # ("About 20 kids ", "traditional clothing", "on")
+    for instance in combinations(sprl_input.childInstanceNodes, 3):
+        model_trial[triplet, instance] = np.random.rand() * 0.2
+    model_trial[triplet, (stairs, about_20_kids_, on)] = 0.85  # GT
+    model_trial[triplet, (stairs, about_20_kids, on)] = 0.78  # GT
 
     # spatial_triplet relation
-    model_trial[spatial_triplet, (0, 1, 3)] = 0.25  # ("stairs", "About 20 kids ", "on") - GT
-    model_trial[spatial_triplet, (0, 2, 3)] = 0.38  # ("stairs", "About 20 kids", "on") - GT
-    model_trial[spatial_triplet, (0, 4, 3)] = 0.22  # ("stairs", "hat", "on")
-    model_trial[spatial_triplet, (0, 5, 3)] = 0.39  # ("stairs", "traditional clothing", "on")
-    model_trial[spatial_triplet, (1, 0, 3)] = 0.32  # ("About 20 kids ", "stairs", "on")
-    model_trial[spatial_triplet, (1, 2, 3)] = 0.30  # ("About 20 kids ", "About 20 kids", "on")
-    model_trial[spatial_triplet, (1, 4, 3)] = 0.22  # ("About 20 kids ", "hat", "on")
-    model_trial[spatial_triplet, (1, 5, 3)] = 0.39  # ("About 20 kids ", "traditional clothing", "on")
-    model_trial[spatial_triplet, (2, 0, 3)] = 0.31  # ("About 20 kids", "stairs", "on")
-    model_trial[spatial_triplet, (2, 1, 3)] = 0.30  # ("About 20 kids", "About 20 kids ", "on")
-    model_trial[spatial_triplet, (2, 4, 3)] = 0.15  # ("About 20 kids ", "hat", "on")
-    model_trial[spatial_triplet, (2, 5, 3)] = 0.27  # ("About 20 kids ", "traditional clothing", "on")
+    for instance in combinations(sprl_input.childInstanceNodes, 3):
+        model_trial[spatial_triplet, instance] = np.random.rand() * 0.2
+    model_trial[spatial_triplet, (stairs, about_20_kids_, on)] = 0.74  # GT
+    model_trial[spatial_triplet, (stairs, about_20_kids, on)] = 0.83  # GT
 
     # region relation
-    model_trial[spatial_triplet, (0, 1, 3)] = 0.25  # ("stairs", "About 20 kids ", "on") - GT
-    model_trial[spatial_triplet, (0, 2, 3)] = 0.38  # ("stairs", "About 20 kids", "on") - GT
-    model_trial[spatial_triplet, (0, 4, 3)] = 0.22  # ("stairs", "hat", "on")
-    model_trial[spatial_triplet, (0, 5, 3)] = 0.12  # ("stairs", "traditional clothing", "on")
-    model_trial[spatial_triplet, (1, 0, 3)] = 0.32  # ("About 20 kids ", "stairs", "on")
-    model_trial[spatial_triplet, (1, 2, 3)] = 0.30  # ("About 20 kids ", "About 20 kids", "on")
-    model_trial[spatial_triplet, (1, 4, 3)] = 0.22  # ("About 20 kids ", "hat", "on")
-    model_trial[spatial_triplet, (1, 5, 3)] = 0.39  # ("About 20 kids ", "traditional clothing", "on")
-    model_trial[spatial_triplet, (2, 0, 3)] = 0.31  # ("About 20 kids", "stairs", "on")
-    model_trial[spatial_triplet, (2, 1, 3)] = 0.30  # ("About 20 kids", "About 20 kids ", "on")
-    model_trial[spatial_triplet, (2, 4, 3)] = 0.15  # ("About 20 kids ", "hat", "on")
-    model_trial[spatial_triplet, (2, 5, 3)] = 0.27  # ("About 20 kids ", "traditional clothing", "on")
 
-    # none_relation
-    model_trial[spatial_triplet, (0, 1, 3)] = 0.15  # ("stairs", "About 20 kids ", "on")
-    model_trial[spatial_triplet, (0, 2, 3)] = 0.08  # ("stairs", "About 20 kids", "on")
+    for instance in combinations(sprl_input.childInstanceNodes, 3):
+        model_trial[region, instance] = np.random.rand() * 0.2
+    model_trial[region, (stairs, about_20_kids_, on)] = 0.65  # GT
+    model_trial[region, (stairs, about_20_kids, on)] = 0.88  # GT
 
     return model_trial
 
@@ -212,29 +189,30 @@ def test_main_sprl(ontology_graph, sprl_input, model_trial):
     none_entity = application_graph['NONE_ENTITY']
     triplet = application_graph['triplet']
     spatial_triplet = application_graph['spatial_triplet']
-    none_relation = application_graph['none_relation']
+    region = application_graph['region']
 
-    test_data_node = sprl_input
+    sentence_node = sprl_input
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sprl_input.childInstanceNodes
+    #stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing = [0,1,2,3,4,5]
 
     #------------------
     # Call solver on data Node for sentence 0
     #------------------
-    inference_trial = test_data_node.inferILPConstrains(model_trial, trajector, landmark, spatial_indicator, none_entity, triplet, spatial_triplet, none_relation)
+    inference_trial = sentence_node.inferILPConstrains(model_trial, trajector, landmark, spatial_indicator, none_entity, triplet, spatial_triplet, region)
 
     #------------------
     # evaluate
     #------------------
     # -- phrase results:
-    assert inference_trial[landmark, (0, )] == 1  # "stairs" - LANDMARK
-    assert inference_trial[trajector, (1, )] == 1  # "About 20 kids " - TRAJECTOR
-    assert inference_trial[trajector, (2, )] == 1  # "About 20 kids" - TRAJECTOR
+    assert inference_trial[landmark, (stairs, )] == 1  # "stairs" - LANDMARK
+    assert inference_trial[trajector, (about_20_kids_, )] == 1  # "About 20 kids " - TRAJECTOR
+    assert inference_trial[trajector, (about_20_kids, )] == 1  # "About 20 kids" - TRAJECTOR
 
-    assert inference_trial[spatial_indicator, (3, )] == 1  # "on" - SPATIALINDICATOR
+    assert inference_trial[spatial_indicator, (on, )] == 1  # "on" - SPATIALINDICATOR
 
     # -- relation results:
+    assert inference_trial[triplet, (stairs, about_20_kids_, on)] == 1
+    assert inference_trial[triplet, (stairs, about_20_kids, on)] == 1
 
-    assert inference_trial[triplet, (0, 1, 3)] == 1 # ("stairs", "About 20 kids ", "on")
-    assert inference_trial[triplet, (0, 2, 3)] == 1 # ("stairs", "About 20 kids", "on")
-
-    assert inference_trial[none_relation, (0, 1, 3)] == 0 # ("stairs", "About 20 kids ", "on")
-    assert inference_trial[none_relation, (0, 2, 3)] == 0 # ("stairs", "About 20 kids", "on")
+    assert inference_trial[spatial_triplet, (stairs, about_20_kids_, on)] == 1
+    assert inference_trial[spatial_triplet, (stairs, about_20_kids, on)] == 1
