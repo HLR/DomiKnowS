@@ -277,6 +277,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     self.optimizer.zero_grad()
                 except StopIteration:
                     break
+        self.save()
 
     def save(self, ):
         learners = self.get_sensors(CallingLearner)
@@ -294,7 +295,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         else:
             print("you have to specify one of valid or test to run this function")
             raise
-
+        metrics = {'f1_score': 0, 'precision': 0, 'recall': 0}
         while True:
             try:
                 truth = []
@@ -307,6 +308,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
             except StopIteration:
                 break
+
 
 
 class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):

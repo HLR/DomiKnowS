@@ -3,6 +3,7 @@ import abc
 from typing import Any
 import torch
 
+
 class CallingLearner(CallingSensor):
     __metaclass__ = abc.ABCMeta
 
@@ -25,8 +26,10 @@ class CallingLearner(CallingSensor):
             self.updated = True
 
     def save(self, filepath):
-        torch.save(self.model.state_dict(), filepath+"/"+self.name)
+        final_name  = self.fullname.replace('/', '_')
+        torch.save(self.model.state_dict(), filepath+"/"+self.fullname)
 
     def load(self, filepath):
-        self.model.load_state_dict(torch.load(filepath+"/"+self.name))
+        final_name = self.fullname.replace('/', '_')
+        self.model.load_state_dict(torch.load(filepath+"/"+self.fullname))
         self.model.eval()

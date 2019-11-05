@@ -77,17 +77,6 @@ class DataLoader :
             print('Prepared {} files'.format(iteration), end='\r')
         print('Preparation resulted in {} inputs'.format(len(self.inputs)))
 
-    def prepareInput(self):
-        print('Starting to Prepare {} inputs'.format(len(self.inputs)), end='\n')
-        print(" ")
-        iteration = 0
-        for sample in self.inputs:
-            sample['words'] = []
-            for item in sample['lower_sentences']:
-                sample['words'].append([word for word in item if word in self.vocabulary.vocab.stoi and len(word)])
-            iteration += 1
-            print('Prepared {} inputs'.format(iteration), end='\r')
-
     def prepareLables(self):
         print("starting to prepare lables", end='\n')
         print(" ")
@@ -126,6 +115,7 @@ class DataLoader :
         iteration = 0
         for sample in self.inputs:
             sample['inputs'] = []
+            sample['phrases'] = []
             # words array cotains arrays of all sentences inside a file
             for sentence in sample['sentences']:
                 annotated_sentence = []
@@ -135,36 +125,86 @@ class DataLoader :
                 sentence = sentence.to_tokenized_string().split(" ")
                 #                 print(sentence)
                 # temp array is a sentence of words
-                for token in sentence:
-                    check2 = False
-                    #                     string = token.
-                    for annotation in sample['annotated']:
-                        if annotation[0] == token or token == annotation[0].split(' ')[-1]:
-                            check = True
-                            check2 = True
-                            _input = {"word": token, 'type': annotation[1], 'subtype': annotation[2],
+                # for token in sentence:
+                #     check2 = False
+                #     #                     string = token.
+                #     for annotation in sample['annotated']:
+                #         if len(annotation[0].split(' ')) > 1:
+                #             if len(annotation[0].split(' ')) == 2:
+                #                 check = True
+                #                 check2 = True
+                #                 _input = {"word": token, 'type': "L-" + annotation[1], 'subtype': annotation[2],
+                #                           "mentioned": annotation[3], 'set': sample['type']}
+                #                 annotated_sentence.append(_input)
+                #                 break
+                #         else:
+                #             if token == annotation[0].split(' ')[0]:
+                #                 check = True
+                #                 check2 = True
+                #                 _input = {"word": token, 'type': "L-"+ annotation[1], 'subtype': annotation[2],
+                #                           "mentioned": annotation[3], 'set': sample['type']}
+                #                 annotated_sentence.append(_input)
+                #                 break
+                #
+                #     if not check2 and (token == " " or token == "."):
+                #         _input = {"word": token, 'type': '-O-', 'subtype': '-O-', "mentioned": "NONE",
+                #                   'set': sample['type']}
+                #         annotated_sentence.append(_input)
+                #     elif not check2:
+                #         _input = {"word": token, 'type': '-O-', 'subtype': '-O-', "mentioned": "NONE",
+                #                   'set': sample['type']}
+                #         annotated_sentence.append(_input)
+
+                phrases = []
+                for annotation in sample['annotated']:
+                    phrases.append({"text": annotation[0], "label": annotation[1]})
+                    start = 0
+                    _list = []
+                    labels = annotation[0].split(' ')
+                    # for _it in range(start, len(sentence)):
+                    if labels[0] in sentence[start:]:
+                        check = True
+                        value_index = sentence.index(labels[0])
+                    else:
+                        continue
+                    for _it in range(start, value_index):
+                        _input = {"word": sentence[_it], 'type': '-O-', 'subtype': '-O-', "mentioned": "NONE",
+                                  'set': sample['type']}
+                        annotated_sentence.append(_input)
+                    for _it in range(len(labels)):
+                        if labels[_it] == sentence[start+_it]:
+                            _list.append(sentence[sentence[start+_it]])
+                        else:
+                            break
+                    if len(_list) == 1:
+                        _input = {"word": _list[0], 'type': "L-" + annotation[1], 'subtype': annotation[2],
+                                          "mentioned": annotation[3], 'set': sample['type']}
+                        annotated_sentence.append(_input)
+                    elif len(_list) == 2:
+                        _input = {"word": _list[0], 'type': "B-" + annotation[1], 'subtype': annotation[2],
+                                  "mentioned": annotation[3], 'set': sample['type']}
+                        annotated_sentence.append(_input)
+                        _input = {"word": _list[1], 'type': "L-" + annotation[1], 'subtype': annotation[2],
+                                  "mentioned": annotation[3], 'set': sample['type']}
+                        annotated_sentence.append(_input)
+                    else:
+                        _input = {"word": _list[0], 'type': "B-" + annotation[1], 'subtype': annotation[2],
+                                  "mentioned": annotation[3], 'set': sample['type']}
+                        annotated_sentence.append(_input)
+                        _input = {"word": _list[-1], 'type': "L-" + annotation[1], 'subtype': annotation[2],
+                                  "mentioned": annotation[3], 'set': sample['type']}
+                        annotated_sentence.append(_input)
+                        for item in range(1, len(_list) - 1):
+                            _input = {"word": _list[item], 'type': "I-" + annotation[1], 'subtype': annotation[2],
                                       "mentioned": annotation[3], 'set': sample['type']}
                             annotated_sentence.append(_input)
-                            break
-
-                    if not check2 and (token == " " or token == "."):
-                        _input = {"word": token, 'type': '-O-', 'subtype': '-O-', "mentioned": "NONE",
-                                  'set': sample['type']}
-                        annotated_sentence.append(_input)
-                    elif not check2:
-                        _input = {"word": token, 'type': '-O-', 'subtype': '-O-', "mentioned": "NONE",
-                                  'set': sample['type']}
-                        annotated_sentence.append(_input)
+                    start = value_index + len(_list)
 
                 # annotated_sentence is an array of annotated words inside a sentence
                 sample['inputs'].append(annotated_sentence)
-                #                 if iteration >= 2:
-                #                     print("the it condition")
-                #                     print(annotated_sentence)
-                #                     print(sentence)
-                #                     exit(0)
+                sample['phrases'].append(phrases)
                 if check:
-                    self.data.append([annotated_sentence, sentence1])
+                    self.data.append([annotated_sentence, sentence1, phrases])
             iteration += 1
             print('Labled {} inputs with total number of sentences with entities of {} sentences'.format(iteration, len(
                 self.data)), end='\r')
@@ -173,7 +213,6 @@ class DataLoader :
         self.listFiles()
         self.splitHint()
         self.readData()
-        #         self.prepareInput()
         self.prepareLables()
         self.readLables()
         self.lableInputs()
@@ -205,9 +244,9 @@ class ACEReader :
 
     def makeLables(self):
         for item in self.data:
-            for word in item[0]:
-                if word['type'] not in self.lables:
-                    self.lables.append(word['type'])
+            for phrase in item[2]:
+                if phrase['label'] not in self.lables:
+                    self.lables.append(phrase['label'])
 
     def count(self):
         return len(self.data)
@@ -231,26 +270,29 @@ class ACEReader :
     def readTrain(self):
         for item in self.train:
             sentence = item[1]
-            lables = [x['type'] for x in item[0]]
-            yield sentence, lables
+            boundaries = [x["type"] for x in item[0]]
+            lables = item[2]
+            yield sentence, boundaries, lables
 
     def readValid(self):
         for item in self.valid:
             sentence = item[1]
-            lables = [x['type'] for x in item[0]]
-            yield sentence, lables
+            boundaries = [x["type"] for x in item[0]]
+            lables = item[2]
+            yield sentence, boundaries, lables
 
     def readTest(self):
         for item in self.test:
             sentence = item[1]
-            lables = [x['type'] for x in item[0]]
-            yield sentence, lables
+            boundaries = [x["type"] for x in item[0]]
+            lables = item[2]
+            yield sentence, boundaries, lables
 
     def lableCount(self):
         for item in self.data:
-            for word in item[0]:
+            for phrase in item[2]:
                 for k in range(len(self.lables)):
-                    if word['type'] == self.lables[k]:
+                    if phrase['label'] == self.lables[k]:
                         self.lablesCount[k] += 1
                         self.total += 1
 
