@@ -1,0 +1,110 @@
+<!-- 
+
+A DTD for Annotation Graphs (ATLAS Level 0), derived from the AIF DTD.
+
+2000-10-26   v1.0b1  Steven Bird (LDC)
+2000-11-08   v1.0b2  Steven Bird (LDC)
+2000-11-21   v1.0b3  Steven Bird (LDC)
+2001-01-30   v1.0    Steven Bird (LDC)
+2001-04-02   v1.1b1  Steven Bird (LDC)
+2001-04-23   v1.1b2  Steven Bird (LDC)
+2001-09-15   v1.1b3  Steven Bird (LDC)
+2001-12-20   v1.1    Steven Bird (LDC)
+
+-->
+
+<!-- Overview:
+
+            AGSet  := Metadata Timeline* AG*
+                   [attrs: id, version, xmlns, xmlns:xlink]
+
+          Metadata := ANY
+
+                AG := Metadata? Anchor* Annotation*
+                   [attrs: id, type, timeline?]
+
+          Timeline := Metadata? Signal*
+            Signal := Metadata?
+                   [attrs: id, mimeClass, mimeType, encoding,
+                    xlink:type, xlink:href, track?]
+
+            Anchor := EMPTY
+                   [attrs: id, offset?, unit?, signals?]
+
+        Annotation := Feature*
+                   [attrs: id, type, start, end]
+           Feature := PCDATA
+                   [attrs: name]
+-->
+
+<!ELEMENT Metadata ( MetadataElement* )>
+
+<!ELEMENT MetadataElement ANY>
+<!ATTLIST MetadataElement
+    name        CDATA  #REQUIRED
+>
+
+<!ELEMENT AGSet
+  ( Metadata, Timeline*, AG* )>
+<!ATTLIST AGSet
+    id          ID     #REQUIRED
+    version     CDATA  #FIXED    "1.0"
+    xmlns       CDATA  #FIXED    "http://www.ldc.upenn.edu/atlas/ag/"
+    xmlns:xlink CDATA  #FIXED    "http://www.w3.org/1999/xlink"
+    xmlns:dc    CDATA  #FIXED    "http://purl.org/DC/documents/rec-dces-19990702.htm"
+>
+
+<!ELEMENT AG
+  ( Metadata?, Anchor*, Annotation* )>
+<!ATTLIST AG
+    id          ID         #REQUIRED
+    type        NMTOKEN    #IMPLIED
+    timeline    IDREF      #IMPLIED
+>
+
+<!ELEMENT Timeline
+  ( Metadata?, Signal* )>
+<!ATTLIST Timeline
+    id          ID         #REQUIRED
+>
+
+<!ELEMENT Signal ( Metadata? )>
+<!ATTLIST Signal
+    id          ID         #REQUIRED
+    mimeClass   CDATA      #REQUIRED
+    mimeType    CDATA      #REQUIRED
+    encoding    CDATA      #REQUIRED
+    unit        CDATA      #REQUIRED
+    xlink:type  CDATA      #FIXED        "simple"
+    xlink:href  CDATA      #REQUIRED
+    track       NMTOKEN    #IMPLIED
+>
+
+<!ELEMENT Annotation ( Feature* )>
+<!ATTLIST Annotation
+    id         ID          #REQUIRED
+    type       NMTOKEN     #REQUIRED
+    start      IDREF       #REQUIRED
+    end        IDREF       #REQUIRED
+>
+
+<!ELEMENT Feature (#PCDATA)>
+<!ATTLIST Feature
+    name        NMTOKEN    #REQUIRED
+>
+
+<!--
+  Note that feature content may be structured, and the recommended
+  way is to use Dublin Core Structured Values DCSV (Cox & Iannella)
+  http://purl.org/dc/documents/rec/dcmi-dcsv-20000728.htm
+  e.g. "name.given=Eric; name.family=Van Sandt; height=170 cm"
+-->
+
+<!ELEMENT Anchor EMPTY>
+<!ATTLIST Anchor
+    id          ID         #REQUIRED
+    offset      CDATA      #IMPLIED
+    unit        CDATA      #IMPLIED
+    signals     IDREFS     #IMPLIED
+>
+

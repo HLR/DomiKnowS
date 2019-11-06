@@ -1,0 +1,582 @@
+                 ACE 2005 Multilingual Training Corpus
+                               LDC2006T06
+
+                             February 15, 2006
+                        Linguistic Data Consortium
+
+1. Introduction
+
+This file contains documentation on the ACE 2005 Multilingual Training
+Corpus, Linguistic Data Consortium (LDC) catalog number LDC2006T06 and isbn
+1-58563-376-3.
+
+This publication contains the complete set of English, Arabic and Chinese
+training data for the 2005 Automatic Content Extraction (ACE) technology
+evaluation. The corpus consists of data of various types annotated for
+entities, relations and events was created by Linguistic Data Consortium
+with support from the ACE Program, with additional assistance from
+LDC. This data was previously distributed as an e-corpus (LDC2005E18) to
+participants in the 2005 ACE evaluation.
+
+The objective of the ACE program is to develop automatic content extraction
+technology to support automatic processing of human language in text
+form. 
+
+In November 2005, sites were evaluated on system performance in five
+primary areas: the recognition of entities, values, temporal expressions,
+relations, and events.  Entity, relation and event mention detection were
+also offered as diagnostic tasks.  All tasks with the exception of event
+tasks were performed for three languages, English, Chinese and Arabic.
+Events tasks were evaluated in English and Chinese only.  The current
+publication comprises the official training data for these evaluation
+tasks.
+
+A complete description of the ACE 2005 Evaluation can be found on the ACE
+Program website maintained by the National Institute of Standards and
+Technology (NIST): http://www.nist.gov/speech/tests/ace/
+
+For more information about linguistic resources for the ACE Program,
+including annotation guidelines, task definitions, free annotation tools
+and other documentation, please visit LDC's ACE website:
+http://projects.ldc.upenn.edu/ace/
+
+2. Annotation
+2.1 Tasks and Guidelines
+Data contained in this release has been annotated for the following tasks:
+
+  - Entities
+  - Values (including TIMEX2 objects)
+  - Relations between entities, including relation timestamps
+  - Events, including event timestamps
+  - TIMEX2 normalization for English data
+
+The latest annotation guidelines for each language can be downloaded from
+LDC's ACE website:
+  http://projects.ldc.upenn.edu/ace/annotation
+
+2.2 Annotation Process
+
+Training data files for all languages are dually annotated for all tasks by
+two annotators working independently.  The first pass (complete) annotation
+is called 1P; the independent dual first pass (complete) annotation is
+called DUAL.  For both 1P and DUAL, a single annotator completes all tasks
+(entities, values, relations & events) for a file.  Files are assigned via
+an automated Annotation Workflow System (AWS), and file assignment is
+double-blind.
+
+Discrepancies between the 1P and DUAL version of each file are then
+adjudicated by a senior annotator or team leader, resulting in a
+high-quality gold standard file.  The gold standard adjudicated file is
+known as ADJ.  After adjudication, TIMEX2 values are normalized for English
+only.  This task is known as NORM.  
+
+Note that this annotation process differs substantially from previous years
+in which data was first passed (1P) by a single junior annotator, then that
+person's work was second passed (2P), or reviewed for completeness and
+accuracy, by a senior annotator; and then additional quality control (QC)
+spot-checks were conducted by the team leader.  This annotation process
+should result in a final corpus of ADJ data that is higher quality and more
+consistent than in previous ACE corpora.  Note however that due to time and
+funding constraints, most but not all files have been adjudicated or indeed
+dually annotated. The corpus also includes additional quality control
+checks conducted by team leaders on the ADJ files.
+
+The full annotation process for 2005 is represented below:
+
+1P: entities	    DUAL: entities
+    values                values
+    events                events
+    relations             relations
+        |                    |
+        |                    |
+        |_________?__________|
+                  |
+                  |
+                  |
+                  V
+             ADJ: entities
+                  values
+                  events
+                  relations
+                  |
+                  |
+                  |
+                  V
+             NORM: TIMEX2 normalization 
+                   (English only)
+
+
+3. Source Data Profile
+3.1 Data Selection Process
+
+A new feature of 2005 ACE training corpus is careful, targeted data
+selection.  Rather than choosing files at random for annotation, this
+year's task requires a certain density of annotation across the corpus.
+The established target, agreed upon at the Fall 2004 ACE Workshop, is 50
+examples of each entity, relation and event type/subtype within the
+training corpus for each language.  Note that the "50-example threshhold"
+is simply a target and not a hard and fast requirement of the corpus.  LDC
+has made a concerted effort to identify at least 50 examples of each
+type/subtype, but has likely fallen short of the goal in some cases.  What
+follows is a brief description of our data selection process.
+
+First, a pool of documents substantially larger than the target dataset
+was quickly labeled by ACE annotators as "good" or "bad" for ACE annotation.  
+The good/bad determiniation was based on the document content including 
+number and type of entities, relations and events. Annotators then reviewed 
+the "good" documents and produced a rough estimate of the number of each 
+type/subtype of entity, relation and event mentioned in the document.  In 
+practice for most genres this involved a binary yes/no distinction of 
+whether a given subtype appeared in each document. Documents were then
+algorithmically selected from this set to maximize the overall count of
+each type/subtype. This process was supplemented by manual keyword 
+searching focused on the rarest annotation types.
+
+3.2 Training Data Sources and Epochs
+
+Below is a description of the data sources and epochs for each language,
+along with a rough percentage of each data type to be expected in the
+complete (final) training corpus.  Some of the source data is drawn from
+previous LDC publications including TDT4 Multilingual Text and Annotations
+corpus (LDC2005T16) and English Gigaword Second Edition (LDC2005T12). 
+
+English
+
+    * Newswire (NW): 20%
+      sources: AFP (Agence France Presse - English), APW (Associated Press), NYT (New
+      York Times), XIN (Xinhua News Agency - English)
+      training epoch: March-June 2003
+      test epoch: July-Aug 2003
+
+    * Broadcast News (BN): 20%
+      sources: CNN (Cable News Network), CNNHL (CNN Headline News)
+      training epoch: March-June 2003
+      test epoch July-Aug 2003
+
+    * Broadcast Conversation (BC): 15%
+      sources: CNN_CF (CNN CrossFire), CNN_IP (CNN Inside Politics), CNN_LE
+      (CNN Late Edition)
+      training epoch: March-June 2003
+      test epoch July-Aug 2003
+      
+    * Weblog (WL): 15%
+      sources: various internet weblogs (shared online journals)
+      training epoch: Nov 2004-Feb 2005
+      test epoch: March-April 2005
+
+    * Usenet Newsgroups/Discussion Forum (UN): 15%
+      sources: various internet discussion forums/bulletin boards
+      training epoch: Nov 2004-Feb 2005
+      test epoch: March-April 2005
+
+    * Conversational Telephone Speech (CTS): 15%
+      sources: EARS Fisher 2004 Telephone Speech Collection Supplement
+      training epoch: Nov-Dec 2004
+      test epoch: Nov-Dec 2004
+
+ Chinese
+ 
+    * Newswire (NW): 40%
+      sources: XIN (Xinhua News Agency), ZBN (Zaobao News Agency)
+      training epoch: Oct-Dec 2000
+      test epoch: Jan 2001
+
+    * Broadcast News (BN): 40%
+      sources: CBS (China Broadcasting System), CNR (China National Radio),
+      CTS (China Television System), CTV (China Central TV), VOM (Voice of
+      America - Mandarin)
+      training epoch: Oct-Dec 2000
+      test epoch: Jan 2001
+
+    * Broadcast Conversation (BC): 0%
+      Not targeted for Chinese
+      
+    * Weblog (WL): 20%
+      sources: various internet weblogs (shared online journals)
+      training epoch: Nov 2004-Feb 2005
+      test epoch: March-April 2005
+
+    * Usenet Newsgroups/Discussion Forum (UN): 0%
+      Not targeted for Chinese
+      
+    * Conversational Telephone Speech (CTS): 0%
+      Not targeted for Chinese
+
+Arabic
+ 
+    * Newswire (NW): 40%
+      sources: AFA (Agence France Presse - Arabic), ALH (Al Hayat), ANN (An Nahar) 
+      training epoch: Oct-Dec 2000
+      test epoch: Jan 2001
+
+    * Broadcast News (BN): 40%
+      sources: NTV (Nile TV), VAR (Voice of America - Arabic)
+      training epoch: Oct-Dec 2000
+      test epoch: Jan 2001
+
+    * Broadcast Conversation (BC): 0%
+      Not targeted for Arabic
+      
+    * Weblog (WL): 20%
+      sources: various internet weblogs (shared online journals)
+      training epoch: Nov 2004-Feb 2005
+      test epoch: March-April 2005
+
+    * Usenet Newsgroups/Discussion Forum (UN): 0%
+      Not targeted for Arabic
+      
+    * Conversational Telephone Speech (CTS): 0%
+      Not targeted for Arabic
+
+
+4. Annotation Data Profile
+
+Below is information about the amount of data included in the current
+release and its annotation status.  
+
+1P: data subject to first pass (complete) annotation
+DUAL: data also subject to dual first pass (complete) annotation
+ADJ: data also subject to discrepancy resolution/adjudication
+NORM: data also subject to TIMEX2 normalization
+
+English
+
+	==============words============	     ==========files===========
+         1P      DUAL     ADJ     NORM	     1P     DUAL    ADJ    NORM
+  NW   60658 	57807	33459	 48399	    128	    124	     81	    106
+  BN   59239 	58144	52444	 55967	    239	    234	    217	    226 
+  BC   46612 	46110	33874	 40415 	     68	     67	     52	     60
+  WL   45210     43648	35529	 37897	    127	    122	    114	    119
+  UN   45161 	44473	26371	 37366 	     58	     57	     37	     49
+  CTS  47003 	47003	34868	 39845	     46	     46	     34	     39
+      ---------------------------------     ---------------------------
+Total 303833   297185  216545   259889      666     650     535     599
+
+Chinese
+Note: Chinese data expressed in terms of characters.  We assume
+a correspondence of roughly 1.5 characters/word.
+
+	 ========chars========		     ========files=====
+         1P      DUAL     ADJ     	     1P     DUAL    ADJ
+  NW  127319   124175  121797	  	    248     242	    238
+  BN  134963   133696  120513	  	    332	    328	    298
+  WL   71839    68063	65681		    107	    101	     97  
+      ------------------------              --------------------
+Total 334121   325834  307991               687     671     633
+
+
+Arabic
+
+	 ========words=======	     =======files======
+         1P      DUAL     ADJ        1P     DUAL    ADJ 
+  NW   61287	56158	53026 	    239     226	    221 
+  BN   29259 	27165	26907 	    134	    128	    127	
+  WL   21687 	20181	20181	     60	     55	     55 
+      -----------------------       -------------------
+Total 112233   103504  100114       433     409     403 
+
+
+5. Data Directory Structure
+
+The data are organized by language, data type and annotation status as
+follows: 
+
+fp1: data subject to first pass (complete) annotation
+fp2: data also subject to dual first pass (complete) annotation
+adj: data also subject to discrepancy resolution/adjudication
+timex2norm: data also subject to TIMEX2 normalization
+
+So for instance, if a source file has been dually annotated, you will find
+an .apf.xml annotation file in each of "fp1" and "fp2".
+
+The "FileList" files contain information about the word (for English and
+Arabic) or character (for Chinese) counts and annotation status for each
+file in the release.
+
+6. File Format Description
+
+   Each directory contains files of the following formats.  For most
+   users, the most important files are the .sgm files and .apf.xml
+   files.
+
+   Source Text (.sgm) Files
+
+      - These files contain the source text files in an SGM format.
+	These files use the UNIX-style end of lines.  All .sgm files are
+	in UTF-8.
+
+   ACE Program Format (APF) (.apf.xml) Files
+
+      - These files are in the official ACE annotation file format.  See
+        section 8 for more details.
+
+   AG (.ag.xml) Files
+
+      - These are annotation files created with the LDC's annotation
+        toolkit.  These files have been convetered to the corresponding
+        .apf.xml files.
+
+   ID table (.tab) Files
+
+      - These files store mapping tables between the IDs used in the
+        ag.xml files and their corresponding apf.xml files.
+
+
+7. Data Validation
+
+Below is a description of the sanity checks and other format validation
+steps applied to annotation files created by LDC.  (Note that files created
+by Valorem have had only two sanity checks applied: validation of .xml, and
+self-scoring using NIST's ACE scorer, ace05-eval-v11.pl.)
+
+    -- Extents stripped of all spaces and punctuation at front and back
+    -- GPE mentions without roles were fixed
+    -- For non-GPE mentions with roles, roles were removed
+    -- All non-complex entity mentions have heads.  For APF, this means
+       that all entity mentions have heads
+    -- No English passages are annotated in non-English files
+    -- All relation mentions have exactly two non-timex2 arguments
+    -- All relation arguments are contained in the extent of the 
+       relation mention
+    -- All event mention arguments are contained in the extent of the
+       event mention
+    -- All NAMPRE and NOMPRE GPE mentions have GPE as their role
+    -- No relations have mentions from the same entity as their only
+       non-timex2 arguments
+    -- All files have exactly one timex2 annotation in the DATETIME field
+    -- No annotation extents overlap without nesting (entity mention, 
+       relation mention, event mention, value mention, entity mention head, 
+       event mention anchor)
+    -- There are no annotations inside of sgm tags
+    -- There are no instances where an entity and an event share exactly 
+       the same head/anchor
+    -- All relation arguments have types that are allowed for their 
+       argument position based on their entity/value type
+    -- All event arguments have types that are allowed for their
+       role based on their entity/value type
+    -- All entities, values, relations, events have permissible type-subtype 
+       pairs
+    -- All files successfully convert to APF
+    -- All APF files validate against DTD
+    -- All APF files can be scored against themselves
+    -- All instances of cross-type metonymy manually reviewed
+    -- All instances of co-extensive entity mentions with the same heads
+       manually reviewed
+    -- Check for event mentions whose anchor is the full extent of the
+       mention
+    -- Manual scan of all PRO extents for outliers in adjudicated files
+    -- Manual scan of all NOM heads with different entity type/subtype
+       values in different parts of the corpus (adjudicated files only)
+    -- Manual scan of all NAM heads with different entity type/subtype
+       values in different parts of the corpus (adjudicated files only)
+    -- Manual scan of all relation mentions by relation type/subtype
+       and argument type/subtype for outliers in adjudicated files
+    -- Manual and automatic scans of mention extents by patterns to identify
+       inconsistencies in adjudicated files
+    -- Search for untagged pronouns (English, Arabic)
+    -- Search for English Building-Grounds mentions containing "Airport" or
+       "Airfield"
+    -- Search for untagged relative clauses (English)
+    -- Search for demonstratives tagged as WHQ (Arabic)
+    -- Search for relation arguments in violation of the Blocking Rule as
+       defined in the annotation guidelines
+    -- Search for non-Verbal, non-Other, co-extensive relation mentions
+    -- Search for relations with frequently-confused types based on argument
+       types (in particular, PHYS.Located vs. ART.UOIM and ORG-AFF.Employment
+       vs. GPE-AFF.CRRE)
+    -- Search for co-extensive, co-related event mentions
+    -- Scan entities whose mentions appear more than once in the argument 
+       structure of a single event mention.
+    -- Scan all clitic pronoun mentions that are not participants in the
+       event whose anchor they are attached to (Arabic)
+    -- Scan all unannotated common TIMEX2 triggers (English)
+    -- Manually examine and correct or describe all fatal errors and warnings
+       generated by the most recent version of the scorer
+
+8. Notes About Scorer Warnings
+
+The current version of the ACE scorer (v11) still generates warnings for a
+handful of the files included in this distribution for both Chinese and 
+English. The LDC has manually reviewed these annotations and determined
+that the annotation is as correct as possible given this year's annotation
+guidelines. The warnings the remain are as follows:
+
+English
+    Warning: "appear to be redundant mentions"
+    Description: Two mentions of the same event in the same extent may 
+        have access to the same arguments by the Typeable
+        Reader Rule. Generally, at least one of the mentions
+	is a nominal mention of the event.
+        AFP_ENG_20030320.0722.apf.xml EV5-12 and EV5-11
+        AFP_ENG_20030320.0722.apf.xml EV6-3 and EV6-1
+        AFP_ENG_20030527.0616.apf.xml EV1-3 and EV1-2
+        AFP_ENG_20030509.0345.apf.xml EV4-2 and EV4-1
+        APW_ENG_20030326.0190.apf.xml EV10-5 and EV10-4
+        APW_ENG_20030416.0581.apf.xml EV5-2 and EV5-1
+        APW_ENG_20030424.0532.apf.xml EV13-2 and EV13-1
+        CNN_ENG_20030417_063039.0.apf.xml EV2-2 and EV2-1
+        CNN_ENG_20030526_183538.3.apf.xml EV7-2 and EV7-1
+        CNN_ENG_20030610_123040.9.apf.xml EV7-2 and EV7-1
+        CNN_IP_20030402.1600.02-1.apf.xml EV8-2 and EV8-1
+        CNN_IP_20030404.1600.00-1.apf.xml EV9-2 and EV9-1
+    Description: A subset of this type or errors is generated by specific
+	compound expressions like "suicide bomber" and
+	"release on parole" that always contain two mentions of the
+	same event.
+        AFP_ENG_20030305.0918.apf.xml EV37-2 and EV37-1
+        APW_ENG_20030416.0581.apf.xml EV2-2 and EV2-1
+        rec.arts.sf.written.robert-jordan_20050208.1350.apf.xml EV2-11 and EV2-10
+    Warning: equivalent event elements
+    Description: This warning is raised when two non-coreferenced event
+	mentions in the same extent share the same arguments. It
+	seems to occur when one event is part of another event 
+	mentioned in the extent and when two or more events of the
+        same type with the same arguments appear in a coordination
+	structure.
+        CNN_ENG_20030612_173004.10.apf.xml EV10 and EV11
+        MARKBACKER_20041220.0919.apf.xml EV1 and EV6
+        misc.survivalism_20050210.0232.apf.xml EV3, EV4 and EV5
+
+Chinese
+    Warning: equivalent event elements
+    Description: This warning is raised when two non-coreferenced event
+	mentions in the same extent share the same arguments. It
+	seems to occur when one event is part of another event 
+	mentioned in the extent and when two or more events of the
+        same type with the same arguments appear in a coordination
+	structure.
+	XIN20001121.0200.0021.apf.xml EV2 and EV3
+	CNR20001019.1700.0858.apf.xml EV3 and EV4
+    Warning: "appear to be redundant mentions"
+    Description: Two mentions of the same event in the same extent may 
+	have access to the same arguments by the Typeable
+	Reader Rule. Generally, at least one of the mentions
+	is a nominal mention of the event.
+	XIN20001225.0800.0058.apf.xml EV3-5 and EV3-2
+
+Arabic
+    Warning: equivalent event elements
+    Description: The two events are not coreferenced, but they share 
+       the same arguments.  It roughly translates to something along the lines of 
+       "she hit him and attacked him".
+       ANN20001124.1500.0090.apf.xml EV11 and EV4
+
+9. Notes About APF
+
+   - Offsets
+
+     APF uses the offset counting method traditionally used in previous
+     ACE evaluation programs: 1) Each (UTF-8) character, not byte, is
+     counted as one.  2) Each newline character is counted as one.  (The
+     .sgm files use the UNIX-style end of line characters.)  3) SGML
+     tags are *not* counted towards offsets.  (Please note that the AG
+     files included in this release do count SGML tags in offsets.)
+
+   - TIMEX2 (new this year)
+
+     The timex2 element represents TIME2 timex expression annotations.
+     Its optional attributes, such as "VAL" and "MOD", represent the
+     TIMEX2 normalization values.  Note that LDC is creating timex2
+     annotation on all files, but not performing timex2 normalization of
+     all of the files.
+
+     Timestamping in relations and events are represented as references
+     to timex2 annotations in relation_arguments and event_arguments (and
+     as references to timex2_mention annotations in
+     relation_mention_arguments and event_mention_arguments).  These
+     timestamp arguments have roles that start with "Time-".
+
+   - Extent and Scope in Event Mentions (new this year)
+
+     In response to requests made at the 2005 mid-course correction
+     workshop, the extent of an event_mention is now an automatically
+     generated minimum string that includes its anchor and its
+     event_mention_arguments.  The "ldc_scope" element stores the scope
+     marked in the LDC's annotation process.
+
+   - REFID (new this year)
+
+     The REFID attributes used in relation_argument and event_argument
+     refer to entity, value or timex2 IDs.  The REFID attributes used in
+     relation_mention_argument and event_mention_argument refer to
+     entity_mention, value_mention or timex2_mention IDs.
+
+   - TYPE, LDCTYPE and LDCATR in entity_mention
+
+     The TYPE attribute of entity_mention store the official ACE entity
+     mention types, and the LDCTYPE and LDCATR attributes store the
+     attributes used in the LDC's annotation process.
+
+   - "Unspecified" TENSE for "Other" MODALITY in relations (new this year)
+ 
+     If the MODALITY attribute of a relation is set to "Other", the
+     TENSE attribute is automatically set to "Unspecified".  This is not
+     true for events.
+
+   - name in entity_attributes
+
+     The "name" element in entity_attributes stores the heads of
+     "NAM"-type mentions as in the previous years.  In response to
+     George Doddington's request, we have added the NAME attribute to
+     the "name" element.  The NAME attribute stores slightly normalized
+     versions of the names where:
+
+     - \n is replaced with a space
+     - multiple spaces are reduced to one space
+     - " (double quote) is removed
+
+     - Example:
+
+     <entity_attributes>
+        <name NAME="United States">
+           <charseq START="4242" END="4254">United
+     States</charseq>
+        </name>
+     </entity_attributes>
+
+   - Nickname metonymy
+
+     Nickname metonyms are indicated with METONYMY_MENTION="TRUE" in
+     entity_mentions.  "NAN"-type entity mentions marked as nickname
+     metonymy do not give rise to name elements.
+
+   - Cross-type metonymy
+
+     "Cross-type" metonyms are represented with relations of the type
+     METONYMY.  The METONYMY type relations do not have
+     relation_mentions.
+
+   - For more details, please refer to the APF V5.1.1 DTD.
+
+10. DTDs
+
+   The following DTDs are in the dtd subdirectory.
+
+     apf.v5.1.1.dtd             - XML DTD for APF files
+
+     (Updated from apf.v5.0.0.dtd --- please see section "0. NEWS" in
+     this document.)
+
+     ace_source_sgml.v1.0.2.dtd - SGML DTD for .sgm files
+
+     ag-1.1.dtd                 - XML DTD for AG files
+
+11. Copyright Information
+
+Portions © 2000-2003 Agence France Presse, © 2003 The Associated Press, © 2003 New York Times, © 2000-2001, 2003 Xinhua News Agency,  ©  2003 Cable News Network LP, LLLP, © 2000-2001 SPH  AsiaOne Ltd, ©  2000-2001 China  Broadcasting System, ©  2000-2001 China National Radio,  ©  2000-2001 China Television System,  © 2000-2001 China Central TV, © 2000-2001 Al Hayat, © 2000-2001 An-Nahar, © 2000-2001 Nile TV, © 2005, 2006 Trustees of the University of Pennsylvania
+
+
+
+12. Contact Information
+  
+   If you have questions about this data release, please contact the
+   following personnel at the LDC. 
+
+   Christopher Walker <chwalker@ldc.upenn.edu> - ACE Project Manager
+   Stephanie Strassel <strassel@ldc.upenn.edu> - LDC Annotation Group
+                                                 Director/ACE Consultant
+   Julie Medero <jmedero@ldc.upenn.edu>        - ACE Lead Developer
+   Kazuaki Maeda <maeda@ldc.upenn.edu>         - Technical Consultant/Manager
+
+README Created January 9, 2006 Julie Medero
+       Updated January 9, 2006 Stephanie Strassel
