@@ -24,6 +24,7 @@ from ...solver.allennlpInferenceSolver import AllennlpInferenceSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
 from .. import Graph, Property
+from ..dataNode import DataNode
 from .model import GraphModel
 
 
@@ -251,7 +252,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     def populate(self, context, root, *concepts, query=None, label_fn=None, data_dict=None):
         trial = Trial()
         if data_dict is None:
-            data_dict = defaultdict()
+            data_dict = defaultdict(list)
 
         def peel(node_value, repeat_unpeelable=False):
             # get a iterator for each instance in the fist level
@@ -284,9 +285,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         root_data = []
         sub_context = {}
         for k, v in filter(contained_by(self), context.items()):
-            k = k[len(self.fullname)+1:]
-            print('@@@',k)
-            node = self[k]
+            node = self[k[len(self.fullname)+1:]]
             if not isinstance(node, Property): # skip sensors and learners
                 continue
             if contain(root, k):
@@ -297,9 +296,9 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                                             ontologyNode=root)
                         dataNode.index = index
                         root_data.append(dataNode)
-                prop = k
+                #import pdb; pdb.set_trace()
                 for dataNode, pv in zip(root_data, peel(v)):
-                    dataNode.__dict__[node.name] = pv
+                    dataNode.__dict__[node.prop_name] = pv
             else:
                 sub_context[k] = v
         if label_fn:
@@ -307,10 +306,11 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                 prob = label_fn(dataNode)
                 if prob is not None:
                     trial[root, dataNode] = prob
-
+        data_dict[root].extend(root_data)
         for rel in root.contains():
-            for dataNode in data_dict[concept]:
-                dataNode
+            pass
+            #for dataNode in data_dict[concept]:
+            #    dataNode
 #             for rel in concept.is_a():
 #                 pass
 #             for rel in concept.has_a():

@@ -123,6 +123,6 @@ class HasA(OTORelation):
 class HasMany(OTMRelation):
     pass
 
-@Concept.relation_type('contain')
-class Contain(OTMRelation):
+@Concept.relation_type('contains')
+class Contains(OTMRelation):
     pass

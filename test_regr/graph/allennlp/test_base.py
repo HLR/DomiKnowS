@@ -16,8 +16,8 @@ def graph(request):
             word = Concept(name='word')
             phrase = Concept(name='phrase')
             sentence = Concept(name='sentence')
-            phrase.has_many(word)
-            sentence.has_many(phrase)
+            phrase.contains(word)
+            sentence.contains(phrase)
 
             pair = Concept(name='pair')
             pair.has_a(phrase, phrase)
@@ -92,28 +92,53 @@ def graph(request):
 @pytest.fixture()
 def allennlp_graph(graph):
     from regr.graph.allennlp.base import AllenNlpGraph
-    from regr.sensor.sensor import Sensor
+    from regr.sensor import Sensor, Learner
+
+
     sentence = graph['linguistic/sentence']
+    phrase = graph['linguistic/phrase']
+    people = graph['application/people']
     #import pdb; pdb.set_trace()
     sentence['raw'] = Sensor()
-    #print(graph['linguistic/sentence']['raw'])
-    print(graph['linguistic/sentence'])
+    phrase['raw'] = Sensor()
+    phrase['encode'] = Learner()
+    people['label'] = Learner()
+    people['label'] = Sensor()
     return AllenNlpGraph(graph)
 
 
 @pytest.fixture()
-def context():
+def context(allennlp_graph):
     from random import choices
+    import numpy as np
+
+
+    sentence = allennlp_graph['linguistic/sentence']
+    phrase = allennlp_graph['linguistic/phrase']
+    people = allennlp_graph['application/people']
+
     context = {}
     batch = 8
     length = 12
-    words = ['John', 'works', 'for', 'IBM']
-    context['global/linguistic/sentence/raw'] = [ choices(words, k=length) for _ in range(batch)]
+    feature = 24
+    vocab = ['John', 'works', 'for', 'IBM']
+
+    sentences = [' '.join(choices(vocab, k=length)) for _ in range(batch)]
+    context[sentence['raw'].fullname] = sentences
+    context[phrase['raw'].fullname] = [sentence.split() for sentence in sentences]
+    context[phrase['encode'].fullname] = np.random.rand(batch, length, feature)
+    context[people['label'].fullname] = np.random.rand(batch, length, 2)
+
     return context
 
 def test_populate(allennlp_graph, context):
-    print(context)
     sentence = allennlp_graph['linguistic/sentence']
+    phrase = allennlp_graph['linguistic/phrase']
+    people = allennlp_graph['application/people']
+
     #import pdb; pdb.set_trace()
     trial, data_dict = allennlp_graph.populate(context, sentence)
-    #assert False
+
+    # sentence
+    for node, context_value in zip(data_dict[sentence], context[sentence['raw'].fullname]):
+        assert node.raw == context_value
