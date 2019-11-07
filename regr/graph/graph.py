@@ -16,8 +16,6 @@ class Graph(BaseGraphTree):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
 
-
-
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
@@ -25,7 +23,6 @@ class Graph(BaseGraphTree):
     @property
     def ontology(self):
         return self._ontology
-
     
     @ontology.setter
     def ontology(self, ontology):
@@ -35,14 +32,12 @@ class Graph(BaseGraphTree):
             self._ontology = Graph.Ontology(ontology)
         elif isinstance(ontology, tuple) and len(ontology) == 2:
             self._ontology = Graph.Ontology(*ontology)
-        
-    @staticmethod
+
     def get_apply(self, name):
         if name in self.concepts:
             return self.concepts[name]
         return BaseGraphTree.get_apply(self, name)
 
-    @staticmethod
     def set_apply(self, name, sub):
         if __package__ is None or __package__ == '':
             from concept import Concept
@@ -67,9 +62,28 @@ class Graph(BaseGraphTree):
         return wht
 
     # NB: for namedtuple, defaults are right-most first
-    # `local` default to None, 
+    # `local` default to None,
     # python 3.7+
     # Ontology = namedtuple('Ontology', ('iri', 'local'), defaults=(None,))
     # python 2.6+
     Ontology = namedtuple('Ontology', ('iri', 'local'))
-    Ontology.__new__.__defaults__ = (None,) 
+    Ontology.__new__.__defaults__ = (None,)
+    
+    # --- Logical Constraints
+
+    logicalConstrains = {}
+
+    def andL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('and', e1, e2)
+        return self.logicalConstrains[lcName]
+
+    def orL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('or', e1, e2)
+        return self.logicalConstrains[lcName]
+
+    def ifL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('if', e1, e2)
+        return self.logicalConstrains[lcName]

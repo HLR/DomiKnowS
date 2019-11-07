@@ -115,12 +115,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     currentConstrName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
                         
                     # Version of the disjoint constrain using logical function library
-                    #m.addConstr(self.myIlpBooleanProcessor.nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1, name=constrainName)
+                    m.addConstr(self.myIlpBooleanProcessor.nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1, name=constrainName)
 
                     # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
-                    currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
-                    m.addConstr(currentConstrLinExpr <= 1, name=currentConstrName)
-                    self.myLogger.debug("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
+                    #currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
+                    #m.addConstr(currentConstrLinExpr <= 1, name=currentConstrName)
+                    #self.myLogger.debug("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
                                
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -384,24 +384,24 @@ class gurobiILPOntSolver(ilpOntSolver):
                              
                                 
                             # Version of the domain and range constrains using logical function library
-                            #currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]) >= 1, name=constrainNameDomain)
-                            #currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
-                            #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]) >= 1, name=constrainNameRange)
+                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
+                            m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]) >= 1, name=currentConstrNameDomain)
+                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
+                            m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]) >= 1, name=currentConstrNameRange)
                                 
                             # --- Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
                             
                             # Domain Constrain
-                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
-                            currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
-                            m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
-                            self.myLogger.debug("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
+                            #currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
+                            #currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
+                            #m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
+                            #self.myLogger.debug("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
 
                             # Range constrain
-                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
-                            currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
-                            m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
-                            self.myLogger.debug("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
+                            #currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
+                            #currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
+                            #m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
+                            #self.myLogger.debug("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
                                 
                     self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
 
@@ -829,13 +829,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                             noTriplePropertiesRanges = noTriplePropertiesRanges + 1
                               
             if noTriplePropertiesRanges < 3:
-                self.myLogger.warning("Problem with creation of - triple - constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
+                self.myLogger.warning("Problem with creation of constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
                 self.myLogger.warning("Abandon it - going to the next relation")
 
-                break
+                continue
             else:
-                self.myLogger.info("Found definition for relation %s - %s"%(tripleRelationName,triplePropertiesRanges))
+                self.myLogger.info("Found definition for relation \"%s\" - %s"%(tripleRelationName,triplePropertiesRanges))
 
+            tripleConstrainsNo = 0
             for token1Index, token1 in enumerate(tokens): 
                 for token2Index, token2 in enumerate(tokens):
                     if token2 == token1:
@@ -863,8 +864,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
                         m.addConstr(currentConstrLinExprRange >= 0, name=constrainNameTriple)
                                     
-                        self.myLogger.debug("Created - triple - constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
-    
+                        self.myLogger.debug("Created constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+                        tripleConstrainsNo = tripleConstrainsNo+1
+            
+            self.myLogger.info("Created %i constrains for relation \"%s\""%(tripleConstrainsNo,tripleRelationName))
+            
         m.update()
 
         # Add objectives
@@ -984,7 +988,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', x)
 
-                        self.myLogger.info('Token Solutions\n')
+                        self.myLogger.info('')
+                        self.myLogger.info('---- Token Solutions ----')
 
                         for conceptName in conceptNames:
                             tokenResult[conceptName] = np.zeros(len(tokens))
@@ -992,7 +997,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             for tokenIndex, token in enumerate(tokens):
                                 if ((token, conceptName) in solution) and (solution[token, conceptName] == 1):                                    
                                     tokenResult[conceptName][tokenIndex] = 1
-                                    self.myLogger.info('Solution \"%s\" is \"%s\"'%(token,conceptName))
+                                    self.myLogger.info('\"%s\" is \"%s\"'%(token,conceptName))
 
             # Collect results for relations
             relationResult = None
@@ -1003,7 +1008,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if y or True:
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', y)
-                        self.myLogger.info('Relation Solutions\n')
+                                                
+                        self.myLogger.info('')
+                        self.myLogger.info('---- Relation Solutions ----')
 
                         for relationName in relationNames:
                             relationResult[relationName] = np.zeros((len(tokens), len(tokens)))
@@ -1016,7 +1023,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     if ((relationName, token1, token2) in solution) and (solution[relationName, token1, token2] == 1):
                                         relationResult[relationName][token1Index][token2Index] = 1
                                         
-                                        self.myLogger.info('Solution \"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
+                                        self.myLogger.info('\"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
         
             # Collect results for triple relations
             tripleRelationResult = None
@@ -1030,7 +1037,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if z or True:
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', z)
-                        self.myLogger.info('Triple Relation Solutions\n')
+                        
+                        self.myLogger.info('')
+                        self.myLogger.info('---- Triple Relation Solutions ----')
 
                         for tripleRelationName in tripleRelationNames:
                             self.myLogger.info('Solutions for relation %s\n'%(tripleRelationName))
@@ -1050,14 +1059,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         if ((tripleRelationName, token1, token2, token3) in solution) and (solution[tripleRelationName, token1, token2, token3] == 1):
                                             tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
                                         
-                                            self.myLogger.info('Solution \"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
+                                            self.myLogger.info('\"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
         
         except:
-            self.myLogger.error('Error')
+            self.myLogger.error('Error returning solutions')
             raise
            
         end = datetime.datetime.now()
         elapsed = end - start
+        self.myLogger.info('')
         self.myLogger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
         # return results of ILP optimization

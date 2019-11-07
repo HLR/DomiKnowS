@@ -329,27 +329,24 @@ class NamedTree(NamedTreeNode, OrderedDict):
             names = [name.strip() for name in names]
         return self.query_apply(names, func)
 
-    @staticmethod
-    def get_apply(self_, name):
-        return OrderedDict.__getitem__(self_, name)
+    def get_apply(self, name):
+        return OrderedDict.__getitem__(self, name)
 
     def get_sub(self, *names, delim='/', trim=True):
-        return self.parse_query_apply(names, self.get_apply, delim, trim)
+        return self.parse_query_apply(names, lambda s, name: s.get_apply(name), delim, trim)
 
-    @staticmethod
-    def set_apply(self_, name, sub):
-        OrderedDict.__setitem__(self_, name, sub)
+    def set_apply(self, name, sub):
+        OrderedDict.__setitem__(self, name, sub)
 
     def set_sub(self, *names, sub, delim='/', trim=True):
         # NB: sub is keyword arg because it is after a list arg
-        return self.parse_query_apply(names, lambda s, k: self.set_apply(s, k, sub), delim, trim)
+        return self.parse_query_apply(names, lambda s, k: s.set_apply(k, sub), delim, trim)
 
-    @staticmethod
-    def del_apply(self_, name):
-        return OrderedDict.__delitem__(self_, name)
+    def del_apply(self, name):
+        return OrderedDict.__delitem__(self, name)
 
     def del_sub(self, *names, delim='/', trim=True):
-        return self.parse_query_apply(names, self.del_apply, delim, trim)
+        return self.parse_query_apply(names, lambda s, name: s.del_apply(name), delim, trim)
 
     def __getitem__(self, name):
         return self.get_sub(*entuple(name))

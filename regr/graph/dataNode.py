@@ -200,26 +200,26 @@ class DataNode:
                 
                 for currentCandidate in currentCandidates:
                     if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                        currentCandidate = currentCandidate[0].instanceID
+                        currentCandidate = currentCandidate[0]
                         currentProbability = currentConceptOrRelation.predict(self, (currentCandidate, ))
                         if currentProbability:
-                            graphResultsForPhraseToken[currentConceptOrRelation.name][infer_candidatesID[currentCandidate]] = currentProbability
+                            graphResultsForPhraseToken[currentConceptOrRelation.name][currentCandidate.instanceID] = currentProbability
                         
                     elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
-                        currentCandidate1 = currentCandidate[0].instanceID
-                        currentCandidate2 = currentCandidate[1].instanceID
+                        currentCandidate1 = currentCandidate[0]
+                        currentCandidate2 = currentCandidate[1]
                         currentProbability = currentConceptOrRelation.predict(self, (currentCandidate1, currentCandidate2))
                         if currentProbability:
-                            graphResultsForPhraseRelation[currentConceptOrRelation.name][infer_candidatesID[currentCandidate1]][infer_candidatesID[currentCandidate2]] = currentProbability
+                            graphResultsForPhraseRelation[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
     
                     elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element     
-                        currentCandidate1 = currentCandidate[0].instanceID
-                        currentCandidate2 = currentCandidate[1].instanceID
-                        currentCandidate3 = currentCandidate[2].instanceID
+                        currentCandidate1 = currentCandidate[0]
+                        currentCandidate2 = currentCandidate[1]
+                        currentCandidate3 = currentCandidate[2]
                         currentProbability = currentConceptOrRelation.predict(self, (currentCandidate1, currentCandidate2, currentCandidate3))
                         if currentProbability:
                             graphResultsForTripleRelations[currentConceptOrRelation.name] \
-                                [infer_candidatesID[currentCandidate1]][infer_candidatesID[currentCandidate2]][infer_candidatesID[currentCandidate3]]= currentProbability
+                                [currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
                         
                     else: # No support for more then three candidates yet
                         pass
@@ -239,23 +239,25 @@ class DataNode:
             #  Create Trail with returned results
             infered_trial = Trial()
 
-            for concept in tokenResult:
-                for infer_candidate in infer_candidatesID:
-                    infered_trial[conceptOrRelationDict[concept], (infer_candidate, )] = tokenResult[concept][infer_candidate] 
+            for concept_name in tokenResult:
+                concept = conceptOrRelationDict[concept_name]
+                currentCandidates = candidates_currentConceptOrRelation[concept]
+                for infer_candidate in currentCandidates:
+                    infered_trial[concept, infer_candidate] = tokenResult[concept_name][infer_candidate[0].instanceID]
                     
-            for concept in pairResult:
-                for infer_candidate1 in infer_candidatesID:
-                    for infer_candidate2 in infer_candidatesID:
-                        if infer_candidate1 != infer_candidate2:
-                            infered_trial[conceptOrRelationDict[concept], (infer_candidate1, infer_candidate2)] = pairResult[concept][infer_candidate1, infer_candidate2] 
+            for concept_name in pairResult:
+                concept = conceptOrRelationDict[concept_name]
+                currentCandidates = candidates_currentConceptOrRelation[concept]
+                for infer_candidate in currentCandidates:
+                    if infer_candidate[0] != infer_candidate[1]:
+                        infered_trial[concept, infer_candidate] = pairResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID]
                             
-            for concept in tripleResult:
-                for infer_candidate1 in infer_candidatesID:
-                    for infer_candidate2 in infer_candidatesID:
-                        if infer_candidate1 != infer_candidate2:
-                            for infer_candidate3 in infer_candidatesID:
-                                if infer_candidate2 != infer_candidate3:
-                                    infered_trial[conceptOrRelationDict[concept], (infer_candidate1, infer_candidate2, infer_candidate3)] = tripleResult[concept][infer_candidate1, infer_candidate2, infer_candidate3] 
+            for concept_name in tripleResult:
+                concept = conceptOrRelationDict[concept_name]
+                currentCandidates = candidates_currentConceptOrRelation[concept]
+                for infer_candidate in currentCandidates:
+                    if infer_candidate[0] != infer_candidate[1] and infer_candidate[0] != infer_candidate[2] and infer_candidate[1] != infer_candidate[2]:
+                        infered_trial[concept, infer_candidate] = tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
                 
             return infered_trial
         
