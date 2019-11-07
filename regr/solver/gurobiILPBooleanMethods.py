@@ -5,193 +5,253 @@ else:
     from .ilpConfig import ilpConfig 
     from .ilpBooleanMethods import ilpBooleanProcessor 
 
+from gurobipy import *
+
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
 
     # Negation
-    def notVar(m, _var):
-        _notVar=m.addVar(vtype=GRB.BINARY, name="not_%s" % (_var))
+    # 1 - var == varNOT
+    # TODO Without variable return 1 - var
+    def notVar(self, m, var):
+        varNOT=m.addVar(vtype=GRB.BINARY, name="not_%s"%(var))
         
-        m.addConstr(1 - _var, GRB.EQUAL, _notVar)
+        m.addConstr(1 - var == varNOT)
     
-        return _notVar
+        return varNOT
     
     # Conjunction 2 variable
-    def and2Var(m, _var1, _var2):
-        _andVar=m.addVar(vtype=GRB.BINARY, name="and_%s_%s" % (_var1, _var2))
+    # varAND <= var1
+    # varAND <= var2 
+    # var1 + var2 <= varAND + 2 - 1
+    # TODO Without variable return var1 + var2 >= 2
+    def and2Var(self, m, var1, var2):
+        varAND=m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1, var2))
             
-        m.addConstr(_andVar - _var1, GRB.LESS_EQUAL, 0)
-        m.addConstr(_andVar - _var2, GRB.LESS_EQUAL, 0)
+        m.addConstr(varAND <= var1)
+        m.addConstr(varAND <= var2)
+        m.addConstr(var1 + var2 <= varAND + 2 - 1)
             
-        m.addConstr(_var1 + _var2 - _andVar - 1, GRB.LESS_EQUAL, 0)
-            
-        return _andVar
+        return varAND
     
     # Conjunction
-    def andVar(m, *_var):
-        if len(_var) < 1:
+    # varAND <= var1
+    # varAND <= var2
+    # ....
+    # varAND <= varN
+    # var1 + var2 + .. + varN <= varAND + N - 1
+    # TODO Without variable return var1 + var2 + .. + varN >= N
+    def andVar(self, m, *var):
+        N = len(var)
+        if N < 1:
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        if N == 1:
+            return currentVar[0]
         
-        _andVarName = "and"
-        for currentVar in _var:
-            _andVarName += "_%s" % (currentVar)
+        andVarName = "and"
+        for currentVar in var:
+            andVarName += "_%s"%(currentVar)
             
-        _andVar = m.addVar(vtype=GRB.BINARY, name=_andVarName)
-        for currentVar in _var:
-            m.addConstr(_andVar - currentVar, GRB.LESS_EQUAL, 0)
+        varAND = m.addVar(vtype=GRB.BINARY, name=andVarName)
+        for currentVar in var:
+            m.addConstr(varAND <= currentVar)
 
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
         
-        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, _andVar + len(_var) - 1)
+        m.addConstr(varSumLinExpr <= varAND + N - 1)
     
-        return _andVar
+        return varAND
     
     # Disjunction 2 variables
-    def or2Var(m, _var1, _var2):
-        _orVar=m.addVar(vtype=GRB.BINARY, name="or_%s_%s" % (_var1, _var2))
+    # var1 <= varOR
+    # var2 <= varOR 
+    # var1 + var2 >= varOR 
+    # TODO Without variable return var1 + var2 >= 1
+    def or2Var(self, m, var1, var2):
+        varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1, var2))
             
-        m.addConstr(_orVar, GRB.LESS_EQUAL, _var1)
-        m.addConstr(_orVar, GRB.LESS_EQUAL, _var2)
+        m.addConstr(var1 <= varOR)
+        m.addConstr(var2 <= varOR)
             
-        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, _orVar)
+        m.addConstr(var1 + var2 >= varOR)
     
-        return _orVar
+        return varOR
     
     # Disjunction
-    def orVar(m, *_var):
-        if len(_var) < 1:
+    # var1 <= varOR
+    # var2 <= varOR 
+    # ...
+    # varN <= varOR
+    # var1 + var2 + ... + varN >= varOR
+    # TODO Without variable return var1 + var2 + ... + varN >= 1
+    def orVar(self, m, *var):
+        N = len(var)
+        
+        if N < 1:
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
-        
-        _orVarName = "or"
-        for currentVar in _var:
-            _orVarName += "_%s" % (currentVar)
-        
-        _orVar = m.addVar(vtype=GRB.BINARY, name=_orVarName)
+        if N == 1:
+            return currentVar[0]
 
-        for currentVar in _var:
-            m.addConstr(_orVar, GRB.LESS_EQUAL, currentVar)
-
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        orVarName = "or"
+        for currentVar in var:
+            orVarName += "_%s" % (currentVar)
         
-        m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, _orVar)
+        varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
+
+        for currentVar in var:
+            m.addConstr(currentVar <= varOR)
+
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
+        
+        m.addConstr(varSumLinExpr >= varOR)
              
-        return _orVar
+        return varOR
     
     # Nand (Alternative denial) 2 variables
-    def nand2Var(m, _var1, _var2):
-        _nandVar = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s" % (_var1, _var2))
+    # not(varNAND) <= var1
+    # not(varNAND) <= var2 
+    # var1 + var2 <= not(varNAND) + 2 - 1
+    # TODO Without variable return var1 + var2 <= 1
+    def nand2Var(self, m, var1, var2):
+        varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
             
-        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var1)
-        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var2)
+        m.addConstr(self.notVar(m, varNAND) <= var1)
+        m.addConstr(self.notVar(m, varNAND) <= var2)
         
-        m.addConstr(_var1 + _var2, GRB.LESS_EQUAL, 2 - _nandVar)
+        m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1)
         
-        return _nandVar
+        return varNAND
     
     # Nand (Alternative denial)
-    def nandVar(m, *_var):
-        if len(_var) < 1:
+    # not(varNAND) <= var1
+    # not(varNAND) <= var2 
+    # ...
+    # not(varNAND <= varN 
+    # var1 + var2 + ... + varN <= not(varNAND) + N - 1
+    # TODO Without variable return var1 + var2 + ... + varN <= N -1
+    def nandVar(self, m, *var):
+        N = len(var)
+        
+        if N < 1:
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        if N == 1:
+            return currentVar[0]
         
-        _nandVarName = "nand"
-        for currentVar in _var:
-            _nandVarName += "_%s" % (currentVar)
+        nandVarName = "nand"
+        for currentVar in var:
+            nandVarName += "_%s"%(currentVar)
             
-        _nandVar = m.addVar(vtype=GRB.BINARY, name=_nandVarName)
-        for currentVar in _var:
-            m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, currentVar)
+        varNAND = m.addVar(vtype=GRB.BINARY, name=nandVarName)
+        for currentVar in var:
+            m.addConstr(self.notVar(m, varNAND) <= currentVar)
 
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
     
-        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, len(_var) - _nandVar)
+        m.addConstr(varSumLinExpr <= self.notVar(m, varNAND) + N - 1)
     
-        return _nandVar
+        return varNAND
     
-    # Nor (Joint Denial) i2 variables
-    def nor2Var(m, _var1, _var2):
-        _norVar = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(_var1, _var2))
+    # Nor (Joint Denial) 2 variables
+    # var1 <= not(varNOR)
+    # var2 <= not(varNOR) 
+    # var1 + var2 >= not(varNOR)
+    # TODO Without variable return var1 + var2 <= 0
+    def nor2Var(self, m, var1, var2):
+        varNOR = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(var1, var2))
             
-        m.addConstr(_var1, GRB.LESS_EQUAL, 1 - _norVar)
-        m.addConstr(_var2, GRB.LESS_EQUAL, 1 - _norVar)
+        m.addConstr(var1 <= self.notVar(m, varNOR))
+        m.addConstr(var2 <= self.notVar(m, varNOR))
             
-        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, 1 - _norVar)
+        m.addConstr(var1 + var2 >= self.notVar(m, varNOR))
         
-        return _norVar
+        return varNOR
     
     # Nor (Joint Denial)
-    def norVar(m, *_var):
-        if len(_var) < 1:
+    # Nor (Joint Denial) 2 variables
+    # var1 <= not(varNOR)
+    # var2 <= not(varNOR) 
+    # ...
+    # varN <= not(varNOR)
+    # var1 + var2 + ... + varN >= not(varNOR)
+    # TODO Without variable return var1 + var2 + ... + varN <= 0
+    def norVar(self, m, *var):
+        N = len(var)
+        
+        if N < 1:
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        if N == 1:
+            return currentVar[0]
         
         _norVarName = "nor"
-        for currentVar in _var:
+        for currentVar in var:
             _norVarName += "_%s"%(currentVar)
            
-        _norVar = m.addVar(vtype=GRB.BINARY, name=_norVarName)
-        for currentVar in _var:
-            m.addConstr(currentVar, GRB.LESS_EQUAL, 1 - _norVar)
+        varNOR = m.addVar(vtype=GRB.BINARY, name=norVarName)
+        for currentVar in var:
+            m.addConstr(currentVar <= self.notVar(m, varNOR))
         
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
             
-            m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, 1 - _norVar)
+            m.addConstr(varSumLinExpr >= self.notVar(m, varNOR))
     
-        return _norVar
+        return varNOR
     
     # Exclusive Disjunction
-    def xorVar(m, _var1, _var2):
-        _xorVar = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(_var1, _var2))
+    # var1 + var2 + varXOR <= 2
+    # -var1 - var2 + varXOR <= 0
+    # var1 - var2 + varXOR >= 0
+    # -var1 + var2 + varXOR >= 0
+    # TODO Without variable return var1 + var2 == 1 
+    def xorVar(self, m, var1, var2):
+        varXOR = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(var1, var2))
             
-        m.addConstr(_var1 + _var2 + _xorVar, GRB.LESS_EQUAL, 2)
-        m.addConstr(-_var1 - _var2 + _xorVar, GRB.LESS_EQUAL, 0)
-        m.addConstr(_var1 - _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
-        m.addConstr(-_var1 + _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
+        m.addConstr(var1 + var2 + varXOR <= 2)
+        m.addConstr(-var1 - var2 + varXOR <= 0)
+        m.addConstr(var1 - var2 + varXOR >= 0)
+        m.addConstr(-var1 + var2 + varXOR >= 0)
             
-        return _xorVar
+        return varXOR
     
     # Implication
-    def ifVar(m, _var1, _var2):
-        _ifVar = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(_var1, _var2))
+    # 1 - var1 <= varIF
+    # var2 <= varIF
+    # 1 - var1 + var2 >= varIF
+    # TODO Without variable return var1 <= var2
+    def ifVar(self, m, var1, var2):
+        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(var1, var2))
             
-        m.addConstr(1 - _var1 , GRB.LESS_EQUAL, _ifVar)
-        m.addConstr(_var2 , GRB.LESS_EQUAL, _ifVar)
-        m.addConstr(1 - _var1 + _var2, GRB.GREATER_EQUAL, _ifVar)
+        m.addConstr(1 - var1 <= varIF)
+        m.addConstr(var2 <= varIF)
+        m.addConstr(1 - var1 + var2 >= varIF)
             
-        return _ifVar
+        return varIF
            
     # Equivalence 
-    def epqVar(m, _var1, _var2):
-        _epqVar = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(_var1, _var2))
+    # var1 + var2 - varEQ <= 1
+    # var1 + var2 + varEQ >= 1
+    # -var1 + var2 + varEQ <= 1
+    # var1- var2 + varEQ <= 1
+    # TODO Without variable return var1 == var2
+    def eqVar(self, m, var1, var2):
+        varEQ = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(var1, var2))
             
-        m.addConstr(_var1 + _var2 - _epqVar, GRB.LESS_EQUAL, 1)
-        m.addConstr(_var1 + _var2 + _epqVar , GRB.GREATER_EQUAL, 1)
-        m.addConstr(-_var1 + _var2 + _epqVar, GRB.LESS_EQUAL, 1)
-        m.addConstr(_var1 - _var2 + _epqVar, GRB.LESS_EQUAL, 1)
+        m.addConstr(var1 + var2 - varEQ <= 1)
+        m.addConstr(var1 + var2 + varEQ >= 1)
+        m.addConstr(-var1 + var2 + varEQ <= 1)
+        m.addConstr(var1 - var2 + varEQ <= 1)
         
-        return _epqVar
-    
+        return varEQ

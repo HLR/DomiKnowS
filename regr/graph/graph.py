@@ -68,3 +68,22 @@ class Graph(BaseGraphTree):
     # python 2.6+
     Ontology = namedtuple('Ontology', ('iri', 'local'))
     Ontology.__new__.__defaults__ = (None,)
+    
+    # --- Logical Constraints
+
+    logicalConstrains = {}
+
+    def andL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('and', e1, e2)
+        return self.logicalConstrains[lcName]
+
+    def orL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('or', e1, e2)
+        return self.logicalConstrains[lcName]
+
+    def ifL(self, e1, e2):
+        lcName = "LC%i"%(len(self.logicalConstrains))
+        self.logicalConstrains[lcName] = ('if', e1, e2)
+        return self.logicalConstrains[lcName]

@@ -25,37 +25,31 @@ class ilpOntSolver(object):
     
     def setup_solver_logger(self, _ildConfig = ilpConfig):
         
-        if _ildConfig is not None:
+        logName = __name__
+        logLevel = logging.DEBUG
+        logFilename='ilpOntSolver.log'
+        logFilesize=5*1024*1024*1024
+        logBackupCount=4
+        logFileMode='a'
+
+        if _ildConfig and (isinstance(_ildConfig, dict)):
             if 'log_name' in _ildConfig:
                 logName = _ildConfig['log_name']
-            else:
-                logName = __name__
-                
             if 'log_level' in _ildConfig:
                 logLevel = _ildConfig['log_level']
-            else:
-                logLevel = logging.DEBUG
-
             if 'log_filename' in _ildConfig:
                 logFilename = _ildConfig['log_filename']
-            else:
-                logFilename='ilpOntSolver.log'
-                
             if 'log_filesize' in _ildConfig:
                 logFilesize = _ildConfig['log_filesize']
-            else:
-                logFilesize=5*1024*1024*1024
-                
             if 'log_backupCount' in _ildConfig:
                 logBackupCount = _ildConfig['log_backupCount']
-            else:
-                logBackupCount=4
+            if 'log_fileMode' in _ildConfig:
+                logFileMode = _ildConfig['log_fileMode']
             
         logger = logging.getLogger(logName)
     
         # Create file handler and set level to info
-        ch = RotatingFileHandler(logFilename, mode='a', maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-        #ch = logging.FileHandler(logFilename)
+        ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
         logger.setLevel(logLevel)
 
         # Create formatter
@@ -67,7 +61,7 @@ class ilpOntSolver(object):
         # Add ch to logger
         logger.addHandler(ch)
         
-        print("Log file is in: ", ch.baseFilename)
+        print("Log file for %s is in: %s"%(logName,ch.baseFilename))
         self.myLogger = logger
 
     def loadOntology(self, ontologies):
