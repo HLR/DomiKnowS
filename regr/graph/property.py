@@ -7,11 +7,16 @@ class Property(BaseGraphShallowTree):
         cls = type(self)
         context = cls._context[-1]
         self.prop_name = prop_name
-        name = '{}-{}'.format(context.name, prop_name)
-        BaseGraphShallowTree.__init__(self, name)
+        #name = '{}-{}'.format(context.name, prop_name)
+        BaseGraphShallowTree.__init__(self, prop_name)
 
     def attach_to_context(self, name=None):
         BaseGraphShallowTree.attach_to_context(self, self.prop_name)
+
+    def get_fullname(self, delim='/'):
+        if self.sup is None:
+            return self.name  # note: when it is not nested in any context, use the auto name
+        return self.sup.get_fullname(delim) + delim + self.prop_name
 
     def attach(self, sub):
         from ..sensor import Sensor

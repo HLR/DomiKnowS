@@ -1,7 +1,8 @@
 from collections import OrderedDict
 from collections.abc import Iterable
-from itertools import chain
+from itertools import chain, product
 from .base import Scoped, BaseGraphTree
+from .trial import Trial
 from ..utils import enum
 
 
@@ -36,7 +37,6 @@ class Concept(BaseGraphTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
-    @staticmethod
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property
@@ -47,7 +47,7 @@ class Concept(BaseGraphTree):
             if name not in self:
                 with self:
                     prop = Property(prop_name=name)
-            self.get_apply(self, name).attach(sub)
+            self.get_apply(name).attach(sub)
 
     def what(self):
         wht = BaseGraphTree.what(self)
@@ -167,5 +167,52 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
+    def predict(self, root_data, data, trial=None):
+        # TODO: make use of root_data to find the best proper trial in the stack
+        if not trial:
+            trial = Trial.default()
 
+        try:
+            return trial[self, data]
+        except (AttributeError, KeyError):
+            return None
 
+    def candidates(self, root_data, query=None):
+        def basetype(concept):
+            # get inheritance rank
+            basetypes = []
+            for is_a in concept.is_a():
+                basetypes.append(basetype(is_a.dst))
+
+            has_a_basetype = []
+            for has_a in concept.has_a():
+                has_a_basetype.extend(basetype(has_a.dst))
+            basetypes.append(has_a_basetype)
+
+            basetypes = sorted(basetypes, key=lambda x: len(x))
+            # TODO: here we assume all possible basetypes are homogenous and get the longest one
+            # There should be some other semantic to handle this ambiguousity.
+            # if still nothing, the original concept is the base type
+            return basetypes[-1] or (concept,)
+
+        base = basetype(self)
+        assert len(set(base)) == 1  # homogenous base type
+
+        def get_base_data(root_data, single_base):
+            base_data = [root_data,]
+            while True:
+                if base_data[0].getOntologyNode() == single_base:
+                    return base_data
+                base_data = list(chain(*(bd.getChildInstanceNodes() for bd in base_data)))
+
+        base_data = get_base_data(root_data, base[0])
+        if query:
+            return filter(query, product(base_data, repeat=len(base)))
+        else:
+            return product(base_data, repeat=len(base))
+
+    def getOntologyGraph(self):  # lowest sub-graph
+        node = self
+        while isinstance(node, Concept):  # None is not instance of Concept, If this concept has no graph, it will end up None
+            node = node.sup
+        return node

@@ -8,8 +8,12 @@ with Graph('spLanguage') as splang_Graph:
 
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
+        word = Concept(name='word')
         phrase = Concept(name = 'phrase')
         sentence = Concept(name = 'sentence')
+        
+        phrase.has_many(word)
+        sentence.has_many(phrase)
 
     with Graph('application') as app_graph:
         splang_Graph.ontology = ('http://ontology.ihmc.us/ML/SPRL.owl', './')
