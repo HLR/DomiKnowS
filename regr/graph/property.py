@@ -13,6 +13,11 @@ class Property(BaseGraphShallowTree):
     def attach_to_context(self, name=None):
         BaseGraphShallowTree.attach_to_context(self, self.prop_name)
 
+    def get_fullname(self, delim='/'):
+        if self.sup is None:
+            return self.name  # note: when it is not nested in any context, use the auto name
+        return self.sup.get_fullname(delim) + delim + self.prop_name
+
     def attach(self, sub):
         from ..sensor import Sensor
         if isinstance(sub, Sensor):
