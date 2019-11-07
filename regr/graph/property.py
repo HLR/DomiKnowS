@@ -7,8 +7,8 @@ class Property(BaseGraphShallowTree):
         cls = type(self)
         context = cls._context[-1]
         self.prop_name = prop_name
-        name = '{}-{}'.format(context.name, prop_name)
-        BaseGraphShallowTree.__init__(self, name)
+        #name = '{}-{}'.format(context.name, prop_name)
+        BaseGraphShallowTree.__init__(self, prop_name)
 
     def attach_to_context(self, name=None):
         BaseGraphShallowTree.attach_to_context(self, self.prop_name)

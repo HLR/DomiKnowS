@@ -37,7 +37,6 @@ class Concept(BaseGraphTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
-    @staticmethod
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property
@@ -48,7 +47,7 @@ class Concept(BaseGraphTree):
             if name not in self:
                 with self:
                     prop = Property(prop_name=name)
-            self.get_apply(self, name).attach(sub)
+            self.get_apply(name).attach(sub)
 
     def what(self):
         wht = BaseGraphTree.what(self)
