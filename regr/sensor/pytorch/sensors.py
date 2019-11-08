@@ -59,7 +59,7 @@ class TorchSensor(BaseGraphTreeNode):
         if self.output:
             return context[self.output.fullname]
 
-    def value_fetch(self, pre, selector=None):
+    def fetch_value(self, pre, selector=None):
         if selector:
             try:
                 return self.context_helper[list(self.sup.sup[pre].find(selector))[0][1].fullname]
