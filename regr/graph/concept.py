@@ -36,6 +36,15 @@ class Concept(BaseGraphTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
+    def __call__(self, name=None):
+        from .relation import IsA
+
+
+        new_concept = Concept(name)
+        new_concept.is_a(self)
+
+        return new_concept
+
     @staticmethod
     def set_apply(self, name, sub):
         from ..sensor import Sensor
