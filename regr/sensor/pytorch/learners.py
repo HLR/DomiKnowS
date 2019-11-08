@@ -22,7 +22,7 @@ class TorchLearner(TorchSensor):
     def update_parameters(self):
         if not self.updated:
             for pre in self.pres:
-                for name, learner in self.sup[pre].find(TorchLearner):
+                for name, learner in self.sup.sup[pre].find(TorchLearner):
                     self.model.add_module(name=name, module=learner.model)
             self.updated = True
 

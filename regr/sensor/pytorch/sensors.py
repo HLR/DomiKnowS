@@ -54,7 +54,7 @@ class TorchSensor(BaseGraphTreeNode):
         context: Dict[str, Any]
     ) -> Any:
         for pre in self.pres:
-            for _, sensor in self.sup[pre].find(Sensor):
+            for _, sensor in self.sup.sup[pre].find(Sensor):
                 sensor(context=context)
         if self.output:
             return context[self.output.fullname]
@@ -62,7 +62,7 @@ class TorchSensor(BaseGraphTreeNode):
     def value_fetch(self, pre, selector=None):
         if selector:
             try:
-                return self.context_helper[list(self.sup[pre].find(selector))[0][1].fullname]
+                return self.context_helper[list(self.sup.sup[pre].find(selector))[0][1].fullname]
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
@@ -129,3 +129,85 @@ class NominalSensor(TorchSensor):
             context[self.fullname] = val
             context[self.sup.fullname] = val # override state under property name
         return context
+
+
+class TorchEdgeSensor(TorchSensor):
+    def __init__(self, *pres, mode="forward"):
+        super(TorchEdgeSensor).__init__(*pres)
+        self.mode = mode
+        self.edge = self.sup.sup
+        if mode == "forward":
+            self.src = self.edge.src
+            self.dst = self.edge.dst
+        elif mode == "backward":
+            self.src = self.edge.dst
+            self.dst = self.edge.src
+        else:
+            print("the mode passed to the edge sensor is not right")
+            raise
+
+    def __call__(
+        self,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        try:
+            context = self.update_pre_context(context)
+        except:
+            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            raise
+        self.context_helper = context
+        try:
+            context = self.update_context(context)
+        except:
+            print('Error during updating context with sensor {}'.format(self.fullname))
+            raise
+        return context[self.dst[self.pres[0]].fullname]
+
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+
+        if not force and self.fullname in context:
+            # context cached results by sensor name. override if forced recalc is needed
+            val = context[self.fullname]
+        else:
+            val = self.forward()
+        if val is not None:
+            context[self.fullname] = val
+            context[self.dst[self.pres[0]].fullname] = val # override state under property name
+        return context
+
+    def update_pre_context(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        for pre in self.pres:
+            for _, sensor in self.src[pre].find(Sensor):
+                sensor(context=context)
+        if self.output:
+            return context[self.output.fullname]
+
+
+class TorchEdgeReaderSensor(TorchEdgeSensor):
+    def __init__(self, *pres, keyword, mode="forward"):
+        super(ReaderSensor).__init__(*pres, mode=mode)
+        self.data = None
+        self.keyword = keyword
+
+    def fill_data(self, data):
+        self.data = data
+
+    def forward(
+            self,
+    ) -> Any:
+        if self.data:
+            try:
+                return self.data[self.keyword]
+            except:
+                print("the key you requested from the reader doesn't exist")
+                raise
+        else:
+            print("there is no data to operate on")
+            raise
