@@ -123,8 +123,8 @@ def model_declaration(graph, config):
     organization['label'] = LabelSensor(reader, 'Org', output_only=True)
     location['label'] = LabelSensor(reader, 'Loc', output_only=True)
     other['label'] = LabelSensor(reader, 'Other', output_only=True)
-    #o['label'] = LabelSensor(reader, 'O', output_only=True)
 
+    #o['label'] = LabelSensor(reader, 'O', output_only=True)
     #### We connect properties with learners that generate predictions.
     #### Notice that we connect the predicting `Learner`s to the same properties as "ground-truth" `Sensor`s.
     #### Multiple assignment is a feature in `regr` to allow each property to have multiple sources.
