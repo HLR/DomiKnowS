@@ -22,23 +22,11 @@ class GurobiSolver(ilpOntSolver):
             self.names.update({concept.name: concept for concept in cur_graph.traversal_apply(func)})
 
     def calculateILPSelection(self, data, *predicates_list):
-        def findone(name):
-            def func(node):
-                if isinstance(node, Concept) and node.name==name:
-                    return node
-            for graph in self.myGraph:
-                for node in graph.traversal_apply(func):
-                    # return the first found
-                    assert self.names[name] == node
-                    return node
-                else:
-                    raise ValueError('Cannot find concept "{}" in the graph attached to the solver.'.format(predicate))
-
         concepts_list = []
         for predicates in predicates_list:
             concept_dict = {}
             for predicate, v in predicates.items():
-                concept = findone(predicate)
+                concept = self.names[predicate]
                 concept_dict[concept] = v
             concepts_list.append(concept_dict)
 
