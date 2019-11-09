@@ -10,8 +10,8 @@ else:
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04.corp_5_train.corp",
-        'valid_path': "conll04.corp_5_test.corp"
+        'train_path': "conll04.corp_1_train.corp",
+        'valid_path': "conll04.corp_1_test.corp"
     },
     'Model': { # model setting
         'embedding_dim': 8,
@@ -44,8 +44,9 @@ config = {
             'balance_factor': 1.5,
             'label_smoothing': 0.01,
             'focal_gamma': 2,
-            'inference_interval': 100,
-            'inference_training_set': False
+            'inference_interval': 1,
+            'inference_training_set': True,
+            'inference_loss': True
         }
     },
     'Train': {
