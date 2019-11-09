@@ -23,6 +23,11 @@ class ilpOntSolver(object):
     
     __negVarTrashhold = 1.0
     
+    def __init__(self, graph, ontologiesTuple):
+        self.setup_solver_logger()
+        self.myGraph = graph
+        self.loadOntology(ontologiesTuple)
+
     def setup_solver_logger(self, _ildConfig = ilpConfig):
         
         logName = __name__

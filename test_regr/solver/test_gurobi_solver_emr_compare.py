@@ -130,8 +130,17 @@ def passby(fn, *args, **kwargs):
 
 def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
-    from regr.solver.gurobi_solver import GurobiSolver
-    solver = GurobiSolver(lazy_not=True, self_relation=False)
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    import logging
+    iplConfig = {
+        'ilpSolver' : 'mini',
+        'log_level' : logging.DEBUG,
+        'log_filename' : 'ilpOntSolver.log',
+        'log_filesize' : 5*1024*1024*1024,
+        'log_backupCount' : 5,
+        'log_fileMode' : 'a'
+    }
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
     
     # call solver
     results = benchmark(solver.solve_legacy, phrase, *inputs)

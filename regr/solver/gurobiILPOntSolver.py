@@ -25,8 +25,10 @@ import logging
 import datetime
 
 class gurobiILPOntSolver(ilpOntSolver):
-    def __init__(self) -> None:
-        super().__init__()
+    ilpSolver = 'Gurobi'
+
+    def __init__(self, graph, ontologiesTuple) -> None:
+        super().__init__(graph, ontologiesTuple)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
                
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
@@ -897,11 +899,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         return Z_Q
         
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
-    
-        if self.ilpSolver == None:
-            self.myLogger.warning('ILP solver not provided - returning unchanged results')
-            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
-        
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
 

@@ -3,13 +3,20 @@ import numpy as np
 from itertools import product, permutations
 
 from regr.graph.relation import IsA, HasA, NotA
-from .solver import Solver
+from .ilpOntSolver import ilpOntSolver
 
 
-class GurobiSolver(Solver):
-    def __init__(self, lazy_not=True, self_relation=True):
+class GurobiSolver(ilpOntSolver):
+    ilpSolver = 'mini'
+
+    def __init__(self, graph, ontologiesTuple, lazy_not=True, self_relation=True):
+        super().__init__(graph, ontologiesTuple)
         self.lazy_not = lazy_not
         self.self_relation = self_relation
+
+    def calculateILPSelection(self, data, *predicates_list):
+        import pdb;pdb.set_trace()
+        pass
 
     def solve_legacy(self, data, *predicates_list):
         # data is a list of objects of the base type

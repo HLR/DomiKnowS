@@ -6,8 +6,8 @@ else:
     from .ilpOntSolver import ilpOntSolver
 
 class dummyILPOntSolver(ilpOntSolver):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, graph, ontologiesTuple) -> None:
+        super().__init__(graph, ontologiesTuple)
         self.myIlpBooleanProcessor = None
         
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):

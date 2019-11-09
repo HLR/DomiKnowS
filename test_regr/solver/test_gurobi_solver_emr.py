@@ -145,14 +145,23 @@ def emr_input(emr_graph):
 
 @pytest.mark.gurobi
 def test_main_emr(emr_graph, emr_input):
-    from regr.solver.gurobi_solver import GurobiSolver
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    import logging
 
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 
     # ------Call solver -------
     test_graph = emr_graph
-
-    myilpOntSolver = GurobiSolver(lazy_not=True)
+    # prepare solver
+    iplConfig = {
+        'ilpSolver' : 'mini',
+        'log_level' : logging.DEBUG,
+        'log_filename' : 'ilpOntSolver.log',
+        'log_filesize' : 5*1024*1024*1024,
+        'log_backupCount' : 5,
+        'log_fileMode' : 'a'
+    }
+    myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
     tokenResult, relationsResult = myilpOntSolver.solve_legacy(test_phrase,
                                                                test_graphResultsForPhraseToken,
                                                                test_graphResultsForPhraseRelation
