@@ -3,6 +3,7 @@ import logging
 import pickle
 from glob import glob
 from collections import defaultdict
+from itertools import chain
 from typing import Dict, List, Tuple, Union
 import torch
 import numpy as np
@@ -46,28 +47,23 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         # do not invoke super().__init__() here
 
     def get_multiassign(self):
-        ma = []
-
         def func(node):
             # use a closure to collect multi-assignments
             if isinstance(node, Property) and len(node) > 1:
-                ma.append(node)
-        self.traversal_apply(func)
-        return ma
+                return node
+
+        return list(self.traversal_apply(func))
 
     @property
     def poi(self):
         return self.get_multiassign()
 
     def get_sensors(self, *tests):
-        sensors = []
-
         def func(node):
             # use a closure to collect sensors
             if isinstance(node, Property):
-                sensors.extend(node.find(*tests))
-        self.traversal_apply(func)
-        return sensors
+                return node.find(*tests)
+        return list(chain(*self.traversal_apply(func)))
 
     def solver_log_to(self, log_path:str=None):
         solver_logger = logging.getLogger(ilpOntSolver.__module__)

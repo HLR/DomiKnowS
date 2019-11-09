@@ -284,7 +284,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 del self[key]
                 sub._sup = None # TODO: what else to have?
 
-    def traversal_apply(self, func, order='pre', first='depth'):
+    def traversal_apply(self, func, filter_fn=lambda x: x is not None, order='pre', first='depth'):
         if order.lower() not in ['pre', 'post']:
             raise ValueError('Options for order are pre or post, {} given.'.format(order))
         if first.lower() not in ['depth', 'breadth']:
@@ -303,6 +303,8 @@ class NamedTree(NamedTreeNode, OrderedDict):
             if order.lower() == 'pre':
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
+                if not filter_fn or filter_fn(retval):
+                    yield retval
 
             if isinstance(current, NamedTree):
                 subs = [current[name] for name in current] # compatible to subclasses that override the iterator
@@ -316,6 +318,8 @@ class NamedTree(NamedTreeNode, OrderedDict):
             while to_apply:
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
+                if not filter_fn or filter_fn(retval):
+                    yield retval
 
     def query_apply(self, names, func):
         if len(names) > 1:

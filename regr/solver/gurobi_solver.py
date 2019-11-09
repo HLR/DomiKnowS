@@ -2,6 +2,7 @@ from gurobipy import Model, GRB
 import numpy as np
 from itertools import product, permutations
 
+from regr.graph import Concept
 from regr.graph.relation import IsA, HasA, NotA
 from .ilpOntSolver import ilpOntSolver
 
@@ -13,10 +14,41 @@ class GurobiSolver(ilpOntSolver):
         super().__init__(graph, ontologiesTuple)
         self.lazy_not = lazy_not
         self.self_relation = self_relation
+        def func(node):
+            if isinstance(node, Concept):
+                return node
+        self.names = {}
+        for cur_graph in graph:
+            self.names.update({concept.name: concept for concept in cur_graph.traversal_apply(func)})
 
     def calculateILPSelection(self, data, *predicates_list):
-        import pdb;pdb.set_trace()
-        pass
+        def findone(name):
+            def func(node):
+                if isinstance(node, Concept) and node.name==name:
+                    return node
+            for graph in self.myGraph:
+                for node in graph.traversal_apply(func):
+                    # return the first found
+                    assert self.names[name] == node
+                    return node
+                else:
+                    raise ValueError('Cannot find concept "{}" in the graph attached to the solver.'.format(predicate))
+
+        concepts_list = []
+        for predicates in predicates_list:
+            concept_dict = {}
+            for predicate, v in predicates.items():
+                concept = findone(predicate)
+                concept_dict[concept] = v
+            concepts_list.append(concept_dict)
+
+        # call to solve
+        concepts_results = self.solve_legacy(data, *concepts_list)
+
+        # prepare result
+        results = [{k.name:v for k, v in concepts_result.items()}
+                   for concepts_result in concepts_results]
+        return results
 
     def solve_legacy(self, data, *predicates_list):
         # data is a list of objects of the base type

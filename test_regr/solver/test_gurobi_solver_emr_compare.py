@@ -147,6 +147,43 @@ def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     return results
 
 
+def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
+    if len(inputs) > 3:
+        raise NotImplemented
+    # prepare input
+    owl_inputs = []
+    key_maps = []
+    for input_ in inputs:
+        owl_input = {}
+        key_map = {}
+        for k, v in input_.items():
+            owl_input[k.name] = v
+            key_map[k.name] = k
+        owl_inputs.append(owl_input)
+        key_maps.append(key_map)
+
+    # prepare solver
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    import logging
+    iplConfig = {
+        'ilpSolver' : 'mini',
+        'log_level' : logging.DEBUG,
+        'log_filename' : 'ilpOntSolver.log',
+        'log_filesize' : 5*1024*1024*1024,
+        'log_backupCount' : 5,
+        'log_fileMode' : 'a'
+    }
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
+
+    # call solver
+    owl_results = benchmark(solver.calculateILPSelection, phrase, *owl_inputs)
+
+    # prepare result
+    results = [{key_map[k]:v for k, v in owl_result.items()}
+               for owl_result, key_map in zip(owl_results, key_maps)]
+    return results
+
+
 def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     if len(inputs) > 3:
         raise NotImplemented
@@ -175,7 +212,7 @@ def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     return results
 
 
-solver_list = [mini_wrap, owl_wrap]
+solver_list = [mini_wrap, mini_owlapi_wrap, owl_wrap]
 
 
 @pytest.fixture(params=solver_list)
