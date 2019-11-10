@@ -1,6 +1,7 @@
 from gurobipy import Model, GRB
 import numpy as np
 from itertools import product, permutations
+import warnings
 
 from regr.graph import Concept
 from regr.graph.relation import IsA, HasA, NotA
@@ -159,7 +160,7 @@ class GurobiSolver(ilpOntSolver):
         #import pdb;pdb.set_trace()
 
         if model.status != GRB.Status.OPTIMAL:
-            raise model.status
+            warnings.warn('Model did not finish in an optimal status! Status code is {}.'.format(model.status), RuntimeWarning)
 
         # collect result
         retval = []
