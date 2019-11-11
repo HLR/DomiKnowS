@@ -1,7 +1,4 @@
-from owlready2 import isDefinedBy
-
-from regr.graph import Graph, Concept, Relation
-import re
+from regr.graph import Concept, Relation
 import pytest
 
 
