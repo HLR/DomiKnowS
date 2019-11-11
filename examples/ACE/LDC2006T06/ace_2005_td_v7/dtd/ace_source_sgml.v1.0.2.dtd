@@ -1,0 +1,46 @@
+<!DOCTYPE  ACESOURCETEXT [
+
+<!ELEMENT  ACESOURCETEXT O O (DOC+)                               >
+
+<!ELEMENT  DOC         - -  (DOCID,
+                             DOCTYPE?,
+                             DATETIME,
+                             BODY,
+                             ENDTIME?, 
+                             TRAILER?)                            >
+
+<!ELEMENT  DOCID       - -  (#PCDATA)                             >
+<!ELEMENT  DOCTYPE     - -  (#PCDATA)                             >
+<!ATTLIST  DOCTYPE     SOURCE CDATA #IMPLIED                      >
+<!ELEMENT  DATETIME    - -  (#PCDATA)                             >
+<!ELEMENT  ENDTIME     - -  (#PCDATA)                             >
+<!ELEMENT  TRAILER     - -  (#PCDATA)                             >
+
+<!ELEMENT  BODY        - -  (SLUG|KEYWORD|HEADER|HEADLINE|TEXT|
+                             FOOTER|TRAILER)*                     >
+
+<!ELEMENT  SLUG        - -  (#PCDATA)                             >
+<!ELEMENT  KEYWORD     - -  (#PCDATA)                             >
+<!ELEMENT  HEADER      - -  (#PCDATA)                             >
+<!ELEMENT  HEADLINE    - -  (#PCDATA)                             >
+<!ELEMENT  FOOTER      - -  (#PCDATA)                             >
+<!ELEMENT  TEXT        - -  (P|TURN|POST|#PCDATA)+                >
+
+<!ELEMENT  P           - O  (#PCDATA)                             >
+<!ELEMENT  TURN        - O  (SPEAKER|#PCDATA)+                    >
+<!ELEMENT  POST        - O  (POSTER|POSTDATE|SUBJECT|QUOTE|#PCDATA)+ >
+<!ATTLIST  POST        DATETIME CDATA #IMPLIED                    >
+<!ELEMENT  SPEAKER     - O  (#PCDATA)                             >
+<!ATTLIST  SPEAKER     NAME CDATA #IMPLIED                        >
+<!ELEMENT  POSTER      - O  (#PCDATA)                             >
+<!ELEMENT  SUBJECT     - O  (#PCDATA)                             >
+<!ELEMENT  POSTDATE    - O  (#PCDATA)                             >
+<!ELEMENT  QUOTE       - O  (#PCDATA)                             >
+<!ATTLIST  QUOTE     PREVIOUSPOST CDATA #IMPLIED                  >
+
+<!ENTITY   lt      "<" >
+<!ENTITY   gt      ">" >
+<!ENTITY   amp     "&" >
+<!ENTITY #DEFAULT SYSTEM >
+
+]>
