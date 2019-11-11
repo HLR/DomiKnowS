@@ -1,6 +1,8 @@
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import chain
+from typing import Tuple
+
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
 
@@ -43,6 +45,38 @@ class Concept(BaseGraphTree):
         new_concept.is_a(self)
 
         return new_concept
+
+    def get_apply(self, name):
+        from .relation import Relation
+        if isinstance(name, Concept):
+            name = (name,)
+        if isinstance(name, Tuple):
+            concept, *tests = name
+            retval = []
+            tests_in = [lambda x: x.src == concept,].append(tests)
+            for rel in self._in:
+                for test in tests_in:
+                    if issubclass(test, Relation):
+                        if not isinstance(rel, test):
+                            break
+                    else:
+                        if not test(rel):
+                            break
+                else:
+                    retval.append(concept)
+            tests_out = [lambda x: x.dst == concept,].append(tests)
+            for rel in self._out:
+                for test in tests_out:
+                    if issubclass(test, Relation):
+                        if not isinstance(rel, test):
+                            break
+                    else:
+                        if not test(rel):
+                            break
+                else:
+                    retval.append(concept)
+            return retval
+        return BaseGraphTree.get_apply(self, name)
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor
