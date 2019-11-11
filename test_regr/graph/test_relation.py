@@ -1,4 +1,6 @@
 from functools import wraps
+import random
+
 from regr.graph import Concept, Property, Relation
 from regr.sensor import Sensor, Learner
 import pytest
@@ -58,5 +60,18 @@ class TestRelation(object):
 
         rel_sentence_contains_phrase.forward = forward
 
+        echo_number = random.random()
+
+        def backward(number):
+            return number == echo_number
+
+        rel_sentence_contains_phrase.backward = backward
+
+        # NB: notice the difference of forward and backward usage.
+        # Functions assign to member of instance are not bounded to `self` automatically.
+        # The `forward` example is wrapped by the member decorator to work with `self`,
+        # what make it acts like a member function that can be call without `self`.
+        # The `backward` example is the default way. And it acts like a static member.
+
         assert rel_sentence_contains_phrase.forward()
-        assert rel_sentence_contains_phrase.backward(0) is None
+        assert rel_sentence_contains_phrase.backward(echo_number)
