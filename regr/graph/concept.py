@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import chain
-from typing import Tuple
+from typing import Tuple, Type
 
 from .base import Scoped, BaseGraphTree
 from ..utils import enum
@@ -20,9 +20,12 @@ class Concept(BaseGraphTree):
 
             def create(src, *args, **kwargs):
                 # add one-by-one
+                rels = []
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
                     rel_inst = Rel(src, dst, argument_name=argument_name)
+                    rels.append(rel_inst)
+                return rels
 
             cls._rels[Rel.name()] = create
             return Rel
@@ -38,45 +41,53 @@ class Concept(BaseGraphTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
-    def __call__(self, name=None):
-        from .relation import IsA
+    def __call__(self, *args, **kwargs):
+        from .relation import IsA, HasA
 
-        new_concept = Concept(name)
-        new_concept.is_a(self)
+        if (len(args) + len(kwargs) == 0 or
+                ('name' in kwargs) or
+                (len(args)==1 and isinstance(args[0], str))):
+            new_concept = Concept(*args, **kwargs)
+            new_concept.is_a(self)
+            return new_concept
+        else:
+            return self.has_a(*args, **kwargs)
 
-        return new_concept
+    def get_sub(self, *names, delim='/', trim=True):
+        for name in names:
+            if isinstance(name, Concept):
+                return self.get_apply_concept(*names)
+        return self.parse_query_apply(names, lambda s, name: s.get_apply(name), delim, trim)
 
-    def get_apply(self, name):
+    def get_apply_concept(self, concept, *tests):
         from .relation import Relation
-        if isinstance(name, Concept):
-            name = (name,)
-        if isinstance(name, Tuple):
-            concept, *tests = name
-            retval = []
-            tests_in = [lambda x: x.src == concept,].append(tests)
-            for rel in self._in:
-                for test in tests_in:
-                    if issubclass(test, Relation):
-                        if not isinstance(rel, test):
-                            break
-                    else:
-                        if not test(rel):
-                            break
+
+        retval = []
+        tests_in = [lambda x: x.src == concept,]
+        tests_in.extend(tests)
+        for rel in chain(*self._in.values()):
+            for test in tests_in:
+                if isinstance(test, Type) and issubclass(test, Relation):
+                    if not isinstance(rel, test):
+                        break
                 else:
-                    retval.append(concept)
-            tests_out = [lambda x: x.dst == concept,].append(tests)
-            for rel in self._out:
-                for test in tests_out:
-                    if issubclass(test, Relation):
-                        if not isinstance(rel, test):
-                            break
-                    else:
-                        if not test(rel):
-                            break
+                    if not test(rel):
+                        break
+            else:
+                retval.append(rel)
+        tests_out = [lambda x: x.dst == concept,]
+        tests_out.extend(tests)
+        for rel in chain(*self._out.values()):
+            for test in tests_out:
+                if isinstance(test, Type) and issubclass(test, Relation):
+                    if not isinstance(rel, test):
+                        break
                 else:
-                    retval.append(concept)
-            return retval
-        return BaseGraphTree.get_apply(self, name)
+                    if not test(rel):
+                        break
+            else:
+                retval.append(rel)
+        return retval
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor
