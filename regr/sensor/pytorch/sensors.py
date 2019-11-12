@@ -45,9 +45,6 @@ class TorchSensor(BaseGraphTreeNode):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
-            if self.edge:
-                for _, sensor in self.edge.find(Sensor):
-                    sensor(context=context)
             self.define_inputs()
             val = self.forward()
         if val is not None:
@@ -61,6 +58,9 @@ class TorchSensor(BaseGraphTreeNode):
     ) -> Any:
         for pre in self.pres:
             for _, sensor in self.sup.sup[pre].find(Sensor):
+                sensor(context=context)
+        if self.edge:
+            for _, sensor in self.edge.find(Sensor):
                 sensor(context=context)
         if self.output:
             return context[self.output.fullname]
