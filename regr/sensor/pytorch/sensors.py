@@ -11,6 +11,7 @@ class TorchSensor(BaseGraphTreeNode):
         self.pres = pres
         self.output = output
         self.context_helper= None
+        self.inputs = []
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")
@@ -43,6 +44,7 @@ class TorchSensor(BaseGraphTreeNode):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
+            self.define_inputs()
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
@@ -68,7 +70,11 @@ class TorchSensor(BaseGraphTreeNode):
                 raise
             pass
         else:
-            return self.context_helper[self.sup[pre].fullname]
+            return self.context_helper[self.sup.sup[pre].fullname]
+
+    def define_inputs(self):
+        for pre in self.pres:
+            self.inputs.append(self.fetch_value(pre))
 
     def forward(self,) -> Any:
         return None
@@ -173,6 +179,7 @@ class TorchEdgeSensor(TorchSensor):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
+            self.define_inputs()
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
@@ -188,6 +195,17 @@ class TorchEdgeSensor(TorchSensor):
                 sensor(context=context)
         if self.output:
             return context[self.output.fullname]
+
+    def fetch_value(self, pre, selector=None):
+        if selector:
+            try:
+                return self.context_helper[list(self.src[pre].find(selector))[0][1].fullname]
+            except:
+                print("The key you are trying to access to with a selector doesn't exist")
+                raise
+            pass
+        else:
+            return self.context_helper[self.src[pre].fullname]
 
 
 class TorchEdgeReaderSensor(TorchEdgeSensor):

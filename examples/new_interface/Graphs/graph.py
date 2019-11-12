@@ -12,9 +12,9 @@ with Graph('global') as graph:
         word = Concept('word')
         phrase = Concept('phrase')
         sentence = Concept('sentence')
-        sentence.contains(phrase)
-        sentence.contains(word)
-        phrase.contains(word)
+        (rel_sentence_contains_phrase,) = sentence.contains(phrase)
+        (rel_sentence_contains_word,) = sentence.contains(word)
+        (rel_phrase_contains_word,) = phrase.contains(word)
         pair = Concept('pair')
         pair.has_a(phrase, phrase)
 

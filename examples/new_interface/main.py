@@ -10,13 +10,11 @@ This example follows the pipeline we discussed in our preliminary paper.
 
 from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
     SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor
-# from .Graphs.Sensors.mainSensors import SequenceConcatSensor, FlairEmbeddingSensor, CallingSensor, ReaderSensor
-# from .Graphs.Sensors.conceptSensors import LabelSensor
-# from .Graphs.Learners.conceptLearners import LSTMLearner, FullyConnectedLearner
+from Graphs.Sensors.wordSensors import WordEmbedding
+from Graphs.Sensors.edgeSensors import FlairSentenceToWord
 from data.reader import DataLoader, ACEReader
-# from .data.reader import DataLoader, ACEReader
 from regr.sensor.pytorch.sensors import *
-# from .Graphs.base import PytorchSolverGraph
+from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner
 
 
 def ontology_declaration():
@@ -65,16 +63,12 @@ def model_declaration(graph, data, reader):
     sentence['bert'] = SentenceBertEmbedderSensor('raw')
     sentence['glove'] = SentenceGloveEmbedderSensor('raw')
     sentence['flair'] = SentenceFlairEmbedderSensor('raw')
+    sentence['raw_ready'] = TorchSensor('bert', 'glove', 'flair', output='raw')
+    sentence[word] = FlairSentenceToWord('raw_ready')
 
-    # sentence['pos'] = SentencePosTaggerSensor(sentence['raw'], reader=reader)
-    # next(sentence['flair'].find(SentenceFlairEmbedderSensor))[1](context={})
+    word['embedding'] = WordEmbedding('raw_ready')
 
-    sentence['raw_ready'] = CallingSensor(sentence['bert'], sentence['glove'], sentence['flair'], output=sentence['raw'])
-    sentence['embedding'] = FlairEmbeddingSensor(sentence['raw_ready'], embedding_dim=5220)
-    sentence['all'] = SequenceConcatSensor(sentence['embedding'], sentence['pos'])
-    # next(sentence['output'].find(CallingSensor))[1](context={})
-    #
-    word['encode'] = LSTMLearner(sentence['all'], input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
+    word['encode'] = LSTMLearner('embedding', input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
 
     FAC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
     GPE['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)

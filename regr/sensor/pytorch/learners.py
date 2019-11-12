@@ -1,8 +1,8 @@
-from Graphs.Sensors.mainSensors import CallingSensor
 import abc
 from typing import Any
 import torch
 from .sensors import TorchSensor
+from .learnerModels import PyTorchFC, LSTMModel
 
 
 class TorchLearner(TorchSensor):
@@ -34,3 +34,42 @@ class TorchLearner(TorchSensor):
         final_name = self.fullname.replace('/', '_')
         self.model.load_state_dict(torch.load(filepath+"/"+final_name))
         self.model.eval()
+
+
+class LSTMLearner(TorchLearner):
+    def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False):
+        super(LSTMLearner, self).__init__(*pres)
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
+        self.input_dim = input_dim
+        self.model = LSTMModel(input_dim=self.input_dim, hidden_dim=self.hidden_dim, num_layers=self.num_layers,
+                               batch_size=1, bidirectional=self.bidirectional)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
+
+    def forward(
+            self,
+    ) -> Any:
+        output = self.model(self.inputs[0])
+        return output
+
+
+class FullyConnectedLearner(TorchLearner):
+    def __init__(self, *pres, input_dim, output_dim):
+        super(FullyConnectedLearner, self).__init__(*pres)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.model = PyTorchFC(input_dim=self.input_dim, output_dim=self.output_dim)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
+
+    def forward(
+            self,
+    ) -> Any:
+        _tensor = self.inputs[0]
+        output = self.model(_tensor)
+        return output
+
