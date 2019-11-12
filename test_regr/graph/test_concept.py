@@ -44,5 +44,6 @@ class TestConcept(object):
         sensor = Sensor()
         phrase[people] = sensor
         assert isinstance(phrase[people], Property)
+        assert phrase[people] is phrase['<people>']
         assert sensor.fullname == 'phrase/<people>/sensor'
         assert phrase[people, 'sensor'] is sensor

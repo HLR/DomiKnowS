@@ -63,6 +63,11 @@ class Concept(BaseGraphTree):
             if trim:
                 name = name.strip()
             names = list(chain(name0s[1:], names[1:]))
+            if name[0] == '<' and name[-1] == '>':
+                for key in self:
+                    if key.name == name[1:-1]:
+                        name = key
+                        break
         if names:
             return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
         return func(self, name)
