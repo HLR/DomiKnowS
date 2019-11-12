@@ -6,12 +6,13 @@ from ...graph.base import BaseGraphTreeNode
 
 class TorchSensor(BaseGraphTreeNode):
 
-    def __init__(self, *pres, output=None):
+    def __init__(self, *pres, output=None, edge=None):
         super(TorchSensor).__init__()
         self.pres = pres
         self.output = output
         self.context_helper= None
         self.inputs = []
+        self.edge = edge
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")
@@ -44,6 +45,9 @@ class TorchSensor(BaseGraphTreeNode):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
+            if self.edge:
+                for _, sensor in self.edge.find(Sensor):
+                    sensor(context=context)
             self.define_inputs()
             val = self.forward()
         if val is not None:
