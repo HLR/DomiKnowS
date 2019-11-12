@@ -311,36 +311,35 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
 
-    def query_apply(self, names, func):
-        if len(names) > 1:
-            return self[names[0]].query_apply(names[1:], func)
-        # this is only one layer above the leaf layer
-        return func(self, names[0])
 
-    def parse_query_apply(self, names, func, delim='/', trim=True):
-        names = list(chain(*(name.split(delim) for name in names)))
+    def parse_query_apply(self, func, *names, delim='/', trim=True):
+        name0s = names[0].split(delim)
+        name = name0s[0]
         if trim:
-            names = [name.strip() for name in names]
-        return self.query_apply(names, func)
+            name = name.strip()
+        names = list(chain(name0s[1:], names[1:]))
+        if names:
+            return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
+        return func(self, name)
 
     def get_apply(self, name):
         return OrderedDict.__getitem__(self, name)
 
     def get_sub(self, *names, delim='/', trim=True):
-        return self.parse_query_apply(names, lambda s, name: s.get_apply(name), delim, trim)
+        return self.parse_query_apply(lambda s, name: s.get_apply(name), *names, delim=delim, trim=trim)
 
     def set_apply(self, name, sub):
         OrderedDict.__setitem__(self, name, sub)
 
     def set_sub(self, *names, sub, delim='/', trim=True):
         # NB: sub is keyword arg because it is after a list arg
-        return self.parse_query_apply(names, lambda s, k: s.set_apply(k, sub), delim, trim)
+        return self.parse_query_apply(lambda s, k: s.set_apply(k, sub), *names, delim=delim, trim=trim)
 
     def del_apply(self, name):
         return OrderedDict.__delitem__(self, name)
 
     def del_sub(self, *names, delim='/', trim=True):
-        return self.parse_query_apply(names, lambda s, name: s.del_apply(name), delim, trim)
+        return self.parse_query_apply(lambda s, name: s.del_apply(name), *names, delim=delim, trim=trim)
 
     def __getitem__(self, name):
         return self.get_sub(*entuple(name))

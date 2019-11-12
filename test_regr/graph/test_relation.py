@@ -19,16 +19,16 @@ class TestRelation(object):
 
         rels = disjoint(people, organization, location, other, o)
 
-        assert people[organization][0] in rels
-        assert isinstance(people[organization][0], NotA)
-        assert organization[location][0] in rels
-        assert isinstance(organization[location][0], NotA)
-        assert location[other][0] in rels
-        assert isinstance(location[other][0], NotA)
-        assert other[o][0] in rels
-        assert isinstance(other[o][0], NotA)
-        assert o[people][0] in rels
-        assert isinstance(o[people][0], NotA)
+        assert people.relate_to(organization)[0] in rels
+        assert isinstance(people.relate_to(organization)[0], NotA)
+        assert organization.relate_to(location)[0] in rels
+        assert isinstance(organization.relate_to(location)[0], NotA)
+        assert location.relate_to(other)[0] in rels
+        assert isinstance(location.relate_to(other)[0], NotA)
+        assert other.relate_to(o)[0] in rels
+        assert isinstance(other.relate_to(o)[0], NotA)
+        assert o.relate_to(people)[0] in rels
+        assert isinstance(o.relate_to(people)[0], NotA)
 
     def test_relation(self):
         sentence = Concept('sentence')

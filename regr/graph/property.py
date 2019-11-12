@@ -16,7 +16,12 @@ class Property(BaseGraphShallowTree):
     def get_fullname(self, delim='/'):
         if self.sup is None:
             return self.name  # note: when it is not nested in any context, use the auto name
-        return self.sup.get_fullname(delim) + delim + self.prop_name
+        from .concept import Concept
+        if isinstance(self.prop_name, Concept):
+            prop_name = '<{}>'.format(self.prop_name.name)
+        else:
+            prop_name = self.prop_name
+        return self.sup.get_fullname(delim) + delim + prop_name
 
     def attach(self, sub):
         from ..sensor import Sensor

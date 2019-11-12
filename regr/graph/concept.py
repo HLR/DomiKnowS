@@ -53,13 +53,21 @@ class Concept(BaseGraphTree):
         else:
             return self.has_a(*args, **kwargs)
 
-    def get_sub(self, *names, delim='/', trim=True):
-        for name in names:
-            if isinstance(name, Concept):
-                return self.get_apply_concept(*names)
-        return self.parse_query_apply(names, lambda s, name: s.get_apply(name), delim, trim)
+    def parse_query_apply(self, func, *names, delim='/', trim=True):
+        if isinstance(names[0], Concept):
+            name = names[0]
+            names = names[1:]
+        else:
+            name0s = names[0].split(delim)
+            name = name0s[0]
+            if trim:
+                name = name.strip()
+            names = list(chain(name0s[1:], names[1:]))
+        if names:
+            return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
+        return func(self, name)
 
-    def get_apply_concept(self, concept, *tests):
+    def relate_to(self, concept, *tests):
         from .relation import Relation
 
         retval = []
