@@ -68,15 +68,33 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     def solver_log_to(self, log_path:str=None):
         solver_logger = logging.getLogger(ilpOntSolver.__module__)
         solver_logger.propagate = False
-        if DEBUG_TRAINING or True:
+        if DEBUG_TRAINING:
             solver_logger.setLevel(logging.DEBUG)
+            param = {'precision': 4,
+                     'threshold': np.inf,
+                     'edgeitems': 3,
+                     'linewidth': np.inf
+                    }
+            torch.set_printoptions(**param)
+            np.set_printoptions(**param)
             pd.options.display.max_rows = None
             pd.options.display.max_columns = None
         else:
             solver_logger.setLevel(logging.INFO)
         solver_logger.handlers = []
         if log_path is not None:
-            handler = logging.FileHandler(log_path)
+            if DEBUG_TRAINING:
+                handler = logging.FileHandler(log_path)
+            else:
+                logFilesize = 5 * 1024 * 1024 * 1024 # 5G
+                logBackupCount = 4
+                logFileMode = 'a'
+                handler = logging.handlers.RotatingFileHandler(log_path,
+                                                               mode=logFileMode,
+                                                               maxBytes=logFilesize,
+                                                               backupCount=logBackupCount,
+                                                               encoding=None,
+                                                               delay=0)
             solver_logger.addHandler(handler)
 
     def save(self, path, **objects):
@@ -89,7 +107,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             with open(os.path.join(path, k + '.pkl'), 'wb') as fout:
                 pickle.dump(v, fout)
 
-    def load(self, path, model:Union[str, int]='default'):
+    def load(self, path, model:Union[str, int]='default', vocab=None):
         model_file = None
         if isinstance(model, int):
             model_file = 'model_state_epoch_{}'.format(model)
@@ -109,7 +127,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                               'the string "best" for best model, '
                               'the string "last" for last saved model, '
                               'or the string "default" for just "model.th".'))
-        vocab_file = os.path.join(path, 'vocab')
+        vocab = vocab or os.path.join(path, 'vocab')
 
         if torch.cuda.is_available() and not DEBUG_TRAINING:
             device = 0
@@ -117,8 +135,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         else:
             device = -1
 
-        #print('Loading vocab from {}'.format(vocab_file))
-        self.model.vocab = Vocabulary.from_files(vocab_file)
+        #print('Loading vocab from {}'.format(vocab))
+        self.model.vocab = Vocabulary.from_files(vocab)
         self.model.extend_embedder_vocab()
         #print('Loading model from {}'.format(model_file))
         with open(model_file, 'rb') as fin:
