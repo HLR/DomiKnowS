@@ -54,7 +54,7 @@ def map_input(ontology_graph):
     # sample input
     #------------------
 
-    neighborhoodGraph = {
+    neighborhood0 = {
         [1, 0, 0],
         [1, 0, 0],
         [0, 1, 1]
