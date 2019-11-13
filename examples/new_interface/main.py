@@ -11,17 +11,10 @@ This example follows the pipeline we discussed in our preliminary paper.
 from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
     SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor
 from Graphs.Sensors.wordSensors import WordEmbedding
-from Graphs.Sensors.edgeSensors import FlairSentenceToWord
+from Graphs.Sensors.edgeSensors import FlairSentenceToWord, BILTransformer
 from data.reader import DataLoader, ACEReader
-from regr.sensor.pytorch.sensors import *
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor
 from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner
-
-
-def ontology_declaration():
-    from Graphs.graph import graph
-    # from .Graphs.graph import graph
-    return graph
-
 
 def dataloader(data_path, splitter_path):
     loader = DataLoader(data_path, splitter_path)
@@ -43,7 +36,9 @@ def reader_start(reader, mode):
         return reader.readTest
 
 
-def model_declaration(graph, data, reader):
+def model_declaration(data, reader):
+    from Graphs.graph import graph, rel_phrase_contains_word, rel_sentence_contains_phrase, rel_sentence_contains_word
+
     print("model started")
     graph.detach()
 
@@ -64,27 +59,34 @@ def model_declaration(graph, data, reader):
     sentence['glove'] = SentenceGloveEmbedderSensor('raw')
     sentence['flair'] = SentenceFlairEmbedderSensor('raw')
     sentence['raw_ready'] = TorchSensor('bert', 'glove', 'flair', output='raw')
-    sentence[word] = FlairSentenceToWord('raw_ready')
+    rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward")
 
-    word['embedding'] = WordEmbedding('raw_ready')
+    word['embedding'] = WordEmbedding('raw_ready', edge=rel_sentence_contains_word['forward'])
 
     word['encode'] = LSTMLearner('embedding', input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
 
-    FAC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    GPE['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    PER['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    ORG['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    LOC['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    VEH['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
-    WEA['label'] = FullyConnectedLearner(word['encode'], input_dim=480, output_dim=2)
+    word['boundary'] = FullyConnectedLearner('encode', input_dim=480, output_dim=3*7)
+    word['boundary'] = ReaderSensor(keyword='boundary')
 
-    FAC['label'] = LabelSensor(sentence['info'], target=FAC.name)
-    GPE['label'] = LabelSensor(sentence['info'], target=GPE.name)
-    PER['label'] = LabelSensor(sentence['info'], target=PER.name)
-    ORG['label'] = LabelSensor(sentence['info'], target=ORG.name)
-    LOC['label'] = LabelSensor(sentence['info'], target=LOC.name)
-    VEH['label'] = LabelSensor(sentence['info'], target=VEH.name)
-    WEA['label'] = LabelSensor(sentence['info'], target=WEA.name)
+    rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary')
+
+    phrase['encode'] = ConcatAggregationSensor("raw_ready", edge=rel_phrase_contains_word['backward'], map_key="encode")
+
+    phrase[FAC] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[GPE] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[PER] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[ORG] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[LOC] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[VEH] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    phrase[WEA] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+
+    phrase[FAC] = ReaderSensor(keyword=FAC.name)
+    phrase[GPE] = ReaderSensor(keyword=GPE.name)
+    phrase[PER] = ReaderSensor(keyword=PER.name)
+    phrase[ORG] = ReaderSensor(keyword=ORG.name)
+    phrase[LOC] = ReaderSensor(keyword=LOC.name)
+    phrase[VEH] = ReaderSensor(keyword=VEH.name)
+    phrase[WEA] = ReaderSensor(keyword=WEA.name)
 
 
     from Graphs.base import ACEGraph
@@ -177,9 +179,6 @@ def model_declaration(graph, data, reader):
 
 #### The main entrance of the program.
 def main():
-    # print("salam")
-    graph = ontology_declaration()
-
     data_path = ["LDC2006T06/ace_2005_td_v7/data/English/bc/fp1/",
                  "LDC2006T06/ace_2005_td_v7/data/English/bc/fp2/", ]
                  # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp1/",
@@ -200,19 +199,9 @@ def main():
     train = reader_start(reader=reader, mode="train")
     # train = None
     # reader = None
-    updated_graph = model_declaration(graph, data=train, reader=reader)
+    updated_graph = model_declaration(data=train, reader=reader)
 
     updated_graph.train(100)
-
-    #### 3. Train and save the model
-    #### "Explicit inference" is done automatically in every call to the model.
-    #### To have better reproducibility, we initial the random seeds of all subsystems.
-    # seed()
-    # #### Train the model with inference functionality inside.
-    # lbp.train(Config.Data, Config.Train)
-    # #### Save the model, including vocabulary use to index the tokens.
-    # save_to = Config.Train.trainer.serialization_dir or '/tmp/emr'
-    # lbp.save(save_to, config=save_config)
 
 ####
 """
