@@ -214,7 +214,7 @@ class TorchEdgeSensor(TorchSensor):
 
 class TorchEdgeReaderSensor(TorchEdgeSensor):
     def __init__(self, *pres, keyword, mode="forward"):
-        super(ReaderSensor).__init__(*pres, mode=mode)
+        super(TorchEdgeReaderSensor).__init__(*pres, mode=mode)
         self.data = None
         self.keyword = keyword
 
@@ -233,3 +233,78 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
         else:
             print("there is no data to operate on")
             raise
+
+
+class AggregationSensor(TorchSensor):
+    def __init__(self, *pres, edge, map_key):
+        super(AggregationSensor).__init__(*pres, edge=edge)
+        self.edge_node = self.edge.sup
+        self.map_key = map_key
+        self.map_value = None
+        self.data = None
+        if self.edge.name == "backward":
+            self.src = self.edge.dst
+            self.dst = self.edge.src
+        else:
+            print("the mode should always be passed as backward to the edge used in aggregator sensor")
+            raise
+
+    def get_map_value(self, ):
+            self.map_value = self.context_helper[self.src[self.map_key].fullname]
+
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+
+        if not force and self.fullname in context:
+            # context cached results by sensor name. override if forced recalc is needed
+            val = context[self.fullname]
+        else:
+            self.define_inputs()
+            self.get_map_value()
+            self.get_data()
+            val = self.forward()
+        if val is not None:
+            context[self.fullname] = val
+            context[self.dst[self.pres[0]].fullname] = val # override state under property name
+        return context
+
+    def get_data(self):
+        result = []
+        for item in self.inputs[0]:
+            result.append(self.map_value[item[0]:item[1]])
+        self.data = result
+
+
+class MaxAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        for item in self.data:
+            results.append(torch.max(item, dim=0)[0])
+        return torch.stack(results)
+
+
+class MinAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        for item in self.data:
+            results.append(torch.min(item, dim=0)[0])
+        return torch.stack(results)
+
+
+class MeanAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        for item in self.data:
+            results.append(torch.mean(item, dim=0))
+        return torch.stack(results)
+
+
+class ConcatAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        for item in self.data:
+            results.append(torch.cat([x for x in self.data], dim=-1))
+        return torch.stack(results)
