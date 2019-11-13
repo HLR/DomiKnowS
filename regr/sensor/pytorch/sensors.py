@@ -1,16 +1,15 @@
 from regr.sensor.sensor import Sensor
 from typing import Dict, Any
 import torch
-from ...graph.base import BaseGraphTreeNode
 
 
-class TorchSensor(BaseGraphTreeNode):
+class TorchSensor(Sensor):
 
     def __init__(self, *pres, output=None, edge=None):
-        super(TorchSensor).__init__()
+        super().__init__()
         self.pres = pres
         self.output = output
-        self.context_helper= None
+        self.context_helper = None
         self.inputs = []
         self.edge = edge
         is_cuda = torch.cuda.is_available()
@@ -24,7 +23,7 @@ class TorchSensor(BaseGraphTreeNode):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            context = self.update_pre_context(context)
+            self.update_pre_context(context)
         except:
             print('Error during updating pre context with sensor {}'.format(self.fullname))
             raise
@@ -49,7 +48,7 @@ class TorchSensor(BaseGraphTreeNode):
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
-            context[self.sup.fullname] = val # override state under property name
+            context[self.sup.fullname] = val  # override state under property name
         return context
 
     def update_pre_context(
@@ -86,8 +85,12 @@ class TorchSensor(BaseGraphTreeNode):
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword):
-        super(ReaderSensor).__init__(*pres)
-        self.data = None
+        super().__init__(*pres)
+        # self.data = None
+        from flair.data import Sentence
+        self.data = {
+            'raw': Sentence("John lives in new york"),
+        }
         self.keyword = keyword
 
     def fill_data(self, data):
@@ -109,7 +112,7 @@ class ReaderSensor(TorchSensor):
 
 class NominalSensor(TorchSensor):
     def __init__(self, *pres, vocab=None):
-        super(NominalSensor).__init__(*pres)
+        super().__init__(*pres)
         self.vocab = vocab
 
     def complete_vocab(self):
@@ -143,13 +146,15 @@ class NominalSensor(TorchSensor):
 
 class TorchEdgeSensor(TorchSensor):
     def __init__(self, *pres, mode="forward"):
-        super(TorchEdgeSensor).__init__(*pres)
+        super().__init__(*pres)
         self.mode = mode
+
+    def get_initialized(self):
         self.edge = self.sup.sup
-        if mode == "forward":
+        if self.mode == "forward":
             self.src = self.edge.src
             self.dst = self.edge.dst
-        elif mode == "backward" or mode == "selection":
+        elif self.mode == "backward" or self.mode == "selection":
             self.src = self.edge.dst
             self.dst = self.edge.src
         else:
@@ -160,8 +165,9 @@ class TorchEdgeSensor(TorchSensor):
         self,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
+        self.get_initialized()
         try:
-            context = self.update_pre_context(context)
+           self.update_pre_context(context)
         except:
             print('Error during updating pre context with sensor {}'.format(self.fullname))
             raise
@@ -214,7 +220,7 @@ class TorchEdgeSensor(TorchSensor):
 
 class TorchEdgeReaderSensor(TorchEdgeSensor):
     def __init__(self, *pres, keyword, mode="forward"):
-        super(TorchEdgeReaderSensor).__init__(*pres, mode=mode)
+        super().__init__(*pres, mode=mode)
         self.data = None
         self.keyword = keyword
 
@@ -237,14 +243,14 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
 
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edge, map_key):
-        super(AggregationSensor).__init__(*pres, edge=edge)
+        super().__init__(*pres, edge=edge)
         self.edge_node = self.edge.sup
         self.map_key = map_key
         self.map_value = None
         self.data = None
         if self.edge.name == "backward":
-            self.src = self.edge.dst
-            self.dst = self.edge.src
+            self.src = self.edge.sup.dst
+            self.dst = self.edge.sup.src
         else:
             print("the mode should always be passed as backward to the edge used in aggregator sensor")
             raise
@@ -312,7 +318,7 @@ class ConcatAggregationSensor(AggregationSensor):
 
 class SelectionEdgeSensor(TorchEdgeSensor):
     def __init__(self, *pres, mode="selection"):
-        super(SelectionEdgeSensor).__init__(*pres, mode=mode)
+        super().__init__(*pres, mode=mode)
         self.selection_helper = None
 
     def get_selection_helper(self):

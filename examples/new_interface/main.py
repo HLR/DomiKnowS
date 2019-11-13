@@ -13,7 +13,7 @@ from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
 from Graphs.Sensors.wordSensors import WordEmbedding
 from Graphs.Sensors.edgeSensors import FlairSentenceToWord, BILTransformer
 from data.reader import DataLoader, ACEReader
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, Sensor
 from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner
 
 def dataloader(data_path, splitter_path):
@@ -36,7 +36,7 @@ def reader_start(reader, mode):
         return reader.readTest
 
 
-def model_declaration(data, reader):
+def model_declaration():
     from Graphs.graph import graph, rel_phrase_contains_word, rel_sentence_contains_phrase, rel_sentence_contains_word
 
     print("model started")
@@ -55,10 +55,13 @@ def model_declaration(data, reader):
     WEA = graph['application/WEA']
 
     sentence['raw'] = ReaderSensor(keyword='raw')
+    # sentence['raw'] = Sensor()
     sentence['bert'] = SentenceBertEmbedderSensor('raw')
     sentence['glove'] = SentenceGloveEmbedderSensor('raw')
     sentence['flair'] = SentenceFlairEmbedderSensor('raw')
     sentence['raw_ready'] = TorchSensor('bert', 'glove', 'flair', output='raw')
+
+    list(sentence['raw'].find(TorchSensor))[0][1](context={})
     rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward")
 
     word['embedding'] = WordEmbedding('raw_ready', edge=rel_sentence_contains_word['forward'])
@@ -89,119 +92,39 @@ def model_declaration(data, reader):
     phrase[WEA] = ReaderSensor(keyword=WEA.name)
 
 
-    from Graphs.base import ACEGraph
-    # from .Graphs.base import ACEGraph
-
-    ACEsolver = ACEGraph(PytorchSolverGraph(NewGraph(graph)))
-    ACEsolver.set_reader_instance(reader=reader)
-    return ACEsolver
+    # from Graphs.base import ACEGraph
+    # # from .Graphs.base import ACEGraph
     #
-    # next(sentence['encode'].find(CallingSensor))[1](context={})
-
-    # sentence['all'] = ConcatSensor(sentence['flair'], sentence['bert'], sentence['glove'])
-    # #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.
-    # #### Notice that the Conll04 dataset comes with phrase tokenized sentences.
-    # #### Thus this is already a phrase-based sentence.
-    # #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
-    # #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    # word['raw'] = SentenceEmbedderSensor('word', config.pretrained_dims['word'], sentence['raw'], pretrained_file=config.pretrained_files['word'])
-    # word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
-    # word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
-    # # possible to add more this kind
-    # word['all'] = ConcatSensor(word['raw'], word['pos'], word['dep'])
-    # #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
-    # #### Here we encode the word2vec output further with an RNN.
-    # #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
-    # #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    # word['ngram'] = NGramSensor(config.ngram, word['all'])
-    # word['encode'] = RNNLearner(word['ngram'], layers=config.rnn.layers, bidirectional=config.rnn.bidirectional, dropout=config.dropout)
-    # #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
-    # #### This process takes no parameters.
-    # #### But there is still a PyTorch module associated with it.
-    # word['compact'] = MLPLearner(config.compact.layers, word['encode'], activation=config.activation)
-    # pair['cat'] = CartesianProductSensor(word['compact'])
-    # pair['tkn_dist'] = TokenDistantSensor(config.distance_emb_size * 2, config.max_distance, sentence['raw'])
-    # pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    # pair['tkn_dep_dist'] = TokenDepDistSensor(config.distance_emb_size, config.max_distance, sentence['raw'])
-    # pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    # pair['emb'] = MLPLearner([config.relemb.emb_size,], pair['onehots'], activation=None)
-    # pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
-    # pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    # pair['encode'] = ConvLearner(config.relconv.layers, config.relconv.kernel_size, pair['all'], activation=config.activation, dropout=config.dropout)
-    #
-    # #### Then we connect properties with ground-truth from `reader`.
-    # #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
-    # #### The second argument indicates the key we used for each lable in reader.
-    # #### The last keyword argument `output_only` indicates that these sensors are not to be used with forward computation.
-    # people['label'] = LabelSensor(reader, 'Peop', output_only=True)
-    # organization['label'] = LabelSensor(reader, 'Org', output_only=True)
-    # location['label'] = LabelSensor(reader, 'Loc', output_only=True)
-    # other['label'] = LabelSensor(reader, 'Other', output_only=True)
-    # #o['label'] = LabelSensor(reader, 'O', output_only=True)
-    #
-    # #### We connect properties with learners that generate predictions.
-    # #### Notice that we connect the predicting `Learner`s to the same properties as "ground-truth" `Sensor`s.
-    # #### Multiple assignment is a feature in `regr` to allow each property to have multiple sources.
-    # #### Value from different sources will be compared, to generate inconsistency error.
-    # #### The training of this model is then based on this inconsistency error.
-    # #### In this example, "ground-truth" `Sensor`s has no parameters to be trained, while predicting `Learner`s have all sets of paramters to be trained.
-    # #### The error also propagate backward through the computational path to all modules as assigned above.
-    # #### Here we use `LogisticRegressionLearner`s, which is binary classifiers.
-    # #### Notice the first argument, the "input dimention", takes a `* 2` because the output from `phrase['emb']` is bidirectional, having two times dimentions.
-    # #### The second argument is base on what the prediction will be made.
-    # #### The constructors make individule modules for them with seperated parameters, though they take same arguments.
-    # people['label'] = LogisticRegressionLearner(word['encode'])
-    # organization['label'] = LogisticRegressionLearner(word['encode'])
-    # location['label'] = LogisticRegressionLearner(word['encode'])
-    # other['label'] = LogisticRegressionLearner(word['encode'])
-    # #o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
-    #
-    # #### We repeat these on composed-concepts.
-    # #### There is nothing different in usage thought they are higher ordered concepts.
-    # work_for['label'] = LabelSensor(reader, 'Work_For', output_only=True)
-    # live_in['label'] = LabelSensor(reader, 'Live_In', output_only=True)
-    # located_in['label'] = LabelSensor(reader, 'Located_In', output_only=True)
-    # orgbase_on['label'] = LabelSensor(reader, 'OrgBased_In', output_only=True)
-    # kill['label'] = LabelSensor(reader, 'Kill', output_only=True)
-    #
-    # #### We also connect the predictors for composed-concepts.
-    # #### Notice the first argument, the "input dimention", takes a `* 4` because `pair['emb']` from `CartesianProductSensor` has double dimention again over `phrase['emb']`.
-    # work_for['label'] = LogisticRegressionLearner(pair['encode'])
-    # live_in['label'] = LogisticRegressionLearner(pair['encode'])
-    # located_in['label'] = LogisticRegressionLearner(pair['encode'])
-    # orgbase_on['label'] = LogisticRegressionLearner(pair['encode'])
-    # kill['label'] = LogisticRegressionLearner(pair['encode'])
-    #
-    # #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
-    # lbp = AllenNlpGraph(graph, **config.graph)
-    # return lbp
+    # ACEsolver = ACEGraph(PytorchSolverGraph(NewGraph(graph)))
+    # ACEsolver.set_reader_instance(reader=reader)
+    # return ACEsolver
 
 
 #### The main entrance of the program.
 def main():
-    data_path = ["LDC2006T06/ace_2005_td_v7/data/English/bc/fp1/",
-                 "LDC2006T06/ace_2005_td_v7/data/English/bc/fp2/", ]
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp1/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp2/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp1/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp2/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp1/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp2/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp1/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp2/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp1/",
-                 # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp2/", ]
-
-    hint_path = "data"
-
-    loader = dataloader(data_path=data_path, splitter_path=hint_path)
-    reader = reader_declaration(loader=loader)
-    train = reader_start(reader=reader, mode="train")
+    # data_path = ["LDC2006T06/ace_2005_td_v7/data/English/bc/fp1/",
+    #              "LDC2006T06/ace_2005_td_v7/data/English/bc/fp2/", ]
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp1/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/bn/fp2/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp1/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/cts/fp2/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp1/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/nw/fp2/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp1/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/un/fp2/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp1/",
+    #              # "/home/hfaghihi/LDC2006T06/ace_2005_td_v7/data/English/wi/fp2/", ]
+    #
+    # hint_path = "data"
+    #
+    # loader = dataloader(data_path=data_path, splitter_path=hint_path)
+    # reader = reader_declaration(loader=loader)
+    # train = reader_start(reader=reader, mode="train")
     # train = None
     # reader = None
-    updated_graph = model_declaration(data=train, reader=reader)
+    model_declaration()
 
-    updated_graph.train(100)
+    # updated_graph.train(100)
 
 ####
 """
