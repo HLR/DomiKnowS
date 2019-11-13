@@ -26,6 +26,9 @@ class CityReader:
 if __name__ == "__main__":
 
     myMap = CityReader("city.json")
-    print(myMap.all_cities())
-    for a in myMap.all_cities():
-       print(myMap.get_neighbors(a))
+    assert myMap.all_cities() == ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+    assert myMap.get_neighbors('1') == ['2', '3', '4', '5']
+    assert myMap.get_neighbors('2') == ['1']
+    assert myMap.get_neighbors('3') == ['1']
+    assert myMap.get_neighbors('4') == ['1']
+    assert myMap.get_neighbors('6') == ['7','8','9']
