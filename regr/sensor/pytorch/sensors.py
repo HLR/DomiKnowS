@@ -149,7 +149,7 @@ class TorchEdgeSensor(TorchSensor):
         if mode == "forward":
             self.src = self.edge.src
             self.dst = self.edge.dst
-        elif mode == "backward":
+        elif mode == "backward" or mode == "selection":
             self.src = self.edge.dst
             self.dst = self.edge.src
         else:
@@ -308,3 +308,44 @@ class ConcatAggregationSensor(AggregationSensor):
         for item in self.data:
             results.append(torch.cat([x for x in self.data], dim=-1))
         return torch.stack(results)
+
+
+class SelectionEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, mode="selection"):
+        super(SelectionEdgeSensor).__init__(*pres, mode=mode)
+        self.selection_helper = None
+
+    def get_selection_helper(self):
+        self.selection_helper = self.context_helper[self.src[self.dst]]
+
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+
+        if not force and self.fullname in context:
+            # context cached results by sensor name. override if forced recalc is needed
+            val = context[self.fullname]
+        else:
+            self.define_inputs()
+            self.get_selection_helper()
+            val = self.forward()
+        if val is not None:
+            context[self.fullname] = val
+            context[self.sup.fullname] = val  # override state under property name
+        return context
+
+
+class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
+    def forward(self,) -> Any:
+        return self.selection_helper
+
+
+class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
+    def __init__(self, *pres, threshold=0.5):
+        super(SelectionEdgeSensor).__init__(*pres)
+        self.threshold = threshold
+
+    def forward(self,) -> Any:
+        return torch.tensor([x for x in self.selection_helper if x >= self.threshold])
