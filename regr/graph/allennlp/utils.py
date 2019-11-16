@@ -179,10 +179,11 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
         if len(inferences.shape) == len(logits): # inferences shape: (batch, sequence_length, ..., num_classes)
             # shape: (batch, sequence_length, ...)
             inferences_weights = inferences.select(-1, 1)
+            #inferences_weights = torch.gather(inferences, dim=-1, index=targets)
         else: # inferences shape: (batch, sequence_length, ...)
             # shape: (batch, sequence_length, ...)
             inferences_weights = inferences
-        inferences_weights = inferences_weights.float()
+        inferences_weights = (inferences_weights.long() != targets.long()).float()
         weights = weights * inferences_weights
 
     # focal loss coefficient

@@ -243,7 +243,9 @@ class GraphModel(Model):
             # mask  (b, l)
             label, pred, mask = get_prop_result(prop, data)
             if self.inference_loss:
+                # (b, l, c)
                 _, pred_i, _ = get_prop_result(prop, data_i)
+                # (b, l,)
                 pred_i = pred_i.argmax(dim=-1)
             label = label.clone().detach()
             mask = mask.clone().float()
