@@ -52,7 +52,10 @@ class LSTMLearner(TorchLearner):
     def forward(
             self,
     ) -> Any:
-        output = self.model(self.inputs[0])
+        value = self.inputs[0]
+        if not torch.is_tensor(value):
+            value = torch.stack(self.inputs[0])
+        output = self.model(value)
         return output
 
 

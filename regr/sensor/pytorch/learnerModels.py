@@ -39,4 +39,4 @@ class PyTorchFC(nn.Module):
     def forward(self, x):
         # x = F.relu(self.fc1(x))
         x = self.fc1(x[:, -1, :])
-        return F.softmax(x)
+        return F.softmax(x, dim=1)

@@ -33,7 +33,14 @@ class TorchSensor(Sensor):
         except:
             print('Error during updating context with sensor {}'.format(self.fullname))
             raise
-        return context[self.fullname]
+
+        if self.output:
+            return context[self.sup.sup[self.output].fullname]
+
+        try:
+            return context[self.fullname]
+        except:
+            return context[self.sup.sup['raw'].fullname]
 
     def update_context(
         self,
@@ -49,20 +56,26 @@ class TorchSensor(Sensor):
         if val is not None:
             context[self.fullname] = val
             context[self.sup.fullname] = val  # override state under property name
+        else:
+            context[self.fullname] = None
+            context[self.sup.fullname] = None
+        if self.output:
+            context[self.fullname] = self.fetch_value(self.output)
+            context[self.sup.fullname] = self.fetch_value(self.output)
         return context
 
     def update_pre_context(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        for pre in self.pres:
-            for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(context=context)
         if self.edge:
             for _, sensor in self.edge.find(Sensor):
                 sensor(context=context)
-        if self.output:
-            return context[self.output.fullname]
+        for pre in self.pres:
+            for _, sensor in self.sup.sup[pre].find(Sensor):
+                sensor(context=context)
+
+
 
     def fetch_value(self, pre, selector=None):
         if selector:
@@ -81,6 +94,14 @@ class TorchSensor(Sensor):
 
     def forward(self,) -> Any:
         return None
+
+
+class ConstantSensor(TorchSensor):
+    def __init__(self, *pres, output=None, edge=None):
+        super().__init__(*pres, output=output, edge=edge)
+
+    def forward(self,) -> Any:
+        return self.context_helper[self.sup.fullname]
 
 
 class ReaderSensor(TorchSensor):
@@ -148,6 +169,10 @@ class TorchEdgeSensor(TorchSensor):
     def __init__(self, *pres, mode="forward"):
         super().__init__(*pres)
         self.mode = mode
+        self.created = 0
+        if mode != "forward" and mode != "backward":
+            print("the mode passed to the edge sensor is not right")
+            raise
 
     def get_initialized(self):
         self.edge = self.sup.sup
@@ -166,6 +191,9 @@ class TorchEdgeSensor(TorchSensor):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         self.get_initialized()
+        if not self.created:
+            self.dst[self.pres[0]] = ConstantSensor()
+            self.created = 1
         try:
            self.update_pre_context(context)
         except:
@@ -355,3 +383,4 @@ class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
 
     def forward(self,) -> Any:
         return torch.tensor([x for x in self.selection_helper if x >= self.threshold])
+
