@@ -4,4 +4,4 @@ from typing import Any
 
 class WordEmbedding(TorchSensor):
     def forward(self,) -> Any:
-        return [word.embedding for word in self.inputs[0]]
+        return [word.embedding.view(1, 5220) for word in self.inputs[0]]

@@ -61,19 +61,19 @@ def model_declaration():
     sentence['flair'] = SentenceFlairEmbedderSensor('raw')
     sentence['raw_ready'] = TorchSensor('bert', 'glove', 'flair', output='raw')
 
-    list(sentence['raw'].find(TorchSensor))[0][1](context={})
     rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward")
 
     word['embedding'] = WordEmbedding('raw_ready', edge=rel_sentence_contains_word['forward'])
+    word['encode'] = LSTMLearner('embedding', input_dim=5220, hidden_dim=240, num_layers=1, bidirectional=True)
+    word['boundary'] = FullyConnectedLearner('encode', input_dim=480, output_dim=4)
+    context = {}
+    print(list(word['boundary'].find(TorchSensor))[0][1](context=context))
+    # word['boundary'] = ReaderSensor(keyword='boundary')
 
-    word['encode'] = LSTMLearner('embedding', input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
-
-    word['boundary'] = FullyConnectedLearner('encode', input_dim=480, output_dim=3*7)
-    word['boundary'] = ReaderSensor(keyword='boundary')
-
-    rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary')
+    rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary', mode="backward")
 
     phrase['encode'] = ConcatAggregationSensor("raw_ready", edge=rel_phrase_contains_word['backward'], map_key="encode")
+    print(list(phrase['encode'].find(TorchSensor))[0][1](context=context))
 
     phrase[FAC] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
     phrase[GPE] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
@@ -122,6 +122,20 @@ def main():
     # train = reader_start(reader=reader, mode="train")
     # train = None
     # reader = None
+    from flair.data import Sentence
+    reader = [
+        {
+            'raw': Sentence("john works for Michigan State University"),
+            'boundary': ['L', 'NONE', 'NONE', 'B', 'I', 'L'],
+            'FAC': [0, 0],
+            'GPE': [0, 0],
+            'PER': [1, 0],
+            'ORG': [0, 1],
+            'LOC': [0, 0],
+            'VEH': [0, 0],
+            'WEA': [0, 0],
+        }
+    ]
     model_declaration()
 
     # updated_graph.train(100)
