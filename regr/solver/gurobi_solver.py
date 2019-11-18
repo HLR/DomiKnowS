@@ -46,6 +46,7 @@ class GurobiSolver(ilpOntSolver):
         # predicates_list[i][concept] is the prediction result of the predicate for concept
         model = Model('solver')
         model.params.outputflag = 0
+        model.Params.timeLimit = 300.0 # 300 seconds = 5 min
 
         # prepare candidates
         length = len(data)
