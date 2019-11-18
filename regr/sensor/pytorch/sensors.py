@@ -308,7 +308,7 @@ class AggregationSensor(TorchSensor):
     def get_data(self):
         result = []
         for item in self.inputs[0]:
-            result.append(self.map_value[item[0]:item[1]])
+            result.append(self.map_value[item[0]:item[1]+1])
         self.data = result
 
 
@@ -340,7 +340,7 @@ class ConcatAggregationSensor(AggregationSensor):
     def forward(self,) -> Any:
         results = []
         for item in self.data:
-            results.append(torch.cat([x for x in self.data], dim=-1))
+            results.append(torch.cat([x for x in item], dim=-1))
         return torch.stack(results)
 
 
