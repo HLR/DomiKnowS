@@ -89,6 +89,7 @@ class TorchSensor(Sensor):
             return self.context_helper[self.sup.sup[pre].fullname]
 
     def define_inputs(self):
+        self.inputs = []
         for pre in self.pres:
             self.inputs.append(self.fetch_value(pre))
 
@@ -105,13 +106,10 @@ class ConstantSensor(TorchSensor):
 
 
 class ReaderSensor(TorchSensor):
-    def __init__(self, *pres, keyword):
+    def __init__(self, *pres, keyword, label=False):
         super().__init__(*pres)
-        # self.data = None
-        from flair.data import Sentence
-        self.data = {
-            'raw': Sentence("John lives in new york"),
-        }
+        self.data = None
+        self.label = label
         self.keyword = keyword
 
     def fill_data(self, data):
@@ -122,7 +120,10 @@ class ReaderSensor(TorchSensor):
     ) -> Any:
         if self.data:
             try:
-                return self.data[self.keyword]
+                if self.label:
+                    return torch.tensor(self.data[self.keyword])
+                else:
+                    return self.data[self.keyword]
             except:
                 print("the key you requested from the reader doesn't exist")
                 raise
@@ -170,7 +171,7 @@ class TorchEdgeSensor(TorchSensor):
         super().__init__(*pres)
         self.mode = mode
         self.created = 0
-        if mode != "forward" and mode != "backward":
+        if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
             raise
 
@@ -229,6 +230,8 @@ class TorchEdgeSensor(TorchSensor):
         context: Dict[str, Any]
     ) -> Any:
         for pre in self.pres:
+            if pre not in self.src:
+                continue
             for _, sensor in self.src[pre].find(Sensor):
                 sensor(context=context)
         if self.output:
@@ -302,7 +305,7 @@ class AggregationSensor(TorchSensor):
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
-            context[self.dst[self.pres[0]].fullname] = val # override state under property name
+            context[self.dst[self.map_key].fullname] = val # override state under property name
         return context
 
     def get_data(self):
@@ -349,8 +352,33 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         super().__init__(*pres, mode=mode)
         self.selection_helper = None
 
+    def __call__(
+        self,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        self.get_initialized()
+        try:
+           self.update_pre_context(context)
+        except:
+            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            raise
+        self.context_helper = context
+        try:
+            context = self.update_context(context)
+        except:
+            print('Error during updating context with sensor {}'.format(self.fullname))
+            raise
+        return context[self.src[self.dst].fullname]
+
     def get_selection_helper(self):
-        self.selection_helper = self.context_helper[self.src[self.dst]]
+        self.selection_helper = self.context_helper[self.src[self.dst].fullname]
+
+    def update_pre_context(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        for _, sensor in self.src[self.dst].find(Sensor):
+                sensor(context=context)
 
     def update_context(
         self,

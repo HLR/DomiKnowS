@@ -16,7 +16,7 @@ class TorchLearner(TorchSensor):
     @property
     @abc.abstractmethod
     def parameters(self) -> Any:
-        self.update_parameters()
+        # self.update_parameters()
         return self.model.parameters()
 
     def update_parameters(self):
