@@ -24,4 +24,7 @@ class BILTransformer(TorchEdgeSensor):
                 start = -1
             elif start != -1 and indices == 1:
                 pass
-        return phrases
+        if phrases:
+            return phrases
+        else:
+            return [[0, len(self.inputs[1])]]

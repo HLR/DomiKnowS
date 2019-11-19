@@ -19,15 +19,13 @@ with Graph('global') as graph:
         pair.has_a(phrase, phrase)
 
     with Graph('application') as app_graph:
-        entity = phrase('entity')
-
-        FAC = entity(name='FAC')
-        GPE = entity(name='GPE')
-        LOC = entity(name='LOC')
-        ORG = entity(name='ORG')
-        PER = entity(name='PER')
-        VEH = entity(name='VEH')
-        WEA = entity(name='WEA')
+        FAC = phrase(name='FAC')
+        GPE = phrase(name='GPE')
+        LOC = phrase(name='LOC')
+        ORG = phrase(name='ORG')
+        PER = phrase(name='PER')
+        VEH = phrase(name='VEH')
+        WEA = phrase(name='WEA')
 
         FAC.not_a(GPE, LOC, VEH, WEA, PER, ORG)
 
