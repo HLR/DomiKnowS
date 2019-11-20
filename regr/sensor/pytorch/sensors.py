@@ -121,7 +121,7 @@ class ReaderSensor(TorchSensor):
         if self.data:
             try:
                 if self.label:
-                    return torch.tensor(self.data[self.keyword])
+                    return torch.tensor(self.data[self.keyword], device=self.device)
                 else:
                     return self.data[self.keyword]
             except:
@@ -145,7 +145,7 @@ class NominalSensor(TorchSensor):
             self.vocab.append(value)
 
     def one_hot_encoder(self, value):
-        output = torch.zeros(len(self.vocab))
+        output = torch.zeros(len(self.vocab), device=self.device)
         output[self.vocab.index(value)] = 1
         return output
 
@@ -410,5 +410,5 @@ class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
         self.threshold = threshold
 
     def forward(self,) -> Any:
-        return torch.tensor([x for x in self.selection_helper if x >= self.threshold])
+        return torch.tensor([x for x in self.selection_helper if x >= self.threshold], device=self.device)
 
