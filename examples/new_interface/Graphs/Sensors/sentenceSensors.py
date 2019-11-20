@@ -51,6 +51,10 @@ class SentenceFlairEmbedderSensor(SentenceSensor):
         return None
 
 
+class FlairSentenceSensor(TorchSensor):
+    def forward(self,) -> Any:
+        return Sentence(self.inputs[0])
+
 # def translator(label):
 #     items = ['PRON', 'VERB', 'ADV', 'ADJ', 'PART', 'DET', 'NOUN', 'ADP']
 #     vector = torch.zeros(len(items))
