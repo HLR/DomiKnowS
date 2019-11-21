@@ -234,7 +234,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         weights = []
         for item, value in info.items():
             for prop in value:
-                weights.append([0.3, 0.7])
+                weights.append([0.2, 0.8])
         return torch.tensor(weights, device=self.device)
 
     def load(self):
