@@ -167,10 +167,11 @@ class NominalSensor(TorchSensor):
 
 
 class TorchEdgeSensor(TorchSensor):
-    def __init__(self, *pres, mode="forward"):
+    def __init__(self, *pres, mode="forward", keyword="default"):
         super().__init__(*pres)
         self.mode = mode
         self.created = 0
+        self.keyword = keyword
         if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
             raise
@@ -193,7 +194,7 @@ class TorchEdgeSensor(TorchSensor):
     ) -> Dict[str, Any]:
         self.get_initialized()
         if not self.created:
-            self.dst[self.pres[0]] = ConstantSensor()
+            self.dst[self.keyword] = ConstantSensor()
             self.created = 1
         try:
            self.update_pre_context(context)
@@ -206,7 +207,7 @@ class TorchEdgeSensor(TorchSensor):
         except:
             print('Error during updating context with sensor {}'.format(self.fullname))
             raise
-        return context[self.dst[self.pres[0]].fullname]
+        return context[self.dst[self.keyword].fullname]
 
     def update_context(
         self,
@@ -222,7 +223,7 @@ class TorchEdgeSensor(TorchSensor):
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
-            context[self.dst[self.pres[0]].fullname] = val # override state under property name
+            context[self.dst[self.keyword].fullname] = val # override state under property name
         return context
 
     def update_pre_context(
