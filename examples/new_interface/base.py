@@ -14,6 +14,7 @@ import numpy
 import torch
 import itertools
 from tqdm import tqdm
+from data.reader import SimpleReader
 
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
@@ -243,48 +244,53 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         for item in _learners:
             item.load(self.filename)
 
-    def train(self, iterations, reader):
+    def train(self, iterations, paths):
         reader_sensors = self.readers
-        _array = itertools.tee(reader, iterations)
+        _array = []
+        for _iter in range(len(paths)):
+            loader = SimpleReader(paths[_iter])
+            reader = loader.data()
+            _array.append(itertools.tee(reader, iterations))
 
         for i in tqdm(range(iterations), "Iterations: "):
-            while True:
-                try:
-                    value = next(_array[i])
-                    for item in reader_sensors:
-                        item.fill_data(value)
-                    truth = []
-                    pred = []
-                    info = {}
-                    context = {}
-                    for prop1 in self.poi:
-                        entity = prop1.sup.name
-                        prop_name = prop1.name
-                        if entity not in info:
-                            info[entity] = {}
-                        if prop_name not in info[entity]:
-                            info[entity][prop_name] = {"start": len(truth)}
-                        list(prop1.find(ReaderSensor))[0][1](context=context)
-                        list(prop1.find(TorchLearner))[0][1](context=context)
-                        # check this with quan
-                        truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                        pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+            for j in tqdm(range(len(paths)), "READER : "):
+                while True:
+                    try:
+                        value = next(_array[j][i])
+                        for item in reader_sensors:
+                            item.fill_data(value)
+                        truth = []
+                        pred = []
+                        info = {}
+                        context = {}
+                        for prop1 in self.poi:
+                            entity = prop1.sup.name
+                            prop_name = prop1.name
+                            if entity not in info:
+                                info[entity] = {}
+                            if prop_name not in info[entity]:
+                                info[entity][prop_name] = {"start": len(truth)}
+                            list(prop1.find(ReaderSensor))[0][1](context=context)
+                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            # check this with quan
+                            truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
+                            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
 
-                    total_loss = 0
-                    weights = self.weights(info=info, truth=truth).float()
-                    loss_fn = []
-                    for _it in range(len(truth)):
-                        loss_fn.append(torch.nn.CrossEntropyLoss(weight=weights[_it]))
-                        truth[_it] = truth[_it].long()
-                        pred[_it] = pred[_it].float()
-                        total_loss += loss_fn[_it](pred[_it], truth[_it])
-#                     print(total_loss)
-                    total_loss.backward(retain_graph=True)
+                        total_loss = 0
+                        weights = self.weights(info=info, truth=truth).float()
+                        loss_fn = []
+                        for _it in range(len(truth)):
+                            loss_fn.append(torch.nn.CrossEntropyLoss(weight=weights[_it]))
+                            truth[_it] = truth[_it].long()
+                            pred[_it] = pred[_it].float()
+                            total_loss += loss_fn[_it](pred[_it], truth[_it])
+    #                     print(total_loss)
+                        total_loss.backward(retain_graph=True)
 
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
-                except StopIteration:
-                    break
+                        self.optimizer.step()
+                        self.optimizer.zero_grad()
+                    except StopIteration:
+                        break
         self.save()
 
     def save(self, ):

@@ -90,11 +90,9 @@ def model_declaration():
 
 #### The main entrance of the program.
 def main():
-
-    data_loader = SimpleReader("ACE_JSON/train/result0.json")
-    reader = data_loader.data()
+    paths = ["ACE_JSON/train/result0.json", "ACE_JSON/train/result1.json"]
     updated_graph = model_declaration()
-    updated_graph.train(iterations=10, reader=reader)
+    updated_graph.train(iterations=2, paths=paths)
     # updated_graph.load()
     # updated_graph.test(reader=reader)
 
