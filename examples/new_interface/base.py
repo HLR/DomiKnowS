@@ -253,6 +253,13 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             _array.append(itertools.tee(reader, iterations))
 
         for i in tqdm(range(iterations), "Iterations: "):
+            metrics = {'f1_score': 0, 'precision': 0, 'recall': 0}
+            predict = 0
+            total = 0
+            tp = 0
+            fp = 0
+            tn = 0
+            fn = 0
             for j in tqdm(range(len(paths)), "READER : "):
                 while True:
                     try:
@@ -275,6 +282,17 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             # check this with quan
                             truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                             pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                            total += len(truth[-1])
+                            for item in range(len(pred[-1])):
+                                _, index = torch.max(pred[-1][item], dim=0)
+                                if index == truth[-1][item] and index == 1:
+                                    tp += 1
+                                elif index == truth[-1][item] and index == 0:
+                                    tn += 1
+                                elif index != truth[-1][item] and index == 1:
+                                    fp += 1
+                                elif index != truth[-1][item] and index == 0:
+                                    fn += 1
 
                         total_loss = 0
                         weights = self.weights(info=info, truth=truth).float()
@@ -291,6 +309,10 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         self.optimizer.zero_grad()
                     except StopIteration:
                         break
+            recall = tp / (tp + fn)
+            precision = tp / (tp + fp)
+            f1 = 2 * (precision * recall) / (precision + recall)
+            print("precision is " + str(precision) + " recall is " + str(recall) + " f1 score is " + str(f1))
         self.save()
 
     def save(self, ):
