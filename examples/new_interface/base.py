@@ -302,7 +302,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
     def test(self, paths):
         reader_sensors = self.readers
         _array = []
-        for _iter in range(len(paths)):
+        for _iter in tqdm(range(len(paths)), "READERS: "):
             loader = SimpleReader(paths[_iter])
             reader = loader.data()
             _array.append(reader)
