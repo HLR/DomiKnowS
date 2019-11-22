@@ -28,3 +28,34 @@ class BILTransformer(TorchEdgeSensor):
             return phrases
         else:
             return [[0, len(self.inputs[1])]]
+
+
+class WordToPhraseTransformer(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        value = torch.cat([item for item in self.inputs], -1)
+        indexes = []
+        for item in value:
+            _, index = torch.max(item, 0)
+            indexes.append(index)
+        print(indexes)
+        phrases = []
+        start = -1
+        previous = -1
+        _index = 0
+        for _index in range(len(indexes)):
+            if start == -1 and indexes[_index] % 2 == 0:
+                start = _index
+                previous = indexes[_index]
+            elif start != -1:
+                if indexes[_index] != previous:
+                    phrases.append([start, _index - 1])
+                    if indexes[_index] % 2 == 0:
+                        start = _index
+                        previous = indexes[_index]
+                    else:
+                        start = -1
+                        previous = -1
+        if start != -1 and indexes[_index] % 2 == 0:
+            phrases.append([start, _index])
+
+
