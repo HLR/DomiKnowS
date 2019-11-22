@@ -299,8 +299,13 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         for item in _learners:
             item.save(self.filename)
 
-    def test(self, reader):
+    def test(self, paths):
         reader_sensors = self.readers
+        _array = []
+        for _iter in range(len(paths)):
+            loader = SimpleReader(paths[_iter])
+            reader = loader.data()
+            _array.append(reader)
         metrics = {'f1_score': 0, 'precision': 0, 'recall': 0}
         predict = 0
         total = 0
@@ -308,35 +313,36 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         fp = 0
         tn = 0
         fn = 0
-        while True:
-            try:
-                value = next(reader)
-                for item in reader_sensors:
-                    item.fill_data(value)
-                truth = []
-                pred = []
-                context = {}
-                learners = self.get_sensors(FullyConnectedLearner)
-                _learners = [learner for name, learner in learners]
-                for item in _learners:
-                    list(item.sup.find(ReaderSensor))[0][1](context=context)
-                    list(item.sup.find(TorchLearner))[0][1](context=context)
-                    truth.append(context[list(item.sup.find(ReaderSensor))[0][1].fullname])
-                    pred.append(context[list(item.sup.find(TorchLearner))[0][1].fullname])
-                    total += len(truth[-1])
-                    for item in range(len(pred[-1])):
-                        _, index = torch.max(pred[-1][item], dim=0)
-                        if index == truth[-1][item] and index == 1:
-                            tp += 1
-                        elif index == truth[-1][item] and index == 0:
-                            tn += 1
-                        elif index != truth[-1][item] and index == 1:
-                            fp += 1
-                        elif index != truth[-1][item] and index == 0:
-                            fn += 1
+        for _iter in range(len(paths)):
+            while True:
+                try:
+                    value = next(_array[_iter])
+                    for item in reader_sensors:
+                        item.fill_data(value)
+                    truth = []
+                    pred = []
+                    context = {}
+                    learners = self.get_sensors(FullyConnectedLearner)
+                    _learners = [learner for name, learner in learners]
+                    for item in _learners:
+                        list(item.sup.find(ReaderSensor))[0][1](context=context)
+                        list(item.sup.find(TorchLearner))[0][1](context=context)
+                        truth.append(context[list(item.sup.find(ReaderSensor))[0][1].fullname])
+                        pred.append(context[list(item.sup.find(TorchLearner))[0][1].fullname])
+                        total += len(truth[-1])
+                        for item in range(len(pred[-1])):
+                            _, index = torch.max(pred[-1][item], dim=0)
+                            if index == truth[-1][item] and index == 1:
+                                tp += 1
+                            elif index == truth[-1][item] and index == 0:
+                                tn += 1
+                            elif index != truth[-1][item] and index == 1:
+                                fp += 1
+                            elif index != truth[-1][item] and index == 0:
+                                fn += 1
 
-            except StopIteration:
-                break
+                except StopIteration:
+                    break
         recall = tp / (tp + fn)
         precision = tp / (tp + fp)
         f1 = 2 * (precision * recall) / (precision + recall)
