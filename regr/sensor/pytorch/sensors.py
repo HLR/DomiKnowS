@@ -5,13 +5,15 @@ import torch
 
 class TorchSensor(Sensor):
 
-    def __init__(self, *pres, output=None, edge=None):
+    def __init__(self, *pres, output=None, edges=None):
         super().__init__()
+        if not edges:
+            edges = []
         self.pres = pres
         self.output = output
         self.context_helper = None
         self.inputs = []
-        self.edge = edge
+        self.edges = edges
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")
@@ -68,14 +70,12 @@ class TorchSensor(Sensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
-        if self.edge:
-            for _, sensor in self.edge.find(Sensor):
+        for edge in self.edges:
+            for _, sensor in edge.find(Sensor):
                 sensor(context=context)
         for pre in self.pres:
             for _, sensor in self.sup.sup[pre].find(Sensor):
                 sensor(context=context)
-
-
 
     def fetch_value(self, pre, selector=None):
         if selector:
@@ -99,7 +99,7 @@ class TorchSensor(Sensor):
 
 class ConstantSensor(TorchSensor):
     def __init__(self, *pres, output=None, edge=None):
-        super().__init__(*pres, output=output, edge=edge)
+        super().__init__(*pres, output=output, edges=edge)
 
     def forward(self,) -> Any:
         return self.context_helper[self.sup.fullname]
@@ -275,14 +275,14 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
 
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edge, map_key):
-        super().__init__(*pres, edge=edge)
+        super().__init__(*pres, edges=edge)
         self.edge_node = self.edge.sup
         self.map_key = map_key
         self.map_value = None
         self.data = None
-        if self.edge.name == "backward":
-            self.src = self.edge.sup.dst
-            self.dst = self.edge.sup.src
+        if self.edges[0].name == "backward":
+            self.src = self.edges[0].sup.dst
+            self.dst = self.edges[0].sup.src
         else:
             print("the mode should always be passed as backward to the edge used in aggregator sensor")
             raise
