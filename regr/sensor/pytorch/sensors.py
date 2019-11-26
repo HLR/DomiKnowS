@@ -172,6 +172,9 @@ class TorchEdgeSensor(TorchSensor):
         self.mode = mode
         self.created = 0
         self.keyword = keyword
+        self.edge = None
+        self.src = None
+        self.dst = None
         if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
             raise Exception('not valid')
@@ -274,8 +277,8 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
 
 
 class AggregationSensor(TorchSensor):
-    def __init__(self, *pres, edge, map_key):
-        super().__init__(*pres, edges=edge)
+    def __init__(self, *pres, edges, map_key):
+        super().__init__(*pres, edges=edges)
         self.edge_node = self.edge.sup
         self.map_key = map_key
         self.map_value = None
@@ -345,6 +348,14 @@ class ConcatAggregationSensor(AggregationSensor):
         results = []
         for item in self.data:
             results.append(torch.cat([x for x in item], dim=-1))
+        return torch.stack(results)
+
+
+class LastAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        for item in self.data:
+            results.append(item[-1])
         return torch.stack(results)
 
 

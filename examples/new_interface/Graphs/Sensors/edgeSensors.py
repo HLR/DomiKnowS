@@ -59,3 +59,6 @@ class WordToPhraseTransformer(TorchEdgeSensor):
             phrases.append([start, _index])
 
 
+class PhraseToPair(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        return self.inputs[0]

@@ -12,15 +12,17 @@ sys.path.append("../..")
 
 from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
     SentenceFlairEmbedderSensor, SentenceGloveEmbedderSensor, FlairSentenceSensor
-from Graphs.Sensors.wordSensors import WordEmbedding
-from Graphs.Sensors.edgeSensors import FlairSentenceToWord, BILTransformer
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, ProbabilitySelectionEdgeSensor, MaxAggregationSensor
-from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner
+from Graphs.Sensors.wordSensors import WordEmbedding, BetweenIndexGenerator, PairIndexGenerator, \
+    MultiplyCatSensor, BetweenEncoderSensor
+from Graphs.Sensors.edgeSensors import FlairSentenceToWord, WordToPhraseTransformer, PhraseToPair
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, ProbabilitySelectionEdgeSensor, \
+    MaxAggregationSensor, TorchEdgeSensor, LastAggregationSensor
+from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner, TorchLearner
 from data.reader import SimpleReader
 
 
 def model_declaration():
-    from Graphs.graph import graph, rel_phrase_contains_word, rel_sentence_contains_phrase, rel_sentence_contains_word
+    from Graphs.graph import graph, rel_phrase_contains_word, rel_sentence_contains_phrase, rel_sentence_contains_word, rel_pair_phrase1, rel_pair_phrase2
 
     print("model started")
     graph.detach()
@@ -28,6 +30,7 @@ def model_declaration():
     sentence = graph['linguistic/sentence']
     word = graph['linguistic/word']
     phrase = graph['linguistic/phrase']
+    pair = graph['linguistic/pair']
 
     FAC = graph['application/FAC']
     GPE = graph['application/GPE']
@@ -36,6 +39,7 @@ def model_declaration():
     LOC = graph['application/LOC']
     VEH = graph['application/VEH']
     WEA = graph['application/WEA']
+    ART = graph['application/ART']
 
     sentence['raw'] = ReaderSensor(keyword='raw')
     sentence['flair_sentence'] = FlairSentenceSensor('raw')
@@ -45,9 +49,10 @@ def model_declaration():
     sentence['flair'] = SentenceFlairEmbedderSensor('flair_sentence')
     sentence['raw_ready'] = TorchSensor('bert', 'glove', 'flair', output='flair_sentence')
 
-    rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward")
+    rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward", keyword="raw_ready")
 
-    word['embedding'] = WordEmbedding('raw_ready', edge=rel_sentence_contains_word['forward'])
+    word['embedding'] = WordEmbedding('raw_ready', edges=[rel_sentence_contains_word['forward']])
+
     word['encode'] = LSTMLearner('embedding', input_dim=5220, hidden_dim=240, num_layers=1, bidirectional=True)
     # word['boundary'] = FullyConnectedLearner('encode', input_dim=480, output_dim=4)
     # word['boundary'] = ReaderSensor(keyword='boundary')
@@ -72,6 +77,23 @@ def model_declaration():
     word[VEH] = ReaderSensor(keyword=VEH.name, label=True)
     word[WEA] = ReaderSensor(keyword=WEA.name, label=True)
 
+    rel_phrase_contains_word['backward'] = WordToPhraseTransformer(FAC, GPE, PER, ORG, LOC, VEH, WEA,
+                                                                   mode="backward", keyword="raw")
+    phrase['encode'] = LastAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
+
+    rel_pair_phrase1['backward'] = PhraseToPair('raw', mode="backward", keyword="phrase1_raw")
+    rel_pair_phrase2['backward'] = PhraseToPair('raw', mode="backward", keyword="phrase2_raw")
+    rel_pair_phrase1['backward'] = PhraseToPair('encode', mode="backward", keyword="phrase1_encode")
+    rel_pair_phrase2['backward'] = PhraseToPair('encode', mode="backward", keyword="phrase2_encode")
+
+    pair['index'] = PairIndexGenerator(
+        'phrase1_raw', 'phrase2_raw',
+        edges=[[rel_pair_phrase1['backward']], [rel_pair_phrase2['backward']]]
+    )
+    pair['between_index'] = BetweenIndexGenerator('index', 'phrase1_raw', 'phrase2_raw')
+    pair['phrase_features'] = MultiplyCatSensor('index', 'phrase1_encode', 'phrase2_encode')
+    pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
+    pair[ART] = TorchLearner('')
     # phrase.relate_to(FAC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # phrase.relate_to(GPE)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # word.relate_to(PER)[0]['selection'] = ProbabilitySelectionEdgeSensor()
@@ -90,9 +112,10 @@ def model_declaration():
 
 #### The main entrance of the program.
 def main():
-    paths = ["ACE_JSON/train/result0.json", "ACE_JSON/train/result1.json"]
+    paths = ["ACE_JSON/train/result0.json"]
     updated_graph = model_declaration()
-    updated_graph.train(iterations=2, paths=paths)
+
+    updated_graph.train(iterations=1, paths=paths)
     # updated_graph.load()
     # updated_graph.test(paths=paths)
 

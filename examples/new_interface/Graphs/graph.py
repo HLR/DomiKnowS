@@ -16,7 +16,7 @@ with Graph('global') as graph:
         (rel_sentence_contains_word,) = sentence.contains(word)
         (rel_phrase_contains_word,) = phrase.contains(word)
         pair = Concept('pair')
-        pair.has_a(phrase, phrase)
+        (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(phrase, phrase)
 
     with Graph('application') as app_graph:
         FAC = phrase(name='FAC')
@@ -26,6 +26,13 @@ with Graph('global') as graph:
         PER = phrase(name='PER')
         VEH = phrase(name='VEH')
         WEA = phrase(name='WEA')
+        ART = pair(name="ART")
+        GEN_AFF = pair(name="GEN-AFF")
+        METONYMY = pair(name="METONYMY")
+        ORG_AFF = pair(name="ORG-AFF")
+        PART_WHOLE = pair(name="PART-WHOLE")
+        PER_SOC = pair(name="PER-SOC")
+        PHYS = pair(name="PHYS")
 
         FAC.not_a(GPE, LOC, VEH, WEA, PER, ORG)
 
