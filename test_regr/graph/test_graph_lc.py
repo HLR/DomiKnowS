@@ -78,7 +78,7 @@ class TestGraph(object):
                 # if token with concept people and token with concept organization exist then relation work_for also exists
                 ifL(andL(existsL(people), existsL(organization)), existsL(work_for))
                 
-                # Example with variables - do we real need them
+                # Example with variables
                 w  = andL(people, ('x',), organization, ('y',))
                 w2 = orL(w, location, ('x',))
                 w3 = ifL(w2, work_for, ('x', 'y'))

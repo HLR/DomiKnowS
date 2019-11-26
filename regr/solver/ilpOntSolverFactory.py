@@ -34,65 +34,55 @@ class ilpOntSolverFactory:
             else:
                 graphOntologyError.add(currentGraph)
                 
-        if not ontologies:
-            if ilpConfig['ilpSolver'] == "Gurobi":
-                if __package__ is None or __package__ == '':
-                    from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
-                else:
-                    from .gurobiILPOntSolver import gurobiILPOntSolver
-                    
-                SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
-                mysolver = SolverClass()
-                
-                mysolver.setup_solver_logger()
-                mysolver.myGraph = graph
-                mysolver.ilpSolver = _iplConfig['ilpSolver']
-                
-                return mysolver
-            else:
-                return None
-        else:
-            ontologiesTuple = (*ontologies, )
-            
-            if ontologiesTuple not in cls.__instances:
-    
-                if _iplConfig is not None:
-                    if ilpConfig['ilpSolver'] == "Gurobi":
-                        if __package__ is None or __package__ == '':
-                            from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
-                        else:
-                            from .gurobiILPOntSolver import gurobiILPOntSolver
-                        SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
-                    elif ilpConfig['ilpSolver'] == "GEKKO":
-                        if __package__ is None or __package__ == '':
-                            from regr.solver.gekkoILPOntSolver import gekkoILPOntSolver
-                        else:
-                            from .gekkoILPOntSolver import gekkoILPOntSolver
-                        SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
+        ontologiesTuple = (*ontologies, )
+        
+        if ontologiesTuple not in cls.__instances:
+
+            if _iplConfig is not None:
+                if ilpConfig['ilpSolver'] == "Gurobi":
+                    if __package__ is None or __package__ == '':
+                        from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
                     else:
-                        if __package__ is None or __package__ == '':
-                            from regr.solver.dummyILPOntSolver import dummyILPOntSolver
-                        else:
-                            from .dummyILPOntSolver import dummyILPOntSolver
-                        SolverClass = cls.getClass(dummyILPOntSolver, *SupplementalClasses)
-                        
-                    cls.__instances[ontologiesTuple] = SolverClass()
-    
-                cls.__instances[ontologiesTuple].setup_solver_logger() 
-    
-                cls.__instances[ontologiesTuple].myGraph = graph
-    
+                        from .gurobiILPOntSolver import gurobiILPOntSolver
+                    SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
+                elif ilpConfig['ilpSolver'] == "GEKKO":
+                    if __package__ is None or __package__ == '':
+                        from regr.solver.gekkoILPOntSolver import gekkoILPOntSolver
+                    else:
+                        from .gekkoILPOntSolver import gekkoILPOntSolver
+                    SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
+                else:
+                    if __package__ is None or __package__ == '':
+                        from regr.solver.dummyILPOntSolver import dummyILPOntSolver
+                    else:
+                        from .dummyILPOntSolver import dummyILPOntSolver
+                    SolverClass = cls.getClass(dummyILPOntSolver, *SupplementalClasses)
+                    
+                cls.__instances[ontologiesTuple] = SolverClass()
+
+            cls.__instances[ontologiesTuple].setup_solver_logger() 
+
+            cls.__instances[ontologiesTuple].myGraph = graph
+
+            if ontologiesTuple:
                 cls.__instances[ontologiesTuple].loadOntology(ontologiesTuple)
-    
-                cls.__instances[ontologiesTuple].ilpSolver = _iplConfig['ilpSolver']
-    
-                if graphOntologyError:
-                    for currentGraph in graphOntologyError:
-                        cls.__instances[ontologiesTuple].myLogger.error("Problem graph %s ontology is not correctly defined %s"%(currentGraph.name,currentGraph.ontology))
-    
+
+            cls.__instances[ontologiesTuple].ilpSolver = _iplConfig['ilpSolver']
+
+            if ontologiesTuple and graphOntologyError:
+                for currentGraph in graphOntologyError:
+                    cls.__instances[ontologiesTuple].myLogger.error("Problem -  graph %s ontology is not correctly defined %s"%(currentGraph.name,currentGraph.ontology))
+
+            if ontologiesTuple:
                 cls.__instances[ontologiesTuple].myLogger.info("Returning new ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
-                return cls.__instances[ontologiesTuple]
             else:
+                cls.__instances[ontologiesTuple].myLogger.info("Returning generic (not based on ontology) ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
+
+            return cls.__instances[ontologiesTuple]
+        else:
+            if ontologiesTuple:
                 cls.__instances[ontologiesTuple].myLogger.info("Returning existing ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
-    
-                return cls.__instances[ontologiesTuple]
+            else:
+                cls.__instances[ontologiesTuple].myLogger.info("Returning existing generic ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
+
+            return cls.__instances[ontologiesTuple]

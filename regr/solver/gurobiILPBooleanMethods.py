@@ -1,9 +1,7 @@
-if __package__ is None or __package__ == '':
-    from regr.solver.ilpConfig import ilpConfig 
-    from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
-else:
-    from .ilpConfig import ilpConfig 
-    from .ilpBooleanMethods import ilpBooleanProcessor 
+import logging
+
+from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from regr.solver.ilpConfig import ilpConfig 
 
 from gurobipy import *
 
@@ -11,23 +9,25 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
+                
+        self.myLogger = logging.getLogger(ilpConfig['log_name'])
 
-    # Negation
-    # 1 - var == varNOT
-    # TODO Without variable return 1 - var
-    def notVar(self, m, var):
+    def notVar(self, m, var, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(1 - var >= 1)
+            return
+        
         varNOT=m.addVar(vtype=GRB.BINARY, name="not_%s"%(var))
         
         m.addConstr(1 - var == varNOT)
     
         return varNOT
     
-    # Conjunction 2 variable
-    # varAND <= var1
-    # varAND <= var2 
-    # var1 + var2 <= varAND + 2 - 1
-    # TODO Without variable return var1 + var2 >= 2
-    def and2Var(self, m, var1, var2):
+    def and2Var(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 >= 2)
+            return
+        
         varAND=m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1, var2))
             
         m.addConstr(varAND <= var1)
@@ -36,26 +36,23 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         return varAND
     
-    # Conjunction
-    # varAND <= var1
-    # varAND <= var2
-    # ....
-    # varAND <= varN
-    # var1 + var2 + .. + varN <= varAND + N - 1
-    # TODO Without variable return var1 + var2 + .. + varN >= N
-    def andVar(self, m, *var):
+    def andVar(self, m, *var, onlyConstrains = False):
         N = len(var)
         if N < 1:
             return None
         
         if N == 1:
-            return currentVar[0]
+            return var[0]
         
-        andVarName = "and"
-        for currentVar in var:
-            andVarName += "_%s"%(currentVar)
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr >= N)
+            return
             
-        varAND = m.addVar(vtype=GRB.BINARY, name=andVarName)
+        varAND = m.addVar(vtype=GRB.BINARY)
         for currentVar in var:
             m.addConstr(varAND <= currentVar)
 
@@ -67,12 +64,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         return varAND
     
-    # Disjunction 2 variables
-    # var1 <= varOR
-    # var2 <= varOR 
-    # var1 + var2 >= varOR 
-    # TODO Without variable return var1 + var2 >= 1
-    def or2Var(self, m, var1, var2):
+    def or2Var(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 >= 1)
+            return
+        
         varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1, var2))
             
         m.addConstr(var1 <= varOR)
@@ -82,22 +78,29 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         return varOR
     
-    # Disjunction
-    # var1 <= varOR
-    # var2 <= varOR 
-    # ...
-    # varN <= varOR
-    # var1 + var2 + ... + varN >= varOR
-    # TODO Without variable return var1 + var2 + ... + varN >= 1
-    def orVar(self, m, *var):
+    def orVar(self, m, *var, onlyConstrains = False):
+        self.myLogger.debug("OR called with : %s"%(var,))
+
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr >= 1)
+            
+            self.myLogger.debug("OR only creating  constrain: %s >= %i"%(varSumLinExpr, 1))
+            return
+        
         N = len(var)
         
         if N < 1:
+            self.myLogger.debug("OR returns : %s"%('None'))
             return None
         
         if N == 1:
+            self.myLogger.debug("OR returns : %s"%(currentVar[0]))
             return currentVar[0]
-
+        
         orVarName = "or"
         for currentVar in var:
             orVarName += "_%s" % (currentVar)
@@ -112,15 +115,18 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             varSumLinExpr.addTerms(1.0, currentVar)
         
         m.addConstr(varSumLinExpr >= varOR)
+        self.myLogger.debug("OR creating  constrain: %s >= %i"%(varSumLinExpr, 1))
+
+        m.update()
              
+        self.myLogger.debug("OR returns : %s"%(varOR))
         return varOR
     
-    # Nand (Alternative denial) 2 variables
-    # not(varNAND) <= var1
-    # not(varNAND) <= var2 
-    # var1 + var2 <= not(varNAND) + 2 - 1
-    # TODO Without variable return var1 + var2 <= 1
-    def nand2Var(self, m, var1, var2):
+    def nand2Var(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 1)
+            return
+        
         varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
             
         m.addConstr(self.notVar(m, varNAND) <= var1)
@@ -130,14 +136,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         return varNAND
     
-    # Nand (Alternative denial)
-    # not(varNAND) <= var1
-    # not(varNAND) <= var2 
-    # ...
-    # not(varNAND <= varN 
-    # var1 + var2 + ... + varN <= not(varNAND) + N - 1
-    # TODO Without variable return var1 + var2 + ... + varN <= N -1
-    def nandVar(self, m, *var):
+    def nandVar(self, m, *var, onlyConstrains = False):
         N = len(var)
         
         if N < 1:
@@ -145,6 +144,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         if N == 1:
             return currentVar[0]
+        
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr <= N- 1)
+            return
         
         nandVarName = "nand"
         for currentVar in var:
@@ -162,12 +169,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         return varNAND
     
-    # Nor (Joint Denial) 2 variables
-    # var1 <= not(varNOR)
-    # var2 <= not(varNOR) 
-    # var1 + var2 >= not(varNOR)
-    # TODO Without variable return var1 + var2 <= 0
-    def nor2Var(self, m, var1, var2):
+    def nor2Var(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 0)
+            return
+        
         varNOR = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(var1, var2))
             
         m.addConstr(var1 <= self.notVar(m, varNOR))
@@ -177,15 +183,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         return varNOR
     
-    # Nor (Joint Denial)
-    # Nor (Joint Denial) 2 variables
-    # var1 <= not(varNOR)
-    # var2 <= not(varNOR) 
-    # ...
-    # varN <= not(varNOR)
-    # var1 + var2 + ... + varN >= not(varNOR)
-    # TODO Without variable return var1 + var2 + ... + varN <= 0
-    def norVar(self, m, *var):
+    def norVar(self, m, *var, onlyConstrains = False):
         N = len(var)
         
         if N < 1:
@@ -193,6 +191,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         if N == 1:
             return currentVar[0]
+        
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr <= 0)
+            return
         
         _norVarName = "nor"
         for currentVar in var:
@@ -210,13 +216,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         return varNOR
     
-    # Exclusive Disjunction
-    # var1 + var2 + varXOR <= 2
-    # -var1 - var2 + varXOR <= 0
-    # var1 - var2 + varXOR >= 0
-    # -var1 + var2 + varXOR >= 0
-    # TODO Without variable return var1 + var2 == 1 
-    def xorVar(self, m, var1, var2):
+    def xorVar(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 1)
+            m.addConstr(var1 + var2 >= 1)
+            return
+        
         varXOR = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(var1, var2))
             
         m.addConstr(var1 + var2 + varXOR <= 2)
@@ -226,12 +231,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         return varXOR
     
-    # Implication
-    # 1 - var1 <= varIF
-    # var2 <= varIF
-    # 1 - var1 + var2 >= varIF
-    # TODO Without variable return var1 <= var2
-    def ifVar(self, m, var1, var2):
+    def ifVar(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 <= var2)
+            return
+        
         varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(var1, var2))
             
         m.addConstr(1 - var1 <= varIF)
@@ -240,13 +244,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         return varIF
            
-    # Equivalence 
-    # var1 + var2 - varEQ <= 1
-    # var1 + var2 + varEQ >= 1
-    # -var1 + var2 + varEQ <= 1
-    # var1- var2 + varEQ <= 1
-    # TODO Without variable return var1 == var2
-    def eqVar(self, m, var1, var2):
+    def eqVar(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 >= var2)
+            m.addConstr(var1 >= var2)
+            return
+        
         varEQ = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(var1, var2))
             
         m.addConstr(var1 + var2 - varEQ <= 1)

@@ -23,7 +23,7 @@ class ilpOntSolver(object):
     
     __negVarTrashhold = 1.0
     
-    def setup_solver_logger(self, _ildConfig = ilpConfig):
+    def setup_solver_logger(self, _ilpConfig = ilpConfig):
         
         logName = __name__
         logLevel = logging.DEBUG
@@ -32,19 +32,19 @@ class ilpOntSolver(object):
         logBackupCount=4
         logFileMode='a'
 
-        if _ildConfig and (isinstance(_ildConfig, dict)):
-            if 'log_name' in _ildConfig:
-                logName = _ildConfig['log_name']
-            if 'log_level' in _ildConfig:
-                logLevel = _ildConfig['log_level']
-            if 'log_filename' in _ildConfig:
-                logFilename = _ildConfig['log_filename']
-            if 'log_filesize' in _ildConfig:
-                logFilesize = _ildConfig['log_filesize']
-            if 'log_backupCount' in _ildConfig:
-                logBackupCount = _ildConfig['log_backupCount']
-            if 'log_fileMode' in _ildConfig:
-                logFileMode = _ildConfig['log_fileMode']
+        if _ilpConfig and (isinstance(_ilpConfig, dict)):
+            if 'log_name' in _ilpConfig:
+                logName = _ilpConfig['log_name']
+            if 'log_level' in _ilpConfig:
+                logLevel = _ilpConfig['log_level']
+            if 'log_filename' in _ilpConfig:
+                logFilename = _ilpConfig['log_filename']
+            if 'log_filesize' in _ilpConfig:
+                logFilesize = _ilpConfig['log_filesize']
+            if 'log_backupCount' in _ilpConfig:
+                logBackupCount = _ilpConfig['log_backupCount']
+            if 'log_fileMode' in _ilpConfig:
+                logFileMode = _ilpConfig['log_fileMode']
             
         logger = logging.getLogger(logName)
     
