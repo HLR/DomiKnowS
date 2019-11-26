@@ -129,7 +129,7 @@ class ReaderSensor(TorchSensor):
                 raise
         else:
             print("there is no data to operate on")
-            raise
+            raise Exception('not valid')
 
 
 class NominalSensor(TorchSensor):
@@ -174,7 +174,7 @@ class TorchEdgeSensor(TorchSensor):
         self.keyword = keyword
         if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
-            raise
+            raise Exception('not valid')
 
     def get_initialized(self):
         self.edge = self.sup.sup
@@ -186,7 +186,7 @@ class TorchEdgeSensor(TorchSensor):
             self.dst = self.edge.src
         else:
             print("the mode passed to the edge sensor is not right")
-            raise
+            raise Exception('not valid')
 
     def __call__(
         self,
@@ -270,7 +270,7 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
                 raise
         else:
             print("there is no data to operate on")
-            raise
+            raise Exception('not valid')
 
 
 class AggregationSensor(TorchSensor):
@@ -285,7 +285,7 @@ class AggregationSensor(TorchSensor):
             self.dst = self.edges[0].sup.src
         else:
             print("the mode should always be passed as backward to the edge used in aggregator sensor")
-            raise
+            raise Exception('not valid')
 
     def get_map_value(self, ):
             self.map_value = self.context_helper[self.src[self.map_key].fullname]
