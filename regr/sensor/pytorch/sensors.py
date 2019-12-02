@@ -227,6 +227,8 @@ class TorchEdgeSensor(TorchSensor):
         if val is not None:
             context[self.fullname] = val
             context[self.dst[self.keyword].fullname] = val # override state under property name
+        else:
+            print("val is none")
         return context
 
     def update_pre_context(
@@ -279,7 +281,7 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edges, map_key):
         super().__init__(*pres, edges=edges)
-        self.edge_node = self.edge.sup
+        self.edge_node = self.edges[0].sup
         self.map_key = map_key
         self.map_value = None
         self.data = None
@@ -424,3 +426,7 @@ class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
     def forward(self,) -> Any:
         return torch.tensor([x for x in self.selection_helper if x >= self.threshold], device=self.device)
 
+
+class ConcatSensor(TorchSensor):
+    def forward(self,) -> Any:
+        return torch.cat(self.inputs, dim=-1)
