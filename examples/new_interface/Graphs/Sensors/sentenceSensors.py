@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor
+from regr.sensor.pytorch.sensors import TorchSensor, NominalSensor
 # from .mainSensors import ReaderSensor, CallingSensor
 from typing import Dict, Any
 from flair.embeddings import WordEmbeddings, CharacterEmbeddings, FlairEmbeddings, StackedEmbeddings, BertEmbeddings, ELMoEmbeddings
@@ -64,23 +64,13 @@ class FlairSentenceSensor(TorchSensor):
 #     return vector.view(1, len(items))
 #
 #
-# class SentencePosTaggerSensor(SentenceSensor):
-#     def __init__(self, *pres, reader):
-#         super().__init__(*pres)
-#         self.reader = reader
-#         self.tagger = SequenceTagger.load('pos')
-#
-#     def forward(
-#             self,
-#             context: Dict[str, Any]
-#     ) -> Any:
-#         super(SentencePosTaggerSensor, self).forward(context=context)
-#         self.tagger.predict(context[self.sentencesensor.fullname])
-#         _dict = context[self.sentencesensor.fullname].to_dict(tag_type='pos')
-#         _list = []
-#
-#         for item in _dict['entities']:
-#             # _list.append(self.reader.posTagEncoder(item['type']))
-#             _list.append(self.reader.postagEncoder(item['type']))
-#         print(_list[-1].shape)
-#         return torch.stack(_list)
+
+
+class SentencePosTagger(SentenceSensor):
+    def __init__(self, *pres):
+        super().__init__(*pres)
+        self.tagger = SequenceTagger.load('pos')
+
+    def forward(self,) -> Any:
+        self.tagger.predict(self.inputs[0])
+        return None
