@@ -11,7 +11,7 @@ import re
 import json
 
 
-class DataLoader :
+class DataLoader:
     def __init__(self, _paths, _hint):
         self.paths = _paths
         self.files = []
@@ -24,6 +24,8 @@ class DataLoader :
         self.splitTest = []
         self.splitValid = []
         self.splitTrain = []
+        self.postags = []
+        self.tagger = SequenceTagger.load('pos')
 
     def listFiles(self):
         for path in self.paths:
@@ -69,12 +71,13 @@ class DataLoader :
             else:
                 sample['type'] = "ignore"
             text = sample['parse'].select_one("TEXT").prettify()
-            text = re.sub('<[^<]+>', "\n",text)
+            text = re.sub('<[^<]+>', "\n", text)
             text = text.replace('\n\n', '. ').replace('\n', ' ')
             text = re.sub(' +', ' ', text)
             sample['parse'] = text
             splitted = text.split(".")
-            splitted = [re.sub(' +', ' ', re.sub(r'[^\w\s]',' ',data)).replace(" t ", "'t ") for data in splitted if len(data) > 2]
+            splitted = [re.sub(' +', ' ', re.sub(r'[^\w\s]', ' ', data)).replace(" t ", "'t ") for data in splitted if
+                        len(data) > 2]
             sentences = [Sentence(sent) for sent in splitted]
             sentences = [sentence for sentence in sentences if len(sentence) >= 3]
             sample['sentences'] = sentences
@@ -106,14 +109,36 @@ class DataLoader :
             _all = []
             for entity in entities:
                 mentions = entity.findall(".//entity_mention")
-                _all.extend([[mention.find("./head/charseq").text, mention.find("./head/charseq").attrib['START'], entity.attrib] for mention in mentions])
-            _all = sorted(_all, key=lambda x:int(x[1]))
+                _all.extend([[mention.find("./head/charseq").text, mention.find("./head/charseq").attrib['START'],
+                              entity.attrib] for mention in mentions])
+            _all = sorted(_all, key=lambda x: int(x[1]))
             sample['annotated'] = [(x[0],
                                     x[2]['TYPE'],
                                     x[2]['SUBTYPE'],
-                                    x[1]
-                                   )
+                                    x[1],
+                                    x[2]['ID']
+                                    )
                                    for x in _all]
+            relations = root.findall(".//relation")
+            _all = []
+            _all.extend([[relation.findall("./relation_argument")[0].attrib['REFID'],
+                          relation.findall("./relation_argument")[1].attrib['REFID'], relation.attrib] for relation in
+                         relations])
+            sample['relations'] = [(x[0],
+                                    x[1],
+                                    x[2]['TYPE'],
+                                    x[2]['SUBTYPE'],
+                                    x[2]['ID']
+                                    )
+                                   for x in _all if x[2]['TYPE'] != "METONYMY"]
+            sample['relations'].extend([(x[0],
+                                         x[1],
+                                         x[2]['TYPE'],
+                                         "UNKNOWN",
+                                         x[2]['ID']
+                                         )
+                                        for x in _all if x[2]['TYPE'] == "METONYMY"])
+            #             sample['relations'] = _all
             iteration += 1
             total_ann += len(sample['annotated'])
             print('Read {} inputs with total {} annotations'.format(iteration, total_ann), end='\r')
@@ -136,89 +161,126 @@ class DataLoader :
                 phrases = []
                 start = 0
                 for iteration in range(len(sample['annotated'])):
-#                     print(iteration)
+                    #                     print(iteration)
                     if iteration < checked:
-#                         print("passed")
+                        #                         print("passed")
                         continue
                     annotation = sample['annotated'][iteration]
-#                     print(annotation)
-#                     print(sentence[start:])
+                    #                     print(annotation)
+                    #                     print(sentence[start:])
                     _list = []
                     labels = Sentence(annotation[0]).to_tokenized_string().split(" ")
-#                     print(labels)
-#                     print("Annotation is ")
-#                     print(annotation)
-#                     print("label are")
-#                     print(labels)
+                    #                     print(labels)
+                    #                     print("Annotation is ")
+                    #                     print(annotation)
+                    #                     print("label are")
+                    #                     print(labels)
                     # for _it in range(start, len(sentence)):
                     if labels[0] in sentence[start:]:
                         value_index = sentence[start:].index(labels[0])
                         if len(labels) > len(sentence[value_index:]):
-#                             print("b1")
+                            #                             print("b1")
                             break
                     else:
-#                         print("b2")
+                        #                         print("b2")
                         break
 
                     for _it in range(len(labels)):
-                        if labels[_it] == sentence[start+value_index+_it]:
-                            _list.append(sentence[start+value_index+_it])
+                        if labels[_it] == sentence[start + value_index + _it]:
+                            _list.append(sentence[start + value_index + _it])
                         else:
-#                             print(value_index)
-#                             print(sentence[start+value_index+_it])
-#                             print(_it)
-#                             print(labels[_it])
-#                             print("b3")
+                            #                             print(value_index)
+                            #                             print(sentence[start+value_index+_it])
+                            #                             print(_it)
+                            #                             print(labels[_it])
+                            #                             print("b3")
                             break
                     if len(_list) != len(labels):
-#                         print("b4")
+                        #                         print("b4")
                         break
                     check = True
-                    example = {"text": annotation[0], "label": annotation[1], 'list': _list, 'value_index': value_index, 'before' : start}
+                    example = {"text": annotation[0], "label": annotation[1], 'list': _list, 'value_index': value_index,
+                               'before': start, 'id': annotation[4], 'start': annotation[3]}
 
-                    for _it in range(start, start+value_index):
+                    for _it in range(start, start + value_index):
                         _input = {"word": sentence[_it], 'w-type': '-O-', 'type': '-O-', 'subtype': '-O-',
-                                  'set': sample['type']}
+                                  'set': sample['type'], 'index': self.index_finder("-O-")}
                         annotated_sentence.append(_input)
                     if len(_list) == 1:
-                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "L-" + annotation[1], 'subtype': annotation[2],
-                                          'set': sample['type'], 'start': annotation[3]}
+                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "L-" + annotation[1],
+                                  'subtype': annotation[2],
+                                  'set': sample['type'], 'start': annotation[3],
+                                  'index': self.index_finder(annotation[1])}
                         annotated_sentence.append(_input)
                     elif len(_list) == 2:
-                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "B-" + annotation[1], 'subtype': annotation[2],
-                                  'set': sample['type'], 'start': annotation[3]}
+                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "B-" + annotation[1],
+                                  'subtype': annotation[2],
+                                  'set': sample['type'], 'start': annotation[3],
+                                  'index': self.index_finder(annotation[1])}
                         annotated_sentence.append(_input)
-                        _input = {"word": _list[1], 'w-type': annotation[1], 'type': "L-" + annotation[1], 'subtype': annotation[2],
-                                  'set': sample['type'], 'start': annotation[3]}
+                        _input = {"word": _list[1], 'w-type': annotation[1], 'type': "L-" + annotation[1],
+                                  'subtype': annotation[2],
+                                  'set': sample['type'], 'start': annotation[3],
+                                  'index': self.index_finder(annotation[1])}
                         annotated_sentence.append(_input)
                     else:
-                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "B-" + annotation[1], 'subtype': annotation[2],
-                                  'set': sample['type'], 'start': annotation[3]}
+                        _input = {"word": _list[0], 'w-type': annotation[1], 'type': "B-" + annotation[1],
+                                  'subtype': annotation[2],
+                                  'set': sample['type'], 'start': annotation[3],
+                                  'index': self.index_finder(annotation[1])}
                         annotated_sentence.append(_input)
-                        _input = {"word": _list[-1], 'w-type': annotation[1], 'type': "L-" + annotation[1], 'subtype': annotation[2],
-                                  'set': sample['type'], 'start': annotation[3]}
+                        _input = {"word": _list[-1], 'w-type': annotation[1], 'type': "L-" + annotation[1],
+                                  'subtype': annotation[2],
+                                  'set': sample['type'], 'start': annotation[3],
+                                  'index': self.index_finder(annotation[1])}
                         annotated_sentence.append(_input)
                         for item in range(1, len(_list) - 1):
-                            _input = {"word": _list[item], 'w-type': annotation[1], 'type': "I-" + annotation[1], 'subtype': annotation[2],
-                                      'set': sample['type'], 'start': annotation[3]}
+                            _input = {"word": _list[item], 'w-type': annotation[1], 'type': "I-" + annotation[1],
+                                      'subtype': annotation[2],
+                                      'set': sample['type'], 'start': annotation[3],
+                                      'index': self.index_finder(annotation[1])}
                             annotated_sentence.append(_input)
                     start = start + value_index + len(_list)
                     example['after'] = start
-                    checked = iteration+1
+                    example['boundary'] = [example['before'] + example['value_index'], example['after'] - 1]
+                    checked = iteration + 1
                     phrases.append(example)
                 for _it in range(start, len(sentence)):
-                        _input = {"word": sentence[_it], 'w-type': '-O-', 'type': '-O-', 'subtype': '-O-',
-                                  'set': sample['type']}
-                        annotated_sentence.append(_input)
+                    _input = {"word": sentence[_it], 'w-type': '-O-', 'type': '-O-', 'subtype': '-O-',
+                              'set': sample['type'], 'index': self.index_finder('-O-')}
+                    annotated_sentence.append(_input)
                 # annotated_sentence is an array of annotated words inside a sentence
+                relations = []
+                for phrase in phrases:
+                    for rel in sample['relations']:
+                        if rel[0] == phrase['id']:
+                            relations.append(rel)
+
                 sample['inputs'].append(annotated_sentence)
                 sample['phrases'].append(phrases)
                 if check:
-                    self.data.append([annotated_sentence, sentence1.to_tokenized_string(), phrases])
+                    self.data.append(
+                        {"words": annotated_sentence, "sentence": sentence1.to_tokenized_string(), "phrases": phrases,
+                         'relations': relations})
             iteration += 1
             print('Labled {} inputs with total number of sentences with entities of {} sentences'.format(iteration, len(
                 self.data)), end='\r')
-        self.data = [item for item in self.data if len(item[0]) != 0]
+        self.data = [item for item in self.data if len(item["words"]) != 0]
+
+    def index_finder(self, _class):
+        choices = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "-O-"]
+        return choices.index(_class)
+
+    def posTagFinder(self):
+        _it = 0
+        for _it in range(1500):
+            item = random.choice(self.data)
+            temp = Sentence(item['sentence'])
+            self.tagger.predict(temp)
+            _dict = temp.to_dict(tag_type='pos')
+            self.postags.extend([sample['type'] for sample in _dict['entities'] if sample['type'] not in self.postags])
+        self.postags = list(set(self.postags))
+
     def fire(self):
         self.listFiles()
         self.splitHint()
@@ -226,6 +288,7 @@ class DataLoader :
         self.prepareLables()
         self.readLables()
         self.lableInputs()
+        self.posTagFinder()
 
 
 class SimpleReader:
