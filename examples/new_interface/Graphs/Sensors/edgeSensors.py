@@ -8,6 +8,11 @@ class FlairSentenceToWord(TorchEdgeSensor):
         return [token for token in self.inputs[0]]
 
 
+class SentenceToWordPos(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        return [token.tags['pos'].value for token in self.inputs[0]]
+
+
 class BILTransformer(TorchEdgeSensor):
     def forward(self,) -> Any:
         phrases = []
@@ -32,31 +37,38 @@ class BILTransformer(TorchEdgeSensor):
 
 class WordToPhraseTransformer(TorchEdgeSensor):
     def forward(self,) -> Any:
-        value = torch.cat([item for item in self.inputs], -1)
-        indexes = []
-        for item in value:
-            _, index = torch.max(item, 0)
-            indexes.append(index)
-        print(indexes)
-        phrases = []
-        start = -1
-        previous = -1
-        _index = 0
-        for _index in range(len(indexes)):
-            if start == -1 and indexes[_index] % 2 == 0:
-                start = _index
-                previous = indexes[_index]
-            elif start != -1:
-                if indexes[_index] != previous:
-                    phrases.append([start, _index - 1])
-                    if indexes[_index] % 2 == 0:
-                        start = _index
-                        previous = indexes[_index]
-                    else:
-                        start = -1
-                        previous = -1
-        if start != -1 and indexes[_index] % 2 == 0:
-            phrases.append([start, _index])
+        with torch.no_grad():
+            temp = torch.cat([item for item in self.inputs], -1)
+            value = []
+            for item in temp:
+                s = torch.tensor([i for i in range(1, item.shape[0], 2)])
+                value.append(torch.index_select(item, 0, s))
+            indexes = []
+            for item in value:
+                _, index = torch.max(item, 0)
+                if _ < 0.5:
+                    index = -1
+                indexes.append(index)
+            phrases = []
+            start = -1
+            previous = -1
+            _index = 0
+            for _index in range(len(indexes)):
+                if start == -1 and indexes[_index] != -1:
+                    start = _index
+                    previous = indexes[_index]
+                elif start != -1:
+                    if indexes[_index] != previous:
+                        phrases.append([start, _index - 1])
+                        if indexes[_index] != -1:
+                            start = _index
+                            previous = indexes[_index]
+                        else:
+                            start = -1
+                            previous = -1
+            if start != -1 and indexes[_index] != -1:
+                phrases.append([start, _index])
+        return phrases
 
 
 class PhraseToPair(TorchEdgeSensor):
