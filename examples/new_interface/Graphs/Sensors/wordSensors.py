@@ -1,7 +1,8 @@
-from regr.sensor.pytorch.sensors import TorchSensor, Sensor
+from regr.sensor.pytorch.sensors import TorchSensor, Sensor, NominalSensor
 from typing import Any
 import torch
 from typing import Dict, Any
+
 
 class WordEmbedding(TorchSensor):
     def forward(self,) -> Any:
@@ -64,6 +65,13 @@ class BetweenEncoderSensor(TorchSensor):
     def forward(self,) -> Any:
         results = []
         for item in self.inputs[0]:
-            data = self.inputs[-1][item[0]:item[1]+1]
+            data = self.inputs[-1][item[0]+1:item[1]]
             results.append(torch.mean(data, dim=0))
         return torch.stack(results)
+
+
+class WordPosTaggerSensor(NominalSensor):
+    def forward(
+            self,
+    ) -> Any:
+        return self.inputs[0]
