@@ -133,8 +133,8 @@ class ReaderSensor(TorchSensor):
 
 
 class NominalSensor(TorchSensor):
-    def __init__(self, *pres, vocab=None):
-        super().__init__(*pres)
+    def __init__(self, *pres, vocab=None, edges=None):
+        super().__init__(*pres, edges=edges)
         self.vocab = vocab
 
     def complete_vocab(self):
@@ -145,8 +145,13 @@ class NominalSensor(TorchSensor):
             self.vocab.append(value)
 
     def one_hot_encoder(self, value):
-        output = torch.zeros(len(self.vocab), device=self.device)
-        output[self.vocab.index(value)] = 1
+        if not isinstance(value, list):
+            output = torch.zeros([1, len(self.vocab)], device=self.device)
+            output[0][self.vocab.index(value)] = 1
+        else:
+            output = torch.zeros([len(value), 1, len(self.vocab)], device=self.device)
+            for _it in range(len(value)):
+                output[_it][0][self.vocab.index(value[_it])] = 1
         return output
 
     def update_context(
@@ -158,11 +163,18 @@ class NominalSensor(TorchSensor):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
+            self.define_inputs()
             val = self.forward()
             val = self.one_hot_encoder(val)
         if val is not None:
             context[self.fullname] = val
-            context[self.sup.fullname] = val # override state under property name
+            context[self.sup.fullname] = val  # override state under property name
+        else:
+            context[self.fullname] = None
+            context[self.sup.fullname] = None
+        if self.output:
+            context[self.fullname] = self.fetch_value(self.output)
+            context[self.sup.fullname] = self.fetch_value(self.output)
         return context
 
 
@@ -429,4 +441,12 @@ class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
 
 class ConcatSensor(TorchSensor):
     def forward(self,) -> Any:
+        return torch.cat(self.inputs, dim=-1)
+
+
+class ListConcator(TorchSensor):
+    def forward(self,) -> Any:
+        for it in range(len(self.inputs)):
+            if isinstance(self.inputs[it], list):
+                self.inputs[it] = torch.stack(self.inputs[it])
         return torch.cat(self.inputs, dim=-1)
