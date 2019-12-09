@@ -15,6 +15,7 @@ import torch
 import itertools
 from tqdm import tqdm
 from data.reader import SimpleReader
+from Graphs.graph import pair, ART, word, phrase
 
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
@@ -270,6 +271,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         pred = []
                         info = {}
                         context = {}
+                        # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
+                        # print("end")
                         for prop1 in self.poi:
                             entity = prop1.sup.name
                             prop_name = prop1.name
@@ -313,7 +316,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             precision = tp / (tp + fp)
             f1 = 2 * (precision * recall) / (precision + recall)
             print("precision is " + str(precision) + " recall is " + str(recall) + " f1 score is " + str(f1))
-        self.save()
+            self.save()
 
     def save(self, ):
         learners = self.get_sensors(TorchLearner)
