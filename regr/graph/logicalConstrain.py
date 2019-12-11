@@ -100,14 +100,21 @@ class existsL(LogicalConstrain):
         
         if ifLog: self.myLogger.debug("Exists Logical Constrain invoked with variables: %s"%([[x.VarName for x in v1] for v1 in v]))
 
-        existsVar = []
         for currentConcept in v:
+            existsVar = []
+            tokensInConcept = []
+            existsV[currentConcept] = {}
+
             for currentVar in v[currentConcept]:
-                for currentToken in v[currentConcept, currentVar]:
-                    existsVar.extend(v[currentConcept, currentVar, currentToken])
+                for currentToken in v[currentConcept][currentVar]:
+                    existsVar.extend(v[currentConcept][currentVar][currentToken])
+                    tokensInConcept.append(currentToken)
             
-            existsV[currentConcept, token] = myIlpBooleanProcessor.orVar(model, *existsVar, onlyConstrains = headConstrain)
-    
+            existsVarResult = myIlpBooleanProcessor.orVar(model, *existsVar, onlyConstrains = headConstrain)
+            
+            for currentToken in tokensInConcept:
+                existsV[currentConcept][currentToken] = existsVarResult
+
         if  headConstrain:
             if ifLog: self.myLogger.debug("Exists Logical Constrain is the head constrain - only ILP constrain created")
         else:
