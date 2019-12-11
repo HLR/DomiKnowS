@@ -1,4 +1,5 @@
 import logging
+from itertools import permutations
 
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from regr.solver.ilpConfig import ilpConfig 
@@ -11,7 +12,34 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         super().__init__()
                 
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
+        self.constrainCaches = {}
 
+    def resetCaches(self):
+         self.constrainCaches = {}
+
+    def __addToConstrainCaches(self, lmName, onlyConstrains, var, cachedValue):
+        if lmName in self.constrainCaches:
+                if onlyConstrains in self.constrainCaches[lmName]:
+                    self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+                else:
+                    self.constrainCaches[lmName][onlyConstrains] = {}
+                    self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+        else:
+            self.constrainCaches[lmName] = {}
+            self.constrainCaches[lmName][onlyConstrains] = {}
+
+            self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+            
+    def __isInConstrainCaches(self, lmName, onlyConstrains, var):
+        if lmName in self.constrainCaches:
+            if onlyConstrains in self.constrainCaches[lmName]:
+                for currentVarPermutation in permutations(var):
+                    if currentVarPermutation in self.constrainCaches[lmName][onlyConstrains]:
+                        #self.myLogger.debug("%s already created constrain for this variables %s - does nothing"%(lmName, [x.VarName for x in var]))
+                        return (True, self.constrainCaches[lmName][onlyConstrains][currentVarPermutation])
+                    
+        return (False, None)
+                
     def notVar(self, m, var, onlyConstrains = False):
         if onlyConstrains:
             m.addConstr(1 - var >= 1)
@@ -38,11 +66,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
     def andVar(self, m, *var, onlyConstrains = False):
         N = len(var)
-        if N < 1:
-            return None
         
-        if N == 1:
-            return var[0]
+        if N <= 1:
+            return None
         
         if onlyConstrains:
             varSumLinExpr = LinExpr()
@@ -88,18 +114,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
             m.addConstr(varSumLinExpr >= 1)
             
-            self.myLogger.debug("OR only creating  constrain: %s >= %i"%(varSumLinExpr, 1))
+            self.myLogger.debug("OR only creating constrain: %s >= %i"%(varSumLinExpr, 1))
             return
         
         N = len(var)
         
-        if N < 1:
+        if N <= 1:
             self.myLogger.debug("OR returns : %s"%('None'))
             return None
-        
-        if N == 1:
-            self.myLogger.debug("OR returns : %s"%(currentVar[0]))
-            return currentVar[0]
         
         orVarName = "or"
         for currentVar in var:
@@ -115,7 +137,6 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             varSumLinExpr.addTerms(1.0, currentVar)
         
         m.addConstr(varSumLinExpr >= varOR)
-        self.myLogger.debug("OR creating  constrain: %s >= %i"%(varSumLinExpr, 1))
 
         m.update()
              
@@ -137,20 +158,30 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         return varNAND
     
     def nandVar(self, m, *var, onlyConstrains = False):
+        #self.myLogger.debug("NAND called with : %s"%(var,))
+        
+        cacheResult = self.__isInConstrainCaches('nandVar', onlyConstrains, var)
+        if cacheResult[0]:
+            cacheResult[1]
+            
         N = len(var)
         
-        if N < 1:
+        if N <= 1:
+            self.myLogger.debug("NAND returns : %s"%('None'))
             return None
-        
-        if N == 1:
-            return currentVar[0]
         
         if onlyConstrains:
             varSumLinExpr = LinExpr()
             for currentVar in var:
                 varSumLinExpr.addTerms(1.0, currentVar)
         
-            m.addConstr(varSumLinExpr <= N- 1)
+            m.addConstr(varSumLinExpr <= N - 1)
+                        
+            varSumLinExprStr = str(varSumLinExpr)
+            self.myLogger.debug("NAND only created constrain: %s <= %i"%(varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')], N-1))
+            
+            self.__addToConstrainCaches('nandVar', onlyConstrains, var, None)
+      
             return
         
         nandVarName = "nand"
@@ -167,6 +198,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
         m.addConstr(varSumLinExpr <= self.notVar(m, varNAND) + N - 1)
     
+        self.__addToConstrainCaches('nandVar', onlyConstrains, var, varNAND)
+
         return varNAND
     
     def nor2Var(self, m, var1, var2, onlyConstrains = False):
@@ -186,11 +219,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def norVar(self, m, *var, onlyConstrains = False):
         N = len(var)
         
-        if N < 1:
+        if N <= 1:
             return None
-        
-        if N == 1:
-            return currentVar[0]
         
         if onlyConstrains:
             varSumLinExpr = LinExpr()
@@ -232,8 +262,19 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         return varXOR
     
     def ifVar(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("IF called with : %s"%(var1,var2))
+
+        cacheResult = self.__isInConstrainCaches('ifVar', onlyConstrains, (var1, var2))
+        if cacheResult[0]:
+            cacheResult[1]
+            
         if onlyConstrains:
             m.addConstr(var1 <= var2)
+            
+            self.myLogger.debug("IF only created constrain: %s <= %s"%(var1.VarName, var2.VarName))
+
+            self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
+
             return
         
         varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(var1, var2))
@@ -242,6 +283,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         m.addConstr(var2 <= varIF)
         m.addConstr(1 - var1 + var2 >= varIF)
             
+        self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), varIF)
+
         return varIF
            
     def eqVar(self, m, var1, var2, onlyConstrains = False):

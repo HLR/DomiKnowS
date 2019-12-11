@@ -28,7 +28,6 @@ class TestGraph(object):
                 location = Concept(name='location')
                 other = Concept(name='other')
                 o = Concept(name='O')
-    
                 people.is_a(entity)
                 organization.is_a(entity)
                 location.is_a(entity)
