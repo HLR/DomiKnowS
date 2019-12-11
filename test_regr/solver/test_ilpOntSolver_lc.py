@@ -83,7 +83,7 @@ def emr_input(request):
             nandL(o, other)
 
             existsL(people, ('p',))
-            #notL(other, ('o',))
+            notL(other, ('o',))
             #notL(existsL(location, ('l',)), ('e', ))
                 
             work_for = Concept(name='work_for')

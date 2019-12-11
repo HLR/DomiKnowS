@@ -76,14 +76,22 @@ class notL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        notV = list()
+        notV = {}
         
         if ifLog: self.myLogger.debug("Not Logical Constrain invoked with variables: %s"%([[x.VarName for x in v1] for v1 in v]))
         
-        for currrentS in v:
-            for currrentV in currrentS:
-                notV.append(myIlpBooleanProcessor.notVar(model, currrentV, onlyConstrains = headConstrain))
-                
+        for currentConcept in v:
+            notV[currentConcept] = {}
+
+            for currentVar in v[currentConcept]:
+                for currentToken in v[currentConcept][currentVar]:
+                    notVar = []
+
+                    for currentILPVar in v[currentConcept][currentVar][currentToken]:
+                        notVar.append(myIlpBooleanProcessor.notVar(model, currentILPVar, onlyConstrains = headConstrain))
+            
+                    notV[currentConcept][currentToken] = notVar
+                   
         if  headConstrain:
             if ifLog: self.myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
         else:
