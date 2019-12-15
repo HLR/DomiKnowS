@@ -44,9 +44,9 @@ config = {
             'balance_factor': 1.5,
             'label_smoothing': 0.01,
             'focal_gamma': 2,
-            'inference_interval': 1,
-            'inference_training_set': True,
-            'inference_loss': True
+            'inference_interval': 100,
+            'inference_training_set': False,
+            'inference_loss': False
         }
     },
     'Train': {

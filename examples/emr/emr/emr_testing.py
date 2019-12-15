@@ -23,21 +23,21 @@ parser.add_argument('--vocab-path', '-v', type=str,
                     help='override default vocabulary path than vocab in model serialization_dir.')
 parser.add_argument('--data-path', '-d', type=str,
                     help='Path to the data.')
-parser.add_argument('--log-solver', '-s', type=str, default='solver.log',
+parser.add_argument('--solver-log', '-s', type=str, default='solver.log',
                     help='Path save inference log.')
 parser.add_argument('--batch-size', '-b', type=int, default=1,
                     help='Batch size in testing.')
 
 args = parser.parse_args()
 
-def test(model_path, vocab_path, data_path, log_solver, batch_size, Config):
+def test(model_path, vocab_path, data_path, solver_log, batch_size, Config):
     graph = ontology_declaration()
 
     lbp = model_declaration(graph, Config.Model)
 
     seed()
     lbp.load(model_path, 'last', vocab_path)
-    metrics = lbp.test(data_path, log_solver, batch_size)
+    metrics = lbp.test(data_path, solver_log, batch_size)
     print(metrics)
 
 
@@ -52,7 +52,7 @@ def main():
             config_path = os.path.join(args.model_path, 'config.pkl')
         with open(config_path, 'rb') as fin:
             Config = pickle.load(fin)
-    return test(args.model_path, args.vocab_path, args.data_path, args.log_solver, args.batch_size, Config)
+    return test(args.model_path, args.vocab_path, args.data_path, args.solver_log, args.batch_size, Config)
 
 
 if __name__ == '__main__':
