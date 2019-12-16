@@ -338,7 +338,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         fp = 0
         tn = 0
         fn = 0
-        for _iter in range(len(paths)):
+        for _iter in tqdm(range(len(paths)), "Readers Execution: "):
             while True:
                 try:
                     value = next(_array[_iter])
