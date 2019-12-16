@@ -9,7 +9,24 @@ import xml.etree.ElementTree as ET
 import string
 import re
 import json
+from pycorenlp import StanfordCoreNLP
 
+
+
+nlp = StanfordCoreNLP('http://localhost:9000')
+properties={
+  'annotators': 'ssplit',
+  'outputFormat': 'json'
+  }
+def sentence_split(text, properties={'annotators': 'ssplit', 'outputFormat': 'json'}):
+    """Split sentence using Stanford NLP"""
+    annotated = nlp.annotate(text, properties)
+    sentence_split = list()
+    for sentence in annotated['sentences']:
+        s = [t['word'] for t in sentence['tokens']]
+        k = [item.lower() for item in s if item not in [",", ".", '...', '..']]
+        sentence_split.append(" ".join(k))
+    return sentence_split
 
 class DataLoader:
     def __init__(self, _paths, _hint):
@@ -72,10 +89,9 @@ class DataLoader:
                 sample['type'] = "ignore"
             text = sample['parse'].select_one("TEXT").prettify()
             text = re.sub('<[^<]+>', "\n", text)
-            text = text.replace('\n\n', '. ').replace('\n', ' ').replace("Dr.", "Dr ").replace("Mr.", "Mr ").replace(
-                "Al-", "Al").replace("/", " ").replace("'s", " s").replace(".-", "-").replace("-", " ").replace("(",
-                                                                                                                " ").replace(
-                ")", " ").replace("%", ' percent ')
+            text = text.replace("Dr.", "Dr ").replace("Mr.", "Mr ").replace("Al-", "Al").replace("/", " ").replace("'s",
+                                                                                                                   " s").replace(
+                ".-", "-").replace("-", " ").replace("(", " ").replace(")", " ").replace("%", ' percent ')
             x = re.findall(r'[a-z]\.[A-Z]', text)
             for item in x:
                 item = item.replace(".", "\.")
@@ -340,10 +356,15 @@ class DataLoader:
                 phrases_ids = [phrase['id'] for phrase in phrases]
                 for phrase in phrases:
                     for rel in sample['relations']:
+                        if rel in relations:
+                            continue
                         if rel[0] == phrase['id'] and rel[1] in phrases_ids:
                             relations.append(rel)
-                        elif rel[0] == phrase['id'] or rel[1] == phrase['id']:
+                        elif (rel[1] not in phrases_ids or rel[0] not in phrases_ids) and (
+                                rel[0] == phrase['id'] or rel[1] == phrase['id']):
                             all_relations.append(rel)
+                #                 if(len(all_relations) != len(relations)):
+                #                     print("relation not match ", sample['annotation_path'])
 
                 sample['inputs'].append(annotated_sentence)
                 sample['phrases'].append(phrases)
@@ -354,7 +375,7 @@ class DataLoader:
                          'relations': relations, 'all_relations': all_relations, 'file': sample['annotation_path']})
             iteration += 1
             if (total_phrases + passed != len(sample['annotated'])):
-                print(sample['annotation_path'])
+                print("phrase not match ", sample['annotation_path'])
             print('Labled {} inputs with total number of sentences with entities of {} sentences'.format(iteration, len(
                 self.data)), end='\r')
         self.data = [item for item in self.data if len(item["words"]) != 0]
@@ -379,12 +400,70 @@ class DataLoader:
         self.prepareLables()
         self.readLables()
         self.lableInputs()
-
-
+#         self.posTagFinder()
 #         self.posTagFinder()
 
 
-class SimpleReader:
+def sentence_merger(data):
+    update_list = []
+    count = 0
+    passing = 0
+    removing = []
+    print(len(data.data))
+    for _iter in range(len(data.data)):
+        if count < passing:
+            count += 1
+            continue
+        else:
+            count = 0
+            passing = 0
+        if len(data.data[_iter]['all_relations']) != 0:
+            print("iteration is ", _iter)
+            for relation in data.data[_iter]['all_relations']:
+                if relation in data.data[_iter]['relations']:
+                    print("here it is ")
+                    continue
+                search = None
+                check = False
+                if relation[0] in [phrase['id'] for phrase in data.data[_iter]['phrases']]:
+                    search = relation[1]
+                else:
+                    search = relation[0]
+                print(search)
+                for j in range(1, 3):
+                    if search in [phrase['id'] for phrase in data.data[_iter + j]['phrases']]:
+                        print("it is in ", _iter + j)
+                        check = True
+                        new_start = len(data.data[_iter]['words'])
+                        passing = j
+                        for i in range(1, j + 1):
+                            print("merging in process")
+                            removing.append(_iter + i)
+                            data.data[_iter]['words'].extend(data.data[_iter + i]['words'])
+                            for phrase in data.data[_iter + i]['phrases']:
+                                phrase['before'] += new_start
+                            data.data[_iter]['phrases'].extend(data.data[_iter + i]['phrases'])
+                            data.data[_iter]['relations'].extend(data.data[_iter + i]['relations'])
+                            data.data[_iter]['all_relations'].extend(data.data[_iter + i]['all_relations'])
+                            data.data[_iter]['sentence'] = " ".join(
+                                [data.data[_iter]['sentence'], data.data[_iter + i]['sentence']])
+                            new_start += len(data.data[_iter + i]['words'])
+                        break
+                if not check:
+                    print(search)
+                    #                 print(relation)
+                    print(data.data[_iter]['sentence'])
+                    #                 print(data.data[_iter]['relations'])
+                    #                 print(data.data[_iter]['all_relations'])
+                    print("error")
+                break
+
+    for remove in removing:
+        del(data.data[remove])
+    print(len(data.data))
+
+
+class SimpleReader():
     def __init__(self, file):
         self.file = file
         with open(file, 'r') as myfile:
@@ -407,17 +486,30 @@ class SimpleReader:
 
     def data(self):
         for item in self.obj:
+            for phrase in item['phrases']:
+                phrase['index'] = phrase['value_index'] + phrase['before']
+            for relation in item['relations']:
+                for phrase in item['phrases']:
+                    if relation[0] == phrase['id']:
+                        relation.append([phrase['index'], phrase['after']-1])
+                    if relation[1] == phrase['id']:
+                        relation.append([phrase['index'], phrase['after']-1])
+            relation_locations = [[relation[5], relation[6], relation[2]] for relation in item['relations']]
+            relations = {}
+            keys = {"ART", "GEN-AFF", "METONYMY", "ORG-AFF", "PART-WHOLE", "PER-SOC", "PHYS"}
+            for key in keys:
+                relations[key]= []
+            for relation_location in relation_locations:
+                relations[relation_location[2]].append([relation_location[0], relation_location[1]])
             _dict = {
-                "raw": item['sentence'],
+                "raw": item['sentence'].replace("u s", "us").replace(" m r", " mr ").replace(" u k ", " uk ").replace(" u n ", " un "),
                 "FAC": self.get_prob(item['words'], "FAC"),
-                "GPE": self.get_prob(item['words'], "GPE"),
-                "LOC": self.get_prob(item['words'], "LOC"),
-                "PER": self.get_prob(item['words'], "PER"),
-                "ORG": self.get_prob(item['words'], "ORG"),
-                "VEH": self.get_prob(item['words'], "VEH"),
-                "WEA": self.get_prob(item['words'], "WEA"),
+                "GEP": self.get_prob(item['words'], "GPE"),
+                "LOC" : self.get_prob(item['words'], "LOC"),
+                "PER" : self.get_prob(item['words'], "PER"),
+                "ORG" : self.get_prob(item['words'], "ORG"),
+                "VEH" : self.get_prob(item['words'], "VEH"),
+                "WEA" : self.get_prob(item['words'], "WEA"),
+                "relations" : relations
             }
             yield _dict
-
-
-
