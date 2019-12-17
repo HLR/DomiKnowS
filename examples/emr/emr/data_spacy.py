@@ -209,65 +209,14 @@ def reprocess(sentence, relations, keep_entity=False, first=True):
     return new_tokens, labels, relations
 
 
-def spacy_index(index, tokens, spacy_tokens):
-    char_index = 0
-    char_length = 0
-    for index_cur, token in enumerate(tokens):
-        if index_cur < index[0]:
-            pass
-        elif index_cur < index[1]:
-            char_length += len(token) + 1
-        else:
-            break
-        char_index += len(token) + 1
-    # - 1 char_length has one more space, then we do not need -1
-    start_char_index = char_index - char_length
-
-    matched_spacy_tokens = []
-    for spacy_token in spacy_tokens:
-        if spacy_token.idx < start_char_index:
-            pass
-        elif spacy_token.idx < start_char_index + char_length:
-            assert spacy_token.idx + \
-                len(spacy_token) <= start_char_index + char_length
-            matched_spacy_tokens.append(spacy_token)
-        else:
-            break
-    return matched_spacy_tokens
-
-
-def spacy_process(splitter, tokens, labels, relations):
-    sentence = ' '.join(tokens)
-    spacy_tokens = splitter.split_words(sentence)
-
-    spacy_labels = []
-    for label in labels:
-        (label_type, index, token) = label
-        token = spacy_index(index, tokens, spacy_tokens)
-        spacy_label = (label_type, token)
-        spacy_labels.append(spacy_label)
-
-    spacy_relations = []
-    for relation in relations:
-        (relation_type, (src_index, src_token), (dst_index, dst_token)) = relation
-        src_token = spacy_index(src_index, tokens, spacy_tokens)
-        dst_token = spacy_index(dst_index, tokens, spacy_tokens)
-        spacy_relation = (relation_type, src_token, dst_token)
-        spacy_relations.append(spacy_relation)
-
-    return spacy_tokens, spacy_labels, spacy_relations
-
-
 class Conll04SpaCyReader(SensableReader):
     corpus_reader = Conll04CorpusReader()
-    splitter = SpacyWordSplitter(
-        'en_core_web_sm', True, True, True, keep_spacy_tokens=True)
 
     def __init__(self, entity_anckor='last') -> None:
         super().__init__()
-        self.entity_anckor = entity_anckor
+        self.set_entity_anckor(entity_anckor)
 
-    def entity_anckor(self, entity_anckor):
+    def set_entity_anckor(self, entity_anckor):
         if entity_anckor in ('first', 'lass'):
             raise ValueError('"entity_anckor" must be one of "first" or "last".')
         if entity_anckor == 'first':
@@ -275,15 +224,67 @@ class Conll04SpaCyReader(SensableReader):
         elif entity_anckor == 'last':
             self._entity_index = -1
 
-    entity_anckor = property(fset=entity_anckor)
+    splitter = SpacyWordSplitter(
+        'en_core_web_sm', True, True, True, keep_spacy_tokens=True)
+    @classmethod
+    def split(cls, sentence):
+        return cls.splitter.split_words(sentence)
+
+    @classmethod
+    def match(cls, index, tokens, spacy_tokens):
+        char_index = 0
+        char_length = 0
+        for index_cur, token in enumerate(tokens):
+            if index_cur < index[0]:
+                pass
+            elif index_cur < index[1]:
+                char_length += len(token) + 1
+            else:
+                break
+            char_index += len(token) + 1
+        # - 1 char_length has one more space, then we do not need -1
+        start_char_index = char_index - char_length
+
+        matched_spacy_tokens = []
+        for spacy_token in spacy_tokens:
+            if spacy_token.idx < start_char_index:
+                pass
+            elif spacy_token.idx < start_char_index + char_length:
+                assert spacy_token.idx + \
+                    len(spacy_token) <= start_char_index + char_length
+                matched_spacy_tokens.append(spacy_token.i)
+            else:
+                break
+        return matched_spacy_tokens
+
+    @classmethod
+    def process_one(cls, tokens, labels, relations):
+        sentence = ' '.join(tokens)
+        split_tokens = cls.split(sentence)
+
+        split_labels = []
+        for label in labels:
+            (label_type, index, token) = label
+            token = cls.match(index, tokens, split_tokens)
+            split_label = (label_type, token)
+            split_labels.append(split_label)
+
+        split_relations = []
+        for relation in relations:
+            (relation_type, (src_index, src_token), (dst_index, dst_token)) = relation
+            src_token = cls.match(src_index, tokens, split_tokens)
+            dst_token = cls.match(dst_index, tokens, split_tokens)
+            split_relation = (relation_type, src_token, dst_token)
+            split_relations.append(split_relation)
+
+        return split_tokens, split_labels, split_relations
 
     def raw_read(self, file_path):
         sentences, relation_lists = self.corpus_reader(file_path)
         for sentence, relations in zip(sentences, relation_lists):
             tokens, labels, relations = reprocess(sentence, relations)
-            spacy_tokens, spacy_labels, spacy_relations = spacy_process(
-                self.splitter, tokens, labels, relations)
-            yield spacy_tokens, spacy_labels, spacy_relations
+            tokens, labels, relations = self.process_one(tokens, labels, relations)
+            yield tokens, labels, relations
 
     @cls.tokens('sentence')
     def update_sentence(
@@ -336,7 +337,7 @@ class Conll04SpaCyReader(SensableReader):
             return None
         label_list = [NONE_LABEL,] * len(tokens)
         for label_type, token in labels:
-            label_list[token[self._entity_index].i] = label_type
+            label_list[token[self._entity_index]] = label_type
         return SequenceLabelField(label_list, fields[self.get_fieldname('word')])
 
     @cls.field('relation')
@@ -352,7 +353,7 @@ class Conll04SpaCyReader(SensableReader):
         relation_indices = []
         relation_labels = []
         for relation_type, src_token, dst_token in relations:
-            relation_indices.append((src_token[self._entity_index].i, dst_token[self._entity_index].i))
+            relation_indices.append((src_token[self._entity_index], dst_token[self._entity_index]))
             relation_labels.append(relation_type)
         return AdjacencyField(
             relation_indices,
@@ -381,7 +382,7 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
             labels_dict[label_type] = [False,] * len(tokens)
 
         for label_type, token in labels:
-            labels_dict[label_type][token[self._entity_index].i] = True
+            labels_dict[label_type][token[self._entity_index]] = True
 
         for label_type, label_list in labels_dict.items():
             yield label_type, SequenceLabelField(label_list, fields[self.get_fieldname('word')])
@@ -402,7 +403,7 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
         for relation_type, src_token, dst_token in relations:
             try:
                 relations_dict[relation_type].append(
-                    (src_token[self._entity_index].i, dst_token[self._entity_index].i))
+                    (src_token[self._entity_index], dst_token[self._entity_index]))
             except KeyError:
                 msg = 'Relationship {} is unknown. Sentence: {} Raltions: {}'.format(relation_type, tokens, relations)
                 warnings.warn(msg, stacklevel=3)

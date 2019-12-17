@@ -24,6 +24,7 @@ from ...solver.ilpOntSolver import ilpOntSolver
 from ...solver.allennlpInferenceSolver import AllennlpInferenceSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
+from ...sensor.allennlp.sensor import SentenceEmbedderSensor
 from .. import Graph, Property
 from ..dataNode import DataNode
 from .model import GraphModel
@@ -166,7 +167,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             scheduler = None
 
         # prepare iterator
-        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderLearner)]
+        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderSensor)]
         iterator = BucketIterator(sorting_keys=sorting_keys,
                                   track_epoch=True,
                                   **train_config.iterator)
