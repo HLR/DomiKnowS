@@ -251,11 +251,6 @@ class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
         else:
             raise TypeError()
 
-    def forward(
-        self,
-        context: Dict[str, Any]
-    ) -> Any:
-        return self.module(context[self.fullname])
 
 class NGramSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
     def create_module(self):

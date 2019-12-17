@@ -56,7 +56,7 @@ config = {
         'trainer': {
             'num_epochs': 100,
             'patience': None,
-            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+            'serialization_dir': None #'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
         },
         'optimizer': {
             'type': 'adam',
