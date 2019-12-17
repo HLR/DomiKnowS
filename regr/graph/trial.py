@@ -7,6 +7,11 @@ class TrialTree(BaseGraphTree):
         super().__init__(name=name)
         self.trial = trial
 
+    def what(self):
+        wht = BaseGraphTree.what(self)
+        wht['trial'] = repr(self.trial)
+        return wht
+
 
 class Trial():
     @classmethod
@@ -73,3 +78,6 @@ class Trial():
     def values(self):
         for key in iter(self):
             yield self[key]
+
+    def __repr__(self):
+        return repr(dict(self))

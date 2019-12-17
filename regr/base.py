@@ -1,4 +1,5 @@
 import abc
+import gc
 from collections import Counter, defaultdict, OrderedDict
 from contextlib import contextmanager
 from threading import Lock
@@ -40,6 +41,11 @@ class Scoped(object):
     def __init__(self, blocking=False):
         self._blocking = blocking
 
+    @classmethod
+    def clear(cls):
+        cls.__context.__locks.clear()
+        gc.collect()
+
     @contextmanager
     def scope(self, blocking=None):
         if blocking is None:
@@ -78,7 +84,6 @@ class Named(Scoped):
         Scoped.__init__(self, blocking=False)
         self.name = name
 
-
     def __repr__(self):
         cls = type(self)
         with self.scope() as detailed:
@@ -99,6 +104,7 @@ class AutoNamed(Named):
 
     @classmethod
     def clear(cls):
+        Named.clear()
         cls._names.clear()
         cls._objs.clear()
 

@@ -16,7 +16,7 @@ DataInstance = Dict[str, torch.Tensor]
 class AllennlpInferenceSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def inferSelection(self, graph: Graph, data: DataInstance, vocab=None) -> DataInstance:
+    def inferSelection(self, graph: Graph, data: DataInstance) -> DataInstance:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -86,11 +86,8 @@ class AllennlpInferenceSolver(ilpOntSolver):
         # inference per instance
         for batch_index in range(batch_size):
             # prepare tokens
-            if vocab:
-                tokens = ['{}_{}'.format(i, token)
-                          for i, token in enumerate(sentence[batch_index])]
-            else:
-                tokens = [str(i) for i in range(mask_len[batch_index])]
+            tokens = ['{}_{}'.format(i, token)
+                      for i, token in enumerate(sentence[batch_index])]
             # prepare tables
             table_list = []
             for rank in range(1, max_rank + 1):

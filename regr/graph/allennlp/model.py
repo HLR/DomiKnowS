@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Tuple, Iterable
 from collections import OrderedDict
-from torch import Tensor
+from torch import Tensor, cuda
 from torch.nn import Module
 from allennlp.models import Model
 from allennlp.data import Vocabulary
@@ -200,11 +200,14 @@ class GraphModel(Model):
         self,
         **data: DataInstance
     ) -> DataInstance:
+        Trial.clear() # reset at every epoch
+        #if cuda.is_available():
+        #    cuda.empty_cache()
+
         # make sure every node needed are calculated
         for prop in self.graph.poi:
             for name, sensor in prop.items():
                 sensor(data)
-        Trial.clear() # reset at every epoch
         trivial_trial = Trial(data)
 
         with trivial_trial:
@@ -223,7 +226,7 @@ class GraphModel(Model):
         data: DataInstance
     ) -> DataInstance:
         #data = inference(self.graph, self.graph.solver, data, self.vocab)
-        data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
+        data = self.graph.solver.inferSelection(self.graph, data)
 
         return data
 

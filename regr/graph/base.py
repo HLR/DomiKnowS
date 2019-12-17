@@ -9,12 +9,22 @@ class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
         AutoNamed.__init__(self, name)  # name may be update
         NamedTreeNode.__init__(self, self.name)
 
+    @classmethod
+    def clear(cls):
+        AutoNamed.clear()
+        NamedTreeNode.clear()
+
 
 @BaseGraphTreeNode.share_context
 class BaseGraphTree(AutoNamed, NamedTree):
     def __init__(self, name=None):
         AutoNamed.__init__(self, name)  # name may be update
         NamedTree.__init__(self, self.name)
+
+    @classmethod
+    def clear(cls):
+        AutoNamed.clear()
+        NamedTree.clear()
 
 
 @Scoped.class_scope
