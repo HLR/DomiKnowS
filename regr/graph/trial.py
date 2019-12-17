@@ -1,3 +1,4 @@
+import gc
 from .base import BaseGraphTree
 
 
@@ -17,6 +18,7 @@ class Trial():
     @classmethod
     def clear(cls):
         TrialTree.clear()
+        gc.collect()  # to release memory right away
 
     @classmethod
     def default(cls):

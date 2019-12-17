@@ -1,5 +1,4 @@
 import abc
-import gc
 from collections import Counter, defaultdict, OrderedDict
 from contextlib import contextmanager
 from threading import Lock
@@ -44,7 +43,6 @@ class Scoped(object):
     @classmethod
     def clear(cls):
         cls.__context.__locks.clear()
-        gc.collect()
 
     @contextmanager
     def scope(self, blocking=None):
