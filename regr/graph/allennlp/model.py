@@ -196,13 +196,21 @@ class GraphModel(Model):
     def _update_loss(self, trivial_trial, trial):
         trial['loss'] = self.loss_func(trivial_trial, trial)
 
+    i = 0
     def forward(
         self,
         **data: DataInstance
     ) -> DataInstance:
         Trial.clear() # reset at every epoch
-        #if cuda.is_available():
-        #    cuda.empty_cache()
+
+#         if (self.i % 100 == 0):
+#             import gc
+#             gc.collect()
+#             if cuda.is_available():
+#                 cuda.empty_cache()
+#             self.i = 1
+#         else:
+#             self.i += 1
 
         # make sure every node needed are calculated
         for prop in self.graph.poi:

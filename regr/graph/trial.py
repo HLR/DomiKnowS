@@ -1,4 +1,5 @@
 import gc
+import weakref
 from .base import BaseGraphTree
 
 
@@ -6,11 +7,16 @@ from .base import BaseGraphTree
 class TrialTree(BaseGraphTree):
     def __init__(self, trial, name=None):
         super().__init__(name=name)
-        self.trial = trial
+        self._trial = weakref.ref(trial)
+
+    @property
+    def trial(self):
+        return self._trial()
 
     def what(self):
         wht = BaseGraphTree.what(self)
-        wht['trial'] = repr(self.trial)
+        if self.trial:
+            wht['trial'] = repr(self.trial)
         return wht
 
 
@@ -18,7 +24,7 @@ class Trial():
     @classmethod
     def clear(cls):
         TrialTree.clear()
-        gc.collect()  # to release memory right away
+        #gc.collect()  # to release memory right away -- too slow
 
     @classmethod
     def default(cls):
