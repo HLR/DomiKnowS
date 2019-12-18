@@ -783,11 +783,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if token3 == token1:
                             continue
                         
-                        if (tripleRelationName, token1, token2, token3) not in z:
-                            continue
+                        # Check if probability not zero
+                        currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        if currentProbability == 0:
+                            continue   
                         
                         # Create variable
-                        z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
+                        z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="z_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
                         #self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         # Create negative variable
@@ -933,7 +935,42 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 self.myLogger.info("Created %i constrains for relation \"%s\""%(tripleConstrainsNo,tripleRelationName))
         else: # ------- No Ontology
-            pass
+            tripleRelations = set()
+            
+            for graph in self.myGraph:
+                for currentGraphConceptName in graph.concepts:
+                    for tripleRelationName in graphResultsForPhraseTripleRelation:
+                        if tripleRelationName in graph.concepts:
+                            tripleRelations.add(graph.concepts[tripleRelationName])
+                            
+                for subGraphKey in graph._objs:
+                    subGraph = graph._objs[subGraphKey]
+                    for tripleRelationName in graphResultsForPhraseTripleRelation:
+                        if tripleRelationName in subGraph.concepts:
+                            tripleRelations.add(subGraph.concepts[tripleRelationName])
+                            
+            for relation in tripleRelations:
+                for arg_id, rel in enumerate(relation.has_a()): 
+                    # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
+                    # A has_a B : A(x,y,...) <= B(x)
+                    #for xy in candidates[rel.src]:
+                    #x = xy[arg_id]
+                    tripleRelationName = rel.src.name
+                    conceptName = rel.dst.name
+                    
+                    if arg_id > 2:
+                        self.myLogger.warn("When creating triple relation constrains for relation \"%s\" for concept \"%s\" received more then three concepts"%(tripleRelationName,conceptName))
+                        continue
+                    
+                    for triple in permutations(tokens, r=3):
+                        if  (tripleRelationName, triple[0], triple[1], triple[2]) not in z:
+                            continue
+                        
+                        if (conceptName, triple[arg_id]) not in x: 
+                            continue
+                            
+                        self.myIlpBooleanProcessor.ifVar(m, z[tripleRelationName, triple[0], triple[1], triple[2]], x[conceptName, triple[arg_id]], onlyConstrains = True)
+                        #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[tripleRelationName, token1, token2].VarName,x[conceptName, token1].VarName))
             
         m.update()
 
@@ -969,97 +1006,102 @@ class gurobiILPOntSolver(ilpOntSolver):
             for lcKey, lc in graph.logicalConstrains.items():
                 self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, headLC = True)
                 
-    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, headLC = False):
+    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName='Final', headLC = False):
         lcVariables = {}
         
-        for eIndex, e in enumerate(lc.e):     
-            if isinstance(e, Concept): # -- Concept or Relation
-                typeOfConcept, conceptTypes = self._typeOfConcept(e)
-                conceptName = e.name
-                
-                if typeOfConcept == 'concept':
-                    _lcVariables = {}
+        for eIndex, e in enumerate(lc.e): 
+            if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
+                variablesNames = None
+                if eIndex + 1 < len(lc.e):
+                    if isinstance(lc.e[eIndex+1], tuple):
+                        variablesNames = lc.e[eIndex+1]
+                        
+                if isinstance(e, Concept): # -- Concept or Relation
+                    typeOfConcept, conceptTypes = self._typeOfConcept(e)
+                    conceptName = e.name
                     
-                    variableName1 = 'variableName1'
-                    if eIndex + 1 < len(lc.e):
-                        if isinstance(lc.e[eIndex+1], tuple):
-                            variablesNames = lc.e[eIndex+1]
-                            
-                            if len(variablesNames) == 1:
-                                variableName1 = variablesNames[0]
-                            else:
-                                self.myLogger.error('Logical Constrain has incorrect variables set %s for %s'%(variablesNames,conceptName))
-                                
-                    for token in tokens:
-                        if (conceptName, token) in x:
-                            _lcVariables[token] = [x[conceptName, token]]
-                        else:
-                            _lcVariables[token] = [None]
-
-                    lcVariables[conceptName] = {variableName1:_lcVariables}
+                    if not variablesNames:
+                        self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,conceptName))
+                        variablesNames = ()
                     
-                elif typeOfConcept == 'pair':
-                    _lcVariables1 = {}
-                    _lcVariables2 = {}
-
-                    variableName1 = 'variableName1'
-                    variableName2 = 'variableName2'
-                    if eIndex + 1 < len(lc.e):
-                        if isinstance(lc.e[eIndex+1], tuple):
-                            variablesNames = lc.e[eIndex+1]
+                    if typeOfConcept == 'concept':
+                        if len(variablesNames) == 0:
+                            variablesNames = ('variableName1', )
                             
-                            if len(variablesNames) == 2:
-                                variableName1 = variablesNames[0]
-                                variableName2 = variablesNames[1]
+                        if len(variablesNames) > 1:
+                            self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        _lcVariables = {}
+                                    
+                        for token in tokens:
+                            if (conceptName, token) in x:
+                                _lcVariables[token] = [x[conceptName, token]]
                             else:
-                                self.myLogger.error('Logical Constrain has incorrect variables set %s for %s'%(variablesNames,conceptName))
-                                
-                    for tokensPair in permutations(tokens, r=2):
-                        if (conceptName, *tokensPair) in y:
-                            if tokensPair[0] in _lcVariables1:
-                                _lcVariables1[tokensPair[0]].append(y[(conceptName, *tokensPair)])
-                            else:
+                                _lcVariables[token] = [None]
+                        
+                        lcVariables[conceptName] = {variablesNames[0]:_lcVariables}
+                        
+                    elif typeOfConcept == 'pair':
+                        _lcVariables1 = {}
+                        _lcVariables2 = {}
+    
+                        if len(variablesNames) == 0:
+                            variablesNames = ('variableName1', 'variableName2')
+                            
+                        if len(variablesNames) > 2:
+                            self.myLogger.warn('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        for tokensPair in permutations(tokens, r=2):
+                            if (conceptName, *tokensPair) in y:
                                 _lcVariables1[tokensPair[0]] = [y[(conceptName, *tokensPair)]]
-                                
-                            if tokensPair[1] in _lcVariables2:
-                                _lcVariables2[tokensPair[1]].append(y[(conceptName, *tokensPair)])
-                            else:
                                 _lcVariables2[tokensPair[1]] = [y[(conceptName, *tokensPair)]]
-                   
-                    #_lcVariables1[tokensPair[0]] = [None]
-                    lcVariables[conceptName] = {variableName1:_lcVariables1}
-                    lcVariables[conceptName][variableName2] = _lcVariables2
-
-                elif typeOfConcept == 'triplet':
-                    _lcVariables = []
-                    for token1 in tokens:
-                        for token2 in tokens:
-                            if token2 == token1:
-                                continue
-                                
-                            for token3 in tokens:
-                                if token3 == token2:
+                            else:
+                                _lcVariables1[tokensPair[0]] = [None]
+                                _lcVariables2[tokensPair[1]] = [None]
+                       
+                        #_lcVariables1[tokensPair[0]] = [None]
+                        lcVariables[conceptName] = {variablesNames[0]:_lcVariables1}
+                        lcVariables[conceptName][variablesNames[1]] = _lcVariables2
+    
+                    elif typeOfConcept == 'triplet':
+                        _lcVariables = []
+                        for token1 in tokens:
+                            for token2 in tokens:
+                                if token2 == token1:
                                     continue
-                                
-                                if token3 == token1:
-                                    continue
-
-                                if (conceptName, token1, token2, token3) in z:
-                                    _lcVariables.append(z[conceptName, token1, token2, token3])
-                                else:
-                                     _lcVariables.append(None)
+                                    
+                                for token3 in tokens:
+                                    if token3 == token2:
+                                        continue
+                                    
+                                    if token3 == token1:
+                                        continue
+    
+                                    if (conceptName, token1, token2, token3) in z:
+                                        _lcVariables.append(z[conceptName, token1, token2, token3])
+                                    else:
+                                         _lcVariables.append(None)
+                        
+                        lcVariables.append(_lcVariables)
+    
+                elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively
+                    if not variablesNames:
+                        self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,e))
+                        variablesNames = ()
+                        
+                    if len(variablesNames) == 0:
+                        variablesNames = ('variableName1', )
+                            
+                    if len(variablesNames) > 1:
+                        self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,e))
                     
-                    lcVariables.append(_lcVariables)
-
-            elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively
-                lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation))
+                    lcVariables = self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName = variablesNames[0])
             elif isinstance(e, tuple): # tuple with named variable - skip for now
                 pass # Already processed in the previous iteration
             else:
-                self.myLogger.error('Logical Constrain has incorrect variables element %s'%(e))
+                self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lcKey,e))
 
-                
-        return lc(m, self.myIlpBooleanProcessor, lcVariables, headConstrain = headLC)
+        return lc(m, self.myIlpBooleanProcessor, lcVariables, resultVariableName=resultVariableName, headConstrain = headLC)
                 
     def _typeOfConcept (self, e):
         for is_a in e.is_a():
