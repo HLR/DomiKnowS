@@ -15,7 +15,7 @@ import torch
 import itertools
 from tqdm import tqdm
 from data.reader import SimpleReader
-from Graphs.graph import pair, ART, word, phrase
+from Graphs.graph import pair, ART, word, phrase, PART_WHOLE, ART, ORG_AFF, PER_SOC, METONYMY, PHYS, GEN_AFF
 
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
@@ -265,14 +265,15 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                 while True:
                     try:
                         value = next(_array[j][i])
+                        print(value)
                         for item in reader_sensors:
                             item.fill_data(value)
                         truth = []
                         pred = []
                         info = {}
                         context = {}
-                        # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
-                        # print("end")
+                        print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
+                        print("end")
                         for prop1 in self.poi:
                             entity = prop1.sup.name
                             prop_name = prop1.name
@@ -282,6 +283,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                 info[entity][prop_name] = {"start": len(truth)}
                             list(prop1.find(ReaderSensor))[0][1](context=context)
                             list(prop1.find(TorchLearner))[0][1](context=context)
+                            if prop1.sup == pair:
+                                print("a relation type is here")
                             # check this with quan
                             truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                             pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])

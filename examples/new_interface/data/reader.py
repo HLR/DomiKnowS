@@ -504,12 +504,12 @@ class SimpleReader():
             _dict = {
                 "raw": item['sentence'].replace("u s", "us").replace(" m r", " mr ").replace(" u k ", " uk ").replace(" u n ", " un "),
                 "FAC": self.get_prob(item['words'], "FAC"),
-                "GEP": self.get_prob(item['words'], "GPE"),
-                "LOC" : self.get_prob(item['words'], "LOC"),
-                "PER" : self.get_prob(item['words'], "PER"),
-                "ORG" : self.get_prob(item['words'], "ORG"),
-                "VEH" : self.get_prob(item['words'], "VEH"),
-                "WEA" : self.get_prob(item['words'], "WEA"),
-                "relations" : relations
+                "GPE": self.get_prob(item['words'], "GPE"),
+                "LOC": self.get_prob(item['words'], "LOC"),
+                "PER": self.get_prob(item['words'], "PER"),
+                "ORG": self.get_prob(item['words'], "ORG"),
+                "VEH": self.get_prob(item['words'], "VEH"),
+                "WEA": self.get_prob(item['words'], "WEA"),
+                "relations": relations
             }
             yield _dict

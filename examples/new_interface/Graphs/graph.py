@@ -26,6 +26,7 @@ with Graph('global') as graph:
         PER = phrase(name='PER')
         VEH = phrase(name='VEH')
         WEA = phrase(name='WEA')
+
         ART = pair(name="ART")
         GEN_AFF = pair(name="GEN-AFF")
         METONYMY = pair(name="METONYMY")

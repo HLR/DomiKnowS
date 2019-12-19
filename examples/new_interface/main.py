@@ -15,6 +15,7 @@ from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
 from Graphs.Sensors.wordSensors import WordEmbedding, BetweenIndexGenerator, PairIndexGenerator, \
     MultiplyCatSensor, BetweenEncoderSensor, WordPosTaggerSensor
 from Graphs.Sensors.edgeSensors import FlairSentenceToWord, WordToPhraseTransformer, PhraseToPair, SentenceToWordPos
+from Graphs.Sensors.relationSensors import RelationReaderSensor
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, ProbabilitySelectionEdgeSensor, \
     MaxAggregationSensor, TorchEdgeSensor, LastAggregationSensor, ConcatSensor, ListConcator, MeanAggregationSensor
 from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner, TorchLearner
@@ -98,7 +99,8 @@ def model_declaration():
     pair['phrase_features'] = MultiplyCatSensor('index', 'phrase1_encode', 'phrase2_encode')
     pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
     pair['features'] = ConcatSensor('phrase_features', 'between_encoder')
-    pair[ART] = FullyConnectedLearner('features', input_dim=1440, output_dim=2)
+    pair[ART] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[ART] = RelationReaderSensor(keyword=ART.name)
     # phrase.relate_to(FAC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # phrase.relate_to(GPE)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # word.relate_to(PER)[0]['selection'] = ProbabilitySelectionEdgeSensor()
@@ -120,6 +122,7 @@ def main():
     paths = ["ACE_JSON/train/result0.json"]
     updated_graph = model_declaration()
 
+    # updated_graph.load()
     updated_graph.train(iterations=1, paths=paths)
     # updated_graph.load()
     # updated_graph.test(paths=paths)

@@ -65,7 +65,10 @@ class BetweenEncoderSensor(TorchSensor):
     def forward(self,) -> Any:
         results = []
         for item in self.inputs[0]:
-            data = self.inputs[-1][item[0]+1:item[1]]
+            if item[0]+1 <= item[1]:
+                data = self.inputs[-1][item[0]:item[1]]
+            else:
+                data = self.inputs[-1][item[0]+1:item[1]]
             results.append(torch.mean(data, dim=0))
         return torch.stack(results)
 
