@@ -3,7 +3,8 @@ from typing import Any
 import torch
 from .sensors import TorchSensor
 from .learnerModels import PyTorchFC, LSTMModel
-
+import os.path
+from os import path
 
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
@@ -32,8 +33,9 @@ class TorchLearner(TorchSensor):
 
     def load(self, filepath):
         final_name = self.fullname.replace('/', '_')
-        self.model.load_state_dict(torch.load(filepath+"/"+final_name))
-        self.model.eval()
+        if path.exists(filepath+"/"+final_name):
+            self.model.load_state_dict(torch.load(filepath+"/"+final_name))
+            self.model.eval()
 
 
 class LSTMLearner(TorchLearner):
