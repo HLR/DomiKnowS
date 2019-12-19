@@ -79,7 +79,7 @@ Scoped._Scoped__context = Scoped
 
 class Named(Scoped):
     def __init__(self, name):
-        Scoped.__init__(self, blocking=False)
+        super().__init__(blocking=False)
         self.name = name
 
     def __repr__(self):
@@ -102,7 +102,7 @@ class AutoNamed(Named):
 
     @classmethod
     def clear(cls):
-        Named.clear()
+        super().clear()
         cls._names.clear()
         cls._objs.clear()
 
@@ -176,13 +176,18 @@ class NamedTreeNode(Named):
         return cls_
 
     @classmethod
+    def clear(cls):
+        super().clear()
+        cls._context.clear()
+
+    @classmethod
     def default(cls):
         if cls._context:
             return cls._context[-1]
         return None
 
     def __init__(self, name=None):
-        Named.__init__(self, name)
+        super().__init__(name)
         cls = type(self)
         self._sup = None
         self.attach_to_context()
@@ -235,17 +240,19 @@ class NamedTree(NamedTreeNode, OrderedDict):
     def __repr__(self):
         with hide_inheritance(NamedTree, dict):
             # prevent pprint over optimize OrderedDict(dict) on NamedTree instance
-            return NamedTreeNode.__repr__(self)
+            return super().__repr__()
 
     def __hash__(self):  # NB: OrderedDict is unhashable.
+        # dict override __hash__ by setting it to None. Using super().__hash__() gives problem.
         return NamedTreeNode.__hash__(self)
 
     def __eq__(self, other): # NB: OrderedDict has __eq__, empty == empty, which is not what we expected
+        # dict override __eq__ in an waired way also
         return NamedTreeNode.__eq__(self, other)
 
     def __init__(self, name=None):
-        NamedTreeNode.__init__(self, name)
-        OrderedDict.__init__(self)
+        super().__init__(name)
+        super(NamedTreeNode, self).__init__(self.name)
 
     def attach(self, sub, name=None):
         # resolve and prevent recursive definition
