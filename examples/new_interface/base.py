@@ -272,8 +272,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         pred = []
                         info = {}
                         context = {}
-                        print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
-                        print("end")
+                        # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
+                        # print("end")
                         for prop1 in self.poi:
                             entity = prop1.sup.name
                             prop_name = prop1.name
@@ -284,7 +284,40 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             list(prop1.find(ReaderSensor))[0][1](context=context)
                             list(prop1.find(TorchLearner))[0][1](context=context)
                             if prop1.sup == pair:
+                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
+                                phrases_gr = context[phrase['ground_bound'].fullname]
+                                phrases = context[phrase['raw'].fullname]
+                                matches = []
+                                for _ph in phrases:
+                                    check = False
+                                    for _tr in phrases_gr:
+                                        if _ph[0] == _tr[0] and _ph[1] == _tr[1]:
+                                            matches.append(_tr)
+                                            check = True
+                                            break
+                                        elif _ph[0] == _tr[0] and _tr[1] - 1 <= _ph[1] <= _tr[1] + 1:
+                                            matches.append(_tr)
+                                            check = True
+                                            break
+                                        elif _ph[1] == _tr[1] and _tr[0] - 1 <= _ph[0] <= _tr[0] + 1:
+                                            matches.append(_tr)
+                                            check = True
+                                            break
+                                    if not check:
+                                        matches.append("NONE")
+                                pairs = context[pair['index'].fullname]
+                                pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                                _truth = []
+                                for _iteration in range(len(pairs)):
+                                    for item in pairs_gr:
+                                        if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == item[1]:
+                                            _truth.append(1)
+                                        else:
+                                            _truth.append(0)
+                                _truth = torch.tensor(_truth)
+                                context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
                                 print("a relation type is here")
+
                             # check this with quan
                             truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                             pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])

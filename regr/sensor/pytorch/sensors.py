@@ -323,7 +323,8 @@ class AggregationSensor(TorchSensor):
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
-            context[self.dst[self.map_key].fullname] = val # override state under property name
+            print(self.sup.fullname)
+            context[self.sup.fullname] = val # override state under property name
         return context
 
     def get_data(self):

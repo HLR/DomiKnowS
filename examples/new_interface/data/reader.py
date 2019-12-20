@@ -488,6 +488,9 @@ class SimpleReader():
         for item in self.obj:
             for phrase in item['phrases']:
                 phrase['index'] = phrase['value_index'] + phrase['before']
+            phrase_bound = []
+            for phrase in item['phrases']:
+                phrase_bound.append([phrase['index'], phrase['after']-1])
             for relation in item['relations']:
                 for phrase in item['phrases']:
                     if relation[0] == phrase['id']:
@@ -510,6 +513,7 @@ class SimpleReader():
                 "ORG": self.get_prob(item['words'], "ORG"),
                 "VEH": self.get_prob(item['words'], "VEH"),
                 "WEA": self.get_prob(item['words'], "WEA"),
-                "relations": relations
+                "relations": relations,
+                "boundaries": phrase_bound
             }
             yield _dict

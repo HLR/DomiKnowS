@@ -15,7 +15,7 @@ from Graphs.Sensors.sentenceSensors import SentenceBertEmbedderSensor, \
 from Graphs.Sensors.wordSensors import WordEmbedding, BetweenIndexGenerator, PairIndexGenerator, \
     MultiplyCatSensor, BetweenEncoderSensor, WordPosTaggerSensor
 from Graphs.Sensors.edgeSensors import FlairSentenceToWord, WordToPhraseTransformer, PhraseToPair, SentenceToWordPos
-from Graphs.Sensors.relationSensors import RelationReaderSensor
+from Graphs.Sensors.relationSensors import RelationReaderSensor, RangeCreatorSensor
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, ProbabilitySelectionEdgeSensor, \
     MaxAggregationSensor, TorchEdgeSensor, LastAggregationSensor, ConcatSensor, ListConcator, MeanAggregationSensor
 from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner, TorchLearner
@@ -82,6 +82,7 @@ def model_declaration():
 
     rel_phrase_contains_word['backward'] = WordToPhraseTransformer(FAC, GPE, PER, ORG, LOC, VEH, WEA,
                                                                    mode="backward", keyword="raw")
+    phrase['ground_bound'] = ReaderSensor(keyword="boundaries")
     phrase['last_encode'] = LastAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
     phrase['mean_encode'] = MeanAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
     phrase['encode'] = ConcatSensor("last_encode", "mean_encode")
@@ -95,7 +96,8 @@ def model_declaration():
         'phrase1_raw', 'phrase2_raw',
         edges=[rel_pair_phrase1['backward'], rel_pair_phrase2['backward']]
     )
-    pair['between_index'] = BetweenIndexGenerator('index', 'phrase1_raw', 'phrase2_raw')
+    pair['ranges'] = RangeCreatorSensor('index', 'phrase1_raw', 'phrase2_raw')
+    pair['between_index'] = BetweenIndexGenerator('index', 'phrase1_raw', 'phrase2_raw', 'ranges')
     pair['phrase_features'] = MultiplyCatSensor('index', 'phrase1_encode', 'phrase2_encode')
     pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
     pair['features'] = ConcatSensor('phrase_features', 'between_encoder')
