@@ -1011,6 +1011,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         for eIndex, e in enumerate(lc.e): 
             if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
+                
+                # Look on step ahead in the parsed logical constrain and get variables names (if present) after the current concept
                 variablesNames = None
                 if eIndex + 1 < len(lc.e):
                     if isinstance(lc.e[eIndex+1], tuple):
@@ -1019,6 +1021,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if isinstance(e, Concept): # -- Concept or Relation
                     typeOfConcept, conceptTypes = self._typeOfConcept(e)
                     conceptName = e.name
+                    lcVariables[conceptName] = {}
                     
                     if not variablesNames:
                         self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,conceptName))
@@ -1052,6 +1055,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                             self.myLogger.warn('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
                             
                         for tokensPair in permutations(tokens, r=2):
+                            #if tokensPair[0] in _lcVariables1: 
+                            #   print("Exists ", _lcVariables1[tokensPair[0]],  "for variable name ", variablesNames[0])
+                                 
                             if (conceptName, *tokensPair) in y:
                                 _lcVariables1[tokensPair[0]] = [y[(conceptName, *tokensPair)]]
                                 _lcVariables2[tokensPair[1]] = [y[(conceptName, *tokensPair)]]
@@ -1063,26 +1069,46 @@ class gurobiILPOntSolver(ilpOntSolver):
                         lcVariables[conceptName] = {variablesNames[0]:_lcVariables1}
                         lcVariables[conceptName][variablesNames[1]] = _lcVariables2
     
+                        print(rer)
                     elif typeOfConcept == 'triplet':
-                        _lcVariables = []
-                        for token1 in tokens:
-                            for token2 in tokens:
-                                if token2 == token1:
-                                    continue
-                                    
-                                for token3 in tokens:
-                                    if token3 == token2:
-                                        continue
-                                    
-                                    if token3 == token1:
-                                        continue
-    
-                                    if (conceptName, token1, token2, token3) in z:
-                                        _lcVariables.append(z[conceptName, token1, token2, token3])
-                                    else:
-                                         _lcVariables.append(None)
+                        variablesNamesNo = 3
                         
-                        lcVariables.append(_lcVariables)
+                        _lcVariables = {}
+                        
+                        if len(variablesNames) > variablesNamesNo:
+                            self.myLogger.warn('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        if len(variablesNames) < variablesNamesNo:
+                            self.myLogger.info('Logical Constrain %s has not enough variables defined %s for %s'%(lc.lcName,variablesNames,conceptName))   
+                        
+                        updatedVariablesNames = []
+                        for variableNo in range(variablesNamesNo):
+                            if len(variablesNames) > variableNo:
+                                updatedVariablesNames.append(variablesNames[variableNo])
+                            else:
+                                variableNameforNo = "variableName" + str(variableNo)
+                                updatedVariablesNames.append(variableNameforNo)
+
+                            _lcVariables[variablesNames[variableNo]] = {}
+
+                        for tokensPermutation in permutations(tokens, r=variablesNamesNo):
+                            #print('tokensPermutation ', tokensPermutation)
+                            tokensPermutationILPVariable = None;
+                            
+                            if (conceptName, *tokensPermutation) in z:
+                                tokensPermutationILPVariable = z[(conceptName, *tokensPermutation)]
+                        
+                            for variableNo in range(variablesNamesNo):
+                                #if tokensPermutation[variableNo] in _lcVariables[variablesNames[variableNo]]: 
+                                #   print("Exists ", _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]],  "for variable name ", variablesNames[variableNo])
+                                    
+                                if tokensPermutation[variableNo] not in _lcVariables[variablesNames[variableNo]]:
+                                    _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]] = []
+                                    
+                                _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]].append(tokensPermutationILPVariable)
+                        
+                        for variableName in updatedVariablesNames:
+                            lcVariables[conceptName][variableName] = _lcVariables[variableName]
     
                 elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively
                     if not variablesNames:
