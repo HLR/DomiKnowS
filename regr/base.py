@@ -92,6 +92,9 @@ class Named(Scoped):
 
         return repr_str
 
+    def __str__(self):
+        return self.name
+
 
 class AutoNamed(Named):
     _names = Counter()

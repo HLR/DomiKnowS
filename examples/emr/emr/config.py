@@ -10,8 +10,8 @@ else:
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04.corp_5_train.corp",
-        'valid_path': "conll04.corp_5_test.corp"
+        'train_path': "conll04.corp_x_train.corp",
+        'valid_path': "conll04.corp_x_test.corp"
     },
     'Model': { # model setting
         'embedding_dim': 8,
@@ -44,8 +44,8 @@ config = {
             'balance_factor': 1.5,
             'label_smoothing': 0.01,
             'focal_gamma': 2,
-            'inference_interval': 100,
-            'inference_training_set': False
+            'inference_interval': 1,
+            'inference_training_set': True
         }
     },
     'Train': {
@@ -55,7 +55,7 @@ config = {
         'trainer': {
             'num_epochs': 100,
             'patience': None,
-            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
+            'serialization_dir': None# 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
         },
         'optimizer': {
             'type': 'adam',
@@ -67,7 +67,7 @@ config = {
             'patience': 10
         },
         'iterator': {
-            'batch_size': 8,
+            'batch_size': 2,
         }
     },
     'Source': {
