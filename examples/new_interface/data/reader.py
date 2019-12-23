@@ -505,7 +505,7 @@ class SimpleReader():
             for relation_location in relation_locations:
                 relations[relation_location[2]].append([relation_location[0], relation_location[1]])
             _dict = {
-                "raw": item['sentence'].replace("u s", "us").replace(" m r", " mr ").replace(" u k ", " uk ").replace(" u n ", " un "),
+                "raw": item['sentence'],
                 "FAC": self.get_prob(item['words'], "FAC"),
                 "GPE": self.get_prob(item['words'], "GPE"),
                 "LOC": self.get_prob(item['words'], "LOC"),

@@ -36,6 +36,7 @@ class TorchLearner(TorchSensor):
         if path.exists(filepath+"/"+final_name):
             self.model.load_state_dict(torch.load(filepath+"/"+final_name))
             self.model.eval()
+            self.model.train()
 
 
 class LSTMLearner(TorchLearner):

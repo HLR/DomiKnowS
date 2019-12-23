@@ -274,6 +274,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
                         # print("end")
                         for prop1 in self.poi:
+                            Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             if entity not in info:
@@ -315,23 +316,26 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                             check = True
                                     if not check:
                                         _truth.append(0)
-                                _truth = torch.tensor(_truth)
+                                _truth = torch.tensor(_truth, device=self.device)
                                 context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                                if not len(pairs):
+                                    Do = False
 
                             # check this with quan
-                            truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
-                            total += len(truth[-1])
-                            for item in range(len(pred[-1])):
-                                _, index = torch.max(pred[-1][item], dim=0)
-                                if index == truth[-1][item] and index == 1:
-                                    tp += 1
-                                elif index == truth[-1][item] and index == 0:
-                                    tn += 1
-                                elif index != truth[-1][item] and index == 1:
-                                    fp += 1
-                                elif index != truth[-1][item] and index == 0:
-                                    fn += 1
+                            if Do:
+                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
+                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                total += len(truth[-1])
+                                for item in range(len(pred[-1])):
+                                    _, index = torch.max(pred[-1][item], dim=0)
+                                    if index == truth[-1][item] and index == 1:
+                                        tp += 1
+                                    elif index == truth[-1][item] and index == 0:
+                                        tn += 1
+                                    elif index != truth[-1][item] and index == 1:
+                                        fp += 1
+                                    elif index != truth[-1][item] and index == 0:
+                                        fn += 1
 
                         total_loss = 0
                         weights = self.weights(info=info, truth=truth).float()

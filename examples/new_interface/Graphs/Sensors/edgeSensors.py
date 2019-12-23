@@ -41,7 +41,7 @@ class WordToPhraseTransformer(TorchEdgeSensor):
             temp = torch.cat([item for item in self.inputs], -1)
             value = []
             for item in temp:
-                s = torch.tensor([i for i in range(1, item.shape[0], 2)])
+                s = torch.tensor([i for i in range(1, item.shape[0], 2)], device=self.device)
                 value.append(torch.index_select(item, 0, s))
             indexes = []
             for item in value:

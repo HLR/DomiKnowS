@@ -358,7 +358,7 @@ class MeanAggregationSensor(AggregationSensor):
                 results.append(torch.mean(item, dim=0))
             return torch.stack(results)
         else:
-            return torch.zeros(self.default_dim)
+            return torch.zeros(1, 1, self.default_dim, device=self.device)
 
 
 class ConcatAggregationSensor(AggregationSensor):
@@ -377,7 +377,7 @@ class LastAggregationSensor(AggregationSensor):
                 results.append(item[-1])
             return torch.stack(results)
         else:
-            return torch.zeros(self.default_dim)
+            return torch.zeros(1, 1, self.default_dim, device=self.device)
 
 
 class SelectionEdgeSensor(TorchEdgeSensor):
