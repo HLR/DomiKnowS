@@ -111,7 +111,13 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
         return mask
 
 
-class JointCandidateSensor(PreArgsModuleSensor, MaskedSensor):
+class CandidateSensor(MaskedSensor):
+    pass
+
+class CandidateReaderSensor(ReaderSensor, CandidateSensor):
+    pass
+
+class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
     def create_module(self):
         return JointCandidate()
 

@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Iterable
 from collections import OrderedDict
 from torch import Tensor, cuda
 from torch.nn import Module
+import torch
 from allennlp.models import Model
 from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
@@ -17,7 +18,7 @@ from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
-from ...sensor.allennlp.sensor import LabelMaskSensor, JointCandidateSensor
+from ...sensor.allennlp.sensor import CandidateSensor
 from .utils import sequence_cross_entropy_with_logits, structured_perceptron_exact_with_logits
 
 
@@ -33,7 +34,7 @@ def update_metrics(
     metrics: List[Tuple[str, Property, callable]]
 ) -> DataInstance:
     label_masks = {}
-    for name, sensor in graph.get_sensors(JointCandidateSensor):
+    for name, sensor in graph.get_sensors(CandidateSensor):
         sensor(data)
         mask = data[sensor.fullname].clone().detach()
         label_masks[mask.shape] = mask
@@ -218,6 +219,7 @@ class GraphModel(Model):
                 sensor(data)
         trivial_trial = Trial(data)
 
+        # inference
         with trivial_trial:
             if self._need_inference(trivial_trial):
                 trial = Trial()
@@ -233,6 +235,33 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
+        # process candidates
+        label_not_masks = {}
+        for name, sensor in self.graph.get_sensors(CandidateSensor):
+            sensor(data)
+            mask = data[sensor.fullname].clone().detach()
+            label_not_masks[mask.shape] = (1-mask).type(torch.uint8)
+        for prop in self.graph.poi:
+            # label (b, l)
+            # pred  (b, l, c)
+            # mask  (b, l)
+            label, pred, mask = get_prop_result(prop, data)
+            if mask.shape in label_not_masks:
+                # label_mask  (b, l)
+                label_not_mask = label_not_masks[mask.shape]
+                shape = pred.shape
+                # (b*l, c)
+                pred = pred.clone().detach().view(-1, shape[-1])
+                # (b*l, )
+                label_not_mask = label_not_mask.view(-1)
+                pred[label_not_mask, 0] = torch.tensor(float("Inf"))
+                pred[label_not_mask, 1] = torch.tensor(-float("Inf"))
+                # (b, l, c)
+                pred = pred.view(shape)
+                label_not_mask = label_not_mask.view(mask.shape)
+                data[prop.fullname] = pred
+                for name, learner in prop.find(AllenNlpLearner):
+                    data[learner.fullname] = pred
         #data = inference(self.graph, self.graph.solver, data, self.vocab)
         data = self.graph.solver.inferSelection(self.graph, data)
 
@@ -242,9 +271,10 @@ class GraphModel(Model):
         self,
         data, data_i
     ) -> DataInstance:
+        #import pdb; pdb.set_trace()
         loss = 0
         label_masks = {}
-        for name, sensor in self.graph.get_sensors(JointCandidateSensor):
+        for name, sensor in self.graph.get_sensors(CandidateSensor):
             sensor(data)
             mask = data[sensor.fullname].clone().detach()
             label_masks[mask.shape] = mask

@@ -8,6 +8,10 @@ from regr.graph.relation import IsA, HasA, NotA
 from .ilpOntSolver import ilpOntSolver
 
 
+def isnan(x):
+    return x != x
+
+
 class GurobiSolver(ilpOntSolver):
     ilpSolver = 'mini'
 
@@ -46,7 +50,6 @@ class GurobiSolver(ilpOntSolver):
         # predicates_list[i][concept] is the prediction result of the predicate for concept
         model = Model('solver')
         model.params.outputflag = 0
-        model.Params.timeLimit = 300.0 # 300 seconds = 5 min
 
         # prepare candidates
         length = len(data)
@@ -69,12 +72,14 @@ class GurobiSolver(ilpOntSolver):
         # add variables
         for predicates in predicates_list:
             for concept, predicate in predicates.items():
-                for obj in candidates[concept]: # flat: C-order -> last dim first!
+                for x in candidates[concept]: # flat: C-order -> last dim first!
+                    idx, _ = zip(*x)
+                    if isnan(predicate[idx]): continue
                     var = model.addVar(vtype=GRB.BINARY,
-                                       name='{}_{}'.format(concept.name, str(obj)))
-                    variables[concept, obj] = var
-                    idx, _ = zip(*obj)
-                    predictions[concept, obj] = predicate[idx]
+                                       name='{}_{}'.format(concept.name, str(x)))
+                    model.update()
+                    variables[concept, x] = var
+                    predictions[concept, x] = predicate[idx]
 
         # add constraints
         for predicates in predicates_list:
@@ -82,64 +87,59 @@ class GurobiSolver(ilpOntSolver):
                 for rel in concept.is_a():
                     # A is_a B : A(x) <= B(x)
                     for x in candidates[rel.src]:
+                        if (rel.src, x) not in variables: continue
                         if (rel.dst, x) not in variables: continue
                         constr = model.addConstr(variables[rel.src, x] <= variables[rel.dst, x],
                                                  name='{}_{}'.format(rel.name, str(x)))
-                        #model.update()
-#                         print(rel.name)
-#                         print(variables[rel.src, x], '<=', variables[rel.dst, x])
-#                         print(constr)
+                        model.update()
                         constraints[rel, x] = constr
                 for rel in concept.not_a():
                     # A not_a B : A(x) + B(x) <= 1
                     for x in candidates[rel.src]:
+                        if (rel.src, x) not in variables: continue
                         if (rel.dst, x) not in variables: continue
                         constr = model.addConstr(variables[rel.src, x] + variables[rel.dst, x] <= 1,
                                                  name='{}_{}'.format(rel.name, str(x)))
-                        #model.update()
-#                         print(rel.name)
-#                         print(variables[rel.src, x], '+', variables[rel.dst, x], '<= 1')
-#                         print(constr)
+                        model.update()
                         constraints[rel, x] = constr
                 for arg_id, rel in enumerate(concept.has_a()): # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
                     # A has_a B : A(x,y,...) <= B(x)
                     for xy in candidates[rel.src]:
                         x = xy[arg_id]
+                        if (rel.src, xy) not in variables: continue
                         if (rel.dst, (x,)) not in variables: continue
                         #import pdb;pdb.set_trace()
                         constr = model.addConstr(variables[rel.src, xy] <= variables[rel.dst, (x,)],
                                                  name='{}_{}_{}'.format(rel.name, str(xy), str(x)))
-                        #model.update()
-#                         print(rel.name)
-#                         print(variables[rel.src, xy], '<=', variables[rel.dst, (x,)])
-#                         print(constr)
+                        model.update()
                         constraints[rel, xy, x] = constr
 
         if self.lazy_not:
-            variables_not = {} # (concept, (object,...)) -> variable
-            predictions_not = {} # (concept, (object,...)) -> prediction
-            constraints_not = {} # (rel, (object,...)) -> constr
+            variables_not = {} # (concept, (x,...)) -> variable
+            predictions_not = {} # (concept, (x,...)) -> prediction
+            constraints_not = {} # (rel, (x,...)) -> constr
 
             # add variables
             for predicates in predicates_list:
                 for concept, predicate in predicates.items():
-                    for obj in candidates[concept]:
+                    for x in candidates[concept]:
+                        idx, _ = zip(*x)
+                        if isnan(predicate[idx]): continue
                         var = model.addVar(vtype=GRB.BINARY,
-                                           name='lazy_not_{}_{}'.format(concept.name, str(obj)))
-                        variables_not[concept, obj] = var
-                        idx, _ = zip(*obj)
-                        predictions_not[concept, obj] = 1 - predicate[idx]
+                                           name='lazy_not_{}_{}'.format(concept.name, str(x)))
+                        model.update()
+                        variables_not[concept, x] = var
+                        predictions_not[concept, x] = 1 - predicate[idx]
 
             # add constraints
             for predicates in predicates_list:
                 for concept in predicates:
                     for x in candidates[concept]:
+                        if (concept, x) not in variables: continue
+                        if (concept, x) not in variables_not: continue
                         constr = model.addConstr(variables[concept, x] + variables_not[concept, x] == 1,
                                                name='lazy_not_{}_{}'.format(concept.name, str(x)))
-                        #model.update()
-#                         print(concept.name, 'lazy_not')
-#                         print(variables[concept, x], '+', variables_not[concept, x], '<= 1')
-#                         print(constr)
+                        model.update()
                         constraints_not[concept, x] = constr
 
         # Set objective
@@ -147,13 +147,16 @@ class GurobiSolver(ilpOntSolver):
         for predicates in predicates_list:
             for concept in predicates:
                 for x in candidates[concept]:
+                    if (concept, x) not in variables: continue
                     objective += variables[concept, x] * predictions[concept, x]
         if self.lazy_not:
             for predicates in predicates_list:
                 for concept in predicates:
                     for x in candidates[concept]:
+                        if (concept, x) not in variables_not: continue
                         objective += variables_not[concept, x] * predictions_not[concept, x]
         model.setObjective(objective, GRB.MAXIMIZE)
+        model.update()
 
         # solve
         #model.update()
@@ -170,18 +173,14 @@ class GurobiSolver(ilpOntSolver):
             retval.append(predicates_result)
             for concept, predicate in predicates.items():
                 predicates_result[concept] = np.zeros((length,) * arity)
-                for obj in candidates[concept]:
+                for x in candidates[concept]:
+                    if (concept, x) not in variables: continue
                     # NB: candidates generated by 'C' order
-                    idx, _ = zip(*obj)
-                    predicates_result[concept][idx] = variables[concept, obj].x
+                    idx, _ = zip(*x)
+                    predicates_result[concept][idx] = variables[concept, x].x
                 #import pdb;pdb.set_trace()
 
         if len(retval) == 1:
             return retval[0]
 
         return retval
-
-# for (c, x), v in variables.items(): print(c.name,x,v)
-# for (c, x), v in predictions.items(): print(c.name,x,v)
-# for (c, x), v in constraints.items(): print(c.name,x,v)
-# for c in model.getConstrs(): print(c)

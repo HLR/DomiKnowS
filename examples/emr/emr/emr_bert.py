@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceBertEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceBertEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor, CandidateReaderSensor
 from regr.sensor.allennlp.learner import MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
@@ -98,7 +98,7 @@ def model_declaration(graph, config):
     organization['label'] = LabelSensor(reader, 'Org', output_only=True)
     location['label'] = LabelSensor(reader, 'Loc', output_only=True)
     other['label'] = LabelSensor(reader, 'Other', output_only=True)
-    o['label'] = LabelSensor(reader, 'O', output_only=True)
+    #o['label'] = LabelSensor(reader, 'O', output_only=True)
 
     #### We connect properties with learners that generate predictions.
     #### Notice that we connect the predicting `Learner`s to the same properties as "ground-truth" `Sensor`s.
@@ -115,7 +115,7 @@ def model_declaration(graph, config):
     organization['label'] = LogisticRegressionLearner(word['encode'])
     location['label'] = LogisticRegressionLearner(word['encode'])
     other['label'] = LogisticRegressionLearner(word['encode'])
-    o['label'] = LogisticRegressionLearner(word['encode'])
+    #o['label'] = LogisticRegressionLearner(word['encode'])
 
     #### We repeat these on composed-concepts.
     #### There is nothing different in usage thought they are higher ordered concepts.
@@ -132,6 +132,8 @@ def model_declaration(graph, config):
     located_in['label'] = LogisticRegressionLearner(pair['encode'])
     orgbase_on['label'] = LogisticRegressionLearner(pair['encode'])
     kill['label'] = LogisticRegressionLearner(pair['encode'])
+
+    pair['candidate'] = CandidateReaderSensor(reader, 'cancidate')
 
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
     lbp = AllenNlpGraph(graph, **config.graph)

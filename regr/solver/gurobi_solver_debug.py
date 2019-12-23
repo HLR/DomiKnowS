@@ -1,17 +1,28 @@
 from gurobipy import Model, GRB
 import numpy as np
+import torch
 from itertools import product, permutations
 import warnings
+import logging
 
 from regr.graph import Concept
 from regr.graph.relation import IsA, HasA, NotA
 from .gurobi_solver import GurobiSolver
 
 
+def isbad(x):
+    return (
+        x != x or  # nan
+        abs(x) == float('inf')  # inf
+    )
+
+
 class GurobiSolverDebug(GurobiSolver):
     ilpSolver = 'mini_debug'
 
     def solve_legacy(self, data, *predicates_list):
+        self.myLogger.setLevel(logging.DEBUG)
+
         # data is a list of objects of the base type
         # predicates_list is a list of predicates
         # predicates_list[i] is the dict of predicates of the objects of the base type to the power of i
@@ -44,14 +55,15 @@ class GurobiSolverDebug(GurobiSolver):
             for concept, predicate in predicates.items():
                 self.myLogger.debug('for {}'.format(concept.name))
                 self.myLogger.debug('{}'.format(predicate))
-                for obj in candidates[concept]: # flat: C-order -> last dim first!
+                for x in candidates[concept]: # flat: C-order -> last dim first!
+                    idx, _ = zip(*x)
+                    if isbad(predicate[idx]): continue
                     var = model.addVar(vtype=GRB.BINARY,
-                                       name='{}_{}'.format(concept.name, str(obj)))
+                                       name='{}_{}'.format(concept.name, str(x)))
                     model.update()
                     self.myLogger.debug(' - add {}'.format(var))
-                    variables[concept, obj] = var
-                    idx, _ = zip(*obj)
-                    predictions[concept, obj] = predicate[idx]
+                    variables[concept, x] = var
+                    predictions[concept, x] = predicate[idx]
 
         # add constraints
         self.myLogger.info('add constraints')
@@ -63,6 +75,7 @@ class GurobiSolverDebug(GurobiSolver):
                     self.myLogger.debug(' - - {}'.format(rel.name))
                     # A is_a B : A(x) <= B(x)
                     for x in candidates[rel.src]:
+                        if (rel.src, x) not in variables: continue
                         if (rel.dst, x) not in variables: continue
                         constr = model.addConstr(variables[rel.src, x] <= variables[rel.dst, x],
                                                  name='{}_{}'.format(rel.name, str(x)))
@@ -74,6 +87,7 @@ class GurobiSolverDebug(GurobiSolver):
                     self.myLogger.debug(' - - {}'.format(rel.name))
                     # A not_a B : A(x) + B(x) <= 1
                     for x in candidates[rel.src]:
+                        if (rel.src, x) not in variables: continue
                         if (rel.dst, x) not in variables: continue
                         constr = model.addConstr(variables[rel.src, x] + variables[rel.dst, x] <= 1,
                                                  name='{}_{}'.format(rel.name, str(x)))
@@ -86,6 +100,7 @@ class GurobiSolverDebug(GurobiSolver):
                     # A has_a B : A(x,y,...) <= B(x)
                     for xy in candidates[rel.src]:
                         x = xy[arg_id]
+                        if (rel.src, xy) not in variables: continue
                         if (rel.dst, (x,)) not in variables: continue
                         #import pdb;pdb.set_trace()
                         constr = model.addConstr(variables[rel.src, xy] <= variables[rel.dst, (x,)],
@@ -96,23 +111,24 @@ class GurobiSolverDebug(GurobiSolver):
 
         if self.lazy_not:
             self.myLogger.info('lazy negative')
-            variables_not = {} # (concept, (object,...)) -> variable
-            predictions_not = {} # (concept, (object,...)) -> prediction
-            constraints_not = {} # (rel, (object,...)) -> constr
+            variables_not = {} # (concept, (x,...)) -> variable
+            predictions_not = {} # (concept, (x,...)) -> prediction
+            constraints_not = {} # (rel, (x,...)) -> constr
 
             # add variables
             self.myLogger.info('lazy negative add variables')
             for predicates in predicates_list:
                 for concept, predicate in predicates.items():
                     self.myLogger.debug('for {}'.format(concept.name))
-                    for obj in candidates[concept]:
+                    for x in candidates[concept]:
+                        idx, _ = zip(*x)
+                        if isbad(predicate[idx]): continue
                         var = model.addVar(vtype=GRB.BINARY,
-                                           name='lazy_not_{}_{}'.format(concept.name, str(obj)))
+                                           name='lazy_not_{}_{}'.format(concept.name, str(x)))
                         model.update()
                         self.myLogger.debug(' - add {}'.format(var))
-                        variables_not[concept, obj] = var
-                        idx, _ = zip(*obj)
-                        predictions_not[concept, obj] = 1 - predicate[idx]
+                        variables_not[concept, x] = var
+                        predictions_not[concept, x] = 1 - predicate[idx]
 
             # add constraints
             self.myLogger.info('lazy negative add constraints')
@@ -120,6 +136,8 @@ class GurobiSolverDebug(GurobiSolver):
                 for concept in predicates:
                     self.myLogger.debug('for {}'.format(concept.name))
                     for x in candidates[concept]:
+                        if (concept, x) not in variables: continue
+                        if (concept, x) not in variables_not: continue
                         constr = model.addConstr(variables[concept, x] + variables_not[concept, x] == 1,
                                                name='lazy_not_{}_{}'.format(concept.name, str(x)))
                         model.update()
@@ -132,11 +150,13 @@ class GurobiSolverDebug(GurobiSolver):
         for predicates in predicates_list:
             for concept in predicates:
                 for x in candidates[concept]:
+                    if (concept, x) not in variables: continue
                     objective += variables[concept, x] * predictions[concept, x]
         if self.lazy_not:
             for predicates in predicates_list:
                 for concept in predicates:
                     for x in candidates[concept]:
+                        if (concept, x) not in variables_not: continue
                         objective += variables_not[concept, x] * predictions_not[concept, x]
         model.setObjective(objective, GRB.MAXIMIZE)
         model.update()
@@ -161,10 +181,12 @@ class GurobiSolverDebug(GurobiSolver):
             for concept, predicate in predicates.items():
                 self.myLogger.debug('for {}'.format(concept.name))
                 predicates_result[concept] = np.zeros((length,) * arity)
-                for obj in candidates[concept]:
+                for x in candidates[concept]:
+                    #import pdb; pdb.set_trace()
+                    if (concept, x) not in variables: continue
                     # NB: candidates generated by 'C' order
-                    idx, _ = zip(*obj)
-                    predicates_result[concept][idx] = variables[concept, obj].x
+                    idx, _ = zip(*x)
+                    predicates_result[concept][idx] = variables[concept, x].x
                 #import pdb;pdb.set_trace()
                 self.myLogger.debug('{}'.format(predicates_result[concept]))
 

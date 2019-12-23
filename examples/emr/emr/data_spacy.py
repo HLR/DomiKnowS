@@ -357,7 +357,7 @@ class Conll04SpaCyReader(SensableReader):
             relation_labels.append(relation_type)
         return AdjacencyField(
             relation_indices,
-            fields[self.get_fieldname('phrase')],
+            fields[self.get_fieldname('word')],
             relation_labels,
             padding_value=-1  # multi-class label, use -1 for null class
         )
