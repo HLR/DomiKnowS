@@ -265,7 +265,6 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                 while True:
                     try:
                         value = next(_array[j][i])
-                        print(value)
                         for item in reader_sensors:
                             item.fill_data(value)
                         truth = []
@@ -309,14 +308,15 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                 pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
                                 _truth = []
                                 for _iteration in range(len(pairs)):
+                                    check = False
                                     for item in pairs_gr:
                                         if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == item[1]:
                                             _truth.append(1)
-                                        else:
-                                            _truth.append(0)
+                                            check = True
+                                    if not check:
+                                        _truth.append(0)
                                 _truth = torch.tensor(_truth)
                                 context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
-                                print("a relation type is here")
 
                             # check this with quan
                             truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])

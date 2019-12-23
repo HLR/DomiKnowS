@@ -291,12 +291,13 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
 
 
 class AggregationSensor(TorchSensor):
-    def __init__(self, *pres, edges, map_key):
+    def __init__(self, *pres, edges, map_key, deafault_dim = 480):
         super().__init__(*pres, edges=edges)
         self.edge_node = self.edges[0].sup
         self.map_key = map_key
         self.map_value = None
         self.data = None
+        self.default_dim = deafault_dim
         if self.edges[0].name == "backward":
             self.src = self.edges[0].sup.dst
             self.dst = self.edges[0].sup.src
@@ -323,7 +324,6 @@ class AggregationSensor(TorchSensor):
             val = self.forward()
         if val is not None:
             context[self.fullname] = val
-            print(self.sup.fullname)
             context[self.sup.fullname] = val # override state under property name
         return context
 
@@ -353,9 +353,12 @@ class MinAggregationSensor(AggregationSensor):
 class MeanAggregationSensor(AggregationSensor):
     def forward(self,) -> Any:
         results = []
-        for item in self.data:
-            results.append(torch.mean(item, dim=0))
-        return torch.stack(results)
+        if len(self.data):
+            for item in self.data:
+                results.append(torch.mean(item, dim=0))
+            return torch.stack(results)
+        else:
+            return torch.zeros(self.default_dim)
 
 
 class ConcatAggregationSensor(AggregationSensor):
@@ -369,9 +372,12 @@ class ConcatAggregationSensor(AggregationSensor):
 class LastAggregationSensor(AggregationSensor):
     def forward(self,) -> Any:
         results = []
-        for item in self.data:
-            results.append(item[-1])
-        return torch.stack(results)
+        if len(self.data):
+            for item in self.data:
+                results.append(item[-1])
+            return torch.stack(results)
+        else:
+            return torch.zeros(self.default_dim)
 
 
 class SelectionEdgeSensor(TorchEdgeSensor):
