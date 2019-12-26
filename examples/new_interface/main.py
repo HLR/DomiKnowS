@@ -41,6 +41,12 @@ def model_declaration():
     VEH = graph['application/VEH']
     WEA = graph['application/WEA']
     ART = graph['application/ART']
+    GEN_AFF = graph['application/GEN-AFF']
+    METONYMY = graph['application/METONYMY']
+    ORG_AFF = graph['application/ORG-AFF']
+    PART_WHOLE = graph['application/PART-WHOLE']
+    PER_SOC = graph['application/PER-SOC']
+    PHYS = graph['application/PHYS']
 
     sentence['raw'] = ReaderSensor(keyword='raw')
     sentence['flair_sentence'] = FlairSentenceSensor('raw')
@@ -101,8 +107,20 @@ def model_declaration():
     pair['phrase_features'] = MultiplyCatSensor('index', 'phrase1_encode', 'phrase2_encode')
     pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
     pair['features'] = ConcatSensor('phrase_features', 'between_encoder')
+
     pair[ART] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
     pair[ART] = RelationReaderSensor(keyword=ART.name)
+    pair[GEN_AFF] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[GEN_AFF] = RelationReaderSensor(keyword=GEN_AFF.name)
+    pair[METONYMY] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[METONYMY] = RelationReaderSensor(keyword=METONYMY.name)
+    pair[ORG_AFF] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[ORG_AFF] = RelationReaderSensor(keyword=ORG_AFF.name)
+    pair[PHYS] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[PHYS] = RelationReaderSensor(keyword=PHYS.name)
+    pair[PER_SOC] = FullyConnectedLearner('features', input_dim=2400, output_dim=2)
+    pair[PER_SOC] = RelationReaderSensor(keyword=PER_SOC.name)
+
     # phrase.relate_to(FAC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # phrase.relate_to(GPE)[0]['selection'] = ProbabilitySelectionEdgeSensor()
     # word.relate_to(PER)[0]['selection'] = ProbabilitySelectionEdgeSensor()
