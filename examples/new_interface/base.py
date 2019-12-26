@@ -254,13 +254,16 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             _array.append(itertools.tee(reader, iterations))
 
         for i in tqdm(range(iterations), "Iterations: "):
-            metrics = {'f1_score': 0, 'precision': 0, 'recall': 0}
             predict = 0
             total = 0
             tp = 0
             fp = 0
             tn = 0
             fn = 0
+            metrics = {}
+            for prop1 in self.poi:
+                metrics[prop1.sup.name + "-" + prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+
             for j in tqdm(range(len(paths)), "READER : "):
                 while True:
                     try:
@@ -273,15 +276,11 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         context = {}
                         # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
                         # print("end")
-                        metrics = {}
-                        for prop1 in self.pio:
-                            metrics[prop1.sup.name + "-" + prop1.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
-
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
-                            dict_key = prop1.sup.name + "-" + prop1.name
+                            dict_key = prop1.sup.name + "-" + prop1.name.name
                             if entity not in info:
                                 info[entity] = {}
                             if prop_name not in info[entity]:
@@ -370,7 +369,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                 append_write = 'w'  # make a new file if not
 
             loggerFile = open(filename, append_write)
-            loggerFile.write("iteration is: " + i + '\n')
+            loggerFile.write("iteration is: " + str(i) + '\n')
             loggerFile.write(data_json)
             loggerFile.write("End of Iteration\n")
             loggerFile.close()
@@ -389,13 +388,15 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             loader = SimpleReader(paths[_iter])
             reader = loader.data()
             _array.append(reader)
-        metrics = {'f1_score': 0, 'precision': 0, 'recall': 0}
         predict = 0
         total = 0
         tp = 0
         fp = 0
         tn = 0
         fn = 0
+        metrics = {}
+        for prop1 in self.poi:
+            metrics[prop1.sup.name + "-" + prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
         for _iter in tqdm(range(len(paths)), "Readers Execution: "):
             while True:
                 try:
@@ -405,33 +406,45 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     truth = []
                     pred = []
                     context = {}
-                    learners = self.get_sensors(FullyConnectedLearner)
-                    _learners = [learner for name, learner in learners]
-                    for item in _learners:
-                        list(item.sup.find(ReaderSensor))[0][1](context=context)
-                        list(item.sup.find(TorchLearner))[0][1](context=context)
-                        truth.append(context[list(item.sup.find(ReaderSensor))[0][1].fullname])
-                        pred.append(context[list(item.sup.find(TorchLearner))[0][1].fullname])
+                    # learners = self.get_sensors(FullyConnectedLearner)
+                    # _learners = [learner for name, learner in learners]
+                    for prop1 in self.poi:
+                        dict_key = prop1.sup.name + "-" + prop1.name.name
+                        list(prop1.find(ReaderSensor))[0][1](context=context)
+                        list(prop1.find(TorchLearner))[0][1](context=context)
+                        truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
+                        pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
                         total += len(truth[-1])
                         for item in range(len(pred[-1])):
                             _, index = torch.max(pred[-1][item], dim=0)
                             if index == truth[-1][item] and index == 1:
-                                tp += 1
+                                metrics[dict_key]["tp"] += 1
                             elif index == truth[-1][item] and index == 0:
-                                tn += 1
+                                metrics[dict_key]["tn"] += 1
                             elif index != truth[-1][item] and index == 1:
-                                fp += 1
+                                metrics[dict_key]["fp"] += 1
                             elif index != truth[-1][item] and index == 0:
-                                fn += 1
+                                metrics[dict_key]["fn"] += 1
 
                 except StopIteration:
                     break
-        recall = tp / (tp + fn)
-        precision = tp / (tp + fp)
-        f1 = 2 * (precision * recall) / (precision + recall)
-        print("precision is " + str(precision))
-        print("recall is " + str(recall))
-        print("f1 score is " + str(f1))
+        # recall = tp / (tp + fn)
+        # precision = tp / (tp + fp)
+        # f1 = 2 * (precision * recall) / (precision + recall)
+        # print("precision is " + str(precision))
+        # print("recall is " + str(recall))
+        # print("f1 score is " + str(f1))
+        print("check the result file\n")
+        filename = 'test_results.txt'
+        data_json = json.dumps(metrics)
+        if os.path.exists(filename):
+            append_write = 'a'  # append if already exists
+        else:
+            append_write = 'w'  # make a new file if not
+
+        loggerFile = open(filename, append_write)
+        loggerFile.write(data_json)
+        loggerFile.close()
 
 class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
