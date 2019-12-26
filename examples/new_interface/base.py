@@ -8,7 +8,7 @@ from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
 from regr.utils import WrapperMetaClass
 
 # from ..Graphs.Sensors.mainSensors import CallingSensor, ReaderSensor
-
+import os
 from typing import Union, List
 import numpy
 import torch
@@ -16,7 +16,7 @@ import itertools
 from tqdm import tqdm
 from data.reader import SimpleReader
 from Graphs.graph import pair, ART, word, phrase, PART_WHOLE, ART, ORG_AFF, PER_SOC, METONYMY, PHYS, GEN_AFF
-
+import json
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
                                        targets: torch.Tensor,
@@ -273,10 +273,15 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         context = {}
                         # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
                         # print("end")
+                        metrics = {}
+                        for prop1 in self.pio:
+                            metrics[prop1.sup.name + "-" + prop1.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
+                            dict_key = prop1.sup.name + "-" + prop1.name
                             if entity not in info:
                                 info[entity] = {}
                             if prop_name not in info[entity]:
@@ -329,13 +334,13 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                 for item in range(len(pred[-1])):
                                     _, index = torch.max(pred[-1][item], dim=0)
                                     if index == truth[-1][item] and index == 1:
-                                        tp += 1
+                                        metrics[dict_key]["tp"] += 1
                                     elif index == truth[-1][item] and index == 0:
-                                        tn += 1
+                                        metrics[dict_key]["tn"] += 1
                                     elif index != truth[-1][item] and index == 1:
-                                        fp += 1
+                                        metrics[dict_key]["fp"] += 1
                                     elif index != truth[-1][item] and index == 0:
-                                        fn += 1
+                                        metrics[dict_key]["fn"] += 1
 
                         total_loss = 0
                         weights = self.weights(info=info, truth=truth).float()
@@ -352,10 +357,23 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         self.optimizer.zero_grad()
                     except StopIteration:
                         break
-            recall = tp / (tp + fn)
-            precision = tp / (tp + fp)
-            f1 = 2 * (precision * recall) / (precision + recall)
-            print("precision is " + str(precision) + " recall is " + str(recall) + " f1 score is " + str(f1))
+            # recall = tp / (tp + fn)
+            # precision = tp / (tp + fp)
+            # f1 = 2 * (precision * recall) / (precision + recall)
+            # print("precision is " + str(precision) + " recall is " + str(recall) + " f1 score is " + str(f1))
+            print("check the result file\n")
+            filename = 'results.txt'
+            data_json = json.dumps(metrics)
+            if os.path.exists(filename):
+                append_write = 'a'  # append if already exists
+            else:
+                append_write = 'w'  # make a new file if not
+
+            loggerFile = open(filename, append_write)
+            loggerFile.write("iteration is: " + i + '\n')
+            loggerFile.write(data_json)
+            loggerFile.write("End of Iteration\n")
+            loggerFile.close()
             self.save()
 
     def save(self, ):
