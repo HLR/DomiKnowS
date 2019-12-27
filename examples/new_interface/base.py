@@ -234,9 +234,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def weights(self, info, truth):
         weights = []
-        for item, value in info.items():
-            for prop in value:
-                weights.append([0.07, 0.93])
+        for item in info:
+            weights.append([0.07, 0.93])
         return torch.tensor(weights, device=self.device)
 
     def load(self):
@@ -272,7 +271,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             item.fill_data(value)
                         truth = []
                         pred = []
-                        info = {}
+                        info = []
                         context = {}
                         # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
                         # print("end")
@@ -281,10 +280,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.sup.name + "-" + prop1.name.name
-                            if entity not in info:
-                                info[entity] = {}
-                            if prop_name not in info[entity]:
-                                info[entity][prop_name] = {"start": len(truth)}
+                            info.append(prop1.name.name)
                             list(prop1.find(ReaderSensor))[0][1](context=context)
                             list(prop1.find(TorchLearner))[0][1](context=context)
                             if prop1.sup == pair:
@@ -409,22 +405,64 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     # learners = self.get_sensors(FullyConnectedLearner)
                     # _learners = [learner for name, learner in learners]
                     for prop1 in self.poi:
+                        Do = True
                         dict_key = prop1.sup.name + "-" + prop1.name.name
                         list(prop1.find(ReaderSensor))[0][1](context=context)
                         list(prop1.find(TorchLearner))[0][1](context=context)
-                        truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                        pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
-                        total += len(truth[-1])
-                        for item in range(len(pred[-1])):
-                            _, index = torch.max(pred[-1][item], dim=0)
-                            if index == truth[-1][item] and index == 1:
-                                metrics[dict_key]["tp"] += 1
-                            elif index == truth[-1][item] and index == 0:
-                                metrics[dict_key]["tn"] += 1
-                            elif index != truth[-1][item] and index == 1:
-                                metrics[dict_key]["fp"] += 1
-                            elif index != truth[-1][item] and index == 0:
-                                metrics[dict_key]["fn"] += 1
+                        if prop1.sup == pair:
+                            list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
+                            phrases_gr = context[phrase['ground_bound'].fullname]
+                            phrases = context[phrase['raw'].fullname]
+                            matches = []
+                            for _ph in phrases:
+                                check = False
+                                for _tr in phrases_gr:
+                                    if _ph[0] == _tr[0] and _ph[1] == _tr[1]:
+                                        matches.append(_tr)
+                                        check = True
+                                        break
+                                    elif _ph[0] == _tr[0] and _tr[1] - 1 <= _ph[1] <= _tr[1] + 1:
+                                        matches.append(_tr)
+                                        check = True
+                                        break
+                                    elif _ph[1] == _tr[1] and _tr[0] - 1 <= _ph[0] <= _tr[0] + 1:
+                                        matches.append(_tr)
+                                        check = True
+                                        break
+                                if not check:
+                                    matches.append("NONE")
+                            pairs = context[pair['index'].fullname]
+                            pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                            _truth = []
+                            for _iteration in range(len(pairs)):
+                                check = False
+                                for item in pairs_gr:
+                                    if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == \
+                                            item[1]:
+                                        _truth.append(1)
+                                        check = True
+                                        break
+                                if not check:
+                                    _truth.append(0)
+                            _truth = torch.tensor(_truth, device=self.device)
+                            context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                            if not len(pairs):
+                                Do = False
+
+                        if Do:
+                            truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
+                            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                            total += len(truth[-1])
+                            for item in range(len(pred[-1])):
+                                _, index = torch.max(pred[-1][item], dim=0)
+                                if index == truth[-1][item] and index == 1:
+                                    metrics[dict_key]["tp"] += 1
+                                elif index == truth[-1][item] and index == 0:
+                                    metrics[dict_key]["tn"] += 1
+                                elif index != truth[-1][item] and index == 1:
+                                    metrics[dict_key]["fp"] += 1
+                                elif index != truth[-1][item] and index == 0:
+                                    metrics[dict_key]["fn"] += 1
 
                 except StopIteration:
                     break
@@ -446,6 +484,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         loggerFile.write(data_json)
         loggerFile.close()
 
+
 class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
     __metaclass__ = WrapperMetaClass
 
@@ -456,37 +495,17 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
     ):
         pass
 
-    def set_reader_instance(self, reader):
-        self.reader_instance = reader
+    # def set_reader_instance(self, reader):
+    #     self.reader_instance = reader
 
-    # @property
-    # def target_weights(self):
-    #     class_weights = self.reader_instance.weights
-    #     targets = {'FAC': 1, 'PER': 1, 'ORG': 1, '-O-': 1, 'WEA' : 1, "VEH": 1, 'LOC': 1, 'GPE': 1 }
-    #     for label, weight in targets.items():
-    #         targets[label] = class_weights[self.reader_instance.lableToInt(label)]
-    #     return targets
-    #
-    # def weights(self, info, truth):
-    #     # weights = []
-    #     # for _it in range(len(truth)):
-    #     #     weights.append(torch.ones(1, truth[_it].shape[0]))
-    #     # target_weights = self.target_weights()
-    #     # for entity, _dict in info.items():
-    #     #     for prop1, _values in _dict.items():
-    #     #         for i in range(len(truth[_values['start']])):
-    #     #             if truth[_values['start']][i] > 0.5:
-    #     #                 weights[_values['start']][0][i] = target_weights[entity]
-    #     #             else:
-    #     #                 weights[_values['start']][0][i] = target_weights['-O-']
-    #     # return torch.stack(weights)
-    #     weights = []
-    #     for item, value in info.items():
-    #         weight = self.target_weights[item]
-    #         weights.append([weight, 1 - weight])
-    #     return torch.tensor(weights, device=self.device)
-
-
-
-
-
+    def weights(self, info, truth):
+        weights = []
+        defaults = [0.96312867737412, 0.9894575918349645, 0.8696203721105056, 0.9933500065054284, 0.9916224538475995, 0.9943908750524049, 0.9453833142989316]
+        _list = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE"]
+        _pairs = ["ART", "PER-SOC", "ORG-AFF", "METONYMY", "GEN-AFF", "PART-WHOLE", "PHYS"]
+        for item in info:
+            if item not in _pairs:
+                weights.append([1-defaults[_list.index(item)], defaults[_list.index(item)]])
+            else:
+                weights.append([0.01, 0.99])
+        return torch.tensor(weights, device=self.device)
