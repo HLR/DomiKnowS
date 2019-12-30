@@ -71,6 +71,42 @@ class WordToPhraseTransformer(TorchEdgeSensor):
         return phrases
 
 
+class WordToPhraseTagTransformer(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        with torch.no_grad():
+            temp = torch.cat([item for item in self.inputs], -1)
+            value = []
+            for item in temp:
+                s = torch.tensor([i for i in range(1, item.shape[0], 2)], device=self.device)
+                value.append(torch.index_select(item, 0, s))
+            indexes = []
+            for item in value:
+                _, index = torch.max(item, 0)
+                if _ < 0.5:
+                    index = -1
+                indexes.append(index)
+            phrases = []
+            start = -1
+            previous = -1
+            _index = 0
+            for _index in range(len(indexes)):
+                if start == -1 and indexes[_index] != -1:
+                    start = _index
+                    previous = indexes[_index]
+                elif start != -1:
+                    if indexes[_index] != previous:
+                        phrases.append(indexes[_index])
+                        if indexes[_index] != -1:
+                            start = _index
+                            previous = indexes[_index]
+                        else:
+                            start = -1
+                            previous = -1
+            if start != -1 and indexes[_index] != -1:
+                phrases.append(indexes[_index])
+        return phrases
+
+
 class PhraseToPair(TorchEdgeSensor):
     def forward(self,) -> Any:
         return self.inputs[0]

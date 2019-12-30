@@ -273,7 +273,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         pred = []
                         info = []
                         context = {}
-                        # print(list(pair[ART].find(TorchSensor))[0][1](context=context).shape)
+                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
                         # print("end")
                         for prop1 in self.poi:
                             Do = True
@@ -314,6 +314,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                         if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == item[1]:
                                             _truth.append(1)
                                             check = True
+                                            break
                                     if not check:
                                         _truth.append(0)
                                 _truth = torch.tensor(_truth, device=self.device)

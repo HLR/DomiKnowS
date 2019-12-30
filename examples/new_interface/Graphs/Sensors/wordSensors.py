@@ -34,7 +34,7 @@ class MultiplyCatSensor(TorchSensor):
     def forward(self, ) -> Any:
         results = []
         if not len(self.inputs[0]):
-            return torch.zeros(1, 1, 1920, device=self.device)
+            return torch.zeros(1, 1, 1934, device=self.device)
 
         for item in self.inputs[0]:
             results.append(torch.cat([self.inputs[1][item[0]], self.inputs[2][item[1]]], dim=-1))
@@ -80,6 +80,13 @@ class BetweenEncoderSensor(TorchSensor):
 
 
 class WordPosTaggerSensor(NominalSensor):
+    def forward(
+            self,
+    ) -> Any:
+        return self.inputs[0]
+
+
+class PhraseEntityTagger(NominalSensor):
     def forward(
             self,
     ) -> Any:
