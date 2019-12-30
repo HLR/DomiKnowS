@@ -37,6 +37,9 @@ class Concept(BaseGraphTree):
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
 
+    def __str__(self):
+        return self.name
+    
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property

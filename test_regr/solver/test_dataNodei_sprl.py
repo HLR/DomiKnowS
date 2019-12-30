@@ -74,6 +74,15 @@ def sprl_input(ontology_graph):
     sentence = test_ont_graph['linguistic/sentence']
     phrase = test_ont_graph['linguistic/phrase']
 
+    application_graph = ontology_graph['application']
+    trajector = application_graph['TRAJECTOR']
+    landmark = application_graph['LANDMARK']
+    spatial_indicator = application_graph['SPATIAL_INDICATOR']
+    none_entity = application_graph['NONE_ENTITY']
+    triplet = application_graph['triplet']
+    spatial_triplet = application_graph['spatial_triplet']
+    region = application_graph['region']
+    
     #------------------
     # sample input
     #------------------
@@ -105,11 +114,107 @@ def sprl_input(ontology_graph):
                                                    DataNode(instanceID = 2, instanceValue = phrases[2], ontologyNode = phrase, childInstanceNodes = []),
                                                    DataNode(instanceID = 3, instanceValue = phrases[3], ontologyNode = phrase, childInstanceNodes = []),
                                                    DataNode(instanceID = 4, instanceValue = phrases[4], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 5, instanceValue = phrases[5], ontologyNode = phrase, childInstanceNodes = [])])
+                                                   DataNode(instanceID = 5, instanceValue = phrases[5], ontologyNode = phrase, childInstanceNodes = [])]) 
+    
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  test_dataNode.childInstanceNodes
+    
+    test_dataNode.childInstanceNodes[0].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.37,
+                                                                                              (landmark) : 0.68,
+                                                                                              (spatial_indicator) : 0.05,
+                                                                                              (none_entity) : 0.20,
+                                                                    
+                                                                                              (triplet, (about_20_kids_, on)) : 0.85,
+                                                                                              (triplet, (about_20_kids, on)) : 0.78,
+                                                                                              (spatial_triplet, (about_20_kids_, on)) : 0.74,
+                                                                                              (spatial_triplet, (about_20_kids, on)) : 83,
+                                                                                              (region, (about_20_kids_, on)) : 0.65,
+                                                                                              (region, (about_20_kids, on)) : 88
+                                                                                              # Fill the rest of triple relation with 0.2 below
+                                                                                            }
+                                                      }
+        
+    for instance in combinations(test_dataNode.childInstanceNodes, 2):
+        if (triplet, (*instance)) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
+            stairs.predictions['Learned'][triplet, instance] = np.random.rand() * 0.2
+        if (spatial_triplet, instance) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
+            stairs.predictions[DataNode.PredictionType["Learned"]][spatial_triplet, instance] = np.random.rand() * 0.2
+        if (region, instance) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
+            stairs.predictions[DataNode.PredictionType["Learned"]][region, instance] = np.random.rand() * 0.2
+        
+    test_dataNode.childInstanceNodes[1].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.72,
+                                                                                              (landmark) : 0.15,
+                                                                                              (spatial_indicator) : 0.03,
+                                                                                              (none_entity) : 0.61
+                                                                                            }
+                                                       }
+    
+    test_dataNode.childInstanceNodes[2].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.78,
+                                                                                              (landmark) : 0.33,
+                                                                                              (spatial_indicator) : 0.02,
+                                                                                              (none_entity) : 0.48
+                                                                                            }
+                                                       }
 
+    test_dataNode.childInstanceNodes[3].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.01,
+                                                                                              (landmark) : 0.03,
+                                                                                              (spatial_indicator) : 0.93,
+                                                                                              (none_entity) : 0.03
+                                                                                            }
+                                                       }
+    
+    test_dataNode.childInstanceNodes[4].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.42,
+                                                                                              (landmark) : 0.43,
+                                                                                              (spatial_indicator) : 0.03,
+                                                                                              (none_entity) : 0.05
+                                                                                            }
+                                                       }
+    
+    test_dataNode.childInstanceNodes[5].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.22,
+                                                                                              (landmark) : 0.13,
+                                                                                              (spatial_indicator) : 0.01,
+                                                                                              (none_entity) : 0.52
+                                                                                            }
+                                                       }
     yield test_dataNode
 
-@pytest.fixture()
+@pytest.mark.gurobi
+def test_main_sprl(ontology_graph, sprl_input):
+    application_graph = ontology_graph['application']
+    trajector = application_graph['TRAJECTOR']
+    landmark = application_graph['LANDMARK']
+    spatial_indicator = application_graph['SPATIAL_INDICATOR']
+    none_entity = application_graph['NONE_ENTITY']
+    triplet = application_graph['triplet']
+    spatial_triplet = application_graph['spatial_triplet']
+    region = application_graph['region']
+
+    sentence_node = sprl_input
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sentence_node.childInstanceNodes
+
+    #------------------
+    # Call solver on data Node for sentence 0
+    #------------------
+    sentence_node.inferILPConstrains(trajector, landmark, spatial_indicator, none_entity, triplet, spatial_triplet, region)
+
+    #------------------
+    # evaluate
+    #------------------
+    # -- phrase results:
+    assert stairs.predictions[DataNode.PredictionType["ILP"]][landmark] == 1  # "stairs" - LANDMARK
+    assert about_20_kids_.predictions[DataNode.PredictionType["ILP"]][trajector] == 1  # "About 20 kids " - TRAJECTOR
+    assert about_20_kids_.predictions[DataNode.PredictionType["ILP"]][trajector] == 1  # "About 20 kids" - TRAJECTOR
+
+    assert on.predictions[DataNode.PredictionType["ILP"]][spatial_indicator] == 1  # "on" - SPATIALINDICATOR
+
+    # -- relation results:
+    assert istairs.predictions[DataNode.PredictionType["ILP"]][triplet, (about_20_kids_, on)] == 1
+    assert stairs.predictions[DataNode.PredictionType["ILP"]][triplet, (about_20_kids, on)] == 1
+
+    assert stairs.predictions[DataNode.PredictionType["ILP"]][spatial_triplet, (about_20_kids_, on)] == 1
+    assert stairs.predictions[DataNode.PredictionType["ILP"]][spatial_triplet, (about_20_kids, on)] == 1
+    
+    
+# Left for reference - not used anymore
 def model_trial(ontology_graph, sprl_input):
     from regr.graph import Trial
 
@@ -180,39 +285,3 @@ def model_trial(ontology_graph, sprl_input):
 
     return model_trial
 
-@pytest.mark.gurobi
-def test_main_sprl(ontology_graph, sprl_input, model_trial):
-    application_graph = ontology_graph['application']
-    trajector = application_graph['TRAJECTOR']
-    landmark = application_graph['LANDMARK']
-    spatial_indicator = application_graph['SPATIAL_INDICATOR']
-    none_entity = application_graph['NONE_ENTITY']
-    triplet = application_graph['triplet']
-    spatial_triplet = application_graph['spatial_triplet']
-    region = application_graph['region']
-
-    sentence_node = sprl_input
-    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sprl_input.childInstanceNodes
-    #stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing = [0,1,2,3,4,5]
-
-    #------------------
-    # Call solver on data Node for sentence 0
-    #------------------
-    inference_trial = sentence_node.inferILPConstrains(model_trial, trajector, landmark, spatial_indicator, none_entity, triplet, spatial_triplet, region)
-
-    #------------------
-    # evaluate
-    #------------------
-    # -- phrase results:
-    assert inference_trial[landmark, (stairs, )] == 1  # "stairs" - LANDMARK
-    assert inference_trial[trajector, (about_20_kids_, )] == 1  # "About 20 kids " - TRAJECTOR
-    assert inference_trial[trajector, (about_20_kids, )] == 1  # "About 20 kids" - TRAJECTOR
-
-    assert inference_trial[spatial_indicator, (on, )] == 1  # "on" - SPATIALINDICATOR
-
-    # -- relation results:
-    assert inference_trial[triplet, (stairs, about_20_kids_, on)] == 1
-    assert inference_trial[triplet, (stairs, about_20_kids, on)] == 1
-
-    assert inference_trial[spatial_triplet, (stairs, about_20_kids_, on)] == 1
-    assert inference_trial[spatial_triplet, (stairs, about_20_kids, on)] == 1

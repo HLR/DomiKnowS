@@ -13,13 +13,21 @@ else:
 # Class representing single data instance and links to the children data nodes which represent sub instances this instance was segmented into 
 class DataNode:
    
+    PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
+   
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, childInstanceNodes = None, attributes = None):
-        self.instanceID = instanceID                 # The data instance id (e.g. paragraph number, sentence number, token number, etc.)
-        self.instanceValue = instanceValue           # Optional value of the instance 
-        self.ontologyNode = ontologyNode             # Reference to the ontology graph node (e.g. Concept) which is the type of this instance
-        self.childInstanceNodes = childInstanceNodes # List of child data nodes this instance was segmented into
-        self.attributes = attributes                 # Dictionary with additional node's attributes
-        self.calculatedTypesOfPredictions = dict()   # Dictionary with types of calculated predictions results (for learned model, from constrain solver, etc.)
+        self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
+        self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
+        self.ontologyNode = ontologyNode                 # Reference to the ontology graph node (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
+        self.childInstanceNodes = childInstanceNodes     # List of child data nodes this instance was segmented into
+        self.attributes = attributes                     # Dictionary with additional node's attributes
+        self.predictions = {}                            # Dictionary with types of calculated predictions results (inferred: from learned model, by constrain solver, etc.)
+      
+    def __str__(self):
+        if self.instanceValue:
+            return self.instanceValue
+        else:
+            return 'instanceID ' + self.instanceID
         
     def getInstanceID(self):
         return self.instanceID
