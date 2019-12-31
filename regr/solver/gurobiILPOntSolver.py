@@ -796,7 +796,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
                             z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
                         else:
-                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(relationName,token1,token2,token3))
+                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(tripleRelationName,token1,token2,token3))
                             
         # Add constraints forcing decision between variable and negative variables 
         for tripleRelationName in tripleRelationNames:            

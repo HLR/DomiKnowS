@@ -5,6 +5,7 @@ from .base import Scoped, BaseGraphTree
 from .trial import Trial
 from ..utils import enum
 
+from .dataNode import DataNode
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -170,13 +171,15 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, root_data, data, trial=None):
+    def predict(self, root_data, data):
         # TODO: make use of root_data to find the best proper trial in the stack
-        if not trial:
-            trial = Trial.default()
-
         try:
-            return trial[self, data]
+            if len(data) == 0:
+                return None
+            elif len(data) == 1:
+                return data[0].predictions[DataNode.PredictionType["Learned"]][self]
+            else:
+                return data[0].predictions[DataNode.PredictionType["Learned"]][self, data[1:]]
         except (AttributeError, KeyError):
             return None
 

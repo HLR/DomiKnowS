@@ -179,6 +179,8 @@ def sprl_input(ontology_graph):
 
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input):
+    from regr.graph import DataNode
+
     application_graph = ontology_graph['application']
     trajector = application_graph['TRAJECTOR']
     landmark = application_graph['LANDMARK']
@@ -202,12 +204,12 @@ def test_main_sprl(ontology_graph, sprl_input):
     # -- phrase results:
     assert stairs.predictions[DataNode.PredictionType["ILP"]][landmark] == 1  # "stairs" - LANDMARK
     assert about_20_kids_.predictions[DataNode.PredictionType["ILP"]][trajector] == 1  # "About 20 kids " - TRAJECTOR
-    assert about_20_kids_.predictions[DataNode.PredictionType["ILP"]][trajector] == 1  # "About 20 kids" - TRAJECTOR
+    assert about_20_kids.predictions[DataNode.PredictionType["ILP"]][trajector] == 1  # "About 20 kids" - TRAJECTOR
 
     assert on.predictions[DataNode.PredictionType["ILP"]][spatial_indicator] == 1  # "on" - SPATIALINDICATOR
 
     # -- relation results:
-    assert istairs.predictions[DataNode.PredictionType["ILP"]][triplet, (about_20_kids_, on)] == 1
+    assert stairs.predictions[DataNode.PredictionType["ILP"]][triplet, (about_20_kids_, on)] == 1
     assert stairs.predictions[DataNode.PredictionType["ILP"]][triplet, (about_20_kids, on)] == 1
 
     assert stairs.predictions[DataNode.PredictionType["ILP"]][spatial_triplet, (about_20_kids_, on)] == 1
