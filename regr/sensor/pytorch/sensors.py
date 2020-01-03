@@ -380,6 +380,17 @@ class LastAggregationSensor(AggregationSensor):
             return torch.zeros(1, 1, self.default_dim, device=self.device)
 
 
+class FirstAggregationSensor(AggregationSensor):
+    def forward(self,) -> Any:
+        results = []
+        if len(self.data):
+            for item in self.data:
+                results.append(item[0])
+            return torch.stack(results)
+        else:
+            return torch.zeros(1, 1, self.default_dim, device=self.device)
+
+
 class SelectionEdgeSensor(TorchEdgeSensor):
     def __init__(self, *pres, mode="selection"):
         super().__init__(*pres, mode=mode)
