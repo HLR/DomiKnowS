@@ -149,9 +149,12 @@ class NominalSensor(TorchSensor):
             output = torch.zeros([1, len(self.vocab)], device=self.device)
             output[0][self.vocab.index(value)] = 1
         else:
-            output = torch.zeros([len(value), 1, len(self.vocab)], device=self.device)
-            for _it in range(len(value)):
-                output[_it][0][self.vocab.index(value[_it])] = 1
+            if len(value):
+                output = torch.zeros([len(value), 1, len(self.vocab)], device=self.device)
+                for _it in range(len(value)):
+                    output[_it][0][self.vocab.index(value[_it])] = 1
+            else:
+                output = torch.zeros([1, 1, len(self.vocab)], device=self.device)
         return output
 
     def update_context(

@@ -14,9 +14,10 @@ import numpy
 import torch
 import itertools
 from tqdm import tqdm
-from data.reader import SimpleReader
+from data.reader import SimpleReader, PickleReader
 from Graphs.graph import pair, ART, word, phrase, PART_WHOLE, ART, ORG_AFF, PER_SOC, METONYMY, PHYS, GEN_AFF
 import json
+
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
                                        targets: torch.Tensor,
@@ -248,7 +249,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         reader_sensors = self.readers
         _array = []
         for _iter in range(len(paths)):
-            loader = SimpleReader(paths[_iter])
+            loader = PickleReader(paths[_iter])
             reader = loader.data()
             _array.append(itertools.tee(reader, iterations))
 
@@ -351,7 +352,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             pred[_it] = pred[_it].float()
                             total_loss += sequence_cross_entropy_with_logits(pred[_it], truth[_it],
                                                                              weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2)
-                        print(total_loss)
+                        # print(total_loss)
                         total_loss.backward(retain_graph=True)
 
                         self.optimizer.step()

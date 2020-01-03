@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, NominalSensor
+from regr.sensor.pytorch.sensors import TorchSensor, NominalSensor, ReaderSensor
 # from .mainSensors import ReaderSensor, CallingSensor
 from typing import Dict, Any
 from flair.embeddings import WordEmbeddings, CharacterEmbeddings, FlairEmbeddings, StackedEmbeddings, BertEmbeddings, ELMoEmbeddings
@@ -74,3 +74,18 @@ class SentencePosTagger(SentenceSensor):
     def forward(self,) -> Any:
         self.tagger.predict(self.inputs[0])
         return None
+
+
+class TensorReaderSensor(ReaderSensor):
+    def forward(
+        self,
+    ) -> Any:
+        if self.data:
+            try:
+                    return torch.tensor(self.data[self.keyword], device=self.device)
+            except:
+                print("the key you requested from the reader doesn't exist")
+                raise
+        else:
+            print("there is no data to operate on")
+            raise Exception('not valid')
