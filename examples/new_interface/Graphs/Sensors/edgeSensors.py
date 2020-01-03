@@ -95,7 +95,7 @@ class WordToPhraseTagTransformer(TorchEdgeSensor):
                     previous = indexes[_index]
                 elif start != -1:
                     if indexes[_index] != previous:
-                        phrases.append(indexes[_index])
+                        phrases.append(previous)
                         if indexes[_index] != -1:
                             start = _index
                             previous = indexes[_index]
