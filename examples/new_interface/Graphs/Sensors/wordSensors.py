@@ -34,7 +34,7 @@ class MultiplyCatSensor(TorchSensor):
     def forward(self, ) -> Any:
         results = []
         if not len(self.inputs[0]):
-            return torch.zeros(1, 1, 1934, device=self.device)
+            return torch.zeros(1, 1, 974, device=self.device)
 
         for item in self.inputs[0]:
             results.append(torch.cat([self.inputs[1][item[0]], self.inputs[2][item[1]]], dim=-1))

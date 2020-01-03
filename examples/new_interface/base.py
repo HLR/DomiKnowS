@@ -229,7 +229,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     @property
     def optimizer(self):
-        optimizer = optim.SGD(self.parameters, lr=0.1)
+        optimizer = optim.SGD(self.parameters, lr=0.04)
         return optimizer
 
     def weights(self, info, truth):
@@ -280,7 +280,6 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.sup.name + "-" + prop1.name.name
-                            info.append(prop1.name.name)
                             list(prop1.find(ReaderSensor))[0][1](context=context)
                             list(prop1.find(TorchLearner))[0][1](context=context)
                             if prop1.sup == pair:
@@ -324,6 +323,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
                             # check this with quan
                             if Do:
+                                info.append(prop1.name.name)
                                 truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                                 pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
@@ -339,14 +339,19 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                         metrics[dict_key]["fn"] += 1
 
                         total_loss = 0
-                        weights = self.weights(info=info, truth=truth).float()
+                        weights = self.weights(info=info, truth=truth)
                         loss_fn = []
+                        # for _it in range(len(truth)):
+                        #     loss_fn.append(torch.nn.CrossEntropyLoss(weight=weights[_it]))
+                        #     truth[_it] = truth[_it].long()
+                        #     pred[_it] = pred[_it].float()
+                        #     total_loss += loss_fn[_it](pred[_it], truth[_it])
                         for _it in range(len(truth)):
-                            loss_fn.append(torch.nn.CrossEntropyLoss(weight=weights[_it]))
                             truth[_it] = truth[_it].long()
                             pred[_it] = pred[_it].float()
-                            total_loss += loss_fn[_it](pred[_it], truth[_it])
-    #                     print(total_loss)
+                            total_loss += sequence_cross_entropy_with_logits(pred[_it], truth[_it],
+                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2)
+                        print(total_loss)
                         total_loss.backward(retain_graph=True)
 
                         self.optimizer.step()
@@ -504,9 +509,22 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
         defaults = [0.96312867737412, 0.9894575918349645, 0.8696203721105056, 0.9933500065054284, 0.9916224538475995, 0.9943908750524049, 0.9453833142989316]
         _list = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE"]
         _pairs = ["ART", "PER-SOC", "ORG-AFF", "METONYMY", "GEN-AFF", "PART-WHOLE", "PHYS"]
-        for item in info:
+        for _it in range(len(info)):
+            item = info[_it]
             if item not in _pairs:
-                weights.append([1-defaults[_list.index(item)], defaults[_list.index(item)]])
+                _weight = []
+                for data in truth[_it]:
+                    if data:
+                        _weight.append(defaults[_list.index(item)])
+                    else:
+                        _weight.append(1-defaults[_list.index(item)])
+                weights.append(_weight)
             else:
-                weights.append([0.01, 0.99])
-        return torch.tensor(weights, device=self.device)
+                _weight = []
+                for data in truth[_it]:
+                    if data:
+                        _weight.append(0.96)
+                    else:
+                        _weight.append(0.04)
+                weights.append(_weight)
+        return weights
