@@ -17,6 +17,7 @@ from tqdm import tqdm
 from data.reader import SimpleReader, PickleReader
 from Graphs.graph import pair, ART, word, phrase, PART_WHOLE, ART, ORG_AFF, PER_SOC, METONYMY, PHYS, GEN_AFF
 from Graphs.solver.solver import ACELogicalSolver
+from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 import json
 
 
@@ -501,7 +502,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             *args,
             **kwargs
     ):
-        self.solver = ACELogicalSolver()
+        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, ACELogicalSolver)
 
     # def set_reader_instance(self, reader):
     #     self.reader_instance = reader
@@ -530,7 +531,6 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         _weight.append(0.10)
                 weights.append(_weight)
         return weights
-
 
     def trainConstraint(self, iterations, paths):
         reader_sensors = self.readers
