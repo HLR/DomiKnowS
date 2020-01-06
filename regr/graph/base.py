@@ -1,7 +1,10 @@
+from itertools import chain
+
 if __package__ is None or __package__ == '':
     from regr.base import Scoped, AutoNamed, NamedTreeNode, NamedTree
 else:
     from ..base import Scoped, AutoNamed, NamedTreeNode, NamedTree
+
 
 @NamedTreeNode.localize_context
 class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
@@ -30,9 +33,13 @@ class BaseGraphShallowTree(BaseGraphTree):
             '{} object has no attribute __exit__'.format(type(self).__name__))
 
     # disable query
-    def query_apply(self, names, func):
-        if len(names) > 1:
-            raise ValueError(
-                '{} cannot have nested elements. Access properties using property name directly. Query of names {} is not possibly applied.'.format(type(self), names))
-        # this is only one layer above the leaf layer
-        return func(self, names[0])
+    def parse_query_apply(self, func, *names, delim='/', trim=True):
+        name0s = names[0].split(delim)
+        name = name0s[0]
+        if trim:
+            name = name.strip()
+        names = list(chain(name0s[1:], names[1:]))
+        if names:
+            raise ValueError(('{} cannot have nested elements. Access properties using property name directly.'
+                              'Query of names {} is not possibly applied.'.format(type(self).__name__, names)))
+        return func(self, name)

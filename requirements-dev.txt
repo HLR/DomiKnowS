@@ -1,5 +1,4 @@
 pytest
 flaky
-torch<1.2
-allennlp==0.8.5
+torch
 gekko
