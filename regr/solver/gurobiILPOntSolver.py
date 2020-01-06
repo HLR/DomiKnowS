@@ -330,12 +330,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (conceptName, token) not in x:
                     continue
                            
-                currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex]*x[conceptName, token]
+                currentQElement = graphResultsForPhraseToken[conceptName][tokenIndex][1]*x[conceptName, token]
                 X_Q += currentQElement
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                 if (token, 'Not_'+conceptName) in x: 
-                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
+                    currentQElement = graphResultsForPhraseToken[conceptName][tokenIndex][0]*x['Not_'+conceptName, token]
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
@@ -744,12 +744,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if (relationName, token1, token2) not in y:
                         continue
                         
-                    currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index]*y[relationName, token1, token2]
+                    currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index][1]*y[relationName, token1, token2]
                     Y_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                     if (relationName+'-neg', token1, token2) in y: 
-                        currentQElement = (1-graphResultsForPhraseRelation[relationName][token1Index][token2Index])*y[relationName+'-neg', token1, token2]
+                        currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index][0]*y[relationName+'-neg', token1, token2]
                         Y_Q += currentQElement
                         #self.myLogger.debug("Created objective element %s"%(currentQElement))
 

@@ -1,5 +1,6 @@
 from regr.graph import Concept, Relation, Graph
 # from .base import NewGraph as Graph
+from regr.graph.logicalConstrain import *
 
 Graph.clear()
 Concept.clear()
