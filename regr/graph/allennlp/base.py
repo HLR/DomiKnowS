@@ -22,6 +22,7 @@ from ...solver import ilpOntSolverFactory
 from ...solver.ilpOntSolverFactory import ilpOntSolverFactory
 from ...solver.ilpOntSolver import ilpOntSolver
 from ...solver.allennlpInferenceSolver import AllennlpInferenceSolver
+from ...solver.allennlplogInferenceSolver import AllennlplogInferenceSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
 from ...sensor.allennlp.sensor import SentenceEmbedderSensor
@@ -43,7 +44,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     ):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
-        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
+        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlplogInferenceSolver)
         self.solver_log_to(None)
         # do not invoke super().__init__() here
 

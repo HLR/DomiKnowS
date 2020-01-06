@@ -85,10 +85,10 @@ def model_declaration(graph, config):
     #### `SequenceSensor` provides the ability to read from a `TextField` in AllenNLP.
     #### It takes two arguments, firstly the reader to read with, and secondly a `key` for the reader to refer to correct `TextField`.
     sentence['raw'] = SentenceSensor(reader, 'sentence')
-    word['emb'] = SentenceBertEmbedderSensor('word', 768, 'bert-base-uncased', sentence['raw'])
-    word['encode'] = MLPLearner([768,], word['emb'])
+    word['emb'] = SentenceBertEmbedderSensor('word', 384, 'bert-base-uncased', sentence['raw'])
+    word['encode'] = MLPLearner([384,], word['emb'])
     pair['cat'] = CartesianProductSensor(word['encode'])
-    pair['encode'] = MLPLearner([768,], pair['cat'])
+    pair['encode'] = MLPLearner([384,], pair['cat'])
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
