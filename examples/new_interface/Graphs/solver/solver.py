@@ -20,7 +20,7 @@ class ACELogicalSolver(ilpOntSolver):
         sentence = {}
         with torch.no_grad():
             for item in predicates:
-                sentence[item.replace("<", "").replace(">", "")] = [np.log(_it.cpu().numpy()) for _it in
+                sentence[item.replace("<", "").replace(">", "")] = [_it.cpu().numpy() for _it in
                                                                     context[global_key + predictions_on + "/" + item]]
             sentence['phrase'] = {}
             sentence['phrase']['entity'] = {}
@@ -35,7 +35,7 @@ class ACELogicalSolver(ilpOntSolver):
                     for _range in range(ph[0], ph[1] + 1):
                         _value[0] = _value[0] * sentence[item.replace("<", "").replace(">", "")][_range][0]
                         _value[1] = _value[1] * sentence[item.replace("<", "").replace(">", "")][_range][1]
-                    _list.append(_value)
+                    _list.append(np.log(np.array(_value)))
                 sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = [_val for _val in _list]
             sentence['phrase']['relations'] = {}
             for item in pairs:
@@ -50,14 +50,21 @@ class ACELogicalSolver(ilpOntSolver):
                     _result[indexes[1]][indexes[0]][1] = values[1]
                 sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
 
-        results = self.calculateILPSelection(sentence['phrase']['raw'],
+        phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
+        results = self.calculateILPSelection(phrases,
                                    sentence['phrase']['entity'],
                                    sentence['phrase']['relations'])
 
         return self.transform_back(result=results, context=context, helper=sentence)
 
-
     def transform_back(self, result, context, helper):
+        pairs = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
+        relations = {}
+        for val in pairs:
+            _list = []
+            for item in helper['phrase']['pair_index']:
+                _list.append(result[1][val][item[0]][item[1]])
+            result[1][val] = np.array(_list)
         return result
 
 
