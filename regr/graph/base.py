@@ -1,18 +1,21 @@
 from itertools import chain
 
-from ..base import Scoped, AutoNamed, NamedTreeNode, NamedTree
+if __package__ is None or __package__ == '':
+    from regr.base import Scoped, AutoNamed, NamedTreeNode, NamedTree
+else:
+    from ..base import Scoped, AutoNamed, NamedTreeNode, NamedTree
 
 
 @NamedTreeNode.localize_context
 class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
-    def __init__(self, name=None, ontology=None):
+    def __init__(self, name=None):
         AutoNamed.__init__(self, name)  # name may be update
         NamedTreeNode.__init__(self, self.name)
 
 
 @BaseGraphTreeNode.share_context
 class BaseGraphTree(AutoNamed, NamedTree):
-    def __init__(self, name=None, ontology=None):
+    def __init__(self, name=None):
         AutoNamed.__init__(self, name)  # name may be update
         NamedTree.__init__(self, self.name)
 

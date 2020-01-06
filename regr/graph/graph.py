@@ -15,6 +15,7 @@ class Graph(BaseGraphTree):
         elif isinstance(ontology, str):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
+        self._logicalConstrains = OrderedDict()
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -55,6 +56,10 @@ class Graph(BaseGraphTree):
     @property
     def concepts(self):
         return self._concepts
+    
+    @property
+    def logicalConstrains(self):
+        return self._logicalConstrains
 
     def what(self):
         wht = BaseGraphTree.what(self)
