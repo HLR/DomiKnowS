@@ -117,4 +117,4 @@ class ilpOntSolver(object):
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None): pass
     
     @abc.abstractclassmethod
-    def inferILPConstrains(self, model_trail, *conceptsRelations): pass
+    def inferILPConstrains(self, context): pass
