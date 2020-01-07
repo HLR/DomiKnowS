@@ -49,3 +49,10 @@ with Graph('global') as graph:
         PER.not_a(FAC, GPE, LOC, VEH, WEA, ORG)
 
         ORG.not_a(FAC, GPE, LOC, VEH, WEA, PER)
+
+        list_of_concepts = [GPE, FAC, LOC, VEH, WEA, PER, ORG]
+
+        for item in list_of_concepts:
+            for item1 in list_of_concepts:
+                if item != item1:
+                    nandL(item, item1)
