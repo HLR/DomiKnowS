@@ -173,7 +173,8 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
                                             label_smoothing: float = None,
                                             gamma: float = None,
                                             eps: float = 1e-8,
-                                            alpha: Union[float, List[float], torch.FloatTensor] = None
+                                            alpha: Union[float, List[float], torch.FloatTensor] = None,
+                                            soft_penalty=0.6
                                            ) -> torch.FloatTensor:
     if average not in {None, "token", "batch"}:
         raise ValueError("Got average f{average}, expected one of "
@@ -203,7 +204,7 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
             inferences_weights = inferences
 
         #inferences_weights = (inferences_weights.long() != targets.long()).float()
-        soft_penalty = 0.6  # 0 - structured loss only; 1 - conventional loss
+          # 0 - structured loss only; 1 - conventional loss
         inferences_true = (inferences_weights.long() == targets.long()).float()
         inferences_weights = 1 - inferences_true * (1 - soft_penalty)
 
@@ -915,18 +916,18 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             truth[_it] = truth[_it].long()
                             pred[_it] = pred[_it].float()
                             total_loss += structured_perceptron_exact_with_logits(logits=pred[_it], targets=truth[_it], inferences=inferences[_it],
-                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2)
+                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2, soft_penalty=0) #Just structure loss
                         # print(total_loss)
                         total_loss.backward(retain_graph=True)
 
                         self.optimizer.step()
                         self.optimizer.zero_grad()
 
-                        for _it in range(len(info)):
-                            if info[_it] in entities:
-                                pred[_it] = result[0][info[_it]]
-                            elif info[_it] in relations:
-                                pred[_it] = result[1][info[_it]]
+                        # for _it in range(len(info)):
+                        #     if info[_it] in entities:
+                        #         pred[_it] = result[0][info[_it]]
+                        #     elif info[_it] in relations:
+                        #         pred[_it] = result[1][info[_it]]
                         for _val in range(len(pred)):
                             for item in range(len(pred[_val])):
                                 index = pred[_val][item].item()
