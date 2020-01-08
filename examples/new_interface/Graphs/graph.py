@@ -56,3 +56,5 @@ with Graph('global') as graph:
             for item1 in list_of_concepts:
                 if item != item1:
                     nandL(item, item1)
+
+        ifL()

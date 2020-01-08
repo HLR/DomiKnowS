@@ -26,7 +26,7 @@ class ilpOntSolver(object):
     def setup_solver_logger(self, _ilpConfig = ilpConfig):
         
         logName = __name__
-        logLevel = logging.DEBUG
+        logLevel = logging.CRITICAL
         logFilename='ilpOntSolver.log'
         logFilesize=5*1024*1024*1024
         logBackupCount=4
@@ -117,4 +117,4 @@ class ilpOntSolver(object):
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None): pass
     
     @abc.abstractclassmethod
-    def inferILPConstrains(self, context): pass
+    def inferILPConstrains(self, context, info): pass

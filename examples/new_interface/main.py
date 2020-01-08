@@ -148,7 +148,7 @@ def main():
     updated_graph = model_declaration()
     #
     # # updated_graph.load()
-    updated_graph.trainConstraint(iterations=1, paths=paths)
+    updated_graph.structured_train_constraint(iterations=1, paths=paths)
     # updated_graph.load()
     # updated_graph.test(paths=paths)
 

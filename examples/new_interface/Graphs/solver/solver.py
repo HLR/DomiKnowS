@@ -2,70 +2,153 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 import abc
 import torch
 import numpy as np
+from Graphs.graph import app_graph
+from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 
 class ACELogicalSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def inferILPConstrains(self, context):
+    def inferILPConstrains(self, context, info):
+#         print("info is")
+#         print(info)
         global_key = "global/linguistic/"
         root = "sentence"
         root_features = ["raw", ]
         predictions_on = "word"
         prediction_features = ["raw_ready"]
-        predicates = ["<FAC>", "<VEH>", "<PER>", "<ORG>", "<GPE>", "<LOC>", "<WEA>"]
-        pairs = ["<ART>", "<GEN-AFF>", "<ORG-AFF>", "<PER-SOC>", "<METONYMY>", "<PART-WHOLE>", "<PHYS>"]
+        predicates1 = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
+        predicates = []
+        for item in info:
+            if item in predicates1:
+                predicates.append("<"+str(item)+">")
+
+        pairs1 = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
+        pairs = []
+        for item in info:
+            if item in pairs1:
+                pairs.append("<"+str(item)+">")
+#         print("pairs are ")
+#         print(pairs)
         pairs_on = "pair"
-        phrase_order = ["FAC", "GPE", "PER", "ORG", "LOC", "VEH", "WEA"]
-        sentence = {}
+        phrase_order1 = ["FAC", "GPE", "PER", "ORG", "LOC", "VEH", "WEA"]
+        phrase_order = []
+        for item in info:
+            if item in phrase_order1:
+                phrase_order.append(str(item))
+        sentence = {"words": {}}
         with torch.no_grad():
+            epsilon = 0.00001
+            for item in predicates:
+                for _it in range(len(context[global_key + predictions_on + "/" + item])):
+                    if context[global_key + predictions_on + "/" + item][_it][0] > 1-epsilon:
+                        context[global_key + predictions_on + "/" + item][_it][0] = 1-epsilon
+                    elif context[global_key + predictions_on + "/" + item][_it][1] > 1-epsilon:
+                        context[global_key + predictions_on + "/" + item][_it][1] = 1-epsilon
             for item in predicates:
                 sentence[item.replace("<", "").replace(">", "")] = [_it.cpu().numpy() for _it in
                                                                     context[global_key + predictions_on + "/" + item]]
-            sentence['phrase'] = {}
-            sentence['phrase']['entity'] = {}
-            sentence['phrase']['raw'] = context[global_key + "phrase/raw"]
-            sentence['phrase']['tag'] = [_it.item() for _it in context[global_key + "phrase/tag"]]
-            sentence['phrase']['tag_name'] = [phrase_order[t] for t in sentence['phrase']['tag']]
-            sentence['phrase']['pair_index'] = context[global_key + "pair/index"]
             for item in predicates:
-                _list = []
-                for ph in sentence['phrase']['raw']:
-                    _value = [1, 1]
-                    for _range in range(ph[0], ph[1] + 1):
-                        _value[0] = _value[0] * sentence[item.replace("<", "").replace(">", "")][_range][0]
-                        _value[1] = _value[1] * sentence[item.replace("<", "").replace(">", "")][_range][1]
-                    _list.append(np.log(np.array(_value)))
-                sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = [_val for _val in _list]
-            sentence['phrase']['relations'] = {}
-            for item in pairs:
-                _list = [np.log(_it.cpu().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
-                _result = np.zeros((len(sentence['phrase']['raw']), len(sentence['phrase']['raw']), 2))
-                for _range in range(len(sentence['phrase']['pair_index'])):
-                    indexes = sentence['phrase']['pair_index'][_range]
-                    values = _list[_range]
-                    _result[indexes[0]][indexes[1]][0] = values[0]
-                    _result[indexes[1]][indexes[0]][0] = values[0]
-                    _result[indexes[0]][indexes[1]][1] = values[1]
-                    _result[indexes[1]][indexes[0]][1] = values[1]
-                sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
+                sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it.cpu().numpy()) for _it in
+                                                                    context[global_key + predictions_on + "/" + item]]
+            if len(pairs):
+                sentence['phrase'] = {}
+                sentence['phrase']['entity'] = {}
+                sentence['phrase']['raw'] = context[global_key + "phrase/raw"]
+                sentence['phrase']['tag'] = [_it.item() for _it in context[global_key + "phrase/tag"]]
+                sentence['phrase']['tag_name'] = [phrase_order[t] for t in sentence['phrase']['tag']]
+                sentence['phrase']['pair_index'] = context[global_key + "pair/index"]
+                for item in predicates:
+                    _list = []
+                    for ph in sentence['phrase']['raw']:
+                        _value = [1, 1]
+                        for _range in range(ph[0], ph[1] + 1):
+                            _value[0] = _value[0] * sentence[item.replace("<", "").replace(">", "")][_range][0]
+                            _value[1] = _value[1] * sentence[item.replace("<", "").replace(">", "")][_range][1]
+                        _list.append(np.log(np.array(_value)))
+                    sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = [_val for _val in _list]
+                sentence['phrase']['relations'] = {}
+                for item in pairs:
+                    _list = [np.log(_it.cpu().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
+                    _result = np.zeros((len(sentence['phrase']['raw']), len(sentence['phrase']['raw']), 2))
+                    for _range in range(len(sentence['phrase']['pair_index'])):
+                        indexes = sentence['phrase']['pair_index'][_range]
+                        values = _list[_range]
+                        _result[indexes[0]][indexes[1]][0] = values[0]
+                        _result[indexes[1]][indexes[0]][0] = values[0]
+                        _result[indexes[0]][indexes[1]][1] = values[1]
+                        _result[indexes[1]][indexes[0]][1] = values[1]
+                    sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
+        import pickle
+        file = open('data.pkl', 'wb')
 
-        phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
-        results = self.calculateILPSelection(phrases,
-                                   sentence['phrase']['entity'],
-                                   sentence['phrase']['relations'])
+        # dump information to that file
+        pickle.dump(sentence, file)
+
+        # close the file
+        file.close()
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
+        if len(pairs):
+            phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
+            results = myilpOntSolver.calculateILPSelection(phrases,
+                                   sentence['phrase']['entity'],sentence['phrase']['relations'])
+        else:
+            tokens = [str(_it) for _it in range(len(sentence['FAC']))]
+
+            results = myilpOntSolver.calculateILPSelection(tokens,
+                                       sentence['words'])
 
         return self.transform_back(result=results, context=context, helper=sentence)
 
     def transform_back(self, result, context, helper):
-        pairs = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
-        relations = {}
-        for val in pairs:
-            _list = []
-            for item in helper['phrase']['pair_index']:
-                _list.append(result[1][val][item[0]][item[1]])
-            result[1][val] = np.array(_list)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
+        if "phrase" in helper:
+            pairs = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
+            for val in pairs:
+                _list = []
+                for item in helper['phrase']['pair_index']:
+                    _list.append(result[1][val][item[0]][item[1]])
+                result[1][val] = torch.tensor(np.array(_list), device=self.device)
+
+            for item in result[0]:
+                count = 0
+#                 print("pre-result is ")
+#                 print(result[0][item])
+                _list = []
+                last = -1
+                for ph in helper['phrase']['raw']:
+#                     print("ph is ")
+#                     print(ph[0])
+#                     print(ph[1])
+                    if ph[0] > last:
+                        for i in range(last+1, ph[0]):
+                            _list.append(0)
+                    last = ph[1]
+                    for i in range(ph[0], ph[1]+1):
+                        _list.append(result[0][item][count])
+                    count += 1
+                if last != len(helper['words']['FAC']):
+                    for i in range(last+1, len(helper['words']['FAC'])):
+                            _list.append(0)
+                result[0][item] = torch.tensor(_list, device = self.device)
+#                 print("words are ")
+#                 print(len(helper['words']['FAC']))
+#                 print("raw is ")
+#                 print(helper['phrase']['raw'])
+#                 print("result is ")
+#                 print(_list)
+#                 print("item is ")
+#                 print(item)
+#                 print(fg)
+        else:
+            for item in result[0]:
+                result[0][item] = torch.from_numpy(result[0][item]).float().to(self.device)
         return result
+
 
 
 
