@@ -623,6 +623,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             **kwargs
     ):
         self.solver = ilpOntSolverFactory.getOntSolverInstance(self, ACELogicalSolver)
+        # self.solver = None
 
     # def set_reader_instance(self, reader):
     #     self.reader_instance = reader
@@ -808,7 +809,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             loggerFile.close()
             self.save()
 
-    def structured_train_constraint(self, iterations, paths):
+    def structured_train_constraint(self, iterations, paths, ratio):
         reader_sensors = self.readers
         _array = []
         for _iter in range(len(paths)):
@@ -824,8 +825,10 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             tn = 0
             fn = 0
             metrics = {}
+            inference_metrics = {}
             for prop1 in self.poi:
                 metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+                inference_metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
 
             for j in tqdm(range(len(paths)), "READER : "):
                 while True:
@@ -892,17 +895,17 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                 truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                                 pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
+                        if self.solver:
+                            result = self.solver.inferILPConstrains(context=context, info=info)
+                            entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
+                            relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
-                        result = self.solver.inferILPConstrains(context=context, info=info)
-                        entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
-                        relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
-
-                        inferences = [torch.zeros(1).float().to(self.device) for i in range(len(info))]
-                        for _it in range(len(info)):
-                            if info[_it] in entities:
-                                inferences[_it] = result[0][info[_it]]
-                            elif info[_it] in relations:
-                                inferences[_it] = result[1][info[_it]]
+                            inferences = [torch.zeros(1).float().to(self.device) for i in range(len(info))]
+                            for _it in range(len(info)):
+                                if info[_it] in entities:
+                                    inferences[_it] = result[0][info[_it]]
+                                elif info[_it] in relations:
+                                    inferences[_it] = result[1][info[_it]]
 
                         total_loss = 0
                         weights = self.weights(info=info, truth=truth)
@@ -916,7 +919,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             truth[_it] = truth[_it].long()
                             pred[_it] = pred[_it].float()
                             total_loss += structured_perceptron_exact_with_logits(logits=pred[_it], targets=truth[_it], inferences=inferences[_it],
-                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2, soft_penalty=0) #Just structure loss
+                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2, soft_penalty=ratio) #Just structure loss
                         # print(total_loss)
                         total_loss.backward(retain_graph=True)
 
@@ -930,7 +933,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         #         pred[_it] = result[1][info[_it]]
                         for _val in range(len(pred)):
                             for item in range(len(pred[_val])):
-                                index = pred[_val][item].item()
+                                _, index = torch.max(pred[-1][item], dim=0)
                                 if index == truth[_val][item] and index == 1:
                                     metrics[info[_val]]["tp"] += 1
                                 elif index == truth[_val][item] and index == 0:
@@ -939,6 +942,26 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     metrics[info[_val]]["fp"] += 1
                                 elif index != truth[_val][item] and index == 0:
                                     metrics[info[_val]]["fn"] += 1
+
+
+                        # With INFERENCE
+                        if self.solver:
+                            for _it in range(len(info)):
+                                if info[_it] in entities:
+                                    pred[_it] = result[0][info[_it]]
+                                elif info[_it] in relations:
+                                    pred[_it] = result[1][info[_it]]
+                            for _val in range(len(pred)):
+                                for item in range(len(pred[_val])):
+                                    _, index = torch.max(pred[-1][item], dim=0)
+                                    if index == truth[_val][item] and index == 1:
+                                        inference_metrics[info[_val]]["tp"] += 1
+                                    elif index == truth[_val][item] and index == 0:
+                                        inference_metrics[info[_val]]["tn"] += 1
+                                    elif index != truth[_val][item] and index == 1:
+                                        inference_metrics[info[_val]]["fp"] += 1
+                                    elif index != truth[_val][item] and index == 0:
+                                        inference_metrics[info[_val]]["fn"] += 1
                     except StopIteration:
                         break
             # recall = tp / (tp + fn)
@@ -948,6 +971,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             print("check the result file\n")
             filename = 'results.txt'
             data_json = json.dumps(metrics)
+            data1_json = json.dumps(inference_metrics)
             if os.path.exists(filename):
                 append_write = 'a'  # append if already exists
             else:
@@ -956,6 +980,11 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             loggerFile = open(filename, append_write)
             loggerFile.write("iteration is: " + str(i) + '\n')
             loggerFile.write(data_json)
+            print("\n")
+            if self.solver:
+                loggerFile.write("inference result is: " + '\n')
+                loggerFile.write(data1_json)
+                print("\n")
             loggerFile.write("End of Iteration\n")
             loggerFile.close()
             self.save()

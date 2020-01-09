@@ -57,4 +57,4 @@ with Graph('global') as graph:
                 if item != item1:
                     nandL(item, item1)
 
-        ifL()
+        # ifL(PER_SOC, ('x', 'y'), orL(PER, ('x', ), PER, ('y', )))

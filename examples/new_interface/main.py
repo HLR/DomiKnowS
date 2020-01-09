@@ -18,7 +18,7 @@ from Graphs.Sensors.edgeSensors import FlairSentenceToWord, WordToPhraseTransfor
 from Graphs.Sensors.relationSensors import RelationReaderSensor, RangeCreatorSensor
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, NominalSensor, ConcatAggregationSensor, ProbabilitySelectionEdgeSensor, \
     MaxAggregationSensor, TorchEdgeSensor, LastAggregationSensor, ConcatSensor, ListConcator, MeanAggregationSensor, FirstAggregationSensor
-from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner, TorchLearner
+from regr.sensor.pytorch.learners import LSTMLearner, FullyConnectedLearner, TorchLearner, FullyConnectedLearnerRelu
 from data.reader import SimpleReader
 
 
@@ -69,6 +69,8 @@ def model_declaration():
 
     # phrase['encode'] = MaxAggregationSensor("raw_ready", edge=rel_phrase_contains_word['backward'], map_key="encode")
 
+    word['encode_final'] = FullyConnectedLearnerRelu('encode', input_dim=480, output_dim=480)
+
     word[FAC] = ReaderSensor(keyword=FAC.name, label=True)
     word[GPE] = ReaderSensor(keyword=GPE.name, label=True)
     word[PER] = ReaderSensor(keyword=PER.name, label=True)
@@ -77,13 +79,13 @@ def model_declaration():
     word[VEH] = ReaderSensor(keyword=VEH.name, label=True)
     word[WEA] = ReaderSensor(keyword=WEA.name, label=True)
 
-    word[FAC] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[GPE] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[PER] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[ORG] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[LOC] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[VEH] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
-    word[WEA] = FullyConnectedLearner('encode', input_dim=480, output_dim=2)
+    word[FAC] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[GPE] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[PER] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[ORG] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[LOC] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[VEH] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[WEA] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
 
     rel_phrase_contains_word['backward'] = WordToPhraseTransformer(FAC, GPE, PER, ORG, LOC, VEH, WEA,
                                                                    mode="backward", keyword="raw")
@@ -112,19 +114,21 @@ def model_declaration():
     pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
     pair['features'] = ConcatSensor('phrase_features', 'between_encoder')
 
-    pair[ART] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair['features_final'] = FullyConnectedLearnerRelu('features', input_dim=1454, output_dim=1454)
+
+    pair[ART] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[ART] = RelationReaderSensor(keyword=ART.name)
-    pair[GEN_AFF] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[GEN_AFF] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[GEN_AFF] = RelationReaderSensor(keyword=GEN_AFF.name)
-    pair[METONYMY] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[METONYMY] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[METONYMY] = RelationReaderSensor(keyword=METONYMY.name)
-    pair[ORG_AFF] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[ORG_AFF] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[ORG_AFF] = RelationReaderSensor(keyword=ORG_AFF.name)
-    pair[PHYS] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[PHYS] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[PHYS] = RelationReaderSensor(keyword=PHYS.name)
-    pair[PER_SOC] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[PER_SOC] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[PER_SOC] = RelationReaderSensor(keyword=PER_SOC.name)
-    pair[PART_WHOLE] = FullyConnectedLearner('features', input_dim=1454, output_dim=2)
+    pair[PART_WHOLE] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
     pair[PART_WHOLE] = RelationReaderSensor(keyword=PART_WHOLE.name)
 
     # phrase.relate_to(FAC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
@@ -148,7 +152,7 @@ def main():
     updated_graph = model_declaration()
     #
     # # updated_graph.load()
-    updated_graph.structured_train_constraint(iterations=1, paths=paths)
+    updated_graph.structured_train_constraint(iterations=1, paths=paths, ratio=1)
     # updated_graph.load()
     # updated_graph.test(paths=paths)
 

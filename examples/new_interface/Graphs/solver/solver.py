@@ -10,8 +10,6 @@ class ACELogicalSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
     def inferILPConstrains(self, context, info):
-#         print("info is")
-#         print(info)
         global_key = "global/linguistic/"
         root = "sentence"
         root_features = ["raw", ]
@@ -28,8 +26,6 @@ class ACELogicalSolver(ilpOntSolver):
         for item in info:
             if item in pairs1:
                 pairs.append("<"+str(item)+">")
-#         print("pairs are ")
-#         print(pairs)
         pairs_on = "pair"
         phrase_order1 = ["FAC", "GPE", "PER", "ORG", "LOC", "VEH", "WEA"]
         phrase_order = []
@@ -40,17 +36,15 @@ class ACELogicalSolver(ilpOntSolver):
         with torch.no_grad():
             epsilon = 0.00001
             for item in predicates:
-                for _it in range(len(context[global_key + predictions_on + "/" + item])):
-                    if context[global_key + predictions_on + "/" + item][_it][0] > 1-epsilon:
-                        context[global_key + predictions_on + "/" + item][_it][0] = 1-epsilon
-                    elif context[global_key + predictions_on + "/" + item][_it][1] > 1-epsilon:
-                        context[global_key + predictions_on + "/" + item][_it][1] = 1-epsilon
-            for item in predicates:
-                sentence[item.replace("<", "").replace(">", "")] = [_it.cpu().numpy() for _it in
-                                                                    context[global_key + predictions_on + "/" + item]]
-            for item in predicates:
-                sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it.cpu().numpy()) for _it in
-                                                                    context[global_key + predictions_on + "/" + item]]
+                _list = [_it.cpu().numpy() for _it in context[global_key + predictions_on + "/" + item]]
+                for _it in range(len(_list)):
+                    if _list[_it][0] > 1-epsilon:
+                        _list[_it][0] = 1-epsilon
+                    elif _list[_it][1] > 1-epsilon:
+                        _list[_it][1] = 1-epsilon
+                sentence[item.replace("<", "").replace(">", "")] = _list
+                sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it) for _it in _list]
+
             if len(pairs):
                 sentence['phrase'] = {}
                 sentence['phrase']['entity'] = {}
@@ -79,14 +73,14 @@ class ACELogicalSolver(ilpOntSolver):
                         _result[indexes[0]][indexes[1]][1] = values[1]
                         _result[indexes[1]][indexes[0]][1] = values[1]
                     sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
-        import pickle
-        file = open('data.pkl', 'wb')
-
-        # dump information to that file
-        pickle.dump(sentence, file)
-
-        # close the file
-        file.close()
+        # import pickle
+        # file = open('data.pkl', 'wb')
+        #
+        # # dump information to that file
+        # pickle.dump(sentence, file)
+        #
+        # # close the file
+        # file.close()
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
         if len(pairs):
             phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
@@ -116,14 +110,10 @@ class ACELogicalSolver(ilpOntSolver):
 
             for item in result[0]:
                 count = 0
-#                 print("pre-result is ")
-#                 print(result[0][item])
                 _list = []
                 last = -1
                 for ph in helper['phrase']['raw']:
-#                     print("ph is ")
-#                     print(ph[0])
-#                     print(ph[1])
+
                     if ph[0] > last:
                         for i in range(last+1, ph[0]):
                             _list.append(0)
@@ -135,15 +125,6 @@ class ACELogicalSolver(ilpOntSolver):
                     for i in range(last+1, len(helper['words']['FAC'])):
                             _list.append(0)
                 result[0][item] = torch.tensor(_list, device = self.device)
-#                 print("words are ")
-#                 print(len(helper['words']['FAC']))
-#                 print("raw is ")
-#                 print(helper['phrase']['raw'])
-#                 print("result is ")
-#                 print(_list)
-#                 print("item is ")
-#                 print(item)
-#                 print(fg)
         else:
             for item in result[0]:
                 result[0][item] = torch.from_numpy(result[0][item]).float().to(self.device)

@@ -2,7 +2,7 @@ import abc
 from typing import Any
 import torch
 from .sensors import TorchSensor
-from .learnerModels import PyTorchFC, LSTMModel
+from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 import os.path
 from os import path
 
@@ -79,3 +79,20 @@ class FullyConnectedLearner(TorchLearner):
         output = self.model(_tensor)
         return output
 
+
+class FullyConnectedLearnerRelu(TorchLearner):
+    def __init__(self, *pres, input_dim, output_dim):
+        super(FullyConnectedLearnerRelu, self).__init__(*pres)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.model = PyTorchFCRelu(input_dim=self.input_dim, output_dim=self.output_dim)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
+
+    def forward(
+            self,
+    ) -> Any:
+        _tensor = self.inputs[0]
+        output = self.model(_tensor)
+        return output
