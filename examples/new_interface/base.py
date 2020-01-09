@@ -671,8 +671,12 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             tn = 0
             fn = 0
             metrics = {}
+            inference_metrics = {}
+            extra = {}
             for prop1 in self.poi:
                 metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+                inference_metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+                extra[prop1.name.name] = 0
 
             for j in tqdm(range(len(paths)), "READER : "):
                 while True:
@@ -718,6 +722,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                 pairs = context[pair['index'].fullname]
                                 pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
                                 _truth = []
+                                extra[prop1.name.name] += len(pairs_gr)
                                 for _iteration in range(len(pairs)):
                                     check = False
                                     for item in pairs_gr:
@@ -744,6 +749,20 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                         relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
+
+                        for _val in range(len(pred)):
+                            for item in range(len(pred[_val])):
+                                _, index = torch.max(pred[_val][item], dim=0)
+                                if index == truth[_val][item] and index == 1:
+                                    metrics[info[_val]]["tp"] += 1
+                                elif index == truth[_val][item] and index == 0:
+                                    metrics[info[_val]]["tn"] += 1
+                                elif index != truth[_val][item] and index == 1:
+                                    metrics[info[_val]]["fp"] += 1
+                                elif index != truth[_val][item] and index == 0:
+                                    metrics[info[_val]]["fn"] += 1
+
+
                         for _it in range(len(info)):
                             if info[_it] in entities:
                                 pred[_it] = result[0][info[_it]]
@@ -753,13 +772,13 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             for item in range(len(pred[_val])):
                                 index = pred[_val][item].item()
                                 if index == truth[_val][item] and index == 1:
-                                    metrics[info[_val]]["tp"] += 1
+                                    inference_metrics[info[_val]]["tp"] += 1
                                 elif index == truth[_val][item] and index == 0:
-                                    metrics[info[_val]]["tn"] += 1
+                                    inference_metrics[info[_val]]["tn"] += 1
                                 elif index != truth[_val][item] and index == 1:
-                                    metrics[info[_val]]["fp"] += 1
+                                    inference_metrics[info[_val]]["fp"] += 1
                                 elif index != truth[_val][item] and index == 0:
-                                    metrics[info[_val]]["fn"] += 1
+                                    inference_metrics[info[_val]]["fn"] += 1
 
                     #                         import pickle
                     #                         file = open('imp.pkl', 'wb')
@@ -794,9 +813,11 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             # precision = tp / (tp + fp)
             # f1 = 2 * (precision * recall) / (precision + recall)
             # print("precision is " + str(precision) + " recall is " + str(recall) + " f1 score is " + str(f1))
-            print("check the result file\n")
+            print("check the test_result file\n")
             filename = 'test_results.txt'
             data_json = json.dumps(metrics)
+            data1_json = json.dumps(inference_metrics)
+            extra_json = json.dumps(extra)
             if os.path.exists(filename):
                 append_write = 'a'  # append if already exists
             else:
@@ -805,9 +826,15 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             loggerFile = open(filename, append_write)
             loggerFile.write("iteration is: " + str(i) + '\n')
             loggerFile.write(data_json)
+            print("\n")
+            loggerFile.write("extra is: " + '\n')
+            loggerFile.write(extra_json)
+            print("\n")
+            loggerFile.write("inference result is: " + '\n')
+            loggerFile.write(data1_json)
+            print("\n")
             loggerFile.write("End of Iteration\n")
             loggerFile.close()
-            self.save()
 
     def structured_train_constraint(self, iterations, paths, ratio):
         reader_sensors = self.readers
@@ -826,9 +853,11 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             fn = 0
             metrics = {}
             inference_metrics = {}
+            extra = {}
             for prop1 in self.poi:
                 metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
                 inference_metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+                extra[prop1.name.name] = 0
 
             for j in tqdm(range(len(paths)), "READER : "):
                 while True:
@@ -873,6 +902,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                         matches.append("NONE")
                                 pairs = context[pair['index'].fullname]
                                 pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                                extra[prop1.name.name] += len(pairs_gr)
                                 _truth = []
                                 for _iteration in range(len(pairs)):
                                     check = False
@@ -933,7 +963,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         #         pred[_it] = result[1][info[_it]]
                         for _val in range(len(pred)):
                             for item in range(len(pred[_val])):
-                                _, index = torch.max(pred[-1][item], dim=0)
+                                _, index = torch.max(pred[_val][item], dim=0)
                                 if index == truth[_val][item] and index == 1:
                                     metrics[info[_val]]["tp"] += 1
                                 elif index == truth[_val][item] and index == 0:
@@ -953,7 +983,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     pred[_it] = result[1][info[_it]]
                             for _val in range(len(pred)):
                                 for item in range(len(pred[_val])):
-                                    _, index = torch.max(pred[-1][item], dim=0)
+                                    index = pred[_val][item].item()
                                     if index == truth[_val][item] and index == 1:
                                         inference_metrics[info[_val]]["tp"] += 1
                                     elif index == truth[_val][item] and index == 0:
@@ -972,6 +1002,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             filename = 'results.txt'
             data_json = json.dumps(metrics)
             data1_json = json.dumps(inference_metrics)
+            extra_json = json.dumps(extra)
             if os.path.exists(filename):
                 append_write = 'a'  # append if already exists
             else:
@@ -980,6 +1011,9 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             loggerFile = open(filename, append_write)
             loggerFile.write("iteration is: " + str(i) + '\n')
             loggerFile.write(data_json)
+            print("\n")
+            loggerFile.write("extra is: " + '\n')
+            loggerFile.write(extra_json)
             print("\n")
             if self.solver:
                 loggerFile.write("inference result is: " + '\n')
