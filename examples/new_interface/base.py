@@ -919,7 +919,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             truth[_it] = truth[_it].long()
                             pred[_it] = pred[_it].float()
                             total_loss += structured_perceptron_exact_with_logits(logits=pred[_it], targets=truth[_it], inferences=inferences[_it],
-                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2, soft_penalty=ratio) #Just structure loss
+                                                                             weights=torch.tensor(weights[_it], device=self.device).float(), gamma=2, soft_penalty=ratio, label_smoothing=0.01) #Just structure loss
                         # print(total_loss)
                         total_loss.backward(retain_graph=True)
 
