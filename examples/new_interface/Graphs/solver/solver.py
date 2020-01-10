@@ -42,6 +42,10 @@ class ACELogicalSolver(ilpOntSolver):
                         _list[_it][0] = 1-epsilon
                     elif _list[_it][1] > 1-epsilon:
                         _list[_it][1] = 1-epsilon
+                    if _list[_it][0] < epsilon:
+                        _list[_it][0] = epsilon
+                    elif _list[_it][1] < epsilon:
+                        _list[_it][1] = epsilon
                 sentence[item.replace("<", "").replace(">", "")] = _list
                 sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it) for _it in _list]
 
