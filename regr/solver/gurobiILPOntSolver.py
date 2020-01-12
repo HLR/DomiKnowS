@@ -334,7 +334,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 X_Q += currentQElement
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
-                if (token, 'Not_'+conceptName) in x: 
+                if ('Not_'+conceptName, token) in x: 
                     currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
