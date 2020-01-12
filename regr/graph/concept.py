@@ -1,10 +1,12 @@
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import chain, product
+from typing import Tuple, Type
 from .base import Scoped, BaseGraphTree
 from .trial import Trial
 from ..utils import enum
 
+from .dataNode import DataNode
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -19,9 +21,12 @@ class Concept(BaseGraphTree):
 
             def create(src, *args, **kwargs):
                 # add one-by-one
+                rels = []
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
                     rel_inst = Rel(src, dst, argument_name=argument_name)
+                    rels.append(rel_inst)
+                return rels
 
             cls._rels[Rel.name()] = create
             return Rel
@@ -36,6 +41,70 @@ class Concept(BaseGraphTree):
 
         self._in = OrderedDict()  # relation catogrory_name : list of relation inst
         self._out = OrderedDict()  # relation catogrory_name : list of relation inst
+
+    def __str__(self):
+        return self.name
+    
+    def __call__(self, *args, **kwargs):
+        from .relation import IsA, HasA
+
+        if (len(args) + len(kwargs) == 0 or
+                ('name' in kwargs) or
+                (len(args)==1 and isinstance(args[0], str))):
+            new_concept = Concept(*args, **kwargs)
+            new_concept.is_a(self)
+            return new_concept
+        else:
+            return self.has_a(*args, **kwargs)
+
+    def parse_query_apply(self, func, *names, delim='/', trim=True):
+        if isinstance(names[0], Concept):
+            name = names[0]
+            names = names[1:]
+        else:
+            name0s = names[0].split(delim)
+            name = name0s[0]
+            if trim:
+                name = name.strip()
+            names = list(chain(name0s[1:], names[1:]))
+            if name[0] == '<' and name[-1] == '>':
+                for key in self:
+                    if key.name == name[1:-1]:
+                        name = key
+                        break
+        if names:
+            return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
+        return func(self, name)
+
+    def relate_to(self, concept, *tests):
+        from .relation import Relation
+
+        retval = []
+        tests_in = [lambda x: x.src == concept,]
+        tests_in.extend(tests)
+        for rel in chain(*self._in.values()):
+            for test in tests_in:
+                if isinstance(test, Type) and issubclass(test, Relation):
+                    if not isinstance(rel, test):
+                        break
+                else:
+                    if not test(rel):
+                        break
+            else:
+                retval.append(rel)
+        tests_out = [lambda x: x.dst == concept,]
+        tests_out.extend(tests)
+        for rel in chain(*self._out.values()):
+            for test in tests_out:
+                if isinstance(test, Type) and issubclass(test, Relation):
+                    if not isinstance(rel, test):
+                        break
+                else:
+                    if not test(rel):
+                        break
+            else:
+                retval.append(rel)
+        return retval
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor
@@ -70,7 +139,7 @@ class Concept(BaseGraphTree):
         for prop, value in self.items():
             if len(value) > 1:
                 yield self._graph, self, prop, value
-
+                
     def distances(self, p, q):
         '''
         The "distance" used in this concept to measure the consistency.
@@ -167,13 +236,15 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, root_data, data, trial=None):
+    def predict(self, root_data, data):
         # TODO: make use of root_data to find the best proper trial in the stack
-        if not trial:
-            trial = Trial.default()
-
         try:
-            return trial[self, data]
+            if len(data) == 0:
+                return None
+            elif len(data) == 1:
+                return data[0].predictions[DataNode.PredictionType["Learned"]][self]
+            else:
+                return data[0].predictions[DataNode.PredictionType["Learned"]][self, data[1:]]
         except (AttributeError, KeyError):
             return None
 
@@ -216,3 +287,4 @@ class Concept(BaseGraphTree):
         while isinstance(node, Concept):  # None is not instance of Concept, If this concept has no graph, it will end up None
             node = node.sup
         return node
+

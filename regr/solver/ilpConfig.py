@@ -6,7 +6,8 @@ ilpConfig = {
     # variable controlling what ILP solver is used  - one of "Gurobi", "GEKKO", None
     'ilpSolver' : REGR_SOLVER or 'Gurobi',
     
-    # 'log_name'
+    # Logging configuration for ilpOntSolver
+    'log_name' : 'ilpOntSolver', 
     'log_level' : logging.DEBUG,
     'log_filename' : 'ilpOntSolver.log',
     'log_filesize' : 5*1024*1024*1024,

@@ -15,6 +15,7 @@ class Graph(BaseGraphTree):
         elif isinstance(ontology, str):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
+        self._logicalConstrains = OrderedDict()
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -55,6 +56,10 @@ class Graph(BaseGraphTree):
     @property
     def concepts(self):
         return self._concepts
+    
+    @property
+    def logicalConstrains(self):
+        return self._logicalConstrains
 
     def what(self):
         wht = BaseGraphTree.what(self)
@@ -68,22 +73,3 @@ class Graph(BaseGraphTree):
     # python 2.6+
     Ontology = namedtuple('Ontology', ('iri', 'local'))
     Ontology.__new__.__defaults__ = (None,)
-    
-    # --- Logical Constraints
-
-    logicalConstrains = {}
-
-    def andL(self, e1, e2):
-        lcName = "LC%i"%(len(self.logicalConstrains))
-        self.logicalConstrains[lcName] = ('and', e1, e2)
-        return self.logicalConstrains[lcName]
-
-    def orL(self, e1, e2):
-        lcName = "LC%i"%(len(self.logicalConstrains))
-        self.logicalConstrains[lcName] = ('or', e1, e2)
-        return self.logicalConstrains[lcName]
-
-    def ifL(self, e1, e2):
-        lcName = "LC%i"%(len(self.logicalConstrains))
-        self.logicalConstrains[lcName] = ('if', e1, e2)
-        return self.logicalConstrains[lcName]

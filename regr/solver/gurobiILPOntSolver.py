@@ -1,4 +1,7 @@
 from six import string_types
+from itertools import product, permutations, groupby
+import logging
+import datetime
 
 # numpy
 import numpy as np
@@ -8,21 +11,13 @@ from owlready2 import *
 
 # Gurobi
 from gurobipy import *
-from examples.emr.emr.graph import phrase
 
-if __package__ is None or __package__ == '': 
-    from regr.solver.ilpConfig import ilpConfig
-    from regr.solver.ilpOntSolver import ilpOntSolver
- 
-    from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-else:
-    from .ilpConfig import ilpConfig 
-    from .ilpOntSolver import ilpOntSolver
-
-    from .gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-    
-import logging
-import datetime
+from regr.graph.concept import Concept
+from regr.solver.ilpConfig import ilpConfig
+from regr.solver.ilpOntSolver import ilpOntSolver
+from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
+from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
+from click.decorators import group
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -31,7 +26,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         super().__init__(graph, ontologiesTuple)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
                
-    def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
+    def addTokenConstrains(self, m, conceptNames, tokens, x, graphResultsForPhraseToken):
         if graphResultsForPhraseToken is None:
             return None
         
@@ -44,8 +39,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.debug("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
 
         # Create variables for token - concept and negative variables
-        for tokenIndex, token in enumerate(tokens):            
-            for conceptName in conceptNames: 
+        for conceptName in conceptNames: 
+            for tokenIndex, token in enumerate(tokens):            
                 currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 
                 # Check if probability not zero
@@ -53,23 +48,22 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
 
                 # Create variable
-                x[token, conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
-                self.myLogger.debug("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
+                x[conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
+                #self.myLogger.debug("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
 
                 # Create negative variable
                 if currentProbability <= 1.0: # ilpOntSolver.__negVarTrashhold:
-                    x[token, 'Not_'+conceptName]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
+                    x['Not_'+conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
                 else:
-                    self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(conceptName,token))
+                    self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(token, conceptName))
 
         # Add constraints forcing decision between variable and negative variables 
         for conceptName in conceptNames:
             for token in tokens:
-                if (token, 'Not_'+conceptName) in x:
-                    constrainName = 'c_%s_%sselfDisjoint'%(token, conceptName)  
-                    currentConstrLinExpr = x[token, conceptName] + x[token, 'Not_'+conceptName]
-                    m.addConstr(currentConstrLinExpr == 1, name=constrainName)
-                    self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                if ('Not_'+conceptName, token) in x:
+                    currentConstrLinExpr = x[conceptName, token] + x['Not_'+conceptName, token]
+                    m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptName, token))
+                    #self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
         m.update()
 
@@ -79,231 +73,280 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.warning("No ILP variables created for tokens")
             return
 
-        # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
-        foundDisjoint = dict() # too eliminate duplicates
-        for conceptName in conceptNames:
-            
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-            
-            if currentConcept is None :
-                continue
-            
-            self.myLogger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
+        if hasattr(self, 'myOnto'): # --- Use Ontology as a source of constrains 
+            # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
+            foundDisjoint = dict() # too eliminate duplicates
+            for conceptName in conceptNames:
                 
-            for d in currentConcept.disjoints():
-                disjointConcept = d.entities[1]._name
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                
+                if currentConcept is None :
+                    continue
+                
+                #self.myLogger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
                     
-                if currentConcept._name == disjointConcept:
-                    disjointConcept = d.entities[0]._name
+                for d in currentConcept.disjoints():
+                    disjointConcept = d.entities[1]._name
                         
                     if currentConcept._name == disjointConcept:
-                        continue
-                        
-                if disjointConcept not in conceptNames:
-                     continue
-                        
-                if conceptName in foundDisjoint:
-                    if disjointConcept in foundDisjoint[conceptName]:
-                        continue
-                
-                if disjointConcept in foundDisjoint:
-                    if conceptName in foundDisjoint[disjointConcept]:
-                        continue
+                        disjointConcept = d.entities[0]._name
                             
-                for tokenIndex, token in enumerate(tokens):
-                    if (token, conceptName) not in x:
-                        continue
-                    
-                    currentConstrName = 'c_%s_%s_Disjoint_%s'%(token, conceptName, disjointConcept)
-                        
-                    # Version of the disjoint constrain using logical function library
-                    m.addConstr(self.myIlpBooleanProcessor.nandVar(m, x[token, conceptName], x[token, disjointConcept]) >= 1, name=constrainName)
-
-                    # Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
-                    #currentConstrLinExpr = x[token, conceptName] + x[token, disjointConcept]
-                    #m.addConstr(currentConstrLinExpr <= 1, name=currentConstrName)
-                    #self.myLogger.debug("Disjoint constrain between concept \"%s\" and concept %s - %s <= %i"%(conceptName,disjointConcept,currentConstrLinExpr,1))
-                               
-                if not (conceptName in foundDisjoint):
-                    foundDisjoint[conceptName] = {disjointConcept}
-                else:
-                    foundDisjoint[conceptName].add(disjointConcept)
-                           
-            if conceptName in foundDisjoint:
-                self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
-
-        # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
-        foundEquivalent = dict() # too eliminate duplicates
-        for conceptName in conceptNames:
-            
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                
-            if currentConcept is None :
-                continue
-                
-            for equivalentConcept in currentConcept.equivalent_to:
-                if equivalentConcept.name not in conceptNames:
-                     continue
-                        
-                if conceptName in foundEquivalent:
-                    if equivalentConcept.name in foundEquivalent[conceptName]:
-                        continue
-                
-                if equivalentConcept.name in foundEquivalent:
-                    if conceptName in foundEquivalent[equivalentConcept.name]:
-                        continue
+                        if currentConcept._name == disjointConcept:
+                            continue
                             
-                for tokenIndex, token in enumerate(tokens):
-                    if (token, conceptName) not in x:
-                        continue
-                    
-                    constrainName = 'c_%s_%s_Equivalent_%s'%(token, conceptName, equivalentConcept.name)
-                    m.addConstr(self.myIlpBooleanProcessor.andVar(m, x[token, conceptName], x[token, equivalentConcept]) >= 1, name=constrainName)
-
-                if not (conceptName in foundEquivalent):
-                    foundEquivalent[conceptName] = {equivalentConcept.name}
-                else:
-                    foundEquivalent[conceptName].add(equivalentConcept.name)
-           
-            if conceptName in foundEquivalent:
-                self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
-    
-        # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
-        for conceptName in conceptNames :
-            
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                
-            if currentConcept is None :
-                continue
-                
-            for ancestorConcept in currentConcept.ancestors(include_self = False) :
-                if ancestorConcept.name not in conceptNames :
-                     continue
+                    if disjointConcept not in conceptNames:
+                         continue
                             
-                for tokenIndex, token in enumerate(tokens):
-                    if (token, conceptName) not in x:
-                        continue
+                    if conceptName in foundDisjoint:
+                        if disjointConcept in foundDisjoint[conceptName]:
+                            continue
                     
-                    constrainName = 'c_%s_%s_Ancestor_%s'%(token, currentConcept, ancestorConcept.name)
-                    m.addConstr(self.myIlpBooleanProcessor.ifVar(m, x[token, conceptName], x[token, ancestorConcept]) >= 1, name=constrainName)
-
-                self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
-
-        # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
-        for conceptName in conceptNames :
-            
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                
-            if currentConcept is None :
-                continue
-                
-            for conceptConstruct in currentConcept.constructs(Prop = None) :
-                if type(conceptConstruct) is And :
-                    
+                    if disjointConcept in foundDisjoint:
+                        if conceptName in foundDisjoint[disjointConcept]:
+                            continue
+                                
                     for tokenIndex, token in enumerate(tokens):
-                        if (token, conceptName) not in x:
+                        if (conceptName, token) not in x:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.nandVar(m, x[conceptName, token], x[disjointConcept, token], onlyConstrains = True)
+                    if not (conceptName in foundDisjoint):
+                        foundDisjoint[conceptName] = {disjointConcept}
+                    else:
+                        foundDisjoint[conceptName].add(disjointConcept)
+                               
+                if conceptName in foundDisjoint:
+                    self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+    
+            # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
+            foundEquivalent = dict() # too eliminate duplicates
+            for conceptName in conceptNames:
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                    
+                if currentConcept is None :
+                    continue
+                    
+                for equivalentConcept in currentConcept.equivalent_to:
+                    if equivalentConcept.name not in conceptNames:
+                         continue
+                            
+                    if conceptName in foundEquivalent:
+                        if equivalentConcept.name in foundEquivalent[conceptName]:
                             continue
                     
-                        _varAnd = m.addVar(name="andVar_%s"%(constrainName))
+                    if equivalentConcept.name in foundEquivalent:
+                        if conceptName in foundEquivalent[equivalentConcept.name]:
+                            continue
+                                
+                    for tokenIndex, token in enumerate(tokens):
+                        if (conceptName, token) not in x:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.andVar(m, x[conceptName, token], x[equivalentConcept, token], onlyConstrains = True)
+                    if not (conceptName in foundEquivalent):
+                        foundEquivalent[conceptName] = {equivalentConcept.name}
+                    else:
+                        foundEquivalent[conceptName].add(equivalentConcept.name)
+               
+                if conceptName in foundEquivalent:
+                    self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
         
-                        andList = []
+            # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
+            for conceptName in conceptNames :
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
-                        for currentClass in conceptConstruct.Classes :
-                            if (token, currentClass.name) not in x:
+                if currentConcept is None :
+                    continue
+                    
+                for ancestorConcept in currentConcept.ancestors(include_self = False) :
+                    if ancestorConcept.name not in conceptNames :
+                         continue
+                                
+                    for tokenIndex, token in enumerate(tokens):
+                        if (conceptName, token) not in x:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.ifVar(m, x[conceptName, token], x[ancestorConcept, token], onlyConstrains = True)
+                            
+                    self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+    
+            # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
+            for conceptName in conceptNames :
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                    
+                if currentConcept is None :
+                    continue
+                    
+                for conceptConstruct in currentConcept.constructs(Prop = None) :
+                    if type(conceptConstruct) is And :
+                        
+                        for tokenIndex, token in enumerate(tokens):
+                            if (conceptName, token) not in x:
                                 continue
                         
-                            andList.append(x[token, currentClass.name])
-    
-                        andList.append(x[token, conceptName])
-                        
-                        constrainName = 'c_%s_%s_Intersection'%(token, conceptName)
-                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, andList) >= 1, name=constrainName)
-                        
-        # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
-        for conceptName in conceptNames :
+                            _varAnd = m.addVar(name="andVar_%s_%s"%(conceptName, token))
             
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                
-            if currentConcept is None :
-                continue
-                
-            for conceptConstruct in currentConcept.constructs(Prop = None) :
-                if type(conceptConstruct) is Or :
-                    
-                    for tokenIndex, token in enumerate(tokens):    
-                        if (token, conceptName) not in x:
-                            continue
+                            andList = []
                         
-                        _varOr = m.addVar(name="orVar_%s"%(constrainName))
+                            for currentClass in conceptConstruct.Classes :
+                                if (currentClass.name, token) not in x:
+                                    continue
+                            
+                                andList.append(x[currentClass.name, token])
         
-                        orList = []
+                            andList.append(x[conceptName, token])
+                            
+                            self.myIlpBooleanProcessor.andVar(m, andList, onlyConstrains = True)
+                            
+            # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
+            for conceptName in conceptNames :
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
-                        for currentClass in conceptConstruct.Classes :
-                            if (token, currentClass.name) not in x:
+                if currentConcept is None :
+                    continue
+                    
+                for conceptConstruct in currentConcept.constructs(Prop = None) :
+                    if type(conceptConstruct) is Or :
+                        
+                        for tokenIndex, token in enumerate(tokens):    
+                            if (conceptName, token) not in x:
                                 continue
                             
-                            orList.append(x[token, currentClass.name])
-    
-                        orList.append(x[token, conceptName])
-                        
-                        constrainName = 'c_%s_%s_Union'%(token, conceptName)
-                        m.addConstr(self.myIlpBooleanProcessor.orVar(m, orList) >= 1, name=constrainName)
-        
-        # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
-        for conceptName in conceptNames :
+                            _varOr = m.addVar(name="orVar_%s_%s"%(conceptName, token))
             
-            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                
-            if currentConcept is None :
-                continue
-                
-            for conceptConstruct in currentConcept.constructs(Prop = None) :
-                if type(conceptConstruct) is Not :
-                    
-                    complementClass = conceptConstruct.Class
-
-                    for tokenIndex, token in enumerate(tokens):          
-                        if (token, conceptName) not in x:
-                            continue
+                            orList = []
                         
-                        if (token, complementClass.name) not in x:
-                            continue
-                          
-                        constrainName = 'c_%s_%s_ComplementOf_%s'%(token, conceptName, complementClass.name) 
-                        m.addConstr(self.myIlpBooleanProcessor.xorVar(m, x[token, conceptName], x[token, complementClass.name]) >= 1, name=constrainName)
-
-                    self.myLogger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
-                        
-        # ---- No supported yet
-    
-        # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
+                            for currentClass in conceptConstruct.Classes :
+                                if (currentClass.name, token) not in x:
+                                    continue
+                                
+                                orList.append(x[currentClass.name, token])
         
-        # -- Add constraints based on concept oneOf statements in ontology - ?
+                            orList.append(x[conceptName, token])
+                            
+                            self.myIlpBooleanProcessor.orVar(m, orList, onlyConstrains = True)
+            
+            # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
+            for conceptName in conceptNames:
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                    
+                if currentConcept is None :
+                    continue
+                    
+                for conceptConstruct in currentConcept.constructs(Prop = None) :
+                    if type(conceptConstruct) is Not :
+                        
+                        complementClass = conceptConstruct.Class
     
+                        for tokenIndex, token in enumerate(tokens):          
+                            if (conceptName, token) not in x:
+                                continue
+                            
+                            if (complementClass.name, token) not in x:
+                                continue
+                              
+                            self.myIlpBooleanProcessor.xorVar(m, x[conceptName, token], x[complementClass.name, token], onlyConstrains = True)
+    
+                        self.myLogger.info("Created - objectComplementOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,complementClass.name))
+                            
+            # ---- No supported yet
+        
+            # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
+            
+            # -- Add constraints based on concept oneOf statements in ontology - ?
+        else: # ---------- no Ontology
+            concepts = set()
+            
+            # Get concept based on concept names
+            for graph in self.myGraph:
+                for conceptName in conceptNames:
+                    if conceptName in graph.concepts:
+                        concepts.add(graph.concepts[conceptName])
+                        
+                for subGraphKey in graph._objs:
+                    subGraph = graph._objs[subGraphKey]
+                    for conceptName in conceptNames:
+                            if conceptName in subGraph.concepts:
+                                concepts.add(subGraph.concepts[conceptName])
+            
+            # Create subclass constrains
+            for concept in concepts:
+                for rel in concept.is_a():
+                    # A is_a B : if(A, B) : A(x) <= B(x)
+                    for token in tokens:
+                        if (rel.src.name, token) not in x: # subclass (A)
+                            continue
+                        
+                        if (rel.dst.name, token) not in x: # superclass (B)
+                            continue
+                                                                        
+                        self.myIlpBooleanProcessor.ifVar(m, x[rel.src.name, token], x[rel.dst.name, token], onlyConstrains = True)
+                        self.myLogger.info("Created - subclass - constrains between concept \"%s\" and concepts %s"%(rel.src.name,rel.dst.name))
+
+            # Create disjoint constraints
+            foundDisjoint = dict() # To eliminate duplicates
+            for concept in concepts:     
+                for rel in concept.not_a():
+                    conceptName = concept.name
+                    disjointConcept = rel.dst.name
+                        
+                    if disjointConcept not in conceptNames:
+                         continue
+                            
+                    if conceptName in foundDisjoint:
+                        if disjointConcept in foundDisjoint[conceptName]:
+                            continue
+                    
+                    if disjointConcept in foundDisjoint:
+                        if conceptName in foundDisjoint[disjointConcept]:
+                            continue
+                                
+                    for tokenIndex, token in enumerate(tokens):
+                        if (conceptName, token) not in x:
+                            continue
+                        
+                        if (disjointConcept, token) not in x:
+                            continue
+                            
+                        self.myIlpBooleanProcessor.nandVar(m, x[conceptName, token], x[disjointConcept, token], onlyConstrains = True)
+                            
+                    if not (conceptName in foundDisjoint):
+                        foundDisjoint[conceptName] = {disjointConcept}
+                    else:
+                        foundDisjoint[conceptName].add(disjointConcept)
+                               
+                if conceptName in foundDisjoint:
+                    self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+            
         m.update()
 
         # Add objectives
         X_Q = None
         for tokenIndex, token in enumerate(tokens):
             for conceptName in conceptNames:      
-                if (token, conceptName) not in x:
+                if (conceptName, token) not in x:
                     continue
                            
-                currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex]*x[token, conceptName]
-                self.myLogger.debug("Created objective element %s"%(currentQElement))
+                currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex]*x[conceptName, token]
                 X_Q += currentQElement
+                #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
-                if (token, 'Not_'+conceptName) in x: 
-                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x[token, 'Not_'+conceptName]
-                    self.myLogger.debug("Created objective element %s"%(currentQElement))
+                if ('Not_'+conceptName, token) in x:
+                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
                     X_Q += currentQElement
+                    #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
         return X_Q
      
-    def addRelationsConstrains(self, m, tokens, conceptNames, x, y, graphResultsForPhraseRelation):
+    def addRelationsConstrains(self, m, conceptNames, tokens, x, y, graphResultsForPhraseRelation):
         if graphResultsForPhraseRelation is None:
             return None
-        
+
         self.myLogger.info('Starting method addRelationsConstrains with graphResultsForPhraseToken')
 
         if graphResultsForPhraseRelation is not None:
@@ -326,7 +369,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
-                    self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
+                    #self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
                     
                     # Create negative variable
                     if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
@@ -342,330 +385,354 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                     
                     if (relationName+'-neg', token1, token2) in y: 
-                        constrainName = 'c_%s_%s_%sselfDisjoint'%(token1, token2, relationName)
-                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name=constrainName)
-                        self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
+                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%sselfDisjoint'%(token1, token2, relationName))
+                        #self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
 
         m.update()
    
         self.myLogger.info("Created %i ilp variables for relations"%(len(y)))
 
-        # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue
-    
-            self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
-    
-            currentRelationDomain = currentRelation.get_domain() # domains_indirect()
-            currentRelationRange = currentRelation.get_range()
+        if hasattr(self, 'myOnto'): # --- Use Ontology as a source of constrains 
+            # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
                     
-            for domain in currentRelationDomain:
-                if domain._name not in conceptNames:
+                if currentRelation is None:
                     continue
+        
+                self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
+        
+                currentRelationDomain = currentRelation.get_domain() # domains_indirect()
+                currentRelationRange = currentRelation.get_range()
                         
-                for range in currentRelationRange:
-                    if range.name not in conceptNames:
+                for domain in currentRelationDomain:
+                    if domain._name not in conceptNames:
                         continue
                             
+                    for range in currentRelationRange:
+                        if range.name not in conceptNames:
+                            continue
+                                
+                        for token1Index, token1 in enumerate(tokens): 
+                            for token2Index, token2 in enumerate(tokens):
+                                if token1 == token2:
+                                    continue
+    
+                                if (domain.name, token1) not in x:
+                                     continue
+                                 
+                                if (range.name, token2) not in x:
+                                     continue
+                                 
+                                if (currentRelation.name, token1, token2) not in y:
+                                     continue
+                                    
+                                self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[domain._name, token1], onlyConstrains = True)
+                                self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[range._name, token2],  onlyConstrains = True)
+                                
+                        self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+    
+            # -- Add constraints based on property subProperty statements in ontology R subproperty of S - R(x, y) -> S(x, y)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                for superProperty in currentRelation.is_a:
+                    if superProperty.name not in graphResultsForPhraseRelation:
+                        continue
+                    
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
                             if token1 == token2:
                                 continue
-
-                            if (token1, domain.name) not in x:
-                                 continue
-                             
-                            if (token1, range.name) not in x:
-                                 continue
-                             
-                            if (currentRelation.name, token1, token2) not in y:
-                                 continue
-                             
-                                
-                            # Version of the domain and range constrains using logical function library
-                            currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
-                            m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token1, domain._name]) >= 1, name=currentConstrNameDomain)
-                            currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
-                            m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelation._name, token1, token2], x[token2, range._name]) >= 1, name=currentConstrNameRange)
-                                
-                            # --- Short version ensuring that logical expression is SATISFY - no generating variable holding the result of evaluating the expression
+        
+                            if (superProperty.name, token1, token2) not in y:
+                                continue
                             
-                            # Domain Constrain
-                            #currentConstrNameDomain = 'c_domain_%s_%s_%s'%(currentRelation, token1, token2)
-                            #currentConstrLinExprDomain = x[token1, domain.name] - y[currentRelation.name, token1, token2]
-                            #m.addConstr(currentConstrLinExprDomain >= 0, name=currentConstrNameDomain)
-                            #self.myLogger.debug("Domain constrain between relation \"%s\" and domain %s - %s >= %i"%(relationName,domain.name,currentConstrLinExprDomain,0))
-
-                            # Range constrain
-                            #currentConstrNameRange = 'c_range_%s_%s_%s'%(currentRelation, token1, token2)
-                            #currentConstrLinExprRange = x[token2, range.name] - y[currentRelation.name, token1, token2]
-                            #m.addConstr(currentConstrLinExprRange >= 0, name=currentConstrNameRange)
-                            #self.myLogger.debug("Range constrain between relation \"%s\" and range %s - %s >= %i"%(relationName,range.name,currentConstrLinExprRange,0))
-                                
-                    self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
-
-          # -- Add constraints based on property subProperty statements in ontology R subproperty of S - R(x, y) -> S(x, y)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                            self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], y[superProperty.name, token1, token2], onlyConstrains = True)
                 
-            if currentRelation is None:
-                continue   
+            # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
+            foundEquivalent = dict() # too eliminate duplicates
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue
+                    
+                for equivalentProperty in currentRelation.equivalent_to:
+                    if equivalentProperty.name not in graphResultsForPhraseRelation:
+                         continue
+                            
+                    if relationName in foundEquivalent:
+                        if equivalentProperty.name in foundEquivalent[relationName]:
+                            continue
+                    
+                    if equivalentProperty.name in foundEquivalent:
+                        if relationName in foundEquivalent[equivalentProperty.name]:
+                            continue
+                                
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
+        
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            if (equivalentProperty.name, token1, token2) not in y:
+                                continue
+                            
+                            self.myIlpBooleanProcessor.andVar(m, y[relationName, token1, token2], y[equivalentProperty.name, token1, token2], onlyConstrains = True)
+                                
+                        if not (relationName in foundEquivalent):
+                            foundEquivalent[relationName] = {equivalentProperty.name}
+                        else:
+                            foundEquivalent[relationName].add(equivalentProperty.name)
             
-            for superProperty in currentRelation.is_a:
-                if superProperty.name not in graphResultsForPhraseRelation:
+            # -- Add constraints based on property inverseProperty statements in ontology - S(x,y) -> R(y,x)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                currentRelationInverse = currentRelation.get_inverse_property()
+                
+                if not currentRelationInverse:
                     continue
                 
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
+                if currentRelationInverse.name not in graphResultsForPhraseRelation:
+                    continue
+                     
+                if currentRelationInverse is not None:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
+     
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            if (currentRelationInverse.name, token1, token2) not in y:
+                                continue
+                            
+                            self.myIlpBooleanProcessor.ifVar(m, y[currentRelationInverse.name, token1, token2], y[relationName, token1, token2], onlyConstrains = True)
+                                                            
+            # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                functionalLinExpr =  LinExpr()
     
-                        if (superProperty.name, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_SuperProperty_%s'%(token1, token2, relationName, superProperty.name)
-                            
-                        #m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], y[superProperty.name, token1, token2]) >= 1, name=constrainName)
-                        m.addConstr(y[superProperty.name, token1, token2] - y[relationName, token1, token2] >= 0, name=constrainName)
-            
-        # -- Add constraints based on property equivalentProperty statements in ontology -  and(R, S)
-        foundEquivalent = dict() # too eliminate duplicates
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue
-                
-            for equivalentProperty in currentRelation.equivalent_to:
-                if equivalentProperty.name not in graphResultsForPhraseRelation:
-                     continue
-                        
-                if relationName in foundEquivalent:
-                    if equivalentProperty.name in foundEquivalent[relationName]:
-                        continue
-                
-                if equivalentProperty.name in foundEquivalent:
-                    if relationName in foundEquivalent[equivalentProperty.name]:
-                        continue
-                            
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
-    
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        if (equivalentProperty.name, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_EquivalentProperty_%s'%(token1, token2, relationName, equivalentProperty.name)
-                        m.addConstr(self.myIlpBooleanProcessor.andVar(m, y[relationName, token1, token2], y[equivalentProperty.name, token1, token2]) >= 1, name=constrainName)
-                            
-                    if not (relationName in foundEquivalent):
-                        foundEquivalent[relationName] = {equivalentProperty.name}
-                    else:
-                        foundEquivalent[relationName].add(equivalentProperty.name)
+                if FunctionalProperty in currentRelation.is_a:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
         
-        # -- Add constraints based on property inverseProperty statements in ontology - S(x,y) -> R(y,x)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            currentRelationInverse = currentRelation.get_inverse_property()
-            
-            if not currentRelationInverse:
-                continue
-            
-            if currentRelationInverse.name not in graphResultsForPhraseRelation:
-                continue
-                 
-            if currentRelationInverse is not None:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
- 
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        if (currentRelationInverse.name, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_InverseProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[currentRelationInverse.name, token2, token1] == 1)
-                        m.addConstr(self.myIlpBooleanProcessor.ifVar(m, y[currentRelationInverse.name, token1, token2], y[relationName, token1, token2]) >= 1, name=constrainName)
+                            if (relationName, token1, token2) not in y:
+                                continue
                             
-        # -- Add constraints based on property functionalProperty statements in ontology - at most one P(x,y) for x
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
+                            functionalLinExpr += y[relationName, token1, token2]
+                                    
+                    if functionalLinExpr:
+                        constrainName = 'c_%s_FunctionalProperty'%(relationName)
+                        m.addConstr(functionalLinExpr <= 1, name=constrainName)
             
-            functionalLinExpr =  LinExpr()
-
-            if FunctionalProperty in currentRelation.is_a:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
+            # -- Add constraints based on property inverseFunctionaProperty statements in ontology - at most one P(x,y) for y
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if InverseFunctionalProperty in currentRelation.is_a:
+                    for token1 in tokens: 
+                        for token2 in tokens:
+                            if token1 == token2:
+                                continue
+        
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            functionalLinExpr += y[relationName, token2, token1]
+        
+                    if functionalLinExpr:
+                        constrainName = 'c_%s_InverseFunctionalProperty'%(relationName)
+                        m.addConstr(functionalLinExpr <= 1, name=constrainName)
+            
+            # -- Add constraints based on property reflexiveProperty statements in ontology - P(x,x)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if ReflexiveProperty in currentRelation.is_a:
+                    for tokenIndex, token in enumerate(tokens):
+                        
+                        if (relationName, token1, token2) not in y:
                             continue
-    
+                            
+                        constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
+                        m.addConstr(y[relationName, token, token] == 1, name=constrainName)  
+                            
+            # -- Add constraints based on property irreflexiveProperty statements in ontology - not P(x,x)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if IrreflexiveProperty in currentRelation.is_a:
+                    for tokenIndex, token in enumerate(tokens):
+                        
                         if (relationName, token1, token2) not in y:
                             continue
                         
-                        functionalLinExpr += y[relationName, token1, token2]
+                        constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
+                        m.addConstr(y[relationName, token, token] == 0, name=constrainName)  
+                        
+            # -- Add constraints based on property symetricProperty statements in ontology - R(x, y) -> R(y,x)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if SymmetricProperty in currentRelation.is_a:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
+        
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token1, token2, relationName)
+                            m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 1)
+            
+            # -- Add constraints based on property asymetricProperty statements in ontology - not R(x, y) -> R(y,x)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if AsymmetricProperty in currentRelation.is_a:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
+        
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token1, token2, relationName)
+                            m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 0)  
+                            
+            # -- Add constraints based on property transitiveProperty statements in ontology - P(x,y) and P(y,z) - > P(x,z)
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+                
+                if TransitiveProperty in currentRelation.is_a:
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token1 == token2:
+                                continue
+        
+                            if (relationName, token1, token2) not in y:
+                                continue
+                            
+                            constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token1, token2, relationName)
+                            #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token] == 1)  
+                                   
+            # -- Add constraints based on property allValueFrom statements in ontology
+        
+            # -- Add constraints based on property hasValueFrom statements in ontology
+        
+            # -- Add constraints based on property objectHasSelf statements in ontology
+            
+            # -- Add constraints based on property disjointProperty statements in ontology
+        
+            # -- Add constraints based on property key statements in ontology
+        
+        
+            # -- Add constraints based on property exactCardinality statements in ontology
+        
+            # -- Add constraints based on property minCardinality statements in ontology
+            
+            # -- Add constraints based on property maxCardinality statements in ontology
+            for relationName in graphResultsForPhraseRelation:
+                currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                    
+                if currentRelation is None:
+                    continue   
+        
+            # ---- Related to DataType properties - not sure yet if we need to support them
+            
+                # -- Add constraints based on property dataSomeValuesFrom statements in ontology
+            
+                # -- Add constraints based on property dataHasValue statements in ontology
+        
+                # -- Add constraints based on property dataAllValuesFrom statements in ontology
+        else: # ------ No Ontology
+            relations = set()
+            
+            for graph in self.myGraph:
+                for currentGraphConceptName in graph.concepts:
+                    for relationName in graphResultsForPhraseRelation:
+                        if relationName in graph.concepts:
+                            relations.add(graph.concepts[relationName])
+                            
+                for subGraphKey in graph._objs:
+                    subGraph = graph._objs[subGraphKey]
+                    for relationName in graphResultsForPhraseRelation:
+                        if relationName in subGraph.concepts:
+                            relations.add(subGraph.concepts[relationName])
+                            
+            for relation in relations:
+                for arg_id, rel in enumerate(relation.has_a()): 
+                    # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
+                    # A has_a B : A(x,y,...) <= B(x)
+                    #for xy in candidates[rel.src]:
+                    #x = xy[arg_id]
+                    relationName = rel.src.name
+                    conceptName = rel.dst.name
+                    
+                    for token1 in tokens: 
+                        for token2 in tokens:
+                            if token1 == token2:
+                                continue
+                            else:
+                                if (relationName, token1, token2) not in y: 
+                                    continue
                                 
-                if functionalLinExpr:
-                    constrainName = 'c_%s_FunctionalProperty'%(relationName)
-                    m.addConstr(functionalLinExpr <= 1, name=constrainName)
-        
-        # -- Add constraints based on property inverseFunctionaProperty statements in ontology - at most one P(x,y) for y
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if InverseFunctionalProperty in currentRelation.is_a:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
-    
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        functionalLinExpr += y[relationName, token2, token1]
-    
-                if functionalLinExpr:
-                    constrainName = 'c_%s_InverseFunctionalProperty'%(relationName)
-                    m.addConstr(functionalLinExpr <= 1, name=constrainName)
-        
-        # -- Add constraints based on property reflexiveProperty statements in ontology - P(x,x)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if ReflexiveProperty in currentRelation.is_a:
-                for tokenIndex, token in enumerate(tokens):
-                    
-                    if (relationName, token1, token2) not in y:
-                        continue
-                        
-                    constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
-                    m.addConstr(y[relationName, token, token] == 1, name=constrainName)  
-                        
-        # -- Add constraints based on property irreflexiveProperty statements in ontology - not P(x,x)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if IrreflexiveProperty in currentRelation.is_a:
-                for tokenIndex, token in enumerate(tokens):
-                    
-                    if (relationName, token1, token2) not in y:
-                        continue
-                    
-                    constrainName = 'c_%s_%s_ReflexiveProperty'%(token, relationName)
-                    m.addConstr(y[relationName, token, token] == 0, name=constrainName)  
-                    
-        # -- Add constraints based on property symetricProperty statements in ontology - R(x, y) -> R(y,x)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if SymmetricProperty in currentRelation.is_a:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
-    
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_SymmetricProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 1)
-        
-        # -- Add constraints based on property asymetricProperty statements in ontology - not R(x, y) -> R(y,x)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if AsymmetricProperty in currentRelation.is_a:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
-    
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_AsymmetricProperty'%(token1, token2, relationName)
-                        m.addGenConstrIndicator(y[relationName, token1, token2], True, y[relationName, token2, token1] == 0)  
-                        
-        # -- Add constraints based on property transitiveProperty statements in ontology - P(x,y) and P(y,z) - > P(x,z)
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-            
-            if TransitiveProperty in currentRelation.is_a:
-                for token1Index, token1 in enumerate(tokens): 
-                    for token2Index, token2 in enumerate(tokens):
-                        if token1 == token2:
-                            continue
-    
-                        if (relationName, token1, token2) not in y:
-                            continue
-                        
-                        constrainName = 'c_%s_%s_%s_TransitiveProperty'%(token1, token2, relationName)
-                        #m.addGenConstrIndicator(y[relationName, token, token1], True, y[relationName, token1, token] == 1)  
-                               
-        # -- Add constraints based on property allValueFrom statements in ontology
-    
-        # -- Add constraints based on property hasValueFrom statements in ontology
-    
-        # -- Add constraints based on property objectHasSelf statements in ontology
-        
-        # -- Add constraints based on property disjointProperty statements in ontology
-    
-        # -- Add constraints based on property key statements in ontology
-    
-    
-        # -- Add constraints based on property exactCardinality statements in ontology
-    
-        # -- Add constraints based on property minCardinality statements in ontology
-        
-        # -- Add constraints based on property maxCardinality statements in ontology
-        for relationName in graphResultsForPhraseRelation:
-            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
-                
-            if currentRelation is None:
-                continue   
-    
-        # ---- Related to DataType properties - not sure yet if we need to support them
-        
-            # -- Add constraints based on property dataSomeValuesFrom statements in ontology
-        
-            # -- Add constraints based on property dataHasValue statements in ontology
-    
-            # -- Add constraints based on property dataAllValuesFrom statements in ontology
-    
+                                if arg_id is 0: # Domain
+                                    if (conceptName, token1) not in x: 
+                                        continue
+                                    
+                                    self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token1], onlyConstrains = True)
+                                    #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token1].VarName))
+                                    
+                                elif arg_id is 1: # Range
+                                    if (conceptName, token2) not in x: 
+                                        continue
+                                
+                                    self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token2], onlyConstrains = True)
+                                    #self.myLogger.info("Created - range - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token2].VarName))
+                                    
+                                else:
+                                    self.myLogger.warn("When creating domain-range constrains for relation \"%s\" for concept \"%s\" received more then two concepts"%(relationName,conceptName))
+
         m.update()
     
         # Add objectives
@@ -680,20 +747,20 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                         
                     currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index]*y[relationName, token1, token2]
-                    self.myLogger.debug("Created objective element %s"%(currentQElement))
                     Y_Q += currentQElement
-                    
+                    #self.myLogger.debug("Created objective element %s"%(currentQElement))
+
                     if (relationName+'-neg', token1, token2) in y: 
                         currentQElement = (1-graphResultsForPhraseRelation[relationName][token1Index][token2Index])*y[relationName+'-neg', token1, token2]
-                        self.myLogger.debug("Created objective element %s"%(currentQElement))
                         Y_Q += currentQElement
-        
+                        #self.myLogger.debug("Created objective element %s"%(currentQElement))
+
         return Y_Q
     
-    def addTripleRelationsConstrains(self, m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation):
+    def addTripleRelationsConstrains(self, m, conceptNames, tokens, x, y, z, graphResultsForPhraseTripleRelation):
         if graphResultsForPhraseTripleRelation is None:
             return None
-        
+
         self.myLogger.info('Starting method addTripleRelationsConstrains with graphResultsForPhraseTripleRelation')
         if graphResultsForPhraseTripleRelation is not None:
             for tripleRelation in graphResultsForPhraseTripleRelation:
@@ -721,17 +788,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                         # Check if probability not zero
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
                         if currentProbability == 0:
-                            continue
+                            continue   
                         
                         # Create variable
-                        z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
-                        self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
+                        z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="z_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
+                        #self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         # Create negative variable
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
                             z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
                         else:
-                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(relationName,token1,token2,token3))
+                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(tripleRelationName,token1,token2,token3))
                             
         # Add constraints forcing decision between variable and negative variables 
         for tripleRelationName in tripleRelationNames:            
@@ -752,124 +819,160 @@ class gurobiILPOntSolver(ilpOntSolver):
                             continue
                         
                         if (tripleRelationName+'-neg', token1, token2, token3) in z: 
-                            constrainName = 'c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName)
-                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] == 1, name=constrainName)
-                            self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s %s == %i"%(tripleRelationName,tripleRelationName,token1,token2,token3,1))
+                            m.addConstr(z[tripleRelationName, token1, token2, token3] + z[tripleRelationName+'-neg', token1, token2, token3] == 1, name='c_%s_%s_%s_%sselfDisjoint'%(token1, token2, token3, tripleRelationName))
+                            #self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s %s == %i"%(tripleRelationName,tripleRelationName,token1,token2,token3,1))
 
         m.update()
     
         self.myLogger.info("Created %i ilp variables for triple relations"%(len(z)))
 
-        # -- Add constraints 
-        for tripleRelationName in graphResultsForPhraseTripleRelation:
-            currentTripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
+        if hasattr(self, 'myOnto'): # --- Use Ontology as a source of constrains 
+            # -- Add constraints 
+            for tripleRelationName in graphResultsForPhraseTripleRelation:
+                currentTripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
+                    
+                if currentTripleRelation is None:
+                    continue
+        
+                #self.myLogger.debug("Triple Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
                 
-            if currentTripleRelation is None:
-                continue
-    
-            self.myLogger.debug("Triple Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentTripleRelation.name, currentTripleRelation))
-            
-            ancestorConcept = None
-            for _ancestorConcept in currentTripleRelation.ancestors(include_self = True):
-                if _ancestorConcept.name == "Thing":
-                     continue
-                 
-                ancestorConcept = _ancestorConcept
-                break
-            
-            if ancestorConcept is None:
-                break
-            
-            tripleProperties = {}
-            triplePropertiesRanges = {}    
-            noTriplePropertiesRanges = 0 
-                         
-            for property in self.myOnto.object_properties():
-                _domain = property.domain
-                
-                if _domain is None:
+                ancestorConcept = None
+                for _ancestorConcept in currentTripleRelation.ancestors(include_self = True):
+                    if _ancestorConcept.name == "Thing":
+                         continue
+                     
+                    ancestorConcept = _ancestorConcept
                     break
                 
-                domain = _domain[0]._name
-                if domain is ancestorConcept.name:                    
-                    for superProperty in property.is_a:
-                        if superProperty is None:
-                            continue
-                        
-                        if superProperty.name == "ObjectProperty":
-                            continue
-                         
-                        if superProperty.name == 'first':
-                            tripleProperties['1'] = property
-                            _range = property.range
+                if ancestorConcept is None:
+                    break
                 
-                            if _range is None:
-                                break
-                
-                            range = _range[0]._name
-                            triplePropertiesRanges['1'] = range
-                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
-                        elif superProperty.name == 'second':
-                            tripleProperties['2'] = property
-                            _range = property.range
-                
-                            if _range is None:
-                                break
-                
-                            range = _range[0]._name
-                            triplePropertiesRanges['2'] = range
-                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
-                        elif superProperty.name == 'third':
-                            tripleProperties['3'] = property
-                            _range = property.range
-                
-                            if _range is None:
-                                break
-                
-                            range = _range[0]._name
-                            triplePropertiesRanges['3'] = range
-                            noTriplePropertiesRanges = noTriplePropertiesRanges + 1
-                              
-            if noTriplePropertiesRanges < 3:
-                self.myLogger.warning("Problem with creation of constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
-                self.myLogger.warning("Abandon it - going to the next relation")
-
-                continue
-            else:
-                self.myLogger.info("Found definition for relation \"%s\" - %s"%(tripleRelationName,triplePropertiesRanges))
-
-            tripleConstrainsNo = 0
-            for token1Index, token1 in enumerate(tokens): 
-                for token2Index, token2 in enumerate(tokens):
-                    if token2 == token1:
-                        continue
-                        
-                    for token3Index, token3 in enumerate(tokens):
-                        if token3 == token2:
+                tripleProperties = {}
+                triplePropertiesRanges = {}    
+                noTriplePropertiesRanges = 0 
+                             
+                for property in self.myOnto.object_properties():
+                    _domain = property.domain
+                    
+                    if _domain is None:
+                        break
+                    
+                    domain = _domain[0]._name
+                    if domain is ancestorConcept.name:                    
+                        for superProperty in property.is_a:
+                            if superProperty is None:
+                                continue
+                            
+                            if superProperty.name == "ObjectProperty":
+                                continue
+                             
+                            if superProperty.name == 'first':
+                                tripleProperties['1'] = property
+                                _range = property.range
+                    
+                                if _range is None:
+                                    break
+                    
+                                range = _range[0]._name
+                                triplePropertiesRanges['1'] = range
+                                noTriplePropertiesRanges = noTriplePropertiesRanges + 1
+                            elif superProperty.name == 'second':
+                                tripleProperties['2'] = property
+                                _range = property.range
+                    
+                                if _range is None:
+                                    break
+                    
+                                range = _range[0]._name
+                                triplePropertiesRanges['2'] = range
+                                noTriplePropertiesRanges = noTriplePropertiesRanges + 1
+                            elif superProperty.name == 'third':
+                                tripleProperties['3'] = property
+                                _range = property.range
+                    
+                                if _range is None:
+                                    break
+                    
+                                range = _range[0]._name
+                                triplePropertiesRanges['3'] = range
+                                noTriplePropertiesRanges = noTriplePropertiesRanges + 1
+                                  
+                if noTriplePropertiesRanges < 3:
+                    self.myLogger.warning("Problem with creation of constrains for relation \"%s\" - not found its full definition %s"%(tripleRelationName,triplePropertiesRanges))
+                    self.myLogger.warning("Abandon it - going to the next relation")
+    
+                    continue
+                else:
+                    self.myLogger.info("Found definition for relation \"%s\" - %s"%(tripleRelationName,triplePropertiesRanges))
+    
+                tripleConstrainsNo = 0
+                for token1Index, token1 in enumerate(tokens): 
+                    for token2Index, token2 in enumerate(tokens):
+                        if token2 == token1:
                             continue
-                        
-                        if token3 == token1:
-                            continue
-                        
-                        if (tripleRelationName, token1, token2, token3) not in z: 
-                            continue
-                        
-                        if ((token1, triplePropertiesRanges['1']) not in x) or ((token2, triplePropertiesRanges['2']) not in x)  or ((token3, triplePropertiesRanges['3']) not in x):
-                            continue
-                        
-                        constrainNameTriple = 'c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3)
-                        r1 = x[token1, triplePropertiesRanges['1']]
-                        r2 = x[token2, triplePropertiesRanges['2']] 
-                        r3 = x[token3, triplePropertiesRanges['3']]
-                        rel = z[tripleRelationName, token1, token2, token3]
-                        
-                        currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
-                        m.addConstr(currentConstrLinExprRange >= 0, name=constrainNameTriple)
-                                    
-                        self.myLogger.debug("Created constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
-                        tripleConstrainsNo = tripleConstrainsNo+1
+                            
+                        for token3Index, token3 in enumerate(tokens):
+                            if token3 == token2:
+                                continue
+                            
+                            if token3 == token1:
+                                continue
+                            
+                            if (tripleRelationName, token1, token2, token3) not in z: 
+                                continue
+                            
+                            if ((triplePropertiesRanges['1'], token1) not in x) or ((triplePropertiesRanges['2'], token2) not in x)  or ((triplePropertiesRanges['3'], token3) not in x):
+                                continue
+                            
+                            r1 = x[triplePropertiesRanges['1'], token1]
+                            r2 = x[triplePropertiesRanges['2'], token2] 
+                            r3 = x[triplePropertiesRanges['3'], token3]
+                            rel = z[tripleRelationName, token1, token2, token3]
+                            
+                            currentConstrLinExprRange = r1 + r2 + r3 - 3 * rel
+                            m.addConstr(currentConstrLinExprRange >= 0, name='c_triple_%s_%s_%s_%s'%(tripleRelationName, token1, token2, token3))
+                                        
+                            self.myLogger.debug("Created constrains for relation \"%s\" for tokens \"%s\", \"%s\", \"%s\""%(tripleRelationName,token1,token2,token3))
+                            tripleConstrainsNo = tripleConstrainsNo+1
+                
+                self.myLogger.info("Created %i constrains for relation \"%s\""%(tripleConstrainsNo,tripleRelationName))
+        else: # ------- No Ontology
+            tripleRelations = set()
             
-            self.myLogger.info("Created %i constrains for relation \"%s\""%(tripleConstrainsNo,tripleRelationName))
+            for graph in self.myGraph:
+                for currentGraphConceptName in graph.concepts:
+                    for tripleRelationName in graphResultsForPhraseTripleRelation:
+                        if tripleRelationName in graph.concepts:
+                            tripleRelations.add(graph.concepts[tripleRelationName])
+                            
+                for subGraphKey in graph._objs:
+                    subGraph = graph._objs[subGraphKey]
+                    for tripleRelationName in graphResultsForPhraseTripleRelation:
+                        if tripleRelationName in subGraph.concepts:
+                            tripleRelations.add(subGraph.concepts[tripleRelationName])
+                            
+            for relation in tripleRelations:
+                for arg_id, rel in enumerate(relation.has_a()): 
+                    # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
+                    # A has_a B : A(x,y,...) <= B(x)
+                    #for xy in candidates[rel.src]:
+                    #x = xy[arg_id]
+                    tripleRelationName = rel.src.name
+                    conceptName = rel.dst.name
+                    
+                    if arg_id > 2:
+                        self.myLogger.warn("When creating triple relation constrains for relation \"%s\" for concept \"%s\" received more then three concepts"%(tripleRelationName,conceptName))
+                        continue
+                    
+                    for triple in permutations(tokens, r=3):
+                        if  (tripleRelationName, triple[0], triple[1], triple[2]) not in z:
+                            continue
+                        
+                        if (conceptName, triple[arg_id]) not in x: 
+                            continue
+                            
+                        self.myIlpBooleanProcessor.ifVar(m, z[tripleRelationName, triple[0], triple[1], triple[2]], x[conceptName, triple[arg_id]], onlyConstrains = True)
+                        #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[tripleRelationName, token1, token2].VarName,x[conceptName, token1].VarName))
             
         m.update()
 
@@ -898,6 +1001,153 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return Z_Q
         
+    def addLogicalConstrains(self, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+        self.myLogger.info('Starting method addLogicalConstrains')
+        
+        for graph in self.myGraph:
+            for lcKey, lc in graph.logicalConstrains.items():
+                self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, headLC = True)
+                
+    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName='Final', headLC = False):
+        lcVariables = {}
+        
+        for eIndex, e in enumerate(lc.e): 
+            if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
+                
+                # Look on step ahead in the parsed logical constrain and get variables names (if present) after the current concept
+                variablesNames = None
+                if eIndex + 1 < len(lc.e):
+                    if isinstance(lc.e[eIndex+1], tuple):
+                        variablesNames = lc.e[eIndex+1]
+                        
+                if isinstance(e, Concept): # -- Concept or Relation
+                    typeOfConcept, conceptTypes = self._typeOfConcept(e)
+                    conceptName = e.name
+                    lcVariables[conceptName] = {}
+                    
+                    if not variablesNames:
+                        self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,conceptName))
+                        variablesNames = ()
+                    
+                    if typeOfConcept == 'concept':
+                        if len(variablesNames) == 0:
+                            variablesNames = ('variableName1', )
+                            
+                        if len(variablesNames) > 1:
+                            self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        _lcVariables = {}
+                                    
+                        for token in tokens:
+                            if (conceptName, token) in x:
+                                _lcVariables[token] = [x[conceptName, token]]
+                            else:
+                                _lcVariables[token] = [None]
+                        
+                        lcVariables[conceptName] = {variablesNames[0]:_lcVariables}
+                        
+                    elif typeOfConcept == 'pair':
+                        _lcVariables1 = {}
+                        _lcVariables2 = {}
+    
+                        if len(variablesNames) == 0:
+                            variablesNames = ('variableName1', 'variableName2')
+                            
+                        if len(variablesNames) > 2:
+                            self.myLogger.warn('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        for tokensPair in permutations(tokens, r=2):
+                            #if tokensPair[0] in _lcVariables1: 
+                            #   print("Exists ", _lcVariables1[tokensPair[0]],  "for variable name ", variablesNames[0])
+                                 
+                            if (conceptName, *tokensPair) in y:
+                                _lcVariables1[tokensPair[0]] = [y[(conceptName, *tokensPair)]]
+                                _lcVariables2[tokensPair[1]] = [y[(conceptName, *tokensPair)]]
+                            else:
+                                _lcVariables1[tokensPair[0]] = [None]
+                                _lcVariables2[tokensPair[1]] = [None]
+                       
+                        #_lcVariables1[tokensPair[0]] = [None]
+                        lcVariables[conceptName] = {variablesNames[0]:_lcVariables1}
+                        lcVariables[conceptName][variablesNames[1]] = _lcVariables2
+    
+                        print(rer)
+                    elif typeOfConcept == 'triplet':
+                        variablesNamesNo = 3
+                        
+                        _lcVariables = {}
+                        
+                        if len(variablesNames) > variablesNamesNo:
+                            self.myLogger.warn('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
+                            
+                        if len(variablesNames) < variablesNamesNo:
+                            self.myLogger.info('Logical Constrain %s has not enough variables defined %s for %s'%(lc.lcName,variablesNames,conceptName))   
+                        
+                        updatedVariablesNames = []
+                        for variableNo in range(variablesNamesNo):
+                            if len(variablesNames) > variableNo:
+                                updatedVariablesNames.append(variablesNames[variableNo])
+                            else:
+                                variableNameforNo = "variableName" + str(variableNo)
+                                updatedVariablesNames.append(variableNameforNo)
+
+                            _lcVariables[variablesNames[variableNo]] = {}
+
+                        for tokensPermutation in permutations(tokens, r=variablesNamesNo):
+                            #print('tokensPermutation ', tokensPermutation)
+                            tokensPermutationILPVariable = None;
+                            
+                            if (conceptName, *tokensPermutation) in z:
+                                tokensPermutationILPVariable = z[(conceptName, *tokensPermutation)]
+                        
+                            for variableNo in range(variablesNamesNo):
+                                #if tokensPermutation[variableNo] in _lcVariables[variablesNames[variableNo]]: 
+                                #   print("Exists ", _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]],  "for variable name ", variablesNames[variableNo])
+                                    
+                                if tokensPermutation[variableNo] not in _lcVariables[variablesNames[variableNo]]:
+                                    _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]] = []
+                                    
+                                _lcVariables[variablesNames[variableNo]][tokensPermutation[variableNo]].append(tokensPermutationILPVariable)
+                        
+                        for variableName in updatedVariablesNames:
+                            lcVariables[conceptName][variableName] = _lcVariables[variableName]
+    
+                elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively
+                    if not variablesNames:
+                        self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,e))
+                        variablesNames = ()
+                        
+                    if len(variablesNames) == 0:
+                        variablesNames = ('variableName1', )
+                            
+                    if len(variablesNames) > 1:
+                        self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,e))
+                    
+                    lcVariables = self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName = variablesNames[0])
+            elif isinstance(e, tuple): # tuple with named variable - skip for now
+                pass # Already processed in the previous iteration
+            else:
+                self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lcKey,e))
+
+        return lc(m, self.myIlpBooleanProcessor, lcVariables, resultVariableName=resultVariableName, headConstrain = headLC)
+                
+    def _typeOfConcept (self, e):
+        for is_a in e.is_a():
+            is_a_dst = is_a.dst.name
+            
+            if is_a_dst is 'pair':
+                pairConcepts = []
+                for has_a in e.has_a():
+                    pairConcepts.append(has_a.dst.name)
+                return 'pair', pairConcepts
+            elif is_a_dst is 'triplet':
+                tripletConcepts = []
+                for has_a in e.has_a():
+                    tripletConcepts.append(has_a.dst.name)
+                return 'triplet', tripletConcepts
+        
+        return 'concept', []
+                
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
@@ -905,9 +1155,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         if graphResultsForPhraseToken is None:
             self.myLogger.warning('graphResultsForPhraseToken is None - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
-        
-        conceptNames = list(graphResultsForPhraseToken)
-        
+              
+        concepts = [k for k in graphResultsForPhraseToken.keys()]
+
         tokens = None
         if all(isinstance(item, tuple) for item in phrase):
             tokens = [x for x, _ in phrase]
@@ -919,7 +1169,8 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         try:
             # Create a new Gurobi model
-            m = Model("decideOnClassificationResult")
+            self.myIlpBooleanProcessor.resetCaches()
+            m = Model("decideOnClassificationResult" + str(start))
             m.params.outputflag = 0
             
             # Variables for concept - token
@@ -934,27 +1185,30 @@ class gurobiILPOntSolver(ilpOntSolver):
             # -- Set objective
             Q = None
             
-            X_Q = self.addTokenConstrains(m, tokens, conceptNames, x, graphResultsForPhraseToken)
+            X_Q = self.addTokenConstrains(m, concepts, tokens, x, graphResultsForPhraseToken)
             if X_Q is not None:
                 if Q is None:
                     Q = X_Q
                 else:
                     Q += X_Q
             
-            Y_Q = self.addRelationsConstrains(m, tokens, conceptNames, x, y, graphResultsForPhraseRelation)
+            Y_Q = self.addRelationsConstrains(m, concepts, tokens, x, y, graphResultsForPhraseRelation)
             if Y_Q is not None:
                 Q += Y_Q
                 
-            Z_Q = self.addTripleRelationsConstrains(m, tokens, conceptNames, x, y, z, graphResultsForPhraseTripleRelation)
+            Z_Q = self.addTripleRelationsConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseTripleRelation)
             if Z_Q is not None:
                 Q += Z_Q
             
+            if not hasattr(self, 'myOnto'): # --- Not Using Ontology as a source of constrains 
+                self.addLogicalConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+
             m.setObjective(Q, GRB.MAXIMIZE)
 
             # Token is associated with a single concept
             #for token in tokens:
             #   constrainName = 'c_%s'%(token)
-            #    m.addConstr(quicksum(x[token, conceptName] for conceptName in conceptNames) <= 1, name=constrainName)
+            #    m.addConstr(quicksum(x[conceptName, token] for conceptName in conceptNames) <= 1, name=constrainName)
             
             m.update()
 
@@ -981,6 +1235,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             tokenResult = None
             if graphResultsForPhraseToken is not None:
                 tokenResult = dict()
+                conceptNames = [k for k in graphResultsForPhraseToken.keys()]
+
                 if x or True:
                     if m.status == GRB.Status.OPTIMAL:
                         solution = m.getAttr('x', x)
@@ -992,7 +1248,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             tokenResult[conceptName] = np.zeros(len(tokens))
                             
                             for tokenIndex, token in enumerate(tokens):
-                                if ((token, conceptName) in solution) and (solution[token, conceptName] == 1):                                    
+                                if ((conceptName, token) in solution) and (solution[conceptName, token] == 1):                                    
                                     tokenResult[conceptName][tokenIndex] = 1
                                     self.myLogger.info('\"%s\" is \"%s\"'%(token,conceptName))
 
@@ -1000,7 +1256,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             relationResult = None
             if graphResultsForPhraseRelation is not None: 
                 relationResult = dict()
-                relationNames = graphResultsForPhraseRelation.keys()
+                relationNames = [k for k in graphResultsForPhraseRelation.keys()]
                 
                 if y or True:
                     if m.status == GRB.Status.OPTIMAL:
@@ -1026,7 +1282,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             tripleRelationResult = None
             if graphResultsForPhraseTripleRelation is not None:
                 tripleRelationResult = {}
-                tripleRelationNames = graphResultsForPhraseTripleRelation.keys()
+                tripleRelationNames = [k for k in graphResultsForPhraseTripleRelation.keys()]
                 
                 for tripleRelationName in tripleRelationNames:
                     tripleRelationResult[tripleRelationName] = np.zeros((len(tokens), len(tokens), len(tokens)))
@@ -1067,7 +1323,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('')
         self.myLogger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
         
-        # return results of ILP optimization
+        # Return results of ILP optimization
         return tokenResult, relationResult, tripleRelationResult
     
         def inferILPConstrains(self, model_trail, *conceptsRelations): 

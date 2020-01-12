@@ -32,6 +32,7 @@ class Sensor(BaseGraphTreeNode):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        *args,
+        **kwargs,
     ) -> Any:
         return None
