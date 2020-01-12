@@ -20,9 +20,11 @@ from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
 from click.decorators import group
 
 
-class gurobiILPOntSolver(ilpOntSolver):
-    def __init__(self) -> None:
-        super().__init__()
+class gurobiILPOntLogSolver(ilpOntSolver):
+    ilpSolver = 'GurobiLog'
+
+    def __init__(self, graph, ontologiesTuple) -> None:
+        super().__init__(graph, ontologiesTuple)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
 
     def addTokenConstrains(self, m, conceptNames, tokens, x, graphResultsForPhraseToken):
