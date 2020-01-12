@@ -17,6 +17,7 @@ from regr.solver.ilpConfig import ilpConfig
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
+from regr.utils import isbad
 from click.decorators import group
 
 
@@ -44,6 +45,11 @@ class gurobiILPOntLogSolver(ilpOntSolver):
         # Create variables for token - concept and negative variables
         for conceptName in conceptNames:
             for tokenIndex, token in enumerate(tokens):
+                # skip nan
+                if (isbad(graphResultsForPhraseToken[conceptName][tokenIndex][0]) or
+                    isbad(graphResultsForPhraseToken[conceptName][tokenIndex][1])):
+                    continue
+
                 # Create variable
                 x[conceptName, token] = m.addVar(vtype=GRB.BINARY, name="x_%s_is_%s" % (token, conceptName))
 
@@ -372,6 +378,11 @@ class gurobiILPOntLogSolver(ilpOntSolver):
             for token1Index, token1 in enumerate(tokens):
                 for token2Index, token2 in enumerate(tokens):
                     if token1 == token2:
+                        continue
+
+                    # skip nan
+                    if (isbad(graphResultsForPhraseRelation[relationName][token1Index][token2Index][0]) or
+                        isbad(graphResultsForPhraseRelation[relationName][token1Index][token2Index][1])):
                         continue
                     # Create variable
                     y[relationName, token1, token2] = m.addVar(vtype=GRB.BINARY,
@@ -810,7 +821,9 @@ class gurobiILPOntLogSolver(ilpOntSolver):
 
                         if token3 == token1:
                             continue
-
+                        if (isbad(graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index][1]) or
+                            isbad(graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index][0])):
+                            continue
                         # Create variable
                         z[tripleRelationName, token1, token2, token3] = m.addVar(vtype=GRB.BINARY,
                                                                                  name="z_%s_%s_%s_%s" % (

@@ -10,7 +10,7 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor, CandidateReaderSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
@@ -157,6 +157,8 @@ def model_declaration(graph, config):
     located_in['label'] = LogisticRegressionLearner(pair['encode'])
     orgbase_on['label'] = LogisticRegressionLearner(pair['encode'])
     kill['label'] = LogisticRegressionLearner(pair['encode'])
+
+    pair['candidate'] = CandidateReaderSensor(reader, 'cancidate')
 
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
     lbp = AllenNlpGraph(graph, **config.graph)

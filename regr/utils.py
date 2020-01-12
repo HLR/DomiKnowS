@@ -270,3 +270,9 @@ def get_prop_result(prop, data):
     label = vals[0]  # TODO: from readersensor
     pred = vals[1]  # TODO: from learner
     return label, pred, mask
+
+def isbad(x):
+    return (
+        x != x or  # nan
+        abs(x) == float('inf')  # inf
+    )

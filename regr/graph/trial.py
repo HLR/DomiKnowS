@@ -56,7 +56,10 @@ class Trial():
         except KeyError:
             if key in self.obsoleted:
                 raise
-            return self.sup.__getitem__(key)
+            sup = self.sup
+            if not sup:
+                raise
+            return sup.__getitem__(key)
 
     def __setitem__(self, key, obj):
         self.data.__setitem__(key, obj)

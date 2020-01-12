@@ -414,3 +414,21 @@ class Conll04SpaCyBinaryReader(Conll04SpaCyReader):
                 fields[self.get_fieldname('word')],
                 padding_value=0
             )
+
+    @cls.field('cancidate')
+    def update_relation_cancidate(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        tokens, labels, relations = raw_sample
+        if relations is None:
+            return None
+        relation_indices = []
+        for relation_type, src_token, dst_token in relations:
+            relation_indices.append((src_token[self._entity_index], dst_token[self._entity_index]))
+        return AdjacencyField(
+            relation_indices,
+            fields[self.get_fieldname('word')],
+            padding_value=0
+        )

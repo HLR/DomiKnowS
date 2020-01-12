@@ -7,14 +7,8 @@ import logging
 
 from regr.graph import Concept
 from regr.graph.relation import IsA, HasA, NotA
+from regr.utils import isbad
 from .gurobi_solver import GurobiSolver
-
-
-def isbad(x):
-    return (
-        x != x or  # nan
-        abs(x) == float('inf')  # inf
-    )
 
 
 class GurobilogSolverDebug(GurobiSolver):
