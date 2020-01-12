@@ -56,7 +56,8 @@ class GraphModel(Model):
         focal_gamma: float = 2.,
         inference_interval: int = 10,
         inference_training_set: bool = False,
-        inference_loss: bool = False
+        inference_loss: bool = False,
+        soft_penalty: float =  1.
     ) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
@@ -69,6 +70,7 @@ class GraphModel(Model):
         self.balance_factor = balance_factor
         self.label_smoothing = label_smoothing
         self.focal_gamma = focal_gamma
+        self.soft_penalty = soft_penalty
 
         self.graph = graph
 
@@ -308,7 +310,8 @@ class GraphModel(Model):
                     pred, label, mask, pred_i,
                     label_smoothing=self.label_smoothing,
                     gamma=self.focal_gamma,
-                    alpha=alpha
+                    alpha=alpha,
+                    soft_penalty=self.soft_penalty
                 )
             else:
                 loss += sequence_cross_entropy_with_logits(

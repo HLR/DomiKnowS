@@ -155,7 +155,8 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
                                             label_smoothing: float = None,
                                             gamma: float = None,
                                             eps: float = 1e-8,
-                                            alpha: Union[float, List[float], torch.FloatTensor] = None
+                                            alpha: Union[float, List[float], torch.FloatTensor] = None,
+                                            soft_penalty = 1
                                            ) -> torch.FloatTensor:
     if average not in {None, "token", "batch"}:
         raise ValueError("Got average f{average}, expected one of "
@@ -185,7 +186,7 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
             inferences_weights = inferences
 
         #inferences_weights = (inferences_weights.long() != targets.long()).float()
-        soft_penalty = 0.6  # 0 - structured loss only; 1 - conventional loss
+        #soft_penalty = 0.6  # 0 - structured loss only; 1 - conventional loss
         inferences_true = (inferences_weights.long() == targets.long()).float()
         inferences_weights = 1 - inferences_true * (1 - soft_penalty)
 

@@ -46,7 +46,9 @@ config = {
             'focal_gamma': 2,
             'inference_interval': 1,
             'inference_training_set': True,
-            'inference_loss': True
+            'inference_loss': True,
+            'log_solver': True,
+            'soft_penalty': 0.6
         }
     },
     'Train': {

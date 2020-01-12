@@ -40,11 +40,15 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     def __init__(
         self,
         *args,
+        log_solver=False,
         **kwargs
     ):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
-        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
+        if log_solver:
+            self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlplogInferenceSolver)
+        else:
+            self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
         self.solver_log_to(None)
         # do not invoke super().__init__() here
 
