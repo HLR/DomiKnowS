@@ -44,7 +44,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     ):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
-        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlplogInferenceSolver)
+        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
         self.solver_log_to(None)
         # do not invoke super().__init__() here
 
@@ -68,7 +68,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         return list(chain(*self.traversal_apply(func)))
 
     def solver_log_to(self, log_path:str=None):
-        solver_logger = logging.getLogger(ilpOntSolver.__module__)
+        #solver_logger = logging.getLogger(ilpOntSolver.__module__)
+        solver_logger = self.solver.myLogger
         solver_logger.propagate = False
         if DEBUG_TRAINING:
             solver_logger.setLevel(logging.DEBUG)
