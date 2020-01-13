@@ -338,11 +338,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                 if ('Not_'+conceptName, token) in x: 
-<<<<<<< HEAD
                     currentQElement = (1 - graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
-=======
                     currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
->>>>>>> branch 'experimental' of https://github.com/kordjamshidi/RelationalGraph.git
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
@@ -1344,9 +1341,3 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Return results of ILP optimization
         return tokenResult, relationResult, tripleRelationResult
-    
-        def inferILPConstrains(self, model_trail, *conceptsRelations): 
-            if len(conceptsRelations) == 0:
-                return model_trail
-            
-            return conceptsRelations[0].inferILPConstrains(self, model_trail, conceptsRelations[1:])
