@@ -44,6 +44,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Check if probability not zero
                 if currentProbability == 0:
                     continue
+                elif currentProbability > 1:
+                    self.myLogger.error("Probability %f is above 1 for concept %s and token %s created"%(currentProbability,token, conceptName))
+                    continue
 
                 # Create variable
                 x[conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
@@ -334,8 +337,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 X_Q += currentQElement
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
-                if (token, 'Not_'+conceptName) in x: 
-                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
+                if ('Not_'+conceptName, token) in x: 
+                    currentQElement = (1 - graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
@@ -363,7 +366,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     # Check if probability not zero
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     if currentProbability == 0:
-                        continue   
+                        continue
+                    elif currentProbability > 1:
+                        self.myLogger.error("Probability %f is above 1 for relation %s and tokens %s %s created"%(currentProbability,relationName,token1,token2))
+                        continue
 
                     # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
@@ -785,12 +791,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         # Check if probability not zero
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
+                        #self.myLogger.info("Probability is %f for relation %s and tokens %s %s %s"%(currentProbability,tripleRelationName,token1,token2,token3))
+
                         if currentProbability == 0:
-                            continue   
-                        
+                            self.myLogger.debug("Probability is %f for relation %s and tokens %s %s %s - no variable created"%(currentProbability,tripleRelationName,token1,token2,token3))
+                            continue
+                        elif currentProbability > 1:
+                            self.myLogger.error("Probability %f is above 1 for relation %s and tokens %s %s %s - no variable created"%(currentProbability,tripleRelationName,token1,token2,token3))
+                            continue
+
                         # Create variable
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="z_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
-                        #self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
+                        self.myLogger.debug("Created variable for relation %s between tokens %s %s %s, probability is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         # Create negative variable
                         if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
