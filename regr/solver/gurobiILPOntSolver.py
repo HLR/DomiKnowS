@@ -338,7 +338,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                 if ('Not_'+conceptName, token) in x: 
+<<<<<<< HEAD
                     currentQElement = (1 - graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
+=======
+                    currentQElement = (1-graphResultsForPhraseToken[conceptName][tokenIndex])*x['Not_'+conceptName, token]
+>>>>>>> branch 'experimental' of https://github.com/kordjamshidi/RelationalGraph.git
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
