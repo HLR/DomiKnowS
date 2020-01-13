@@ -803,8 +803,7 @@ class gurobiILPOntLogSolver(ilpOntSolver):
                 self.myLogger.debug('graphResultsForPhraseTripleRelation for relation \"%s"' % (tripleRelation))
 
                 for token1Index, token1 in enumerate(tokens):
-                    self.myLogger.debug('for token \"%s \n%s"' % (token1, np.column_stack((["   "] + tokens, np.vstack(
-                        (tokens, graphResultsForPhraseTripleRelation[tripleRelation][token1Index]))))))
+                    self.myLogger.debug('for token \"%s \n%s"' % (token1, graphResultsForPhraseTripleRelation[tripleRelation][token1Index]))
 
         tripleRelationNames = list(graphResultsForPhraseTripleRelation)
 

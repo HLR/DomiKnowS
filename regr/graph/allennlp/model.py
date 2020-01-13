@@ -237,6 +237,7 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> DataInstance:
+        #import pdb; pdb.set_trace()
         # process candidates
         label_not_masks = {}
         for name, sensor in self.graph.get_sensors(CandidateSensor):
@@ -256,8 +257,7 @@ class GraphModel(Model):
                 pred = pred.clone().detach().view(-1, shape[-1])
                 # (b*l, )
                 label_not_mask = label_not_mask.view(-1)
-                pred[label_not_mask, 0] = torch.tensor(float("Inf"))
-                pred[label_not_mask, 1] = torch.tensor(-float("Inf"))
+                pred[label_not_mask, :] = torch.tensor(float("nan"))
                 # (b, l, c)
                 pred = pred.view(shape)
                 label_not_mask = label_not_mask.view(mask.shape)

@@ -17,7 +17,9 @@ from regr.solver.ilpConfig import ilpConfig
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
+from regr.utils import isbad
 from click.decorators import group
+
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -45,6 +47,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 # Check if probability not zero
                 if currentProbability == 0:
+                    continue
+
+                # skip nan
+                if isbad(currentProbability):
                     continue
 
                 # Create variable
@@ -365,7 +371,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     # Check if probability not zero
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     if currentProbability == 0:
-                        continue   
+                        continue
+
+                    # skip nan
+                    if isbad(currentProbability):
+                        continue
 
                     # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
@@ -788,8 +798,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                         # Check if probability not zero
                         currentProbability = graphResultsForPhraseTripleRelation[tripleRelationName][token1Index][token2Index][token3Index]
                         if currentProbability == 0:
-                            continue   
-                        
+                            continue
+
+                        # skip nan
+                        if isbad(currentProbability):
+                            continue
+
                         # Create variable
                         z[tripleRelationName, token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="z_%s_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
                         #self.myLogger.debug("Probability for relation %s between tokens %s %s %s is %f"%(tripleRelationName,token1, token2, token3, currentProbability))

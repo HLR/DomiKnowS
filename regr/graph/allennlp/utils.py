@@ -177,7 +177,7 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
 
     # inference coefficient
     if inferences is not None:
-        if len(inferences.shape) == len(logits): # inferences shape: (batch, sequence_length, ..., num_classes)
+        if len(inferences.shape) == len(logits.shape): # inferences shape: (batch, sequence_length, ..., num_classes)
             # shape: (batch, sequence_length, ...)
             inferences_weights = inferences.select(-1, 1)
             #inferences_weights = torch.gather(inferences, dim=-1, index=targets)
@@ -187,6 +187,7 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
 
         #inferences_weights = (inferences_weights.long() != targets.long()).float()
         #soft_penalty = 0.6  # 0 - structured loss only; 1 - conventional loss
+        #import pdb; pdb.set_trace()
         inferences_true = (inferences_weights.long() == targets.long()).float()
         inferences_weights = 1 - inferences_true * (1 - soft_penalty)
 
