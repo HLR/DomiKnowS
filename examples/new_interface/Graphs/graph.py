@@ -57,4 +57,270 @@ with Graph('global') as graph:
                 if item != item1:
                     nandL(item, item1)
 
-        # ifL(PER_SOC, ('x', 'y'), orL(PER, ('x', ), PER, ('y', )))
+        # PER_SOC
+        orL(
+            andL(
+                ifL(PER_SOC, ("x", "y",), PER("x", )),
+                ifL(PER_SOC, ("x", "y",), PER("y", ))
+            ),
+            andL(
+                ifL(PER_SOC, ("x", "y",), PER("x", )),
+                ifL(PER_SOC, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(PER_SOC, ("x", "y",), ORG("x", )),
+                ifL(PER_SOC, ("x", "y",), PER("y",))
+            )
+        )
+
+        #GEN_AFF
+        orL(
+            andL(
+                ifL(GEN_AFF, ("x", "y",), PER("x", )),
+                ifL(GEN_AFF, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), PER("x", )),
+                ifL(GEN_AFF, ("x", "y",), PER("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), ORG("x", )),
+                ifL(GEN_AFF, ("x", "y",), LOC("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), ORG("x", )),
+                ifL(GEN_AFF, ("x", "y",), GPE, ("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), PER("x", )),
+                ifL(GEN_AFF, ("x", "y",), LOC("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), PER("x", )),
+                ifL(GEN_AFF, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), ORG("x", )),
+                ifL(GEN_AFF, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(GEN_AFF, ("x", "y",), GPE("x", )),
+                ifL(GEN_AFF, ("x", "y",), PER("y",))
+            )
+        )
+
+        # ORG_AFF
+        orL(
+            andL(
+                ifL(ORG_AFF, ("x", "y",), PER("x", )),
+                ifL(ORG_AFF, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), PER("x", )),
+                ifL(ORG_AFF, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), GPE("x", )),
+                ifL(ORG_AFF, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), ORG("x", )),
+                ifL(ORG_AFF, ("x", "y",), GPE("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), ORG("x", )),
+                ifL(ORG_AFF, ("x", "y",), PER, ("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), ORG("x", )),
+                ifL(ORG_AFF, ("x", "y",), ORG("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), PER("x", )),
+                ifL(ORG_AFF, ("x", "y",), PER("y",))
+            ),
+            andL(
+                ifL(ORG_AFF, ("x", "y",), GPE("x", )),
+                ifL(ORG_AFF, ("x", "y",), PER("y", ))
+            )
+        )
+
+        # PHYS
+        orL(
+            andL(
+                ifL(PHYS, ("x", "y",), PER("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), PER("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), PER("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y",))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), ORG("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), PER("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), PER("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), ORG("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            )
+        )
+
+        # ART
+        orL(
+            andL(
+                ifL(ART, ("x", "y",), PER("x", )),
+                ifL(ART, ("x", "y",), VEH("y", ))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), ORG("x", )),
+                ifL(ART, ("x", "y",), VEH("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), GPE("x", )),
+                ifL(ART, ("x", "y",), VEH("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), GPE("x", )),
+                ifL(ART, ("x", "y",), WEA("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), PER("x", )),
+                ifL(ART, ("x", "y",), WEA("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), ORG("x", )),
+                ifL(ART, ("x", "y",), FAC("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), PER("x", )),
+                ifL(ART, ("x", "y",), FAC("y",))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), ORG("x", )),
+                ifL(ART, ("x", "y",), WEA("y", ))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), GPE("x", )),
+                ifL(ART, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), WEA("x", )),
+                ifL(ART, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(ART, ("x", "y",), VEH("x", )),
+                ifL(ART, ("x", "y",), ORG("y", ))
+            )
+        )
+
+        # PART_WHOLE
+        orL(
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), GPE("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), ORG("x", )),
+                ifL(PHYS, ("x", "y",), ORG("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), FAC("x", )),
+                ifL(PHYS, ("x", "y",), LOC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), ORG("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), GPE("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), WEA("x", )),
+                ifL(PHYS, ("x", "y",), VEH("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), VEH("x", )),
+                ifL(PHYS, ("x", "y",), VEH("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), PER("x", )),
+                ifL(PHYS, ("x", "y",), ORG("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), WEA("x", )),
+                ifL(PHYS, ("x", "y",), WEA("y", ))
+            ),
+            andL(
+                ifL(PHYS, ("x", "y",), LOC("x", )),
+                ifL(PHYS, ("x", "y",), FAC("y", ))
+            )
+        )
