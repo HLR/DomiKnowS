@@ -4,6 +4,8 @@ import torch
 import numpy as np
 from Graphs.graph import app_graph
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+from regr.graph import Graph
+
 
 
 class ACELogicalSolver(ilpOntSolver):
@@ -85,7 +87,11 @@ class ACELogicalSolver(ilpOntSolver):
         #
         # # close the file
         # file.close()
-        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
+        graph1 = Graph(iri='http://ontology.ihmc.us/ML/ACE.owl', local='./')
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(graph1)
+
+        #Using the lConstraints
+        # myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
         if len(pairs):
             phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
             results = myilpOntSolver.calculateILPSelection(phrases,

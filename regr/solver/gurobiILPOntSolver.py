@@ -1144,7 +1144,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         lcVariables[conceptName] = {variablesNames[0]: _lcVariables1}
                         lcVariables[conceptName][variablesNames[1]] = _lcVariables2
 
-                        print(rer)
+
                     elif typeOfConcept == 'triplet':
                         variablesNamesNo = 3
 

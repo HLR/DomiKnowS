@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://webprotege.stanford.edu/project/9bojdQeN9LE5ZdMWpfi11z#"
+     xml:base="http://ontology.ihmc.us/ML/ACE.owl"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+    <owl:Ontology rdf:ID="http://ontology.ihmc.us/ML/ACE.owl"/>
+
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Object Properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://webprotege.stanford.edu/GPE -->
+
+    <owl:ObjectProperty rdf:ID="ORG-AFF">
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+        <rdfs:domain rdf:resource="#ORG"/>
+        <rdfs:domain rdf:resource="#GPE"/>
+        <rdfs:domain rdf:resource="#PER"/>
+        <rdfs:range rdf:resource="#ORG"/>
+        <rdfs:range rdf:resource="#GPE"/>
+        <rdfs:range rdf:resource="#PER"/>
+        <rdfs:label xml:lang="en">ORG_AFF</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://webprotege.stanford.edu/ART -->
+
+    <owl:ObjectProperty rdf:ID="ART">
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+        <rdfs:label xml:lang="en">ART</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://webprotege.stanford.edu/GEN-AFF -->
+
+    <owl:ObjectProperty rdf:ID="GEN-AFF">
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+        <rdfs:domain rdf:resource="#ORG"/>
+        <rdfs:domain rdf:resource="#GPE"/>
+        <rdfs:domain rdf:resource="#PER"/>
+        <rdfs:domain rdf:resource="#LOC"/>
+        <rdfs:range rdf:resource="#ORG"/>
+        <rdfs:range rdf:resource="#GPE"/>
+        <rdfs:range rdf:resource="#PER"/>
+        <rdfs:range rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">GEN_AFF</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://webprotege.stanford.edu/PER-SOC -->
+
+    <owl:ObjectProperty rdf:ID="PER-SOC">
+        <rdfs:domain rdf:resource="#ORG"/>
+        <rdfs:domain rdf:resource="#PER"/>
+        <rdfs:range rdf:resource="#ORG"/>
+        <rdfs:range rdf:resource="#PER"/>
+        <rdfs:label xml:lang="en">PER_SOC</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://webprotege.stanford.edu/PART-WHOLE -->
+
+    <owl:ObjectProperty rdf:ID="PART-WHOLE">
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+        <rdfs:label xml:lang="en">PART_WHOLE</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://webprotege.stanford.edu/PHYS -->
+
+    <owl:ObjectProperty rdf:ID="PHYS">
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+        <rdfs:label xml:lang="en">PHYS</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Classes
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://webprotege.stanford.edu/ORG -->
+
+    <owl:Class rdf:ID="ORG">
+        <owl:disjointWith rdf:resource="#FAC"/>
+        <owl:disjointWith rdf:resource="#GPE"/>
+        <owl:disjointWith rdf:resource="#PER"/>
+        <owl:disjointWith rdf:resource="#WEA"/>
+        <owl:disjointWith rdf:resource="#VEH"/>
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">ORG</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/FAC -->
+
+    <owl:Class rdf:ID="FAC">
+        <owl:disjointWith rdf:resource="#GPE"/>
+        <owl:disjointWith rdf:resource="#PER"/>
+        <owl:disjointWith rdf:resource="#WEA"/>
+        <owl:disjointWith rdf:resource="#VEH"/>
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">FAC</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/GPE -->
+
+    <owl:Class rdf:ID="GPE">
+        <owl:disjointWith rdf:resource="#PER"/>
+        <owl:disjointWith rdf:resource="#WEA"/>
+        <owl:disjointWith rdf:resource="#VEH"/>
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">GPE</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/PER -->
+
+    <owl:Class rdf:ID="PER">
+        <owl:disjointWith rdf:resource="#WEA"/>
+        <owl:disjointWith rdf:resource="#VEH"/>
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">PER</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/WEA -->
+
+    <owl:Class rdf:ID="WEA">
+        <owl:disjointWith rdf:resource="#VEH"/>
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">WEA</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/VEH -->
+
+    <owl:Class rdf:ID="VEH">
+        <owl:disjointWith rdf:resource="#LOC"/>
+        <rdfs:label xml:lang="en">VEH</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://webprotege.stanford.edu/LOC -->
+
+    <owl:Class rdf:ID="LOC">
+        <rdfs:label xml:lang="en">LOC</rdfs:label>
+    </owl:Class>
+</rdf:RDF>
+
+
+
+<!-- Generated by the OWL API (version 4.5.13) https://github.com/owlcs/owlapi -->
+

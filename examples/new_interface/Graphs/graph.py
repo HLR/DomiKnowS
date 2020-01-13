@@ -129,7 +129,7 @@ with Graph('global') as graph:
             ),
             andL(
                 ifL(ORG_AFF, ("x", "y",), ORG("x", )),
-                ifL(ORG_AFF, ("x", "y",), PER, ("y",))
+                ifL(ORG_AFF, ("x", "y",), PER("y",))
             ),
             andL(
                 ifL(ORG_AFF, ("x", "y",), ORG("x", )),
@@ -264,63 +264,63 @@ with Graph('global') as graph:
         # PART_WHOLE
         orL(
             andL(
-                ifL(PHYS, ("x", "y",), LOC("x", )),
-                ifL(PHYS, ("x", "y",), GPE("y", ))
+                ifL(PART_WHOLE, ("x", "y",), LOC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), GPE("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), FAC("x", )),
-                ifL(PHYS, ("x", "y",), GPE("y", ))
+                ifL(PART_WHOLE, ("x", "y",), FAC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), GPE("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), GPE("x", )),
-                ifL(PHYS, ("x", "y",), GPE("y", ))
+                ifL(PART_WHOLE, ("x", "y",), GPE("x", )),
+                ifL(PART_WHOLE, ("x", "y",), GPE("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), ORG("x", )),
-                ifL(PHYS, ("x", "y",), ORG("y", ))
+                ifL(PART_WHOLE, ("x", "y",), ORG("x", )),
+                ifL(PART_WHOLE, ("x", "y",), ORG("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), FAC("x", )),
-                ifL(PHYS, ("x", "y",), FAC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), FAC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), FAC("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), GPE("x", )),
-                ifL(PHYS, ("x", "y",), LOC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), GPE("x", )),
+                ifL(PART_WHOLE, ("x", "y",), LOC("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), LOC("x", )),
-                ifL(PHYS, ("x", "y",), LOC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), LOC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), LOC("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), FAC("x", )),
-                ifL(PHYS, ("x", "y",), LOC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), FAC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), LOC("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), GPE("x", )),
-                ifL(PHYS, ("x", "y",), ORG("y", ))
+                ifL(PART_WHOLE, ("x", "y",), GPE("x", )),
+                ifL(PART_WHOLE, ("x", "y",), ORG("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), GPE("x", )),
-                ifL(PHYS, ("x", "y",), FAC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), GPE("x", )),
+                ifL(PART_WHOLE, ("x", "y",), FAC("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), WEA("x", )),
-                ifL(PHYS, ("x", "y",), VEH("y", ))
+                ifL(PART_WHOLE, ("x", "y",), WEA("x", )),
+                ifL(PART_WHOLE, ("x", "y",), VEH("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), VEH("x", )),
-                ifL(PHYS, ("x", "y",), VEH("y", ))
+                ifL(PART_WHOLE, ("x", "y",), VEH("x", )),
+                ifL(PART_WHOLE, ("x", "y",), VEH("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), PER("x", )),
-                ifL(PHYS, ("x", "y",), ORG("y", ))
+                ifL(PART_WHOLE, ("x", "y",), PER("x", )),
+                ifL(PART_WHOLE, ("x", "y",), ORG("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), WEA("x", )),
-                ifL(PHYS, ("x", "y",), WEA("y", ))
+                ifL(PART_WHOLE, ("x", "y",), WEA("x", )),
+                ifL(PART_WHOLE, ("x", "y",), WEA("y", ))
             ),
             andL(
-                ifL(PHYS, ("x", "y",), LOC("x", )),
-                ifL(PHYS, ("x", "y",), FAC("y", ))
+                ifL(PART_WHOLE, ("x", "y",), LOC("x", )),
+                ifL(PART_WHOLE, ("x", "y",), FAC("y", ))
             )
         )

@@ -144,6 +144,12 @@
     <rdfs:domain rdf:resource="#people"/>
     <rdfs:range rdf:resource="#people"/>
   </owl:ObjectProperty> -->
+
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="PER_SOC">
+    <rdfs:domain rdf:resource="#PER"/>
+    <rdfs:range rdf:resource="#PER"/>
+  </owl:ObjectProperty>
 </rdf:RDF>
 
 <!-- Created with TopBraid -->
