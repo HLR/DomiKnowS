@@ -67,6 +67,12 @@ class ilpOntSolverFactory:
                 else:
                     from .gurobi_solver_debug import GurobiSolverDebug
                 SolverClass = cls.getClass(GurobiSolverDebug, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "mini_log":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobi_log_solver import GurobilogSolver
+                else:
+                    from .gurobi_log_solver import GurobilogSolver
+                SolverClass = cls.getClass(GurobilogSolver, *SupplementalClasses)
             elif _iplConfig['ilpSolver'] == "mini_log_debug":
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobi_log_solver_debug import GurobilogSolverDebug
