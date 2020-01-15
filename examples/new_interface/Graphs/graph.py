@@ -20,13 +20,13 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(phrase, phrase)
 
     with Graph('application') as app_graph:
-        FAC = phrase(name='FAC')
-        GPE = phrase(name='GPE')
-        LOC = phrase(name='LOC')
-        ORG = phrase(name='ORG')
-        PER = phrase(name='PER')
-        VEH = phrase(name='VEH')
-        WEA = phrase(name='WEA')
+        FAC = word(name='FAC')
+        GPE = word(name='GPE')
+        LOC = word(name='LOC')
+        ORG = word(name='ORG')
+        PER = word(name='PER')
+        VEH = word(name='VEH')
+        WEA = word(name='WEA')
 
         ART = pair(name="ART")
         GEN_AFF = pair(name="GEN-AFF")
