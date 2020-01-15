@@ -150,9 +150,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.myLogger.debug("OR returns : %s"%('None'))
             return None
         
-        orVarName = "OR_VAR-"
+        orVarName = "or"
         for currentVar in var:
-            orVarName += "-%s" % (currentVar.VarName)
+            orVarName += "_%s" % (currentVar.VarName)
         
         varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
 
@@ -320,7 +320,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
             return
         
-        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(var1, var2))
+        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_then_%s"%(var1.VarName, var2.VarName))
             
         m.addConstr(1 - var1 <= varIF)
         m.addConstr(var2 <= varIF)
