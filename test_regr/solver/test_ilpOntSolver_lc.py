@@ -82,7 +82,7 @@ def emr_input(request):
             #o.not_a(other)
             nandL(o, other)
 
-            existsL(people, ('p',))
+            #existsL(people, ('p',))
             #notL(other, ('o',))
             #notL(existsL(location, ('l',)), ('e', ))
             #existsL(notL(people))

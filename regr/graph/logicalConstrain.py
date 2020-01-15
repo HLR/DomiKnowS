@@ -8,6 +8,12 @@ ifLog = False
 
 class LogicalConstrain:
     def __init__(self, *e):
+        self.active = True
+        
+        for e_item in e:
+            if isinstance(e_item, LogicalConstrain):
+                e_item.active = False
+                
         self.e = e
         
         if e:
@@ -19,6 +25,9 @@ class LogicalConstrain:
                 context.logicalConstrains[self.lcName] = self
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
+        
+    def __str__(self):
+        return self.__class__.__name__
           
     def __call__(self, model, myIlpBooleanProcessor, v): 
         pass 
@@ -34,43 +43,42 @@ class LogicalConstrain:
 
         if ifLog: self.myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[x.VarName for x in v1] for v1 in v]))
 
-        if len(v) != 2:
-            self.myLogger.error("%s Logical Constrain created with %i sets of variables but should be with exactly 2 sets"%(lcName, len(v)))
+        if len(v) < 2:
+            self.myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
             return ilpV
         
-        concepts = [concept for concept in v] 
-               
-        commonVarName = None
-        for conceptIndex, _ in enumerate(concepts):
-            if conceptIndex + 2 > len(concepts):
-                break
-            
-            for varName in v[concepts[conceptIndex]]:
-                if varName in v[concepts[conceptIndex+1]]:
-                    commonVarName = varName
-                    break
-            
-        if not commonVarName:
-            return None
+        zVars = {}
+        vKeys = [next(iter(v[i])) for i in range(len(v))]
         
-        for concept in concepts:
-            ilpV[concept] = {}
-            ilpV[concept][resultVariableName] = {}
-            
-            tokens = [token for token in v[concept][commonVarName]]
-    
-            for token in tokens:
-                _ilpV = []
-            
-                tokenVarSet = [v[concept][commonVarName][token] for concept in concepts if token in v[concept][commonVarName]]
+        if  vKeys[0] ==  vKeys[1]:
+            for v1 in v[0][vKeys[0]]:
+                tokenVars = []
                 
-                for varS in product(*tokenVarSet):
-                    if None in varS:
-                        continue
+                for i in range(len(v)):
+                    currentVar = v[i][vKeys[i]][v1]
+                    tokenVars.append(currentVar)
                     
-                    _ilpV.append(lcFun(model, *varS, onlyConstrains = headConstrain))
+                zVars[(*v1, )] = lcFun(model, *tokenVars, onlyConstrains = headConstrain)
+                
+            ilpKey = (*vKeys[0], )
+        else:
+            for v1 in v[0][vKeys[0]]:
+                for v2 in v[1][vKeys[1]]:        
+                    
+                    if len(v1) > len(v2): 
+                        if (vKeys[0][0] == vKeys[1][0]) and (v1[0] != v2[0]):
+                                continue
+                        elif (vKeys[0][1] == vKeys[1][0]) and (v1[1] != v2[0]):
+                            continue
                         
-                ilpV[concept][resultVariableName][token] = _ilpV
+                    v1Var = v[0][vKeys[0]][v1]
+                    v2Var = v[1][vKeys[1]][v2]
+                    
+                    zVars[(*v1, *v2)] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                        
+            ilpKey = (*vKeys[0], *vKeys[1])
+        
+        ilpV[ilpKey] = zVars
         
         if  headConstrain:
             if ifLog: self.myLogger.debug("% Logical Constrain is the head constrain - only ILP constrain created"%(lcName))

@@ -45,6 +45,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         cacheResult = self.__isInConstrainCaches('notVar', onlyConstrains, var)
         if cacheResult[0]:
+            self.myLogger.debug("NOT constrain already created - doing nothing")
             return cacheResult[1]
             
         if onlyConstrains:
@@ -127,6 +128,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         cacheResult = self.__isInConstrainCaches('orVar', onlyConstrains, var)
         if cacheResult[0]:
+            self.myLogger.debug("OR constrain already created - doing nothing")
             return cacheResult[1]
 
         if onlyConstrains:
@@ -191,6 +193,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         cacheResult = self.__isInConstrainCaches('nandVar', onlyConstrains, var)
         if cacheResult[0]:
+            self.myLogger.debug("NAND constrain already created - doing nothing")
             return cacheResult[1]
             
         N = len(var)
@@ -302,8 +305,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def ifVar(self, m, var1, var2, onlyConstrains = False):
         #self.myLogger.debug("IF called with : %s"%(var1,var2))
 
+        if (not var1) or (not var2):
+            return
+    
         cacheResult = self.__isInConstrainCaches('ifVar', onlyConstrains, (var1, var2))
         if cacheResult[0]:
+            self.myLogger.debug("IF constrain already created - doing nothing")
             return cacheResult[1]
             
         if onlyConstrains:
@@ -332,6 +339,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         cacheResult = self.__isInConstrainCaches('eqVar', onlyConstrains, (var1, var2))
         if cacheResult[0]:
+            self.myLogger.debug("EQ constrain already created - doing nothing")
             return cacheResult[1]
         
         if onlyConstrains:

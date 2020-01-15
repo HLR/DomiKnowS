@@ -1,5 +1,8 @@
 import numpy as np
 from collections import OrderedDict 
+import logging
+
+from regr.solver.ilpConfig import ilpConfig 
 
 if __package__ is None or __package__ == '':
     from graph import Graph
@@ -14,6 +17,8 @@ class DataNode:
     PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
    
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, childInstanceNodes = None, attributes = None):
+        self.myLogger = logging.getLogger(ilpConfig['log_name'])
+
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the ontology graph node (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
@@ -129,6 +134,9 @@ class DataNode:
                     currentCandidate2 = currentCandidate[1]
                     currentCandidate3 = currentCandidate[2]
                     currentProbability = currentConceptOrRelation.predict(self, (currentCandidate1, currentCandidate2, currentCandidate3))
+                    
+                    self.myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
+
                     if currentProbability:
                         graphResultsForTripleRelations[currentConceptOrRelation.name] \
                             [currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
