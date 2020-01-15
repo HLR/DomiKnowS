@@ -33,8 +33,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         padding = max([len(str(t)) for t in tokens])
         spacing = max([len(str(c)) for c in conceptNames]) + 1
         self.myLogger.debug("{:^{}}".format("", spacing) + ' '.join(map('{:^10}'.format, ['\''+ str(t) + '\'' for t in tokens])))
-        for concept, tokenTable in graphResultsForPhraseToken.items():
-            self.myLogger.debug("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
+        # for concept, tokenTable in graphResultsForPhraseToken.items():
+            # self.myLogger.debug("{:<{}}".format(concept, spacing) + ' '.join(map('{:^10f}'.format, [t for t in tokenTable])))
 
         # Create variables for token - concept and negative variables
         for conceptName in conceptNames: 
@@ -42,18 +42,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                 currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 
                 # Check if probability not zero
-                if currentProbability == 0:
+                if currentProbability[1] == 0:
                     continue
-                elif currentProbability > 1:
-                    self.myLogger.error("Probability %f is above 1 for concept %s and token %s created"%(currentProbability,token, conceptName))
-                    continue
+                # elif currentProbability[1] > 1:
+                #     self.myLogger.error("Probability %f is above 1 for concept %s and token %s created"%(currentProbability,token, conceptName))
+                #     continue
 
                 # Create variable
                 x[conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(token, conceptName))             
                 #self.myLogger.debug("Created ILP variable for concept %s and token %s it's probability is %f"%(conceptName,token,currentProbability))
 
                 # Create negative variable
-                if currentProbability <= 1.0: # ilpOntSolver.__negVarTrashhold:
+                if True: # ilpOntSolver.__negVarTrashhold:
                     x['Not_'+conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
                 else:
                     self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(token, conceptName))
@@ -352,10 +352,10 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         self.myLogger.info('Starting method addRelationsConstrains with graphResultsForPhraseToken')
 
-        if graphResultsForPhraseRelation is not None:
-            for relation in graphResultsForPhraseRelation:
-                self.myLogger.debug('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseRelation[relation])))) ))
-                
+        # if graphResultsForPhraseRelation is not None:
+        #     for relation in graphResultsForPhraseRelation:
+        #         self.myLogger.debug('graphResultsForPhraseRelation for relation \"%s\" \n%s'%(relation, np.column_stack( (["   "] + tokens, np.vstack((tokens, graphResultsForPhraseRelation[relation])))) ))
+        #
         relationNames = list(graphResultsForPhraseRelation)
             
         # Create variables for relation - token - token and negative variables
@@ -367,18 +367,18 @@ class gurobiILPOntSolver(ilpOntSolver):
     
                     # Check if probability not zero
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
-                    if currentProbability == 0:
-                        continue
-                    elif currentProbability > 1:
-                        self.myLogger.error("Probability %f is above 1 for relation %s and tokens %s %s created"%(currentProbability,relationName,token1,token2))
-                        continue
+                    # if currentProbability == 0:
+                    #     continue
+                    # elif currentProbability > 1:
+                    #     self.myLogger.error("Probability %f is above 1 for relation %s and tokens %s %s created"%(currentProbability,relationName,token1,token2))
+                    #     continue
 
                     # Create variable
                     y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
                     #self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability))
                     
                     # Create negative variable
-                    if currentProbability < 1.0: # ilpOntSolver.__negVarTrashhold:
+                    if True: # ilpOntSolver.__negVarTrashhold:
                         y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
                     else:
                         self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s created"%(relationName,token1,token2))
@@ -809,7 +809,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.debug("Created variable for relation %s between tokens %s %s %s, probability is %f"%(tripleRelationName,token1, token2, token3, currentProbability))
 
                         # Create negative variable
-                        if currentProbability < 1.0: #ilpOntSolver.__negVarTrashhold:
+                        if True: #ilpOntSolver.__negVarTrashhold:
                             z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
                         else:
                             self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(tripleRelationName,token1,token2,token3))
