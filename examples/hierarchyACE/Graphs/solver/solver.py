@@ -21,7 +21,7 @@ class ACELogicalSolver(ilpOntSolver):
                  "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
-                 "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
+                 "Government", "Media", "Medical-Science", "Non-Governmental", "Religious", "Sports", "Group",
                  "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
                  "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
         predicates = []
@@ -39,7 +39,7 @@ class ACELogicalSolver(ilpOntSolver):
                  "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
-                 "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
+                 "Government", "Media", "Medical-Science", "Non-Governmental", "Religious", "Sports", "Group",
                  "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
                  "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
         phrase_order = []

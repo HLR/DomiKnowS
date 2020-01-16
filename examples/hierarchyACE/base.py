@@ -245,7 +245,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                  "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
-                 "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
+                 "Government", "Media", "Medical-Science", "Non-Governmental", "Religious", "Sports", "Group",
                  "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
                  "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
         for _it in range(len(info)):
