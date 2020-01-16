@@ -17,7 +17,13 @@ class ACELogicalSolver(ilpOntSolver):
         root_features = ["raw", ]
         predictions_on = "word"
         prediction_features = ["raw_ready"]
-        predicates1 = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
+        predicates1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
+                 "Subarea-Facility", "Continent", "County_or_District", "GPE_Cluster", "Nation", "Population-Center",
+                 "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
+                 "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
+                 "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
+                 "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
+                 "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
         predicates = []
         for item in info:
             if item in predicates1:
@@ -29,7 +35,13 @@ class ACELogicalSolver(ilpOntSolver):
             if item in pairs1:
                 pairs.append("<"+str(item)+">")
         pairs_on = "pair"
-        phrase_order1 = ["FAC", "GPE", "PER", "ORG", "LOC", "VEH", "WEA"]
+        phrase_order1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
+                 "Subarea-Facility", "Continent", "County_or_District", "GPE_Cluster", "Nation", "Population-Center",
+                 "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
+                 "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
+                 "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
+                 "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
+                 "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
         phrase_order = []
         for item in info:
             if item in phrase_order1:
