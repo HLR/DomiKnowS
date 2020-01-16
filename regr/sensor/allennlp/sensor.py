@@ -240,13 +240,11 @@ class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
     def __init__(
         self,
         key: str,
-        embedding_dim: int,
         pretrained_model: str,
         pre,
         output_only: bool=False
     ) -> NoReturn:
         self.key = key
-        self.embedding_dim = embedding_dim
         self.pretrained_model = pretrained_model
         ModuleSensor.__init__(self, pre, output_only=output_only)
 

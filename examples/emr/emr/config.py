@@ -40,6 +40,7 @@ config = {
         'pretrained_dims': {
             'word': 50
         },
+        'bert_mlp': [768 // 1,],
         'graph': {
             'balance_factor': 1.5,
             'label_smoothing': 0.01,
