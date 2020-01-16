@@ -15,7 +15,7 @@ from gurobipy import *
 from regr.graph.concept import Concept
 from regr.solver.ilpConfig import ilpConfig
 from regr.solver.ilpOntSolver import ilpOntSolver
-from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
+from regr.solver.gurobiILPBooleanMethods1 import gurobiILPBooleanProcessor
 from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
 from click.decorators import group
 
