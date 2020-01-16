@@ -98,23 +98,60 @@ class SelfCartesianProduct3(CartesianProduct3):
         return CartesianProduct3.forward(self, x, x, x)
 
 
+class JointOldCandidate(Module):
+    def forward(self, *tensors):
+        #import pdb; pdb.set_trace()
+        batch = tensors[0].shape[0]
+        num = len(tensors)
+        # b, l, c
+        logits_sum = tensors[0].clone()
+        # n, b, l, c
+        addends = [logits.clone() for logits in tensors[1:]]
+        for i, logits in enumerate(addends):
+            for tensor in addends[i:]:
+                # b, ..., 1, l, c
+                tensor.unsqueeze_(-3)
+            # b, l, ..., l, c = b, ..., l, 1, c + b, ..., 1, l, c 
+            logits_sum = logits_sum.unsqueeze_(-2) + logits # this are the logits
+        # b, l, ..., l ~ {0, 1}
+        candidate = logits_sum.argmax(-1) # find the largest index along logits dim
+        # remove self pair
+        # b, l, ..., l ~ {0}
+        candidate_2 = torch.zeros_like(candidate)[0]
+        for indices in itertools.product(*(range(d) for d in candidate.shape[1:])):
+            if len(indices) == len(set(indices)):
+                # if no same index
+                candidate_2[indices] = 1
+        # b, l, ..., l ~ {0, 1}
+        candidate_2 = candidate_2.expand(batch, *((-1,) * num))
+        return candidate * candidate_2
+
+
 class JointCandidate(Module):
     def forward(self, *tensors):
         #import pdb; pdb.set_trace()
         batch = tensors[0].shape[0]
         num = len(tensors)
-        logits_sum = tensors[0].clone()
-        addends = [ logits.clone() for logits in tensors[1:] ]
-        for i, logits in enumerate(addends):
+        # b, l ~ {0, 1}
+        candidate_sum = tensors[0].clone().argmax(-1)
+        # n-1, b, l ~ {0, 1}
+        addends = [logits.clone().argmax(-1) for logits in tensors[1:]]
+        for i, candidate_tensor in enumerate(addends):
             for tensor in addends[i:]:
-                tensor.unsqueeze_(-3)
-            logits_sum = logits_sum.unsqueeze_(-2) + logits # this are the logits
-        candidate = logits_sum.argmax(-1) # find the largest index along logits dim
-        # self pair
+                # b, ..., 1, l ~ {0, 1}
+                tensor.unsqueeze_(-2)
+            # b, l, ..., l = b, ..., l, 1 + b, ..., 1, l
+            candidate_sum = candidate_sum.unsqueeze_(-1) * candidate_tensor
+        # b, l, ..., l ~ {0, 1}
+        candidate = candidate_sum
+        # remove self pair
+        # b, l, ..., l ~ {0}
         candidate_2 = torch.zeros_like(candidate)[0]
-        for indices in itertools.product( *(range(d) for d in candidate.shape[1:]) ) :
+        for indices in itertools.product(*(range(d) for d in candidate.shape[1:])):
             if len(indices) == len(set(indices)):
+                # if no same index
                 candidate_2[indices] = 1
+        # b, l, ..., l ~ {0, 1}
         candidate_2 = candidate_2.expand(batch, *((-1,) * num))
         return candidate * candidate_2
 
