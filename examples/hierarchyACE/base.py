@@ -242,7 +242,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                     pow(0.9933500065054284, 4), pow(0.9916224538475995, 4), pow(0.9943908750524049, 4),
                     pow(0.9453833142989316, 4)]
         _list = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
-                 "Subarea-Facility", "Continent", "County_or_District", "GPE_Cluster", "Nation", "Population-Center",
+                 "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
                  "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",

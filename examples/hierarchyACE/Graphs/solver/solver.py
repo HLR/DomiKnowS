@@ -18,7 +18,7 @@ class ACELogicalSolver(ilpOntSolver):
         predictions_on = "word"
         prediction_features = ["raw_ready"]
         predicates1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
-                 "Subarea-Facility", "Continent", "County_or_District", "GPE_Cluster", "Nation", "Population-Center",
+                 "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
                  "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
@@ -36,7 +36,7 @@ class ACELogicalSolver(ilpOntSolver):
                 pairs.append("<"+str(item)+">")
         pairs_on = "pair"
         phrase_order1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
-                 "Subarea-Facility", "Continent", "County_or_District", "GPE_Cluster", "Nation", "Population-Center",
+                 "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
                  "Government", "Media", "Medical_Science", "Non-Governmental", "Religious", "Sports", "Group",
