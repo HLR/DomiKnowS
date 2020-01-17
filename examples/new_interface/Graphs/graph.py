@@ -50,6 +50,13 @@ with Graph('global') as graph:
 
         ORG.not_a(FAC, GPE, LOC, VEH, WEA, PER)
 
+        ART.not_a(GEN_AFF, ORG_AFF, PART_WHOLE, PER_SOC, PHYS)
+        GEN_AFF.not_a(ART, ORG_AFF, PART_WHOLE, PER_SOC, PHYS)
+        ORG_AFF.not_a(ART, GEN_AFF, PART_WHOLE, PER_SOC, PHYS)
+        PART_WHOLE.not_a(ART, GEN_AFF, ORG_AFF, PER_SOC, PHYS)
+        PER_SOC.not_a(ART, GEN_AFF, ORG_AFF, PART_WHOLE, PHYS)
+        PHYS.not_a(ART, GEN_AFF, ORG_AFF, PART_WHOLE, PER_SOC)
+
         # list_of_concepts = [GPE, FAC, LOC, VEH, WEA, PER, ORG]
         #
         # for item in list_of_concepts:
