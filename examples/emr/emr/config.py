@@ -10,7 +10,8 @@ else:
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        'train_path': "conll04.corp_1_train.corp",
+        #'train_path': "conll04.corp_1_train.corp",
+        'train_path': "conll04.corp_1_train.corp_subsample_0.5.corp",
         'valid_path': "conll04.corp_1_test.corp"
     },
     'Model': { # model setting
@@ -40,7 +41,7 @@ config = {
         'pretrained_dims': {
             'word': 50
         },
-        'bert_mlp': [768 // 1,],
+        'bert_mlp': [768,],
         'graph': {
             'balance_factor': 1.5,
             'label_smoothing': 0.01,
