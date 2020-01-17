@@ -60,25 +60,29 @@ with Graph('global') as graph:
         ifL(PHYS, ('x', 'y'), ifL(PER, ('x',), orL(LOC, FAC, GPE), ('y',)))
 
         # 'PHYS': ['FAC', 'LOC'], ['FAC', 'FAC'], ['FAC', 'GPE']
-        ifL(PHYS, ('x', 'y'), ifL(FAC, ('x',), orL(LOC, FAC, GPE), ('y',)))
+        ifL(PHYS, ('x', 'y'), ifL(FAC, ('x',), orL(LOC, FAC, GPE, PER, ORG), ('y',)))
 
         # 'PHYS': ['LOC', 'LOC'], ['LOC', 'GPE'], ['LOC', 'FAC'],  ['LOC', 'PER']
         ifL(PHYS, ('x', 'y'), ifL(LOC, ('x',), orL(LOC, GPE, FAC, PER), ('y',)))
 
         # 'PHYS': ['GPE', 'LOC'], ['GPE', 'GPE'], ['GPE', 'FAC'], ['GPE', 'PER']
-        ifL(PHYS, ('x', 'y'), ifL(GPE, ('x',), orL(LOC, GPE, FAC, PER), ('y',)))
+        ifL(PHYS, ('x', 'y'), ifL(GPE, ('x',), orL(LOC, GPE, FAC, PER, ORG), ('y',)))
 
         # 'PHYS': ['ORG', 'GPE'], ['ORG', 'FAC']
         ifL(PHYS, ('x', 'y'), ifL(ORG, ('x',), orL(GPE, FAC), ('y',)))
+
 
         # 'GEN-AFF': ['PER', 'GPE'], ['PER', 'PER'], ['PER', 'LOC'], ['PER', 'ORG']
         ifL(GEN_AFF, ('x', 'y'), ifL(PER, ('x',), orL(GPE, PER, LOC, ORG), ('y',)))
 
         # 'GEN-AFF': ['ORG', 'LOC'], ['ORG', 'GPE'], ['ORG', 'ORG']
-        ifL(GEN_AFF, ('x', 'y'), ifL(ORG, ('x',), orL(LOC, GPE, ORG), ('y',)))
+        ifL(GEN_AFF, ('x', 'y'), ifL(ORG, ('x',), orL(LOC, GPE, ORG, PER), ('y',)))
 
         # 'GEN-AFF':['GPE', 'PER']
-        ifL(GEN_AFF, ('x', 'y'), ifL(GPE, ('x',), PER, ('y',)))
+        ifL(GEN_AFF, ('x', 'y'), ifL(GPE, ('x',), orL(PER, ORG), ('y',)))
+
+        ifL(GEN_AFF, ('x', 'y'), ifL(LOC, ('x', ), orL(PER, ORG), ('y',)))
+
 
         # 'ORG-AFF':['ORG', 'PER'], ['ORG', 'GPE'], ['ORG', 'ORG'],
         ifL(ORG_AFF, ('x', 'y'), ifL(ORG, ('x',), orL(PER, GPE, ORG), ('y',)))
@@ -89,11 +93,13 @@ with Graph('global') as graph:
         # 'ORG-AFF':['GPE', 'PER'],  ['GPE', 'ORG'],
         ifL(ORG_AFF, ('x', 'y'), ifL(GPE, ('x',), orL(PER, ORG), ('y',)))
 
+
         # 'PER-SOC':['PER', 'PER'],  ['PER', 'ORG'],
         ifL(PER_SOC, ('x', 'y'), ifL(PER, ('x',), orL(PER, ORG), ('y',)))
 
         # 'PER-SOC':['ORG', 'PER']
         ifL(PER_SOC, ('x', 'y'), ifL(ORG, ('x',), PER, ('y',)))
+
 
         # 'PART-WHOLE':['LOC', 'GPE'], ['LOC', 'LOC'], ['LOC', 'FAC']
         ifL(PART_WHOLE, ('x', 'y'), ifL(LOC, ('x',), orL(GPE, LOC, FAC), ('y',)))
@@ -111,7 +117,8 @@ with Graph('global') as graph:
         ifL(PART_WHOLE, ('x', 'y'), ifL(WEA, ('x',), orL(WEA, VEH), ('y',)))
 
         # 'PART-WHOLE':['VEH', 'VEH']
-        ifL(PART_WHOLE, ('x', 'y'), ifL(VEH, ('x',), VEH, ('y',)))
+        ifL(PART_WHOLE, ('x', 'y'), ifL(VEH, ('x',), orL(VEH, WEA), ('y',)))
+
 
         # 'ART':['PER', 'VEH'], ['PER', 'WEA'], ['PER', 'FAC']
         ifL(ART, ('x', 'y'), ifL(PER, ('x',), orL(VEH, WEA, FAC), ('y',)))
@@ -123,10 +130,13 @@ with Graph('global') as graph:
         ifL(ART, ('x', 'y'), ifL(GPE, ('x',), orL(VEH, WEA, FAC), ('y',)))
 
         # 'ART':['VEH', 'ORG']
-        ifL(ART, ('x', 'y'), ifL(VEH, ('x',), ORG, ('y',)))
+        ifL(ART, ('x', 'y'), ifL(VEH, ('x',), orL(ORG, PER, GPE), ('y',)))
 
         # 'ART':['WEA', 'GPE']
-        ifL(ART, ('x', 'y'), ifL(WEA, ('x',), GPE, ('y',)))
+        ifL(ART, ('x', 'y'), ifL(WEA, ('x',), orL(GPE, ORG, PER), ('y',)))
+
+        ifL(ART, ('x', 'y'), ifL(FAC, ('x',), orL(GPE, ORG, PER), ('y',)))
+
 
         # # PER_SOC
         # orL(
