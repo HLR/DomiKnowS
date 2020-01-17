@@ -117,7 +117,10 @@ class ACELogicalSolver(ilpOntSolver):
             for val in pairs:
                 _list = []
                 for item in helper['phrase']['pair_index']:
-                    _list.append(result[1][val][item[0]][item[1]])
+                    if result[1][val][item[0]][item[1]] == 1 or result[1][val][item[1]][item[0]] == 1:
+                        _list.append(1)
+                    else:
+                        _list.append(0)
                 result[1][val] = torch.tensor(np.array(_list), device=self.device)
 
             for item in result[0]:
