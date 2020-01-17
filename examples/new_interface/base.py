@@ -727,7 +727,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     check = False
                                     for item in pairs_gr:
                                         if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == \
-                                                item[1]:
+                                                item[1] or (matches[pairs[_iteration][0]] == item[1] and matches[pairs[_iteration][1]] == item[0]):
                                             _truth.append(1)
                                             check = True
                                             break
@@ -908,7 +908,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     check = False
                                     for item in pairs_gr:
                                         if matches[pairs[_iteration][0]] == item[0] and matches[pairs[_iteration][1]] == \
-                                                item[1]:
+                                                item[1] or (matches[pairs[_iteration][0]] == item[1] and matches[pairs[_iteration][1]] == item[0]):
                                             _truth.append(1)
                                             check = True
                                             break

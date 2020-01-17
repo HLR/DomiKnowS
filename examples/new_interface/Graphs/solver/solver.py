@@ -78,6 +78,8 @@ class ACELogicalSolver(ilpOntSolver):
                         _result[indexes[1]][indexes[0]][0] = values[0]
                         _result[indexes[0]][indexes[1]][1] = values[1]
                         _result[indexes[1]][indexes[0]][1] = values[1]
+                    for _ii in range(len(sentence['phrase']['raw'])):
+                        _result[_ii][_ii] = np.log(np.array([0.999, 0.001]))
                     sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
         # import pickle
         # file = open('data.pkl', 'wb')
@@ -87,11 +89,11 @@ class ACELogicalSolver(ilpOntSolver):
         #
         # # close the file
         # file.close()
-        graph1 = Graph(iri='http://ontology.ihmc.us/ML/ACE.owl', local='./')
-        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(graph1)
+        # graph1 = Graph(iri='http://ontology.ihmc.us/ML/ACE.owl', local='./')
+        # myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(graph1)
 
         #Using the lConstraints
-        # myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(app_graph)
         if len(pairs):
             phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
             results = myilpOntSolver.calculateILPSelection(phrases,
