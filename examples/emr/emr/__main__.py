@@ -9,6 +9,10 @@ parser.add_argument(
     action='store_true',
     help='Run the full example with BERT.')
 parser.add_argument(
+    '--glove',
+    action='store_true',
+    help='Run the full example with GloVe.')
+parser.add_argument(
     '-b', '--bilou',
     action='store_true',
     help='Run the example with BILOU tagging.')
@@ -32,11 +36,16 @@ def main():
                 from emr_bilou import main
             else:
                 from .emr_bilou import main
-    if args.bert:
+    elif args.bert:
         if __package__ is None or __package__ == '':
             from emr_bert import main
         else:
             from .emr_bert import main
+    elif args.glove:
+        if __package__ is None or __package__ == '':
+            from emr_glove import main
+        else:
+            from .emr_glove import main
     else:
         if __package__ is None or __package__ == '':
             from emr_full import main
