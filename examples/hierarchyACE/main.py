@@ -108,9 +108,9 @@ def model_declaration():
     word['pos_encode'] = WordPosTaggerSensor('pos', vocab=postags, edges=[rel_sentence_contains_word['forward']])
     word['features'] = ListConcator('embedding', 'pos_encode')
     # word['features'] = TensorReaderSensor(keyword="features")
-    word['encode'] = LSTMLearner('features', input_dim=5236, hidden_dim=240, num_layers=1, bidirectional=True)
+    word['encode'] = LSTMLearner('features', input_dim=5236, hidden_dim=500, num_layers=1, bidirectional=True)
 
-    word['encode_final'] = FullyConnectedLearnerRelu('encode', input_dim=480, output_dim=480)
+    word['encode_final'] = FullyConnectedLearnerRelu('encode', input_dim=1000, output_dim=1000)
 
     word[FAC] = ReaderSensor(keyword=FAC.name, label=True)
     word[GPE] = ReaderSensor(keyword=GPE.name, label=True)
@@ -120,24 +120,24 @@ def model_declaration():
     word[VEH] = ReaderSensor(keyword=VEH.name, label=True)
     word[WEA] = ReaderSensor(keyword=WEA.name, label=True)
 
-    word[FAC] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[GPE] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[PER] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[ORG] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[LOC] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[VEH] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-    word[WEA] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+    word[FAC] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[GPE] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[PER] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[ORG] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[LOC] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[VEH] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
+    word[WEA] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
 
-    _subnames = [Airport, Building_Grounds, Path, Plant,Subarea_Facility, Continent, County_or_District, GPE_Cluster,
-                 Nation, Population_Center, Special, State_or_Province, Address, Boundary, Celestial,
+    _subnames = [Airport, Building_Grounds, Path, Subarea_Facility, GPE_Cluster,
+                 Nation, Population_Center, State_or_Province, Boundary, Celestial,
                  Land_Region_Natural, Region_General, Region_International, Water_Body, Commercial, Educational,
-                 Entertainment, Government, Media, Medical_Science, Non_Governmental, Religious, Sports, Group,
-                 Indeterminate, Individual, Land, Subarea_Vehicle, Underspecified, Water, Biological, Blunt, Chemical,
-                 Exploding, Nuclear, Projectile, Sharp, Shooting, WEA_Underspecified]
+                 Government, Media, Non_Governmental, Group,
+                 Indeterminate, Individual, Land, Water, Chemical,
+                 Exploding, Nuclear, Projectile, Shooting, WEA_Underspecified]
 
     for item in _subnames:
         word[item] = ReaderSensor(keyword=item.name, label=True)
-        word[item] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
+        word[item] = FullyConnectedLearner('encode_final', input_dim=1000, output_dim=2)
 
     from base import ACEGraph, PytorchSolverGraph, NewGraph
     #
