@@ -148,17 +148,16 @@ def model_declaration():
 #### The main entrance of the program.
 def main():
     # paths = ["ACE_JSON/test/result0.json", "ACE_JSON/test/result1.json", "ACE_JSON/test/result2.json"]
-    paths = ["ACE_JSON/train/result0.json", "ACE_JSON/train/result1.json", "ACE_JSON/train/result2.json",
-             "ACE_JSON/train/result3.json", "ACE_JSON/train/result4.json", "ACE_JSON/train/result5.json",
-             "ACE_JSON/train/result6.json", "ACE_JSON/train/result7.json", "ACE_JSON/train/result8.json",
-             "ACE_JSON/train/result9.json", "ACE_JSON/train/result10.json"]
+    # paths = ["ACE_JSON/train/result0.json", "ACE_JSON/train/result1.json", "ACE_JSON/train/result2.json", "ACE_JSON/train/result3.json", "ACE_JSON/train/result4.json", "ACE_JSON/train/result5.json", "ACE_JSON/train/result6.json", "ACE_JSON/train/result7.json", "ACE_JSON/train/result8.json", "ACE_JSON/train/result9.json", "ACE_JSON/train/result10.json"]
+    paths = ["ACE_JSON/train/result0.json"]
     # paths = ["ACE_JSON/train/result0.json"]
     updated_graph = model_declaration()
     #
     # # updated_graph.load()
     updated_graph.structured_train_constraint(iterations=50, paths=paths, ratio=1)
     # updated_graph.load()
-    # updated_graph.predConstraint(paths=paths)
+    paths = ["ACE_JSON/test/result0.json", "ACE_JSON/test/result1.json", "ACE_JSON/test/result2.json"]
+    updated_graph.predConstraint(paths=paths)
 
 ####
 """
