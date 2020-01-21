@@ -155,7 +155,7 @@ def main():
     updated_graph.structured_train_constraint(iterations=50, paths=paths, ratio=1)
     updated_graph.load()
     paths = ["ACE_JSON/test/data0.pickle", "ACE_JSON/test/data1.pickle", "ACE_JSON/test/data2.pickle"]
-    updated_graph.test(paths=paths)
+    updated_graph.predConstraint(paths=paths)
 
 ####
 """
