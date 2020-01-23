@@ -1,4 +1,3 @@
-data
+data/
 data.zip
-get-pip.py
-/EMR_Solver_TEST.py
+log.*
