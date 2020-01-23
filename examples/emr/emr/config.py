@@ -10,8 +10,8 @@ else:
 config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
-        #'train_path': "conll04.corp_1_train.corp",
-        'train_path': "conll04.corp_1_train.corp_subsample_0.5.corp",
+        'train_path': "conll04.corp_1_train.corp",
+        #'train_path': "conll04.corp_1_train.corp_subsample_0.0625.corp",
         'valid_path': "conll04.corp_1_test.corp"
     },
     'Model': { # model setting
@@ -36,10 +36,10 @@ config = {
             'kernel_size': 7
         },
         'pretrained_files': {
-            'word': 'data/glove.6B/glove.6B.50d.txt'
+            'word': 'data/glove.6B/glove.6B.300d.txt'
         },
         'pretrained_dims': {
-            'word': 50
+            'word': 300
         },
         'bert_mlp': [768,],
         'graph': {
@@ -55,7 +55,7 @@ config = {
     },
     'Train': {
         'pretrained_files': {
-            'word': 'data/glove.6B/glove.6B.50d.txt'
+            'word': 'data/glove.6B/glove.6B.300d.txt'
         },
         'trainer': {
             'num_epochs': 100,
