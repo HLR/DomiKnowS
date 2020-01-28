@@ -836,6 +836,43 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             loggerFile.write("End of Iteration\n")
             loggerFile.close()
 
+    def PredictionTime(self, sentence):
+        value = {'raw': sentence}
+        for item in self.readers:
+            item.fill_data(value)
+        truth = []
+        pred = []
+        info = []
+        context = {}
+        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
+        # print("end")
+        for prop1 in self.poi:
+            Do = True
+            entity = prop1.sup.name
+            prop_name = prop1.name
+            dict_key = prop1.name.name
+            list(prop1.find(TorchLearner))[0][1](context=context)
+
+            info.append(prop1.name.name)
+            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+
+        result = self.solver.inferILPConstrains(context=context, info=info)
+        entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
+        relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
+
+        print("ORDER")
+        print(info)
+        print("BEFORE RESULTS")
+        print(pred)
+
+        for _it in range(len(info)):
+            if info[_it] in entities:
+                pred[_it] = result[0][info[_it]]
+            elif info[_it] in relations:
+                pred[_it] = result[1][info[_it]]
+        print("AFTER RESULT")
+        print(pred)
+
     def structured_train_constraint(self, iterations, paths, ratio):
         reader_sensors = self.readers
         _array = []

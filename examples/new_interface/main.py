@@ -48,21 +48,21 @@ def model_declaration():
     PER_SOC = graph['application/PER-SOC']
     PHYS = graph['application/PHYS']
 
-    # sentence['raw'] = ReaderSensor(keyword='raw')
-    # sentence['flair_sentence'] = FlairSentenceSensor('raw')
-    # # sentence['raw'] = Sensor()
-    # sentence['bert'] = SentenceBertEmbedderSensor('flair_sentence')
-    # sentence['glove'] = SentenceGloveEmbedderSensor('flair_sentence')
-    # sentence['flair'] = SentenceFlairEmbedderSensor('flair_sentence')
-    # sentence['pos'] = SentencePosTagger('flair_sentence')
-    # sentence['raw_ready'] = TorchSensor('pos', 'bert', 'glove', 'flair', output='flair_sentence')
-    # rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward", keyword="raw_ready")
-    # rel_sentence_contains_word['forward'] = SentenceToWordPos('raw_ready', mode="forward", keyword="pos")
-    # word['embedding'] = WordEmbedding('raw_ready', edges=[rel_sentence_contains_word['forward']])
-    # postags = ['INTJ', 'AUX', 'CCONJ', 'SYM', 'ADJ', 'VERB', 'PART', 'PROPN', 'PUNCT', 'ADP', 'NOUN', 'PRON', 'ADV', 'DET', 'X', 'NUM']
-    # word['pos_encode'] = WordPosTaggerSensor('pos', vocab=postags, edges=[rel_sentence_contains_word['forward']])
-    # word['features'] = ListConcator('embedding', 'pos_encode')
-    word['features'] = TensorReaderSensor(keyword="features")
+    sentence['raw'] = ReaderSensor(keyword='raw')
+    sentence['flair_sentence'] = FlairSentenceSensor('raw')
+    # sentence['raw'] = Sensor()
+    sentence['bert'] = SentenceBertEmbedderSensor('flair_sentence')
+    sentence['glove'] = SentenceGloveEmbedderSensor('flair_sentence')
+    sentence['flair'] = SentenceFlairEmbedderSensor('flair_sentence')
+    sentence['pos'] = SentencePosTagger('flair_sentence')
+    sentence['raw_ready'] = TorchSensor('pos', 'bert', 'glove', 'flair', output='flair_sentence')
+    rel_sentence_contains_word['forward'] = FlairSentenceToWord('raw_ready', mode="forward", keyword="raw_ready")
+    rel_sentence_contains_word['forward'] = SentenceToWordPos('raw_ready', mode="forward", keyword="pos")
+    word['embedding'] = WordEmbedding('raw_ready', edges=[rel_sentence_contains_word['forward']])
+    postags = ['INTJ', 'AUX', 'CCONJ', 'SYM', 'ADJ', 'VERB', 'PART', 'PROPN', 'PUNCT', 'ADP', 'NOUN', 'PRON', 'ADV', 'DET', 'X', 'NUM']
+    word['pos_encode'] = WordPosTaggerSensor('pos', vocab=postags, edges=[rel_sentence_contains_word['forward']])
+    word['features'] = ListConcator('embedding', 'pos_encode')
+    # word['features'] = TensorReaderSensor(keyword="features")
     word['encode'] = LSTMLearner('features', input_dim=5236, hidden_dim=240, num_layers=1, bidirectional=True)
 
     # rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary', mode="backward")
@@ -149,13 +149,14 @@ def model_declaration():
 def main():
     # paths = ["ACE_JSON/test/data0.pickle", "ACE_JSON/test/data1.pickle", "ACE_JSON/test/data2.pickle"]
     # paths = ["ACE_JSON/train/data0.pickle", "ACE_JSON/train/data1.pickle", "ACE_JSON/train/data2.pickle", "ACE_JSON/train/data3.pickle", "ACE_JSON/train/data4.pickle", "ACE_JSON/train/data5.pickle", "ACE_JSON/train/data6.pickle", "ACE_JSON/train/data7.pickle", "ACE_JSON/train/data8.pickle", "ACE_JSON/train/data9.pickle", "ACE_JSON/train/data10.pickle"]
-    paths = ["ACE_JSON/train/data0.pickle"]
+    # paths = ["ACE_JSON/train/data0.pickle"]
     updated_graph = model_declaration()
-    # # updated_graph.load()
-    updated_graph.structured_train_constraint(iterations=50, paths=paths, ratio=1)
     updated_graph.load()
-    paths = ["ACE_JSON/test/data0.pickle", "ACE_JSON/test/data1.pickle", "ACE_JSON/test/data2.pickle"]
-    updated_graph.predConstraint(paths=paths)
+    # updated_graph.structured_train_constraint(iterations=50, paths=paths, ratio=1)
+    # updated_graph.load()
+    # paths = ["ACE_JSON/test/data0.pickle", "ACE_JSON/test/data1.pickle", "ACE_JSON/test/data2.pickle"]
+    # updated_graph.predConstraint(paths=paths)
+    updated_graph.PredictionTime(sentence=str(input()))
 
 ####
 """
