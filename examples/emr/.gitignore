@@ -1,5 +1,4 @@
-data
+data/
 data.zip
-get-pip.py
-/EMR_Solver_TEST.py
-/glove.6B.zip
+glove.6B.zip
+log.*

@@ -9,15 +9,29 @@ else:
 @NamedTreeNode.localize_context
 class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
     def __init__(self, name=None):
-        AutoNamed.__init__(self, name)  # name may be update
-        NamedTreeNode.__init__(self, self.name)
+        super().__init__(name)  # name may be update
+        super(AutoNamed, self).__init__(self.name)
+
+    @classmethod
+    def clear(cls):
+        #AutoNamed.clear() # this call may clear wrong context
+        # super() call bring the correct reference to current class `cls`
+        super().clear()
+        # Sibling class of AutoNamed is NamedTree
+        super(AutoNamed, cls).clear()
 
 
 @BaseGraphTreeNode.share_context
 class BaseGraphTree(AutoNamed, NamedTree):
     def __init__(self, name=None):
-        AutoNamed.__init__(self, name)  # name may be update
-        NamedTree.__init__(self, self.name)
+        super().__init__(name)  # name may be update
+        super(AutoNamed, self).__init__(self.name)
+
+    @classmethod
+    def clear(cls):
+        # see comment above in BaseGraphTreeNode
+        super().clear()
+        super(AutoNamed, cls).clear()
 
 
 @Scoped.class_scope

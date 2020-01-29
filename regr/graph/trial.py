@@ -1,3 +1,5 @@
+import gc
+import weakref
 from .base import BaseGraphTree
 
 
@@ -5,10 +7,25 @@ from .base import BaseGraphTree
 class TrialTree(BaseGraphTree):
     def __init__(self, trial, name=None):
         super().__init__(name=name)
-        self.trial = trial
+        self._trial = weakref.ref(trial)
+
+    @property
+    def trial(self):
+        return self._trial()
+
+    def what(self):
+        wht = BaseGraphTree.what(self)
+        if self.trial:
+            wht['trial'] = repr(self.trial)
+        return wht
 
 
 class Trial():
+    @classmethod
+    def clear(cls):
+        TrialTree.clear()
+        #gc.collect()  # to release memory right away -- too slow
+
     @classmethod
     def default(cls):
         default_tree = TrialTree.default()
@@ -39,7 +56,10 @@ class Trial():
         except KeyError:
             if key in self.obsoleted:
                 raise
-            return self.sup.__getitem__(key)
+            sup = self.sup
+            if not sup:
+                raise
+            return sup.__getitem__(key)
 
     def __setitem__(self, key, obj):
         self.data.__setitem__(key, obj)
@@ -69,3 +89,6 @@ class Trial():
     def values(self):
         for key in iter(self):
             yield self[key]
+
+    def __repr__(self):
+        return repr(dict(self))

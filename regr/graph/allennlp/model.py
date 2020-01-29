@@ -1,22 +1,25 @@
 import os
 from typing import Dict, List, Tuple, Iterable
 from collections import OrderedDict
-from torch import Tensor
+from torch import Tensor, cuda
 from torch.nn import Module
+import torch
 from allennlp.models import Model
 from allennlp.data import Vocabulary
 from allennlp.nn.util import get_text_field_mask
 
 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
+
 from .metrics import Epoch, DatasetType
 
 from .. import Graph
+from ..trial import Trial
 from ..property import Property
 from ...utils import prod, get_prop_result
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
-from ...sensor.allennlp.sensor import LabelMaskSensor, JointCandidateSensor
-from .utils import sequence_cross_entropy_with_logits
+from ...sensor.allennlp.sensor import CandidateSensor
+from .utils import sequence_cross_entropy_with_logits, structured_perceptron_exact_with_logits
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
@@ -31,7 +34,7 @@ def update_metrics(
     metrics: List[Tuple[str, Property, callable]]
 ) -> DataInstance:
     label_masks = {}
-    for name, sensor in graph.get_sensors(JointCandidateSensor):
+    for name, sensor in graph.get_sensors(CandidateSensor):
         sensor(data)
         mask = data[sensor.fullname].clone().detach()
         label_masks[mask.shape] = mask
@@ -53,11 +56,14 @@ class GraphModel(Model):
         label_smoothing: float = 0.1,
         focal_gamma: float = 2.,
         inference_interval: int = 10,
-        inference_training_set: bool = False
+        inference_training_set: bool = False,
+        inference_loss: bool = False,
+        soft_penalty: float =  1.
     ) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
         self.inference_training_set = inference_training_set
+        self.inference_loss = inference_loss
         self.meta = []
         self.metrics = []
         self.metrics_inferenced = []
@@ -65,6 +71,7 @@ class GraphModel(Model):
         self.balance_factor = balance_factor
         self.label_smoothing = label_smoothing
         self.focal_gamma = focal_gamma
+        self.soft_penalty = soft_penalty
 
         self.graph = graph
 
@@ -103,6 +110,12 @@ class GraphModel(Model):
         self,
         data: DataInstance
     ) -> bool:
+        return self._report_inference(data) or self.inference_loss
+
+    def _report_inference(
+        self,
+        data: DataInstance
+    ) -> bool:
         #import pdb; pdb.set_trace()
         if DEBUG_TRAINING:
             return True
@@ -123,16 +136,14 @@ class GraphModel(Model):
 
     def _update_metrics(
         self,
-        data: DataInstance
+        trivial_trial, trial
     ) -> DataInstance:
         for metric_name, metric in self.meta:
-            metric(data)
-        data = update_metrics(self.graph, data, self.metrics)
-        if self._need_inference(data):
-            #import pdb; pdb.set_trace()
-            data = self._inference(data)
-            data = update_metrics(self.graph, data, self.metrics_inferenced)
-        return data
+            metric(trivial_trial)
+        update_metrics(self.graph, trivial_trial, self.metrics)
+        if self._need_inference(trivial_trial) and self._report_inference(trivial_trial):
+            update_metrics(self.graph, trial, self.metrics_inferenced)
+        return trial
 
     def get_metrics(self, reset: bool=False) -> Dict[str, float]:
         metrics = OrderedDict()
@@ -187,40 +198,88 @@ class GraphModel(Model):
             pretty_metrics['{}[ {} ]'.format('\n' if not i else '', metric_name)] = metric.get_metric(reset)
         return pretty_metrics
 
-    def _update_loss(self, data):
-        data['loss'] = self.loss_func(data)
-        return data
+    def _update_loss(self, trivial_trial, trial):
+        trial['loss'] = self.loss_func(trivial_trial, trial)
+        return trial
 
+    i = 0
     def forward(
         self,
         **data: DataInstance
     ) -> DataInstance:
+        Trial.clear() # reset at every epoch
+
+#         if (self.i % 100 == 0):
+#             import gc
+#             gc.collect()
+#             if cuda.is_available():
+#                 cuda.empty_cache()
+#             self.i = 1
+#         else:
+#             self.i += 1
+
         # make sure every node needed are calculated
         for prop in self.graph.poi:
             for name, sensor in prop.items():
                 sensor(data)
+        trivial_trial = Trial(data)
 
-        data = self._update_loss(data)
-        data = self._update_metrics(data)
+        # inference
+        with trivial_trial:
+            if self._need_inference(trivial_trial):
+                trial = Trial()
+                self._inference(trial)
+            else:
+                trial = trivial_trial
+        self._update_loss(trivial_trial, trial)
+        self._update_metrics(trivial_trial, trial)
 
-        return data
+        return dict(trial)
 
     def _inference(
         self,
         data: DataInstance
     ) -> DataInstance:
+        #import pdb; pdb.set_trace()
+        # process candidates
+        label_not_masks = {}
+        for name, sensor in self.graph.get_sensors(CandidateSensor):
+            sensor(data)
+            mask = data[sensor.fullname].clone().detach()
+            label_not_masks[mask.shape] = (1-mask).type(torch.uint8)
+        for prop in self.graph.poi:
+            # label (b, l)
+            # pred  (b, l, c)
+            # mask  (b, l)
+            label, pred, mask = get_prop_result(prop, data)
+            if mask.shape in label_not_masks:
+                # label_mask  (b, l)
+                label_not_mask = label_not_masks[mask.shape]
+                shape = pred.shape
+                # (b*l, c)
+                pred = pred.clone().detach().view(-1, shape[-1])
+                # (b*l, )
+                label_not_mask = label_not_mask.view(-1)
+                pred[label_not_mask, :] = torch.tensor(float("nan"))
+                # (b, l, c)
+                pred = pred.view(shape)
+                label_not_mask = label_not_mask.view(mask.shape)
+                data[prop.fullname] = pred
+                for name, learner in prop.find(AllenNlpLearner):
+                    data[learner.fullname] = pred
         #data = inference(self.graph, self.graph.solver, data, self.vocab)
-        data = self.graph.solver.inferSelection(self.graph, data, self.vocab)
-        
+        data = self.graph.solver.inferSelection(self.graph, data)
+
         return data
 
     def loss_func(
         self,
-        data: DataInstance
+        data, data_i
     ) -> DataInstance:
+        #import pdb; pdb.set_trace()
         loss = 0
         label_masks = {}
-        for name, sensor in self.graph.get_sensors(JointCandidateSensor):
+        for name, sensor in self.graph.get_sensors(CandidateSensor):
             sensor(data)
             mask = data[sensor.fullname].clone().detach()
             label_masks[mask.shape] = mask
@@ -229,6 +288,11 @@ class GraphModel(Model):
             # pred  (b, l, c)
             # mask  (b, l)
             label, pred, mask = get_prop_result(prop, data)
+            if self.inference_loss:
+                # (b, l, c)
+                _, pred_i, _ = get_prop_result(prop, data_i)
+                # (b, l,)
+                pred_i = pred_i.argmax(dim=-1)
             label = label.clone().detach()
             mask = mask.clone().float()
             label_mask = label_masks.get(mask.shape)
@@ -243,12 +307,21 @@ class GraphModel(Model):
 
             alpha = [((num_token + balance_bias) / ((label == class_index).sum().float() + balance_bias))
                      for class_index in range(num_classes)]
-            #import pdb; pdb.set_trace()
-            loss += sequence_cross_entropy_with_logits(
-                pred, label, mask,
-                label_smoothing=self.label_smoothing,
-                gamma=self.focal_gamma,
-                alpha=alpha
-            )
+
+            if self.inference_loss:
+                loss += structured_perceptron_exact_with_logits(
+                    pred, label, mask, pred_i,
+                    label_smoothing=self.label_smoothing,
+                    gamma=self.focal_gamma,
+                    alpha=alpha,
+                    soft_penalty=self.soft_penalty
+                )
+            else:
+                loss += sequence_cross_entropy_with_logits(
+                    pred, label, mask,
+                    label_smoothing=self.label_smoothing,
+                    gamma=self.focal_gamma,
+                    alpha=alpha
+                )
 
         return loss

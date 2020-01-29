@@ -3,6 +3,7 @@ import logging
 import pickle
 from glob import glob
 from collections import defaultdict
+from itertools import chain
 from typing import Dict, List, Tuple, Union
 import torch
 import numpy as np
@@ -21,8 +22,10 @@ from ...solver import ilpOntSolverFactory
 from ...solver.ilpOntSolverFactory import ilpOntSolverFactory
 from ...solver.ilpOntSolver import ilpOntSolver
 from ...solver.allennlpInferenceSolver import AllennlpInferenceSolver
+from ...solver.allennlplogInferenceSolver import AllennlplogInferenceSolver
 from ...sensor.allennlp.base import ReaderSensor
 from ...sensor.allennlp.learner import SentenceEmbedderLearner
+from ...sensor.allennlp.sensor import SentenceEmbedderSensor
 from .. import Graph, Property
 from ..dataNode import DataNode
 from .model import GraphModel
@@ -37,50 +40,68 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
     def __init__(
         self,
         *args,
+        log_solver=False,
         **kwargs
     ):
         vocab = None # Vocabulary()
         self.model = GraphModel(self, vocab, *args, **kwargs)
-        self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
+        if log_solver:
+            self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlplogInferenceSolver)
+        else:
+            self.solver = ilpOntSolverFactory.getOntSolverInstance(self, AllennlpInferenceSolver)
         self.solver_log_to(None)
         # do not invoke super().__init__() here
 
     def get_multiassign(self):
-        ma = []
-
         def func(node):
             # use a closure to collect multi-assignments
             if isinstance(node, Property) and len(node) > 1:
-                ma.append(node)
-        self.traversal_apply(func)
-        return ma
+                return node
+
+        return list(self.traversal_apply(func))
 
     @property
     def poi(self):
         return self.get_multiassign()
 
     def get_sensors(self, *tests):
-        sensors = []
-
         def func(node):
             # use a closure to collect sensors
             if isinstance(node, Property):
-                sensors.extend(node.find(*tests))
-        self.traversal_apply(func)
-        return sensors
+                return node.find(*tests)
+        return list(chain(*self.traversal_apply(func)))
 
     def solver_log_to(self, log_path:str=None):
-        solver_logger = logging.getLogger(ilpOntSolver.__module__)
+        #solver_logger = logging.getLogger(ilpOntSolver.__module__)
+        solver_logger = self.solver.myLogger
         solver_logger.propagate = False
-        if DEBUG_TRAINING or True:
+        if DEBUG_TRAINING:
             solver_logger.setLevel(logging.DEBUG)
+            param = {'precision': 4,
+                     'threshold': np.inf,
+                     'edgeitems': 3,
+                     'linewidth': np.inf
+                    }
+            torch.set_printoptions(**param)
+            np.set_printoptions(**param)
             pd.options.display.max_rows = None
             pd.options.display.max_columns = None
         else:
             solver_logger.setLevel(logging.INFO)
         solver_logger.handlers = []
         if log_path is not None:
-            handler = logging.FileHandler(log_path)
+            if DEBUG_TRAINING:
+                handler = logging.FileHandler(log_path)
+            else:
+                logFilesize = 5 * 1024 * 1024 * 1024 # 5G
+                logBackupCount = 4
+                logFileMode = 'a'
+                handler = logging.handlers.RotatingFileHandler(log_path,
+                                                               mode=logFileMode,
+                                                               maxBytes=logFilesize,
+                                                               backupCount=logBackupCount,
+                                                               encoding=None,
+                                                               delay=0)
             solver_logger.addHandler(handler)
 
     def save(self, path, **objects):
@@ -93,7 +114,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             with open(os.path.join(path, k + '.pkl'), 'wb') as fout:
                 pickle.dump(v, fout)
 
-    def load(self, path, model:Union[str, int]='default'):
+    def load(self, path, model:Union[str, int]='default', vocab=None):
         model_file = None
         if isinstance(model, int):
             model_file = 'model_state_epoch_{}'.format(model)
@@ -113,7 +134,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                               'the string "best" for best model, '
                               'the string "last" for last saved model, '
                               'or the string "default" for just "model.th".'))
-        vocab_file = os.path.join(path, 'vocab')
+        vocab = vocab or os.path.join(path, 'vocab')
 
         if torch.cuda.is_available() and not DEBUG_TRAINING:
             device = 0
@@ -121,8 +142,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         else:
             device = -1
 
-        #print('Loading vocab from {}'.format(vocab_file))
-        self.model.vocab = Vocabulary.from_files(vocab_file)
+        #print('Loading vocab from {}'.format(vocab))
+        self.model.vocab = Vocabulary.from_files(vocab)
         self.model.extend_embedder_vocab()
         #print('Loading model from {}'.format(model_file))
         with open(model_file, 'rb') as fin:
@@ -152,7 +173,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             scheduler = None
 
         # prepare iterator
-        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderLearner)]
+        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderSensor)]
         iterator = BucketIterator(sorting_keys=sorting_keys,
                                   track_epoch=True,
                                   **train_config.iterator)

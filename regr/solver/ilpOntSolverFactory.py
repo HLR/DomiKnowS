@@ -17,7 +17,7 @@ class ilpOntSolverFactory:
         return cls.__classes[SolverClasses]
 
     @classmethod
-    def getOntSolverInstance(cls, graph, *SupplementalClasses, _iplConfig=ilpConfig) -> ilpOntSolver:
+    def getOntSolverInstance(cls, graph, *SupplementalClasses, _iplConfig=ilpConfig, **kwargs) -> ilpOntSolver:
         if graph is None:
             return None
         
@@ -36,54 +36,76 @@ class ilpOntSolverFactory:
                 
         ontologiesTuple = (*ontologies, )
         
-        if ontologiesTuple not in cls.__instances:
-
-            if _iplConfig is not None:
-                if ilpConfig['ilpSolver'] == "Gurobi":
-                    if __package__ is None or __package__ == '':
-                        # from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
-                        from regr.solver.gurobiILPOntSolver1 import gurobiILPOntSolver
-                    else:
-                        from .gurobiILPOntSolver1 import gurobiILPOntSolver
-                    SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
-                elif ilpConfig['ilpSolver'] == "GEKKO":
-                    if __package__ is None or __package__ == '':
-                        from regr.solver.gekkoILPOntSolver import gekkoILPOntSolver
-                    else:
-                        from .gekkoILPOntSolver import gekkoILPOntSolver
-                    SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
+        if _iplConfig is not None:
+            if _iplConfig['ilpSolver'] == "Gurobi":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
                 else:
-                    if __package__ is None or __package__ == '':
-                        from regr.solver.dummyILPOntSolver import dummyILPOntSolver
-                    else:
-                        from .dummyILPOntSolver import dummyILPOntSolver
-                    SolverClass = cls.getClass(dummyILPOntSolver, *SupplementalClasses)
-                    
-                cls.__instances[ontologiesTuple] = SolverClass()
+                    from .gurobiILPOntSolver import gurobiILPOntSolver
+                SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "GurobiLog":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobiILPOntLogSolver import gurobiILPOntLogSolver
+                else:
+                    from .gurobiILPOntLogSolver import gurobiILPOntLogSolver
+                SolverClass = cls.getClass(gurobiILPOntLogSolver, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "GEKKO":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gekkoILPOntSolver import gekkoILPOntSolver
+                else:
+                    from .gekkoILPOntSolver import gekkoILPOntSolver
+                SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "mini":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobi_solver import GurobiSolver
+                else:
+                    from .gurobi_solver import GurobiSolver
+                SolverClass = cls.getClass(GurobiSolver, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "mini_debug":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobi_solver_debug import GurobiSolverDebug
+                else:
+                    from .gurobi_solver_debug import GurobiSolverDebug
+                SolverClass = cls.getClass(GurobiSolverDebug, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "mini_log":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobi_log_solver import GurobilogSolver
+                else:
+                    from .gurobi_log_solver import GurobilogSolver
+                SolverClass = cls.getClass(GurobilogSolver, *SupplementalClasses)
+            elif _iplConfig['ilpSolver'] == "mini_log_debug":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.gurobi_log_solver_debug import GurobilogSolverDebug
+                else:
+                    from .gurobi_log_solver_debug import GurobilogSolverDebug
+                SolverClass = cls.getClass(GurobilogSolverDebug, *SupplementalClasses)
+            else:
+                if __package__ is None or __package__ == '':
+                    from regr.solver.dummyILPOntSolver import dummyILPOntSolver
+                else:
+                    from .dummyILPOntSolver import dummyILPOntSolver
+                SolverClass = cls.getClass(dummyILPOntSolver, *SupplementalClasses)
 
-            cls.__instances[ontologiesTuple].setup_solver_logger() 
-
-            cls.__instances[ontologiesTuple].myGraph = graph
-
-            if ontologiesTuple:
-                cls.__instances[ontologiesTuple].loadOntology(ontologiesTuple)
-
-            cls.__instances[ontologiesTuple].ilpSolver = _iplConfig['ilpSolver']
+        key = (SolverClass, ontologiesTuple, frozenset(kwargs))
+        if key not in cls.__instances:
+            instance = SolverClass(graph, ontologiesTuple, **kwargs)
+            cls.__instances[key] = instance
 
             if ontologiesTuple and graphOntologyError:
                 for currentGraph in graphOntologyError:
-                    cls.__instances[ontologiesTuple].myLogger.error("Problem -  graph %s ontology is not correctly defined %s"%(currentGraph.name,currentGraph.ontology))
+                    instance.myLogger.error("Problem - graph %s ontology is not correctly defined %s"%(currentGraph.name,currentGraph.ontology))
 
             if ontologiesTuple:
-                cls.__instances[ontologiesTuple].myLogger.info("Returning new ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
+                instance.myLogger.info("Returning new ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
             else:
-                cls.__instances[ontologiesTuple].myLogger.info("Returning generic (not based on ontology) ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
+                instance.myLogger.info("Returning generic (not based on ontology) ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
 
-            return cls.__instances[ontologiesTuple]
+            return instance
         else:
+            instance = cls.__instances[key]
             if ontologiesTuple:
-                cls.__instances[ontologiesTuple].myLogger.info("Returning existing ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
+                instance.myLogger.info("Returning existing ilpOntSolver for %s using %s"%(ontologiesTuple,_iplConfig['ilpSolver']))
             else:
-                cls.__instances[ontologiesTuple].myLogger.info("Returning existing generic ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
+                instance.myLogger.info("Returning existing generic ilpOntSolver using %s"%(_iplConfig['ilpSolver']))
 
-            return cls.__instances[ontologiesTuple]
+            return instance

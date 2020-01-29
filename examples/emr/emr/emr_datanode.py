@@ -10,11 +10,10 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor, CandidateReaderSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
-from regr.graph.allennlp import AllenNlpGraph
 
 #### There are a few other components that are needed in common machine learning models.
 #### * `Conll04SensorReader` is a AllenNLP `DatasetReader`.
@@ -27,10 +26,12 @@ if __package__ is None or __package__ == '':
     from data_spacy import Conll04SpaCyBinaryReader as Reader
     from config import Config
     from utils import seed
+    from datanode_utils import AllenNlpDataNodeGraph
 else:
     from .data_spacy import Conll04SpaCyBinaryReader as Reader
     from .config import Config
     from .utils import seed
+    from .datanode_utils import AllenNlpDataNodeGraph
 
 
 #### "*Ontology Declaration*" is the first step in our pipeline.
@@ -40,9 +41,9 @@ else:
 #### Please also refer to `graph.py` for details.
 def ontology_declaration():
     if __package__ is None or __package__ == '':
-        from graph import graph
+        from graph_datanode import graph
     else:
-        from .graph import graph
+        from .graph_datanode import graph
     return graph
 
 
@@ -158,10 +159,8 @@ def model_declaration(graph, config):
     orgbase_on['label'] = LogisticRegressionLearner(pair['encode'])
     kill['label'] = LogisticRegressionLearner(pair['encode'])
 
-    pair['candidate'] = CandidateReaderSensor(reader, 'cancidate')
-
     #### Lastly, we wrap these graph with `AllenNlpGraph` functionalities to get the full learning based program.
-    lbp = AllenNlpGraph(graph, **config.graph)
+    lbp = AllenNlpDataNodeGraph(graph, **config.graph)
     return lbp
 
 

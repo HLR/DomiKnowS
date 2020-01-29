@@ -8,11 +8,8 @@ import numpy as np
 from tqdm import tqdm
 
 
-class Conll04Splitter():
+class Conll04Processor():
     logger = logging.getLogger(__name__)
-
-    def __init__(self):
-        pass
 
     def read(self, path):
         with open(path, 'r') as fin:
@@ -40,6 +37,12 @@ class Conll04Splitter():
 
         return examples
 
+    def write(self, path, examples):
+        with open(path, 'w') as fout:
+            for example in tqdm(examples):
+                fout.write(example)
+
+class Conll04Splitter(Conll04Processor):
     def create_shuffle_shuffle(self, n):
         # `random.shuffle` has a limited random period 2**19937-1 that
         # implies at most 2080 possible shuffle will be generated and
@@ -70,10 +73,6 @@ class Conll04Splitter():
         for split in splits:
             yield [examples[index] for index in split]
 
-    def write(self, path, examples):
-        with open(path, 'w') as fout:
-            for example in tqdm(examples):
-                fout.write(example)
 
     def __call__(self, path, splits_num, subfix='.corp'):
         examples = self.read(path)
@@ -90,21 +89,19 @@ class Conll04Splitter():
                 path, split_index + 1, subfix), test_split)
         return example_splits
 
-
-parser = ArgumentParser(
-    description='Split Conll04 dataset for cross-validation.')
-parser.add_argument('path', nargs=1)
-parser.add_argument('-s', '--splits_num', nargs='?', type=int, default=5,
-                    help='number of folds the dataset will be splitted equally into. Default: 5.')
-parser.add_argument('-S', '--subfix', nargs='?', default='.corp',
-                    help='subfix for the output file name. Default: ".corp".')
-args = parser.parse_args()
-
-
 def main():
+    parser = ArgumentParser(
+        description='Split Conll04 dataset for cross-validation.')
+    parser.add_argument('path', nargs=1)
+    parser.add_argument('-s', '--splits_num', nargs='?', type=int, default=5,
+                        help='number of folds the dataset will be splitted equally into. Default: 5.')
+    parser.add_argument('-S', '--subfix', nargs='?', default='.corp',
+                        help='subfix for the output file name. Default: ".corp".')
+    args = parser.parse_args()
+
     spliter = Conll04Splitter()
-    examples = spliter(args.path[0], args.splits_num, args.subfix)
-    print('Done!')
+    example_splits = spliter(args.path[0], args.splits_num, args.subfix)
+    print('{}-fold datasets with {} examples are created.'.format(len(example_splits), tuple(len(split) for split in example_splits)))
 
 
 if __name__ == '__main__':

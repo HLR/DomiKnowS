@@ -13,7 +13,7 @@ from .ilpOntSolver import ilpOntSolver
 DataInstance = Dict[str, torch.Tensor]
 
 
-class AllennlpInferenceSolver(ilpOntSolver):
+class AllennlplogInferenceSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
     def inferSelection(self, graph: Graph, data: DataInstance) -> DataInstance:
@@ -66,18 +66,16 @@ class AllennlpInferenceSolver(ilpOntSolver):
                 if not device:
                     device = pred_logit.device
                 # pred - (b, l...*r, c)
-                pred = torch.nn.functional.softmax(pred_logit, dim=-1)
-                pos_index = torch.tensor(1, device=device).long()
-                # (b, l...*r)
-                batched_value = pred.index_select(-1, pos_index).squeeze(dim=-1)
+                pred = torch.nn.functional.log_softmax(pred_logit, dim=-1)
                 # copy and detach, time consuming I/O
-                batched_value = batched_value.clone().cpu().detach().numpy()
+                # batched_value - (b, l...*r, c)
+                batched_value = pred.clone().cpu().detach().numpy()
 
-                for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
-                    # (l...*r)
-                    value = batched_value[batch_index_d]
+                for batch_index in range(batch_size):
+                    # (l...*r, c)
+                    value = batched_value[batch_index]
                     # apply mask
-                    # (l'...*r)
+                    # (l'...*r, c)
                     value = value[(slice(0, mask_len[batch_index]),) * rank]
                     values[batch_index][rank][name] = value
         #import pdb; pdb.set_trace()

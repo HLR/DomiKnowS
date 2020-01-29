@@ -10,8 +10,8 @@ This example follows the pipeline we discussed in our preliminary paper.
 #### With `regr`, we assign sensors to properties of concept.
 #### There are two types of sensor: `Sensor`s and `Learner`s.
 #### `Sensor` is the more general term, while a `Learner` is a `Sensor` with learnable parameters.
-from regr.sensor.allennlp.sensor import SentenceSensor, SentenceEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor, CandidateReaderSensor
-from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, MLPLearner, ConvLearner, LogisticRegressionLearner
+from regr.sensor.allennlp.sensor import SentenceSensor, SentenceBertEmbedderSensor, LabelSensor, CartesianProductSensor, ConcatSensor, NGramSensor, TokenDistantSensor, TokenDepSensor, TokenLcaSensor, TokenDepDistSensor, CandidateReaderSensor
+from regr.sensor.allennlp.learner import MLPLearner, ConvLearner, LogisticRegressionLearner
 
 #### `AllenNlpGraph` is a special subclass of `Graph` that wraps a `Graph` and adds computational functionalities to it.
 from regr.graph.allennlp import AllenNlpGraph
@@ -24,11 +24,11 @@ from regr.graph.allennlp import AllenNlpGraph
 #### * `seed` is a useful function that resets random seed of all involving sub-systems: Python, numpy, and PyTorch, to make the performance of training consistent, as a demo.
 #from .data import Conll04SensorReader as Reader
 if __package__ is None or __package__ == '':
-    from data_spacy import Conll04SpaCyBinaryReader as Reader
+    from data_bert import Conll04BERTBinaryReader as Reader
     from config import Config
     from utils import seed
 else:
-    from .data_spacy import Conll04SpaCyBinaryReader as Reader
+    from .data_bert import Conll04BERTBinaryReader as Reader
     from .config import Config
     from .utils import seed
 
@@ -68,7 +68,7 @@ def model_declaration(graph, config):
     organization = graph['application/organization']
     location = graph['application/location']
     other = graph['application/other']
-    #o = graph['application/O']
+    o = graph['application/O']
 
     #### `people`, `organization`, `location`, `other`, and `O` are entities we want to extract in this demo.
     work_for = graph['application/work_for']
@@ -85,35 +85,10 @@ def model_declaration(graph, config):
     #### `SequenceSensor` provides the ability to read from a `TextField` in AllenNLP.
     #### It takes two arguments, firstly the reader to read with, and secondly a `key` for the reader to refer to correct `TextField`.
     sentence['raw'] = SentenceSensor(reader, 'sentence')
-    #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.
-    #### Notice that the Conll04 dataset comes with phrase tokenized sentences.
-    #### Thus this is already a phrase-based sentence.
-    #### `TokenInSequenceSensor` takes the sentence `TextField` here and insert a token field to it.
-    #### Please also refer to AllenNLP `TextField` document for complicated relationship of it and its tokens.
-    word['raw'] = SentenceEmbedderSensor('word', config.pretrained_dims['word'], sentence['raw'], pretrained_file=config.pretrained_files['word'])
-    word['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
-    word['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
-    # possible to add more this kind
-    word['all'] = ConcatSensor(word['raw'], word['pos'], word['dep'])
-    #### `RNNLearner` takes a sequence of representations as input, encodes them with recurrent nerual networks (RNN), like LSTM or GRU, and provides the encoded output.
-    #### Here we encode the word2vec output further with an RNN.
-    #### The first argument indicates the dimensions of internal representations, and the second one incidates we will encode the output of `phrase['w2v']`.
-    #### More optional arguments are avaliable, like `bidirectional` defaulted to `True` for context from both sides, and `dropout` defaulted to `0.5` for tackling overfitting.
-    word['ngram'] = NGramSensor(config.ngram, word['all'])
-    word['encode'] = RNNLearner(word['ngram'], layers=config.rnn.layers, bidirectional=config.rnn.bidirectional, dropout=config.dropout)
-    #### `CartesianProductSensor` is a `Sensor` that takes the representation from `phrase['emb']`, makes all possible combination of them, and generates a concatenating result for each combination.
-    #### This process takes no parameters.
-    #### But there is still a PyTorch module associated with it.
-    word['compact'] = MLPLearner(config.compact.layers, word['encode'], activation=config.activation)
-    pair['cat'] = CartesianProductSensor(word['compact'])
-    pair['tkn_dist'] = TokenDistantSensor(config.distance_emb_size * 2, config.max_distance, sentence['raw'])
-    pair['tkn_dep'] = TokenDepSensor(sentence['raw'])
-    pair['tkn_dep_dist'] = TokenDepDistSensor(config.distance_emb_size, config.max_distance, sentence['raw'])
-    pair['onehots'] = ConcatSensor(pair['tkn_dist'], pair['tkn_dep'], pair['tkn_dep_dist'])
-    pair['emb'] = MLPLearner([config.relemb.emb_size,], pair['onehots'], activation=None)
-    pair['tkn_lca'] = TokenLcaSensor(sentence['raw'], word['compact'])
-    pair['all'] = ConcatSensor(pair['cat'], pair['tkn_lca'], pair['emb'])
-    pair['encode'] = ConvLearner(config.relconv.layers, config.relconv.kernel_size, pair['all'], activation=config.activation, dropout=config.dropout)
+    word['emb'] = SentenceBertEmbedderSensor('word', 'bert-base-uncased', sentence['raw'])
+    word['encode'] = MLPLearner(config.bert_mlp, word['emb'])
+    pair['cat'] = CartesianProductSensor(word['encode'])
+    pair['encode'] = MLPLearner(config.bert_mlp, pair['cat'])
 
     #### Then we connect properties with ground-truth from `reader`.
     #### `LabelSensor` takes the `reader` as argument to provide the ground-truth data.
@@ -123,8 +98,8 @@ def model_declaration(graph, config):
     organization['label'] = LabelSensor(reader, 'Org', output_only=True)
     location['label'] = LabelSensor(reader, 'Loc', output_only=True)
     other['label'] = LabelSensor(reader, 'Other', output_only=True)
-
     #o['label'] = LabelSensor(reader, 'O', output_only=True)
+
     #### We connect properties with learners that generate predictions.
     #### Notice that we connect the predicting `Learner`s to the same properties as "ground-truth" `Sensor`s.
     #### Multiple assignment is a feature in `regr` to allow each property to have multiple sources.
@@ -140,7 +115,7 @@ def model_declaration(graph, config):
     organization['label'] = LogisticRegressionLearner(word['encode'])
     location['label'] = LogisticRegressionLearner(word['encode'])
     other['label'] = LogisticRegressionLearner(word['encode'])
-    #o['label'] = LogisticRegressionLearner(config.embedding_dim * 8, word['emb'])
+    #o['label'] = LogisticRegressionLearner(word['encode'])
 
     #### We repeat these on composed-concepts.
     #### There is nothing different in usage thought they are higher ordered concepts.

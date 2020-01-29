@@ -21,8 +21,10 @@ import logging
 import datetime
 
 class gekkoILPOntSolver(ilpOntSolver):
-    def __init__(self) -> None:
-        super().__init__()
+    ilpSolver = 'GEKKO'
+
+    def __init__(self, graph, ontologiesTuple) -> None:
+        super().__init__(graph, ontologiesTuple)
         self.myIlpBooleanProcessor = gekkoILPBooleanProcessor()
     
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):
@@ -507,11 +509,6 @@ class gekkoILPOntSolver(ilpOntSolver):
     
             # -- Add constraints based on property dataAllValuesFrom statements in ontology
     
-        if self.ilpSolver == "Gurobi":
-            m.update()
-        elif self.ilpSolver == "GEKKO":
-            pass
-    
         # Add objectives
         Y_Q  = None
         for relationName in relationNames:
@@ -687,11 +684,6 @@ class gekkoILPOntSolver(ilpOntSolver):
         return Z_Q
         
     def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
-    
-        if self.ilpSolver == None:
-            self.myLogger.info('ILP solver not provided - returning unchanged results')
-            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
-        
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
 

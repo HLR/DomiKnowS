@@ -22,7 +22,13 @@ class ilpOntSolver(object):
     __metaclass__ = abc.ABCMeta
     
     __negVarTrashhold = 1.0
-    
+
+    def __init__(self, graph, ontologiesTuple):
+        self.setup_solver_logger()
+        self.myGraph = graph
+        if ontologiesTuple:
+            self.loadOntology(ontologiesTuple)
+
     def setup_solver_logger(self, _ilpConfig = ilpConfig):
         
         logName = __name__
