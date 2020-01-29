@@ -17,6 +17,31 @@ def emr_input(request):
     test_graphResultsForPhraseToken["location"] =     np.array([0.3, 0.4, 0.1 , 0.3])
     test_graphResultsForPhraseToken["O"] =            np.array([0.1, 0.9, 0.9 , 0.1])
     
+    test_graphResultsForPhraseToken["people"] =       np.array([[0.3, 0.9, 0.08, 0.4],
+                                                               [0.7, 0.1, 0.02, 0.6]])
+        
+    test_graphResultsForPhraseToken["people"] = np.swapaxes(test_graphResultsForPhraseToken["people"], 1, 0)
+    
+    test_graphResultsForPhraseToken["organization"] = np.array([[0.5, 0.8, 0.07, 0.09],
+                                                               [0.5, 0.2, 0.03, 0.91]])
+    
+    test_graphResultsForPhraseToken["organization"] = np.swapaxes(test_graphResultsForPhraseToken["organization"], 1, 0)
+    
+    test_graphResultsForPhraseToken["other"] =        np.array([[0.7, 0.4, 0.05, 0.5],
+                                                               [0.3, 0.6, 0.05, 0.5]])
+    
+    test_graphResultsForPhraseToken["other"] = np.swapaxes(test_graphResultsForPhraseToken["other"], 1, 0)
+
+    test_graphResultsForPhraseToken["location"] =     np.array([[0.7, 0.6, 0.9 , 0.7],
+                                                               [0.3, 0.4, 0.1 , 0.3]])
+    
+    test_graphResultsForPhraseToken["location"] = np.swapaxes(test_graphResultsForPhraseToken["location"], 1, 0)
+
+    test_graphResultsForPhraseToken["O"] =            np.array([[0.9, 0.1, 0.1 , 0.9],
+                                                               [0.1, 0.9, 0.9 , 0.1]])
+    
+    test_graphResultsForPhraseToken["O"] = np.swapaxes(test_graphResultsForPhraseToken["O"], 1, 0)
+    
     test_graphResultsForPhraseRelation = dict()
     # work_for
     #                                    John  works for   IBM
