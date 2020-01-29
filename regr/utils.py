@@ -204,7 +204,7 @@ def singleton(cls, getter=None, setter=None):
 
 class WrapperMetaClass(type):
     def __call__(cls, inst, *args, **kwargs):
-        if not isinstance(inst, cls.__bases__):
+        if not isinstance(inst, tuple(cls.mro())):
             raise TypeError(
                 'Only cast from {}, while {} is given.'.format(super(cls), type(inst)))
 

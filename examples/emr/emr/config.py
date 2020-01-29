@@ -72,7 +72,7 @@ config = {
             'patience': 10
         },
         'iterator': {
-            'batch_size': 8,
+            'batch_size': 2,
         }
     },
     'Source': {

@@ -20,6 +20,10 @@ parser.add_argument(
     '-s', '--simple',
     action='store_true',
     help='Run the simple example with "people", "organization", and "work for" relationship between them.')
+parser.add_argument(
+    '-d', '--datanode',
+    action='store_true',
+    help='Run the example in datanode mode.')
 args = parser.parse_args()
 
 def main():
@@ -32,10 +36,7 @@ def main():
         if __package__ is None or __package__ == '':
             from emr_bilou import main
         else:
-            if __package__ is None or __package__ == '':
-                from emr_bilou import main
-            else:
-                from .emr_bilou import main
+            from .emr_bilou import main
     elif args.bert:
         if __package__ is None or __package__ == '':
             from emr_bert import main
@@ -46,6 +47,11 @@ def main():
             from emr_glove import main
         else:
             from .emr_glove import main
+    elif args.datanode:
+        if __package__ is None or __package__ == '':
+            from emr_datanode import main
+        else:
+            from .emr_datanode import main
     else:
         if __package__ is None or __package__ == '':
             from emr_full import main
