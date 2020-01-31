@@ -46,7 +46,7 @@ def emr_input(request):
     # work_for
     #                                    John  works for   IBM
     work_for_relation_table = np.array([[0.40, 0.20, 0.20, 0.63],  # John
-                                        [0.00, 0.00, 0.40, 0.30],  # works
+                                        [float("nan"), float("nan"), 0.40, 0.30],  # works
                                         [0.02, 0.03, 0.05, 0.10],  # for
                                         [0.65, 0.20, 0.10, 0.30],  # IBM
                                         ])
@@ -55,18 +55,18 @@ def emr_input(request):
     # live_in
     #                                   John  works for   IBM
     live_in_relation_table = np.array([[0.10, 0.20, 0.20, 0.06],  # John
-                                       [0.00, 0.00, 0.20, 0.10],  # works
+                                       [float("nan"), float("nan"), 0.20, 0.10],  # works
                                        [0.02, 0.03, 0.05, 0.10],  # for
-                                       [0.10, 0.20, 0.10, 0.00],  # IBM
+                                       [0.10, 0.20, 0.10, float("nan")],  # IBM
                                        ])
     test_graphResultsForPhraseRelation["live_in"] = live_in_relation_table
 
     # located_in
     #                                      John  works for   IBM
     located_in_relation_table = np.array([[0.10, 0.20, 0.20, 0.06],  # John
-                                          [0.00, 0.00, 0.00, 0.00],  # works
+                                          [float("nan"), float("nan"), float("nan"), float("nan")],  # works
                                           [0.02, 0.03, 0.05, 0.10],  # for
-                                          [0.03, 0.20, 0.10, 0.00],  # IBM
+                                          [0.03, 0.20, 0.10, float("nan")],  # IBM
                                           ])
     test_graphResultsForPhraseRelation["located_in"] = located_in_relation_table
 
