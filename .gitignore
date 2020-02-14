@@ -113,3 +113,4 @@ venv.bak/
 /data/
 /EMR.owl
 /EMRGraph.py
+.idea/
