@@ -175,3 +175,11 @@ class ifL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
         return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, myIlpBooleanProcessor, v, resultVariableName, headConstrain)
+    
+class equalA(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+
+class inSetA(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)

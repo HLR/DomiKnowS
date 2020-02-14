@@ -126,21 +126,14 @@ def sprl_input(ontology_graph):
                                                                                               (triplet, (about_20_kids_, on)) : 0.85,
                                                                                               (triplet, (about_20_kids, on)) : 0.78,
                                                                                               (spatial_triplet, (about_20_kids_, on)) : 0.74,
-                                                                                              (spatial_triplet, (about_20_kids, on)) : 83,
+                                                                                              (spatial_triplet, (about_20_kids, on)) : 0.83,
                                                                                               (region, (about_20_kids_, on)) : 0.65,
-                                                                                              (region, (about_20_kids, on)) : 88
+                                                                                              (region, (about_20_kids, on)) : 0.88
                                                                                               # Fill the rest of triple relation with 0.2 below
                                                                                             }
                                                       }
         
-    for instance in combinations(test_dataNode.childInstanceNodes, 2):
-        if (triplet, (*instance)) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
-            stairs.predictions['Learned'][triplet, instance] = np.random.rand() * 0.2
-        if (spatial_triplet, instance) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
-            stairs.predictions[DataNode.PredictionType["Learned"]][spatial_triplet, instance] = np.random.rand() * 0.2
-        if (region, instance) not in stairs.predictions[DataNode.PredictionType["Learned"]]:
-            stairs.predictions[DataNode.PredictionType["Learned"]][region, instance] = np.random.rand() * 0.2
-        
+    
     test_dataNode.childInstanceNodes[1].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.72,
                                                                                               (landmark) : 0.15,
                                                                                               (spatial_indicator) : 0.03,
