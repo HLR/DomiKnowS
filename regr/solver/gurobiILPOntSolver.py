@@ -1152,7 +1152,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         if graphResultsForPhraseToken:
             correctN = True
             for c in concepts:
-                if isinstance(graphResultsForPhraseToken[c][0], float):
+                if len(graphResultsForPhraseToken[c].shape) < 2:
                     correctN = False
                 break
             
@@ -1163,14 +1163,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                     graphResultsForPhraseToken[c] = np.swapaxes(graphResultsForPhraseToken[c], 1, 0)
                     
                     for i in range(len(graphResultsForPhraseToken[c])):
-                        graphResultsForPhraseToken[c][i][0] = float("nan")
+                        graphResultsForPhraseToken[c][i][0] = 1 - graphResultsForPhraseToken[c][i][0]
                         
         if graphResultsForPhraseRelation:
             correctN = True
             relationNames = list(graphResultsForPhraseRelation)
-
             for c in relationNames:
-                if isinstance(graphResultsForPhraseRelation[c][0][0], float):
+                temp = np.asarray(graphResultsForPhraseRelation[c][0])
+                if len(temp.shape) < 2:
                     correctN = False
                 break
             
@@ -1182,7 +1182,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         ter3 = np.swapaxes(ter2, 1, 0)
                         
                         for j in range(len(graphResultsForPhraseRelation[c][i])):
-                            ter3[j][0] = float("nan")
+                            ter3[j][0] = 1 - ter3[j][0]
                             
                         ter3 = np.expand_dims(ter3, axis=0)
                         if i == 0:
@@ -1197,7 +1197,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             tripleRelationNames = list(graphResultsForPhraseTripleRelation)
 
             for c in tripleRelationNames:
-                if isinstance(graphResultsForPhraseTripleRelation[c][0][0][0], float):
+                temp = np.asarray(graphResultsForPhraseTripleRelation[c][0][0])
+                if len(temp.shape) < 2:
                     correctN = False
                 break
             
@@ -1212,7 +1213,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             ter3 = np.swapaxes(ter2, 1, 0)
                             
                             for k in range(len(graphResultsForPhraseTripleRelation[c][i][j])):
-                                ter3[k][0] = float("nan")
+                                ter3[k][0] = 1 - ter3[k][0]
                                 
                             ter3 = np.expand_dims(ter3, axis=0)
                             if j == 0:
