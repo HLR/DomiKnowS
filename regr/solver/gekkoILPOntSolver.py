@@ -23,8 +23,8 @@ import datetime
 class gekkoILPOntSolver(ilpOntSolver):
     ilpSolver = 'GEKKO'
 
-    def __init__(self, graph, ontologiesTuple) -> None:
-        super().__init__(graph, ontologiesTuple)
+    def __init__(self, graph, ontologiesTuple, _ilpConfig=ilpConfig) -> None:
+        super().__init__(graph, ontologiesTuple, _ilpConfig=ilpConfig)
         self.myIlpBooleanProcessor = gekkoILPBooleanProcessor()
     
     def addTokenConstrains(self, m, tokens, conceptNames, x, graphResultsForPhraseToken):

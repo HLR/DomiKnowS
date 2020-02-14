@@ -153,7 +153,7 @@ def test_main_emr(emr_graph, emr_input):
     # ------Call solver -------
     test_graph = emr_graph
     # prepare solver
-    iplConfig = {
+    ilpConfig = {
         'ilpSolver' : 'mini',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
@@ -161,7 +161,7 @@ def test_main_emr(emr_graph, emr_input):
         'log_backupCount' : 5,
         'log_fileMode' : 'a'
     }
-    myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
+    myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
     tokenResult, relationsResult = myilpOntSolver.solve_legacy(test_phrase,
                                                                test_graphResultsForPhraseToken,
                                                                test_graphResultsForPhraseRelation

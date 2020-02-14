@@ -13,7 +13,6 @@ from owlready2 import *
 from gurobipy import *
 
 from regr.graph.concept import Concept
-from regr.solver.ilpConfig import ilpConfig
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
@@ -22,8 +21,8 @@ from click.decorators import group
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
 
-    def __init__(self, graph, ontologiesTuple) -> None:
-        super().__init__(graph, ontologiesTuple)
+    def __init__(self, graph, ontologiesTuple, _ilpConfig) -> None:
+        super().__init__(graph, ontologiesTuple, _ilpConfig)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
         
     def valueToBeSkipped(self, x):

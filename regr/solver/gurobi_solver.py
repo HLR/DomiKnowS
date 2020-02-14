@@ -15,8 +15,8 @@ def isnan(x):
 class GurobiSolver(ilpOntSolver):
     ilpSolver = 'mini'
 
-    def __init__(self, graph, ontologiesTuple, lazy_not=True, self_relation=True):
-        super().__init__(graph, ontologiesTuple)
+    def __init__(self, graph, ontologiesTuple, _ilpConfig, lazy_not=True, self_relation=True):
+        super().__init__(graph, ontologiesTuple, _ilpConfig)
         self.lazy_not = lazy_not
         self.self_relation = self_relation
         def func(node):

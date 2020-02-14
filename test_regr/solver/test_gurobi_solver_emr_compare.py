@@ -132,7 +132,7 @@ def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
     import logging
-    iplConfig = {
+    ilpConfig = {
         'ilpSolver' : 'mini',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
@@ -140,7 +140,7 @@ def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
         'log_backupCount' : 5,
         'log_fileMode' : 'a'
     }
-    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
     
     # call solver
     results = benchmark(solver.solve_legacy, phrase, *inputs)
@@ -165,7 +165,7 @@ def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
     import logging
-    iplConfig = {
+    ilpConfig = {
         'ilpSolver' : 'mini',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
@@ -173,7 +173,7 @@ def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
         'log_backupCount' : 5,
         'log_fileMode' : 'a'
     }
-    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _iplConfig=iplConfig, lazy_not=True, self_relation=False)
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
 
     # call solver
     owl_results = benchmark(solver.calculateILPSelection, phrase, *owl_inputs)
