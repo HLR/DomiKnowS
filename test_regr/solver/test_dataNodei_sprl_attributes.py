@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 from regr.graph import Graph, Concept, andL, nandL, notL, ifL, existsL, equalA, inSetA
 
+@pytest.mark.skip(reason="Not ready yet - prototype")
 @pytest.fixture()
 def ontology_graph(request):
     from regr.graph import Graph, Concept
@@ -39,7 +40,9 @@ def ontology_graph(request):
             
             nandL(none_entity, spatial_entity)
             
-            nandL(spatial_entity, equalA('hasSpatialType', 'trajector'), spatial_entity, equalA('hasSpatialType', 'landmark'))
+            #nandL(spatial_entity, equalA('hasSpatialType', 'trajector'), spatial_entity, equalA('hasSpatialType', 'landmark'))
+            
+            nandL(equalA('hasSpatialType', 'trajector'), equalA('hasSpatialType', 'landmark'))
             
             # Alternative            
             nandL(equalA(spatial_entity, 'hasSpatialType', 'trajector'),  equalA(spatial_entity, 'hasSpatialType', 'landmark'))
@@ -54,16 +57,16 @@ def ontology_graph(request):
             spatial_triplet = Concept(name='spatial_triplet')
             spatial_triplet.is_a(triplet)
        
-            ifL(spatial_triplet, ('x','y', 'z'), spatial_entity, equalA('hasSpatialType', 'landmark'), ('x',))
-            ifL(spatial_triplet, ('x','y', 'z'), spatial_entity, equalA('hasSpatialType', 'trajector'), ('y',))
-            ifL(spatial_triplet, ('x','y', 'z'), spatial_entity, equalA('hasSpatialType', 'spatial_indicator'), ('z',))
+            ifL(spatial_triplet, ('x','y', 'z'), equalA('hasSpatialType', 'landmark'), ('x',))
+            ifL(spatial_triplet, ('x','y', 'z'), equalA('hasSpatialType', 'trajector'), ('y',))
+            ifL(spatial_triplet, ('x','y', 'z'), equalA('hasSpatialType', 'spatial_indicator'), ('z',))
 
             none_relation= Concept(name='none_relation')
             none_relation.is_a(triplet)
             
-            ifL(none_relation, ('x','y', 'z'), spatial_entity, equalA('hasSpatialType', 'landmark'), ('x',))
-            ifL(none_relation, ('x','y', 'z'), spatial_entity, equalA('hasSpatialType', 'trajector'), ('y',))
-            ifL(none_relation, ('x','y', 'z'), espatial_entity, qualA('hasSpatialType', 'spatial_indicator'), ('z',))
+            ifL(none_relation, ('x','y', 'z'),  equalA('hasSpatialType', 'landmark'), ('x',))
+            ifL(none_relation, ('x','y', 'z'),  equalA('hasSpatialType', 'trajector'), ('y',))
+            ifL(none_relation, ('x','y', 'z'),  equalA('hasSpatialType', 'spatial_indicator'), ('z',))
             
             region = Concept(name='region')
             region.is_a(spatial_triplet)
@@ -82,6 +85,7 @@ def ontology_graph(request):
     Graph.clear()
     Concept.clear()
 
+@pytest.mark.skip(reason="Not ready yet - prototype")
 @pytest.fixture()
 def sprl_input(ontology_graph):
     from regr.graph import DataNode
@@ -144,7 +148,7 @@ def sprl_input(ontology_graph):
                                                                 }
                                                       }
     
-    stairs.attributes = {DataNode.PredictionType["Learned"] : {'hasSpatialType': {  ('trajector',) : 0.37,
+    stairs.attributes = {DataNode.PredictionType["Learned"] :  {'hasSpatialType': {  ('trajector',) : 0.37,
                                                                                     ('landmark',) : 0.68,
                                                                                     ('spatial_indicator',) : 0.05
                                                                                  }
@@ -153,6 +157,7 @@ def sprl_input(ontology_graph):
     
     yield test_dataNode
 
+@pytest.mark.skip(reason="Not ready yet - prototype")
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input):
     from regr.graph import DataNode
