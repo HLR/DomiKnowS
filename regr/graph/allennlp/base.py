@@ -14,7 +14,6 @@ from allennlp.common.params import Params
 from allennlp.training import Trainer
 from allennlp.training.optimizers import Optimizer
 from allennlp.training.learning_rate_schedulers import LearningRateScheduler
-from allennlp.training.util import evaluate
 from allennlp.nn.util import device_mapping
 from ..trial import Trial
 from ...utils import WrapperMetaClass
@@ -29,6 +28,7 @@ from ...sensor.allennlp.sensor import SentenceEmbedderSensor
 from .. import Graph, Property
 from ..dataNode import DataNode
 from .model import GraphModel
+from .utils import evaluate
 
 
 DEBUG_TRAINING = 'REGR_DEBUG' in os.environ and os.environ['REGR_DEBUG']
@@ -235,7 +235,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         self.model.vocab = vocab
         self.model.extend_embedder_vocab()
 
-    def test(self, data_path, log_path=None, batch=1):
+    def test(self, data_path, log_path=None, batch=1, log_violation=False):
         # prepare GPU
         if torch.cuda.is_available() and not DEBUG_TRAINING:
             device = 0
@@ -263,7 +263,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                            instances=dataset,
                            data_iterator=iterator,
                            cuda_device=device,
-                           batch_weight_key=None)
+                           batch_weight_key=None,
+                           log_violation=log_violation)
 
         # restore model
         self.model.train(training_state)

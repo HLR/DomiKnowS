@@ -57,12 +57,14 @@ class GraphModel(Model):
         focal_gamma: float = 2.,
         inference_interval: int = 10,
         inference_training_set: bool = False,
+        inference_testing_set: bool = True,
         inference_loss: bool = False,
         soft_penalty: float =  1.
     ) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
         self.inference_training_set = inference_training_set
+        self.inference_testing_set = inference_testing_set
         self.inference_loss = inference_loss
         self.meta = []
         self.metrics = []
@@ -124,7 +126,8 @@ class GraphModel(Model):
             dataset_type_key in data and
             all(dataset_type == 'train' for dataset_type in data[dataset_type_key])):
             return False
-        if (dataset_type_key in data and
+        if (self.inference_testing_set and
+            dataset_type_key in data and
             all(dataset_type == 'test' for dataset_type in data[dataset_type_key])):
             return True
         epoch_key = 'epoch_num'  # TODO: this key... is from Allennlp doc
