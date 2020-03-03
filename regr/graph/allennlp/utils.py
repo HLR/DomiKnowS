@@ -263,3 +263,138 @@ def structured_perceptron_exact_with_logits(logits: torch.FloatTensor,
         # shape : (batch_size,)
         per_batch_loss = negative_log_likelihood.sum(non_batch_dims) / (weights_batch_sum + 1e-13)
         return per_batch_loss
+
+
+import logging
+from typing import Any, Iterable, Dict
+from allennlp.common.tqdm import Tqdm
+from allennlp.common.checks import check_for_gpu
+from allennlp.models.model import Model
+from allennlp.data import Instance
+from allennlp.data.iterators import DataIterator
+from allennlp.nn import util as nn_util
+from ...utils import get_prop_result
+from ...sensor.allennlp.sensor import SentenceSensor
+import torch
+
+
+logger = logging.getLogger(__name__)
+
+# We want to warn people that tqdm ignores metrics that start with underscores
+# exactly once. This variable keeps track of whether we have.
+class HasBeenWarned:
+    tqdm_ignores_underscores = False
+
+
+def show_violation(graph, data):
+    viol_logger = logging.getLogger(__name__ + '.violation')
+    _, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
+    sentence = data[sentence_sensor.fullname]
+
+    for prop in graph.poi:
+        label, pred, mask = get_prop_result(prop, data)
+        pred_label = torch.argmax(pred, dim=-1) # hard label for hard violation
+        for rel in prop.sup.is_a():
+            if prop.prop_name not in rel.dst:
+                continue
+            dst_label, dst_pred, dst_mask = get_prop_result(rel.dst[prop.prop_name], data)
+            dst_pred_label = torch.argmax(dst_pred, dim=-1) # hard label for hard violation
+            # pred_label: b, l*
+            violations = torch.nonzero((pred_label > dst_pred_label).float() * mask)
+            for violation in violations:
+                b = violation[0]
+                l = violation[1:]
+                viol_logger.info('\nExample: %s', sentence[b])
+                viol_logger.info('%s %s', l, [sentence[b][ll] for ll in l])
+                viol_logger.info('%s > %s', rel.src, rel.dst)
+
+        for i, rel in enumerate(prop.sup.has_a()):
+            if prop.prop_name not in rel.dst:
+                continue
+            dst_label, dst_pred, dst_mask = get_prop_result(rel.dst[prop.prop_name], data)
+            dst_pred_label = torch.argmax(dst_pred, dim=-1) # hard label for hard violation
+            # pred_label: b, li-1*, li, li+1*
+            # dst_pred: b, li
+            # b, 1*, 1i, 1*
+            for ll in range(len(pred_label.shape)-1):
+                if i != ll:
+                    dst_pred_label = torch.unsqueeze(dst_pred_label, dim=ll+1)
+            violations = torch.nonzero((pred_label > dst_pred_label).float() * mask)
+            for violation in violations:
+                #import pdb; pdb.set_trace()
+                b = violation[0]
+                l = violation[1:]
+                viol_logger.info('\nExample:%s', sentence[b])
+                viol_logger.info('%s(%s)==[%s,%s]==%s', rel.src, ','.join(['{}:{}'.format(ll,sentence[b][ll]) for ll in l]), pred[(b,*l,0)], pred[(b,*l,1)], pred_label[(b,*l)])
+                dst_lo = [l[i],]
+                dst_l = [0,]* len(l)
+                dst_l[i] = l[i]
+                viol_logger.info('%s(%s)==[%s,%s]==%s', rel.dst, sentence[b][l[i]], dst_pred[(b,*dst_lo,0)], dst_pred[(b,*dst_lo,1)], dst_pred_label[(b,*dst_l)])
+                viol_logger.debug(dst_pred[b])
+
+
+def evaluate(model: Model,
+             instances: Iterable[Instance],
+             data_iterator: DataIterator,
+             cuda_device: int,
+             batch_weight_key: str,
+             log_violation: bool=False) -> Dict[str, Any]:
+    check_for_gpu(cuda_device)
+    with torch.no_grad():
+        model.eval()
+
+        iterator = data_iterator(instances,
+                                 num_epochs=1,
+                                 shuffle=False)
+        logger.info("Iterating over dataset")
+        generator_tqdm = Tqdm.tqdm(iterator, total=data_iterator.get_num_batches(instances))
+
+        # Number of batches in instances.
+        batch_count = 0
+        # Number of batches where the model produces a loss.
+        loss_count = 0
+        # Cumulative weighted loss
+        total_loss = 0.0
+        # Cumulative weight across all batches.
+        total_weight = 0.0
+
+        for batch in generator_tqdm:
+            batch_count += 1
+            batch = nn_util.move_to_device(batch, cuda_device)
+            output_dict = model(**batch)
+            loss = output_dict.get("loss")
+            if log_violation:
+                show_violation(model.graph, output_dict)
+
+            metrics = model.get_metrics()
+
+            if loss is not None:
+                loss_count += 1
+                if batch_weight_key:
+                    weight = output_dict[batch_weight_key].item()
+                else:
+                    weight = 1.0
+
+                total_weight += weight
+                total_loss += loss.item() * weight
+                # Report the average loss so far.
+                metrics["loss"] = total_loss / total_weight
+
+            if (not HasBeenWarned.tqdm_ignores_underscores and
+                        any(metric_name.startswith("_") for metric_name in metrics)):
+                logger.warning("Metrics with names beginning with \"_\" will "
+                               "not be logged to the tqdm progress bar.")
+                HasBeenWarned.tqdm_ignores_underscores = True
+            description = ', '.join(["%s: %.2f" % (name, value) for name, value
+                                     in metrics.items() if not name.startswith("_")]) + " ||"
+            generator_tqdm.set_description(description, refresh=False)
+
+        final_metrics = model.get_metrics(reset=True)
+        if loss_count > 0:
+            # Sanity check
+            if loss_count != batch_count:
+                raise RuntimeError("The model you are trying to evaluate only sometimes " +
+                                   "produced a loss!")
+            final_metrics["loss"] = total_loss / total_weight
+
+        return final_metrics
