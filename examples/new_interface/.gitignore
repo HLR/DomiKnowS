@@ -4,3 +4,4 @@ get-pip.py
 .LDC2006T06
 ACE_JSON/*
 ACE_JSON
+/results.txt

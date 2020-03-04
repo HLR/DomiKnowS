@@ -1,4 +1,4 @@
-from regr.graph import Graph, Concept, Relation, Property
+from regr.graph import Graph, Concept, Relation, Property, DataNodeBuilder
 import torch
 import torch.nn
 import torch.optim as optim
@@ -19,7 +19,6 @@ from Graphs.graph import pair, ART, word, phrase, PART_WHOLE, ART, ORG_AFF, PER_
 from Graphs.solver.solver import ACELogicalSolver
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 import json
-
 
 def sequence_cross_entropy_with_logits(logits: torch.Tensor,
                                        targets: torch.Tensor,
@@ -368,7 +367,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
         reader_sensors = self.readers
         _array = []
         for _iter in range(len(paths)):
-            loader = PickleReader(paths[_iter])
+            loader = SimpleReader(paths[_iter])
             reader = loader.data()
             _array.append(itertools.tee(reader, iterations))
 
@@ -659,7 +658,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
         reader_sensors = self.readers
         _array = []
         for _iter in range(len(paths)):
-            loader = PickleReader(paths[_iter])
+            loader = SimpleReader(paths[_iter])
             reader = loader.data()
             _array.append(itertools.tee(reader, 1))
 
@@ -873,11 +872,13 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
         print("AFTER RESULT")
         print(pred)
 
+   
+        
     def structured_train_constraint(self, iterations, paths, ratio):
         reader_sensors = self.readers
         _array = []
         for _iter in range(len(paths)):
-            loader = PickleReader(paths[_iter])
+            loader = SimpleReader(paths[_iter])
             reader = loader.data()
             _array.append(itertools.tee(reader, iterations))
 
@@ -892,6 +893,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
             inference_metrics = {}
             extra = {}
             for prop1 in self.poi:
+                prop1Name = prop1.name.name
                 metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
                 inference_metrics[prop1.name.name] = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
                 extra[prop1.name.name] = 0
@@ -905,7 +907,9 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         truth = []
                         pred = []
                         info = []
-                        context = {}
+                        _entities = []
+                        _relations = []
+                        context = DataNodeBuilder({"graph" : self, 'Iterations' : i, 'READER' : j})
                         # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
                         # print("end")
                         for prop1 in self.poi:
@@ -959,10 +963,18 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             # check this with quan
                             if Do:
                                 info.append(prop1.name.name)
+                                
+                                if prop1.sup == pair:
+                                   _relations.append(prop1)
+                                else:
+                                    _entities.append(prop1)
+                                
                                 truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
                                 pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
                         if self.solver:
+                            #dataNodeBuilder(context=context, entities= _entities, relations= _relations)
+                            
                             result = self.solver.inferILPConstrains(context=context, info=info)
                             entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                             relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]

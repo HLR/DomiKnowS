@@ -149,7 +149,7 @@ def model_declaration():
 def main():
     # paths = ["ACE_JSON/test/data0.pickle", "ACE_JSON/test/data1.pickle", "ACE_JSON/test/data2.pickle"]
     # paths = ["ACE_JSON/train/data0.pickle", "ACE_JSON/train/data1.pickle", "ACE_JSON/train/data2.pickle", "ACE_JSON/train/data3.pickle", "ACE_JSON/train/data4.pickle", "ACE_JSON/train/data5.pickle", "ACE_JSON/train/data6.pickle", "ACE_JSON/train/data7.pickle", "ACE_JSON/train/data8.pickle", "ACE_JSON/train/data9.pickle", "ACE_JSON/train/data10.pickle"]
-    paths = ["ACE_JSON/train/data0.pickle"]
+    paths = ["ACE_JSON/train/result0-3_1.json"]
     updated_graph = model_declaration()
     # updated_graph.load()
     updated_graph.structured_train_constraint(iterations=50, paths=paths, ratio=1)

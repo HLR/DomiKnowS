@@ -10,6 +10,9 @@ class Property(BaseGraphShallowTree):
         #name = '{}-{}'.format(context.name, prop_name)
         BaseGraphShallowTree.__init__(self, prop_name)
 
+    def __str__(self):
+        return self.name
+    
     def attach_to_context(self, name=None):
         BaseGraphShallowTree.attach_to_context(self, self.prop_name)
 

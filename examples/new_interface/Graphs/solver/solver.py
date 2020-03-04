@@ -38,7 +38,7 @@ class ACELogicalSolver(ilpOntSolver):
         with torch.no_grad():
             epsilon = 0.00001
             for item in predicates:
-                _list = [_it.cpu().numpy() for _it in context[global_key + predictions_on + "/" + item]]
+                _list = [_it.cpu().detach().numpy() for _it in context[global_key + predictions_on + "/" + item]]
                 for _it in range(len(_list)):
                     if _list[_it][0] > 1-epsilon:
                         _list[_it][0] = 1-epsilon
@@ -69,7 +69,7 @@ class ACELogicalSolver(ilpOntSolver):
                     sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = [_val for _val in _list]
                 sentence['phrase']['relations'] = {}
                 for item in pairs:
-                    _list = [np.log(_it.cpu().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
+                    _list = [np.log(_it.cpu().detach().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
                     _result = np.zeros((len(sentence['phrase']['raw']), len(sentence['phrase']['raw']), 2))
                     for _range in range(len(sentence['phrase']['pair_index'])):
                         indexes = sentence['phrase']['pair_index'][_range]
