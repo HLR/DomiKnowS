@@ -25,11 +25,11 @@ def convert_relations(tokens, relations):
     return relations
 
 
-def convert_labels(tokens):
+def convert_labels(tokens, skip_none=True):
     _, _, labels = tokens
     new_labels = []
     for j, label in enumerate(labels):
-        if label != NONE_LABEL:
+        if not skip_none or label != NONE_LABEL:
             new_index = convert_index(j)
             new_labels.append((label, new_index))
     return new_labels
@@ -74,8 +74,8 @@ def remove_index(start, length, index):
         src_index[0] -= length
     '''
     last = index[1] - 1  # src_index[1] is stop index, not last index
-    if last > start:
-        last = max(start, last - length)
+    if last > start - 1:
+        last = max(start - 1, last - length)
     index[1] = last + 1
 
     return index
@@ -107,7 +107,7 @@ def remove_labels(start, length, labels):
     for j in reversed(range(len(labels))):  # descending order to avoid index change
         (label, index) = labels[j]
         if index[0] >= index[1]:
-            assert False, 'Should not remove any entity.'
+            assert label == NONE_LABEL, 'Should not remove any entity "%s".' % label
             del labels[j]
     return labels
 
@@ -135,17 +135,17 @@ def add_tokens_labels(tokens, labels):
     return labels
 
 
-def reprocess(sentence, relations, keep_entity=False, first=True):
+def reprocess(sentence, relations, keep_entity=False, first=True, skip_none=True):
     new_tokens = []
     new_pos_tags = []
     new_labels = []
     offset = 0
 
     relations = convert_relations(sentence, relations)
-    labels = convert_labels(sentence)
+    labels = convert_labels(sentence, skip_none=skip_none)
 
     for i, (token, pos_tag, label) in enumerate(zip(*sentence)):
-        if ((keep_entity and label == NONE_LABEL) or (not keep_entity)) and DELIM in token and DELIM in pos_tag:
+        if ((keep_entity and skip_none and label == NONE_LABEL) or (not keep_entity)) and DELIM in token and DELIM in pos_tag:
             new_token = token.split(DELIM)
             new_pos_tag = pos_tag.split(DELIM)
         else:
@@ -156,7 +156,7 @@ def reprocess(sentence, relations, keep_entity=False, first=True):
                            '{}:{} -> {}:{}.').format(token, pos_tag, new_token, new_pos_tag),
                           stacklevel=2)
         for j, word in enumerate(new_token):
-            if label != NONE_LABEL and word == '.' and j > 0:
+            if (not skip_none or label != NONE_LABEL) and word == '.' and j > 0:
                 new_token[j - 1] = new_token[j - 1] + '.'
                 # no need to change new_pos_tag[j-1]
                 del new_token[j]
@@ -183,7 +183,7 @@ def reprocess(sentence, relations, keep_entity=False, first=True):
                 new_tokens[i] = ''
             else:
                 new_tokens[i - 1] = ''
-                new_tokens[i] = ERGE[new_token]
+                new_tokens[i] = MERGE[new_token]
 
     # remove empty ''
     for i in reversed(range(len(new_tokens))):
