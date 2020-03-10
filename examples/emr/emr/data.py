@@ -5,17 +5,9 @@ import torch
 from torch.utils.data import DataLoader
 from spacy.lang.en import English
 
-
 from .conll import Conll04CorpusReader
 from .data_spacy import reprocess
 
-
-def build_vocab():
-    pass
-def save_vocab():
-    pass
-def load_vocab():
-    pass
 
 class ConllDataLoader(DataLoader):
     nlp = English()
