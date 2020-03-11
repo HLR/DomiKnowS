@@ -1,7 +1,10 @@
 from itertools import chain
 
+import torch
+
 from emr.utils import seed
-from emb.graph.torch import TorchModel, train, test
+from emr.data import ConllDataLoader
+from emr.graph.torch import TorchModel, train, test
 
 from config import Config
 

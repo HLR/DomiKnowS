@@ -1,7 +1,14 @@
 *.log
 
-# Created by https://www.gitignore.io/api/python,pycharm,jupyternotebooks
-# Edit at https://www.gitignore.io/?templates=python,pycharm,jupyternotebooks
+# Created by https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
+# Edit at https://www.gitignore.io/?templates=code,python,pycharm,jupyternotebooks
+
+### Code ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
@@ -210,4 +217,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# End of https://www.gitignore.io/api/python,pycharm,jupyternotebooks
+# End of https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
