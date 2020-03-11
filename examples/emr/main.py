@@ -5,8 +5,10 @@ import torch
 from emr.utils import seed
 from emr.data import ConllDataLoader
 from emr.graph.torch import TorchModel, train, test
+from emr.sensor.sensor import DataLoaderSensor, DataSensor, LabelSensor, CartesianSensor
+from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 
-from config import Config
+from config import Config as config
 
 
 def ontology_declaration():
@@ -76,7 +78,7 @@ def model_declaration(graph, config):
 def main():
     graph = ontology_declaration()
 
-    lbp = model_declaration(graph, Config.Model)
+    lbp = model_declaration(graph, config.Model)
 
     seed()
     training_set = ConllDataLoader(config.Data.train_path,
@@ -90,3 +92,7 @@ def main():
         loss, metric, output = map(lambda x: chain(*x), zip(*train(lbp, training_set, opt)))
         valid_loss, valid_metric, valid_output = map(lambda x: chain(*x), zip(*test(lbp, valid_set, opt)))
         print(epoch, loss, valid_loss)
+
+
+if __name__ == '__main__':
+    main()
