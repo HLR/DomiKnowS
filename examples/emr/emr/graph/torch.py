@@ -3,8 +3,8 @@ import torch
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
+        super().__init__()
         self.graph = graph
-        
 
     def forward(self, data):
         pass
@@ -32,12 +32,12 @@ def eval_many(model, dataset):
     model.eval()
     with torch.no_grad():
         for data in dataset:
-            loss, metric, output = model(data)
+            _, _, output = model(data)
             yield output
 
 
 def eval_one(model, data):
     model.eval()
     with torch.no_grad():
-        loss, metric, output = model(data)
+        _, _, output = model(data)
         return output

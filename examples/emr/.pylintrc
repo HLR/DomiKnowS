@@ -1,2 +1,2 @@
 [TYPECHECK]
-ignored-classes=Namespace
+ignored-classes=emr.utils.Namespace

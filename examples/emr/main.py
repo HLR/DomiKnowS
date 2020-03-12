@@ -5,7 +5,7 @@ import torch
 from emr.utils import seed
 from emr.data import ConllDataLoader
 from emr.graph.torch import TorchModel, train, test
-from emr.sensor.sensor import DataLoaderSensor, DataSensor, LabelSensor, CartesianSensor
+from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 
 from config import Config as config
@@ -85,13 +85,15 @@ def main():
                                    batch_size=config.Train.batch_size,
                                    skip_none=config.Data.skip_none)
     valid_set = ConllDataLoader(config.Data.valid_path,
-                                  batch_size=config.Train.batch_size,
-                                  skip_none=config.Data.skip_none)
+                                batch_size=config.Train.batch_size,
+                                skip_none=config.Data.skip_none)
     opt = torch.optim.Adam(lbp.parameters())
     for epoch in range(10):
-        loss, metric, output = map(lambda x: chain(*x), zip(*train(lbp, training_set, opt)))
-        valid_loss, valid_metric, valid_output = map(lambda x: chain(*x), zip(*test(lbp, valid_set, opt)))
+        loss, metric, _ = map(lambda x: chain(*x), zip(*train(lbp, training_set, opt)))
+        valid_loss, valid_metric, _ = map(lambda x: chain(*x), zip(*test(lbp, valid_set)))
         print(epoch, loss, valid_loss)
+        print(metric)
+        print(valid_metric)
 
 
 if __name__ == '__main__':
