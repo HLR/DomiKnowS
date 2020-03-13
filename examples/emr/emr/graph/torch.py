@@ -1,10 +1,20 @@
 import torch
 
+from regr.graph.property import Property
+from emr.sensor.learner import ModuleLearner
+
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
+        
+        def func(node):
+            if isinstance(node, Property):
+                return node
+        for node in self.graph.traversal_apply(func):
+            for _, sensor in node.find(ModuleLearner):
+                self.add_module(sensor.fullname, sensor.module)
 
     def forward(self, data):
         pass

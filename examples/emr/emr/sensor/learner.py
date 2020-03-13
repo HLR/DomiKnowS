@@ -10,37 +10,38 @@ class TorchLearner(TorchSensor, Learner):
 class FunctionalLearner(FunctionalSensor, TorchLearner):
     pass
 
-class EmbedderLearner(FunctionalLearner):
-    def __init__(self, pre, output_only=False, **kwargs):
+
+class ModuleLearner(FunctionalLearner):
+    @staticmethod
+    def Module():
+        pass
+
+    def __init__(self, pre, output_only=False, module=None, **kwargs):
         super().__init__(pre, output_only=output_only)
-        self.module = torch.nn.Embedding(**kwargs)
+        self.module = module or self.Module(**kwargs)
 
     def forward(self, input):
         return self.module(input)
 
-class RNNLearner(FunctionalLearner):
-    def __init__(self, pre, output_only=False, **kwargs):
-        super().__init__(pre, output_only=output_only)
-        self.module = torch.nn.LSTM(**kwargs)
+
+class EmbedderLearner(ModuleLearner):
+    Module = torch.nn.Embedding
+
+
+class RNNLearner(ModuleLearner):
+    Module=torch.nn.LSTM
 
     def forward(self, input):
         output, _ = self.module(input)
         return output
 
 
-class MLPLearner(FunctionalLearner):
-    def __init__(self, pre, output_only=False, **kwargs):
-        super().__init__(pre, output_only=output_only)
-        self.module = torch.nn.Linear(**kwargs)
-
-    def forward(self, input):
-        return self.module(input)
+class MLPLearner(ModuleLearner):
+    Module = torch.nn.Linear
 
 
-class LRLearner(FunctionalLearner):
-    def __init__(self, pre, output_only=False, **kwargs):
-        super().__init__(pre, output_only=output_only)
-        self.module = torch.nn.Linear(**kwargs, out_features=1)
-
-    def forward(self, input):
-        return self.module(input)
+class LRLearner(ModuleLearner):
+    @staticmethod
+    def Module(**kwargs):
+        kwargs['out_features'] = 1
+        return torch.nn.Linear(**kwargs)
