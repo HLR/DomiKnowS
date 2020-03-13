@@ -16,7 +16,7 @@ def ontology_declaration():
     return graph
 
 
-def model_declaration(graph, config):
+def model_declaration(graph, vocab, config):
     graph.detach()
 
     sentence = graph['linguistic/sentence']
@@ -37,12 +37,12 @@ def model_declaration(graph, config):
 
     # feature
     sentence['raw'] = DataSensor('token')
-    word['emb'] = EmbedderLearner(sentence['raw'])
-    word['ctx_emb'] = RNNLearner(word['emb'])
-    word['feature'] = MLPLearner(word['ctx_emb'])
+    word['emb'] = EmbedderLearner(sentence['raw'], num_embeddings=len(vocab['token']), embedding_dim=50)
+    word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
+    word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
 
-    pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
-    pair['feature'] = MLPLearner(word['emb'])
+    #pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
+    #pair['feature'] = MLPLearner(word['emb'])
 
     # label
     word[people] = LabelSensor('Peop')
@@ -51,24 +51,24 @@ def model_declaration(graph, config):
     word[other] = LabelSensor('Other')
     word[o] = LabelSensor('O')
 
-    word[people] = LRLearner(word['feature'])
-    word[organization] = LRLearner(word['feature'])
-    word[location] = LRLearner(word['feature'])
-    word[other] = LRLearner(word['feature'])
-    word[o] = LRLearner(word['feature'])
+    word[people] = LRLearner(word['feature'], in_features=200)
+    word[organization] = LRLearner(word['feature'], in_features=200)
+    word[location] = LRLearner(word['feature'], in_features=200)
+    word[other] = LRLearner(word['feature'], in_features=200)
+    word[o] = LRLearner(word['feature'], in_features=200)
 
     # relation
-    pair[work_for] = LabelSensor('Work_For')
-    pair[live_in] = LabelSensor('Live_In')
-    pair[located_in] = LabelSensor('Located_In')
-    pair[orgbase_on] = LabelSensor('OrgBased_In')
-    pair[kill] = LabelSensor('Kill')
+    # pair[work_for] = LabelSensor('Work_For')
+    # pair[live_in] = LabelSensor('Live_In')
+    # pair[located_in] = LabelSensor('Located_In')
+    # pair[orgbase_on] = LabelSensor('OrgBased_In')
+    # pair[kill] = LabelSensor('Kill')
 
-    pair[work_for] = LRLearner(pair['feature'])
-    pair[live_in] = LRLearner(pair['feature'])
-    pair[located_in] = LRLearner(pair['feature'])
-    pair[orgbase_on] = LRLearner(pair['feature'])
-    pair[kill] = LRLearner(pair['feature'])
+    # pair[work_for] = LRLearner(pair['feature'])
+    # pair[live_in] = LRLearner(pair['feature'])
+    # pair[located_in] = LRLearner(pair['feature'])
+    # pair[orgbase_on] = LRLearner(pair['feature'])
+    # pair[kill] = LRLearner(pair['feature'])
 
     # program
     lbp = TorchModel(graph)
@@ -78,15 +78,17 @@ def model_declaration(graph, config):
 def main():
     graph = ontology_declaration()
 
-    lbp = model_declaration(graph, config.Model)
-
-    seed()
     training_set = ConllDataLoader(config.Data.train_path,
                                    batch_size=config.Train.batch_size,
                                    skip_none=config.Data.skip_none)
     valid_set = ConllDataLoader(config.Data.valid_path,
                                 batch_size=config.Train.batch_size,
-                                skip_none=config.Data.skip_none)
+                                skip_none=config.Data.skip_none,
+                                vocab=training_set.vocab)
+
+    lbp = model_declaration(graph, training_set.vocab, config.Model)
+
+    seed()
     opt = torch.optim.Adam(lbp.parameters())
     for epoch in range(10):
         loss, metric, _ = map(lambda x: chain(*x), zip(*train(lbp, training_set, opt)))
