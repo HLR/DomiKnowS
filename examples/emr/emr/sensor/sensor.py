@@ -4,9 +4,9 @@ from regr.sensor.sensor import Sensor
 
 
 class TorchSensor(Sensor):
-    def __init__(self, output_only=None):
+    def __init__(self, target=None):
         super().__init__()
-        self.output_only = output_only
+        self.target = target
 
     def __call__(self, context: Dict[str, Any], hard=False) -> Dict[str, Any]:
         if hard or self.fullname not in context:
@@ -31,8 +31,8 @@ class TorchSensor(Sensor):
         return None
 
 class DataSensor(TorchSensor):
-    def __init__(self, key, output_only=False):
-        super().__init__(output_only=output_only)
+    def __init__(self, key, target=False):
+        super().__init__(target=target)
         self.key = key
 
     def forward(self, context):
@@ -41,15 +41,15 @@ class DataSensor(TorchSensor):
 
 class LabelSensor(DataSensor):
     def __init__(self, key):
-        super().__init__(key, output_only=True)
+        super().__init__(key, target=True)
 
 
 class SkipSensor(Exception):
     pass
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, output_only=None):
-        super().__init__(output_only)
+    def __init__(self, *pres, target=None):
+        super().__init__(target)
         self.pres = pres
 
     def update_context(
@@ -64,7 +64,7 @@ class FunctionalSensor(TorchSensor):
             for name, item in pre.items():
                 # choose one result to update finally
                 if isinstance(item, Sensor):
-                    if item.output_only:
+                    if item.target:
                         continue
                     parameters.append(item(context))
                     break

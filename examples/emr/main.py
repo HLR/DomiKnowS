@@ -1,6 +1,7 @@
 from itertools import chain
 
 import torch
+from tqdm import tqdm
 
 from emr.utils import seed
 from emr.data import ConllDataLoader
@@ -91,8 +92,8 @@ def main():
     seed()
     opt = torch.optim.Adam(lbp.parameters())
     for epoch in range(10):
-        loss, metric, _ = map(lambda x: chain(*x), zip(*train(lbp, training_set, opt)))
-        valid_loss, valid_metric, _ = map(lambda x: chain(*x), zip(*test(lbp, valid_set)))
+        loss, metric, _ = zip(*tqdm(train(lbp, training_set, opt), total=len(training_set)))
+        valid_loss, valid_metric, _ = zip(*tqdm(test(lbp, valid_set), total=len(valid_set)))
         print(epoch, loss, valid_loss)
         print(metric)
         print(valid_metric)

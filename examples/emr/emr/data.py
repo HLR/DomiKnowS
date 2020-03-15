@@ -96,8 +96,6 @@ class ConllDataLoader(DataLoader):
         label_vocab = self.vocab['label']
         relation_vocab = self.vocab['relation']
         arg_idx = 0 if self.first else -1
-        entity_types = ['']
-        relation_types = ['']
         batch_size = len(batch)
         max_len = max(*(len(tokens) for tokens, _, _ in batch), 5)  # make sure len >= 5
         # initialize tensors
@@ -119,7 +117,12 @@ class ConllDataLoader(DataLoader):
             for relation, arg1, arg2 in relations:
                 relation_tensors[relation][batch_idx, arg1[arg_idx], arg2[arg_idx]] = True
             #import pdb; pdb.set_trace()
-        context = {'token': tokens_tensor}
+        token_raw, label_raw, relation_raw = zip(*batch)
+        context = {
+            'token_raw': token_raw,
+            'label_raw': label_raw,
+            'relation_raw':relation_raw,
+            'token': tokens_tensor}
         context.update(label_tensors)
         context.update(relation_tensors)
         #import pdb; pdb.set_trace()

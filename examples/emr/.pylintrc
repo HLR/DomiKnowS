@@ -1,2 +1,2 @@
 [TYPECHECK]
-ignored-classes=emr.utils.Namespace
+ignored-classes=emr.utils.Namespace, torch

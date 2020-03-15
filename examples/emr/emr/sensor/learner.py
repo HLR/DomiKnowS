@@ -16,8 +16,8 @@ class ModuleLearner(FunctionalLearner):
     def Module():
         pass
 
-    def __init__(self, pre, output_only=False, module=None, **kwargs):
-        super().__init__(pre, output_only=output_only)
+    def __init__(self, pre, target=False, module=None, **kwargs):
+        super().__init__(pre, target=target)
         self.module = module or self.Module(**kwargs)
 
     def forward(self, input):
