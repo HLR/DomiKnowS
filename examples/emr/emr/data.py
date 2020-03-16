@@ -91,7 +91,7 @@ class ConllDataLoader(DataLoader):
                 'label': label_vocab,
                 'relation': relation_vocab}
 
-    def collate_fn(self, batch):
+    def _collate_fn(self, batch):
         token_vocab = self.vocab['token']
         label_vocab = self.vocab['label']
         relation_vocab = self.vocab['relation']
@@ -139,5 +139,5 @@ class ConllDataLoader(DataLoader):
             tokens, labels, relations = self.process_one(tokens, labels, relations)
             return tokens, labels, relations
         samples = list(map(process, zip(sentences_list, relations_list)))
-        self.vocab = vocab or self.build_vocab(samples, least_count=0, max_vocab=None)
-        super().__init__(samples, collate_fn=self.collate_fn, **kwargs)
+        self.vocab = vocab or self.build_vocab(samples, least_count=least_count, max_vocab=max_vocab)
+        super().__init__(samples, collate_fn=self._collate_fn, **kwargs)

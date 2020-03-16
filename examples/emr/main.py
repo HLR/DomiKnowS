@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from emr.utils import seed
 from emr.data import ConllDataLoader
-from emr.graph.torch import TorchModel, train, test
+from emr.graph.torch import TorchModel, train, test, wrap_batch
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 
@@ -39,6 +39,7 @@ def model_declaration(graph, vocab, config):
     # feature
     sentence['raw'] = DataSensor('token')
     word['emb'] = EmbedderLearner(sentence['raw'], num_embeddings=len(vocab['token']), embedding_dim=50)
+    #word['mask'] = MaskSensor('')
     word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
     word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
 
@@ -93,7 +94,11 @@ def main():
     opt = torch.optim.Adam(lbp.parameters())
     for epoch in range(10):
         loss, metric, _ = zip(*tqdm(train(lbp, training_set, opt), total=len(training_set)))
+        loss = wrap_batch(loss)
+        metric = wrap_batch(metric)
         valid_loss, valid_metric, _ = zip(*tqdm(test(lbp, valid_set), total=len(valid_set)))
+        valid_loss = wrap_batch(valid_loss)
+        valid_metric = wrap_batch(valid_metric)
         print(epoch, loss, valid_loss)
         print(metric)
         print(valid_metric)

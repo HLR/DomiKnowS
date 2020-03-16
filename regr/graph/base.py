@@ -48,11 +48,7 @@ class BaseGraphShallowTree(BaseGraphTree):
 
     # disable query
     def parse_query_apply(self, func, *names, delim='/', trim=True):
-        name0s = names[0].split(delim)
-        name = name0s[0]
-        if trim:
-            name = name.strip()
-        names = list(chain(name0s[1:], names[1:]))
+        name, names = self.extract_name(*names, delim=delim, trim=trim)
         if names:
             raise ValueError(('{} cannot have nested elements. Access properties using property name directly.'
                               'Query of names {} is not possibly applied.'.format(type(self).__name__, names)))

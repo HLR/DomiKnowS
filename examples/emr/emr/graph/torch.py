@@ -1,21 +1,46 @@
 from itertools import combinations
 
 import torch
+from torch.nn import functional as F
 
 from regr.graph.property import Property
 from emr.sensor.learner import TorchSensor, ModuleLearner
+
+
+class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
+    def forward(self, input, target, weight=None):
+        if weight is None:
+            weight = self.weight
+        return F.binary_cross_entropy_with_logits(input, target,
+                                                  self.weight,
+                                                  pos_weight=self.pos_weight,
+                                                  reduction=self.reduction)
+
+
+class CMWithLogitsMetric(torch.nn.Module):
+    def forward(self, input, target, weight=None):
+        if weight is None:
+            weight = torch.ones_like(input, device='cpu', dtype=torch.bool)
+        preds = (input > 0).clone().detach().cpu().bool()
+        labels = target.clone().detach().cpu().bool()
+        tp = (preds * labels * weight).sum()
+        fp = (preds * (~labels) * weight).sum()
+        tn = ((~preds) * (~labels) * weight).sum()
+        fn = ((~preds) * labels * weight).sum()
+        return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
-        self.loss_func = torch.nn.BCEWithLogitsLoss()
-        self.metric_func = None
-        
+        self.loss_func = BCEWithLogitsLoss()
+        self.metric_func = CMWithLogitsMetric()
+
         def func(node):
             if isinstance(node, Property):
                 return node
+            return None
         for node in self.graph.traversal_apply(func):
             for _, sensor in node.find(ModuleLearner):
                 self.add_module(sensor.fullname, sensor.module)
@@ -49,6 +74,21 @@ class TorchModel(torch.nn.Module):
                     local_metric = self.metric_func(logit, labels)
                     metric[output_sensor, target_sensor] = local_metric
         return loss, metric, data
+
+
+def dict_zip(*dicts, fillvalue=None):  # https://codereview.stackexchange.com/a/160584
+    all_keys = {k for d in dicts for k in d.keys()}
+    return {k: [d.get(k, fillvalue) for d in dicts] for k in all_keys}
+
+
+def wrap_batch(values, fillvalue=0):
+    if isinstance(values, (list, tuple)):
+        if isinstance(values[0], dict):
+            values = dict_zip(*values, fillvalue=fillvalue)
+            values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
+        elif isinstance(values[0], torch.Tensor):
+            values = torch.stack(values)
+    return values
 
 
 def train(model, dataset, opt):
