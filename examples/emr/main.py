@@ -101,7 +101,7 @@ def main():
         for k, v in metric.items():
             print(k[0].sup.prop_name.name, end=': ')
             for kk, vv in v.items():
-                print(kk, vv.float().sum(), end=' | ')
+                print(kk, vv.float().mean(), end=' | ')
             print()
 
         print('Validation:')
@@ -112,7 +112,7 @@ def main():
         for k, v in valid_metric.items():
             print(k[0].sup.prop_name.name, end=': ')
             for kk, vv in v.items():
-                print(kk, vv.float().sum(), end=' | ')
+                print(kk, vv.float().mean(), end=' | ')
             print()
 
         #print(metric)

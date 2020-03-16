@@ -30,12 +30,29 @@ class CMWithLogitsMetric(torch.nn.Module):
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 
+class PRF1WithLogitsMetric(CMWithLogitsMetric):
+    def forward(self, input, target, weight=None):
+        CM = super().forward(input, target, weight)
+        tp = CM['TP'].float()
+        fp = CM['FP'].float()
+        fn = CM['FN'].float()
+        if CM['TP']:
+            p = tp / (tp + fp)
+            r = tp / (tp + fn)
+            f1 = 2 * p * r / (p + r)
+        else:
+            p = torch.zeros_like(tp)
+            r = torch.zeros_like(tp)
+            f1 = torch.zeros_like(tp)
+        return {'P': p, 'R': r, 'F1': f1}
+
+
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
         self.loss_func = BCEWithLogitsLoss()
-        self.metric_func = CMWithLogitsMetric()
+        self.metric_func = PRF1WithLogitsMetric()
 
         def func(node):
             if isinstance(node, Property):
