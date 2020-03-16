@@ -65,13 +65,14 @@ class TorchModel(torch.nn.Module):
                     continue
                 logit = output_sensor(data)
                 logit = logit.squeeze()
+                mask = output_sensor.mask(data)
                 labels = target_sensor(data)
                 labels = labels.float()
                 if self.loss_func:
-                    local_loss = self.loss_func(logit, labels)
+                    local_loss = self.loss_func(logit, labels, mask)
                     loss += local_loss
                 if self.metric_func:
-                    local_metric = self.metric_func(logit, labels)
+                    local_metric = self.metric_func(logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
         return loss, metric, data
 

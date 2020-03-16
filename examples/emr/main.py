@@ -38,8 +38,7 @@ def model_declaration(graph, vocab, config):
 
     # feature
     sentence['raw'] = DataSensor('token')
-    word['emb'] = EmbedderLearner(sentence['raw'], num_embeddings=len(vocab['token']), embedding_dim=50)
-    #word['mask'] = MaskSensor('')
+    word['emb'] = EmbedderLearner(sentence['raw'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), embedding_dim=50)
     word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
     word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
 

@@ -27,6 +27,14 @@ class ModuleLearner(FunctionalLearner):
 class EmbedderLearner(ModuleLearner):
     Module = torch.nn.Embedding
 
+    def mask(self, context):
+        input = next(self.get_args(context, sensor_filter=lambda s: not s.target))
+        if self.module.padding_idx is not None:
+            mask = input.clone().detach() != self.module.padding_idx
+        else:
+            mask = torch.ones_like(input)
+        return mask
+
 
 class RNNLearner(ModuleLearner):
     Module=torch.nn.LSTM
