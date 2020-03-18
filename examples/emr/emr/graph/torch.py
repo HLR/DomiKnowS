@@ -1,3 +1,6 @@
+import abc
+from collections import defaultdict
+from typing import Any
 from itertools import combinations
 
 import torch
@@ -20,9 +23,9 @@ class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
 class CMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, weight=None):
         if weight is None:
-            weight = torch.ones_like(input, device='cpu', dtype=torch.bool)
-        preds = (input > 0).clone().detach().cpu().bool()
-        labels = target.clone().detach().cpu().bool()
+            weight = torch.ones_like(input, dtype=torch.bool)
+        preds = (input > 0).clone().detach().bool()
+        labels = target.clone().detach().bool()
         tp = (preds * labels * weight).sum()
         fp = (preds * (~labels) * weight).sum()
         tn = ((~preds) * (~labels) * weight).sum()
@@ -47,12 +50,66 @@ class PRF1WithLogitsMetric(CMWithLogitsMetric):
         return {'P': p, 'R': r, 'F1': f1}
 
 
+class MetricTracker(torch.nn.Module):
+    def __init__(self, metric):
+        super().__init__()
+        self.metric = metric
+        self.list = []
+        self.dict = defaultdict(list)
+
+    def reset(self):
+        self.list.clear()
+        self.dict.clear()
+
+    def __call__(self, *args, **kwargs) -> Any:
+        value = self.metric(*args, **kwargs)
+        self.list.append(value)
+        return value
+
+    def __call_dict__(self, keys, *args, **kwargs) -> Any:
+        value = self.metric(*args, **kwargs)
+        self.dict[keys].append(value)
+        return value
+
+    def __getitem__(self, keys):
+        return lambda *args, **kwargs: self.__call_dict__(keys, *args, **kwargs)
+
+    def value(self, reset=False):
+        if self.list and self.dict:
+            raise RuntimeError('%s cannot be used as list-like and dict-like the same time.', str(type(self)))
+        func = super().__call__
+        def apply(value):
+            if isinstance(value, dict):
+                return {k: apply(v) for k, v in value.items()}
+            else:
+                return func(value)
+        if self.list:
+            value = wrap_batch(self.list)
+            value = apply(value)
+        elif self.dict:
+            value = wrap_batch(self.dict)
+            value = apply(value)
+            #value = {k: super().__call__(v) for k, v in self.dict.items()}
+        else:
+            value = None
+        if reset:
+            self.reset()
+        return value
+
+
+class MacroAverageTracker(MetricTracker):
+    def forward(self, values):
+        if isinstance(values, torch.Tensor):
+            return values.clone().detach().mean()
+        return torch.tensor(values).mean()
+
+
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
-        self.loss_func = BCEWithLogitsLoss()
-        self.metric_func = PRF1WithLogitsMetric()
+        self.loss = MacroAverageTracker(BCEWithLogitsLoss())
+        self.metric = MacroAverageTracker(PRF1WithLogitsMetric())
 
         def func(node):
             if isinstance(node, Property):
@@ -85,11 +142,11 @@ class TorchModel(torch.nn.Module):
                 mask = output_sensor.mask(data)
                 labels = target_sensor(data)
                 labels = labels.float()
-                if self.loss_func:
-                    local_loss = self.loss_func(logit, labels, mask)
+                if self.loss:
+                    local_loss = self.loss(logit, labels, mask)
                     loss += local_loss
-                if self.metric_func:
-                    local_metric = self.metric_func(logit, labels, mask)
+                if self.metric:
+                    local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
         return loss, metric, data
 
@@ -106,13 +163,29 @@ def wrap_batch(values, fillvalue=0):
             values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
         elif isinstance(values[0], torch.Tensor):
             values = torch.stack(values)
+    elif isinstance(values, dict):
+        values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
 
+def to(value, device):
+    if isinstance(value, torch.Tensor):
+        return value.to(device)
+    elif isinstance(value, list):
+        return [to(v, device) for v in value]
+    elif isinstance(value, tuple):
+        return (to(v, device) for v in value)
+    elif isinstance(value, dict):
+        return {k: to(v, device) for k, v in value.items()}
+    else:
+        raise NotImplementedError('%s is not supported. Can only move list, dict of tensors.', type(value))
 
 def train(model, dataset, opt):
     model.train()
+    model.loss.reset()
+    model.metric.reset()
     for data in dataset:
         opt.zero_grad()
+        data = to(data, next(model.parameters()).device)
         loss, metric, output = model(data)
         loss.backward()
         opt.step()
@@ -121,6 +194,8 @@ def train(model, dataset, opt):
 
 def test(model, dataset):
     model.eval()
+    model.loss.reset()
+    model.metric.reset()
     with torch.no_grad():
         for data in dataset:
             loss, metric, output = model(data)
@@ -129,6 +204,8 @@ def test(model, dataset):
 
 def eval_many(model, dataset):
     model.eval()
+    model.loss.reset()
+    model.metric.reset()
     with torch.no_grad():
         for data in dataset:
             _, _, output = model(data)
@@ -136,7 +213,10 @@ def eval_many(model, dataset):
 
 
 def eval_one(model, data):
+    # TODO: extend one sample data to 1-batch data
     model.eval()
+    model.loss.reset()
+    model.metric.reset()
     with torch.no_grad():
         _, _, output = model(data)
         return output

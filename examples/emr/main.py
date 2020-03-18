@@ -95,25 +95,17 @@ def main():
         print('Epoch:', epoch)
         print('Training:')
         loss, metric, _ = zip(*tqdm(train(lbp, training_set, opt), total=len(training_set)))
-        loss = wrap_batch(loss)
-        metric = wrap_batch(metric)
-        print('Training Loss:', loss.mean())
-        for k, v in metric.items():
-            print(k[0].sup.prop_name.name, end=': ')
-            for kk, vv in v.items():
-                print(kk, vv.float().mean(), end=' | ')
-            print()
+        print('Training Loss:', lbp.loss.value())
+        print('Training Metrics:')
+        for (pred, _), value in lbp.metric.value().items():
+            print(pred.sup.prop_name.name, value)
 
         print('Validation:')
         valid_loss, valid_metric, _ = zip(*tqdm(test(lbp, valid_set), total=len(valid_set)))
-        valid_loss = wrap_batch(valid_loss)
-        valid_metric = wrap_batch(valid_metric)
-        print('Validation Loss:', valid_loss.mean())
-        for k, v in valid_metric.items():
-            print(k[0].sup.prop_name.name, end=': ')
-            for kk, vv in v.items():
-                print(kk, vv.float().mean(), end=' | ')
-            print()
+        print('Validation Loss:', lbp.loss.value())
+        print('Validation Metrics:')
+        for (pred, _), value in lbp.metric.value().items():
+            print(pred.sup.prop_name.name, value)
 
         #print(metric)
         #print(valid_metric)
