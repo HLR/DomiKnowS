@@ -119,7 +119,21 @@ class TorchModel(torch.nn.Module):
             for _, sensor in node.find(ModuleLearner):
                 self.add_module(sensor.fullname, sensor.module)
 
+    def move(self, value, device=None):
+        device = device or next(self.parameters()).device
+        if isinstance(value, torch.Tensor):
+            return value.to(device)
+        elif isinstance(value, list):
+            return [self.move(v, device) for v in value]
+        elif isinstance(value, tuple):
+            return (self.move(v, device) for v in value)
+        elif isinstance(value, dict):
+            return {k: self.move(v, device) for k, v in value.items()}
+        else:
+            raise NotImplementedError('%s is not supported. Can only move list, dict of tensors.', type(value))
+
     def forward(self, data):
+        data = self.move(data)
         loss = 0
         metric = {}
         def all_properties(node):
@@ -167,17 +181,6 @@ def wrap_batch(values, fillvalue=0):
         values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
 
-def to(value, device):
-    if isinstance(value, torch.Tensor):
-        return value.to(device)
-    elif isinstance(value, list):
-        return [to(v, device) for v in value]
-    elif isinstance(value, tuple):
-        return (to(v, device) for v in value)
-    elif isinstance(value, dict):
-        return {k: to(v, device) for k, v in value.items()}
-    else:
-        raise NotImplementedError('%s is not supported. Can only move list, dict of tensors.', type(value))
 
 def train(model, dataset, opt):
     model.train()
@@ -185,7 +188,6 @@ def train(model, dataset, opt):
     model.metric.reset()
     for data in dataset:
         opt.zero_grad()
-        data = to(data, next(model.parameters()).device)
         loss, metric, output = model(data)
         loss.backward()
         opt.step()
