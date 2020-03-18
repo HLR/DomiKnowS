@@ -3,8 +3,6 @@ from regr.graph import Graph, DataNode
 
 from typing import Dict, Any
 import torch
-import re
-
 
 class TorchSensor(Sensor):
 
@@ -52,23 +50,6 @@ class TorchSensor(Sensor):
         context: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        
-        if not "counter_TorchSensor" in context:
-            context["counter_TorchSensor"] = {}
-            
-        if  self.fullname in context["counter_TorchSensor"]:
-            context["counter_TorchSensor"][self.fullname] = context["counter_TorchSensor"][self.fullname] + 1
-        else:
-            context["counter_TorchSensor"][self.fullname] = 1
-            
-        if not "counter_Sub_TorchSensor" in context:
-            context["counter_Sub_TorchSensor"] = {}
-            
-        if  self.sup.fullname in context["counter_Sub_TorchSensor"]:
-            context["counter_Sub_TorchSensor"][self.sup.fullname] = context["counter_Sub_TorchSensor"][self.sup.fullname] + 1
-        else:
-            context["counter_Sub_TorchSensor"][self.sup.fullname] = 1
-            
         if not force and self.fullname in context:
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
@@ -89,52 +70,10 @@ class TorchSensor(Sensor):
             
         return context
 
-        # -------------
-        global_key = "global/linguistic/"
-        
-        sentence_key = "sentence"
-        root_features = "raw"
-        tokens_key = "raw_ready"
-        phrase_key = "phrase/raw"
-        
-        if global_key + sentence_key + "/" + root_features in self.sup.fullname:
-            if 'dataNote' not in context:
-                sentenceConcept = context["graph"]['linguistic/sentence']
-                instanceValue = self.data['raw']
-                context['dataNote'] = DataNode(instanceID = context['READER'], instanceValue = instanceValue, ontologyNode = sentenceConcept, childInstanceNodes = [])
-            else:
-                pass # Update dataNode?
-            
-        if global_key + sentence_key + "/" + tokens_key in self.sup.fullname:
-            wordConcept = context["graph"]['linguistic/word']
-            tokens = self.fetch_value(self.output).tokens
-            dn = []
-            for token in tokens:
-                dn.append(DataNode(instanceID = token.idx, instanceValue = token.text, ontologyNode = wordConcept, childInstanceNodes = []))
-
-            if 'dataNote' in context:
-                context['dataNote'].childInstanceNodes = dn
-                
-        if  self.sup.fullname in global_key + phrase_key:
-            phrases = self
-            
-            pass
-                
-        return context
-
     def update_pre_context(
         self,
         context: Dict[str, Any]
     ) -> Any:
-        
-        if not "counter_Pre_TorchSensor" in context:
-            context["counter_Pre_TorchSensor"] = {}
-            
-        if  self.fullname in context["counter_Pre_TorchSensor"]:
-            context["counter_Pre_TorchSensor"][self.fullname] = context["counter_Pre_TorchSensor"][self.fullname] + 1
-        else:
-            context["counter_Pre_TorchSensor"][self.fullname] = 1
-            
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
                 sensor(context=context)
@@ -161,14 +100,12 @@ class TorchSensor(Sensor):
     def forward(self,) -> Any:
         return None
 
-
 class ConstantSensor(TorchSensor):
     def __init__(self, *pres, output=None, edge=None):
         super().__init__(*pres, output=output, edges=edge)
 
     def forward(self,) -> Any:
         return self.context_helper[self.sup.fullname]
-
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword, label=False):

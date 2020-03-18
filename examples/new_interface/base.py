@@ -973,12 +973,15 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                 pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
                         if self.solver:
-                            #dataNodeBuilder(context=context, entities= _entities, relations= _relations)
-                            
-                            result = self.solver.inferILPConstrains(context=context, info=info)
                             entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                             relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
+                            currentDataNode = context.getDataNode()[0]
+                            
+                            conceptsRelations = entities + relations
+                            currentDataNode.inferILPConstrains(*conceptsRelations)        
+                            result = self.solver.inferILPConstrains(context=context, info=info)
+                            
                             inferences = [torch.zeros(1).float().to(self.device) for i in range(len(info))]
                             for _it in range(len(info)):
                                 if info[_it] in entities:
