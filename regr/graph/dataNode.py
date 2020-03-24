@@ -3,7 +3,7 @@ import torch
 from collections import OrderedDict 
 import logging
 import re
-
+import time
 from regr.solver.ilpConfig import ilpConfig 
 from torch.tensor import Tensor
 
@@ -19,16 +19,25 @@ class DataNode:
    
     PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
    
-    def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, childInstanceNodes = None, attributes = None):
+    def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, childInstanceNodes = {}, relationLinks = {}, attributes = {}):
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
 
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the ontology graph node (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
-        self.childInstanceNodes = {}                     # Dictionary mapping child ontology type to List of child data nodes this instance was segmented into based on this type
-        self.attributes = attributes                     # Dictionary with additional node's attributes
-        self.predictions = {}                            # Dictionary with types of calculated predictions results (inferred: from learned model - Learned, by constrain solver - ILP, etc.)
-      
+        if childInstanceNodes:
+            self.childInstanceNodes = childInstanceNodes # Dictionary mapping child ontology type to List of child data nodes this instance was segmented into based on this type
+        else:
+             self.childInstanceNodes = {}
+        if relationLinks:
+            self.relationLinks = relationLinks           # Dictionary mapping relation name to the object representing the relation
+        else:
+            self.relationLinks = {}
+        if attributes:
+            self.attributes = attributes                 # Dictionary with additional node's attributes
+        else:
+             self.attributes = {}
+
     def __str__(self):
         if self.instanceValue:
             return self.instanceValue
@@ -163,10 +172,10 @@ class DataNode:
             concept = conceptOrRelationDict[concept_name]
             currentCandidates = candidates_currentConceptOrRelation[concept]
             for infer_candidate in currentCandidates:
-                if DataNode.PredictionType["ILP"] not in infer_candidate[0].predictions:
-                     infer_candidate[0].predictions[DataNode.PredictionType["ILP"]] = {}
+                if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
+                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]] = {}
                      
-                infer_candidate[0].predictions[DataNode.PredictionType["ILP"]][concept] = \
+                infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept] = \
                     tokenResult[concept_name][infer_candidate[0].instanceID]
                 
         for concept_name in pairResult:
@@ -174,10 +183,10 @@ class DataNode:
             currentCandidates = candidates_currentConceptOrRelation[concept]
             for infer_candidate in currentCandidates:
                 if infer_candidate[0] != infer_candidate[1]:
-                    if DataNode.PredictionType["ILP"] not in infer_candidate[0].predictions:
-                        infer_candidate[0].predictions[DataNode.PredictionType["ILP"]] = {}
+                    if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
+                        infer_candidate[0].attributes[DataNode.PredictionType["ILP"]] = {}
                      
-                    infer_candidate[0].predictions[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1])] = \
+                    infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1])] = \
                         pairResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID]
                         
         for concept_name in tripleResult:
@@ -185,18 +194,36 @@ class DataNode:
             currentCandidates = candidates_currentConceptOrRelation[concept]
             for infer_candidate in currentCandidates:
                 if infer_candidate[0] != infer_candidate[1] and infer_candidate[0] != infer_candidate[2] and infer_candidate[1] != infer_candidate[2]:
-                    if DataNode.PredictionType["ILP"] not in infer_candidate[0].predictions:
-                        infer_candidate[0].predictions[DataNode.PredictionType["ILP"]] = {}
+                    if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
+                        infer_candidate[0].attributes[DataNode.PredictionType["ILP"]] = {}
                         
-                    infer_candidate[0].predictions[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
+                    infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
+
+class RelationLink:
+   
+    def __init__(self, instanceID = None, ontologyNode = None, relationDataNodes = {}, attributes = {}):
+        self.myLogger = logging.getLogger(ilpConfig['log_name'])
+
+        self.instanceID = instanceID                     # The relation instance id
+
+        self.ontologyNode = ontologyNode                 # Reference to the ontology graph node (e.g. Relation) which is the type of this instance (e.g. pair, etc.)
+        if relationDataNodes:
+            self.relationDataNodes = relationDataNodes   # Dictionary mapping data node id to datanode
+        else:
+             self.childInstanceNodes = {}
+        if attributes:
+            self.attributes = attributes                 # Dictionary with additional node's attributes
+        else:
+             self.attributes = {}
 
 class DataNodeBuilder(dict):
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
 
+    # Change elements of value to tuple if they are list - in order to use the value as dictionary key
     def __changToTuple(self, v):
-        if type(v) is (list or tuple):
+        if type(v) is list:
             _v = []
             for v1 in v:
                 _v.append(self.__changToTuple(v1))
@@ -205,6 +232,7 @@ class DataNodeBuilder(dict):
         else:
             return v
         
+    # Find datanode in data graph of the given concept 
     def __findDatanodes(self, dns, concept):
         if dns == None:
             return []
@@ -233,6 +261,7 @@ class DataNodeBuilder(dict):
 
         return returnDns
 
+    # Add or increase generic counter counting number of setitem calls
     def __addSetitemCounter(self):
         globalCounterName = 'Counter' + '_setitem'
         if not dict.__contains__(self, globalCounterName):
@@ -241,6 +270,7 @@ class DataNodeBuilder(dict):
             currentCounter =  dict.__getitem__(self, globalCounterName)
             dict.__setitem__(self, globalCounterName, currentCounter + 1)
             
+    # Add or increase sensor counter counting number of setitem calls with the given sensor key
     def __addSensorCounters(self, skey, value):
         _value = value
         if isinstance(value, list):
@@ -251,15 +281,30 @@ class DataNodeBuilder(dict):
             counterNanme = counterNanme + '/' + s
             
         if not dict.__contains__(self, counterNanme):
-            dict.__setitem__(self, counterNanme, {_value : 1})
+            try:
+               dict.__setitem__(self, counterNanme, {_value : {"counter": 1, "recent" : True}})
+            except TypeError:
+                t = type(_value)
+                return False
+            
+            return False
         else:
             currentCounter =  dict.__getitem__(self, counterNanme)
             
             if _value in currentCounter:
-                currentCounter[_value] = currentCounter[_value] + 1 
+                currentCounter[_value]["counter"] = currentCounter[_value]["counter"] + 1 
+                
+                if currentCounter[_value]["recent"]:
+                    return True
+                else:
+                    currentCounter[_value]["recent"] = True
+                    return False
             else:
-                currentCounter[_value] = 1
+                currentCounter[_value]  = {"counter": 1, "recent" : True}
+                
+                return False
             
+    # Find concept in the graph based on concept name
     def __findConcept(self, _conceptName, usedGraph):
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
@@ -272,50 +317,30 @@ class DataNodeBuilder(dict):
                     return concept
         
         return None 
-            
-    def __setitem__(self, key, value):
-        self.__addSetitemCounter()
-       
-        usedGraph = dict.__getitem__(self, "graph")
-        global_key = usedGraph.name
-                  
-        skey = key.split('/')
+             
+    # Collect concept information defined in the graph
+    def __findConceptInfo(self, usedGraph, concept):
+        conceptInfo = {}
         
-        if len(skey) < 3:
-            return dict.__setitem__(self, key, value)
+        conceptInfo['concept'] = concept
         
-        _conceptName = skey[2]
-        concept = self.__findConcept(_conceptName, usedGraph)
-        
-        keyDataName = "".join(map(lambda x: '/' + x, skey[2:]))
-        keyDataName = keyDataName[1:]
-
-        if not concept:
-            return dict.__setitem__(self, key, value)
-        
-        self.__addSensorCounters(skey, value)
-            
-        if value == None:
-            return dict.__setitem__(self, key, value)
-        has = concept.has_a()
-        
-        relation = False
-        relationAttrs = []
+        conceptInfo['relation'] = False
+        conceptInfo['relationAttrs'] = []
         for arg_id, rel in enumerate(concept.has_a()): 
-            relation = True
+            conceptInfo['relation'] = True
             relationName = rel.src.name
             conceptName = rel.dst.name
                             
             conceptAttr = self.__findConcept(conceptName, usedGraph)
 
-            relationAttrs.append(conceptAttr)
+            conceptInfo['relationAttrs'].append(conceptAttr)
             
-        root = False
+        conceptInfo['root'] = False
         # Check if the concept is root concept 
         if ('contains' not in concept._in):
-            root = True
+            conceptInfo['root'] = True
           
-        contains = []  
+        conceptInfo['contains'] = []  
         # Check if concept contains other concepts
         if ('contains' in concept._out):
             for _contain in concept._out['contains']:
@@ -325,9 +350,9 @@ class DataNodeBuilder(dict):
                 containsConcept = self.__findConcept(_containNameSplit[3], usedGraph)
                 
                 if containsConcept:
-                    contains.append(containsConcept)
+                    conceptInfo['contains'].append(containsConcept)
                 
-        containedIn = []  
+        conceptInfo['containedIn'] = []  
         # Check if concept is contained other concepts
         if ('contains' in concept._in):
             for _contain in concept._in['contains']:
@@ -337,185 +362,242 @@ class DataNodeBuilder(dict):
                 containedConcept = self.__findConcept(_containNameSplit[0], usedGraph)
                 
                 if containedConcept:
-                    containedIn.append(containedConcept)
-        if relation:
-            if (len(skey) == 4) and (skey[3] == "index"):# Check if this is relation index data 
-                index = value
-                dict.__setitem__(self, concept.name + "Index", index)
-                
-                existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-                existingDnsForAttr = self.__findDatanodes(existingRootDns, relationAttrs[0]) # Datanodes of the relations attributes
+                    conceptInfo['containedIn'].append(containedConcept)
+        
+        return conceptInfo
+    
+    # Process relation data cache
+    def __processRelationDataCache(self, conceptInfo, value):
+        if not dict.__contains__(self, conceptInfo['concept'].name + "Cache"): 
+            return
 
-                if dict.__contains__(self, concept.name + "Cache"): # Check if cache for relation has been already added
-                    for _key in dict.__getitem__(self, concept.name + "Cache"):
-                        _value = dict.__getitem__(self, _key)
+        index = dict.__getitem__(self, conceptInfo['concept'].name + "Index")
+        if not index:
+            return
+
+         # Check data graph for data nodes connected by this relation
+        existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
+        
+        if not existingRootDns:
+            return
+        
+        existingDnsForAttr = []
+        for attr in conceptInfo['relationAttrs']:
+            _existingDnsForAttr = self.__findDatanodes(existingRootDns, conceptInfo['relationAttrs'][0]) # Datanodes of the relations attributes
+            
+            if not _existingDnsForAttr:
+                return
+            
+            existingDnsForAttr.append(_existingDnsForAttr)
+            
+        for _key in dict.__getitem__(self, conceptInfo['concept'].name + "Cache"):
+            
+            if not dict.__contains__(self, _key):
+                _value = value
+            else:
+                _value = dict.__getitem__(self, _key)
+            
+            _skey = _key.split('/')
+            _keyDataName = "".join(map(lambda x: '/' + x, _skey[3:]))
+            _keyDataName = _keyDataName[1:]
+
+            if len(_value) == len(index):
+                for vIndex, v in enumerate(_value):
+                    
+                    # Create of update Relation link !!
+                    _i = index[vIndex]
+                    
+                    relationDataNodes = {}
+                    for i in range(len(existingDnsForAttr)):
+                        relationDataNodes[existingDnsForAttr[i][_i[i]].instanceID] = existingDnsForAttr[i][_i[i]]
                         
-                        _skey = _key.split('/')
-                        _keyDataName = "".join(map(lambda x: '/' + x, _skey[2:]))
-                        _keyDataName = _keyDataName[1:]
-
-                        for vIndex, v in enumerate(_value):
-                            if len(_value) == len(index):
-                                _i = index[vIndex]
-                                existingDnsForAttr[_i[0]].predictions[(_keyDataName, _i[1])] = v
-                            elif len(_value) == len(existingDnsForAttr):
-                                existingDnsForAttr[vIndex].predictions[(_keyDataName, )] = v
-                            else:
-                                pass # ????
-            elif dict.__contains__(self, concept.name + "Index"): # Check if index has been already added
-                index = dict.__getitem__(self, concept.name + "Index")
-                
-                existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-                existingDnsForAttr = self.__findDatanodes(existingRootDns, relationAttrs[0]) # Datanodes of the relations attributes
-                
-                for vIndex, v in enumerate(value):
-                    if len(value) == len(index):
-                        _i = index[vIndex]
-                        existingDnsForAttr[_i[0]].predictions[(keyDataName, _i[1])] = v
-                    elif len(value) == len(existingDnsForAttr):
-                        existingDnsForAttr[vIndex].predictions[(keyDataName, )] = v
+                    relationDataNodesIdsTuple = tuple(relationDataNodes.keys())
+                    rl = None
+                    
+                    # Check if relation link exit for this relation
+                    for i, dn in relationDataNodes.items():
+                        if conceptInfo['concept'].name not in dn.relationLinks:
+                            dn.relationLinks[conceptInfo['concept'].name] = {}
+                            
+                        if relationDataNodesIdsTuple not in dn.relationLinks[conceptInfo['concept'].name]:
+                            if not rl:
+                                # Add relation link
+                                rlInstanceID = conceptInfo['concept'].name + '_' + str(tuple(relationDataNodes.keys()))
+                                rl = RelationLink(instanceID = rlInstanceID, ontologyNode = conceptInfo['concept'], relationDataNodes = relationDataNodes, attributes = {})
+                            
+                            dn.relationLinks[conceptInfo['concept'].name][tuple(relationDataNodes.keys())] = rl
+                        else:
+                            rl = dn.relationLinks[conceptInfo['concept'].name][relationDataNodesIdsTuple]
+                    
+                     
+                    t = rl is not None
+                    
+                    if t:
+                        # Add sensor value to the relation link
+                        rl.attributes[_keyDataName] = v
                     else:
                         pass # ????
+
+            elif len(_value) == len(existingDnsForAttr): #Add value to datanode
+                for vIndex, v in enumerate(_value):
+                    existingDnsForAttr[0][vIndex].attributes[_keyDataName] = v
             else:
-                if dict.__contains__(self, concept.name + "Cache"): # Check if cache has been already added
-                    cache = dict.__getitem__(self, concept.name + "Cache")
-                    cache.append(key)
-                else:
-                    cache = [key]
-                    dict.__setitem__(self, concept.name + "Cache", cache)
-        else:                       
-            if not dict.__contains__(self, 'dataNode'): # No datanode yet
-                dns = []
-                if type(value) is not Tensor: # value is not Tensor
+                pass # ????
+                
+        # Remove cache
+        dict.__delitem__(self, conceptInfo['concept'].name + "Cache")
+        
+    # Build or update relation link in the data graph for a given key
+    def __buildRelationLink(self, key, skey, value, conceptInfo):
+        if (len(skey) == 4) and (skey[3] == "index"): # If this is relation index data 
+            dict.__setitem__(self, conceptInfo['concept'].name + "Index", value)  # Keep the index data 
+        else: # Cache key to data about relation
+            if dict.__contains__(self, conceptInfo['concept'].name + "Cache"): # Check if cache has been already added
+                cache = dict.__getitem__(self, conceptInfo['concept'].name + "Cache")
+                cache.append(key)
+            else:
+                cache = [key]
+                dict.__setitem__(self, conceptInfo['concept'].name + "Cache", cache)
+                
+        # Process relation data cache
+        if dict.__contains__(self, conceptInfo['concept'].name + "Index"):
+            self.__processRelationDataCache(conceptInfo, value)
+               
+    # Build or update data node in the data graph for a given key
+    def __buildDataNode(self, value, conceptInfo, keyDataName):
+        if not dict.__contains__(self, 'dataNode'): # No datanode yet
+            dns = []
+            if type(value) is not Tensor: # value is not Tensor
+                instanceValue = ""
+                instanceID = dict.__getitem__(self, "READER")
+                _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'], childInstanceNodes = {})
+                
+                _dn.attributes[keyDataName] = value
+                
+                dns.append(_dn)
+            else: # value is Tensor
+                for vIndex, v in enumerate(value):
                     instanceValue = ""
-                    instanceID = dict.__getitem__(self, "READER")
-                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = concept, childInstanceNodes = {})
+                    instanceID = vIndex
+                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'], childInstanceNodes = {})
                     
-                    _dn.predictions[(keyDataName, )] = value
+                    _dn.attributes[keyDataName] = v
                     
                     dns.append(_dn)
+                        
+            dict.__setitem__(self, 'dataNode', dns)
+        else: # Datanodes already created
+            existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
+            existingDnsForConcept = self.__findDatanodes(existingRootDns, conceptInfo['concept']) # Datanodes of the current concept
+            l = len(existingDnsForConcept)
+            dns = []
+            if len(existingDnsForConcept) == 0: # No Datanode of this concept created yet
+                if (type(value) is not Tensor) and (type(value) is not list) : # value is not Tensor or list
+                    instanceValue = ""
+                    instanceID = dict.__getitem__(self, "READER")
+                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'], childInstanceNodes = {})
+                    
+                    _dn.attributes[keyDataName] = value
+                    ''
+                    if conceptInfo['root'] and len(conceptInfo['contains']) > 0:
+                        for _contains in conceptInfo['contains']:
+                            _existingDnsForConcept = self.__findDatanodes(existingRootDns, _contains) # Datanodes of the current concept
+                            
+                            if len(_existingDnsForConcept) > 0:
+                                _dn.childInstanceNodes[_contains] = _existingDnsForConcept
+                             
+                        dns.append(_dn)   
+                        dict.__setitem__(self, 'dataNode', dns) # New root
+                    else:
+                        pass # ????
+
                 else: # value is Tensor
                     for vIndex, v in enumerate(value):
                         instanceValue = ""
                         instanceID = vIndex
-                        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = concept, childInstanceNodes = {})
+                        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'], childInstanceNodes = {})
                         
-                        _dn.predictions[(keyDataName, )] = v
+                        _dn.attributes[keyDataName] = v
                         
                         dns.append(_dn)
-                            
-                dict.__setitem__(self, 'dataNode', dns)
-            else: # Datanodes already created
-                existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-                existingDnsForConcept = self.__findDatanodes(existingRootDns, concept) # Datanodes of the current concept
-                l = len(existingDnsForConcept)
-                dns = []
-                if len(existingDnsForConcept) == 0: # No Datanode of this concept created yet
-                    if (type(value) is not Tensor) and (type(value) is not list) : # value is not Tensor or list
-                        instanceValue = ""
-                        instanceID = dict.__getitem__(self, "READER")
-                        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = concept, childInstanceNodes = {})
+                    
+                    if len(conceptInfo['containedIn']) > 0:
+                        myContainedIn = self.__findDatanodes(existingRootDns, conceptInfo['containedIn'][0])
                         
-                        _dn.predictions[(keyDataName, )] = value
+                        if len(myContainedIn) > 0:
+                            myContainedIn[0].childInstanceNodes[conceptInfo['concept']] = dns
                         
-                        if root and len(contains) > 0:
-                            for _contains in contains:
-                                _existingDnsForConcept = self.__findDatanodes(existingRootDns, _contains) # Datanodes of the current concept
-                                
-                                if len(_existingDnsForConcept) > 0:
-                                    _dn.childInstanceNodes[_contains] = _existingDnsForConcept
-                                 
-                            dns.append(_dn)   
-                            dict.__setitem__(self, 'dataNode', dns) # New root
-                        else:
-                            pass # ????
+            else: # Datanode with this concept already created
+                if (type(value) is not Tensor) and (type(value) is not list): # value is not Tensor or list
+                    if type(existingDnsForConcept[0]) is DataNode:
+                        existingDnsForConcept[0].attributes[keyDataName] = value
+                else: # value is Tensor
+                    for vIndex, v in enumerate(value):
+                        if vIndex >= len(existingDnsForConcept):
+                            break # ?????
+                        
+                        if type(existingDnsForConcept[vIndex]) is DataNode:
+                            existingDnsForConcept[vIndex].attributes[keyDataName] = v
+ 
+    # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
+    def __setitem__(self, key, value):
+        start = time.time()
+        self.__addSetitemCounter()
+          
+        skey = key.split('/')
+        
+        if self.__addSensorCounters(skey, value):
+            return
+
+        if value == None:
+            return dict.__setitem__(self, key, value)
+        
+        if len(skey) < 3:
+            return dict.__setitem__(self, key, value)
+        
+        usedGraph = dict.__getitem__(self, "graph")
+        _conceptName = skey[2]
+        concept = self.__findConcept(_conceptName, usedGraph)
+        
+        if not concept:
+            return dict.__setitem__(self, key, value)
+        
+        conceptInfo = self.__findConceptInfo(usedGraph, concept)
+        
+        keyDataName = "".join(map(lambda x: '/' + x, skey[3:]))
+        keyDataName = keyDataName[1:]
+
+        if conceptInfo['relation']:
+            self.__buildRelationLink(key, skey, value, conceptInfo) # Build or update relation link
+        else:                       
+            self.__buildDataNode(value, conceptInfo, keyDataName)   # Build or update Data node
+            
+        # Add value to the underling dictionary
+        r = dict.__setitem__(self, key, value)
+        
+        # ------------------- Collect time used for __setitem__
+        end = time.time()
+        if dict.__contains__(self, "DataNodeTime"):
+            currenTime = dict.__getitem__(self, "DataNodeTime")
+            currenTime = currenTime + end - start
+        else:
+            currenTime =  end - start
+        dict.__setitem__(self, "DataNodeTime", currenTime)
+        # -------------------
+        
+        if not r:
+            pass
+        
+        return r                
+                                             
+    def __delitem__(self, key):
+        return dict.__delitem__(self, key)
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key)
     
-                    else: # value is Tensor
-                        for vIndex, v in enumerate(value):
-                            instanceValue = ""
-                            instanceID = vIndex
-                            _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = concept, childInstanceNodes = {})
-                            
-                            _dn.predictions[(keyDataName, )] = v
-                            
-                            dns.append(_dn)
-                        
-                        if len(containedIn) > 0:
-                            myContainedIn = self.__findDatanodes(existingRootDns, containedIn[0])
-                            
-                            if len(myContainedIn) > 0:
-                                myContainedIn[0].childInstanceNodes[concept] = dns
-                            
-                            
-                else: # Datanode with this concept already created
-                    if (type(value) is not Tensor) and (type(value) is not list): # value is not Tensor or list
-                        if type(existingDnsForConcept[0]) is DataNode:
-                            existingDnsForConcept[0].predictions[(keyDataName, )] = value
-                    else: # value is Tensor
-                        for vIndex, v in enumerate(value):
-                            if vIndex >= len(existingDnsForConcept):
-                                break # ?????
-                            
-                            if type(existingDnsForConcept[vIndex]) is DataNode:
-                                existingDnsForConcept[vIndex].predictions[(keyDataName, )] = v
-
-        return dict.__setitem__(self, key, value)
-
-# ----------------------------------------------
-        # Check if this is the data defining datanote for the given concept
-        if (skey[3] == 'raw' or skey[3] == 'raw_ready'): # Raw-ready - fix for sentence/word
-            if not dict.__contains__(self, 'dataNode'):
-                
-                instanceValue = value
-                instanceID = dict.__getitem__(self, "READER")
-                dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = concept, childInstanceNodes = {})
-                dict.__setitem__(self, 'dataNode', dn)
-            else:
-                dns= dict.__getitem__(self, 'dataNode')
-                
-                # Check if datanode exist for concept
-                existingDNs = self.__findDatanodes(dns, concept)
-                
-                if (existingDNs == None) or (len(existingDNs) == 0):
-                    if (skey[3] == 'raw_ready') and (len(skey) < 5) : # fix for concept word  - sentence/raw_ready ?
-                        wordConcept = dict.__getitem__(self, "graph")['linguistic/word']
-        
-                        if wordConcept not in dn.childInstanceNodes:                          
-                            dns = []
-                            for word in value:
-                                dnNew = DataNode(instanceID = word.idx, instanceValue = word.text, ontologyNode = wordConcept, childInstanceNodes = {})
-                                dns.append(dnNew)
-                
-                            dn.childInstanceNodes[wordConcept] = dns
-                    else:
-                        # Check if the concept is root concept 
-                        
-                        # Check if concept contains other concepts
-                        
-                        wordConcept = dict.__getitem__(self, "graph")['linguistic/word']
-        
-                        if wordConcept in dn.childInstanceNodes:  
-                            phraseConcept = dict.__getitem__(self, "graph")['linguistic/phrase']
-                            
-                            if phraseConcept not in dn.childInstanceNodes:
-                                dns = []
-                                for phraseId, phrase in enumerate(value):
-                                    phraseText = None
-                                    childInstanceNodes = []
-                                    
-                                    for wordId in range(phrase[0], phrase[1]+1):
-                                        if phraseText:
-                                            phraseText = phraseText + " " + dn.childInstanceNodes[wordConcept][wordId].instanceValue
-                                        else:
-                                            phraseText = dn.childInstanceNodes[wordConcept][wordId].instanceValue
-                                            
-                                        childInstanceNodes.append(dn.childInstanceNodes[wordConcept][wordId])
-                        
-                                    dnNew = DataNode(instanceID = phraseId, instanceValue = phraseText, ontologyNode = phraseConcept, childInstanceNodes = {wordConcept : childInstanceNodes})
-                                    dns.append(dnNew)
-                                
-                                dn.childInstanceNodes[phraseConcept] = dns
-                
+    # Method calculating Learned prediction based on data in datanode
+    def __calculateLearnedPrediction(self):
         epsilon = 0.00001
         # Check if this is prediction data   
         if dict.__contains__(self, 'dataNode'):
@@ -547,10 +629,10 @@ class DataNodeBuilder(dict):
                             wordConcept = dict.__getitem__(self, "graph")['linguistic/word']
                             if wordConcept in dataNode.childInstanceNodes:  
                                 for dnChildIndex, dnChild in enumerate(dataNode.childInstanceNodes[wordConcept]):
-                                    if DataNode.PredictionType["Learned"] in dnChild.predictions:
-                                        dnChild.predictions[DataNode.PredictionType["Learned"]][(concept,)] = _list[dnChildIndex]
+                                    if DataNode.PredictionType["Learned"] in dnChild.attributes:
+                                        dnChild.attributes[DataNode.PredictionType["Learned"]][(concept,)] = _list[dnChildIndex]
                                     else:
-                                        dnChild.predictions[DataNode.PredictionType["Learned"]] = {(concept,) : _list[dnChildIndex]}
+                                        dnChild.attributes[DataNode.PredictionType["Learned"]] = {(concept,) : _list[dnChildIndex]}
                 
         pair_prediction_key = "pair"
         if (pair_prediction_key in key) and (value is not None):
@@ -591,102 +673,17 @@ class DataNodeBuilder(dict):
                                         
                                     for dnChildIndex, dnChild in enumerate(dataNode.childInstanceNodes[phraseConcept]):
                                         for _ii in range(noPhrases):
-                                            if DataNode.PredictionType["Learned"] in dnChild.predictions:
-                                                dnChild.predictions[DataNode.PredictionType["Learned"]][(pair, dataNode.childInstanceNodes[phraseConcept][dnChildIndex])] = _result[dnChildIndex][_ii]
+                                            if DataNode.PredictionType["Learned"] in dnChild.attributes:
+                                                dnChild.attributes[DataNode.PredictionType["Learned"]][(pair, dataNode.childInstanceNodes[phraseConcept][dnChildIndex])] = _result[dnChildIndex][_ii]
                                             else:
-                                                dnChild.predictions[DataNode.PredictionType["Learned"]] = {(pair, dataNode.childInstanceNodes[phraseConcept][dnChildIndex]) : _result[dnChildIndex][_ii]}  
-                                                      
-    def __delitem__(self, key):
-        return dict.__delitem__(self, key)
-
-    def __contains__(self, key):
-        return dict.__contains__(self, key)
-    
-    def getDataNode(self):
+                                                dnChild.attributes[DataNode.PredictionType["Learned"]] = {(pair, dataNode.childInstanceNodes[phraseConcept][dnChildIndex]) : _result[dnChildIndex][_ii]}  
+        
+    # Method returning datanode with Learned data prepared using the fun fucntion
+    def getDataNode(self, fun):
         if dict.__contains__(self, 'dataNode'):
-            dataNode = dict.__getitem__(self, 'dataNode')
+            _dataNode = dict.__getitem__(self, 'dataNode')
             
-            return dataNode
+            if len(_dataNode) > 0:
+                return _dataNode[0]
         
         return None
-
-# ----------- To be Remove - for reference only  now  
-def processContext(context, concepts, relations):
-    global_key = "global/linguistic/"
-        
-    sentence = {"words": {}}
-    
-    with torch.no_grad():
-        epsilon = 0.00001
-        predictions_on = "word"
-        for _concept in concepts:
-            concept = str(_concept.name.name)
-            
-            _list = [_it.cpu().detach().numpy() for _it in context[global_key + predictions_on + "/" + "<"+ concept +">"]]
-            
-            for _it in range(len(_list)):
-                if _list[_it][0] > 1-epsilon:
-                    _list[_it][0] = 1-epsilon
-                elif _list[_it][1] > 1-epsilon:
-                    _list[_it][1] = 1-epsilon
-                if _list[_it][0] < epsilon:
-                    _list[_it][0] = epsilon
-                elif _list[_it][1] < epsilon:
-                    _list[_it][1] = epsilon
-                    
-            sentence[concept] = _list
-            sentence['words'][concept] = [np.log(_it) for _it in _list]
-
-        if len(relations):
-            sentence['phrase'] = {}
-            
-            sentence['phrase']['raw'] = context[global_key + "phrase/raw"]
-            sentence['phrase']['tag'] = [_it.item() for _it in context[global_key + "phrase/tag"]]
-            sentence['phrase']['tag_name'] = [concepts[t].name.name for t in sentence['phrase']['tag']]
-            sentence['phrase']['pair_index'] = context[global_key + "pair/index"]
-            
-            sentence['phrase']['entity'] = {}
-            for _item in concepts:
-                item = str(_item.name.name)
-
-                _list = []
-                
-                for ph in sentence['phrase']['raw']:
-                    _value = [1, 1]
-                    for _range in range(ph[0], ph[1] + 1):
-                        _value[0] = _value[0] * sentence[item][_range][0]
-                        _value[1] = _value[1] * sentence[item][_range][1]
-                        
-                    _list.append(np.log(np.array(_value)))
-                    
-                sentence['phrase']['entity'][item] = [_val for _val in _list]
-                
-            sentence['phrase']['relations'] = {}
-            pairs_on = "pair"
-            for _item in relations:
-                item = str(_item.name.name)
-
-                _list = [np.log(_it.cpu().detach().numpy()) for _it in context[global_key + pairs_on + "/" + "<"+ item +">"]]
-                _result = np.zeros((len(sentence['phrase']['raw']), len(sentence['phrase']['raw']), 2))
-                
-                for _range in range(len(sentence['phrase']['pair_index'])):
-                    indexes = sentence['phrase']['pair_index'][_range]
-                    values = _list[_range]
-                    _result[indexes[0]][indexes[1]][0] = values[0]
-                    _result[indexes[1]][indexes[0]][0] = values[0]
-                    _result[indexes[0]][indexes[1]][1] = values[1]
-                    _result[indexes[1]][indexes[0]][1] = values[1]
-                    
-                for _ii in range(len(sentence['phrase']['raw'])):
-                    _result[_ii][_ii] = np.log(np.array([0.999, 0.001]))
-                    
-                sentence['phrase']['relations'][item] = _result
-  
-    if len(relations):
-        phrases = [str(_it) for _it in range(len(sentence['phrase']['raw']))]
-        graphResultsForPhraseToken = sentence['phrase']['entity']
-        graphResultsForPhraseRelation = sentence['phrase']['relations']
-        
-    else:
-        tokens = [str(_it) for _it in range(len(sentence['FAC']))]
-        graphResultsForPhraseToken = sentence['words']

@@ -6,7 +6,7 @@ from regr.sensor.pytorch.learners import TorchLearner, FullyConnectedLearner
 # from ..Graphs.Learners.mainLearners import CallingLearner
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
 from regr.utils import WrapperMetaClass
-
+import numpy as np
 # from ..Graphs.Sensors.mainSensors import CallingSensor, ReaderSensor
 import os
 from typing import Union, List
@@ -976,7 +976,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                             relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
-                            currentDataNode = context.getDataNode()[0]
+                            currentDataNode = context.getDataNode(np.log)
                             
                             conceptsRelations = entities + relations
                             currentDataNode.inferILPConstrains(*conceptsRelations)        
