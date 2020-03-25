@@ -77,19 +77,14 @@ class MetricTracker(torch.nn.Module):
     def value(self, reset=False):
         if self.list and self.dict:
             raise RuntimeError('%s cannot be used as list-like and dict-like the same time.', str(type(self)))
-        func = super().__call__
-        def apply(value):
-            if isinstance(value, dict):
-                return {k: apply(v) for k, v in value.items()}
-            else:
-                return func(value)
         if self.list:
             value = wrap_batch(self.list)
-            value = apply(value)
+            value = super().__call__(value)
         elif self.dict:
-            value = wrap_batch(self.dict)
-            value = apply(value)
-            #value = {k: super().__call__(v) for k, v in self.dict.items()}
+            #value = wrap_batch(self.dict)
+            #value = super().__call__(value)
+            func = super().__call__
+            value = {k: func(v) for k, v in self.dict.items()}
         else:
             value = None
         if reset:
@@ -99,17 +94,44 @@ class MetricTracker(torch.nn.Module):
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):
-        if isinstance(values, torch.Tensor):
-            return values.clone().detach().mean()
-        return torch.tensor(values).mean()
+        def func(value):
+            return value.clone().detach().mean()
+        def apply(value):
+            if isinstance(value, dict):
+                return {k: apply(v) for k, v in value.items()}
+            elif isinstance(value, torch.Tensor):
+                return func(value)
+            else:
+                return apply(torch.tensor(value))
+        retval = apply(values)
+        return retval
 
+class PRF1Tracker(MetricTracker):
+    def __init__(self):
+        super().__init__(CMWithLogitsMetric())
+
+    def forward(self, values):
+        CM = wrap_batch(values)
+        tp = CM['TP'].sum().float()
+        fp = CM['FP'].sum().float()
+        fn = CM['FN'].sum().float()
+        if tp:
+            p = tp / (tp + fp)
+            r = tp / (tp + fn)
+            f1 = 2 * p * r / (p + r)
+        else:
+            p = torch.zeros_like(tp)
+            r = torch.zeros_like(tp)
+            f1 = torch.zeros_like(tp)
+        return {'P': p, 'R': r, 'F1': f1}
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
         self.loss = MacroAverageTracker(BCEWithLogitsLoss())
-        self.metric = MacroAverageTracker(PRF1WithLogitsMetric())
+        #self.metric = MacroAverageTracker(PRF1WithLogitsMetric())
+        self.metric = PRF1Tracker()
 
         def func(node):
             if isinstance(node, Property):
@@ -148,8 +170,10 @@ class TorchModel(torch.nn.Module):
                     target_sensor = sensor2
                     output_sensor = sensor1
                 else:
+                    # TODO: should different learners get closer?
                     continue
                 if output_sensor.target:
+                    # two targets, skip
                     continue
                 logit = output_sensor(data)
                 logit = logit.squeeze()
