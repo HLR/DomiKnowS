@@ -181,7 +181,7 @@ class TorchModel(torch.nn.Module):
                 labels = target_sensor(data)
                 labels = labels.float()
                 if self.loss:
-                    local_loss = self.loss(logit, labels, mask)
+                    local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
                     loss += local_loss
                 if self.metric:
                     local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
