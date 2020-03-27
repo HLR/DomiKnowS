@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from emr.utils import seed
 from emr.data import ConllDataLoader
-from emr.graph.torch import TorchModel, train, test, wrap_batch
+from emr.graph.torch import TorchModel, train, test
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 
@@ -72,8 +72,24 @@ def model_declaration(graph, vocab, config):
     pair[kill] = LRLearner(pair['feature'], in_features=200)
 
     # program
-    lbp = TorchModel(graph)
+    lbp = TorchModel(graph, **config)
     return lbp
+
+
+def print_result(model, epoch=None, phase=None):
+    header = ''
+    if epoch is not None:
+        header += 'Epoch {} '.format(epoch)
+    if phase is not None:
+        header += '{} '.format(phase)
+    print('{}Loss:'.format(header))
+    loss = model.loss.value()
+    for (pred, _), value in loss.items():
+        print(' - ', pred.sup.prop_name.name, value.item())
+    print('{}Metrics:'.format(header))
+    metrics = model.metric.value()
+    for (pred, _), value in metrics.items():
+        print(' - ', pred.sup.prop_name.name, str({k: v.item() for k, v in value.items()}))
 
 
 def main():
@@ -97,27 +113,12 @@ def main():
         print('Training:')
         for _ in tqdm(train(lbp, training_set, opt), total=len(training_set)):
             pass
-        print('Training Loss:')
-        loss = lbp.loss.value()
-        for (pred, _), value in loss.items():
-            print(pred.sup.prop_name.name, value.item())
-        print('Training Metrics:')
-        metrics = lbp.metric.value()
-        for (pred, _), value in metrics.items():
-            print(pred.sup.prop_name.name, str({k: v.item() for k, v in value.items()}))
+        print_result(lbp, epoch, 'Training')
 
         print('Validation:')
         for _ in tqdm(test(lbp, valid_set), total=len(valid_set)):
             pass
-        print('Validation Loss:')
-        loss = lbp.loss.value()
-        for (pred, _), value in loss.items():
-            print(pred.sup.prop_name.name, value.item())
-        print('Validation Metrics:')
-        metrics = lbp.metric.value()
-        for (pred, _), value in metrics.items():
-            print(pred.sup.prop_name.name, {k: v.item() for k, v in value.items()})
-
+        print_result(lbp, epoch, 'Validation')
 
 if __name__ == '__main__':
     main()
