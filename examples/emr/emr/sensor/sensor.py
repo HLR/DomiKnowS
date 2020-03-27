@@ -3,6 +3,8 @@ from typing import Any, Dict
 from regr.sensor.sensor import Sensor
 from regr.graph.property import Property
 
+import torch
+
 
 class SkipSensor(Exception):
     pass
@@ -89,12 +91,25 @@ class FunctionalSensor(TorchSensor):
         masks = list(self.get_args(context, sensor_fn=lambda s, c: s.mask(c)))
         masks_num = len(masks)
         mask = masks[0]
+        mask = mask.float()
         for i in range(1, masks_num):
             for j in range(i, masks_num):
                 masks[j].unsqueeze_(-2)
+            masks[i] = masks[i].float()
             mask = mask.unsqueeze_(-1).matmul(masks[i])
         return mask
 
 
 class CartesianSensor(FunctionalSensor):
-    pass
+    def forward(self, *inputs):
+        # torch cat is not broadcasting, do repeat manually
+        input_iter = iter(inputs)
+        output = next(input_iter)
+        for input in input_iter:
+            dob, *dol, dof = output.shape
+            dib, *dil, dif = input.shape
+            assert dob == dib
+            output = output.view(dob, *dol, *(1,)*len(dil), dof).repeat(1, *(1,)*len(dol), *dil, 1)
+            input = input.view(dib, *(1,)*len(dol), *dil, dif).repeat(1, *dol, *(1,)*len(dil), 1)
+            output = torch.cat((output, input), dim=-1)
+        return output

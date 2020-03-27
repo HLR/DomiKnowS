@@ -42,8 +42,8 @@ def model_declaration(graph, vocab, config):
     word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
     word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
 
-    #pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
-    #pair['feature'] = MLPLearner(word['emb'])
+    pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
+    pair['feature'] = MLPLearner(pair['emb'], in_features=400, out_features=200)
 
     # label
     word[people] = LabelSensor('Peop')
@@ -59,17 +59,17 @@ def model_declaration(graph, vocab, config):
     word[o] = LRLearner(word['feature'], in_features=200)
 
     # relation
-    # pair[work_for] = LabelSensor('Work_For')
-    # pair[live_in] = LabelSensor('Live_In')
-    # pair[located_in] = LabelSensor('Located_In')
-    # pair[orgbase_on] = LabelSensor('OrgBased_In')
-    # pair[kill] = LabelSensor('Kill')
+    pair[work_for] = LabelSensor('Work_For')
+    pair[live_in] = LabelSensor('Live_In')
+    pair[located_in] = LabelSensor('Located_In')
+    pair[orgbase_on] = LabelSensor('OrgBased_In')
+    pair[kill] = LabelSensor('Kill')
 
-    # pair[work_for] = LRLearner(pair['feature'])
-    # pair[live_in] = LRLearner(pair['feature'])
-    # pair[located_in] = LRLearner(pair['feature'])
-    # pair[orgbase_on] = LRLearner(pair['feature'])
-    # pair[kill] = LRLearner(pair['feature'])
+    pair[work_for] = LRLearner(pair['feature'], in_features=200)
+    pair[live_in] = LRLearner(pair['feature'], in_features=200)
+    pair[located_in] = LRLearner(pair['feature'], in_features=200)
+    pair[orgbase_on] = LRLearner(pair['feature'], in_features=200)
+    pair[kill] = LRLearner(pair['feature'], in_features=200)
 
     # program
     lbp = TorchModel(graph)
@@ -88,28 +88,34 @@ def main():
                                 vocab=training_set.vocab)
 
     lbp = model_declaration(graph, training_set.vocab, config.Model)
-    #lbp.cuda()
+    lbp.cuda()
 
     seed()
     opt = torch.optim.Adam(lbp.parameters())
     for epoch in range(10):
         print('Epoch:', epoch)
         print('Training:')
-        loss, metric, _ = zip(*tqdm(train(lbp, training_set, opt), total=len(training_set)))
+        for _ in tqdm(train(lbp, training_set, opt), total=len(training_set)):
+            pass
         print('Training Loss:')
-        for (pred, _), value in lbp.loss.value().items():
+        loss = lbp.loss.value()
+        for (pred, _), value in loss.items():
             print(pred.sup.prop_name.name, value.item())
         print('Training Metrics:')
-        for (pred, _), value in lbp.metric.value().items():
+        metrics = lbp.metric.value()
+        for (pred, _), value in metrics.items():
             print(pred.sup.prop_name.name, str({k: v.item() for k, v in value.items()}))
 
         print('Validation:')
-        valid_loss, valid_metric, _ = zip(*tqdm(test(lbp, valid_set), total=len(valid_set)))
+        for _ in tqdm(test(lbp, valid_set), total=len(valid_set)):
+            pass
         print('Validation Loss:')
-        for (pred, _), value in lbp.loss.value().items():
+        loss = lbp.loss.value()
+        for (pred, _), value in loss.items():
             print(pred.sup.prop_name.name, value.item())
         print('Validation Metrics:')
-        for (pred, _), value in lbp.metric.value().items():
+        metrics = lbp.metric.value()
+        for (pred, _), value in metrics.items():
             print(pred.sup.prop_name.name, {k: v.item() for k, v in value.items()})
 
 

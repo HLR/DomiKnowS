@@ -208,8 +208,6 @@ def wrap_batch(values, fillvalue=0):
 
 def train(model, dataset, opt):
     model.train()
-    model.loss.reset()
-    model.metric.reset()
     for data in dataset:
         opt.zero_grad()
         loss, metric, output = model(data)
