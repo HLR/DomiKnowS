@@ -28,11 +28,13 @@ class TorchLearner(TorchSensor):
             self.updated = True
 
     def save(self, filepath):
-        final_name = self.fullname.replace('/', '_')
+        #final_name = self.fullname.replace('/', '_')
+        final_name = self.fullname.replace('/', '_').replace("<","").replace(">","")
         torch.save(self.model.state_dict(), filepath+"/"+final_name)
 
     def load(self, filepath):
-        final_name = self.fullname.replace('/', '_')
+        #final_name = self.fullname.replace('/', '_')
+        final_name = self.fullname.replace('/', '_').replace("<","").replace(">","")
         if path.exists(filepath+"/"+final_name):
             self.model.load_state_dict(torch.load(filepath+"/"+final_name))
             self.model.eval()

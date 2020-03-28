@@ -1,7 +1,8 @@
 from regr.sensor.sensor import Sensor
+from regr.graph import Graph, DataNode
+
 from typing import Dict, Any
 import torch
-
 
 class TorchSensor(Sensor):
 
@@ -55,15 +56,18 @@ class TorchSensor(Sensor):
         else:
             self.define_inputs()
             val = self.forward()
+            
         if val is not None:
             context[self.fullname] = val
             context[self.sup.fullname] = val  # override state under property name
         else:
             context[self.fullname] = None
             context[self.sup.fullname] = None
+            
         if self.output:
             context[self.fullname] = self.fetch_value(self.output)
             context[self.sup.fullname] = self.fetch_value(self.output)
+            
         return context
 
     def update_pre_context(
@@ -96,14 +100,12 @@ class TorchSensor(Sensor):
     def forward(self,) -> Any:
         return None
 
-
 class ConstantSensor(TorchSensor):
     def __init__(self, *pres, output=None, edge=None):
         super().__init__(*pres, output=output, edges=edge)
 
     def forward(self,) -> Any:
         return self.context_helper[self.sup.fullname]
-
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword, label=False):
