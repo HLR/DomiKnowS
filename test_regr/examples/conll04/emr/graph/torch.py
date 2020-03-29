@@ -3,8 +3,9 @@ from itertools import combinations
 
 import torch
 
-from regr.graph.property import Property
+from regr.graph import Property, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+
 
 #from ..sensor.learner import TorchSensor, ModuleLearner
 from ..sensor.learner import ModuleLearner
@@ -53,6 +54,8 @@ class TorchModel(torch.nn.Module):
         for prop in self.graph.traversal_apply(all_properties):
             for _, sensor in prop.find(ReaderSensor):
                 sensor.fill_data(data)
+        data.update({"graph": self.graph, 'READER': 1})
+        context = DataNodeBuilder(data)
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.label:
@@ -67,10 +70,10 @@ class TorchModel(torch.nn.Module):
                 if output_sensor.label:
                     # two targets, skip
                     continue
-                logit = output_sensor(data)
+                logit = output_sensor(context)
                 logit = logit.squeeze()
                 #mask = output_sensor.mask(data)
-                labels = target_sensor(data)
+                labels = target_sensor(context)
                 labels = labels.float()
                 if self.loss:
                     local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
@@ -78,7 +81,9 @@ class TorchModel(torch.nn.Module):
                 if self.metric:
                     local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
-        return loss, metric, data
+        import numpy as np
+        datanote = context.getDataNode(np.log)
+        return loss, metric, datanote
 
 
 class LearningBasedProgram():
