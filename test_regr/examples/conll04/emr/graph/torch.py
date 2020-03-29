@@ -74,14 +74,18 @@ class LearningBasedProgram():
     def __init__(self, graph, **config):
         self.graph = graph
         self.model = TorchModel(graph, **config)
+        if list(self.model.parameters()):
+            self.opt = torch.optim.Adam(self.model.parameters())
+        else:
+            self.opt = None
 
     def train(self, dataset, opt):
         self.model.train()
         for data in dataset:
-            opt.zero_grad()
+            self.opt.zero_grad()
             loss, metric, output = self.model(data)
             loss.backward()
-            opt.step()
+            self.opt.step()
             yield loss, metric, output
 
 

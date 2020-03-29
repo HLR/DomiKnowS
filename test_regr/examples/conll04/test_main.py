@@ -17,6 +17,8 @@ def model_declaration(config):
     graph.detach()
 
     sentence['raw'] = ReaderSensor(keyword='raw')
+    sentence['raw'] = ReaderSensor(keyword='raw', label=True)  # a checkpoint exam
+
     # sentence['emb'] = SentenceWord2VecSensor('raw')
     # rel_sentence_contains_word['forward'] = SentenceToWordEmb('emb', mode="forward", keyword="emb")
     # word['emb'] = WordEmbedding('emb', edges=[rel_sentence_contains_word['forward']])
@@ -50,7 +52,7 @@ def test_main_conll04():
                                    batch_size=config.Train.batch_size,
                                    skip_none=config.Data.skip_none)
     lbp = model_declaration(config.Model)
-    lbp.train(training_set)
+    lbp.train(training_set, None)
 
 if __name__ == '__main__':
     test_main_conll04()
