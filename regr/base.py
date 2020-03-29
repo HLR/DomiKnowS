@@ -40,6 +40,10 @@ class Scoped(object):
     def __init__(self, blocking=False):
         self._blocking = blocking
 
+    @classmethod
+    def clear(cls):
+        cls.__context.__locks.clear()
+
     @contextmanager
     def scope(self, blocking=None):
         if blocking is None:
@@ -75,9 +79,8 @@ Scoped._Scoped__context = Scoped
 
 class Named(Scoped):
     def __init__(self, name):
-        Scoped.__init__(self, blocking=False)
+        super().__init__(blocking=False)
         self.name = name
-
 
     def __repr__(self):
         cls = type(self)
@@ -92,6 +95,9 @@ class Named(Scoped):
 
         return repr_str
 
+    def __str__(self):
+        return self.name
+
 
 class AutoNamed(Named):
     _names = Counter()
@@ -99,6 +105,7 @@ class AutoNamed(Named):
 
     @classmethod
     def clear(cls):
+        super().clear()
         cls._names.clear()
         cls._objs.clear()
 
@@ -172,13 +179,18 @@ class NamedTreeNode(Named):
         return cls_
 
     @classmethod
+    def clear(cls):
+        super().clear()
+        cls._context.clear()
+
+    @classmethod
     def default(cls):
         if cls._context:
             return cls._context[-1]
         return None
 
     def __init__(self, name=None):
-        Named.__init__(self, name)
+        super().__init__(name)
         cls = type(self)
         self._sup = None
         self.attach_to_context()
@@ -231,17 +243,19 @@ class NamedTree(NamedTreeNode, OrderedDict):
     def __repr__(self):
         with hide_inheritance(NamedTree, dict):
             # prevent pprint over optimize OrderedDict(dict) on NamedTree instance
-            return NamedTreeNode.__repr__(self)
+            return super().__repr__()
 
     def __hash__(self):  # NB: OrderedDict is unhashable.
+        # dict override __hash__ by setting it to None. Using super().__hash__() gives problem.
         return NamedTreeNode.__hash__(self)
 
     def __eq__(self, other): # NB: OrderedDict has __eq__, empty == empty, which is not what we expected
+        # dict override __eq__ in an waired way also
         return NamedTreeNode.__eq__(self, other)
 
     def __init__(self, name=None):
-        NamedTreeNode.__init__(self, name)
-        OrderedDict.__init__(self)
+        super().__init__(name)
+        super(NamedTreeNode, self).__init__(self.name)
 
     def attach(self, sub, name=None):
         # resolve and prevent recursive definition
@@ -284,7 +298,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 del self[key]
                 sub._sup = None # TODO: what else to have?
 
-    def traversal_apply(self, func, order='pre', first='depth'):
+    def traversal_apply(self, func, filter_fn=lambda x: x is not None, order='pre', first='depth'):
         if order.lower() not in ['pre', 'post']:
             raise ValueError('Options for order are pre or post, {} given.'.format(order))
         if first.lower() not in ['depth', 'breadth']:
@@ -303,6 +317,8 @@ class NamedTree(NamedTreeNode, OrderedDict):
             if order.lower() == 'pre':
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
+                if not filter_fn or filter_fn(retval):
+                    yield retval
 
             if isinstance(current, NamedTree):
                 subs = [current[name] for name in current] # compatible to subclasses that override the iterator
@@ -316,14 +332,29 @@ class NamedTree(NamedTreeNode, OrderedDict):
             while to_apply:
                 current_apply = to_apply.pop()
                 retval = func(current_apply)
+                if not filter_fn or filter_fn(retval):
+                    yield retval
 
+    def extract_name(self, *names, delim='/', trim=True):
+        if isinstance(names[0], str):
+            name0s = names[0].split(delim)
+            name = name0s[0]
+            if trim:
+                name = name.strip()
+            names = list(chain(name0s[1:], names[1:]))
+            # match typed name string
+            if name[0] == '<' and name[-1] == '>':
+                for key in self:
+                    if key.name == name[1:-1]:
+                        name = key
+                        break
+        else:
+            name = names[0]
+            names = names[1:]
+        return name, names
 
     def parse_query_apply(self, func, *names, delim='/', trim=True):
-        name0s = names[0].split(delim)
-        name = name0s[0]
-        if trim:
-            name = name.strip()
-        names = list(chain(name0s[1:], names[1:]))
+        name, names = self.extract_name(*names, delim=delim, trim=trim)
         if names:
             return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
         return func(self, name)
