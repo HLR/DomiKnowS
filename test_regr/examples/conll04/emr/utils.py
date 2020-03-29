@@ -69,3 +69,15 @@ def wrap_batch(values, fillvalue=0):
     elif isinstance(values, dict):
         values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
+
+
+import sys
+
+if sys.implementation.name == 'cpython':
+    import collections
+    def consume(it):
+        collections.deque(it, maxlen=0)
+else:
+    def consume(it):
+        for _ in it:
+            pass

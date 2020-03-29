@@ -11,8 +11,8 @@ config = {
         'skip_none': False,
     },
     'Model': {
-        'loss': MacroAverageTracker(BCEWithLogitsLoss()),
-        'metric': PRF1Tracker()
+        'loss': None, #MacroAverageTracker(BCEWithLogitsLoss()),
+        'metric': None, #PRF1Tracker()
     },
     'Train': {
         'batch_size': 1,

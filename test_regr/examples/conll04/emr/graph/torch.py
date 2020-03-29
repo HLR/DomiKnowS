@@ -4,8 +4,11 @@ from itertools import combinations
 import torch
 
 from regr.graph.property import Property
-from emr.sensor.learner import TorchSensor, ModuleLearner
-from regr.sensor.pytorch.sensors import TorchSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+
+#from ..sensor.learner import TorchSensor, ModuleLearner
+from ..sensor.learner import ModuleLearner
+from ..utils import consume
 
 
 class TorchModel(torch.nn.Module):
@@ -48,6 +51,9 @@ class TorchModel(torch.nn.Module):
             if isinstance(node, Property):
                 return node
         for prop in self.graph.traversal_apply(all_properties):
+            for _, sensor in prop.find(ReaderSensor):
+                sensor.fill_data(data)
+        for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.label:
                     target_sensor = sensor1
@@ -63,7 +69,7 @@ class TorchModel(torch.nn.Module):
                     continue
                 logit = output_sensor(data)
                 logit = logit.squeeze()
-                mask = output_sensor.mask(data)
+                #mask = output_sensor.mask(data)
                 labels = target_sensor(data)
                 labels = labels.float()
                 if self.loss:
@@ -79,20 +85,24 @@ class LearningBasedProgram():
     def __init__(self, graph, **config):
         self.graph = graph
         self.model = TorchModel(graph, **config)
-        if list(self.model.parameters()):
-            self.opt = torch.optim.Adam(self.model.parameters())
-        else:
-            self.opt = None
 
-    def train(self, dataset):
+    def train(self, dataset, config=None):
+        if list(self.model.parameters()):
+            opt = torch.optim.Adam(self.model.parameters())
+        else:
+            opt = None
+        for epoch in range(10):
+            consume(self.train_epoch(dataset, opt))
+
+    def train_epoch(self, dataset, opt=None):
         self.model.train()
         for data in dataset:
-            if self.opt:
-                self.opt.zero_grad()
+            if opt:
+                opt.zero_grad()
             loss, metric, output = self.model(data)
-            loss.backward()
-            if self.opt:
-                self.opt.step()
+            if opt:
+                loss.backward()
+                opt.step()
             yield loss, metric, output
 
     def test(self, dataset):
@@ -104,8 +114,7 @@ class LearningBasedProgram():
                 loss, metric, output = self.model(data)
                 yield loss, metric, output
 
-
-    def eval_many(self, dataset):
+    def eval(self, dataset):
         self.model.eval()
         self.model.loss.reset()
         self.model.metric.reset()
@@ -113,7 +122,6 @@ class LearningBasedProgram():
             for data in dataset:
                 _, _, output = self.model(data)
                 yield output
-
 
     def eval_one(self, data):
         # TODO: extend one sample data to 1-batch data
