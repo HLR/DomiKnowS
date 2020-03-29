@@ -18,10 +18,12 @@ def model_declaration(config):
     graph.detach()
 
     sentence['raw'] = ReaderSensor(keyword='token')
-    sentence['raw'] = ReaderSensor(keyword='token', label=True)  # a checkpoint exam
+    sentence['raw'] = ReaderSensor(keyword='token', label=True)  # sentence checkpoint
 
     rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
     word['emb'] = DummyWordEmb('raw')
+    word['emb'] = ReaderSensor(keyword='0', label=True)  # word checkpoint
+
 
     # sentence['emb'] = SentenceWord2VecSensor('raw')
     # rel_sentence_contains_word['forward'] = SentenceToWordEmb('emb', mode="forward", keyword="emb")
@@ -56,7 +58,10 @@ def test_main_conll04():
                                    batch_size=config.Train.batch_size,
                                    skip_none=config.Data.skip_none)
     lbp = model_declaration(config.Model)
-    lbp.train(training_set)
+    data = next(iter(training_set))
+    _, _, datanode =lbp.model(data)
+    print(datanode)
+    #lbp.train(training_set)
 
 if __name__ == '__main__':
     test_main_conll04()

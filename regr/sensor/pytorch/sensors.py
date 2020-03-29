@@ -6,7 +6,7 @@ import torch
 
 class TorchSensor(Sensor):
 
-    def __init__(self, *pres, output=None, edges=None):
+    def __init__(self, *pres, output=None, edges=None, label=False):
         super().__init__()
         if not edges:
             edges = []
@@ -15,6 +15,7 @@ class TorchSensor(Sensor):
         self.context_helper = None
         self.inputs = []
         self.edges = edges
+        self.label = label
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")
@@ -109,9 +110,8 @@ class ConstantSensor(TorchSensor):
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword, label=False):
-        super().__init__(*pres)
+        super().__init__(*pres, label=label)
         self.data = None
-        self.label = label
         self.keyword = keyword
 
     def fill_data(self, data):
