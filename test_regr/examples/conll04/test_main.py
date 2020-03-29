@@ -13,11 +13,15 @@ def model_declaration(config):
 
     from graph import graph, sentence, word, people, organization, location, other, o
     from graph import rel_sentence_contains_word
+    from emr.sensors.Sensors import DummyEdgeStoW, DummyWordEmb
 
     graph.detach()
 
     sentence['raw'] = ReaderSensor(keyword='token')
     sentence['raw'] = ReaderSensor(keyword='token', label=True)  # a checkpoint exam
+
+    rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
+    word['emb'] = DummyWordEmb('raw')
 
     # sentence['emb'] = SentenceWord2VecSensor('raw')
     # rel_sentence_contains_word['forward'] = SentenceToWordEmb('emb', mode="forward", keyword="emb")
