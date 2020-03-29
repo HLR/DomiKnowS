@@ -1,6 +1,8 @@
+from itertools import permutations
+
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL
+from regr.graph.logicalConstrain import ifL, andL, nandL
 
 
 Graph.clear()

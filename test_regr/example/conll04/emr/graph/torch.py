@@ -70,41 +70,46 @@ class TorchModel(torch.nn.Module):
         return loss, metric, data
 
 
-def train(model, dataset, opt):
-    model.train()
-    for data in dataset:
-        opt.zero_grad()
-        loss, metric, output = model(data)
-        loss.backward()
-        opt.step()
-        yield loss, metric, output
+class LearningBasedProgram():
+    def __init__(self, graph, **config):
+        self.graph = graph
+        self.model = TorchModel(graph, **config)
 
-
-def test(model, dataset):
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
+    def train(self, dataset, opt):
+        self.model.train()
         for data in dataset:
-            loss, metric, output = model(data)
+            opt.zero_grad()
+            loss, metric, output = self.model(data)
+            loss.backward()
+            opt.step()
             yield loss, metric, output
 
 
-def eval_many(model, dataset):
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
-        for data in dataset:
-            _, _, output = model(data)
-            yield output
+    def test(self, dataset):
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            for data in dataset:
+                loss, metric, output = self.model(data)
+                yield loss, metric, output
 
 
-def eval_one(model, data):
-    # TODO: extend one sample data to 1-batch data
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
-        _, _, output = model(data)
-        return output
+    def eval_many(self, dataset):
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            for data in dataset:
+                _, _, output = self.model(data)
+                yield output
+
+
+    def eval_one(self, data):
+        # TODO: extend one sample data to 1-batch data
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            _, _, output = self.model(data)
+            return output
