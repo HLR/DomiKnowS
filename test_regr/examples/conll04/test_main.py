@@ -52,7 +52,7 @@ def test_main_conll04():
                                    batch_size=config.Train.batch_size,
                                    skip_none=config.Data.skip_none)
     lbp = model_declaration(config.Model)
-    lbp.train(training_set, None)
+    list(lbp.train(training_set))
 
 if __name__ == '__main__':
     test_main_conll04()

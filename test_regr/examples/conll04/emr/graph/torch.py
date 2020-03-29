@@ -5,6 +5,7 @@ import torch
 
 from regr.graph.property import Property
 from emr.sensor.learner import TorchSensor, ModuleLearner
+from regr.sensor.pytorch.sensors import TorchSensor
 
 
 class TorchModel(torch.nn.Module):
@@ -23,7 +24,11 @@ class TorchModel(torch.nn.Module):
                 self.add_module(sensor.fullname, sensor.module)
 
     def move(self, value, device=None):
-        device = device or next(self.parameters()).device
+        try:
+            device = device or next(self.parameters()).device
+        except StopIteration:
+            # no parameter
+            return value
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
@@ -37,23 +42,23 @@ class TorchModel(torch.nn.Module):
 
     def forward(self, data):
         data = self.move(data)
-        loss = 0
+        loss = self.move(torch.tensor(0))
         metric = {}
         def all_properties(node):
             if isinstance(node, Property):
                 return node
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.target:
+                if sensor1.label:
                     target_sensor = sensor1
                     output_sensor = sensor2
-                elif sensor2.target:
+                elif sensor2.label:
                     target_sensor = sensor2
                     output_sensor = sensor1
                 else:
                     # TODO: should different learners get closer?
                     continue
-                if output_sensor.target:
+                if output_sensor.label:
                     # two targets, skip
                     continue
                 logit = output_sensor(data)
@@ -79,15 +84,16 @@ class LearningBasedProgram():
         else:
             self.opt = None
 
-    def train(self, dataset, opt):
+    def train(self, dataset):
         self.model.train()
         for data in dataset:
-            self.opt.zero_grad()
+            if self.opt:
+                self.opt.zero_grad()
             loss, metric, output = self.model(data)
             loss.backward()
-            self.opt.step()
+            if self.opt:
+                self.opt.step()
             yield loss, metric, output
-
 
     def test(self, dataset):
         self.model.eval()
