@@ -71,6 +71,7 @@ def wrap_batch(values, fillvalue=0):
     return values
 
 
+# consume(it) https://stackoverflow.com/q/50937966
 import sys
 
 if sys.implementation.name == 'cpython':
