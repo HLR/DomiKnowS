@@ -42,7 +42,7 @@ class DataNode:
         if self.instanceValue:
             return self.instanceValue
         else:
-            return 'instanceID ' + self.instanceID
+            return 'instanceID {}'.format(self.instanceID)
         
     def getInstanceID(self):
         return self.instanceID

@@ -61,6 +61,7 @@ def test_main_conll04():
     data = next(iter(training_set))
     _, _, datanode =lbp.model(data)
     print(datanode)
+    print(datanode.getChildInstanceNodes())
     #lbp.train(training_set)
 
 if __name__ == '__main__':
