@@ -5,10 +5,11 @@ import torch
 
 from regr.graph import Property, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+from regr.sensor.pytorch.learners import TorchLearner
 
 
 #from ..sensor.learner import TorchSensor, ModuleLearner
-from ..sensor.learner import ModuleLearner
+#from ..sensor.learner import ModuleLearner
 from ..utils import consume
 
 
@@ -24,8 +25,8 @@ class TorchModel(torch.nn.Module):
                 return node
             return None
         for node in self.graph.traversal_apply(func):
-            for _, sensor in node.find(ModuleLearner):
-                self.add_module(sensor.fullname, sensor.module)
+            for _, sensor in node.find(TorchLearner):
+                self.add_module(sensor.fullname, sensor.model)
 
     def move(self, value, device=None):
         try:
