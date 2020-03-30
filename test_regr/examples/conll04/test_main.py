@@ -21,7 +21,7 @@ def model_declaration(config):
     sentence['raw'] = ReaderSensor(keyword='token', label=True)  # sentence checkpoint
 
     rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
-    word['emb'] = DummyWordEmb('raw')
+    word['emb'] = DummyWordEmb('raw', edges=[rel_sentence_contains_word['forward']])
     word['emb'] = ReaderSensor(keyword='0', label=True)  # word checkpoint
 
 
