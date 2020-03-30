@@ -549,7 +549,7 @@ class DataNodeBuilder(dict):
         if self.__addSensorCounters(skey, value):
             return
 
-        if value == None:
+        if value is None:
             return dict.__setitem__(self, key, value)
         
         if len(skey) < 3:
