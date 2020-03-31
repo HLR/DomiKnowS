@@ -119,9 +119,9 @@ class ConllDataLoader(DataLoader):
             #import pdb; pdb.set_trace()
         token_raw, label_raw, relation_raw = zip(*batch)
         context = {
-            'token_raw': token_raw,
-            'label_raw': label_raw,
-            'relation_raw':relation_raw,
+            'token_raw': list(token_raw),
+            'label_raw': list(label_raw),
+            'relation_raw': list(relation_raw),
             'token': tokens_tensor}
         context.update(label_tensors)
         context.update(relation_tensors)

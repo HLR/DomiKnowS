@@ -28,7 +28,7 @@ class ilpOntSolverFactory:
         
         graphOntologyError = set()
         for currentGraph in graph:
-            if (currentGraph.ontology is not None) and (currentGraph.ontology.iri is not None):
+            if (hasattr(currentGraph, 'ontology')) and (currentGraph.ontology is not None) and (currentGraph.ontology.iri is not None):
                 if currentGraph.ontology not in ontologies:
                     ontologies.append(currentGraph.ontology)
             else:

@@ -11,7 +11,7 @@ class SkipSensor(Exception):
 
 
 class TorchSensor(Sensor):
-    def __init__(self, target=None):
+    def __init__(self, target=False):
         super().__init__()
         self.target = target
 
@@ -53,7 +53,7 @@ class LabelSensor(DataSensor):
 
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, target=None):
+    def __init__(self, *pres, target=False):
         super().__init__(target)
         self.pres = pres
 

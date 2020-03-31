@@ -29,8 +29,9 @@ def model_declaration(graph, vocab, config):
     kill = graph['application/kill']
 
     # feature
-    sentence['raw'] = DataSensor('token')
-    word['emb'] = EmbedderLearner(sentence['raw'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), embedding_dim=50)
+    sentence['raw'] = DataSensor('token_raw')
+    sentence['tensor'] = DataSensor('token')
+    word['emb'] = EmbedderLearner(sentence['tensor'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), embedding_dim=50)
     word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
     word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
 

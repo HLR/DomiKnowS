@@ -4,9 +4,39 @@ import torch
 from tqdm import tqdm
 
 from regr.graph.property import Property
+from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+from regr.solver.nologInferenceSolver import NoLogInferenceSolver
 
+from emr.sensor.sensor import DataSensor
 from ..sensor.learner import TorchSensor, ModuleLearner
 from ..utils import seed, consume, print_result
+
+
+class Solver(NoLogInferenceSolver):
+    def __init__(self, graph, ontologiesTuple, _ilpConfig,):
+        def input_sensor_type(sensor):
+            return isinstance(sensor, DataSensor) and not sensor.target
+        super().__init__(graph, ontologiesTuple, _ilpConfig, input_sensor_type, ModuleLearner)
+
+    def get_prop_result(self, prop, data):
+        output_sensor, target_sensor = self.prop_dict[prop]
+
+        logit = output_sensor(data)
+        logit = torch.cat((1-logit, logit), dim=-1)
+        mask = output_sensor.mask(data)
+        labels = target_sensor(data)
+        labels = labels.float()
+        return labels, logit, mask
+
+    def inferSelection(self, graph, data, prop_list, prop_dict):
+        self.prop_dict = prop_dict
+        return super().inferSelection(graph, data, prop_list)
+
+
+def all_properties(node):
+    if isinstance(node, Property):
+        return node
+    return None
 
 
 class TorchModel(torch.nn.Module):
@@ -16,13 +46,11 @@ class TorchModel(torch.nn.Module):
         self.loss = loss
         self.metric = metric
 
-        def func(node):
-            if isinstance(node, Property):
-                return node
-            return None
-        for node in self.graph.traversal_apply(func):
+        for node in self.graph.traversal_apply(all_properties):
             for _, sensor in node.find(ModuleLearner):
                 self.add_module(sensor.fullname, sensor.module)
+
+        self.solver = ilpOntSolverFactory.getOntSolverInstance(self.graph, Solver)
 
     def move(self, value, device=None):
         device = device or next(self.parameters()).device
@@ -35,15 +63,9 @@ class TorchModel(torch.nn.Module):
         elif isinstance(value, dict):
             return {k: self.move(v, device) for k, v in value.items()}
         else:
-            raise NotImplementedError('{} is not supported. Can only move list, dict of tensors.'.format(type(value)))
+            return value
 
-    def forward(self, data):
-        data = self.move(data)
-        loss = 0
-        metric = {}
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
+    def poi(self):
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.target:
@@ -58,19 +80,37 @@ class TorchModel(torch.nn.Module):
                 if output_sensor.target:
                     # two targets, skip
                     continue
-                logit = output_sensor(data)
-                logit = logit.squeeze()
-                mask = output_sensor.mask(data)
-                labels = target_sensor(data)
-                labels = labels.float()
-                if self.loss:
-                    local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
-                    loss += local_loss
-                if self.metric:
-                    local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
-                    metric[output_sensor, target_sensor] = local_metric
+                yield prop, output_sensor, target_sensor
+
+    def forward(self, data):
+        data = self.move(data)
+        loss = 0
+        metric = {}
+        for prop, output_sensor, target_sensor in self.poi():
+            output_sensor(data)
+        data = self.inference(data)
+
+        for prop, output_sensor, target_sensor in self.poi():
+            logit = output_sensor(data)
+            logit = logit.squeeze()
+            mask = output_sensor.mask(data)
+            labels = target_sensor(data)
+            labels = labels.float()
+
+            if self.loss:
+                local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+                loss += local_loss
+            if self.metric:
+                local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
+                metric[output_sensor, target_sensor] = local_metric
         return loss, metric, data
 
+    def inference(self, data):
+        prop_list = [prop for prop, _, _ in self.poi()]
+        prop_dict = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.poi()}
+
+        data = self.solver.inferSelection(self.graph, data, prop_list=prop_list, prop_dict=prop_dict)
+        return data
 
 class LearningBasedProgram():
     def __init__(self, graph, **config):
