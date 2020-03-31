@@ -13,7 +13,7 @@ test_case = {
     'word': {
         'raw': ["John", "works", "for", "IBM"],
         'emb': torch.randn(1, 4, 2048, device=device),
-        'people': torch.tensor([[0.9, 0.4, 0.1, 0.6]], device=device)
+        'people': torch.tensor([[[0.1, 0.9], [0.6, 0.4], [0.9, 0.1], [0.4, 0.6]]], device=device)
     }
 }
 test_case = Namespace(test_case)
@@ -21,10 +21,7 @@ test_case = Namespace(test_case)
 
 def model_declaration(config):
     from emr.graph.torch import LearningBasedProgram
-    #from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
-    #from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
     from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.learners import FullyConnectedLearner
 
     from graph import graph, sentence, word, people, organization, location, other, o
     from graph import rel_sentence_contains_word
@@ -76,9 +73,14 @@ def test_main_conll04():
                                    skip_none=config.Data.skip_none)
     lbp = model_declaration(config.Model)
     data = next(iter(training_set))
-    _, _, datanode =lbp.model(data)
+    _, _, datanode = lbp.model(data)
     print(datanode)
-    print(datanode.getChildInstanceNodes())
+    for concept, concept_node in datanode.getChildInstanceNodes().items():
+        print(concept.name)
+        # FIXME: some problem here! The first word get 4x2 tensor, while other three get none!
+        for word_node in concept_node:
+            print(word_node.getAttributes())
+            print(word_node.getAttribute('<people>'))
     #lbp.train(training_set)
 
 if __name__ == '__main__':

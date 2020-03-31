@@ -42,7 +42,7 @@ class DataNode:
         if self.instanceValue:
             return self.instanceValue
         else:
-            return 'instanceID ' + self.instanceID
+            return 'instanceID {}'.format(self.instanceID)
         
     def getInstanceID(self):
         return self.instanceID
@@ -54,7 +54,7 @@ class DataNode:
         return self.ontologyNode
     
     def getAttributes(self):
-        return self.attributes.kesy()
+        return self.attributes.keys()
     
     def getAttribute(self, key):
         if key in self.attributes:
