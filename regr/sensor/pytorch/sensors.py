@@ -60,10 +60,12 @@ class TorchSensor(Sensor):
             
         if val is not None:
             context[self.fullname] = val
-            context[self.sup.fullname] = val  # override state under property name
+            if not self.label:
+                context[self.sup.fullname] = val  # override state under property name
         else:
             context[self.fullname] = None
-            context[self.sup.fullname] = None
+            if not self.label:
+                context[self.sup.fullname] = None
             
         if self.output:
             context[self.fullname] = self.fetch_value(self.output)
