@@ -1,6 +1,7 @@
-from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor
 from typing import Any
 import torch
+
+from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor
 
 
 class TestSensor(TorchSensor):
@@ -28,5 +29,6 @@ class DummyEdgeStoW(TorchEdgeSensor):
 
 
 class DummyWordEmb(TestSensor): pass
+
 
 class DummyFullyConnectedLearner(TestSensor): pass
