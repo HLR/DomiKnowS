@@ -1,4 +1,5 @@
 import abc
+import inspect
 from collections import Counter, defaultdict, OrderedDict
 from contextlib import contextmanager
 from threading import Lock
@@ -316,9 +317,17 @@ class NamedTree(NamedTreeNode, OrderedDict):
 
             if order.lower() == 'pre':
                 current_apply = to_apply.pop()
-                retval = func(current_apply)
-                if not filter_fn or filter_fn(retval):
-                    yield retval
+                if inspect.isgeneratorfunction(func):
+                    # func: yield
+                    if filter_fn:
+                        yield from filter(filter_fn, func(current_apply))
+                    else:
+                        yield from func(current_apply)
+                else:
+                    # func: return
+                    retval = func(current_apply)
+                    if not filter_fn or filter_fn(retval):
+                        yield retval
 
             if isinstance(current, NamedTree):
                 subs = [current[name] for name in current] # compatible to subclasses that override the iterator
@@ -331,9 +340,17 @@ class NamedTree(NamedTreeNode, OrderedDict):
         if order.lower() == 'post':
             while to_apply:
                 current_apply = to_apply.pop()
-                retval = func(current_apply)
-                if not filter_fn or filter_fn(retval):
-                    yield retval
+                if inspect.isgeneratorfunction(func):
+                    # func: yield
+                    if filter_fn:
+                        yield from filter(filter_fn, func(current_apply))
+                    else:
+                        yield from func(current_apply)
+                else:
+                    # func: return
+                    retval = func(current_apply)
+                    if not filter_fn or filter_fn(retval):
+                        yield retval
 
     def extract_name(self, *names, delim='/', trim=True):
         if isinstance(names[0], str):
