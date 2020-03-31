@@ -2,9 +2,11 @@ import abc
 from itertools import combinations
 
 import torch
+from tqdm import tqdm
 
 from regr.graph.property import Property
 from emr.sensor.learner import TorchSensor, ModuleLearner
+from emr.utils import seed, consume, print_result
 
 
 class TorchModel(torch.nn.Module):
@@ -70,41 +72,64 @@ class TorchModel(torch.nn.Module):
         return loss, metric, data
 
 
-def train(model, dataset, opt):
-    model.train()
-    for data in dataset:
-        opt.zero_grad()
-        loss, metric, output = model(data)
-        loss.backward()
-        opt.step()
-        yield loss, metric, output
+class LearningBasedProgram():
+    def __init__(self, graph, **config):
+        self.graph = graph
+        self.model = TorchModel(graph, **config)
 
+    def train(self, training_set, valid_set, config=None):
+        self.model.cuda()
+        seed()
+        if list(self.model.parameters()):
+            opt = torch.optim.Adam(self.model.parameters())
+        else:
+            opt = None
+        for epoch in range(10):
+            print('Epoch:', epoch)
+            print('Training:')
+            for _ in tqdm(self.train_epoch(training_set, opt), total=len(training_set)):
+                pass
+            print_result(self.model, epoch, 'Training')
 
-def test(model, dataset):
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
+            print('Validation:')
+            for _ in tqdm(self.test(valid_set), total=len(valid_set)):
+                pass
+            print_result(self.model, epoch, 'Validation')
+
+    def train_epoch(self, dataset, opt=None):
+        self.model.train()
         for data in dataset:
-            loss, metric, output = model(data)
+            if opt is not None:
+                opt.zero_grad()
+            loss, metric, output = self.model(data)
+            if opt is not None:
+                loss.backward()
+                opt.step()
             yield loss, metric, output
 
+    def test(self, dataset):
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            for data in dataset:
+                loss, metric, output = self.model(data)
+                yield loss, metric, output
 
-def eval_many(model, dataset):
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
-        for data in dataset:
-            _, _, output = model(data)
-            yield output
+    def eval(self, dataset):
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            for data in dataset:
+                _, _, output = self.model(data)
+                yield output
 
-
-def eval_one(model, data):
-    # TODO: extend one sample data to 1-batch data
-    model.eval()
-    model.loss.reset()
-    model.metric.reset()
-    with torch.no_grad():
-        _, _, output = model(data)
-        return output
+    def eval_one(self, data):
+        # TODO: extend one sample data to 1-batch data
+        self.model.eval()
+        self.model.loss.reset()
+        self.model.metric.reset()
+        with torch.no_grad():
+            _, _, output = self.model(data)
+            return output

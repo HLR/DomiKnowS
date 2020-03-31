@@ -1,15 +1,7 @@
-from itertools import chain
-
-import torch
-from tqdm import tqdm
-
-from emr.utils import seed
 from emr.data import ConllDataLoader
-from emr.graph.torch import TorchModel, train, test
+from emr.graph.torch import LearningBasedProgram
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
-
-from config import Config as config
 
 
 def ontology_declaration():
@@ -72,27 +64,13 @@ def model_declaration(graph, vocab, config):
     pair[kill] = LRLearner(pair['feature'], in_features=200)
 
     # program
-    lbp = TorchModel(graph, **config)
+    lbp = LearningBasedProgram(graph, **config)
     return lbp
 
 
-def print_result(model, epoch=None, phase=None):
-    header = ''
-    if epoch is not None:
-        header += 'Epoch {} '.format(epoch)
-    if phase is not None:
-        header += '{} '.format(phase)
-    print('{}Loss:'.format(header))
-    loss = model.loss.value()
-    for (pred, _), value in loss.items():
-        print(' - ', pred.sup.prop_name.name, value.item())
-    print('{}Metrics:'.format(header))
-    metrics = model.metric.value()
-    for (pred, _), value in metrics.items():
-        print(' - ', pred.sup.prop_name.name, str({k: v.item() for k, v in value.items()}))
-
-
 def main():
+    from config import Config as config
+
     graph = ontology_declaration()
 
     training_set = ConllDataLoader(config.Data.train_path,
@@ -104,21 +82,7 @@ def main():
                                 vocab=training_set.vocab)
 
     lbp = model_declaration(graph, training_set.vocab, config.Model)
-    lbp.cuda()
-
-    seed()
-    opt = torch.optim.Adam(lbp.parameters())
-    for epoch in range(10):
-        print('Epoch:', epoch)
-        print('Training:')
-        for _ in tqdm(train(lbp, training_set, opt), total=len(training_set)):
-            pass
-        print_result(lbp, epoch, 'Training')
-
-        print('Validation:')
-        for _ in tqdm(test(lbp, valid_set), total=len(valid_set)):
-            pass
-        print_result(lbp, epoch, 'Validation')
+    lbp.train(training_set, valid_set)
 
 if __name__ == '__main__':
     main()

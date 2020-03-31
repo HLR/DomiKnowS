@@ -69,3 +69,32 @@ def wrap_batch(values, fillvalue=0):
     elif isinstance(values, dict):
         values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
+
+
+# consume(it) https://stackoverflow.com/q/50937966
+import sys
+
+if sys.implementation.name == 'cpython':
+    import collections
+    def consume(it):
+        collections.deque(it, maxlen=0)
+else:
+    def consume(it):
+        for _ in it:
+            pass
+
+
+def print_result(model, epoch=None, phase=None):
+    header = ''
+    if epoch is not None:
+        header += 'Epoch {} '.format(epoch)
+    if phase is not None:
+        header += '{} '.format(phase)
+    print('{}Loss:'.format(header))
+    loss = model.loss.value()
+    for (pred, _), value in loss.items():
+        print(' - ', pred.sup.prop_name.name, value.item())
+    print('{}Metrics:'.format(header))
+    metrics = model.metric.value()
+    for (pred, _), value in metrics.items():
+        print(' - ', pred.sup.prop_name.name, str({k: v.item() for k, v in value.items()}))
