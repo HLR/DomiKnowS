@@ -10,7 +10,7 @@ from regr.sensor.pytorch.learners import TorchLearner
 
 #from ..sensor.learner import TorchSensor, ModuleLearner
 #from ..sensor.learner import ModuleLearner
-from ..utils import consume
+from ..utils import seed, consume
 
 
 class TorchModel(torch.nn.Module):
@@ -83,7 +83,7 @@ class TorchModel(torch.nn.Module):
                     local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
         import numpy as np
-        datanote = context.getDataNode(np.log)
+        datanote = context.getDataNode()
         return loss, metric, datanote
 
 
@@ -93,6 +93,7 @@ class LearningBasedProgram():
         self.model = TorchModel(graph, **config)
 
     def train(self, dataset, config=None):
+        seed()
         if list(self.model.parameters()):
             opt = torch.optim.Adam(self.model.parameters())
         else:
