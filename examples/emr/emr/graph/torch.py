@@ -1,12 +1,12 @@
-import abc
 from itertools import combinations
 
 import torch
 from tqdm import tqdm
 
 from regr.graph.property import Property
-from emr.sensor.learner import TorchSensor, ModuleLearner
-from emr.utils import seed, consume, print_result
+
+from ..sensor.learner import TorchSensor, ModuleLearner
+from ..utils import seed, consume, print_result
 
 
 class TorchModel(torch.nn.Module):
@@ -35,7 +35,7 @@ class TorchModel(torch.nn.Module):
         elif isinstance(value, dict):
             return {k: self.move(v, device) for k, v in value.items()}
         else:
-            raise NotImplementedError('%s is not supported. Can only move list, dict of tensors.', type(value))
+            raise NotImplementedError('{} is not supported. Can only move list, dict of tensors.'.format(type(value)))
 
     def forward(self, data):
         data = self.move(data)
@@ -86,14 +86,13 @@ class LearningBasedProgram():
             opt = None
         for epoch in range(10):
             print('Epoch:', epoch)
+
             print('Training:')
-            for _ in tqdm(self.train_epoch(training_set, opt), total=len(training_set)):
-                pass
+            consume(tqdm(self.train_epoch(training_set, opt), total=len(training_set)))
             print_result(self.model, epoch, 'Training')
 
             print('Validation:')
-            for _ in tqdm(self.test(valid_set), total=len(valid_set)):
-                pass
+            consume(tqdm(self.test(valid_set), total=len(valid_set)))
             print_result(self.model, epoch, 'Validation')
 
     def train_epoch(self, dataset, opt=None):
