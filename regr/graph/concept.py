@@ -57,6 +57,25 @@ class Concept(BaseGraphTree):
         else:
             return self.has_a(*args, **kwargs)
 
+    def parse_query_apply(self, func, *names, delim='/', trim=True):
+        if isinstance(names[0], Concept):
+            name = names[0]
+            names = names[1:]
+        else:
+            name0s = names[0].split(delim)
+            name = name0s[0]
+            if trim:
+                name = name.strip()
+            names = list(chain(name0s[1:], names[1:]))
+            if name[0] == '<' and name[-1] == '>':
+                for key in self:
+                    if key.name == name[1:-1]:
+                        name = key
+                        break
+        if names:
+            return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
+        return func(self, name)
+
     def relate_to(self, concept, *tests):
         from .relation import Relation
 
@@ -150,7 +169,7 @@ class Concept(BaseGraphTree):
         vals = self.b.concatenate(vals, axis=0)
         confs = self.b.concatenate(confs, axis=0)
         # TODO: deal with None value in confs. The following is not yet a good solution
-        confs[confs == None] = self.b.mean(confs[confs != None])
+        confs[confs is None] = self.b.mean(confs[confs is not None])
 
         # inverse logistic
         def logit(z): return - self.b.log(self.b(1.) / z - self.b(1.))
@@ -229,6 +248,35 @@ class Concept(BaseGraphTree):
         except (AttributeError, KeyError):
             return None
 
+    # Find datanode in data graph of the given concept 
+    def __findDatanodes(self, dns, concept):
+        if dns is None:
+            return []
+        
+        if len(dns) == 0:
+            return []
+
+        if dns[0].ontologyNode == concept:
+            return dns
+        
+        if dns[0].childInstanceNodes is None:
+            return []
+         
+        if concept in dns[0].childInstanceNodes:
+            returnDns = []
+
+            for dn in dns:
+                returnDns = returnDns + dn.childInstanceNodes[concept]
+                
+            return returnDns
+         
+        returnDns = []
+        for dn in dns:
+            for _concept in dn.childInstanceNodes:
+                returnDns = returnDns + self.__findDatanodes(dn.childInstanceNodes[_concept], concept)
+
+        return returnDns
+
     def candidates(self, root_data, query=None):
         def basetype(concept):
             # get inheritance rank
@@ -252,6 +300,10 @@ class Concept(BaseGraphTree):
 
         def get_base_data(root_data, single_base):
             base_data = [root_data,]
+            base_data = self.__findDatanodes(base_data, single_base)
+            
+            return base_data
+        
             while True:
                 if base_data[0].getOntologyNode() == single_base:
                     return base_data
