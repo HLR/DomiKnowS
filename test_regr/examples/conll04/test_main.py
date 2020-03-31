@@ -12,8 +12,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 test_case = {
     'word': {
         'raw': ["John", "works", "for", "IBM"],
-        'emb': torch.randn(1, 4, 2048, device=device),
-        'people': torch.tensor([[[0.1, 0.9], [0.6, 0.4], [0.9, 0.1], [0.4, 0.6]]], device=device)
+        'emb': torch.randn(4, 2048, device=device),
+        'people': torch.tensor([[0.1, 0.9], [0.6, 0.4], [0.9, 0.1], [0.4, 0.6]], device=device)
     }
 }
 test_case = Namespace(test_case)
