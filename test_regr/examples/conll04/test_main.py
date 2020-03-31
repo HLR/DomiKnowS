@@ -78,7 +78,6 @@ def model_declaration(config, case):
     return lbp
 
 
-@pytest.mark.gurobi
 def test_main_conll04(case):
     from config import Config as config
     from emr.data import ConllDataLoader
