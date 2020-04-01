@@ -242,9 +242,16 @@ class Concept(BaseGraphTree):
         if len(returnDns) > 0:
             return returnDns
         
-        if len(dns[0].getChildDataNodes(key=concept)) > 0:
+        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
+        dns0CDN = dns[0].getChildDataNodes(key=concept)
+        if (dns0CDN is not None) and (len(dns0CDN) > 0):
             for dn in dns:
-                returnDns = returnDns + dn.getChildDataNodes(key=concept)
+                dnCN = dn.getChildDataNodes(key=concept)
+                
+                if dnCN is not None:
+                    returnDns = returnDns + dn.getChildDataNodes(key=concept)
+                else:
+                    pass
         else:
             for dn in dns:
                 returnDns = returnDns + self.__findDatanodes(dn.getChildDataNodes(), concept)

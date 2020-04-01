@@ -50,20 +50,23 @@ class DataNode:
         return self.ontologyNode
     
     def getAttributes(self):
-        return self.attributes.keys()
+        return self.attributes
     
     def getAttribute(self, key = None):
-        if (key is not None) and (key in self.attributes):
-            return self.attributes[key]
+        if key is not None:
+            if key in self.attributes:
+                return self.attributes[key]
+            else:
+                return None
         else:
-            return self.getAttributes()
+            return None
             
     def getRelationLinks(self, key = None):
         if key is not None:
             if key in self.relationLinks:
                 return self.relationLinks[key]
             else:
-                return []
+                return None
         
         return self.relationLinks
 
@@ -76,8 +79,11 @@ class DataNode:
             for r in cn:
                 if r.ontologyNode == key:
                     keyCN.append(r)
-                    
-            return keyCN
+            
+            if len(keyCN) > 0:
+                return keyCN
+            else:
+                return None
             
         return cn
     
@@ -372,9 +378,16 @@ class DataNodeBuilder(dict):
         if len(returnDns) > 0:
             return returnDns
         
-        if len(dns[0].getChildDataNodes(key=concept)) > 0:
+        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
+        dns0CDN = dns[0].getChildDataNodes(key=concept)
+        if (dns0CDN is not None) and (len(dns0CDN) > 0):
             for dn in dns:
-                returnDns = returnDns + dn.getChildDataNodes(key=concept)
+                dnCN = dn.getChildDataNodes(key=concept)
+                
+                if dnCN is not None:
+                    returnDns = returnDns + dn.getChildDataNodes(key=concept)
+                else:
+                    pass
         else:
             for dn in dns:
                 returnDns = returnDns + self.__findDatanodes(dn.getChildDataNodes(), concept)

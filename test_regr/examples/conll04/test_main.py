@@ -89,6 +89,7 @@ def test_main_conll04(case):
     data = next(iter(training_set))
     _, _, datanode = lbp.model(data)
     sentencenode = datanode
+    assert sentencenode.getChildDataNodes() != None
     for word_idx, word_node in enumerate(sentencenode.getChildDataNodes()):
         assert word_node.ontologyNode.name == 'word'
 
