@@ -83,7 +83,7 @@ def main():
                                 vocab=training_set.vocab)
 
     lbp = model_declaration(graph, training_set.vocab, CONFIG.Model)
-    lbp.train(training_set, valid_set)
+    lbp.train(training_set, valid_set, config=CONFIG.Train)
 
 if __name__ == '__main__':
     main()

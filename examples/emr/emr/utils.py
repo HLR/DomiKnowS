@@ -34,7 +34,7 @@ class Namespace(dict):
         from copy import deepcopy
         return Namespace(deepcopy(self))
 
-    def __getitem__(self, key):
+    def __getattr__(self, key):
         return self.get(key, None)
 
 
