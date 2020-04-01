@@ -89,16 +89,16 @@ def test_main_conll04(case):
     data = next(iter(training_set))
     _, _, datanode = lbp.model(data)
     sentencenode = datanode
-    for concept, word_nodes in sentencenode.getChildInstanceNodes().items():
-        assert concept.name == 'word'
-        for word_idx, word_node in enumerate(word_nodes):
-            assert word_node.getAttribute('raw') == case.word.raw[word_idx]
-            assert (word_node.getAttribute('emb') == case.word.emb[word_idx]).all()
-            assert (word_node.getAttribute('<people>') == case.word.people[word_idx]).all()
-            assert (word_node.getAttribute('<organization>') == case.word.organization[word_idx]).all()
-            assert (word_node.getAttribute('<location>') == case.word.location[word_idx]).all()
-            assert (word_node.getAttribute('<other>') == case.word.other[word_idx]).all()
-            assert (word_node.getAttribute('<O>') == case.word.o[word_idx]).all()
+    for word_idx, word_node in enumerate(sentencenode.getChildDataNodes()):
+        assert word_node.ontologyNode.name == 'word'
+
+        assert word_node.getAttribute('raw') == case.word.raw[word_idx]
+        assert (word_node.getAttribute('emb') == case.word.emb[word_idx]).all()
+        assert (word_node.getAttribute('<people>') == case.word.people[word_idx]).all()
+        assert (word_node.getAttribute('<organization>') == case.word.organization[word_idx]).all()
+        assert (word_node.getAttribute('<location>') == case.word.location[word_idx]).all()
+        assert (word_node.getAttribute('<other>') == case.word.other[word_idx]).all()
+        assert (word_node.getAttribute('<O>') == case.word.o[word_idx]).all()
 
 if __name__ == '__main__':
     pytest.main([__file__])

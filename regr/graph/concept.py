@@ -231,31 +231,24 @@ class Concept(BaseGraphTree):
 
     # Find datanode in data graph of the given concept 
     def __findDatanodes(self, dns, concept):
-        if dns is None:
+        if (dns is None) or (len(dns) == 0):
             return []
-        
-        if len(dns) == 0:
-            return []
-
-        if dns[0].ontologyNode == concept:
-            return dns
-        
-        if dns[0].childInstanceNodes is None:
-            return []
-         
-        if concept in dns[0].childInstanceNodes:
-            returnDns = []
-
-            for dn in dns:
-                returnDns = returnDns + dn.childInstanceNodes[concept]
-                
-            return returnDns
          
         returnDns = []
         for dn in dns:
-            for _concept in dn.childInstanceNodes:
-                returnDns = returnDns + self.__findDatanodes(dn.childInstanceNodes[_concept], concept)
-
+            if dn.ontologyNode == concept:
+               returnDns.append(dn) 
+               
+        if len(returnDns) > 0:
+            return returnDns
+        
+        if len(dns[0].getChildDataNodes(key=concept)) > 0:
+            for dn in dns:
+                returnDns = returnDns + dn.getChildDataNodes(key=concept)
+        else:
+            for dn in dns:
+                returnDns = returnDns + self.__findDatanodes(dn.getChildDataNodes(), concept)
+    
         return returnDns
 
     def candidates(self, root_data, query=None):
@@ -288,7 +281,7 @@ class Concept(BaseGraphTree):
             while True:
                 if base_data[0].getOntologyNode() == single_base:
                     return base_data
-                base_data = list(chain(*(bd.getChildInstanceNodes() for bd in base_data)))
+                base_data = list(chain(*(bd.getChildDataNodes() for bd in base_data)))
 
         base_data = get_base_data(root_data, base[0])
         if query:

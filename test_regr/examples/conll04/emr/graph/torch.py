@@ -83,8 +83,8 @@ class TorchModel(torch.nn.Module):
                     local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
         import numpy as np
-        datanote = context.getDataNode()
-        return loss, metric, datanote
+        datanode = context.getDataNode()
+        return loss, metric, datanode
 
 
 class LearningBasedProgram():

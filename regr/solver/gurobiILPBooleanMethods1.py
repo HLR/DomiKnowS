@@ -145,11 +145,15 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         orVarName = "OR_VAR-"
         for currentVar in var:
+            if currentVar is None:
+                continue
             orVarName += "-%s" % (currentVar.VarName)
         
         varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
 
         for currentVar in var:
+            if currentVar is None:
+                continue
             m.addConstr(currentVar <= varOR)
 
         varSumLinExpr = LinExpr()
