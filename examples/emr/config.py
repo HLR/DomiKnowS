@@ -1,9 +1,13 @@
+import torch
+
+from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+
 from emr.utils import Namespace, caller_source
-
 from emr.graph.metric import BCEWithLogitsLoss, MacroAverageTracker, PRF1Tracker
+from emr.graph.solver import Solver
 
 
-config = {
+CONFIG = {
     'Data': {
         'train_path': "data/EntityMentionRelation/conll04.corp_1_train.corp",
         'valid_path': "data/EntityMentionRelation/conll04.corp_1_test.corp",
@@ -11,14 +15,21 @@ config = {
     },
     'Model': {
         'loss': MacroAverageTracker(BCEWithLogitsLoss()),
-        'metric': PRF1Tracker()
+        'metric': PRF1Tracker(),
+        'solver_fn': lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
     },
     'Train': {
+        'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+        'seed': 1,
+        'opt': torch.optim.Adam,
         'batch_size': 8,
+        'epoch': 10,
+        'train_inference': False,
+        'valid_inference': True
     },
     'Source': {
         'emr': caller_source(),
     }
 }
 
-Config = Namespace(config)
+CONFIG = Namespace(CONFIG)

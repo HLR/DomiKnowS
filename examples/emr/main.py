@@ -1,5 +1,5 @@
 from emr.data import ConllDataLoader
-from emr.graph.torch import LearningBasedProgram
+from emr.learningbaseprogram import LearningBasedProgram
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 
@@ -70,19 +70,19 @@ def model_declaration(graph, vocab, config):
 
 
 def main():
-    from config import Config as config
+    from config import CONFIG
 
     graph = ontology_declaration()
 
-    training_set = ConllDataLoader(config.Data.train_path,
-                                   batch_size=config.Train.batch_size,
-                                   skip_none=config.Data.skip_none)
-    valid_set = ConllDataLoader(config.Data.valid_path,
-                                batch_size=config.Train.batch_size,
-                                skip_none=config.Data.skip_none,
+    training_set = ConllDataLoader(CONFIG.Data.train_path,
+                                   batch_size=CONFIG.Train.batch_size,
+                                   skip_none=CONFIG.Data.skip_none)
+    valid_set = ConllDataLoader(CONFIG.Data.valid_path,
+                                batch_size=CONFIG.Train.batch_size,
+                                skip_none=CONFIG.Data.skip_none,
                                 vocab=training_set.vocab)
 
-    lbp = model_declaration(graph, training_set.vocab, config.Model)
+    lbp = model_declaration(graph, training_set.vocab, CONFIG.Model)
     lbp.train(training_set, valid_set)
 
 if __name__ == '__main__':

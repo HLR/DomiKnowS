@@ -34,6 +34,10 @@ class Namespace(dict):
         from copy import deepcopy
         return Namespace(deepcopy(self))
 
+    def __getitem__(self, key):
+        return self.get(key, None)
+
+
 def caller_source():
     import inspect
 
