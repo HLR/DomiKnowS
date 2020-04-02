@@ -34,7 +34,7 @@ def model_declaration(config, case):
     from graph import graph, sentence, word, char, people, organization, location, other, o
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char
     from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyFullyConnectedLearner
-    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC
+    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3
 
     graph.detach()
 
