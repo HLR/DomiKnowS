@@ -57,6 +57,7 @@ class TorchModel(torch.nn.Module):
                 sensor.fill_data(data)
         data.update({"graph": self.graph, 'READER': 1})
         context = DataNodeBuilder(data)
+        # context = data
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.label:

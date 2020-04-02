@@ -20,7 +20,8 @@ def test_case():
             'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
             'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
-            'o':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device)
+            'o':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
+            'phrases': [(0, 0), (3, 3)]
         }
     }
     case = Namespace(case)
@@ -34,7 +35,7 @@ def model_declaration(config, case):
     from graph import graph, sentence, word, char, people, organization, location, other, o
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char
     from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyFullyConnectedLearner
-    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3
+    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3, DummyEdgeWtoP
 
     graph.detach()
 
@@ -43,6 +44,7 @@ def model_declaration(config, case):
 
     # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
+    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("raw", mode='backward', keyword='raw')
     # alternatives to DummyEdgeStoW:
     #   DummyEdgeStoW: ["John", "works", "for", "IBM"]
 
