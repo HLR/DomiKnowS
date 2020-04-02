@@ -31,26 +31,43 @@ def model_declaration(config, case):
     from emr.graph.torch import LearningBasedProgram
     from regr.sensor.pytorch.sensors import ReaderSensor
 
-    from graph import graph, sentence, word, people, organization, location, other, o
-    from graph import rel_sentence_contains_word
-    from emr.sensors.Sensors import DummyEdgeStoW, DummyWordEmb, DummyFullyConnectedLearner
+    from graph import graph, sentence, word, char, people, organization, location, other, o
+    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char
+    from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyFullyConnectedLearner
+    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC
 
     graph.detach()
 
     sentence['raw'] = ReaderSensor(keyword='token')
-    sentence['raw'] = ReaderSensor(keyword='token', label=True)  # sentence checkpoint
+    sentence['raw'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
+    # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
+    # alternatives to DummyEdgeStoW:
+    #   DummyEdgeStoW: ["John", "works", "for", "IBM"]
+
     word['emb'] = DummyWordEmb('raw', edges=[rel_sentence_contains_word['forward']],
                                expected_inputs=[case.word.raw,],
                                expected_outputs=case.word.emb
                               )
+    word['raw2'] = TestSensor('raw', edges=[rel_sentence_contains_word['forward']],
+                               expected_outputs=case.word.raw
+                               )
 
-    # sentence['emb'] = SentenceWord2VecSensor('raw')
-    # rel_sentence_contains_word['forward'] = SentenceToWordEmb('emb', mode="forward", keyword="emb")
-    # word['emb'] = WordEmbedding('emb', edges=[rel_sentence_contains_word['forward']])
-    # word['encode'] = LSTMLearner('features', input_dim=5236, hidden_dim=240, num_layers=1, bidirectional=True)
-    # word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
+    # Edge: word to char forward
+    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw2", mode="forward", keyword="raw2")
+    # alternatives to DummyEdgeWtoC:
+    #   DummyEdgeWtoC: [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
+    #   DummyEdgeWtoCOpt2: ["J", "o", "h", "n"]
+    #   DummyEdgeWtoCOpt3: ["J", "o", "h", "n", " ", "w", "o", "r", "k", "s", " ", "f", "o", "r", " ", "I", "B", "M"]
+    char['emb'] = DummyCharEmb('raw2', edges=[rel_word_contains_char['forward']])
+    char['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+
+    # Edge: backward
+    # TODO: need help implementing BILTransformer, MaxAggregationSensor 
+    #rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary', mode="backward")
+    #phrase['emb'] = MaxAggregationSensor("raw_ready", edge=rel_phrase_contains_word['backward'], map_key="encode")
+    #phrase['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     word[people] = ReaderSensor(keyword='Peop', label=True)
     word[organization] = ReaderSensor(keyword='Org', label=True)

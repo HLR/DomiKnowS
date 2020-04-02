@@ -72,10 +72,10 @@ class TorchModel(torch.nn.Module):
                     # two targets, skip
                     continue
                 logit = output_sensor(context)
-                logit = logit.squeeze()
+                #logit = logit.squeeze()
                 #mask = output_sensor.mask(data)
                 labels = target_sensor(context)
-                labels = labels.float()
+                #labels = labels.float()
                 if self.loss:
                     local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
                     loss += local_loss

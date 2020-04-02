@@ -13,9 +13,14 @@ with Graph('global') as graph:
     graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
 
     with Graph('linguistic') as ling_graph:
+        char = Concept(name='char')
         word = Concept(name='word')
+        phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
         (rel_sentence_contains_word,) = sentence.contains(word)
+        (rel_sentence_contains_phrase,) = sentence.contains(phrase)
+        (rel_phrase_contains_word,) = phrase.contains(word)
+        (rel_word_contains_char,) = word.contains(char)
 
         pair = Concept(name='pair')
         (rel_pair_word1, rel_pair_word2, ) = pair.has_a(word, word)
