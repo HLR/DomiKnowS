@@ -22,6 +22,15 @@ def test_case():
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
             'o':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
             'phrases': [(0, 0), (3, 3)]
+        },
+        'phrase': {
+            'emb': torch.randn(3, 2048, device=device),
+            'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
+
+        },
+        'pair': {
+            'emb': torch.randn(4, 4, 2048, device=device),
+            'work_for': torch.rand(4, 4, 2, device=device), # TODO: add examable values
         }
     }
     case = Namespace(case)
@@ -32,9 +41,10 @@ def model_declaration(config, case):
     from emr.graph.torch import LearningBasedProgram
     from regr.sensor.pytorch.sensors import ReaderSensor
 
-    from graph import graph, sentence, word, char, people, organization, location, other, o
-    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char
-    from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyFullyConnectedLearner
+    from graph import graph, sentence, word, char, phrase, pair
+    from graph import people, organization, location, other, o, work_for
+    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
+    from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyPhraseEmb, DummyFullyConnectedLearner
     from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3, DummyEdgeWtoP
 
     graph.detach()
@@ -44,7 +54,6 @@ def model_declaration(config, case):
 
     # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = DummyEdgeStoW("raw", mode="forward", keyword="raw")
-    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("raw", mode='backward', keyword='raw')
     # alternatives to DummyEdgeStoW:
     #   DummyEdgeStoW: ["John", "works", "for", "IBM"]
 
@@ -53,6 +62,7 @@ def model_declaration(config, case):
                                expected_outputs=case.word.emb
                               )
     word['raw2'] = TestSensor('raw', edges=[rel_sentence_contains_word['forward']],
+                               expected_inputs=[case.word.raw,],
                                expected_outputs=case.word.raw
                                )
 
@@ -62,14 +72,28 @@ def model_declaration(config, case):
     #   DummyEdgeWtoC: [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
     #   DummyEdgeWtoCOpt2: ["J", "o", "h", "n"]
     #   DummyEdgeWtoCOpt3: ["J", "o", "h", "n", " ", "w", "o", "r", "k", "s", " ", "f", "o", "r", " ", "I", "B", "M"]
-    char['emb'] = DummyCharEmb('raw2', edges=[rel_word_contains_char['forward']])
+    char['emb'] = DummyCharEmb('raw2', edges=[rel_word_contains_char['forward']],
+                                expected_outputs=case.word.emb
+                               )
     char['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     # Edge: backward
-    # TODO: need help implementing BILTransformer, MaxAggregationSensor 
-    #rel_phrase_contains_word['backward'] = BILTransformer('raw_ready', 'boundary', mode="backward")
-    #phrase['emb'] = MaxAggregationSensor("raw_ready", edge=rel_phrase_contains_word['backward'], map_key="encode")
-    #phrase['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("emb", mode='backward', keyword='emb',)
+    phrase['emb2'] = DummyPhraseEmb("emb", edge=rel_phrase_contains_word['backward'],
+                                    expected_outputs=case.phrase.emb
+                                   )
+    phrase['emb2'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+
+    # Edge: pair backward
+    rel_pair_word1['backward'] = DummyEdgeWtoP('emb', mode="backward", keyword="word1_emb")
+    rel_pair_word2['backward'] = DummyEdgeWtoP('emb', mode="backward", keyword="word2_emb")
+
+    pair['emb'] = TestSensor(
+        'word1_emb', 'word2_emb',
+        edges=[rel_pair_word1['backward'], rel_pair_word2['backward']],
+        expected_inputs=[case.word.emb, case.word.emb],
+        expected_outputs=case.pair.emb,
+    )
 
     word[people] = ReaderSensor(keyword='Peop', label=True)
     word[organization] = ReaderSensor(keyword='Org', label=True)
@@ -92,6 +116,16 @@ def model_declaration(config, case):
     word[o] = DummyFullyConnectedLearner('emb', input_dim=2048, output_dim=2,
                                          expected_inputs=[case.word.emb,],
                                          expected_outputs=case.word.o)
+
+    phrase[people] = ReaderSensor(keyword='Peop', label=True)
+    phrase[people] = DummyFullyConnectedLearner('emb2', input_dim=2048, output_dim=2,
+                                                expected_inputs=[case.phrase.emb,],
+                                                expected_outputs=case.phrase.people)
+
+    pair[work_for] = ReaderSensor(keyword='Work_For', label=True)
+    pair[work_for] = DummyFullyConnectedLearner('emb', input_dim=2048, output_dim=2,
+                                           expected_inputs=[case.pair.emb,],
+                                           expected_outputs=case.pair.work_for)
 
     lbp = LearningBasedProgram(graph, **config)
     return lbp

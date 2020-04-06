@@ -80,10 +80,17 @@ class DummyEdgeWtoCOpt3(TorchEdgeSensor):
         return ["J", "o", "h", "n", " ", "w", "o", "r", "k", "s", " ", "f", "o", "r", " ", "I", "B", "M"]
 
 
-class DummyWordEmb(TestSensor): pass
+class DummyWordEmb(TestSensor):
+    pass
 
 
-class DummyCharEmb(TestSensor): pass
+class DummyCharEmb(TestSensor):
+    pass
 
 
-class DummyFullyConnectedLearner(TestSensor): pass
+class DummyPhraseEmb(TestSensor):
+    pass
+
+
+class DummyFullyConnectedLearner(TestSensor):
+    pass
