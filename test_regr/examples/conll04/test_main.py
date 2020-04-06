@@ -79,7 +79,7 @@ def model_declaration(config, case):
 
     # Edge: backward
     rel_phrase_contains_word['backward'] = DummyEdgeWtoP("emb", mode='backward', keyword='emb',)
-    phrase['emb2'] = DummyPhraseEmb("emb", edge=rel_phrase_contains_word['backward'],
+    phrase['emb2'] = DummyPhraseEmb("emb", edges=[rel_phrase_contains_word['backward']],
                                     expected_outputs=case.phrase.emb
                                    )
     phrase['emb2'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
