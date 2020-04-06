@@ -1,3 +1,2 @@
 [TYPECHECK]
-generated-members=numpy.*,torch.*
-ignored-classes=emr.utils.Namespace
+generated-members=numpy.*,torch.*,emr.utils.Namespace.*

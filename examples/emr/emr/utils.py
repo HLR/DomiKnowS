@@ -15,13 +15,14 @@ def seed(s=1, deterministic=True):
 
 
 class Namespace(dict):
-    def __init__(self, __dict={}, **kwargs):
-        self.__dict__ = self
-        self.update(__dict)
-        self.update(kwargs)
-        for k, v in self.items():
+    def __init__(self, __dict=None, **kwargs):
+        dict_ = __dict or {}
+        dict_.update(kwargs)
+        for k, v in dict_.items():
             if isinstance(v, dict):
-                self[k] = Namespace(v)
+                dict_[k] = Namespace(v)
+        super().__init__(dict_)
+        self.__dict__ = self
 
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, ','.join('\'{}\':{}'.format(k,v) for k,v in self.items()))
