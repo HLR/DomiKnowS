@@ -17,6 +17,37 @@ class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
                                                   reduction=self.reduction)
 
 
+class BCEFocalLoss(BCEWithLogitsLoss):
+    def __init__(self, weight=None, pos_weight=None, reduction='mean', alpha=1, gamma=2, with_logits=True):
+        super().__init__(weight=weight, pos_weight=pos_weight, reduction=reduction)
+        self.alpha = alpha
+        self.gamma = gamma
+        self.with_logits = with_logits
+
+    def forward(self, input, target, weight=None):
+        if weight is None:
+            weight = self.weight
+        if self.with_logits:
+            bce = F.binary_cross_entropy_with_logits(input, target, weight,
+                                                     pos_weight=self.pos_weight,
+                                                     reduce=False)
+        else:
+            # TODO: update weight based on pos_weight
+            bce = F.binary_cross_entropy(input, target, weight, reduce=False)
+
+        pt = torch.exp(-bce)
+        loss = self.alpha * (1 - pt)**self.gamma * bce
+
+        if self.reduction == 'none':
+            return loss
+        elif self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum
+
+        raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
+
+
 class CMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, weight=None):
         if weight is None:
