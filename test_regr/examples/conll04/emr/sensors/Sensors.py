@@ -46,6 +46,11 @@ class DummyEdgeWtoPOpt2(TorchEdgeSensor):
         return [("John"), ("works", "for"), ("IBM")]
 
 
+class DummyEdgeWtoPair(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        return self.inputs[0]
+
+
 class DummyEdgeWtoC(TorchEdgeSensor):
     def forward(self,) -> Any:
         # # opt 1

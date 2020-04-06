@@ -45,7 +45,7 @@ def model_declaration(config, case):
     from graph import people, organization, location, other, o, work_for
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
     from emr.sensors.Sensors import TestSensor, DummyWordEmb, DummyCharEmb, DummyPhraseEmb, DummyFullyConnectedLearner
-    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3, DummyEdgeWtoP
+    from emr.sensors.Sensors import DummyEdgeStoW, DummyEdgeWtoC, DummyEdgeWtoCOpt2, DummyEdgeWtoCOpt3, DummyEdgeWtoP, DummyEdgeWtoPair
 
     graph.detach()
 
@@ -78,15 +78,15 @@ def model_declaration(config, case):
     char['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     # Edge: backward
-    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("emb", mode='backward', keyword='emb',)
+    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("emb", mode='backward', keyword='emb')
     phrase['emb2'] = DummyPhraseEmb("emb", edges=[rel_phrase_contains_word['backward']],
                                     expected_outputs=case.phrase.emb
                                    )
     phrase['emb2'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     # Edge: pair backward
-    rel_pair_word1['backward'] = DummyEdgeWtoP('emb', mode="backward", keyword="word1_emb")
-    rel_pair_word2['backward'] = DummyEdgeWtoP('emb', mode="backward", keyword="word2_emb")
+    rel_pair_word1['backward'] = DummyEdgeWtoPair('emb', mode="backward", keyword="word1_emb")
+    rel_pair_word2['backward'] = DummyEdgeWtoPair('emb', mode="backward", keyword="word2_emb")
 
     pair['emb'] = TestSensor(
         'word1_emb', 'word2_emb',
@@ -140,19 +140,24 @@ def test_main_conll04(case):
                                    skip_none=config.Data.skip_none)
     lbp = model_declaration(config.Model, case)
     data = next(iter(training_set))
-    _, _, datanode = lbp.model(data)
-    sentencenode = datanode
-    assert sentencenode.getChildDataNodes() != None
-    for word_idx, word_node in enumerate(sentencenode.getChildDataNodes()):
-        assert word_node.ontologyNode.name == 'word'
 
-        assert word_node.getAttribute('raw') == case.word.raw[word_idx]
-        assert (word_node.getAttribute('emb') == case.word.emb[word_idx]).all()
-        assert (word_node.getAttribute('<people>') == case.word.people[word_idx]).all()
-        assert (word_node.getAttribute('<organization>') == case.word.organization[word_idx]).all()
-        assert (word_node.getAttribute('<location>') == case.word.location[word_idx]).all()
-        assert (word_node.getAttribute('<other>') == case.word.other[word_idx]).all()
-        assert (word_node.getAttribute('<O>') == case.word.o[word_idx]).all()
+    _, _, datanode = lbp.model(data)
+
+    for child_node in datanode.getChildDataNodes():
+        if child_node.ontologyNode.name == 'word':
+            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<location>') == case.word.location[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<other>') == case.word.other[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<O>') == case.word.o[child_node.instanceID]).all()
+        elif child_node.ontologyNode.name == 'phrase':
+            assert (child_node.getAttribute('emb2') == case.phrase.emb[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
+        else:
+            assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
+
 
 if __name__ == '__main__':
     pytest.main([__file__])
