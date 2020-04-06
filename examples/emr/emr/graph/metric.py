@@ -30,10 +30,10 @@ class BCEFocalLoss(BCEWithLogitsLoss):
         if self.with_logits:
             bce = F.binary_cross_entropy_with_logits(input, target, weight,
                                                      pos_weight=self.pos_weight,
-                                                     reduce=False)
+                                                     reduction='none')
         else:
             # TODO: update weight based on pos_weight
-            bce = F.binary_cross_entropy(input, target, weight, reduce=False)
+            bce = F.binary_cross_entropy(input, target, weight, reduction='none')
 
         pt = torch.exp(-bce)
         loss = self.alpha * (1 - pt)**self.gamma * bce
@@ -104,7 +104,7 @@ class MetricTracker(torch.nn.Module):
 
     def value(self, reset=False):
         if self.list and self.dict:
-            raise RuntimeError('%s cannot be used as list-like and dict-like the same time.', str(type(self)))
+            raise RuntimeError('{} cannot be used as list-like and dict-like the same time.'.format(type(self)))
         if self.list:
             value = wrap_batch(self.list)
             value = super().__call__(value)

@@ -31,12 +31,12 @@ def model_declaration(graph, vocab, config):
     # feature
     sentence['raw'] = DataSensor('token_raw')
     sentence['tensor'] = DataSensor('token')
-    word['emb'] = EmbedderLearner(sentence['tensor'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), embedding_dim=50)
-    word['ctx_emb'] = RNNLearner(word['emb'], input_size=50, hidden_size=100, num_layers=2, batch_first=True, bidirectional=True)
-    word['feature'] = MLPLearner(word['ctx_emb'], in_features=200, out_features=200)
+    word['emb'] = EmbedderLearner(sentence['tensor'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), **config.word.emb)
+    word['ctx_emb'] = RNNLearner(word['emb'], **config.word.ctx_emb)
+    word['feature'] = MLPLearner(word['ctx_emb'], **config.word.feature)
 
     pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
-    pair['feature'] = MLPLearner(pair['emb'], in_features=400, out_features=200)
+    pair['feature'] = MLPLearner(pair['emb'], **config.pair.feature)
 
     # label
     word[people] = LabelSensor('Peop')
@@ -45,11 +45,11 @@ def model_declaration(graph, vocab, config):
     word[other] = LabelSensor('Other')
     word[o] = LabelSensor('O')
 
-    word[people] = LRLearner(word['feature'], in_features=200)
-    word[organization] = LRLearner(word['feature'], in_features=200)
-    word[location] = LRLearner(word['feature'], in_features=200)
-    word[other] = LRLearner(word['feature'], in_features=200)
-    word[o] = LRLearner(word['feature'], in_features=200)
+    word[people] = LRLearner(word['feature'], **config.word.lr)
+    word[organization] = LRLearner(word['feature'], **config.word.lr)
+    word[location] = LRLearner(word['feature'], **config.word.lr)
+    word[other] = LRLearner(word['feature'], **config.word.lr)
+    word[o] = LRLearner(word['feature'], **config.word.lr)
 
     # relation
     pair[work_for] = LabelSensor('Work_For')
@@ -58,14 +58,14 @@ def model_declaration(graph, vocab, config):
     pair[orgbase_on] = LabelSensor('OrgBased_In')
     pair[kill] = LabelSensor('Kill')
 
-    pair[work_for] = LRLearner(pair['feature'], in_features=200)
-    pair[live_in] = LRLearner(pair['feature'], in_features=200)
-    pair[located_in] = LRLearner(pair['feature'], in_features=200)
-    pair[orgbase_on] = LRLearner(pair['feature'], in_features=200)
-    pair[kill] = LRLearner(pair['feature'], in_features=200)
+    pair[work_for] = LRLearner(pair['feature'], **config.pair.lr)
+    pair[live_in] = LRLearner(pair['feature'], **config.pair.lr)
+    pair[located_in] = LRLearner(pair['feature'], **config.pair.lr)
+    pair[orgbase_on] = LRLearner(pair['feature'], **config.pair.lr)
+    pair[kill] = LRLearner(pair['feature'], **config.pair.lr)
 
     # program
-    lbp = LearningBasedProgram(graph, **config)
+    lbp = LearningBasedProgram(graph, **config.lbp)
     return lbp
 
 

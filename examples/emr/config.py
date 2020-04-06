@@ -14,9 +14,39 @@ config = {
         'skip_none': False,
     },
     'Model': {
-        'loss': MacroAverageTracker(BCEFocalLoss(gamma=2, alpha=1)),
-        'metric': PRF1Tracker(),
-        'solver_fn': lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
+        'word': {
+            'emb': {
+                'embedding_dim': 50
+            },
+            'ctx_emb': {
+                'input_size': 50,
+                'hidden_size': 100,
+                'num_layers': 2,
+                'batch_first': True,
+                'bidirectional': True
+            },
+            'feature': {
+                'in_features': 200,
+                'out_features': 200
+            },
+            'lr': {
+                'in_features': 200,
+            }
+        },
+        'pair': {
+            'feature': {
+                'in_features': 400,
+                'out_features': 200
+            },
+            'lr': {
+                'in_features': 200,
+            }
+        },
+        'lbp': {
+            'loss': MacroAverageTracker(BCEFocalLoss(gamma=2, alpha=1)),
+            'metric': PRF1Tracker(),
+            'solver_fn': lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
+        }
     },
     'Train': {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
