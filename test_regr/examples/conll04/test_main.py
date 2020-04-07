@@ -21,7 +21,7 @@ def test_case():
             'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
             'o':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
-            'phrases': [(0, 0), (3, 3)]
+            'phrases': [(0, 0), (2,2), (3, 3)]
         },
         'phrase': {
             'emb': torch.randn(3, 2048, device=device),

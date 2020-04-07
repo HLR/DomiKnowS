@@ -36,7 +36,7 @@ class DummyEdgeStoP(TorchEdgeSensor):
 
 class DummyEdgeWtoP(TorchEdgeSensor):
     def forward(self,) -> Any:
-        return [(0, 0), (3, 3)]
+        return [(0, 0), (2,2), (3, 3)]
 
 
 class DummyEdgeWtoPOpt2(TorchEdgeSensor):
