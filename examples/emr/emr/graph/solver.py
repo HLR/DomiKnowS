@@ -16,7 +16,7 @@ class Solver(NoLogInferenceSolver):
         output_sensor, target_sensor = self.prop_dict[prop]
 
         logit = output_sensor(data)
-        logit = torch.cat((1-logit, logit), dim=-1)
+        logit = torch.stack((1-logit, logit), dim=-1)
         mask = output_sensor.mask(data)
         labels = target_sensor(data)
         labels = labels.float()

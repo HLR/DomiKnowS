@@ -74,7 +74,7 @@ def main():
     from config import CONFIG
 
     if CONFIG.Train.seed is not None:
-            seed(CONFIG.Train.seed)
+        seed(CONFIG.Train.seed)
 
     graph = ontology_declaration()
 

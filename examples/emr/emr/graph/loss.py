@@ -57,6 +57,8 @@ class BCEWithLogitsFocalLoss(torch.nn.Module):
         logp = F.logsigmoid(input)
         lognp = logp - input  # log(1-1/(1+exp(-x))) = log(exp(-x)/(1+exp(-x))) = log(exp(-x)) + log(1/(1+exp(-x)))
         p = torch.exp(logp)
+        # make sure target is float
+        target = target.float()
         # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
         loss = - self.alpha * (1 - p)**self.gamma * target * logp
         loss += - (1 - self.alpha) * p**self.gamma * (1 - target) * lognp

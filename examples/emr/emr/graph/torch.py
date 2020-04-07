@@ -70,10 +70,8 @@ class TorchModel(torch.nn.Module):
 
         for _, output_sensor, target_sensor in self.poi():
             logit = output_sensor(data)
-            logit = logit.squeeze()
             mask = output_sensor.mask(data)
             labels = target_sensor(data)
-            labels = labels.float()
 
             if self.loss:
                 local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)

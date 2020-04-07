@@ -40,7 +40,7 @@ class RNNLearner(ModuleLearner):
     Module=torch.nn.LSTM
 
     def forward(self, input):
-        output, _ = self.module(input)
+        output, _ = super().forward(input)
         return output
 
 
@@ -53,3 +53,6 @@ class LRLearner(ModuleLearner):
     def Module(**kwargs):
         kwargs['out_features'] = 1
         return torch.nn.Linear(**kwargs)
+
+    def forward(self, input):
+        return super().forward(input).squeeze(-1)
