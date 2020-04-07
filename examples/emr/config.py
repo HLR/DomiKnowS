@@ -3,7 +3,8 @@ import torch
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 from emr.utils import Namespace, caller_source
-from emr.graph.metric import BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss, MacroAverageTracker, PRF1Tracker
+from emr.graph.loss import BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from emr.graph.metric import MacroAverageTracker, PRF1Tracker
 from emr.graph.solver import Solver
 
 
