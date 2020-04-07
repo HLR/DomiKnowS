@@ -2,6 +2,7 @@ from emr.data import ConllDataLoader
 from emr.learningbaseprogram import LearningBasedProgram
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
+from emr.utils import seed
 
 
 def ontology_declaration():
@@ -72,15 +73,20 @@ def model_declaration(graph, vocab, config):
 def main():
     from config import CONFIG
 
+    if CONFIG.Train.seed is not None:
+            seed(CONFIG.Train.seed)
+
     graph = ontology_declaration()
 
     training_set = ConllDataLoader(CONFIG.Data.train_path,
                                    batch_size=CONFIG.Train.batch_size,
-                                   skip_none=CONFIG.Data.skip_none)
+                                   skip_none=CONFIG.Data.skip_none,
+                                   shuffle=True)
     valid_set = ConllDataLoader(CONFIG.Data.valid_path,
                                 batch_size=CONFIG.Train.batch_size,
                                 skip_none=CONFIG.Data.skip_none,
-                                vocab=training_set.vocab)
+                                vocab=training_set.vocab,
+                                shuffle=False)
 
     lbp = model_declaration(graph, training_set.vocab, CONFIG.Model)
     lbp.train(training_set, valid_set, config=CONFIG.Train)

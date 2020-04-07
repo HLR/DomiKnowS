@@ -3,7 +3,7 @@ import torch
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 from emr.utils import Namespace, caller_source
-from emr.graph.metric import BCEFocalLoss, MacroAverageTracker, PRF1Tracker
+from emr.graph.metric import BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss, MacroAverageTracker, PRF1Tracker
 from emr.graph.solver import Solver
 
 
@@ -43,7 +43,7 @@ config = {
             }
         },
         'lbp': {
-            'loss': MacroAverageTracker(BCEFocalLoss(gamma=2, alpha=1)),
+            'loss': MacroAverageTracker(BCEWithLogitsFocalLoss()),
             'metric': PRF1Tracker(),
             'solver_fn': lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
         }

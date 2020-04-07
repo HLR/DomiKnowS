@@ -13,8 +13,6 @@ class LearningBasedProgram():
     def train(self, training_set, valid_set=None, test_set=None, config=None):
         if config.device is not None:
             self.model.to(config.device)
-        if config.seed is not None:
-            seed(config.seed)
         if list(self.model.parameters()):
             opt = config.opt(self.model.parameters())
         else:

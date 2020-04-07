@@ -47,6 +47,33 @@ class BCEFocalLoss(BCEWithLogitsLoss):
 
         raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
 
+class BCEWithLogitsFocalLoss(torch.nn.Module):
+    def __init__(self, weight=None, reduction='mean', alpha=0.5, gamma=2):
+        super().__init__()
+        self.weight = weight
+        self.reduction = reduction
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, input, target, weight=None):
+        if weight is None:
+            weight = self.weight or 1
+        logp = torch.nn.functional.logsigmoid(input)
+        lognp = logp - input  # log(1-1/(1+exp(-x))) = log(exp(-x)/(1+exp(-x))) = log(exp(-x)) + log(1/(1+exp(-x)))
+        p = torch.exp(logp)
+        # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
+        loss = - self.alpha * (1 - p)**self.gamma * target * logp
+        loss += - (1 - self.alpha) * p**self.gamma * (1 - target) * lognp
+        loss *= weight
+
+        if self.reduction == 'none':
+            return loss
+        elif self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum
+
+        raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
 
 class CMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, weight=None):
