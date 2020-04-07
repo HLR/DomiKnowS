@@ -138,10 +138,7 @@ class DataNode:
         key = '<' + conceptRelation.name + '>'
         
         # Get probability
-        if key not in dataNode[0].attributes:
-            return [0, 1]
-
-        value = dataNode[0].attributes[key]
+        value = dataNode[0].getAttribute(key)
         
         if value is None:
             return [0, 1]
@@ -624,8 +621,9 @@ class DataNodeBuilder(dict):
             existingDnsForConcept = self.__findDatanodes(existingRootDns, conceptInfo['concept']) # Datanodes of the current concept
             l = len(existingDnsForConcept)
             dns = []
+            
             if len(existingDnsForConcept) == 0: # No Datanode of this concept created yet
-                if (type(value) is not Tensor) and (type(value) is not list) : # value is not Tensor or list
+                if (type(value) is not Tensor) and (type(value) is not list) : # Value is not Tensor or list
                     instanceValue = ""
                     instanceID = dict.__getitem__(self, "READER")
                     _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
@@ -644,38 +642,73 @@ class DataNodeBuilder(dict):
                     else:
                         pass # ????
 
-                else: # value is Tensor
-                    for vIndex, v in enumerate(value):
-                        instanceValue = ""
-                        instanceID = vIndex
-                        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-                        
-                        _dn.attributes[keyDataName] = v
-                        
-                        dns.append(_dn)
-                    
-                    if len(conceptInfo['containedIn']) > 0:
-                        myContainedIn = self.__findDatanodes(existingRootDns, conceptInfo['containedIn'][0])
+                else: # Value is Tensor or List
+                    if (type(value[0]) is not Tensor) and (type(value[0]) is not list) : # Internal Value is not Tensor or list
+                        dns1 = []
+                        for vIndex, v in enumerate(value):
+                            instanceValue = ""
+                            instanceID = vIndex
+                            _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                             
-                        if len(myContainedIn) == 0:
-                            pass
-                        elif len(myContainedIn) == 1:
-                            for dn in dns:
-                                myContainedIn[0].addChildDataNodes(dn)
-                        else:
-                            pass
+                            _dn.attributes[keyDataName] = v
+                            
+                            dns1.append(_dn)
+                            
+                        dns.append(dns1)
+                    else:
+                        for vIndex, v in enumerate(value):
+                            dns1 = []
+                            for vIndex1, v1 in enumerate(v):
+                                instanceValue = ""
+                                instanceID = vIndex * len(v) + vIndex1
+                                _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                                
+                                _dn.attributes[keyDataName] = v1
+                                
+                                dns1.append(_dn)
+                            
+                            dns.append(dns1)
+           
+                    # Forward information in the sensor data
+                    if len(conceptInfo['containedIn']) > 0:
+                        myContainedIn = self.__findDatanodes(existingRootDns, conceptInfo['containedIn'][0]) # Assume single containedIn for now
+                           
+                        for myContainedInIndex, myContainedIn in enumerate(myContainedIn):
+                            for dn in dns[myContainedInIndex]:
+                                myContainedIn.addChildDataNodes(dn)
+                                
+                    # Backward information in the sensor data
+                    if len(conceptInfo['contains']) > 0:
+                        myContains = self.__findDatanodes(existingRootDns, conceptInfo['contains'][0]) # Assume single contains for now
                         
+                        if len(myContains) > 0:
+                            # sort myContains ? - should be sorted - order based on creation
+                            
+                            i = 0
+                            for _dnsIndex, _dns in enumerate(dns): 
+                                for _dnsIndex1, _dns1 in enumerate(_dns):
+                                    _i = _dnsIndex * len(_dns) + _dnsIndex1
+                                    indexes = value[_i]
+                                
+                                    for _ in range(indexes[0], indexes[1] + 1):
+                                        _dns1.addChildDataNodes(myContains[i])
+                                        i = i + 1
+                            
             else: # Datanode with this concept already created
-                if (type(value) is not Tensor) and (type(value) is not list): # value is not Tensor or list
+                if (type(value) is not Tensor) and (type(value) is not list): # Value is not Tensor or list
                     if type(existingDnsForConcept[0]) is DataNode:
                         existingDnsForConcept[0].attributes[keyDataName] = value
-                else: # value is Tensor
-                    for vIndex, v in enumerate(value):
-                        if vIndex >= len(existingDnsForConcept):
-                            break # ?????
-                        
-                        if type(existingDnsForConcept[vIndex]) is DataNode:
-                            existingDnsForConcept[vIndex].attributes[keyDataName] = v
+                else: # Value is Tensor
+                    if len(existingDnsForConcept) > len(value):
+                        pass
+                    elif len(existingDnsForConcept) == len(value):
+                        for vIndex, v in enumerate(value):
+                            if type(existingDnsForConcept[vIndex]) is DataNode:
+                                existingDnsForConcept[vIndex].attributes[keyDataName] = v
+                            else:
+                                pass
+                    elif len(existingDnsForConcept) < len(value):
+                        pass
  
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
     def __setitem__(self, key, value):
