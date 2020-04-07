@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from regr.graph import Graph, Concept, andL, nandL, notL, ifL, existsL, equalA, inSetA
 
-@pytest.mark.skip(reason="Not ready yet - prototype")
+
 @pytest.fixture()
 def ontology_graph(request):
     from regr.graph import Graph, Concept
@@ -85,7 +85,7 @@ def ontology_graph(request):
     Graph.clear()
     Concept.clear()
 
-@pytest.mark.skip(reason="Not ready yet - prototype")
+
 @pytest.fixture()
 def sprl_input(ontology_graph):
     from regr.graph import DataNode
@@ -185,5 +185,3 @@ def test_main_sprl(ontology_graph, sprl_input):
     # -- phrase results:
     assert stairs.predictions[DataNode.PredictionType["ILP"]][spatial_entity] == 1  # "stairs" - LANDMARK
     assert stairs.attributes[DataNode.PredictionType["ILP"]]['hasSpatialType']['landmark'] == 1  # "stairs" - LANDMARK
-    
-    

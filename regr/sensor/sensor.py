@@ -13,7 +13,7 @@ class Sensor(BaseGraphTreeNode):
         except:
             print('Error during updating context with sensor {}'.format(self.fullname))
             raise
-        return context
+        return context[self.fullname]
 
     def update_context(
         self,
