@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 
 from regr.solver.nologInferenceSolver import NoLogInferenceSolver
 
@@ -7,24 +8,22 @@ from ..sensor.sensor import DataSensor
 
 
 class Solver(NoLogInferenceSolver):
-    def __init__(self, graph, ontologiesTuple, _ilpConfig,):
-        def input_sensor_type(sensor):
-            return isinstance(sensor, DataSensor) and not sensor.target
-        super().__init__(graph, ontologiesTuple, _ilpConfig, input_sensor_type, ModuleLearner)
+    def get_raw_input(self, data):
+        graph = next(iter(self.myGraph))
+        _, sentence_sensor = graph.get_sensors(DataSensor, lambda s: not s.target)[0]
+        sentences = sentence_sensor(data)
+        mask_len = [len(s) for s in sentences]  # (b, )
+        return sentences, mask_len
 
     def get_prop_result(self, prop, data):
-        output_sensor, target_sensor = self.prop_dict[prop]
+        graph = next(iter(self.myGraph))
+        output_sensor, _ = graph.poi[prop]
 
         logit = output_sensor(data)
-        logit = torch.stack((1-logit, logit), dim=-1)
+        #score = -F.logsigmoid(logit)
+        score = torch.sigmoid(logit)
         mask = output_sensor.mask(data)
-        labels = target_sensor(data)
-        labels = labels.float()
-        return labels, logit, mask
+        return score, mask
 
     def set_prop_result(self, prop, data, value):
-        data[prop.fullname] = value.unbind(dim=-1)[1]
-
-    def inferSelection(self, graph, data, prop_list, prop_dict):
-        self.prop_dict = prop_dict
-        return super().inferSelection(graph, data, prop_list)
+        data[prop.fullname] = value

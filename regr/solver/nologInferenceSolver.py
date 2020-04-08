@@ -3,7 +3,7 @@ from typing import Dict
 from collections import defaultdict
 import numpy as np
 import torch
-from ..graph import Graph, Concept
+from ..graph import Concept
 from .ilpOntSolver import ilpOntSolver
 
 
@@ -13,18 +13,16 @@ DataInstance = Dict[str, torch.Tensor]
 class NoLogInferenceSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, graph, ontologiesTuple, _ilpConfig, input_sensor_type, output_sensor_type):
-        super().__init__(graph, ontologiesTuple, _ilpConfig)
-        self.input_sensor_type = input_sensor_type
-        self.output_sensor_type = output_sensor_type
+    def get_raw_input(self, data):
+        raise NotImplementedError
 
     def get_prop_result(self, prop, data):
         raise NotImplementedError
 
     def set_prop_result(self, prop, data, value):
-        data[prop.fullname] = value
+        raise NotImplementedError
 
-    def inferSelection(self, graph: Graph, data: DataInstance, prop_list=None) -> DataInstance:
+    def inferSelection(self, data: DataInstance, prop_list) -> DataInstance:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -41,8 +39,6 @@ class NoLogInferenceSolver(ilpOntSolver):
                 rank = in_rank
             return rank or 1
 
-        if prop_list is None:
-            prop_list = graph.poi
         for prop in prop_list:
             if isinstance(prop.prop_name, Concept):
                 concept = prop.prop_name
@@ -55,16 +51,9 @@ class NoLogInferenceSolver(ilpOntSolver):
         else:
             max_rank = 0
 
-        # find base, assume only one base for now
-        # FIXME: that [0] means we are only considering problems with only one sentence
-        name, sentence_sensor = graph.get_sensors(self.input_sensor_type)[0]
-        # Note: SentenceEmbedderSensor is not reliable. For example BERT indexer will introduce redundant wordpiece tokens
-
-        sentence = sentence_sensor(data)
-        batch_size = len(sentence)
-        mask_len = [len(s) for s in sentence]  # (b, )
+        sentences, mask_len = self.get_raw_input(data)
+        batch_size = len(sentences)
         length = max(mask_len)
-        device = None
 
         values = [defaultdict(dict) for _ in range(batch_size)]
         for rank, props in prop_dict.items():
@@ -76,19 +65,11 @@ class NoLogInferenceSolver(ilpOntSolver):
                 else:
                     concept = prop.sup
                 name = concept.name # we need concept name to match that in OWL
-                # TODO: what if a concept has several properties to be predict?
-                # pred_logit - (b, l...*r, c) - for dim-c, [0] is neg, [1] is pos
+                # score - (b, l...*r) / (b, l...*r, c)
                 # mask - (b, l...*r)
-                label, pred_logit, mask = self.get_prop_result(prop, data)
-                if not device:
-                    device = pred_logit.device
-                # pred - (b, l...*r, c)
-                pred = torch.nn.functional.softmax(pred_logit, dim=-1)
-                pos_index = torch.tensor(1, device=device).long()
-                # (b, l...*r)
-                batched_value = pred.index_select(-1, pos_index).squeeze(dim=-1)
+                score, mask = self.get_prop_result(prop, data)
                 # copy and detach, time consuming I/O
-                batched_value = batched_value.clone().cpu().detach().numpy()
+                batched_value = score.clone().cpu().detach().numpy()
 
                 for batch_index in range(batch_size):
                     # (l...*r)
@@ -104,7 +85,7 @@ class NoLogInferenceSolver(ilpOntSolver):
         for batch_index in range(batch_size):
             # prepare tokens
             tokens = ['{}_{}'.format(i, token)
-                      for i, token in enumerate(sentence[batch_index][:mask_len[batch_index]])]
+                      for i, token in enumerate(sentences[batch_index][:mask_len[batch_index]])]
             # prepare tables
             table_list = []
             for rank in range(1, max_rank + 1):
@@ -112,22 +93,13 @@ class NoLogInferenceSolver(ilpOntSolver):
                     table_list.append(values[batch_index][rank])
                 else:
                     table_list.append(None)
+
             #import pdb; pdb.set_trace()
             # Do inference
-            try:
-                # following statement should be equivalent to
-                # - EMR:
-                # result_list = self.calculateILPSelection(tokens, concept_dict, relation_dict)
-                # - SPRL:
-                # result_list = self.calculateILPSelection(tokens, concept_dict, None, triplet_dict)
-                result_table_list = self.calculateILPSelection(tokens, *table_list)
-
-                #import pdb; pdb.set_trace()
-                if all([result_table is None for result_table in result_table_list]):
-                    raise RuntimeError('No result from solver. Check any log from the solver.')
-            except:
-                # whatever, raise it
-                raise
+            result_table_list = self.calculateILPSelection(tokens, *table_list)
+            #import pdb; pdb.set_trace()
+            if all([result_table is None for result_table in result_table_list]):
+                raise RuntimeError('No result from solver. Check any log from the solver.')
 
             # collect result in batch
             result = defaultdict(dict)
@@ -148,6 +120,7 @@ class NoLogInferenceSolver(ilpOntSolver):
         # put results back
         for rank, props in prop_dict.items():
             for prop in props:
+                score, _ = self.get_prop_result(prop, data)  # for device
                 if isinstance(prop.prop_name, Concept):
                     concept = prop.prop_name
                 else:
@@ -158,21 +131,15 @@ class NoLogInferenceSolver(ilpOntSolver):
                     # (l'...*r)
                     instance_value = results[batch_index][rank][name]
                     # (l...*r)
-                    instance_value_pad = np.empty([length, ] * rank)
+                    instance_value_pad = np.zeros([length, ] * rank)
                     instance_value_pad[(slice(0, mask_len[batch_index]),) * rank] = instance_value
                     # (l...*r)
-                    instance_value_d = torch.tensor(instance_value_pad, device=device)
+                    instance_value_d = torch.tensor(instance_value_pad, device=score.device)
                     instance_value_list.append(instance_value_d)
                 # (b, l...*r)
                 batched_value = torch.stack(instance_value_list, dim=0)
-                # (b, l...*r, 2)
-                batched_value = torch.stack([1 - batched_value, batched_value], dim=-1)
-                # undo softmax
-                logits_value = torch.log(batched_value / (1 - batched_value))  # Go to +- inf
                 # Put it back finally
                 #import pdb; pdb.set_trace()
-                self.set_prop_result(prop, data, logits_value)
-                #for name, learner in prop.find(self.output_sensor_type):
-                #    data[learner.fullname] = logits_value
+                self.set_prop_result(prop, data, batched_value)
 
         return data
