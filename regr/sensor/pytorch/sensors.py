@@ -103,12 +103,14 @@ class TorchSensor(Sensor):
     def forward(self,) -> Any:
         return None
 
+
 class ConstantSensor(TorchSensor):
     def __init__(self, *pres, output=None, edge=None):
         super().__init__(*pres, output=output, edges=edge)
 
     def forward(self,) -> Any:
         return self.context_helper[self.sup.fullname]
+
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword, label=False):
