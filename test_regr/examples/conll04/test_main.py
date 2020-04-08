@@ -64,32 +64,28 @@ def model_declaration(config, case):
                                expected_inputs=[case.word.raw,],
                                expected_outputs=case.word.emb
                               )
-    word['raw2'] = TestSensor('raw', edges=[rel_sentence_contains_word['forward']],
-                               expected_inputs=[case.word.raw,],
-                               expected_outputs=case.word.raw
-                               )
 
     # Edge: word to char forward
-    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw", mode="forward", keyword="raw2",
+    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw", mode="forward", keyword="raw",
+                                                      edges=[rel_sentence_contains_word['forward']],
                                                       expected_inputs=[case.word.raw, ],
                                                       expected_outputs=case.char.raw,
-                                                      edges=[rel_sentence_contains_word['forward']]
                                                       )
     # alternatives to DummyEdgeWtoC:
     #   DummyEdgeWtoC: [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
     #   DummyEdgeWtoCOpt2: ["J", "o", "h", "n"]
     #   DummyEdgeWtoCOpt3: ["J", "o", "h", "n", " ", "w", "o", "r", "k", "s", " ", "f", "o", "r", " ", "I", "B", "M"]
-    char['emb'] = DummyCharEmb('raw2', edges=[rel_word_contains_char['forward']],
+    char['emb'] = DummyCharEmb('raw', edges=[rel_word_contains_char['forward']],
                                 expected_outputs=case.word.emb
                                )
     char['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     # Edge: backward
-    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("emb", mode='backward', keyword='emb')
-    phrase['emb2'] = DummyPhraseEmb("emb", edges=[rel_phrase_contains_word['backward']],
+    rel_phrase_contains_word['backward'] = DummyEdgeWtoP("raw", mode='backward', keyword='raw')
+    phrase['emb'] = DummyPhraseEmb("raw", edges=[rel_phrase_contains_word['backward']],
                                     expected_outputs=case.phrase.emb
                                    )
-    phrase['emb2'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+    phrase['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = DummyEdgeWtoPair('emb', mode="backward", keyword="word1_emb")
@@ -125,7 +121,7 @@ def model_declaration(config, case):
                                          expected_outputs=case.word.O)
 
     phrase[people] = ReaderSensor(keyword='Peop', label=True)
-    phrase[people] = DummyFullyConnectedLearner('emb2', input_dim=2048, output_dim=2,
+    phrase[people] = DummyFullyConnectedLearner('emb', input_dim=2048, output_dim=2,
                                                 expected_inputs=[case.phrase.emb,],
                                                 expected_outputs=case.phrase.people)
 
@@ -160,7 +156,7 @@ def test_main_conll04(case):
             assert (child_node.getAttribute('<other>') == case.word.other[child_node.instanceID]).all()
             assert (child_node.getAttribute('<O>') == case.word.O[child_node.instanceID]).all()
         elif child_node.ontologyNode.name == 'phrase':
-            assert (child_node.getAttribute('emb2') == case.phrase.emb[child_node.instanceID]).all()
+            assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
