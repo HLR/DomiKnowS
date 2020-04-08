@@ -51,7 +51,7 @@ class Property(BaseGraphShallowTree):
 
     def __call__(self, context):
         # make sure every sensor are visited
-        for sensor in self:
+        for _, sensor in self.items():
             sensor(context)
         # and see what is lefted
         return context[self.fullname]

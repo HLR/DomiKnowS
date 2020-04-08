@@ -6,10 +6,11 @@ from ..graph.base import BaseGraphTreeNode
 class Sensor(BaseGraphTreeNode):
     def __call__(
         self,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        force=False
     ) -> Dict[str, Any]:
         try:
-            context = self.update_context(context)
+            self.update_context(context, force)
         except:
             print('Error during updating context with sensor {}'.format(self.fullname))
             raise
@@ -20,19 +21,21 @@ class Sensor(BaseGraphTreeNode):
         context: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
+        if not force and (self.fullname in context):
             # context cached results by sensor name. override if forced recalc is needed
             val = context[self.fullname]
         else:
             val = self.forward(context)
-        if val is not None:
             context[self.fullname] = val
-            context[self.sup.fullname] = val # override state under property name
-        return context
+            self.propagate_context(context, self, force)
+
+    def propagate_context(self, context, node, force=False):
+        if node.sup is not None and (node.sup.fullname not in context or force):
+            context[node.sup.fullname] = context[self.fullname]
+            self.propagate_context(context, node.sup, force)
 
     def forward(
         self,
-        *args,
-        **kwargs,
+        context: Dict[str, Any]
     ) -> Any:
-        return None
+        raise NotImplementedError
