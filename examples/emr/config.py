@@ -3,7 +3,7 @@ import torch
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 from emr.utils import Namespace, caller_source
-from emr.graph.loss import BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
 from emr.graph.metric import MacroAverageTracker, PRF1Tracker
 from emr.graph.solver import Solver
 
@@ -44,7 +44,7 @@ config = {
             }
         },
         'lbp': {
-            'loss': MacroAverageTracker(BCEWithLogitsFocalLoss()),
+            'loss': MacroAverageTracker(BWithLogitsIMLoss(1)),
             'metric': PRF1Tracker(),
             'solver_fn': lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
         }
@@ -55,7 +55,7 @@ config = {
         'opt': torch.optim.Adam,
         'batch_size': 8,
         'epoch': 10,
-        'train_inference': False,
+        'train_inference': True,
         'valid_inference': True
     },
     'Source': {

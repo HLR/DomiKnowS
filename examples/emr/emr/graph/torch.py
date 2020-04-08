@@ -25,7 +25,10 @@ class TorchModel(torch.nn.Module):
             for _, sensor in node.find(ModuleLearner):
                 self.add_module(sensor.fullname, sensor.module)
 
+        self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
+
         self.solver = solver_fn(self.graph)
+        self.graph.poi = self.poi
 
     def move(self, value, device=None):
         device = device or next(self.parameters()).device
@@ -40,7 +43,7 @@ class TorchModel(torch.nn.Module):
         else:
             return value
 
-    def poi(self):
+    def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.target:
@@ -62,13 +65,10 @@ class TorchModel(torch.nn.Module):
         loss = 0
         metric = {}
 
-        # make sure output to all targets are generated
-        for _, output_sensor, _ in self.poi():
-            output_sensor(data)
         if inference:
             data = self.inference(data)
 
-        for prop, output_sensor, target_sensor in self.poi():
+        for prop, (output_sensor, target_sensor) in self.poi.items():
             logit = output_sensor(data)
             mask = output_sensor.mask(data)
             inference = prop(data)
@@ -84,10 +84,7 @@ class TorchModel(torch.nn.Module):
         return loss, metric, data
 
     def inference(self, data):
-        prop_list = [prop for prop, _, _ in self.poi()]
-        prop_dict = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.poi()}
-
-        data = self.solver.inferSelection(self.graph, data, prop_list=prop_list, prop_dict=prop_dict)
+        data = self.solver.inferSelection(data, list(self.poi))
         return data
 
 
@@ -115,14 +112,22 @@ class PoiModel(TorchModel):
         loss = 0
         metric = {}
 
-        # make sure output to all targets are generated
-        for _, output_sensor, _ in self.poi():
-            output_sensor(data)
         if inference:
             data = self.inference(data)
 
-        for prop, output_sensor, target_sensor in self.poi():
+        for prop, (output_sensor, target_sensor) in self.poi.items():
             loss += self.poi_loss(data, prop, output_sensor, target_sensor)
             metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
 
         return loss, metric, data
+
+class IMLModel(PoiModel):
+    def poi_loss(self, data, prop, output_sensor, target_sensor):
+        logit = output_sensor(data)
+        mask = output_sensor.mask(data)
+        labels = target_sensor(data)
+        inference = prop(data)
+
+        if self.loss:
+            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
+            return local_loss

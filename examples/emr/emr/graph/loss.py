@@ -21,7 +21,7 @@ class BCEFocalLoss(BCEWithLogitsLoss):
 
     def forward(self, input, target, weight=None):
         if weight is None:
-            weight = self.weight
+            weight = self.weight or 1
         if self.with_logits:
             bce = F.binary_cross_entropy_with_logits(input, target, weight,
                                                      pos_weight=self.pos_weight,
@@ -62,6 +62,35 @@ class BCEWithLogitsFocalLoss(torch.nn.Module):
         # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
         loss = - self.alpha * (1 - p)**self.gamma * target * logp
         loss += - (1 - self.alpha) * p**self.gamma * (1 - target) * lognp
+        loss *= weight
+
+        if self.reduction == 'none':
+            return loss
+        elif self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum
+
+        raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
+
+
+class BWithLogitsIMLoss(torch.nn.Module):
+    def __init__(self, lmbd, reduction='mean'):
+        super().__init__()
+        self.lmbd = lmbd
+        self.reduction = reduction
+
+    def forward(self, input, inference, target, weight=None):
+        if weight is None:
+            weight = self.weight or 1
+
+        logp = F.logsigmoid(input)
+        lognp = logp - input  # log(1-1/(1+exp(-x))) = log(exp(-x)/(1+exp(-x))) = log(exp(-x)) + log(1/(1+exp(-x)))
+        # make sure target is float
+        target = target.float()
+        # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
+        loss = - (1 - (1 - self.lmbd) * inference) * target * logp
+        loss += - (self.lmbd + (1 - self.lmbd) * inference) * (1 - target) * lognp
         loss *= weight
 
         if self.reduction == 'none':
