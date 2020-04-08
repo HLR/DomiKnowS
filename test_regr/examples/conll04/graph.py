@@ -23,7 +23,7 @@ with Graph('global') as graph:
         (rel_word_contains_char,) = word.contains(char)
 
         pair = Concept(name='pair')
-        (rel_pair_word1, rel_pair_word2, ) = pair.has_a(word, word)
+        (rel_pair_word1, rel_pair_word2, ) = pair.has_a(arg1=word, arg2=word)
 
     with Graph('application') as app_graph:
         people = word(name='people')
@@ -38,10 +38,10 @@ with Graph('global') as graph:
             nandL(c1, c2)
 
         work_for = pair(name='work_for')
-        located_in = Concept(name='located_in')
-        live_in = Concept(name='live_in')
-        orgbase_on = Concept(name='orgbase_on')
-        kill = Concept(name='kill')
+        located_in = pair(name='located_in')
+        live_in = pair(name='live_in')
+        orgbase_on = pair(name='orgbase_on')
+        kill = pair(name='kill')
 
         work_for.has_a(people, organization)
         located_in.has_a(location, location)

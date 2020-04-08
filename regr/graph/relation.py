@@ -17,8 +17,10 @@ class Relation(BaseGraphTree):
 
     def __init__(self, src, dst, argument_name):
         cls = type(self)
-        name = '{}-{}-{}-{}'.format(src.name,
-                                    cls.name(), argument_name, dst.name)
+        if isinstance(argument_name, str):
+            name = argument_name
+        else:
+            name = '{}-{}-{}-{}'.format(src.name, cls.name(), argument_name, dst.name)
         BaseGraphTree.__init__(self, name)
         self.src = src
         self.dst = dst
