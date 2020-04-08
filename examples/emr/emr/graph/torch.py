@@ -68,9 +68,10 @@ class TorchModel(torch.nn.Module):
         if inference:
             data = self.inference(data)
 
-        for _, output_sensor, target_sensor in self.poi():
+        for prop, output_sensor, target_sensor in self.poi():
             logit = output_sensor(data)
             mask = output_sensor.mask(data)
+            inference = prop(data)
             labels = target_sensor(data)
 
             if self.loss:
@@ -88,3 +89,40 @@ class TorchModel(torch.nn.Module):
 
         data = self.solver.inferSelection(self.graph, data, prop_list=prop_list, prop_dict=prop_dict)
         return data
+
+
+class PoiModel(TorchModel):
+    def poi_loss(self, data, prop, output_sensor, target_sensor):
+        logit = output_sensor(data)
+        mask = output_sensor.mask(data)
+        labels = target_sensor(data)
+
+        if self.loss:
+            local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+            return local_loss
+
+    def poi_metric(self, data, prop, output_sensor, target_sensor):
+        mask = output_sensor.mask(data)
+        labels = target_sensor(data)
+        inference = prop(data)
+
+        if self.metric:
+            local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
+            return local_metric
+
+    def forward(self, data, inference=True):
+        data = self.move(data)
+        loss = 0
+        metric = {}
+
+        # make sure output to all targets are generated
+        for _, output_sensor, _ in self.poi():
+            output_sensor(data)
+        if inference:
+            data = self.inference(data)
+
+        for prop, output_sensor, target_sensor in self.poi():
+            loss += self.poi_loss(data, prop, output_sensor, target_sensor)
+            metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
+
+        return loss, metric, data

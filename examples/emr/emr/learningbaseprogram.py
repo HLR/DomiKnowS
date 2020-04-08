@@ -1,14 +1,14 @@
 import torch
 from tqdm import tqdm
 
-from .graph.torch import TorchModel
+from .graph.torch import TorchModel, PoiModel
 from .utils import seed, consume, print_result
 
 
 class LearningBasedProgram():
     def __init__(self, graph, **config):
         self.graph = graph
-        self.model = TorchModel(graph, **config)
+        self.model = PoiModel(graph, **config)
 
     def train(self, training_set, valid_set=None, test_set=None, config=None):
         if config.device is not None:
