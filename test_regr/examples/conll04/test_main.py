@@ -70,9 +70,10 @@ def model_declaration(config, case):
                                )
 
     # Edge: word to char forward
-    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw2", mode="forward", keyword="raw2",
+    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw", mode="forward", keyword="raw2",
                                                       expected_inputs=[case.word.raw, ],
-                                                      expected_outputs=case.char.raw
+                                                      expected_outputs=case.char.raw,
+                                                      edges=[rel_sentence_contains_word['forward']]
                                                       )
     # alternatives to DummyEdgeWtoC:
     #   DummyEdgeWtoC: [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
@@ -165,7 +166,7 @@ def test_main_conll04(case):
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
     conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
-    tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
 
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -196,6 +196,7 @@ class TorchEdgeSensor(TorchSensor):
         self.edge = None
         self.src = None
         self.dst = None
+        self.edges = edges
         if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
             raise Exception('not valid')
@@ -256,6 +257,10 @@ class TorchEdgeSensor(TorchSensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
+        if self.edges:
+            for edge in self.edges:
+                for _, sensor in edge.find(Sensor):
+                    sensor(context=context)
         for pre in self.pres:
             if pre not in self.src:
                 continue

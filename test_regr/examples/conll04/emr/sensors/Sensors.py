@@ -25,8 +25,8 @@ class TestSensor(TorchSensor):
 
 
 class TestEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, mode="forward", keyword="default", expected_inputs=None, expected_outputs=None, **kwargs):
-        super().__init__(*pres, mode=mode, keyword=keyword)
+    def __init__(self, *pres, mode="forward", keyword="default", expected_inputs=None, expected_outputs=None, edges=None, **kwargs):
+        super().__init__(*pres, mode=mode, keyword=keyword, edges=edges)
         self._expected_inputs = expected_inputs
         self._expected_outputs = expected_outputs
 
