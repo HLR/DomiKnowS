@@ -157,15 +157,17 @@ class DataNode:
                     _list[0] = epsilon
                 elif _list[1] < epsilon:
                     _list[1] = epsilon
-                        
-                _list = [fun(_it) for _it in _list]
+                       
+                # Apply fun on probabilities 
+                if fun is not None:
+                    _list = [fun(_it) for _it in _list]
                 
                 return _list # Return probability
             
-        return [0, 1]
+        return [1, 0] # ?
             
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, fun=None, *_conceptsRelations):
+    def inferILPConstrains(self, *_conceptsRelations, fun=None):
         
         _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
         candidates_currentConceptOrRelation = OrderedDict()
