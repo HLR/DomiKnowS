@@ -15,26 +15,12 @@ class TorchSensor(Sensor):
         super().__init__()
         self.target = target
 
-    def __call__(self, context: Dict[str, Any], hard=False) -> Dict[str, Any]:
-        if hard or self.fullname not in context:
-            try:
-                self.update_context(context)
-            except:
-                print('Error during updating context with sensor %s', self.fullname)
-                raise
-        return context[self.fullname]
+    def propagate_context(self, context, node, force=False):
+        if not self.target:  # avoid target to be mixed in forward calculation
+            super().propagate_context(context, node, force)
 
-    def update_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        val = self.forward(context)
-        context[self.fullname] = val
-        context[self.sup.fullname] = val # override state under property name
-
-    @abc.abstractmethod
-    def forward(self, *args, **kwargs,) -> Any:
-        raise SkipSensor
-
-    @abc.abstractmethod
-    def mask(self, *args, **kwargs,) -> Any:
+    def mask(self, context: Dict[str, Any]) -> Any:
+        # allow safely skip mask
         raise SkipSensor
 
 
@@ -78,14 +64,16 @@ class FunctionalSensor(TorchSensor):
                 if not skip_none_prop:
                     yield pre
 
-    def update_context(
+    @abc.abstractmethod
+    def forward_func(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def forward(
         self,
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
         args = self.get_args(context, sensor_filter=lambda s: not s.target)
-        val = self.forward(*args)
-        context[self.fullname] = val
-        context[self.sup.fullname] = val # override state under property name
+        return self.forward_func(*args)
 
     def mask(self, context):
         masks = list(self.get_args(context, sensor_fn=lambda s, c: s.mask(c)))
@@ -101,7 +89,7 @@ class FunctionalSensor(TorchSensor):
 
 
 class CartesianSensor(FunctionalSensor):
-    def forward(self, *inputs):
+    def forward_func(self, *inputs):
         # torch cat is not broadcasting, do repeat manually
         input_iter = iter(inputs)
         output = next(input_iter)

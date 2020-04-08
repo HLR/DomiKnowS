@@ -13,15 +13,18 @@ class FunctionalLearner(FunctionalSensor, TorchLearner):
 
 class ModuleLearner(FunctionalLearner):
     @staticmethod
-    def Module():
+    def Module(**kwargs):
         pass
 
     def __init__(self, pre, target=False, module=None, **kwargs):
         super().__init__(pre, target=target)
         self.module = module or self.Module(**kwargs)
 
-    def forward(self, input):
+    def forward_func(self, input):
         return self.module(input)
+
+    def parameters(self):
+        return self.module.parameters()
 
 
 class EmbedderLearner(ModuleLearner):
@@ -39,8 +42,8 @@ class EmbedderLearner(ModuleLearner):
 class RNNLearner(ModuleLearner):
     Module=torch.nn.LSTM
 
-    def forward(self, input):
-        output, _ = super().forward(input)
+    def forward_func(self, input):
+        output, _ = super().forward_func(input)
         return output
 
 
@@ -54,5 +57,5 @@ class LRLearner(ModuleLearner):
         kwargs['out_features'] = 1
         return torch.nn.Linear(**kwargs)
 
-    def forward(self, input):
-        return super().forward(input).squeeze(-1)
+    def forward_func(self, input):
+        return super().forward_func(input).squeeze(-1)
