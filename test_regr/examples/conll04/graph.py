@@ -49,8 +49,8 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
-        ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
+        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
+        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
+        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))

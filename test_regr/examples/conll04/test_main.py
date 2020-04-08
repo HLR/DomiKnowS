@@ -20,7 +20,7 @@ def test_case():
             'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
             'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
-            'o':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
+            'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
             'phrases': [(0, 0), (2,2), (3, 3)]
         },
         'phrase': {
@@ -115,7 +115,7 @@ def model_declaration(config, case):
                                          expected_outputs=case.word.other)
     word[o] = DummyFullyConnectedLearner('emb', input_dim=2048, output_dim=2,
                                          expected_inputs=[case.word.emb,],
-                                         expected_outputs=case.word.o)
+                                         expected_outputs=case.word.O)
 
     phrase[people] = ReaderSensor(keyword='Peop', label=True)
     phrase[people] = DummyFullyConnectedLearner('emb2', input_dim=2048, output_dim=2,
@@ -151,14 +151,14 @@ def test_main_conll04(case):
             assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
             assert (child_node.getAttribute('<location>') == case.word.location[child_node.instanceID]).all()
             assert (child_node.getAttribute('<other>') == case.word.other[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<O>') == case.word.o[child_node.instanceID]).all()
+            assert (child_node.getAttribute('<O>') == case.word.O[child_node.instanceID]).all()
         elif child_node.ontologyNode.name == 'phrase':
             assert (child_node.getAttribute('emb2') == case.phrase.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'o']
+    conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
     tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
 
 if __name__ == '__main__':

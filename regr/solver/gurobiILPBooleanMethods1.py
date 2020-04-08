@@ -200,7 +200,10 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if onlyConstrains:
             varSumLinExpr = LinExpr()
             for currentVar in var:
-                varSumLinExpr.addTerms(1.0, currentVar)
+                try:
+                    varSumLinExpr.addTerms(1.0, currentVar)
+                except  GurobiError:
+                    pass
         
             m.addConstr(varSumLinExpr <= N - 1)
                         

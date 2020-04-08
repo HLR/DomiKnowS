@@ -41,10 +41,9 @@ class ilpOntSolverFactory:
             if _iplConfig is not None:
                 if ilpConfig['ilpSolver'] == "Gurobi":
                     if __package__ is None or __package__ == '':
-                        # from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
-                        from regr.solver.gurobiILPOntSolver1 import gurobiILPOntSolver
+                        from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
                     else:
-                        from .gurobiILPOntSolver1 import gurobiILPOntSolver
+                        from .gurobiILPOntSolver import gurobiILPOntSolver
                     SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
                 elif ilpConfig['ilpSolver'] == "GEKKO":
                     if __package__ is None or __package__ == '':
