@@ -22,6 +22,9 @@ class Solver(NoLogInferenceSolver):
         labels = labels.float()
         return labels, logit, mask
 
+    def set_prop_result(self, prop, data, value):
+        data[prop.fullname] = value.unbind(dim=-1)[1]
+
     def inferSelection(self, graph, data, prop_list, prop_dict):
         self.prop_dict = prop_dict
         return super().inferSelection(graph, data, prop_list)

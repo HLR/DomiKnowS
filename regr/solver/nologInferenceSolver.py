@@ -21,6 +21,9 @@ class NoLogInferenceSolver(ilpOntSolver):
     def get_prop_result(self, prop, data):
         raise NotImplementedError
 
+    def set_prop_result(self, prop, data, value):
+        data[prop.fullname] = value
+
     def inferSelection(self, graph: Graph, data: DataInstance, prop_list=None) -> DataInstance:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
@@ -168,7 +171,7 @@ class NoLogInferenceSolver(ilpOntSolver):
                 logits_value = torch.log(batched_value / (1 - batched_value))  # Go to +- inf
                 # Put it back finally
                 #import pdb; pdb.set_trace()
-                data[prop.fullname] = logits_value
+                self.set_prop_result(prop, data, logits_value)
                 #for name, learner in prop.find(self.output_sensor_type):
                 #    data[learner.fullname] = logits_value
 
