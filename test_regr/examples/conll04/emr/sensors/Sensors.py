@@ -24,6 +24,26 @@ class TestSensor(TorchSensor):
         return self.expected_outputs
 
 
+class TestEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, mode="forward", keyword="default", expected_inputs=None, expected_outputs=None, **kwargs):
+        super().__init__(*pres, mode=mode, keyword=keyword)
+        self._expected_inputs = expected_inputs
+        self._expected_outputs = expected_outputs
+
+    @property
+    def expected_inputs(self):
+        return self._expected_inputs
+
+    @property
+    def expected_outputs(self):
+        return self._expected_outputs
+
+    def forward(self,) -> Any:
+        if self.expected_inputs is not None:
+            assert self.inputs == self.expected_inputs
+        return self.expected_outputs
+
+
 class DummyEdgeStoW(TorchEdgeSensor):
     def forward(self,) -> Any:
         return ["John", "works", "for", "IBM"]
@@ -51,8 +71,9 @@ class DummyEdgeWtoPair(TorchEdgeSensor):
         return self.inputs[0]
 
 
-class DummyEdgeWtoC(TorchEdgeSensor):
+class DummyEdgeWtoC(TestEdgeSensor):
     def forward(self,) -> Any:
+        pass
         # # opt 1
         # self.inputs == ["John", "works", "for", "IBM"]
         return [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]

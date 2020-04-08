@@ -12,6 +12,9 @@ def test_case():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     case = {
+        'char': {
+            "raw": [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
+        },
         'word': {
             'raw': ["John", "works", "for", "IBM"],
             'emb': torch.randn(4, 2048, device=device),
@@ -67,7 +70,10 @@ def model_declaration(config, case):
                                )
 
     # Edge: word to char forward
-    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw2", mode="forward", keyword="raw2")
+    rel_word_contains_char['forward'] = DummyEdgeWtoC("raw2", mode="forward", keyword="raw2",
+                                                      expected_inputs=[case.word.raw, ],
+                                                      expected_outputs=case.char.raw
+                                                      )
     # alternatives to DummyEdgeWtoC:
     #   DummyEdgeWtoC: [["J", "o", "h", "n"], ["w", "o", "r", "k", "s"], ["f", "o", "r"], ["I", "B", "M"]]
     #   DummyEdgeWtoCOpt2: ["J", "o", "h", "n"]
