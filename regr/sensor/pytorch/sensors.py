@@ -186,8 +186,8 @@ class NominalSensor(TorchSensor):
 
 
 class TorchEdgeSensor(TorchSensor):
-    def __init__(self, *pres, mode="forward", keyword="default"):
-        super().__init__(*pres)
+    def __init__(self, *pres, mode="forward", keyword="default", edges=None):
+        super().__init__(*pres, edges=edges)
         self.mode = mode
         self.created = 0
         self.keyword = keyword
