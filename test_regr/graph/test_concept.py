@@ -109,7 +109,7 @@ def phrase_data(sentence_data):
 
 @pytest.fixture()
 def model_trial(graph, sentence_data):
-    from regr.graph import Trial
+    from regr.graph import Trial, DataNode
 
     people = graph['application/people']
     organization = graph['application/organization']
@@ -126,6 +126,23 @@ def model_trial(graph, sentence_data):
     model_trial[organization, phrase_works] = 0.18
     model_trial[organization, phrase_for] = 0.05
     model_trial[organization, phrase_IBM] = 0.70
+
+    phrase_John.predictions = {
+        DataNode.PredictionType["Learned"]: {
+            (people): 0.80,
+            (organization): 0.51}}
+    phrase_works.predictions = {
+        DataNode.PredictionType["Learned"]: {
+            (people): 0.18,
+            (organization): 0.18}}
+    phrase_for.predictions = {
+        DataNode.PredictionType["Learned"]: {
+            (people): 0.05,
+            (organization): 0.05}}
+    phrase_IBM.predictions = {
+        DataNode.PredictionType["Learned"]: {
+            (people): 0.51,
+            (organization): 0.70}}
 
     return model_trial
 
