@@ -94,22 +94,18 @@ def sentence_data(graph):
 
     sentence = graph['linguistic/sentence']
     phrase = graph['linguistic/phrase']
-    sentence_1 = 'John works for IBM'
+    sentence_data = 'John works for IBM'
 
-    sentence_data_1 = DataNode(instanceID=0,
-                               instanceValue=sentence_1,
-                               ontologyNode=sentence,
-                               childInstanceNodes=[
-                                   DataNode(instanceID=i,
-                                            instanceValue=phrase_data,
-                                            ontologyNode=phrase,
-                                            childInstanceNodes=[])
-                                   for i, phrase_data in enumerate(sentence_1.split())])
-    return sentence_data_1
+    sentence_node = DataNode(instanceID=0, instanceValue=sentence_data, ontologyNode=sentence)
+    sentence_node.relationLinks['contains'] = []
+    for i, phrase_data in enumerate(sentence_data.split()):
+        phrase_node = DataNode(instanceID=i, instanceValue=phrase_data, ontologyNode=phrase)
+        sentence_node.relationLinks['contains'].append(phrase_node)
+    return sentence_node
 
 @pytest.fixture()
 def phrase_data(sentence_data):
-    return sentence_data.getChildInstanceNodes()[0]
+    return sentence_data.getChildDataNodes()[0]
 
 @pytest.fixture()
 def model_trial(graph, sentence_data):
@@ -119,7 +115,7 @@ def model_trial(graph, sentence_data):
     organization = graph['application/organization']
 
     model_trial = Trial()  # model_trail should come from model run
-    phrase_John, phrase_works, phrase_for, phrase_IBM = sentence_data.getChildInstanceNodes()
+    phrase_John, phrase_works, phrase_for, phrase_IBM = sentence_data.getChildDataNodes()
 
     model_trial[people, phrase_John] = 0.80
     model_trial[people, phrase_works] = 0.18
@@ -143,10 +139,10 @@ def test_candidates_people_in_sentence(graph, sentence_data):
     people = graph['application/people']
     people_candidates = list(people.candidates(sentence_data))
     assert len(people_candidates) == 4
-    assert people_candidates[0] == (sentence_data.getChildInstanceNodes()[0],)  # John
-    assert people_candidates[1] == (sentence_data.getChildInstanceNodes()[1],)  # works
-    assert people_candidates[2] == (sentence_data.getChildInstanceNodes()[2],)  # for
-    assert people_candidates[3] == (sentence_data.getChildInstanceNodes()[3],)  # IBM
+    assert people_candidates[0] == (sentence_data.getChildDataNodes()[0],)  # John
+    assert people_candidates[1] == (sentence_data.getChildDataNodes()[1],)  # works
+    assert people_candidates[2] == (sentence_data.getChildDataNodes()[2],)  # for
+    assert people_candidates[3] == (sentence_data.getChildDataNodes()[3],)  # IBM
 
 def test_candidates_workfor_in_phrase(graph, phrase_data):
     work_for = graph['application/work_for']
@@ -158,9 +154,9 @@ def test_candidates_workfor_in_sentence(graph, sentence_data):
     work_for = graph['application/work_for']
     candidates = list(work_for.candidates(sentence_data))
     assert len(candidates) == 16
-    assert candidates[0] == (sentence_data.getChildInstanceNodes()[0], sentence_data.getChildInstanceNodes()[0])
-    assert candidates[6] == (sentence_data.getChildInstanceNodes()[1], sentence_data.getChildInstanceNodes()[2])
-    assert candidates[12] == (sentence_data.getChildInstanceNodes()[3], sentence_data.getChildInstanceNodes()[0])
+    assert candidates[0] == (sentence_data.getChildDataNodes()[0], sentence_data.getChildDataNodes()[0])
+    assert candidates[6] == (sentence_data.getChildDataNodes()[1], sentence_data.getChildDataNodes()[2])
+    assert candidates[12] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[0])
 
 def test_candidates_kill_in_phrase(graph, phrase_data):
     kill = graph['application/kill']
@@ -172,9 +168,9 @@ def test_candidates_kill_in_sentence(graph, sentence_data):
     kill = graph['application/kill']
     candidates = list(kill.candidates(sentence_data))
     assert len(candidates) == 16
-    assert candidates[0] == (sentence_data.getChildInstanceNodes()[0], sentence_data.getChildInstanceNodes()[0])
-    assert candidates[6] == (sentence_data.getChildInstanceNodes()[1], sentence_data.getChildInstanceNodes()[2])
-    assert candidates[12] == (sentence_data.getChildInstanceNodes()[3], sentence_data.getChildInstanceNodes()[0])
+    assert candidates[0] == (sentence_data.getChildDataNodes()[0], sentence_data.getChildDataNodes()[0])
+    assert candidates[6] == (sentence_data.getChildDataNodes()[1], sentence_data.getChildDataNodes()[2])
+    assert candidates[12] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[0])
 
 def test_candidates_query_dummy(graph, sentence_data):
     kill = graph['application/kill']
@@ -182,10 +178,10 @@ def test_candidates_query_dummy(graph, sentence_data):
         return (candidate[0].instanceID % 2) and (candidate[1].instanceID % 2)
     candidates = list(kill.candidates(sentence_data, query=query))
     assert len(candidates) == 4
-    assert candidates[0] == (sentence_data.getChildInstanceNodes()[1], sentence_data.getChildInstanceNodes()[1])
-    assert candidates[1] == (sentence_data.getChildInstanceNodes()[1], sentence_data.getChildInstanceNodes()[3])
-    assert candidates[2] == (sentence_data.getChildInstanceNodes()[3], sentence_data.getChildInstanceNodes()[1])
-    assert candidates[3] == (sentence_data.getChildInstanceNodes()[3], sentence_data.getChildInstanceNodes()[3])
+    assert candidates[0] == (sentence_data.getChildDataNodes()[1], sentence_data.getChildDataNodes()[1])
+    assert candidates[1] == (sentence_data.getChildDataNodes()[1], sentence_data.getChildDataNodes()[3])
+    assert candidates[2] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[1])
+    assert candidates[3] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[3])
 
 def test_candidates_query_trial(graph, sentence_data, model_trial):
     work_for = graph['application/work_for']
@@ -200,9 +196,9 @@ def test_candidates_query_trial(graph, sentence_data, model_trial):
     candidates = list(work_for.candidates(sentence_data, query=query))
     assert len(candidates) == 2
     # John 0.80 people, IBM 0.70 organization
-    assert candidates[0] == (sentence_data.getChildInstanceNodes()[0], sentence_data.getChildInstanceNodes()[3])
+    assert candidates[0] == (sentence_data.getChildDataNodes()[0], sentence_data.getChildDataNodes()[3])
     # IBM 0.51 people, John 0.51 organization, just for testing
-    assert candidates[1] == (sentence_data.getChildInstanceNodes()[3], sentence_data.getChildInstanceNodes()[0])
+    assert candidates[1] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[0])
 
 def test_getOntologyGraph(graph):
     linguistic = graph['linguistic']
