@@ -1,16 +1,18 @@
+import logging
 import torch
 from tqdm import tqdm
 
-from .graph.torch import TorchModel, PoiModel, IMLModel
-from .utils import seed, consume, print_result
+from .utils import consume, print_reformat
 
 
 class LearningBasedProgram():
-    def __init__(self, graph, **config):
-        self.graph = graph
-        self.model = IMLModel(graph, **config)
+    logger = logging.getLogger(__name__)
 
-    def train(self, training_set, valid_set=None, test_set=None, config=None):
+    def __init__(self, graph, config):
+        self.graph = graph
+        self.model = config.model(graph)
+
+    def train(self, training_set=None, valid_set=None, test_set=None, config=None):
         if config.device is not None:
             self.model.to(config.device)
         if list(self.model.parameters()):
@@ -18,21 +20,35 @@ class LearningBasedProgram():
         else:
             opt = None
         for epoch in range(config.epoch):
-            print('Epoch:', epoch)
+            self.logger.info('Epoch: %d', epoch)
 
-            print('Training:')
-            consume(tqdm(self.train_epoch(training_set, opt, config.train_inference), total=len(training_set)))
-            print_result(self.model, epoch, 'Training')
+            if training_set is not None:
+                self.logger.info('Training:')
+                consume(tqdm(self.train_epoch(training_set, opt, config.train_inference), total=len(training_set)))
+                self.logger.info(' - loss:')
+                self.print_metric(self.model.loss)
+                self.logger.info(' - metric:')
+                self.print_metric(self.model.metric)
 
             if valid_set is not None:
-                print('Validation:')
+                self.logger.info('Validation:')
                 consume(tqdm(self.test(valid_set, config.valid_inference), total=len(valid_set)))
-                print_result(self.model, epoch, 'Validation')
+                self.logger.info(' - loss:')
+                self.print_metric(self.model.loss)
+                self.logger.info(' - metric:')
+                self.print_metric(self.model.metric)
 
         if test_set is not None:
-            print('Testing:')
+            self.logger.info('Testing:')
             consume(tqdm(self.test(test_set, config.valid_inference), total=len(test_set)))
-            print_result(self.model, epoch, 'Testing')
+            self.logger.info(' - loss:')
+            self.print_metric(self.model.loss)
+            self.logger.info(' - metric:')
+            self.print_metric(self.model.metric)
+
+    def print_metric(self, metric):
+        for (pred, _), value in metric.value().items():
+            self.logger.info('   - %s: %s', pred.sup.prop_name.name, print_reformat(value))
 
     def train_epoch(self, dataset, opt=None, inference=False):
         self.model.train()

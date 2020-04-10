@@ -89,6 +89,23 @@ else:
             pass
 
 
+def print_reformat(value, formatter=None):
+    import torch
+    #from pprint import pformat
+
+    reformatter = {
+        dict: lambda value: ', '.join('%s: %s' % (print_reformat(k, formatter), print_reformat(v, formatter)) for k, v in value.items()),
+        torch.Tensor: lambda value: value.cpu().numpy(),
+        None: str
+    }
+    if formatter:
+        reformatter.update(formatter)
+    for value_type, value_func in reformatter.items():
+        if value_type is not None and isinstance(value, value_type):
+            return value_func(value)
+    return reformatter[None](value)
+
+
 def print_result(model, epoch=None, phase=None):
     header = ''
     if epoch is not None:

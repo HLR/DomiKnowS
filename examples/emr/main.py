@@ -66,7 +66,7 @@ def model_declaration(graph, vocab, config):
     pair[kill] = LRLearner(pair['feature'], **config.pair.lr)
 
     # program
-    lbp = LearningBasedProgram(graph, **config.lbp)
+    lbp = LearningBasedProgram(graph, config.lbp)
     return lbp
 
 
