@@ -6,6 +6,8 @@ class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
     def forward(self, input, target, weight=None):
         if weight is None:
             weight = self.weight
+        # make sure target is float
+        target = target.float()
         return F.binary_cross_entropy_with_logits(input, target,
                                                   self.weight,
                                                   pos_weight=self.pos_weight,
