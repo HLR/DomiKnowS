@@ -107,5 +107,7 @@ class Conll04CorpusReader():
                 trans_func(self)
             if line and Conll04CorpusReader.state_func[state] is not None:
                 Conll04CorpusReader.state_func[state](self, line)
+        if len(self.sentences) > len(self.relations):
+            self.relation_finish()
 
         return self.sentences, self.relations
