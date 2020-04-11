@@ -74,7 +74,6 @@ class ilpOntSolver(object):
 
         # Don't propagate
         logger.propagate = False
-
         print("Log file for %s is in: %s"%(logName,ch.baseFilename))
         self.myLogger = logger
 

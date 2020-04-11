@@ -16,7 +16,6 @@ from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
-from click.decorators import group
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'

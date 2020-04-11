@@ -335,13 +335,26 @@ class NamedTree(NamedTreeNode, OrderedDict):
                 if not filter_fn or filter_fn(retval):
                     yield retval
 
+    def extract_name(self, *names, delim='/', trim=True):
+        if isinstance(names[0], str):
+            name0s = names[0].split(delim)
+            name = name0s[0]
+            if trim:
+                name = name.strip()
+            names = list(chain(name0s[1:], names[1:]))
+            # match typed name string
+            if name[0] == '<' and name[-1] == '>':
+                for key in self:
+                    if key.name == name[1:-1]:
+                        name = key
+                        break
+        else:
+            name = names[0]
+            names = names[1:]
+        return name, names
 
     def parse_query_apply(self, func, *names, delim='/', trim=True):
-        name0s = names[0].split(delim)
-        name = name0s[0]
-        if trim:
-            name = name.strip()
-        names = list(chain(name0s[1:], names[1:]))
+        name, names = self.extract_name(*names, delim=delim, trim=trim)
         if names:
             return self[name].parse_query_apply(func, *names, delim=delim, trim=trim)
         return func(self, name)
