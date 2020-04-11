@@ -236,7 +236,7 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, root_data, data):
+    def predict(self, root_data, *data):
         # TODO: make use of root_data to find the best proper trial in the stack
         try:
             if len(data) == 0:
