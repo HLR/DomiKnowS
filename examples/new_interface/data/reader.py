@@ -11,8 +11,7 @@ import re
 import json
 from pycorenlp import StanfordCoreNLP
 import pickle
-
-
+from regr.graph import DataNode
 
 nlp = StanfordCoreNLP('http://localhost:9000')
 properties={
@@ -486,7 +485,9 @@ class SimpleReader():
         return _list
 
     def data(self):
-        for item in self.obj:
+        for itemNo, item in enumerate(self.obj):
+            #itemSentence = DataNode(instanceID = 'Sentence_' + str(itemNo), instanceValue = item['sentence'], ontologyNode = sentence)
+
             for phrase in item['phrases']:
                 phrase['index'] = phrase['value_index'] + phrase['before']
             phrase_bound = []

@@ -62,7 +62,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info("No ILP negative variable for concept %s and token %s - created based on positive value %f"%(token, conceptName, currentProbability[0]))
 
                 # Create negative variable
-                x['Not_'+conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
+                if True: # ilpOntSolver.__negVarTrashhold:
+                    x['Not_'+conceptName, token]=m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(token, conceptName))
+                else:
+                    self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(token, conceptName))
 
         # Add constraints forcing decision between variable and negative variables 
         for conceptName in conceptNames:
@@ -339,12 +342,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if (conceptName, token) not in x:
                     continue
                            
-                currentQElement =  graphResultsForPhraseToken[conceptName][tokenIndex][1]*x[conceptName, token]
+                currentQElement = graphResultsForPhraseToken[conceptName][tokenIndex][1] * x[conceptName, token]
+
                 X_Q += currentQElement
                 #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                 if ('Not_'+conceptName, token) in x: 
                     currentQElement = graphResultsForPhraseToken[conceptName][tokenIndex][0]*x['Not_'+conceptName, token]
+
                     X_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
@@ -386,7 +391,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s - created based on positive value %f"%(relationName,token1,token2, currentProbability[0]))
                 
                     # Create negative variable
-                    y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
+                    if True: # ilpOntSolver.__negVarTrashhold:
+                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
+                    else:
+                        self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s created"%(relationName,token1,token2))
                         
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
@@ -758,11 +766,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                         
                     currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index][1]*y[relationName, token1, token2]
+
                     Y_Q += currentQElement
                     #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
                     if (relationName+'-neg', token1, token2) in y: 
                         currentQElement = graphResultsForPhraseRelation[relationName][token1Index][token2Index][0]*y[relationName+'-neg', token1, token2]
+
                         Y_Q += currentQElement
                         #self.myLogger.debug("Created objective element %s"%(currentQElement))
 
@@ -815,7 +825,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                             self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s - created based on positive value %f"%(tripleRelationName,token1,token2,token3, currentProbability[0]))
                         
                         # Create negative variable
-                        z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
+                        if True: #ilpOntSolver.__negVarTrashhold:
+                            z[tripleRelationName+'-neg', token1, token2, token3]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s_%s"%(tripleRelationName, token1, token2, token3))
+                        else:
+                            self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s %s created"%(tripleRelationName,token1,token2,token3))
                             
         # Add constraints forcing decision between variable and negative variables 
         for tripleRelationName in tripleRelationNames:            

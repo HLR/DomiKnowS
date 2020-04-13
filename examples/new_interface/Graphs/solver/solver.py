@@ -38,7 +38,7 @@ class ACELogicalSolver(ilpOntSolver):
         with torch.no_grad():
             epsilon = 0.00001
             for item in predicates:
-                _list = [_it.cpu().numpy() for _it in context[global_key + predictions_on + "/" + item]]
+                _list = [_it.cpu().detach().numpy() for _it in context[global_key + predictions_on + "/" + item]]
                 for _it in range(len(_list)):
                     if _list[_it][0] > 1-epsilon:
                         _list[_it][0] = 1-epsilon
@@ -66,10 +66,10 @@ class ACELogicalSolver(ilpOntSolver):
                             _value[0] = _value[0] * sentence[item.replace("<", "").replace(">", "")][_range][0]
                             _value[1] = _value[1] * sentence[item.replace("<", "").replace(">", "")][_range][1]
                         _list.append(np.log(np.array(_value)))
-                    sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = [_val for _val in _list]
+                    sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = torch.tensor([_val for _val in _list])
                 sentence['phrase']['relations'] = {}
                 for item in pairs:
-                    _list = [np.log(_it.cpu().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
+                    _list = [np.log(_it.cpu().detach().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
                     _result = np.zeros((len(sentence['phrase']['raw']), len(sentence['phrase']['raw']), 2))
                     for _range in range(len(sentence['phrase']['pair_index'])):
                         indexes = sentence['phrase']['pair_index'][_range]
@@ -80,7 +80,7 @@ class ACELogicalSolver(ilpOntSolver):
                         _result[indexes[1]][indexes[0]][1] = values[1]
                     for _ii in range(len(sentence['phrase']['raw'])):
                         _result[_ii][_ii] = np.log(np.array([0.999, 0.001]))
-                    sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = _result
+                    sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = torch.tensor(_result)
         # import pickle
         # file = open('data.pkl', 'wb')
         #

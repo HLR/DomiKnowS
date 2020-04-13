@@ -5,10 +5,10 @@ How to run the ACE Example:
 	- This is an optional step!! You can put your data anywhere as long as you change the `paths` variable inside main.py
 2. You have two options for reading this data.
 		-  Using pickle outputs and PickleReader ( these are preprocessed results of ACE saved so if you are interested to change the model it's better not to use them. However they make the speed of execution a lot faster)
-		-  Using json output and SimpleReader
-		-  This option changes the paths being passed to the Training and prediction functions and also changed the reader that is defined in the *base.py*
-		- The classes of readers can be found on data/reader.py
-		- **Please make sure that you are calling the right reader in your training function inside base.py!!**
+	- Using json output and SimpleReader
+	-  This option changes the paths being passed to the Training and prediction functions and also changed the reader that is defined in the *base.py*
+	- The classes of readers can be found on data/reader.py
+	- **Please make sure that you are calling the right reader in your training function inside base.py!!**
 3. The main model is using Graphs/graph.py as the knowledge graph. In this graph we have entities and relations along with the basic types. There are also constraints defined which you can modify or comment. (note: many constraints are comming from the graph itself and is not written separately in the Lconstraints format)
 4. Main.py is the actual file to run the experiment. First you have to define the path of the files you want to process by modifying the variable `paths` then run `updated_graph.structured_train_constraint`  to execute the training. (Note: you can change the ratio variable enable to modify the usage of inference-based loss or cross entorpy)
 5. in order to run just prediction set without updating the parameters run `updated_graph.predConstraint`. Note that if you want to use the saved parameters you have to load the model first by `updated_graph.load()`. The parameters of the model with be automatically be stored in *saves* Folder.

@@ -1,11 +1,12 @@
 from regr.sensor.sensor import Sensor
+from regr.graph import Graph, DataNode
+
 from typing import Dict, Any
 import torch
 
-
 class TorchSensor(Sensor):
 
-    def __init__(self, *pres, output=None, edges=None):
+    def __init__(self, *pres, output=None, edges=None, label=False):
         super().__init__()
         if not edges:
             edges = []
@@ -14,6 +15,7 @@ class TorchSensor(Sensor):
         self.context_helper = None
         self.inputs = []
         self.edges = edges
+        self.label = label
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")
@@ -55,15 +57,20 @@ class TorchSensor(Sensor):
         else:
             self.define_inputs()
             val = self.forward()
+            
         if val is not None:
             context[self.fullname] = val
-            context[self.sup.fullname] = val  # override state under property name
+            if not self.label:
+                context[self.sup.fullname] = val  # override state under property name
         else:
             context[self.fullname] = None
-            context[self.sup.fullname] = None
+            if not self.label:
+                context[self.sup.fullname] = None
+            
         if self.output:
             context[self.fullname] = self.fetch_value(self.output)
             context[self.sup.fullname] = self.fetch_value(self.output)
+            
         return context
 
     def update_pre_context(
@@ -107,9 +114,8 @@ class ConstantSensor(TorchSensor):
 
 class ReaderSensor(TorchSensor):
     def __init__(self, *pres, keyword, label=False):
-        super().__init__(*pres)
+        super().__init__(*pres, label=label)
         self.data = None
-        self.label = label
         self.keyword = keyword
 
     def fill_data(self, data):
@@ -182,14 +188,15 @@ class NominalSensor(TorchSensor):
 
 
 class TorchEdgeSensor(TorchSensor):
-    def __init__(self, *pres, mode="forward", keyword="default"):
-        super().__init__(*pres)
+    def __init__(self, *pres, mode="forward", keyword="default", edges=None):
+        super().__init__(*pres, edges=edges)
         self.mode = mode
         self.created = 0
         self.keyword = keyword
         self.edge = None
         self.src = None
         self.dst = None
+        self.edges = edges
         if mode != "forward" and mode != "backward" and mode != "selection":
             print("the mode passed to the edge sensor is not right")
             raise Exception('not valid')
@@ -250,6 +257,10 @@ class TorchEdgeSensor(TorchSensor):
         self,
         context: Dict[str, Any]
     ) -> Any:
+        if self.edges:
+            for edge in self.edges:
+                for _, sensor in edge.find(Sensor):
+                    sensor(context=context)
         for pre in self.pres:
             if pre not in self.src:
                 continue
