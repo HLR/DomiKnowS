@@ -1,8 +1,9 @@
 
 How to run the ACE Example:  
 1. Download the compiled json outputs of ACE data into the folder ACE_JSON and in the splits of train/test/valid 
-	- in each train/valid/test folder we can have multiple json files containing information of different splits. 
+	- In each train/valid/test folder we can have multiple json files containing information of different splits. 
 	- This is an optional step!! You can put your data anywhere as long as you change the `paths` variable inside main.py
+	- A sample json file is available at sample_data/sample.json
 2. You have two options for reading this data.
 		-  Using pickle outputs and PickleReader ( these are preprocessed results of ACE saved so if you are interested to change the model it's better not to use them. However they make the speed of execution a lot faster)
 	- Using json output and SimpleReader
