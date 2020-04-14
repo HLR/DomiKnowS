@@ -49,7 +49,7 @@ class ACELogicalSolver(ilpOntSolver):
                     elif _list[_it][1] < epsilon:
                         _list[_it][1] = epsilon
                 sentence[item.replace("<", "").replace(">", "")] = _list
-                sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it) for _it in _list]
+                sentence['words'][item.replace("<", "").replace(">", "")] = np.log(np.array(_list))
 
             if len(pairs):
                 sentence['phrase'] = {}
@@ -66,7 +66,7 @@ class ACELogicalSolver(ilpOntSolver):
                             _value[0] = _value[0] * sentence[item.replace("<", "").replace(">", "")][_range][0]
                             _value[1] = _value[1] * sentence[item.replace("<", "").replace(">", "")][_range][1]
                         _list.append(np.log(np.array(_value)))
-                    sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = torch.tensor([_val for _val in _list])
+                    sentence['phrase']['entity'][item.replace("<", "").replace(">", "")] = np.array(_list)
                 sentence['phrase']['relations'] = {}
                 for item in pairs:
                     _list = [np.log(_it.cpu().detach().numpy()) for _it in context[global_key + pairs_on + "/" + item]]
@@ -80,7 +80,7 @@ class ACELogicalSolver(ilpOntSolver):
                         _result[indexes[1]][indexes[0]][1] = values[1]
                     for _ii in range(len(sentence['phrase']['raw'])):
                         _result[_ii][_ii] = np.log(np.array([0.999, 0.001]))
-                    sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = torch.tensor(_result)
+                    sentence['phrase']['relations'][item.replace("<", "").replace(">", "")] = np.array(_result)
         # import pickle
         # file = open('data.pkl', 'wb')
         #
