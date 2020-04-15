@@ -102,8 +102,7 @@ class DataNode:
         if relationName not in self.relationLinks:
             self.relationLinks[relationName] = []
             
-        if dn not in self.relationLinks[relationName]:
-            self.relationLinks[relationName].append(dn)
+        self.relationLinks[relationName].append(dn)
 
     def removeRelationLink(self, relationName, dn):
         if relationName is None:
@@ -133,6 +132,9 @@ class DataNode:
             
     def addChildDataNode(self, dn):
         relationName = 'contains'
+        
+        if (relationName in self.relationLinks) and (dn in self.relationLinks[relationName]):
+            return
         
         self.addRelationLink(relationName, dn)
     
@@ -585,7 +587,7 @@ class DataNodeBuilder(dict):
                         if rDn not in dn.impactLinks[relationName]:
                             dn.impactLinks[relationName].append(rDn)
                         
-                    rDn.addRelationLink(i, dn)
+                    rDn.addRelationLink("connects", dn)
                     
         else: # Datanode with this relation already created  -update it with new attribute
             for rDn in existingDnsForRelation:
