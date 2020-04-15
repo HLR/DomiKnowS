@@ -179,7 +179,7 @@ class DataNode:
         key = '<' + conceptRelation.name + '>'
         
         # Get probability
-        value = dataNode[0].getAttribute(key)
+        value = dataNode[0].getAttribute(key) # ? What if more DataNodes
         
         if value is None:
             return [0, 1]
@@ -400,7 +400,7 @@ class DataNodeBuilder(dict):
         if len(returnDns) > 0:
             return returnDns
         
-        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
+        # Test if fist dn from dns has link to dn of the given concept type
         dns0CDN = dns[0].getRelationLinks(relationName = None, conceptName = conceptName)
         if (dns0CDN is not None) and (len(dns0CDN) > 0):
             for dn in dns:
@@ -561,7 +561,7 @@ class DataNodeBuilder(dict):
                     dn.addRelationLink(conceptInfo['concept'].name, rDn)
                     rDn.addRelationLink(i, dn)
                     
-                _p = ([__p.getInstanceID() for __p in p])
+                _p = tuple([__p.getInstanceID() for __p in p])                
                 rDn.attributes[keyDataName] = value[_p]
                 
         else: # Datanode with this relation already created
@@ -570,8 +570,7 @@ class DataNodeBuilder(dict):
                 for dn in rDn.getRelationLinks().values():
                     p.append(dn[0].instanceID)
                     
-                _p = (p)
-                
+                _p = tuple(p)
                 rDn.attributes[keyDataName] = value[_p]
  
     # Build or update data node in the data graph for a given key

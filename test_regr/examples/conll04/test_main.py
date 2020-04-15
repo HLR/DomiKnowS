@@ -225,6 +225,17 @@ def test_main_conll04(case):
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            
+            for child_node1 in child_node.getChildDataNodes():
+                if child_node1.ontologyNode.name == 'char':
+                    assert True
+                else:
+                    assert False
+                       
+            assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
+                    
+            assert len(child_node.getRelationLinks(relationName = "pair")) == 7
+            
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
             assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
