@@ -238,7 +238,17 @@ def test_main_conll04(case):
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
     conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
-    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    
+    assert tokenResult['people'][0] == 1
+    assert sum(tokenResult['people']) == 1
+    assert tokenResult['organization'][3] == 1
+    assert sum(tokenResult['organization']) == 1
+    assert sum(tokenResult['location']) == 0
+    assert sum(tokenResult['other']) == 0
+    assert tokenResult['O'][1] == 1
+    assert tokenResult['O'][2] == 1
+    assert sum(tokenResult['O']) == 2
 
 if __name__ == '__main__':
     pytest.main([__file__])

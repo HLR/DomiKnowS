@@ -230,7 +230,7 @@ class Concept(BaseGraphTree):
             return None
 
     # Find datanode in data graph of the given concept 
-    def __findDatanodes(self, dns, concept):
+    def __findDataNodes(self, dns, concept):
         if (dns is None) or (len(dns) == 0):
             return []
          
@@ -243,18 +243,18 @@ class Concept(BaseGraphTree):
             return returnDns
         
         # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
-        dns0CDN = dns[0].getChildDataNodes(key=concept)
+        dns0CDN = dns[0].getChildDataNodes(conceptName=concept)
         if (dns0CDN is not None) and (len(dns0CDN) > 0):
             for dn in dns:
-                dnCN = dn.getChildDataNodes(key=concept)
+                dnCN = dn.getChildDataNodes(conceptName=concept)
                 
                 if dnCN is not None:
-                    returnDns = returnDns + dn.getChildDataNodes(key=concept)
+                    returnDns = returnDns + dn.getChildDataNodes(conceptName=concept)
                 else:
                     pass
         else:
             for dn in dns:
-                returnDns = returnDns + self.__findDatanodes(dn.getChildDataNodes(), concept)
+                returnDns = returnDns + self.__findDataNodes(dn.getChildDataNodes(), concept)
     
         return returnDns
 
@@ -281,7 +281,7 @@ class Concept(BaseGraphTree):
 
         def get_base_data(root_data, single_base):
             base_data = [root_data,]
-            base_data = self.__findDatanodes(base_data, single_base)
+            base_data = self.__findDataNodes(base_data, single_base.name)
             
             return base_data
         
