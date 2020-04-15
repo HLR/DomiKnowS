@@ -30,6 +30,9 @@ class DataNode:
             self.relationLinks = relationLinks           # Dictionary mapping relation name to the RealtionLinks
         else:
             self.relationLinks = {}
+            
+        self.impactLinks = {}                            # Dictionary with dataNodes impacting this datanode by having it as a subject of its relation
+        
         if attributes:
             self.attributes = attributes                 # Dictionary with node's attributes
         else:
@@ -101,7 +104,7 @@ class DataNode:
             
         if dn not in self.relationLinks[relationName]:
             self.relationLinks[relationName].append(dn)
-        
+
     def removeRelationLink(self, relationName, dn):
         if relationName is None:
             return
@@ -129,17 +132,25 @@ class DataNode:
         return conceptCN
             
     def addChildDataNode(self, dn):
-        if 'contains' not in self.relationLinks:
-            self.relationLinks['contains'] = []
+        relationName = 'contains'
+        
+        self.addRelationLink(relationName, dn)
+    
+        # Impact
+        if relationName not in dn.impactLinks:
+            dn.impactLinks[relationName] = []
             
-        self.relationLinks['contains'].append(dn)
-        
+        if self not in dn.impactLinks[relationName]:
+            dn.impactLinks[relationName].append(self)
+
     def removeChildDataNode(self, dn):
-        if 'contains' not in self.relationLinks:
-            return
+        relationName = 'contains'
+
+        self.removeRelationLink(relationName, dn)
         
-        self.relationLinks['contains'].remove(dn)
-        
+        # Impact
+        dn.impactLinks[relationName].remove(self)
+
     # Find concept in the graph based on concept name
     def __findConcept(self, _conceptName, usedGraph = None):
         if not usedGraph:
@@ -526,14 +537,19 @@ class DataNodeBuilder(dict):
         
         return conceptInfo
     
-    # Build or update relation link in the data graph for a given key
+    # Build or update relation datanode in the data graph for a given key
     def __buildRelationLink(self, value, conceptInfo, keyDataName):
-        # Check data graph for data nodes connected by this relation
+        # Check if data graph started
         existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
         
         if not existingRootDns:
-            return
+            return # No graph yet - information about relation should not be provided yet
         
+        # Find if datanodes for relation have been created
+        relationName = conceptInfo['concept'].name
+        existingDnsForRelation = self.__findDatanodes(existingRootDns, relationName) # Datanodes of the current concept
+        
+        # Find datanodes connected by this relation
         existingDnsForAttr = []
         for attr in conceptInfo['relationAttrs']:
             _existingDnsForAttr = self.__findDatanodes(existingRootDns, conceptInfo['relationAttrs'][0].name) # Datanodes of the given relations attribute concept
@@ -542,29 +558,36 @@ class DataNodeBuilder(dict):
                 return
             
             existingDnsForAttr.append(_existingDnsForAttr)
-            
-        existingDnsForRelation = self.__findDatanodes(existingRootDns, conceptInfo['concept'].name) # Datanodes of the current concept
-        
+    
         # Check the shape of the value
-        
         for i, a in enumerate(existingDnsForAttr):
             if len(a) != value.shape[i]:
-                return
+                return # ???? Wrong shape not matching relation - !!!
             
-        if len(existingDnsForRelation) == 0: # No Datanode of this concept created yet
+        # Create or update relation nodes
+        if len(existingDnsForRelation) == 0: # No Datanode of this relation created yet
             for p in product(*existingDnsForAttr):
                 instanceValue = ""
                 instanceID = ' -> '.join([n.ontologyNode.name + ' ' + str(n.getInstanceID()) for n in p])
                 rDn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
-                for i, dn in enumerate(p):
-                    dn.addRelationLink(conceptInfo['concept'].name, rDn)
-                    rDn.addRelationLink(i, dn)
-                    
                 _p = tuple([__p.getInstanceID() for __p in p])                
                 rDn.attributes[keyDataName] = value[_p]
                 
-        else: # Datanode with this relation already created
+                for i, dn in enumerate(p):
+                    if i == 0:
+                        dn.addRelationLink(relationName, rDn)
+                    else:
+                        # Impact
+                        if relationName not in dn.impactLinks:
+                            dn.impactLinks[relationName] = []
+                            
+                        if rDn not in dn.impactLinks[relationName]:
+                            dn.impactLinks[relationName].append(rDn)
+                        
+                    rDn.addRelationLink(i, dn)
+                    
+        else: # Datanode with this relation already created  -update it with new attribute
             for rDn in existingDnsForRelation:
                 p = []
                 for dn in rDn.getRelationLinks().values():

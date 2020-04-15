@@ -234,7 +234,7 @@ def test_main_conll04(case):
                        
             assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
                     
-            assert len(child_node.getRelationLinks(relationName = "pair")) == 7
+            assert len(child_node.getRelationLinks(relationName = "pair")) == 4
             
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
