@@ -19,7 +19,6 @@ blocks:
           - if [ -e requirements.txt ]; then pip install --user --cache-dir .pip_cache -r requirements.txt; fi
           - cache store pip-$SEMAPHORE_GIT_BRANCH-$(checksum requirements.txt) .pip_cache
           - export PYTHONPATH=.:$PYTHONPATH
-          - export REGR_SOLVER=GEKKO
       jobs:
       - name: pytest
         commands:
