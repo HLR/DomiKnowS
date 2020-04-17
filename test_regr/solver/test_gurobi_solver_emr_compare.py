@@ -255,6 +255,7 @@ def objective(emr_input, results, lazy_not=True):
     return obj
 
 
+@pytest.mark.slow
 @pytest.mark.gurobi
 def test_compare_emr(emr_graph, emr_input, solvers):
     objs = []
@@ -272,6 +273,7 @@ def test_compare_emr(emr_graph, emr_input, solvers):
                 assert (aa[key] == bb[key]).all()
 
 
+@pytest.mark.slow
 @pytest.mark.gurobi
 @pytest.mark.benchmark
 def test_benchmark(emr_graph, emr_input, solver, benchmark):

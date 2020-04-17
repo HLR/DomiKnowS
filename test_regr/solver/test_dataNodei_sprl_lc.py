@@ -149,67 +149,56 @@ def sprl_input(ontology_graph):
 
     test_phrase = [(phrase, 'NP') for phrase in phrases] # Not feasible to have POS-tag. Usually they are noun phrase
 
-    test_dataNode = DataNode(instanceID = 0, instanceValue = sentence0, ontologyNode = sentence, \
-                             childInstanceNodes = [DataNode(instanceID = 0, instanceValue = phrases[0], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 1, instanceValue = phrases[1], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 2, instanceValue = phrases[2], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 3, instanceValue = phrases[3], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 4, instanceValue = phrases[4], ontologyNode = phrase, childInstanceNodes = []),
-                                                   DataNode(instanceID = 5, instanceValue = phrases[5], ontologyNode = phrase, childInstanceNodes = [])]) 
+    test_dataNode = DataNode(instanceID = 0, instanceValue = sentence0, ontologyNode = sentence)
+    test_dataNode.relationLinks['contains'] = []
+    for i, phrase_data in enumerate(phrases):
+        phrase_node = DataNode(instanceID=i, instanceValue=phrase_data, ontologyNode=phrase)
+        test_dataNode.relationLinks['contains'].append(phrase_node)
     
-    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  test_dataNode.childInstanceNodes
-    
-    test_dataNode.childInstanceNodes[0].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.37,
-                                                                                              (landmark) : 0.68,
-                                                                                              (spatial_indicator) : 0.05,
-                                                                                              (none_entity) : 0.20,
-                                                                    
-                                                                                              (triplet, (about_20_kids_, on)) : 0.85,
-                                                                                              (triplet, (about_20_kids, on)) : 0.78,
-                                                                                              (spatial_triplet, (about_20_kids_, on)) : 0.74,
-                                                                                              (spatial_triplet, (about_20_kids, on)) : 0.83,
-                                                                                              (region, (about_20_kids_, on)) : 0.65,
-                                                                                              (region, (about_20_kids, on)) : 0.88
-                                                                                              # Fill the rest of triple relation with 0.2 below
-                                                                                            }
-                                                      }
-        
-    
-    test_dataNode.childInstanceNodes[1].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.72,
-                                                                                              (landmark) : 0.15,
-                                                                                              (spatial_indicator) : 0.03,
-                                                                                              (none_entity) : 0.61
-                                                                                            }
-                                                       }
-    
-    test_dataNode.childInstanceNodes[2].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.78,
-                                                                                              (landmark) : 0.33,
-                                                                                              (spatial_indicator) : 0.02,
-                                                                                              (none_entity) : 0.48
-                                                                                            }
-                                                       }
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing = test_dataNode.getChildDataNodes()
 
-    test_dataNode.childInstanceNodes[3].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.01,
-                                                                                              (landmark) : 0.03,
-                                                                                              (spatial_indicator) : 0.93,
-                                                                                              (none_entity) : 0.03
-                                                                                            }
-                                                       }
-    
-    test_dataNode.childInstanceNodes[4].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.42,
-                                                                                              (landmark) : 0.43,
-                                                                                              (spatial_indicator) : 0.03,
-                                                                                              (none_entity) : 0.05
-                                                                                            }
-                                                       }
-    
-    test_dataNode.childInstanceNodes[5].predictions = {DataNode.PredictionType["Learned"] : { (trajector) : 0.22,
-                                                                                              (landmark) : 0.13,
-                                                                                              (spatial_indicator) : 0.01,
-                                                                                              (none_entity) : 0.52
-                                                                                            }
-                                                       }
+    stairs.attributes['<{}>'.format(trajector)] = [0.63, 0.37]
+    stairs.attributes['<{}>'.format(landmark)] = [0.32, 0.68]
+    stairs.attributes['<{}>'.format(spatial_indicator)] = [0.95, 0.05]
+    stairs.attributes['<{}>'.format(none_entity)] = [0.80, 0.20]
+    # stairs.predictions = {
+    #     DataNode.PredictionType["Learned"] : {
+    #         (triplet, (about_20_kids_, on)) : 0.85,
+    #         (triplet, (about_20_kids, on)) : 0.78,
+    #         (spatial_triplet, (about_20_kids_, on)) : 0.74,
+    #         (spatial_triplet, (about_20_kids, on)) : 0.83,
+    #         (region, (about_20_kids_, on)) : 0.65,
+    #         (region, (about_20_kids, on)) : 0.88
+    #         # Fill the rest of triple relation with 0.2 below
+    #         }}
+
+    about_20_kids_.attributes['<{}>'.format(trajector)] = [0.28, 0.72]
+    about_20_kids_.attributes['<{}>'.format(landmark)] = [0.85, 0.15]
+    about_20_kids_.attributes['<{}>'.format(spatial_indicator)] = [0.97, 0.03]
+    about_20_kids_.attributes['<{}>'.format(none_entity)] = [0.39, 0.61]
+
+    about_20_kids.attributes['<{}>'.format(trajector)] = [0.22, 0.78]
+    about_20_kids.attributes['<{}>'.format(landmark)] = [0.67, 0.33]
+    about_20_kids.attributes['<{}>'.format(spatial_indicator)] = [0.98, 0.02]
+    about_20_kids.attributes['<{}>'.format(none_entity)] = [0.52, 0.48]
+
+    on.attributes['<{}>'.format(trajector)] = [0.99, 0.01]
+    on.attributes['<{}>'.format(landmark)] = [0.97, 0.03]
+    on.attributes['<{}>'.format(spatial_indicator)] = [0.07, 0.93]
+    on.attributes['<{}>'.format(none_entity)] = [0.97, 0.03]
+
+    hats.attributes['<{}>'.format(trajector)] = [0.58, 0.42]
+    hats.attributes['<{}>'.format(landmark)] = [0.57, 0.43]
+    hats.attributes['<{}>'.format(spatial_indicator)] = [0.97, 0.03]
+    hats.attributes['<{}>'.format(none_entity)] = [0.05, 0.95]
+
+    traditional_clothing.attributes['<{}>'.format(trajector)] = [0.78, 0.22]
+    traditional_clothing.attributes['<{}>'.format(landmark)] = [0.87, 0.13]
+    traditional_clothing.attributes['<{}>'.format(spatial_indicator)] = [0.99, 0.01]
+    traditional_clothing.attributes['<{}>'.format(none_entity)] = [0.48, 0.52]
+
     yield test_dataNode
+
 
 @pytest.mark.gurobi
 def test_main_sprl(ontology_graph, sprl_input):
@@ -225,7 +214,7 @@ def test_main_sprl(ontology_graph, sprl_input):
     region = application_graph['region']
 
     sentence_node = sprl_input
-    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sentence_node.childInstanceNodes
+    stairs, about_20_kids_, about_20_kids, on, hats, traditional_clothing =  sentence_node.getChildDataNodes()
 
     #------------------
     # Call solver on data Node for sentence 0

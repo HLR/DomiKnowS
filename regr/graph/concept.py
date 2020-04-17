@@ -150,7 +150,7 @@ class Concept(BaseGraphTree):
         vals = self.b.concatenate(vals, axis=0)
         confs = self.b.concatenate(confs, axis=0)
         # TODO: deal with None value in confs. The following is not yet a good solution
-        confs[confs == None] = self.b.mean(confs[confs != None])
+        confs[confs is None] = self.b.mean(confs[confs is not None])
 
         # inverse logistic
         def logit(z): return - self.b.log(self.b(1.) / z - self.b(1.))
@@ -219,15 +219,43 @@ class Concept(BaseGraphTree):
 
     def predict(self, root_data, *data):
         # TODO: make use of root_data to find the best proper trial in the stack
-        try:
-            if len(data) == 0:
-                return None
-            elif len(data) == 1:
-                return data[0].predictions[DataNode.PredictionType["Learned"]][self]
-            else:
-                return data[0].predictions[DataNode.PredictionType["Learned"]][self, data[1:]]
-        except (AttributeError, KeyError):
+        if len(data) == 0:
             return None
+        elif len(data) == 1:
+            return data[0].attributes['<{}>'.format(self.name)]
+        else:
+            # TODO: change based on change of datanode model
+            return None
+            # raise NotImplementedError
+
+    # Find datanode in data graph of the given concept 
+    def __findDataNodes(self, dns, concept):
+        if (dns is None) or (len(dns) == 0):
+            return []
+         
+        returnDns = []
+        for dn in dns:
+            if dn.ontologyNode == concept:
+               returnDns.append(dn) 
+               
+        if len(returnDns) > 0:
+            return returnDns
+        
+        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
+        dns0CDN = dns[0].getChildDataNodes(conceptName=concept)
+        if (dns0CDN is not None) and (len(dns0CDN) > 0):
+            for dn in dns:
+                dnCN = dn.getChildDataNodes(conceptName=concept)
+                
+                if dnCN is not None:
+                    returnDns = returnDns + dn.getChildDataNodes(conceptName=concept)
+                else:
+                    pass
+        else:
+            for dn in dns:
+                returnDns = returnDns + self.__findDataNodes(dn.getChildDataNodes(), concept)
+    
+        return returnDns
 
     def candidates(self, root_data, query=None):
         def basetype(concept):
@@ -252,10 +280,14 @@ class Concept(BaseGraphTree):
 
         def get_base_data(root_data, single_base):
             base_data = [root_data,]
+            base_data = self.__findDataNodes(base_data, single_base.name)
+            
+            return base_data
+        
             while True:
                 if base_data[0].getOntologyNode() == single_base:
                     return base_data
-                base_data = list(chain(*(bd.getChildInstanceNodes() for bd in base_data)))
+                base_data = list(chain(*(bd.getChildDataNodes() for bd in base_data)))
 
         base_data = get_base_data(root_data, base[0])
         if query:

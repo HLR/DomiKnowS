@@ -1,4 +1,4 @@
-from regr.graph import Graph, Concept, Relation, Property#, DataNodeBuilder
+from regr.graph import Graph, Concept, Relation, Property, DataNodeBuilder
 import torch
 import torch.nn
 import torch.optim as optim
@@ -900,7 +900,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         info = []
                         _entities = []
                         _relations = []
-                        context = {}#DataNodeBuilder({"graph" : self, 'Iterations' : i, 'READER' : j})
+                        context = DataNodeBuilder({"graph" : self, 'Iterations' : i, 'READER' : j})
                         # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
                         # print("end")
                         for prop1 in self.poi:
@@ -967,9 +967,9 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                             entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                             relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
-                            #currentDataNode = context.getDataNode()
+                            currentDataNode = context.getDataNode()
                             
-                            #result = currentDataNode.inferILPConstrains(np.log, *info) 
+                            result = currentDataNode.inferILPConstrains(np.log, *info) 
                             
                                    
                             result = self.solver.inferILPConstrains(context=context, info=info)

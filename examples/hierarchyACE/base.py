@@ -148,30 +148,21 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
             self.device = torch.device("cpu")
 
     def get_multiassign(self):
-        ma = []
-
         def func(node):
-            # use a closure to collect multi-assignments
             if isinstance(node, Property) and len(node) > 1:
-                ma.append(node)
-
-        self.traversal_apply(func)
-        return ma
+                return node
+            return None
+        return list(self.traversal_apply(func))
 
     @property
     def poi(self):
         return self.get_multiassign()
 
     def get_sensors(self, *tests):
-        sensors = []
-
         def func(node):
-            # use a closure to collect sensors
             if isinstance(node, Property):
-                sensors.extend(node.find(*tests))
-
-        self.traversal_apply(func)
-        return sensors
+                yield from node.find(*tests)
+        return list(self.traversal_apply(func))
 
     @property
     def readers(self):

@@ -54,10 +54,9 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def get_multiassign(self):
         def func(node):
-            # use a closure to collect multi-assignments
             if isinstance(node, Property) and len(node) > 1:
                 return node
-
+            return None
         return list(self.traversal_apply(func))
 
     @property
@@ -66,10 +65,9 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     def get_sensors(self, *tests):
         def func(node):
-            # use a closure to collect sensors
             if isinstance(node, Property):
-                return node.find(*tests)
-        return list(chain(*self.traversal_apply(func)))
+                yield from node.find(*tests)
+        return list(self.traversal_apply(func))
 
     def solver_log_to(self, log_path:str=None):
         #solver_logger = logging.getLogger(ilpOntSolver.__module__)
