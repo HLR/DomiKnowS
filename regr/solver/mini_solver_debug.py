@@ -1,9 +1,11 @@
+import logging
 from enum import Enum
 from itertools import product, permutations
 import warnings
 
 import numpy as np
 from gurobipy import Model, GRB
+import torch
 
 from regr.utils import isbad
 from .gurobi_solver import GurobiSolver
@@ -86,30 +88,71 @@ class GurobiSession(SolverSession):
     def get_value(self, var):
         return var.x
 
-class MiniSolverDebug(GurobiSolver):
-    ilpSolver = 'mini_debug'
+
+class PytorchPrimalDualSession(SolverSession):
+    def __init__(self):
+        self.vars = {}
+        self.constrs = {}
+
+    @staticmethod
+    def autoname(container, prefix='auto'):
+        num = len(container)
+        name = '{}_{}'.format(prefix, num)
+        while name in container:
+            num += 1
+            name = '{}_{}'.format(prefix, num)
+        return name
+
+    VMAP = {
+        SolverSession.VTYPE.BIN: torch.bool,
+        SolverSession.VTYPE.INT: torch.int,
+        SolverSession.VTYPE.DEC: torch.float}
+    def var(self, vtype, lb, ub, name=None):
+        name = name or self.autoname(self.vars)
+        var = torch.empty((), dtype=self.VMAP[vtype])
+        self.vars[name] = var
+        # TODO: handle lb and ub
+        return var
+
+    def constr(self, lhs, ctype, rhs, name=None):
+        name = name or self.autoname(self.constrs)
+        if ctype == SolverSession.CTYPE.EQ:
+            la = torch.ones((2,), dtype=torch.float)
+            penalty = la[0] * max(0, lhs - rhs) + la[1] * max(0, rhs - lhs)
+            constr = (la, penalty)
+        elif ctype in (SolverSession.CTYPE.GE, SolverSession.CTYPE.GT):
+            la = torch.ones((), dtype=torch.float)
+            penalty = la * max(0, lhs - rhs)
+            constr = (la, penalty)
+        elif ctype in (SolverSession.CTYPE.LE, SolverSession.CTYPE.LT):
+            la = torch.ones((), dtype=torch.float)
+            penalty = la * max(0, rhs - lhs)
+            constr = (la, penalty)
+        self.constrs[name] = (la, penalty)
+        return constr
+
+    def obj(self, otype, expr):
+        pass
+
+    def optimize(self):
+        pass
+
+    def get_value(self, var):
+        return var
+
+class Constructor():
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, lazy_not=True, self_relation=True):
+        self.lazy_not = lazy_not
+        self.self_relation = self_relation
 
     def get_predication(self, predicate, idx, negative=False):
         if negative:
             return predicate[(*idx, 0)]
         return predicate[(*idx, 1)]
 
-    def set_predication(self, predicate, idx, value):
-        # predicates_result[concept][idx] = session.get_value(variables[concept, x])
-        predicate[idx] = value
-
-    def solve_legacy(self, data, *predicates_list):
-        #self.myLogger.setLevel(logging.DEBUG)
-
-        # data is a list of objects of the base type
-        # predicates_list is a list of predicates
-        # predicates_list[i] is the dict of predicates of the objects of the base type to the power of i
-        # predicates_list[i][concept] is the prediction result of the predicate for concept
-        self.myLogger.debug('Start for data %s', data)
-        session = GurobiSession()
-
-        # prepare candidates
-        length = len(data)
+    def candidates(self, data, *predicates_list):
         candidates = {} # concept -> [(object,...), ...]
         if self.self_relation:
             gen = lambda enum_data, arity: product(enum_data, repeat=arity)
@@ -121,17 +164,20 @@ class MiniSolverDebug(GurobiSolver):
                 # last one change first (c-order)
                 # abc rep=3 -> aaa, aab, aac, aba, abb, abc, ...
                 candidates[concept] = tuple(gen(enumerate(data), arity))
+        return candidates
 
+    def variables(self, session, candidates, *predicates_list):
         variables = {} # (concept, (object,...)) -> variable
         predictions = {} # (concept, (object,...)) -> prediction
-        constraints = {} # (rel, (object,...)) -> constr
+        variables_not = {} # (concept, (x,...)) -> variable
+        predictions_not = {} # (concept, (x,...)) -> prediction
 
         # add variables
-        self.myLogger.debug('add variables')
+        self.logger.debug('add variables')
         for predicates in predicates_list:
             for concept, predicate in predicates.items():
-                self.myLogger.debug('for %s', concept.name)
-                self.myLogger.debug(predicate)
+                self.logger.debug('for %s', concept.name)
+                self.logger.debug(predicate)
                 for x in candidates[concept]: # flat: C-order -> last dim first!
                     idx, _ = zip(*x)
                     prediction = self.get_predication(predicate, idx)
@@ -139,18 +185,43 @@ class MiniSolverDebug(GurobiSolver):
                     var = session.var(
                         session.VTYPE.BIN, 0, 1,
                         name='{}_{}'.format(concept.name, str(x)))
-                    self.myLogger.debug(' - add %s', var)
+                    self.logger.debug(' - add %s', var)
                     variables[concept, x] = var
                     predictions[concept, x] = prediction
 
+        if self.lazy_not:
+            self.logger.debug('lazy negative')
+
+            # add variables
+            self.logger.debug('lazy negative add variables')
+            for predicates in predicates_list:
+                for concept, predicate in predicates.items():
+                    self.logger.debug('for %s', concept.name)
+                    for x in candidates[concept]:
+                        idx, _ = zip(*x)
+                        prediction_not = self.get_predication(predicate, idx, negative=True)
+                        if isbad(prediction_not): continue
+                        var = session.var(
+                            session.VTYPE.BIN, 0, 1,
+                            name='lazy_not_{}_{}'.format(concept.name, str(x)))
+                        self.logger.debug(' - add %s', var)
+                        variables_not[concept, x] = var
+                        predictions_not[concept, x] = prediction_not
+
+        return variables, predictions, variables_not, predictions_not
+
+    def constraints(self, session, candidates, variables, variables_not, *predicates_list):
+        constraints = {} # (rel, (object,...)) -> constr
+        constraints_not = {} # (rel, (x,...)) -> constr
+
         # add constraints
-        self.myLogger.debug('add constraints')
+        self.logger.debug('add constraints')
         for predicates in predicates_list:
             for concept in predicates:
-                self.myLogger.debug('for %s', concept.name)
-                self.myLogger.debug(' - is_a')
+                self.logger.debug('for %s', concept.name)
+                self.logger.debug(' - is_a')
                 for rel in concept.is_a():
-                    self.myLogger.debug(' - - %s', rel.name)
+                    self.logger.debug(' - - %s', rel.name)
                     # A is_a B : A(x) <= B(x)
                     for x in candidates[rel.src]:
                         if (rel.src, x) not in variables: continue
@@ -158,11 +229,11 @@ class MiniSolverDebug(GurobiSolver):
                         constr = session.constr(
                             variables[rel.src, x], SolverSession.CTYPE.LE, variables[rel.dst, x],
                             name='{}_{}'.format(rel.name, str(x)))
-                        self.myLogger.debug(' - - add %s', constr)
+                        self.logger.debug(' - - add %s', constr)
                         constraints[rel, x] = constr
-                self.myLogger.debug(' - not_a')
+                self.logger.debug(' - not_a')
                 for rel in concept.not_a():
-                    self.myLogger.debug(' - - %s', rel.name)
+                    self.logger.debug(' - - %s', rel.name)
                     # A not_a B : A(x) + B(x) <= 1
                     for x in candidates[rel.src]:
                         if (rel.src, x) not in variables: continue
@@ -170,11 +241,11 @@ class MiniSolverDebug(GurobiSolver):
                         constr = session.constr(
                             variables[rel.src, x] + variables[rel.dst, x], SolverSession.CTYPE.LE, 1,
                             name='{}_{}'.format(rel.name, str(x)))
-                        self.myLogger.debug(' - - add %s', constr)
+                        self.logger.debug(' - - add %s', constr)
                         constraints[rel, x] = constr
-                self.myLogger.debug(' - has_a')
+                self.logger.debug(' - has_a')
                 for arg_id, rel in enumerate(concept.has_a()): # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
-                    self.myLogger.debug(' - - %s', rel.name)
+                    self.logger.debug(' - - %s', rel.name)
                     # A has_a B : A(x,y,...) <= B(x)
                     for xy in candidates[rel.src]:
                         x = xy[arg_id]
@@ -183,47 +254,27 @@ class MiniSolverDebug(GurobiSolver):
                         constr = session.constr(
                             variables[rel.src, xy], SolverSession.CTYPE.LE, variables[rel.dst, (x,)],
                             name='{}_{}_{}'.format(rel.name, str(xy), str(x)))
-                        self.myLogger.debug(' - - add %s', constr)
+                        self.logger.debug(' - - add %s', constr)
                         constraints[rel, xy, x] = constr
 
         if self.lazy_not:
-            self.myLogger.debug('lazy negative')
-            variables_not = {} # (concept, (x,...)) -> variable
-            predictions_not = {} # (concept, (x,...)) -> prediction
-            constraints_not = {} # (rel, (x,...)) -> constr
-
-            # add variables
-            self.myLogger.debug('lazy negative add variables')
-            for predicates in predicates_list:
-                for concept, predicate in predicates.items():
-                    self.myLogger.debug('for %s', concept.name)
-                    for x in candidates[concept]:
-                        idx, _ = zip(*x)
-                        prediction_not = self.get_predication(predicate, idx, negative=True)
-                        if isbad(prediction_not): continue
-                        var = session.var(
-                            session.VTYPE.BIN, 0, 1,
-                            name='lazy_not_{}_{}'.format(concept.name, str(x)))
-                        self.myLogger.debug(' - add %s', var)
-                        variables_not[concept, x] = var
-                        predictions_not[concept, x] = prediction_not
-
-            # add constraints
-            self.myLogger.debug('lazy negative add constraints')
+            self.logger.debug('lazy negative add constraints')
             for predicates in predicates_list:
                 for concept in predicates:
-                    self.myLogger.debug('for %s', concept.name)
+                    self.logger.debug('for %s', concept.name)
                     for x in candidates[concept]:
                         if (concept, x) not in variables: continue
                         if (concept, x) not in variables_not: continue
                         constr = session.constr(
                             variables[concept, x] + variables_not[concept, x], SolverSession.CTYPE.EQ, 1,
                             name='lazy_not_{}_{}'.format(concept.name, str(x)))
-                        self.myLogger.debug(' - add %s', constr)
+                        self.logger.debug(' - add %s', constr)
                         constraints_not[concept, x] = constr
+    
+        return constraints, constraints_not
 
-        # Set objective
-        self.myLogger.debug('set objective')
+    def objective(self, candidates, variables, predictions, variables_not, predictions_not, *predicates_list):
+        self.logger.debug('set objective')
         objective = None
         for predicates in predicates_list:
             for concept in predicates:
@@ -236,6 +287,41 @@ class MiniSolverDebug(GurobiSolver):
                     for x in candidates[concept]:
                         if (concept, x) not in variables_not: continue
                         objective += variables_not[concept, x] * predictions_not[concept, x]
+        return objective
+
+
+class ProbConstructor(Constructor):
+    def get_predication(self, predicate, idx, negative=False):
+        if negative:
+            return 1 - predicate[idx]
+        return predicate[idx]
+
+class MiniSolverDebug(GurobiSolver):
+    ilpSolver = 'mini_debug'
+
+    def __init__(self, graph, ontologiesTuple, _ilpConfig, lazy_not=True, self_relation=True, Constructor=Constructor, Session=GurobiSession):
+        super().__init__(graph, ontologiesTuple, _ilpConfig, lazy_not=lazy_not, self_relation=self_relation)
+        self.constructor = Constructor(lazy_not, self_relation)
+        self.Session = Session
+
+    def set_predication(self, predicate, idx, value):
+        # predicates_result[concept][idx] = session.get_value(variables[concept, x])
+        predicate[idx] = value
+
+    def solve_legacy(self, data, *predicates_list):
+        # data is a list of objects of the base type
+        # predicates_list is a list of predicates
+        # predicates_list[i] is the dict of predicates of the objects of the base type to the power of i
+        # predicates_list[i][concept] is the prediction result of the predicate for concept
+        self.myLogger.debug('Start for data %s', data)
+        candidates = self.constructor.candidates(data, *predicates_list)
+
+        session = self.Session()
+        variables, predictions, variables_not, predictions_not = self.constructor.variables(session, candidates, * predicates_list)
+        self.constructor.constraints(session, candidates, variables, variables_not, *predicates_list)
+
+        # Set objective
+        objective = self.constructor.objective(candidates, variables, predictions, variables_not, predictions_not, *predicates_list)
         session.obj(SolverSession.OTYPE.MAX, objective)
         self.myLogger.debug(' - model %s', session)
 
@@ -246,11 +332,12 @@ class MiniSolverDebug(GurobiSolver):
         self.myLogger.debug(' - model %s', session)
 
         # collect result
+        length = len(data)
         retval = []
         for arity, predicates in enumerate(predicates_list, 1):
             predicates_result = {}
             retval.append(predicates_result)
-            for concept, predicate in predicates.items():
+            for concept, _ in predicates.items():
                 self.myLogger.debug('for %s', concept.name)
                 predicates_result[concept] = np.zeros((length,) * arity)
                 for x in candidates[concept]:
@@ -268,11 +355,9 @@ class MiniSolverDebug(GurobiSolver):
 
         return retval
 
-
-class Mini(MiniSolverDebug):
+class MiniProbSolverDebug(MiniSolverDebug):
     ilpSolver = 'mini_prob_debug'
 
-    def get_predication(self, predicate, idx, negative=False):
-        if negative:
-            return 1 - predicate[idx]
-        return predicate[idx]
+    def __init__(self, graph, ontologiesTuple, _ilpConfig, lazy_not=True, self_relation=True, Session=GurobiSession):
+        super().__init__(graph, ontologiesTuple, _ilpConfig, lazy_not=lazy_not, self_relation=self_relation, Constructor=ProbConstructor, Session=Session)
+
