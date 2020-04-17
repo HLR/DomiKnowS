@@ -55,30 +55,42 @@ class ilpOntSolverFactory:
                 else:
                     from .gekkoILPOntSolver import gekkoILPOntSolver
                 SolverClass = cls.getClass(gekkoILPOntSolver, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini":
+            elif _ilpConfig['ilpSolver'] == "gurobi":
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobi_solver import GurobiSolver
                 else:
                     from .gurobi_solver import GurobiSolver
                 SolverClass = cls.getClass(GurobiSolver, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini_debug":
+            elif _ilpConfig['ilpSolver'] == "gurobi_debug":
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobi_solver_debug import GurobiSolverDebug
                 else:
                     from .gurobi_solver_debug import GurobiSolverDebug
                 SolverClass = cls.getClass(GurobiSolverDebug, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini_log":
+            elif _ilpConfig['ilpSolver'] == "gurobi_log":
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobi_log_solver import GurobilogSolver
                 else:
                     from .gurobi_log_solver import GurobilogSolver
                 SolverClass = cls.getClass(GurobilogSolver, *SupplementalClasses)
-            elif _ilpConfig['ilpSolver'] == "mini_log_debug":
+            elif _ilpConfig['ilpSolver'] == "gurobi_log_debug":
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobi_log_solver_debug import GurobilogSolverDebug
                 else:
                     from .gurobi_log_solver_debug import GurobilogSolverDebug
                 SolverClass = cls.getClass(GurobilogSolverDebug, *SupplementalClasses)
+            elif _ilpConfig['ilpSolver'] == "mini_prob_debug":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.mini_solver_debug import MiniProbSolverDebug
+                else:
+                    from .mini_solver_debug import MiniProbSolverDebug
+                SolverClass = cls.getClass(MiniProbSolverDebug, *SupplementalClasses)
+            elif _ilpConfig['ilpSolver'] == "mini_debug":
+                if __package__ is None or __package__ == '':
+                    from regr.solver.mini_solver_debug import MiniSolverDebug
+                else:
+                    from .mini_solver_debug import MiniSolverDebug
+                SolverClass = cls.getClass(MiniSolverDebug, *SupplementalClasses)
             else:
                 if __package__ is None or __package__ == '':
                     from regr.solver.dummyILPOntSolver import dummyILPOntSolver

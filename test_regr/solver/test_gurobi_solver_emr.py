@@ -154,7 +154,7 @@ def test_main_emr(emr_graph, emr_input):
     test_graph = emr_graph
     # prepare solver
     ilpConfig = {
-        'ilpSolver' : 'mini',
+        'ilpSolver' : 'gurobi',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
         'log_filesize' : 5*1024*1024*1024,

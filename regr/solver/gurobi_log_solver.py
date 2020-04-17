@@ -12,7 +12,7 @@ from .gurobi_solver import GurobiSolver
 
 
 class GurobilogSolver(GurobiSolver):
-    ilpSolver = 'mini_log'
+    ilpSolver = 'gurobi_log'
 
     def solve_legacy(self, data, *predicates_list):
         # data is a list of objects of the base type

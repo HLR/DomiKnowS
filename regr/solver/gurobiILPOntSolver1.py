@@ -20,6 +20,8 @@ from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
 from click.decorators import group
 
 class gurobiILPOntSolver(ilpOntSolver):
+    ilpSolver = 'Gurobi1'
+
     def __init__(self) -> None:
         super().__init__()
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()

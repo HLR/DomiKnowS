@@ -173,7 +173,7 @@ def test_main_sprl(sprl_graph, sprl_input):
 
     # ------Call solver -------
     ilpConfig = {
-        'ilpSolver' : 'mini',
+        'ilpSolver' : 'gurobi',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
         'log_filesize' : 5*1024*1024*1024,

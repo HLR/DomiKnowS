@@ -18,7 +18,7 @@ def isbad(x):
 
 
 class GurobiSolverDebug(GurobiSolver):
-    ilpSolver = 'mini_debug'
+    ilpSolver = 'gurobi_debug'
 
     def solve_legacy(self, data, *predicates_list):
         self.myLogger.setLevel(logging.DEBUG)

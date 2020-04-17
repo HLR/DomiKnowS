@@ -12,7 +12,7 @@ from .gurobi_solver import GurobiSolver
 
 
 class GurobilogSolverDebug(GurobiSolver):
-    ilpSolver = 'mini_log_debug'
+    ilpSolver = 'gurobi_log_debug'
 
     def solve_legacy(self, data, *predicates_list):
         self.myLogger.setLevel(logging.DEBUG)

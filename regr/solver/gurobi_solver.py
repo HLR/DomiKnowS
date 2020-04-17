@@ -13,7 +13,7 @@ def isnan(x):
 
 
 class GurobiSolver(ilpOntSolver):
-    ilpSolver = 'mini'
+    ilpSolver = 'gurobi'
 
     def __init__(self, graph, ontologiesTuple, _ilpConfig, lazy_not=True, self_relation=True):
         super().__init__(graph, ontologiesTuple, _ilpConfig)

@@ -128,12 +128,12 @@ def passby(fn, *args, **kwargs):
     return fn(*args, **kwargs)
 
 
-def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
+def gurobi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
     import logging
     ilpConfig = {
-        'ilpSolver' : 'mini',
+        'ilpSolver' : 'gurobi',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
         'log_filesize' : 5*1024*1024*1024,
@@ -147,9 +147,28 @@ def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     return results
 
 
-def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
+def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
+    # prepare solver
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    import logging
+    ilpConfig = {
+        'ilpSolver' : 'mini_prob_debug',
+        'log_level' : logging.DEBUG,
+        'log_filename' : 'ilpOntSolver.log',
+        'log_filesize' : 5*1024*1024*1024,
+        'log_backupCount' : 5,
+        'log_fileMode' : 'a'
+    }
+    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
+    
+    # call solver
+    results = benchmark(solver.solve_legacy, phrase, *inputs)
+    return results
+
+
+def gurobi_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     if len(inputs) > 3:
-        raise NotImplemented
+        raise NotImplementedError
     # prepare input
     owl_inputs = []
     key_maps = []
@@ -166,7 +185,7 @@ def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
     import logging
     ilpConfig = {
-        'ilpSolver' : 'mini',
+        'ilpSolver' : 'gurobi',
         'log_level' : logging.DEBUG,
         'log_filename' : 'ilpOntSolver.log',
         'log_filesize' : 5*1024*1024*1024,
@@ -186,7 +205,7 @@ def mini_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
 
 def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     if len(inputs) > 3:
-        raise NotImplemented
+        raise NotImplementedError
     # prepare input
     owl_inputs = []
     key_maps = []
@@ -212,7 +231,7 @@ def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     return results
 
 
-solver_list = [mini_wrap, mini_owlapi_wrap, owl_wrap]
+solver_list = [gurobi_wrap, mini_wrap, gurobi_owlapi_wrap, owl_wrap]
 
 
 @pytest.fixture(params=solver_list)
