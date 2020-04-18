@@ -210,6 +210,7 @@ def test_graph_naming():
     assert rel_pair_word2.name == 'arg2'
 
 
+@pytest.mark.gurobi
 def test_main_conll04(case):
     from config import CONFIG
     from emr.data import ConllDataLoader
