@@ -1,11 +1,11 @@
 import os
 import logging
-REGR_SOLVER = 'REGR_SOLVER' in os.environ and os.environ['REGR_SOLVER']
+REGR_SOLVER = os.environ.get('REGR_SOLVER', 'Gurobi')
 
 ilpConfig = {
     # variable controlling what ILP solver is used  - one of "Gurobi", "GEKKO", None
-    'ilpSolver' : REGR_SOLVER or 'Gurobi',
-    
+    'ilpSolver' : REGR_SOLVER,
+
     # Logging configuration for ilpOntSolver
     'log_name' : 'ilpOntSolver', 
     'log_level' : logging.DEBUG,
