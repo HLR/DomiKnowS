@@ -1,0 +1,3 @@
+#regr
+allennlp==0.8.5
+tqdm==4.35.0

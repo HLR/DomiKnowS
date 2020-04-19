@@ -3,7 +3,7 @@ from utils import Namespace
 
 
 config = {
-    'Data': { # data setting
+    'Data': {  # data setting
         'relative_path': "data",
 #         'train_path': "new_train.xml",
 #         'valid_path': "new_gold.xml",
@@ -20,10 +20,13 @@ config = {
         'compact': 32,
         'graph': {
             'balance_factor': 1,
-            'label_smoothing': 0.1,
+            'label_smoothing': 0.01,
             'focal_gamma': 2,
-            'inference_interval': 50,
-            'inference_training_set': False
+            'inference_interval': 1,
+            'inference_training_set': True,
+            'inference_loss': True,
+            'log_solver': True,
+            'soft_penalty': 0.
         }
     },
     'Train': {

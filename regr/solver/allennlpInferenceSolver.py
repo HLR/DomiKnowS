@@ -4,7 +4,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 from ..graph import Graph
-from ..sensor.allennlp.sensor import SentenceEmbedderSensor
+from ..sensor.allennlp.sensor import SentenceEmbedderSensor, SentenceSensor
 from ..sensor.allennlp.base import AllenNlpLearner
 from ..utils import get_prop_result
 from .ilpOntSolver import ilpOntSolver
@@ -16,7 +16,7 @@ DataInstance = Dict[str, torch.Tensor]
 class AllennlpInferenceSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def inferSelection(self, graph: Graph, data: DataInstance, vocab=None) -> DataInstance:
+    def inferSelection(self, graph: Graph, data: DataInstance) -> DataInstance:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -43,18 +43,15 @@ class AllennlpInferenceSolver(ilpOntSolver):
             max_rank = 0
 
         # find base, assume only one base for now
-        # FIXME: that means we are only considering problems with only one sentence
-        tokens_sensors = graph.get_sensors(SentenceEmbedderSensor)
-        name, tokens_sensor = tokens_sensors[0]
-        namespace = tokens_sensor.key
+        # FIXME: that [0] means we are only considering problems with only one sentence
+        name, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
+        # Note: SentenceEmbedderSensor is not reliable. For example BERT indexer will introduce redundant wordpiece tokens
 
-        mask = tokens_sensor.get_mask(data)
-        mask_len = mask.sum(dim=1).clone().cpu().detach().numpy()  # (b, )
-
-        # (b, l) # FIXME '_index' is tricky
-        sentence = data[tokens_sensor.fullname + '_index'][namespace]
-        batch_size, length = sentence.shape
-        device = sentence.device
+        sentence = data[sentence_sensor.fullname]
+        batch_size = len(sentence)
+        mask_len = [len(s) for s in sentence]  # (b, )
+        length = max(mask_len)
+        device = None
 
         values = [defaultdict(dict) for _ in range(batch_size)]
         for rank, props in prop_dict.items():
@@ -66,6 +63,8 @@ class AllennlpInferenceSolver(ilpOntSolver):
                 # pred_logit - (b, l...*r, c) - for dim-c, [0] is neg, [1] is pos
                 # mask - (b, l...*r)
                 label, pred_logit, mask = get_prop_result(prop, data)
+                if not device:
+                    device = pred_logit.device
                 # pred - (b, l...*r, c)
                 pred = torch.nn.functional.softmax(pred_logit, dim=-1)
                 pos_index = torch.tensor(1, device=device).long()
@@ -85,13 +84,10 @@ class AllennlpInferenceSolver(ilpOntSolver):
 
         results = []
         # inference per instance
-        for batch_index, batch_index_d in zip(range(batch_size), torch.arange(batch_size, dtype=torch.long, device=device)):
+        for batch_index in range(batch_size):
             # prepare tokens
-            if vocab:
-                tokens = ['{}_{}'.format(i, vocab.get_token_from_index(int(sentence[batch_index_d, i_d]),namespace=namespace))
-                for i, i_d in zip(range(mask_len[batch_index]), torch.arange(mask_len[batch_index], dtype=torch.long, device=device))]
-            else:
-                tokens = [str(i) for i in range(mask_len[batch_index])]
+            tokens = ['{}_{}'.format(i, token)
+                      for i, token in enumerate(sentence[batch_index])]
             # prepare tables
             table_list = []
             for rank in range(1, max_rank + 1):

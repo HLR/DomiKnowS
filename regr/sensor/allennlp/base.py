@@ -36,14 +36,14 @@ class AllenNlpSensor(Sensor):
                 # choose one result to update finally
                 # TODO: consider priority or confidence or merge somehow
                 if isinstance(sensor, AllenNlpSensor) and not sensor.output_only:
-                    context = sensor(context)
+                    sensor(context)
                     break
             else:  # no break
                 raise RuntimeError('Not able to find a sensor for {} as prereqiured by {}'.format(
                     pre.fullname, self.fullname))
 
         # then call forward
-        return Sensor.update_context(self, context, force)
+        Sensor.update_context(self, context, force)
 
     @property
     def output_dim(self):

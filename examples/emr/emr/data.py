@@ -1,267 +1,143 @@
-from typing import List, Dict, Generator, Tuple, Type
-from collections import defaultdict
-from allennlp.data import TokenIndexer
-from allennlp.data.tokenizers import Token
-from allennlp.data.token_indexers import SingleIdTokenIndexer, PosTagIndexer, DepLabelIndexer, NerTagIndexer
-from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
-from regr.data.allennlp.reader import SensableReader, keep_keys
-import cls
-from typing import Iterator
-from allennlp.data import Instance
+from collections import OrderedDict, Counter
+from itertools import chain
+
+import torch
+from torch.utils.data import DataLoader
+from spacy.lang.en import English
+
 from .conll import Conll04CorpusReader
-from typing import Iterator
-from allennlp.data import Instance
-
-corpus_reader = Conll04CorpusReader()
+from .data_spacy import reprocess
 
 
-class Conll04Reader(SensableReader):
-    def __init__(self) -> None:
-        super().__init__(lazy=False)
+class ConllDataLoader(DataLoader):
+    nlp = English()
 
-    def raw_read(self, file_path):
-        yield from zip(*corpus_reader(file_path))
+    @classmethod
+    def split(cls, sentence):
+        return cls.nlp.tokenizer(sentence)
 
-    @cls.tokens('sentence')
-    def update_sentence(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> List[Token]:
-        (sentence, pos, labels), relations = raw_sample
-        # NB: pos_ for coarse POS tags, and tag_ for fine-grained
-        return [Token(word, pos_=pos_tag, tag_=pos_tag)
-                    for word, pos_tag in zip(sentence, pos)]
+    @classmethod
+    def match(cls, index, tokens, spacy_tokens):
+        char_index = 0
+        char_length = 0
+        for index_cur, token in enumerate(tokens):
+            if index_cur < index[0]:
+                pass
+            elif index_cur < index[1]:
+                char_length += len(token) + 1
+            else:
+                break
+            char_index += len(token) + 1
+        # - 1 char_length has one more space, then we do not need -1
+        start_char_index = char_index - char_length
 
-    @cls.textfield('phrase')
-    def update_sentence_raw(
-        self,
-        fields,
-        tokens
-    ) -> Field:
-        indexers = {'phrase': SingleIdTokenIndexer(namespace='phrase')}
-        textfield = TextField(tokens, indexers)
-        return textfield
+        matched_spacy_tokens = []
+        for spacy_token in spacy_tokens:
+            if spacy_token.idx < start_char_index:
+                pass
+            elif spacy_token.idx < start_char_index + char_length:
+                assert spacy_token.idx + \
+                    len(spacy_token) <= start_char_index + char_length
+                matched_spacy_tokens.append(spacy_token.i)
+            else:
+                break
+        return matched_spacy_tokens
 
-    @cls.textfield('pos_tags')
-    def update_sentence_pos(
-        self,
-        fields,
-        tokens
-    ) -> Field:
-        indexers = {'pos_tags': PosTagIndexer(namespace='pos_tags')} # PosTagIndexer(...coarse_tags:bool=False...)
-        textfield = TextField(tokens, indexers)
-        return textfield
+    @classmethod
+    def process_one(cls, tokens, labels, relations):
+        sentence = ' '.join(tokens)
+        split_tokens = cls.split(sentence)
 
-    #@token_indexer('sentence', 'dep_tags')
-    def update_sentence_dep(
-        self,
-    ) -> Type[TokenIndexer]:
-        return DepLabelIndexer
+        split_labels = []
+        for label in labels:
+            (label_type, index, token) = label
+            token = cls.match(index, tokens, split_tokens)
+            split_label = (label_type, token)
+            split_labels.append(split_label)
 
-    #@token_indexer('sentence', 'ner_tags')
-    def update_sentence_ner(
-        self,
-    ) -> Type[TokenIndexer]:
-        return NerTagIndexer
+        split_relations = []
+        for relation in relations:
+            (relation_type, (src_index, src_token), (dst_index, dst_token)) = relation
+            src_token = cls.match(src_index, tokens, split_tokens)
+            dst_token = cls.match(dst_index, tokens, split_tokens)
+            split_relation = (relation_type, src_token, dst_token)
+            split_relations.append(split_relation)
 
-    @cls.field('labels')
-    def update_labels(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> Field:
-        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
-        (sentence, pos, labels), relations = raw_sample
-        if labels is None:
-            return None
-        return SequenceLabelField(labels, fields[self.get_fieldname('phrase')])
+        return split_tokens, split_labels, split_relations
 
-    @cls.field('relation')
-    def update_relations(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> Field:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For'}
-        (sentence, pos, labels), relations = raw_sample
-        if relations is None:
-            return None
-        relation_indices = []
-        relation_labels = []
-        for rel in relations:
-            src_index = rel[1][0]
-            dst_index = rel[2][0]
-            relation_indices.append((src_index, dst_index))
-            relation_labels.append(rel[0])
-        return AdjacencyField(
-            relation_indices,
-            fields[self.get_fieldname('phrase')],
-            relation_labels,
-            padding_value=-1  # multi-class label, use -1 for null class
-        )
-      
-    def _read(self, *args, **kwargs) -> Iterator[Instance]:
-        for raw_sample in self.raw_read(*args, **kwargs):
-            #raw_sample=self.negative_entity_generation(raw_sample)
-            yield self._to_instance(raw_sample)
+    @classmethod
+    def build_vocab(cls, samples, least_count=0, max_vocab=None):
+        tokens, labels, relations = zip(*samples)
+        # token vocab
+        vocab_token_counter = Counter(map(lambda t: t.text, chain(*tokens)))
+        vocab_token_counter = vocab_token_counter.most_common(max_vocab)
+        vocab_list, _ = zip(*filter(lambda kv: kv[1] > least_count, vocab_token_counter))
+        vocab_list = list(vocab_list)
+        vocab_list.insert(0, '_PAD_')
+        vocab_list.append('_UNK_')
+        vocab = OrderedDict((token, idx) for idx, token in enumerate(vocab_list))
+        # token lable vocab
+        labels, _ = zip(*chain(*filter(None, labels)))
+        vocab_label_counter = Counter(labels)
+        label_list = list(vocab_label_counter.keys())
+        label_vocab = OrderedDict((label, idx) for idx, label in enumerate(label_list))
+        # relation vocab
+        relations, _, _ = zip(*chain(*filter(None, relations)))
+        vocab_relations_counter = Counter(relations)
+        relation_list = list(vocab_relations_counter.keys())
+        relation_vocab = OrderedDict((label, idx) for idx, label in enumerate(relation_list))
+        #import pdb; pdb.set_trace()
+        return {'token': vocab,
+                'label': label_vocab,
+                'relation': relation_vocab}
 
-    def negative_entity_generation(self,raw_sample):
-        temp_num=0
-        label_dict={}
-        label_dict['NONE']=[]
+    def _collate_fn(self, batch):
+        token_vocab = self.vocab['token']
+        label_vocab = self.vocab['label']
+        relation_vocab = self.vocab['relation']
+        arg_idx = 0 if self.first else -1
+        batch_size = len(batch)
+        max_len = max(*(len(tokens) for tokens, _, _ in batch), 5)  # make sure len >= 5
+        # initialize tensors
+        tokens_tensor = torch.empty((batch_size, max_len), dtype=torch.long)
+        tokens_tensor.fill_(token_vocab['_PAD_'])
+        label_tensors = {}
+        for label in label_vocab:
+            label_tensors[label] = torch.empty((batch_size, max_len), dtype=torch.bool)
+            label_tensors[label].fill_(False)
+        relation_tensors = {}
+        for relation in relation_vocab:
+            relation_tensors[relation] = torch.empty((batch_size, max_len, max_len), dtype=torch.bool)
+            relation_tensors[relation].fill_(False)
+        for batch_idx, (tokens, labels, relations) in enumerate(batch):
+            for token_idx, token in enumerate(tokens):
+                tokens_tensor[batch_idx, token_idx] = token_vocab[token.text] if token.text in token_vocab else token_vocab['_UNK_']
+            for label, arg in labels:
+                label_tensors[label][batch_idx, arg[arg_idx]] = True
+            for relation, arg1, arg2 in relations:
+                relation_tensors[relation][batch_idx, arg1[arg_idx], arg2[arg_idx]] = True
+            #import pdb; pdb.set_trace()
+        token_raw, label_raw, relation_raw = zip(*batch)
+        context = {
+            'token_raw': list(token_raw),
+            'label_raw': list(label_raw),
+            'relation_raw': list(relation_raw),
+            'token': tokens_tensor}
+        context.update(label_tensors)
+        context.update(relation_tensors)
+        #import pdb; pdb.set_trace()
+        return context
 
-        sentence = " ".join(raw_sample[0][0])
-        new_chunk=self.getChunk(sentence)
-
-        for label in raw_sample[0][2]:
-
-          try:
-              label_dict[label].append(raw_sample[0][0][temp_num])
-          except:
-              label_dict[label]=[]
-              label_dict[label].append(raw_sample[0][0][temp_num])
-          temp_num += 1
-
-        for chunk in new_chunk:
-
-            for value in label_dict.items():
-
-                if chunk in value[1]:
-                    continue
-                elif self.getHeadwords(chunk) in value[1]:
-                    value[1].append(chunk)
-                    raw_sample[0][0].append(chunk)
-                    raw_sample[0][1].append(self.get_Postag(chunk))
-                    raw_sample[0][2].append(value[0])
-
-            if chunk not in value[1]:
-                raw_sample[0][0].append(chunk)
-                raw_sample[0][1].append(self.get_Postag(chunk))
-                raw_sample[0][2].append("NONE")
-        return raw_sample
-
-
-@keep_keys('sentence', 'phrase', 'pos_tags')
-class Conll04BinaryReader(Conll04Reader):
-    label_names = {'Other', 'Loc', 'Peop', 'Org', 'O'}
-    relation_names = {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
-
-    @cls.fields
-    def update_labels(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> Generator[Tuple[str, Field], None, None]:
-        # {'Other', 'Loc', 'Peop', 'Org', 'O'}
-        (sentence, pos, labels), relations = raw_sample
-        for label_name in self.label_names:
-            yield label_name, SequenceLabelField(
-                [str(label == label_name) for label in labels],
-                fields[self.get_fieldname('phrase')])
-
-    @cls.fields
-    def update_relations(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> Generator[Tuple[str, Field], None, None]:
-        # {'Live_In', 'OrgBased_In', 'Located_In', 'Work_For', 'Kill'}
-        (sentence, pos, labels), relations = raw_sample
-        if relations is None:
-            return None
-        relation_indices = []
-        relation_labels = []
-        for rel in relations:
-            src_index = rel[1][0]
-            dst_index = rel[2][0]
-            relation_indices.append((src_index, dst_index))
-            relation_labels.append(rel[0])
-
-        for relation_name in self.relation_names:
-            cur_indices = []
-            for index, label in zip(relation_indices, relation_labels):
-                if label == relation_name:
-                    cur_indices.append(index)
-
-            yield relation_name, AdjacencyField(
-                cur_indices,
-                fields[self.get_fieldname('phrase')],
-                padding_value=0
-            )
-
-
-@keep_keys
-class Conll04CandidateReader(Conll04Reader):
-    def _is_candidate(
-        self,
-        word,
-        p,
-        label,
-        i
-    ) -> bool:
-        # return (label != 'O') # this is too good and too strong ...
-        candidate_p = {'NN', 'NNS', 'NNP', 'NNPS'}
-        p_list = p.split('/')
-        for cp in candidate_p:
-            if cp in p_list:
-                return True
-        # also possible to add non-'O' not in candidate_p
-        #   but it will be another strong bias that
-        #   those not in candidate_p are something important
-        return False
-
-    @cls.field('candidate')
-    def update_candidate(
-        self,
-        fields: Dict,
-        raw_sample
-    ) -> Field:
-        (sentence, pos, labels), relations = raw_sample
-
-        return SequenceLabelField([str(self._is_candidate(word, p, label, i))
-                                   for i, (word, p, label) in enumerate(zip(sentence, pos, labels))],
-                                  fields[self.get_fieldname('phrase')])
-
-
-@keep_keys
-class Conll04CandidateFilteredReader(Conll04CandidateReader):
-    def raw_read(self, file_path):
-        for (sentence, pos, labels), relation in zip(sentences, relations):
-            select = [self._is_candidate(word, p, label, i, relation)
-                      for i, (word, p, label) in enumerate(zip(sentence, pos, labels))]
-            select = np.array(select)
-            if select.sum() == 0:
-                # skip blank sentence after filter
-                continue
-
-            sentence = [val for val, sel in zip(sentence, select) if sel]
-            pos = [val for val, sel in zip(pos, select) if sel]
-            labels = [val for val, sel in zip(labels, select) if sel]
-            new_relation = []
-            for rel, (src, src_val), (dst, dst_val) in relation:
-                if not select[src] or not select[dst]:
-                    # skip the relation with filtered word
-                    continue
-                new_src = select[:src].sum()
-                new_dst = select[:dst].sum()
-                new_relation.append(
-                    (rel, (new_src, src_val), (new_dst, dst_val)))
-            relation = new_relation
-
-            yield (sentence, pos, labels), relation
-
-
-@keep_keys('sentence', 'candidate', 'update_labels()', 'update_relations()')
-class Conll04CandidateBinaryReader(Conll04CandidateReader, Conll04BinaryReader):
-    pass
-
-
-@keep_keys('sentence', 'candidate', 'update_labels()', 'update_relations()')
-class Conll04CandidateFilteredBinaryReader(Conll04CandidateFilteredReader, Conll04BinaryReader):
-    pass
-
-
-@keep_keys
-class Conll04SensorReader(Conll04BinaryReader):
-    pass
+    def __init__(self, path, reader=Conll04CorpusReader(), first=True, vocab=None, least_count=0, max_vocab=None, skip_none=True, **kwargs):
+        self.reader = reader
+        self.path = path
+        self.first = first
+        sentences_list, relations_list = self.reader(path)
+        def process(sample):
+            sentence, relations = sample
+            tokens, labels, relations = reprocess(sentence, relations, first=first, skip_none=skip_none)
+            tokens, labels, relations = self.process_one(tokens, labels, relations)
+            return tokens, labels, relations
+        samples = list(map(process, zip(sentences_list, relations_list)))
+        self.vocab = vocab or self.build_vocab(samples, least_count=least_count, max_vocab=max_vocab)
+        super().__init__(samples, collate_fn=self._collate_fn, **kwargs)

@@ -1,8 +1,13 @@
 from collections import OrderedDict, namedtuple
+from itertools import chain
+
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
+    from property import Property
 else:
     from .base import BaseGraphTree
+    from .property import Property
+
 
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
@@ -15,6 +20,7 @@ class Graph(BaseGraphTree):
         elif isinstance(ontology, str):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
+        self._logicalConstrains = OrderedDict()
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
@@ -32,6 +38,13 @@ class Graph(BaseGraphTree):
             self._ontology = Graph.Ontology(ontology)
         elif isinstance(ontology, tuple) and len(ontology) == 2:
             self._ontology = Graph.Ontology(*ontology)
+
+    def get_sensors(self, *tests):
+        def func(node):
+            # use a closure to collect sensors
+            if isinstance(node, Property):
+                return node.find(*tests)
+        return list(chain(*self.traversal_apply(func)))
 
     def get_apply(self, name):
         if name in self.concepts:
@@ -55,6 +68,10 @@ class Graph(BaseGraphTree):
     @property
     def concepts(self):
         return self._concepts
+    
+    @property
+    def logicalConstrains(self):
+        return self._logicalConstrains
 
     def what(self):
         wht = BaseGraphTree.what(self)

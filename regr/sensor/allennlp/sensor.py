@@ -2,7 +2,7 @@ from typing import List, Dict, Any, NoReturn
 from collections import OrderedDict
 import torch
 from torch.nn import Module
-from allennlp.modules.token_embedders import Embedding
+from allennlp.modules.token_embedders import Embedding, PretrainedBertEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
@@ -111,7 +111,13 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
         return mask
 
 
-class JointCandidateSensor(PreArgsModuleSensor, MaskedSensor):
+class CandidateSensor(MaskedSensor):
+    pass
+
+class CandidateReaderSensor(ReaderSensor, CandidateSensor):
+    pass
+
+class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
     def create_module(self):
         return JointCandidate()
 
@@ -217,6 +223,37 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
     def get_mask(self, context: Dict[str, Any]):
         # TODO: make sure update_context has been called
         return get_text_field_mask(context[self.fullname + '_index'])
+
+
+class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
+    def create_module(self):
+        self.embedding = PretrainedBertEmbedder(
+            pretrained_model = self.pretrained_model,
+        )
+        return BasicTextFieldEmbedder({self.key: self.embedding},
+                                      embedder_to_indexer_map={self.key: [
+                                          self.key,
+                                          "{}-offsets".format(self.key),
+                                          "{}-type-ids".format(self.key)]},
+                                      allow_unmatched_keys=True)
+
+    def __init__(
+        self,
+        key: str,
+        pretrained_model: str,
+        pre,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.key = key
+        self.pretrained_model = pretrained_model
+        ModuleSensor.__init__(self, pre, output_only=output_only)
+
+        for name, pre_sensor in pre.find(SentenceSensor):
+            pre_sensor.add_embedder(key, self)
+            self.tokens_key = pre_sensor.key # used by reader.update_textfield()
+            break
+        else:
+            raise TypeError()
 
 
 class NGramSensor(PreArgsModuleSensor, SinglePreMaskedSensor):

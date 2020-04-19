@@ -1,4 +1,6 @@
 pytest
+pytest-benchmark
 flaky
-allennlp==0.8.5
+torch
 gekko
+allennlp

@@ -1,0 +1,11 @@
+#regr
+torch
+numpy
+nltk
+gensim
+lxml
+torchtext
+flair
+segtok
+bs4
+pycorenlp

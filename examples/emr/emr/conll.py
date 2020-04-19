@@ -1,24 +1,24 @@
 from tqdm import tqdm
+import logging
 
 
 class Conll04CorpusReader():
-    import logging
     logger = logging.getLogger(__name__)
 
     def sentence_start(self):
-        Conll04CorpusReader.logger.debug('---- sentence start')
+        self.logger.debug('---- sentence start')
         self.sentence = []
         self.words = []
         self.poss = []
         self.labels = []
 
     def sentence_finish(self):
-        Conll04CorpusReader.logger.debug('---- sentence finish')
+        self.logger.debug('---- sentence finish')
         self.sentences.append((self.words, self.poss, self.labels))
-        Conll04CorpusReader.logger.debug((self.words, self.poss, self.labels))
+        self.logger.debug((self.words, self.poss, self.labels))
 
     def sentence_append(self, line):
-        Conll04CorpusReader.logger.debug('---- sentence append')
+        self.logger.debug('---- sentence append')
         # new trunc in sentence
         '''
 3    O    0    O    DT    The    O    O    O
@@ -37,19 +37,19 @@ class Conll04CorpusReader():
         self.poss.append(pos)
         self.labels.append(label)
         self.sentence.append((word, pos, label))
-        Conll04CorpusReader.logger.debug(self.sentence[-1])
+        self.logger.debug(self.sentence[-1])
 
     def relation_start(self):
-        Conll04CorpusReader.logger.debug('---- relation start')
+        self.logger.debug('---- relation start')
         self.relation = []
 
     def relation_finish(self):
-        Conll04CorpusReader.logger.debug('---- relation finish')
+        self.logger.debug('---- relation finish')
         self.relations.append(self.relation)
-        Conll04CorpusReader.logger.debug(self.relation)
+        self.logger.debug(self.relation)
 
     def relation_append(self, line):
-        Conll04CorpusReader.logger.debug('---- relation append')
+        self.logger.debug('---- relation append')
         # new relation
         '''
 6    8    Located_In
@@ -64,7 +64,7 @@ class Conll04CorpusReader():
         arg_1 = (arg_1_idx, self.sentence[arg_1_idx])
         arg_2 = (arg_2_idx, self.sentence[arg_2_idx])
         self.relation.append((relation_type, arg_1, arg_2))
-        Conll04CorpusReader.logger.debug(self.relation[-1])
+        self.logger.debug(self.relation[-1])
 
     def sent2rel(self):
         self.sentence_finish()
@@ -100,12 +100,14 @@ class Conll04CorpusReader():
 
         for line in tqdm(lines):
             line = line.strip()
-            Conll04CorpusReader.logger.debug(line)
+            self.logger.debug(line)
             state, trans_func = Conll04CorpusReader.STT[state][bool(line)]
-            Conll04CorpusReader.logger.debug(state)
+            self.logger.debug(state)
             if trans_func is not None:
                 trans_func(self)
             if line and Conll04CorpusReader.state_func[state] is not None:
                 Conll04CorpusReader.state_func[state](self, line)
+        if len(self.sentences) > len(self.relations):
+            self.relation_finish()
 
         return self.sentences, self.relations

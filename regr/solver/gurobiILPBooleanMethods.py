@@ -1,197 +1,367 @@
-if __package__ is None or __package__ == '':
-    from regr.solver.ilpConfig import ilpConfig 
-    from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
-else:
-    from .ilpConfig import ilpConfig 
-    from .ilpBooleanMethods import ilpBooleanProcessor 
+import logging
+from itertools import permutations
+
+from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from regr.solver.ilpConfig import ilpConfig 
+
+from gurobipy import *
 
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
+                
+        self.myLogger = logging.getLogger(ilpConfig['log_name'])
+        self.constrainCaches = {}
 
-    # Negation
-    def notVar(m, _var):
-        _notVar=m.addVar(vtype=GRB.BINARY, name="not_%s" % (_var))
+    def resetCaches(self):
+         self.constrainCaches = {}
+
+    def __addToConstrainCaches(self, lmName, onlyConstrains, var, cachedValue):
+        if lmName in self.constrainCaches:
+                if onlyConstrains in self.constrainCaches[lmName]:
+                    self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+                else:
+                    self.constrainCaches[lmName][onlyConstrains] = {}
+                    self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+        else:
+            self.constrainCaches[lmName] = {}
+            self.constrainCaches[lmName][onlyConstrains] = {}
+
+            self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
+            
+    def __isInConstrainCaches(self, lmName, onlyConstrains, var):
+        if lmName in self.constrainCaches:
+            if onlyConstrains in self.constrainCaches[lmName]:
+                for currentVarPermutation in permutations(var):
+                    if currentVarPermutation in self.constrainCaches[lmName][onlyConstrains]:
+                        #self.myLogger.debug("%s already created constrain for this variables %s - does nothing"%(lmName, [x.VarName for x in var]))
+                        return (True, self.constrainCaches[lmName][onlyConstrains][currentVarPermutation])
+                    
+        return (False, None)
+                
+    def notVar(self, m, var, onlyConstrains = False):
+        #self.myLogger.debug("NOT called with : %s"%(var))
+
+        cacheResult = self.__isInConstrainCaches('notVar', onlyConstrains, var)
+        if cacheResult[0]:
+            self.myLogger.debug("NOT constrain already created - doing nothing")
+            return cacheResult[1]
+            
+        if onlyConstrains:
+            m.addConstr(1 - var >= 1)
+            
+            self.myLogger.debug("IF created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+
+            self.__addToConstrainCaches('notVar', onlyConstrains, (var1, ), None)
+
+            return
         
-        m.addConstr(1 - _var, GRB.EQUAL, _notVar)
+        varNOT = m.addVar(vtype=GRB.BINARY, name="not_%s"%(var.VarName))
+        
+        m.addConstr(1 - var == varNOT)
     
-        return _notVar
+        m.update()
+        self.myLogger.debug("NOT returns: %s"%(varNOT.VarName))
+
+        return varNOT
     
-    # Conjunction 2 variable
-    def and2Var(m, _var1, _var2):
-        _andVar=m.addVar(vtype=GRB.BINARY, name="and_%s_%s" % (_var1, _var2))
+    def and2Var(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("AND called with : %s"%(var1,var2))
+
+        if onlyConstrains:
+            m.addConstr(var1 + var2 >= 2)
+            return
+        
+        varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1, var2))
             
-        m.addConstr(_andVar - _var1, GRB.LESS_EQUAL, 0)
-        m.addConstr(_andVar - _var2, GRB.LESS_EQUAL, 0)
+        m.addConstr(varAND <= var1)
+        m.addConstr(varAND <= var2)
+        m.addConstr(var1 + var2 <= varAND + 2 - 1)
             
-        m.addConstr(_var1 + _var2 - _andVar - 1, GRB.LESS_EQUAL, 0)
-            
-        return _andVar
+        return varAND
     
-    # Conjunction
-    def andVar(m, *_var):
-        if len(_var) < 1:
+    def andVar(self, m, *var, onlyConstrains = False):
+        N = len(var)
+        
+        if N <= 1:
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
         
-        _andVarName = "and"
-        for currentVar in _var:
-            _andVarName += "_%s" % (currentVar)
+            m.addConstr(varSumLinExpr >= N)
+            return
             
-        _andVar = m.addVar(vtype=GRB.BINARY, name=_andVarName)
-        for currentVar in _var:
-            m.addConstr(_andVar - currentVar, GRB.LESS_EQUAL, 0)
+        varAND = m.addVar(vtype=GRB.BINARY)
+        for currentVar in var:
+            m.addConstr(varAND <= currentVar)
 
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
         
-        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, _andVar + len(_var) - 1)
+        m.addConstr(varSumLinExpr <= varAND + N - 1)
     
-        return _andVar
+        return varAND
     
-    # Disjunction 2 variables
-    def or2Var(m, _var1, _var2):
-        _orVar=m.addVar(vtype=GRB.BINARY, name="or_%s_%s" % (_var1, _var2))
+    def or2Var(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("OR called with : %s"%(var1,var2))
+
+        if onlyConstrains:
+            m.addConstr(var1 + var2 >= 1)
+            return
+        
+        varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1, var2))
             
-        m.addConstr(_orVar, GRB.LESS_EQUAL, _var1)
-        m.addConstr(_orVar, GRB.LESS_EQUAL, _var2)
+        m.addConstr(var1 <= varOR)
+        m.addConstr(var2 <= varOR)
             
-        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, _orVar)
+        m.addConstr(var1 + var2 >= varOR)
     
-        return _orVar
+        return varOR
     
-    # Disjunction
-    def orVar(m, *_var):
-        if len(_var) < 1:
+    def orVar(self, m, *var, onlyConstrains = False):
+        #self.myLogger.debug("OR called with : %s"%(var,))
+        
+        cacheResult = self.__isInConstrainCaches('orVar', onlyConstrains, var)
+        if cacheResult[0]:
+            self.myLogger.debug("OR constrain already created - doing nothing")
+            return cacheResult[1]
+
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr >= 1)
+            
+            varSumLinExprStr = str(varSumLinExpr)
+            self.myLogger.debug("OR created constrain only: %s >= %i"%(varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')], 1))
+            
+            self.__addToConstrainCaches('nandVar', onlyConstrains, var, None)           
+            return
+        
+        N = len(var)
+        
+        if N <= 1:
+            self.myLogger.debug("OR returns : %s"%('None'))
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        orVarName = "or"
+        for currentVar in var:
+            orVarName += "_%s" % (currentVar.VarName)
         
-        _orVarName = "or"
-        for currentVar in _var:
-            _orVarName += "_%s" % (currentVar)
-        
-        _orVar = m.addVar(vtype=GRB.BINARY, name=_orVarName)
+        varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
 
-        for currentVar in _var:
-            m.addConstr(_orVar, GRB.LESS_EQUAL, currentVar)
+        for currentVar in var:
+            m.addConstr(currentVar <= varOR)
 
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
         
-        m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, _orVar)
+        m.addConstr(varSumLinExpr >= varOR)
+
+        self.__addToConstrainCaches('nandVar', onlyConstrains, var, varOR)
+
+        m.update()
              
-        return _orVar
+        self.myLogger.debug("OR returns : %s"%(varOR.VarName))
+        return varOR
     
-    # Nand (Alternative denial) 2 variables
-    def nand2Var(m, _var1, _var2):
-        _nandVar = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s" % (_var1, _var2))
-            
-        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var1)
-        m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, _var2)
-        
-        m.addConstr(_var1 + _var2, GRB.LESS_EQUAL, 2 - _nandVar)
-        
-        return _nandVar
-    
-    # Nand (Alternative denial)
-    def nandVar(m, *_var):
-        if len(_var) < 1:
-            return None
-        
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
-        
-        _nandVarName = "nand"
-        for currentVar in _var:
-            _nandVarName += "_%s" % (currentVar)
-            
-        _nandVar = m.addVar(vtype=GRB.BINARY, name=_nandVarName)
-        for currentVar in _var:
-            m.addConstr(1 - _nandVar, GRB.LESS_EQUAL, currentVar)
+    def nand2Var(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("NAND called with : %s"%(var1,var2))
 
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
-    
-        m.addConstr(_varSumLinExpr, GRB.LESS_EQUAL, len(_var) - _nandVar)
-    
-        return _nandVar
-    
-    # Nor (Joint Denial) i2 variables
-    def nor2Var(m, _var1, _var2):
-        _norVar = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(_var1, _var2))
-            
-        m.addConstr(_var1, GRB.LESS_EQUAL, 1 - _norVar)
-        m.addConstr(_var2, GRB.LESS_EQUAL, 1 - _norVar)
-            
-        m.addConstr(_var1 + _var2, GRB.GREATER_EQUAL, 1 - _norVar)
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 1)
+            return
         
-        return _norVar
+        varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
+            
+        m.addConstr(self.notVar(m, varNAND) <= var1)
+        m.addConstr(self.notVar(m, varNAND) <= var2)
+        
+        m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1)
+        
+        return varNAND
     
-    # Nor (Joint Denial)
-    def norVar(m, *_var):
-        if len(_var) < 1:
+    def nandVar(self, m, *var, onlyConstrains = False):
+        #self.myLogger.debug("NAND called with : %s"%(var,))
+        
+        cacheResult = self.__isInConstrainCaches('nandVar', onlyConstrains, var)
+        if cacheResult[0]:
+            self.myLogger.debug("NAND constrain already created - doing nothing")
+            return cacheResult[1]
+            
+        N = len(var)
+        
+        if N <= 1:
+            self.myLogger.debug("NAND returns : %s"%('None'))
             return None
         
-        if len(_var) == 1:
-            for currentVar in _var:
-                return currentVar
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr <= N - 1)
+                        
+            varSumLinExprStr = str(varSumLinExpr)
+            self.myLogger.debug("NAND created constrain only: %s <= %i"%(varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')], N-1))
+            
+            self.__addToConstrainCaches('nandVar', onlyConstrains, var, None)
+      
+            return
+        
+        nandVarName = "nand"
+        for currentVar in var:
+            nandVarName += "_%s"%(currentVar)
+            
+        varNAND = m.addVar(vtype=GRB.BINARY, name=nandVarName)
+        for currentVar in var:
+            m.addConstr(self.notVar(m, varNAND) <= currentVar)
+
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
+    
+        m.addConstr(varSumLinExpr <= self.notVar(m, varNAND) + N - 1)
+    
+        self.__addToConstrainCaches('nandVar', onlyConstrains, var, varNAND)
+
+        return varNAND
+    
+    def nor2Var(self, m, var1, var2, onlyConstrains = False):
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 0)
+            return
+        
+        varNOR = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(var1, var2))
+            
+        m.addConstr(var1 <= self.notVar(m, varNOR))
+        m.addConstr(var2 <= self.notVar(m, varNOR))
+            
+        m.addConstr(var1 + var2 >= self.notVar(m, varNOR))
+        
+        return varNOR
+    
+    def norVar(self, m, *var, onlyConstrains = False):
+        N = len(var)
+        
+        if N <= 1:
+            return None
+        
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            for currentVar in var:
+                varSumLinExpr.addTerms(1.0, currentVar)
+        
+            m.addConstr(varSumLinExpr <= 0)
+            return
         
         _norVarName = "nor"
-        for currentVar in _var:
+        for currentVar in var:
             _norVarName += "_%s"%(currentVar)
            
-        _norVar = m.addVar(vtype=GRB.BINARY, name=_norVarName)
-        for currentVar in _var:
-            m.addConstr(currentVar, GRB.LESS_EQUAL, 1 - _norVar)
+        varNOR = m.addVar(vtype=GRB.BINARY, name=norVarName)
+        for currentVar in var:
+            m.addConstr(currentVar <= self.notVar(m, varNOR))
         
-        _varSumLinExpr = LinExpr()
-        for currentVar in _var:
-            _varSumLinExpr.addTerms(1.0, currentVar)
+        varSumLinExpr = LinExpr()
+        for currentVar in var:
+            varSumLinExpr.addTerms(1.0, currentVar)
             
-            m.addConstr(_varSumLinExpr, GRB.GREATER_EQUAL, 1 - _norVar)
+            m.addConstr(varSumLinExpr >= self.notVar(m, varNOR))
     
-        return _norVar
+        return varNOR
     
-    # Exclusive Disjunction
-    def xorVar(m, _var1, _var2):
-        _xorVar = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(_var1, _var2))
+    def xorVar(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("XOR called with : %s"%(var1,var2))
+        
+        cacheResult = self.__isInConstrainCaches('xorVar', onlyConstrains, (var1, var2))
+        if cacheResult[0]:
+            return cacheResult[1]
+
+        if onlyConstrains:
+            m.addConstr(var1 + var2 <= 1)
+            m.addConstr(var1 + var2 >= 1)
+            self.myLogger.debug("IF created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+
+            self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
+            return
+        
+        varXOR = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(var1, var2))
             
-        m.addConstr(_var1 + _var2 + _xorVar, GRB.LESS_EQUAL, 2)
-        m.addConstr(-_var1 - _var2 + _xorVar, GRB.LESS_EQUAL, 0)
-        m.addConstr(_var1 - _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
-        m.addConstr(-_var1 + _var2 + _xorVar, GRB.GREATER_EQUAL, 0)
+        m.addConstr(var1 + var2 + varXOR <= 2)
+        m.addConstr(-var1 - var2 + varXOR <= 0)
+        m.addConstr(var1 - var2 + varXOR >= 0)
+        m.addConstr(-var1 + var2 + varXOR >= 0)
             
-        return _xorVar
+        return varXOR
     
-    # Implication
-    def ifVar(m, _var1, _var2):
-        _ifVar = m.addVar(vtype=GRB.BINARY, name="if_%s_%s"%(_var1, _var2))
+    def ifVar(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("IF called with : %s"%(var1,var2))
+
+        if (not var1) or (not var2):
+            return
+    
+        cacheResult = self.__isInConstrainCaches('ifVar', onlyConstrains, (var1, var2))
+        if cacheResult[0]:
+            self.myLogger.debug("IF constrain already created - doing nothing")
+            return cacheResult[1]
             
-        m.addConstr(1 - _var1 , GRB.LESS_EQUAL, _ifVar)
-        m.addConstr(_var2 , GRB.LESS_EQUAL, _ifVar)
-        m.addConstr(1 - _var1 + _var2, GRB.GREATER_EQUAL, _ifVar)
+        if onlyConstrains:
+            m.addConstr(var1 <= var2)
+            self.myLogger.debug("IF created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+
+            self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
+            return
+        
+        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_then_%s"%(var1.VarName, var2.VarName))
             
-        return _ifVar
+        m.addConstr(1 - var1 <= varIF)
+        m.addConstr(var2 <= varIF)
+        m.addConstr(1 - var1 + var2 >= varIF)
+            
+        m.update()
+
+        self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), varIF)
+        
+        self.myLogger.debug("IF returns : %s"%(varIF.VarName))
+
+        return varIF
            
-    # Equivalence 
-    def epqVar(m, _var1, _var2):
-        _epqVar = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(_var1, _var2))
-            
-        m.addConstr(_var1 + _var2 - _epqVar, GRB.LESS_EQUAL, 1)
-        m.addConstr(_var1 + _var2 + _epqVar , GRB.GREATER_EQUAL, 1)
-        m.addConstr(-_var1 + _var2 + _epqVar, GRB.LESS_EQUAL, 1)
-        m.addConstr(_var1 - _var2 + _epqVar, GRB.LESS_EQUAL, 1)
+    def eqVar(self, m, var1, var2, onlyConstrains = False):
+        #self.myLogger.debug("EQ called with : %s"%(var1,var2))
+
+        cacheResult = self.__isInConstrainCaches('eqVar', onlyConstrains, (var1, var2))
+        if cacheResult[0]:
+            self.myLogger.debug("EQ constrain already created - doing nothing")
+            return cacheResult[1]
         
-        return _epqVar
-    
+        if onlyConstrains:
+            m.addConstr(var1 >= var2)
+            self.myLogger.debug("EQ created constrain only: %s => %s"%(var1.VarName, var2.VarName))
+            
+            m.addConstr(var1 <= var2)
+            self.myLogger.debug("EQ created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+
+            self.__addToConstrainCaches('eqVar', onlyConstrains, (var1, var2), None)
+            return
+        
+        varEQ = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(var1, var2))
+            
+        m.addConstr(var1 + var2 - varEQ <= 1)
+        m.addConstr(var1 + var2 + varEQ >= 1)
+        m.addConstr(-var1 + var2 + varEQ <= 1)
+        m.addConstr(var1 - var2 + varEQ <= 1)
+        
+        m.update()
+             
+        self.__addToConstrainCaches('eqVar', onlyConstrains, (var1, var2), varEQ)
+
+        self.myLogger.debug("EQ returns : %s"%(varEQ.VarName))
+        return varEQ

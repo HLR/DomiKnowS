@@ -11,50 +11,129 @@ class ilpBooleanProcessor(object):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
 
-    # Negation
+    # NOT Negation
+    # Create new variable varNOT, create constrain 1 - var == varNOT, return varNOT
+    # 1 - var == varNOT
+    # if onlyConstrains then only construct constrain 1 - var >= 0
     @abc.abstractmethod
-    def notVar(m, _var): pass
+    def notVar(m, _var, onlyConstrains = False): pass
     
-    # Conjunction 2 variable
+    # AND Conjunction with 2 variable
+    # Create new variable varAND, create constrains:
+    # varAND <= var1
+    # varAND <= var2 
+    # var1 + var2 <= varAND + 2 - 1
+    # return varAND
+    # if onlyConstrains then only construct constrain var1 + var2 >= 2
     @abc.abstractmethod
-    def and2Var(m, _var1, _var2): pass
+    def and2Var(m, _var1, _var2,  onlyConstrains = False): pass
         
-    # Conjunction
+    # AND Conjunction
+    # Create new variable varAND, create constrains:
+    # varAND <= var1
+    # varAND <= var2
+    # ....
+    # varAND <= varN
+    # var1 + var2 + .. + varN <= varAND + N - 1
+    # return varAND
+    # if onlyConstrains then only construct constrain var1 + var2 + .. + varN >= N
     @abc.abstractmethod
-    def andVar(m, *_var): pass
+    def andVar(m, *_var, onlyConstrains = False): pass
        
-    # Disjunction 2 variables
+    # OR Disjunction with 2 variables
+    # Create new variable varOR, create constrains:
+    # var1 <= varOR
+    # var2 <= varOR 
+    # var1 + var2 >= varOR 
+    # return varOR
+    # if onlyConstrains then only construct constrain var1 + var2 >= 1
     @abc.abstractmethod
-    def or2Var(m, _var1, _var2): pass
+    def or2Var(m, _var1, _var2,  onlyConstrains = False): pass
         
-    # Disjunction
+    # OR Disjunction
+    # Create new variable varOR, create constrains:
+    # var1 <= varOR
+    # var2 <= varOR 
+    # ...
+    # varN <= varOR
+    # var1 + var2 + ... + varN >= varOR
+    # return varOR
+    # if onlyConstrains then only construct constrain var1 + var2 + ... + varN >= 1
     @abc.abstractmethod
-    def orVar(m, *_var): pass
+    def orVar(m, *_var, onlyConstrains = False): pass
 
-    # Nand (Alternative denial) 2 variables
+    # NAND (Alternative denial) with 2 variables
+    # Create new variable varNAND, create constrains:
+    # not(varNAND) <= var1
+    # not(varNAND) <= var2 
+    # var1 + var2 <= not(varNAND) + 2 - 1
+    # return varNAND
+    # if onlyConstrains then only construct constrain var1 + var2 <= 1
     @abc.abstractmethod
     def nand2Var(m, _var1, _var2): pass
 
-    # Nand (Alternative denial)
+    # NAND (Alternative denial)
+    # Create new variable varNAND, create constrains:
+    # not(varNAND) <= var1
+    # not(varNAND) <= var2 
+    # ...
+    # not(varNAND <= varN 
+    # var1 + var2 + ... + varN <= not(varNAND) + N - 1
+    # return varNAND
+    # if onlyConstrains then only construct constrain var1 + var2 + ... + varN <= N -1
     @abc.abstractmethod
-    def nandVar(m, *_var): pass
+    def nandVar(m, *_var, onlyConstrains = False): pass
   
-    # Nor (Joint Denial) i2 variables
+    # NOR (Joint Denial) 2 variables
+    # Create new variable varNOR, create constrains:
+    # var1 <= not(varNOR)
+    # var2 <= not(varNOR) 
+    # var1 + var2 >= not(varNOR)
+    # return varNOR
+    # if onlyConstrains then only construct constrain var1 + var2 <= 0
     @abc.abstractmethod
     def nor2Var(m, _var1, _var2): pass
 
-    # Nor (Joint Denial)
+    # NOR (Joint Denial)
+    # Create new variable varNOR, create constrains:
+    # var1 <= not(varNOR)
+    # var2 <= not(varNOR) 
+    # ...
+    # varN <= not(varNOR)
+    # var1 + var2 + ... + varN >= not(varNOR)
+    # return varNOR
+    # if onlyConstrains then only construct constrain var1 + var2 + ... + varN <= 0
     @abc.abstractmethod
-    def norVar(m, *_var): pass
+    def norVar(m, *_var, onlyConstrains = False): pass
 
-    # Exclusive Disjunction
+    # XOR Exclusive Disjunction 
+    # Create new variable varXOR, create constrains:
+    # var1 + var2 + varXOR <= 2
+    # -var1 - var2 + varXOR <= 0
+    # var1 - var2 + varXOR >= 0
+    # -var1 + var2 + varXOR >= 0
+    # return varXOR
+    # if onlyConstrains then only construct constrain var1 + var2 <= 1 and var1 + var2 >= 1 
     @abc.abstractmethod
-    def xorVar(m, _var1, _var2): pass
+    def xorVar(m, _var1, _var2,  onlyConstrains = False): pass
 
-    # Implication
+    # IF Implication
+    # Create new variable varIF, create constrains:
+    # 1 - var1 <= varIF
+    # var2 <= varIF
+    # 1 - var1 + var2 >= varIF
+    # return varIF
+    # if onlyConstrains then only construct constrain var1 <= var2
     @abc.abstractmethod
-    def ifVar(m, _var1, _var2): pass
+    def ifVar(m, _var1, _var2,  onlyConstrains = False): pass
 
-    # Equivalence 
+    # XNOR Equivalence (EQ)
+    # Create new variable varEQ, create constrains:
+    # var1 + var2 - varEQ <= 1
+    # var1 + var2 + varEQ >= 1
+    # -var1 + var2 + varEQ <= 1
+    # var1 - var2 + varEQ <= 1
+    # return varEQ
+    # if onlyConstrains then only construct constrain var1 >= var2 and var1 <= var2
     @abc.abstractmethod
-    def epqVar(m, _var1, _var2): pass
+    def epqVar(m, _var1, _var2,  onlyConstrains = False): pass
