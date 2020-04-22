@@ -7,3 +7,5 @@ lxml
 torchtext
 flair
 segtok
+bs4
+pycorenlp

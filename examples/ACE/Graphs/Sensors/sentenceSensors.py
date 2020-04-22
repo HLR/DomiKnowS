@@ -1,5 +1,4 @@
-from regr.sensor.sensor import Sensor
-from Graphs.Sensors.mainSensors import ReaderSensor, CallingSensor
+from regr.sensor.pytorch.sensors import TorchSensor, NominalSensor, ReaderSensor
 # from .mainSensors import ReaderSensor, CallingSensor
 from typing import Dict, Any
 from flair.embeddings import WordEmbeddings, CharacterEmbeddings, FlairEmbeddings, StackedEmbeddings, BertEmbeddings, ELMoEmbeddings
@@ -10,21 +9,10 @@ import pdb
 from flair.data import Sentence
 
 
-
-
-class SentenceReaderSensor(CallingSensor):
-    def forward(
-        self,
-        context: Dict[str, Any]
-    ) -> Any:
-        return context[self.pres[0].fullname][0]
-        # return Sentence("I am highly motivated to capture the relationships of washington with berlin")
-
-
-class SentenceSensor(CallingSensor):
+class SentenceSensor(TorchSensor):
     def __init__(self, *pres):
         super().__init__(*pres)
-        self.sentencesensor = pres[0]
+        self.sentence_value = pres[0]
 
 
 class SentenceBertEmbedderSensor(SentenceSensor):
@@ -34,17 +22,9 @@ class SentenceBertEmbedderSensor(SentenceSensor):
  
     def forward(
         self,
-        context: Dict[str, Any]
     ) -> Any:
-        super(SentenceBertEmbedderSensor, self).forward(context=context) 
-        self.bert_embedding.embed(context[self.sentencesensor.fullname])
+        self.bert_embedding.embed(self.fetch_value(self.sentence_value))
         return None
-
-
-
-# class SentencePosTagSensor(SentenceSensor):
-#     def __init__(self, sentence):
-#         super().__init__(sentence=sentence)
 
 
 class SentenceGloveEmbedderSensor(SentenceSensor):
@@ -54,10 +34,8 @@ class SentenceGloveEmbedderSensor(SentenceSensor):
                                                         
     def forward(
             self,
-            context: Dict[str, Any]
     ) -> Any:
-        super(SentenceGloveEmbedderSensor, self).forward(context=context)
-        self.glove_embedding.embed(context[self.sentencesensor.fullname])
+        self.glove_embedding.embed(self.fetch_value(self.sentence_value))
         return None
 
 
@@ -68,41 +46,46 @@ class SentenceFlairEmbedderSensor(SentenceSensor):
         
     def forward(
             self,
-            context: Dict[str, Any]
     ) -> Any:
-        super(SentenceFlairEmbedderSensor, self).forward(context=context)
-        
-        # print("flair")
-        self.flair_embedding_backward.embed(context[self.sentencesensor.fullname])
+        self.flair_embedding_backward.embed(self.fetch_value(self.sentence_value))
         return None
 
 
-def translator(label):
-    items = ['PRON', 'VERB', 'ADV', 'ADJ', 'PART', 'DET', 'NOUN', 'ADP']
-    vector = torch.zeros(len(items))
-    for item in range(len(items)):
-        if label == items[item]:
-            vector[item] = 1
-    return vector.view(1, len(items))
+class FlairSentenceSensor(TorchSensor):
+    def forward(self,) -> Any:
+        return Sentence(self.inputs[0])
+
+# def translator(label):
+#     items = ['PRON', 'VERB', 'ADV', 'ADJ', 'PART', 'DET', 'NOUN', 'ADP']
+#     vector = torch.zeros(len(items))
+#     for item in range(len(items)):
+#         if label == items[item]:
+#             vector[item] = 1
+#     return vector.view(1, len(items))
+#
+#
 
 
-class SentencePosTaggerSensor(SentenceSensor):
-    def __init__(self, *pres, reader):
+class SentencePosTagger(SentenceSensor):
+    def __init__(self, *pres):
         super().__init__(*pres)
-        self.reader = reader
         self.tagger = SequenceTagger.load('pos')
-        
-    def forward(
-            self,
-            context: Dict[str, Any]
-    ) -> Any:
-        super(SentencePosTaggerSensor, self).forward(context=context)
-        self.tagger.predict(context[self.sentencesensor.fullname])
-        _dict = context[self.sentencesensor.fullname].to_dict(tag_type='pos')
-        _list = []
 
-        for item in _dict['entities']:
-            # _list.append(self.reader.posTagEncoder(item['type']))
-            _list.append(self.reader.postagEncoder(item['type']))
-        print(_list[-1].shape)
-        return torch.stack(_list)
+    def forward(self,) -> Any:
+        self.tagger.predict(self.inputs[0])
+        return None
+
+
+class TensorReaderSensor(ReaderSensor):
+    def forward(
+        self,
+    ) -> Any:
+        if self.data:
+            try:
+                    return torch.tensor(self.data[self.keyword], device=self.device)
+            except:
+                print("the key you requested from the reader doesn't exist")
+                raise
+        else:
+            print("there is no data to operate on")
+            raise Exception('not valid')
