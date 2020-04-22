@@ -51,15 +51,6 @@ class BetweenEncoderSensor(TorchSensor):
             self,
             context: Dict[str, Any]
     ) -> Any:
-        
-        if not "counter_BetweenEncoderSensor" in context:
-            context["counter_BetweenEncoderSensor" ] = {}
-            
-        if self.fullname in context["counter_BetweenEncoderSensor" ]:
-            context["counter_BetweenEncoderSensor" ][self.fullname] = context["counter_BetweenEncoderSensor" ][self.fullname] + 1
-        else:
-            context["counter_BetweenEncoderSensor" ][self.fullname] = 1
-            
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
                 sensor(context=context)
