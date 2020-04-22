@@ -192,7 +192,10 @@ class DataNode:
         key = '<' + conceptRelation.name + '>'
         
         # Get probability
-        value = dataNode[0].getAttribute(key) # ? What if more DataNodes
+        if len(dataNode) == 1:
+            value = dataNode[0].getAttribute(key) 
+        elif len(dataNode) == 2:
+            value = dataNode[0].getRelationLinks(relationName = "pair", conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
         
         if value is None:
             return [0, 1]
@@ -240,11 +243,12 @@ class DataNode:
                     continue
             else:
                 currentConceptOrRelation = _currentConceptOrRelation
-            
-            conceptsRelations.append(currentConceptOrRelation)
-                
+                            
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
             currentCandidates = currentConceptOrRelation.candidates(self)
+            
+            conceptsRelations.append(currentConceptOrRelation)
+
             if currentCandidates is None:
                 continue
             
@@ -325,13 +329,12 @@ class DataNode:
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     currentCandidate3 = currentCandidate[2]
-                    currentProbability = currentConceptOrRelation.predict(self, currentCandidate1, currentCandidate2, currentCandidate3)
+                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun)
                     
                     self.myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
                     if currentProbability:
-                        graphResultsForTripleRelations[currentConceptOrRelation.name] \
-                            [currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
+                        graphResultsForTripleRelations[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
                     
                 else: # No support for more then three candidates yet
                     pass
@@ -493,15 +496,20 @@ class DataNodeBuilder(dict):
                     return concept
         
         return None 
-             
+            
+    conceptInfoCache = {} 
     # Collect concept information defined in the graph
     def __findConceptInfo(self, usedGraph, concept):
+        
+        if concept in self.conceptInfoCache:
+            return self.conceptInfoCache[concept]
+        
         conceptInfo = {}
         
         conceptInfo['concept'] = concept
         
         conceptInfo['relation'] = False
-        conceptInfo['relationAttrs'] = []
+        conceptInfo['relationAttrs'] = {}
         for arg_id, rel in enumerate(concept.has_a()): 
             conceptInfo['relation'] = True
             relationName = rel.src.name
@@ -509,7 +517,7 @@ class DataNodeBuilder(dict):
                             
             conceptAttr = self.__findConcept(conceptName, usedGraph)
 
-            conceptInfo['relationAttrs'].append(conceptAttr)
+            conceptInfo['relationAttrs'][rel.name] = conceptAttr
             
         conceptInfo['root'] = False
         # Check if the concept is root concept 
@@ -540,6 +548,8 @@ class DataNodeBuilder(dict):
                 if containedConcept:
                     conceptInfo['containedIn'].append(containedConcept)
         
+        self.conceptInfoCache[concept] = conceptInfo
+        
         return conceptInfo
     
     # Build or update relation datanode in the data graph for a given key
@@ -555,14 +565,14 @@ class DataNodeBuilder(dict):
         existingDnsForRelation = self.__findDatanodes(existingRootDns, relationName) # Datanodes of the current concept
         
         # Find datanodes connected by this relation
-        existingDnsForAttr = []
-        for attr in conceptInfo['relationAttrs']:
-            _existingDnsForAttr = self.__findDatanodes(existingRootDns, conceptInfo['relationAttrs'][0].name) # Datanodes of the given relations attribute concept
+        existingDnsForAttr = OrderedDict() 
+        for key, attr in conceptInfo['relationAttrs'].items():
+            _existingDnsForAttr = self.__findDatanodes(existingRootDns, attr.name) # Datanodes of the given relations attribute concept
             
             if not _existingDnsForAttr:
                 return
             
-            existingDnsForAttr.append(_existingDnsForAttr)
+            existingDnsForAttr[key] = _existingDnsForAttr
     
         # Check the shape of the value
         for i, a in enumerate(existingDnsForAttr):
@@ -571,7 +581,8 @@ class DataNodeBuilder(dict):
             
         # Create or update relation nodes
         if len(existingDnsForRelation) == 0: # No Datanode of this relation created yet
-            for p in product(*existingDnsForAttr):
+            keys = [*existingDnsForAttr]
+            for p in product(*existingDnsForAttr.values()):
                 instanceValue = ""
                 instanceID = ' -> '.join([n.ontologyNode.name + ' ' + str(n.getInstanceID()) for n in p])
                 rDn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
@@ -590,7 +601,7 @@ class DataNodeBuilder(dict):
                         if rDn not in dn.impactLinks[relationName]:
                             dn.impactLinks[relationName].append(rDn)
                         
-                    rDn.addRelationLink("connects", dn)
+                    rDn.addRelationLink(keys[i], dn)
                     
         else: # Datanode with this relation already created  -update it with new attribute
             for rDn in existingDnsForRelation:

@@ -249,7 +249,7 @@ def test_main_conll04(case):
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
+    conceptsRelations = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
     
     assert tokenResult['people'][0] == 1
