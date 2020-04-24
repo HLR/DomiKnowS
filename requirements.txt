@@ -2,3 +2,15 @@ pandas
 owlready2
 setuptools
 acls
+torch=1.1.0
+allennlp=0.8.5
+numpy
+nltk
+gensim
+lxml
+torchtext
+flair
+segtok
+bs4
+pycorenlp
+tqdm==4.35.0

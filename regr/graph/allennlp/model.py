@@ -249,7 +249,7 @@ class GraphModel(Model):
         for name, sensor in self.graph.get_sensors(CandidateSensor):
             sensor(data)
             mask = data[sensor.fullname].clone().detach()
-            label_not_masks[mask.shape] = (1-mask).type(torch.uint8)
+            label_not_masks[mask.shape] = (1-mask).type(torch.bool)
         for prop in self.graph.poi:
             # label (b, l)
             # pred  (b, l, c)

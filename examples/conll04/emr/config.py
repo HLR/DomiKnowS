@@ -11,7 +11,6 @@ config = {
     'Data': { # data setting
         'relative_path': "data/EntityMentionRelation",
         'train_path': "conll04.corp_1_train.corp",
-        #'train_path': "conll04.corp_1_train.corp_subsample_0.0625.corp",
         'valid_path': "conll04.corp_1_test.corp"
     },
     'Model': { # model setting
@@ -72,7 +71,7 @@ config = {
             'patience': 10
         },
         'iterator': {
-            'batch_size': 2,
+            'batch_size': 8,
         }
     },
     'Source': {
