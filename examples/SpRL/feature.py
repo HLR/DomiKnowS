@@ -1,53 +1,74 @@
 import spacy
 import networkx as nx
+from spacy.matcher import PhraseMatcher
+
 nlpmodel=spacy.load("en_core_web_sm")
+spatial_dict = []
+with open("examples/SpRL/data/spatial_dic.txt") as f_sp:
+    for line in f_sp:
+        spatial_dict.append(line.strip())
+    
 
+class DataFeature_for_sentence():
 
-
-class DataFeature():
-
-    def __init__(self,sentence,phrase):
+    def __init__(self,sentence):
         self.sentence = sentence
-        self.phrase = phrase
+        #self.phrase = phrase
 
         self.parse_sentence = nlpmodel(self.sentence)
-        self.parse_phrase = nlpmodel(self.phrase)
+        #self.parse_phrase = nlpmodel(self.phrase)
 
     def getChunks(self):
+        
         pre_chunk=nlpmodel(self.sentence)
         new_chunk=[]
+        # read dict
+        matcher = PhraseMatcher(nlpmodel.vocab)
+        patterns = [nlpmodel.make_doc(text) for text in spatial_dict]
+        matcher.add("TerminologyList", None, *patterns)
+        matches = matcher(pre_chunk)
+        for match_id, start, end in matches:
+            span = pre_chunk[start:end]
+            new_chunk.append(span)            
+        preposition_span = [pre_chunk[token.i:token.i+1] for token in pre_chunk if token.pos_ == "ADP" ]
+        for each_span in preposition_span:
+            if each_span not in new_chunk:
+                new_chunk.append(each_span)
         for chunk in pre_chunk.noun_chunks:
-            new_chunk.append(chunk)
+           new_chunk.append(chunk)
         return new_chunk
 
     def getSentence(self):
         return self.sentence
 
+class DataFeature_for_span():
+    def __init__(self, span):
+        self.span = span
 
     #get tokens
     def getPhraseTokens(self):
         # docs = nlpmodel(self.phrase)
         num=0
-        for token in self.parse_phrase:
+        for token in self.span:
             num+=1
-        span=self.parse_phrase[0:num]
+        span=self.span[0:num]
         return span.merge()
 
 
     def getLower(self):
-        return self.phrase.lower()
+        return self.span.text.lower()
 
     def getUpper(self):
-        return self.phrase.upper()
+        return self.span.text.upper()
 
 
     # headword
     def getHeadword(self):
-       if len(list(self.parse_phrase.noun_chunks))==0:
-           return self.phrase
-       else:
-           for doc in self.parse_phrase.noun_chunks:
-                    return str(doc.root.head.text).lower()
+        if len(list(self.span.noun_chunks))==0:
+            return self.span.text
+        else:
+            for doc in self.span.noun_chunks:
+                return str(doc.root.text).lower()
 
 
     #pos feature
@@ -98,12 +119,15 @@ class DataFeature():
 
     #phrasetag
     def getPhrasepos(self):
-        phrasepos=''
-        with self.parse_phrase.retokenize() as retokenizer:
-            retokenizer.merge(self.parse_phrase[0:len(self.phrase)])
-        for doc in self.parse_phrase:
-            phrasepos=doc.pos_
-        return phrasepos
+
+        # with self.span.text.retokenize() as retokenizer:
+        #     retokenizer.merge(self.span[0:len(self.span.text)])
+        # for doc in iter(self.span):
+        #     phrasepos=doc.pos_
+        return self.span.root.pos_
+
+       
+        #return phrasepos
 
     def getShortestDependencyPath(self, entity1, entity2):
         edges = []
@@ -124,6 +148,8 @@ class DataFeature():
         pass
 
 
+
+
 #
 # sentence=['fantastic car','new cars','about 20 years old']
 # newtokens=[]
@@ -138,11 +164,15 @@ class DataFeature():
 #     print(i._.pos_)
 
 
-sentence="Convulsions that occur after DTaP are caused by a fever."
-phrase="in the front of"
+#sentence="About 20 kids in traditional clothing and hats waiting on stairs along the left side of ."
+#phrase = ''
+#phrase="in the front of
 # entity1 = 'Convulsions'.lower()
 # entity2 = 'fever'
-data=DataFeature(sentence,phrase)
-print(data.getHeadword())
+#data=DataFeature(sentence,phrase)
+#for i in data.getChunks():
+   #print(i.text)
+   #print(i.start)
+#print(data.getHeadword())
 # print(data.getShortestDependencyPath(entity1, entity2))
 

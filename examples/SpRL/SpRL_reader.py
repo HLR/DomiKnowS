@@ -5,16 +5,19 @@ from allennlp.data.tokenizers import Token
 from allennlp.data.fields import Field, TextField, SequenceLabelField, AdjacencyField
 from allennlp.data.token_indexers import SingleIdTokenIndexer
 from regr.data.allennlp.reader import SensableReader, keep_keys
+#from regr.data.allennlp.reader import SensableReader, keep_keys
 from typing import Iterator, List, Dict, Set, Optional, Tuple, Iterable
 from allennlp.data import Instance
 from allennlp.data.fields.sequence_field import SequenceField
 from allennlp.common.checks import ConfigurationError
 import itertools
+from itertools import product
 import spacy
 import torch
 from featureIndexer import PosTaggerIndexer, LemmaIndexer, DependencyIndexer, HeadwordIndexer, PhrasePosIndexer
-from feature import DataFeature
+from feature import DataFeature_for_sentence, DataFeature_for_span
 from dictionaries import dictionary
+
 
 # sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
@@ -280,6 +283,7 @@ class SpRLReader(SensableReader):
         for raw_sample in raw_examples:
             yield raw_sample
 
+
     def parseSprlXML(self, sprlxmlfile):
 
         # parse the xml tree object
@@ -293,6 +297,15 @@ class SpRLReader(SensableReader):
 
         # iterate news items
         type_list = []
+        def getspan(sentence, span_text, start_index):
+            token_number_of_span = len(DataFeature_for_sentence(span_text).parse_sentence) 
+            doc = DataFeature_for_sentence(sentence).parse_sentence
+            for each_token in doc:
+                 if str(each_token.idx) == start_index:
+                     return doc[each_token.i:each_token.i + token_number_of_span]
+                     
+
+                     
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
             landmark = []
             trajector = []
@@ -308,10 +321,13 @@ class SpRLReader(SensableReader):
             for child in sentenceItem:
 
                 if child.tag == 'TEXT':
+                    chunklist = DataFeature_for_sentence(child.text).getChunks()
                     sentence_dic[child.tag] = child.text
+                    sentence_dic["phrases"] = chunklist
 
                 if child.tag == 'SPATIALINDICATOR':
-                    if "text" in child.attrib:
+                    if "text" in child.attrib: 
+                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
                         spatialindicator.append((child.attrib['text'], child.attrib['start']))
                         sentence_dic[child.tag] = spatialindicator
                         id_text_list[child.attrib['id']] = child.attrib['text']
@@ -319,6 +335,7 @@ class SpRLReader(SensableReader):
 
                 if child.tag == 'LANDMARK':
                     if "text" in child.attrib:
+                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
                         landmark.append((child.attrib['text'], child.attrib['start']))
                         sentence_dic[child.tag] = landmark
                         id_text_list[child.attrib['id']] = child.attrib['text']
@@ -326,6 +343,7 @@ class SpRLReader(SensableReader):
 
                 if child.tag == 'TRAJECTOR':
                     if "text" in child.attrib:
+                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
                         trajector.append((child.attrib['text'], child.attrib['start']))
                         sentence_dic[child.tag] = trajector
                         id_text_list[child.attrib['id']] = child.attrib['text']
@@ -351,13 +369,13 @@ class SpRLReader(SensableReader):
                             relationship.append(each_relationship)
                             sentence_dic[child.tag] = relationship
                     except:
-                        KeyError
-
+                        KeyError   
             sentences_list.append(sentence_dic)
 
         # create empty dataform for sentences
         # sentences_df = pd.DataFrame(sentences_list)
-
+    
+        
         return sentences_list
 
     def getCorpus(self, sentences_list):
@@ -393,8 +411,8 @@ class SpRLReader(SensableReader):
             except:
                 KeyError
 
-            phrase_list = [phrase for phrase in phrase_list if phrase != '']
-            label_list = [label for label in label_list if label != '']
+            phrase_list = [phrase for phrase in phrase_list if phrase]
+            label_list = [label for label in label_list if label]
 
             for rel in sents['RELATION']:
                 temp_temp_element = []
@@ -407,19 +425,87 @@ class SpRLReader(SensableReader):
                 temp_relation.append(tuple(temp_temp_element))
 
             relation_tuple = ((phrase_list, label_list), temp_relation, sents['TEXT'])
+            
+            relation_tuple = self.negative_relation_generation_for_test(relation_tuple, sents['phrases'])
             final_relationship.append(relation_tuple)
-
-        self.negative_relation_generation(final_relationship)
+            
+            
         # for i in final_relationship:
         #     numnum=0
         #     for m in i[0][0]:
         #         print(f"{m},{i[0][1][numnum]}")
         #         numnum +=1
         #     print('\n', end='')
-        #print(final_relationship)
+       # print(self.negative_relation_generation_for_train(final_relationship)[0])
+        print(final_relationship)
         return final_relationship
+    
+    def landmark_candidate_generation(self, phrase):
+        landmark_pos_dic = ["PRON", "NOUN", "DET", "ADJ", "NUM"]
+        landmark_pos = DataFeature_for_span(phrase).getPhrasepos()
+        if landmark_pos in landmark_pos_dic:
+            return phrase
 
-    def negative_relation_generation(self, phrase_relation_list):
+
+    def trajector_candidate_generation(self, phrase):
+        trajector_pos_dic = ["NOUN", "PRON", "ADJ","DET", "NUM", "VERB"]
+        trajector_pos = DataFeature_for_span(phrase).getPhrasepos()
+        if trajector_pos in trajector_pos_dic:
+            return phrase
+
+    def spatial_indicator_candidate_generation(self, phrase):
+        spatial_dict = []
+        with open('examples/SpRL/data/spatial_dic.txt') as f_sp:
+            for each_sp_word in f_sp:
+                spatial_dict.append(each_sp_word.strip())
+        spatial_pos = DataFeature_for_span(phrase).getPhrasepos()
+        if phrase.text in spatial_dict or spatial_pos == "ADP":
+            return phrase
+
+    
+
+
+    def negative_relation_generation_for_test(self, relation_tuple, generated_phrase_list):
+        landmark_candidate_list = []
+        trajector_candidate_list = []
+        spatial_indicator_candidate_list = []
+        for each_phrase in generated_phrase_list:
+            if self.landmark_candidate_generation(each_phrase):
+                landmark_candidate_list.append(self.landmark_candidate_generation(each_phrase))
+            if self.trajector_candidate_generation(each_phrase):
+                trajector_candidate_list.append(self.trajector_candidate_generation(each_phrase))
+            if self.spatial_indicator_candidate_generation(each_phrase):
+                spatial_indicator_candidate_list.append(self.spatial_indicator_candidate_generation(each_phrase))
+
+        raw_triplet_candidates = list(product(landmark_candidate_list, trajector_candidate_list, spatial_indicator_candidate_list))
+        new_triplet_candidates = []
+        def span_not_overlap(triplet):
+            arg1, arg2, arg3 = triplet
+
+            if (arg2.start <= arg1.start and arg1.start < arg2.end) or (arg3.start <= arg1.start and arg1.start < arg3.end) or \
+                (arg3.start <= arg2.start and arg2.start < arg3.end) or (arg1.start <= arg2.start and arg2.start < arg1.end) or \
+                (arg1.start <= arg3.start and arg3.start < arg1.end) or (arg2.start <= arg3.start and arg3.start < arg2.end):
+                return False
+            else:
+                return True
+        def span_overlap(span1, span2):
+            if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
+                return True
+            else:
+                return False
+        new_relation_triplet = []
+        for arg1, arg2, arg3 in filter(span_not_overlap, raw_triplet_candidates):
+            for each_relation in relation_tuple[1]:
+                gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
+                if span_overlap(arg1, gold_arg1[1][0]) and span_overlap(arg2, gold_arg2[1][0]) and span_overlap(arg3, gold_arg3[1][0]):
+                    new_relation_triplet.append((each_relation[0], (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
+                else:
+                    new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
+
+        relation_tuple[1].extend(new_relation_triplet)
+        return relation_tuple
+        
+    def negative_relation_generation_for_train(self, phrase_relation_list):
         for phrase_relation in phrase_relation_list:
             list_indices = list(range(len(phrase_relation[0][0])))
             list_indices = list(itertools.permutations(list_indices, 3))
@@ -480,8 +566,72 @@ class SpRLReader(SensableReader):
         #     print(i)
         return phrase_relation_list
 
-        # print(f" gold region relation number is {gold_relation_region}, gold direction number is {gold_relation_direction} , gold distance number is {gold_relation_distance}")
-        # print(f" negative relation number is {negative_relation}")
+    def entity_candidate_generation_for_train(self, phraselist):
+        gold_entity_landmark = 0
+        gold_entity_trajector = 0
+        gold_entity_spatialindicator = 0
+        positive_entity_landmark = 0
+        positive_entity_trajector = 0
+        positive_entity_spatialindicator = 0
+        negative_entity = 0
+
+        new_phraselist = []
+
+        for each_sentence in phraselist:
+                chunklist = each_sentence.get('phrases')    
+                landmarklist = each_sentence.get('LANDMARK','')
+                trajectorlist = each_sentence.get('TRAJECTOR','')
+                spatialindicatorlist = each_sentence.get('SPATIALINDICATOR','')
+              
+ 
+                tag1list = [land[0] for land in landmarklist]                            
+                tag2list = [traj[0] for traj in trajectorlist]
+                tag3list = [spat[0] for spat in spatialindicatorlist]
+
+                gold_entity_landmark += len(tag1list)
+                gold_entity_trajector += len(tag2list)
+                gold_entity_spatialindicator += len(tag3list)
+
+                each_sentence['NONE'] = list()
+                labelnone = each_sentence['NONE']
+
+                tag1_headword = []
+                tag2_headword = []
+                tag3_headword = []
+
+                for tag1 in tag1list:
+                    tag1_headword.append(DataFeature_for_span(tag1).getHeadword())
+                for tag2 in tag2list:
+                    tag2_headword.append(DataFeature_for_span(tag2).getHeadword())
+                for tag3 in tag3list:
+                    tag3_headword.append(DataFeature_for_span(tag3).getHeadword())
+                chunklist = list(set(chunklist))
+
+                for chunk in chunklist:
+                    if chunk in tag1list or chunk in tag2list or chunk in tag3list:
+                        continue
+                    elif DataFeature_for_span(chunk).getHeadword() in tag1_headword:
+                        landmarklist.append((chunk, chunk.start))
+                    elif DataFeature_for_span(chunk).getHeadword() in tag2_headword:
+                        trajectorlist.append((chunk, chunk.start))
+                    elif DataFeature_for_span(chunk).getHeadword() in tag3_headword:
+                        spatialindicatorlist.append((chunk, chunk.start))
+                    else:
+                        labelnone.append((chunk, chunk.start))
+
+                positive_entity_landmark += len(landmarklist)
+                positive_entity_trajector += len(trajectorlist)
+                positive_entity_spatialindicator += len(spatialindicatorlist)
+                negative_entity += len(labelnone)
+                new_phraselist.append(each_sentence)
+
+        # print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
+        # print(
+        #     f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
+        # print(f" negative entity number is {negative_entity} ")
+
+        return new_phraselist
+
 
     def negative_entity_generation(self, phraselist):
         gold_entity_landmark = 0
@@ -546,19 +696,19 @@ class SpRLReader(SensableReader):
                     else:
                         labelnone.append((chunk.text, sentence.find(chunk.text)))
 
-                positive_entity_landmark += len(tag1list)
-                positive_entity_trajector += len(tag2list)
-                positive_entity_spatialindicator += len(tag3list)
+                positive_entity_landmark += len(landmarklist)
+                positive_entity_trajector += len(trajectorlist)
+                positive_entity_spatialindicator += len(spatialindicatorlist)
                 negative_entity += len(labelnone)
                 new_phraselist.append(phrase)
 
             except:
                 KeyError
 
-        # print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
-        # print(
-        #     f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
-        # print(f" negative entity number is {negative_entity} ")
+        print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
+        print(
+            f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
+        print(f" negative entity number is {negative_entity} ")
 
         return new_phraselist
 
@@ -702,9 +852,10 @@ class NewAdjacencyField(AdjacencyField):
         return adjacency_field
 
 
-#sp = SpRLReader()
-#sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml'))
-#sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/sprl2017_train.xml')))
+sp = SpRLReader()
+#sp.parseSprlXML('examples/SpRL/data/new_train.xml')
+#sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
+sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml')))
 # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 
