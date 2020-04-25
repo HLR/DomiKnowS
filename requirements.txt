@@ -14,3 +14,4 @@ segtok
 bs4
 pycorenlp
 tqdm==4.35.0
+tensorboard
