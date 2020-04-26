@@ -37,6 +37,16 @@ class DataFeature_for_sentence():
         for chunk in pre_chunk.noun_chunks:
            new_chunk.append(chunk)
         return new_chunk
+    
+    def getShortestDependencyPath(self, entity1, entity2):
+        edges = []
+        for token in self.parse_sentence:
+            for child in token.children:
+                edges.append(('{0}'.format(token.lower_),
+                              '{0}'.format(child.lower_)))
+        graph = nx.Graph(edges)
+
+        return nx.shortest_path(graph, source=entity1, target=entity2)
 
     def getSentence(self):
         return self.sentence
@@ -44,15 +54,37 @@ class DataFeature_for_sentence():
 class DataFeature_for_span():
     def __init__(self, span):
         self.span = span
+        self.lemma_ = self.getLemma()
+        self.pos_ = self.getPos()
+        self.tag_ = self.getTag()
+        self.dep_ = self.getDenpendency()
+        self.headword_ = self.getHeadword()
+        self.phrasepos_ = self.getPhrasepos()
+        self.lower_ = self.getLower()
+        self.upper_ = self.getUpper()
+        # self.span.set_extension("lemma_", default=False, force=True)
+        # self.span.set_extension('pos_', default=False, force=True)
+        # self.span.set_extension('tag_', default=False, force=True)
+        # self.span.set_extension('dep_', default=False, force=True)
+        # self.span.set_extension('headword_', default=False, force=True)
+        #self.span.set_extension('phrasepos_', default=False, force=True)
+        # self.span.set_extension('sentence_', default=False, force=True)
+        # self.span._.set('lemma_', self.getLemma())
+        # self.span._.set('pos_', self.getPos())
+        # self.span._.set('tag_', self.getTag())
+        # self.span._.set('dep_', self.getDenpendency())
+        # self.span._.set('headword_', self.getHeadword())
+        #self.span._.set('phrasepos_', self.getPhrasepos())
+        #self.span._.set('sentence_', self.getSentence())
 
     #get tokens
-    def getPhraseTokens(self):
-        # docs = nlpmodel(self.phrase)
-        num=0
-        for token in self.span:
-            num+=1
-        span=self.span[0:num]
-        return span.merge()
+    # def getPhraseTokens(self):
+    #     # docs = nlpmodel(self.phrase)
+    #     num=0
+    #     for token in self.span:
+    #         num+=1
+    #     span=self.span[0:num]
+    #     return span.merge()
 
 
     def getLower(self):
@@ -73,48 +105,54 @@ class DataFeature_for_span():
 
     #pos feature
     def getPos(self):
-        newpos=[]
+        # newpos=[]
         pos = []
-        for token in self.parse_sentence:
-            newpos.append((token.text,token.pos_))
+        # for token in self.parse_sentence:
+        #     newpos.append((token.text,token.pos_))
 
-        for phrase_token in self.parse_phrase:
-            for new_p in newpos:
-                if phrase_token.text == new_p[0]:
-                    pos.append(new_p[1])
+        # for phrase_token in self.parse_phrase:
+        #     for new_p in newpos:
+        #         if phrase_token.text == new_p[0]:
+        #             pos.append(new_p[1])
+        for each_token in self.span:
+            pos.append(each_token.pos_)
         return '|'.join(pos)
 
     #tag feature
     def getTag(self):
-        newtag = []
+        #newtag = []
         tag = []
-        for token in self.parse_sentence:
-            newtag.append((token.text, token.tag_))
+        # for token in self.parse_sentence:
+        #     newtag.append((token.text, token.tag_))
 
-        for phrase_token in self.parse_phrase:
-            for new_t in newtag:
-                if phrase_token.text == new_t[0]:
-                    tag.append(new_t[1])
+        # for phrase_token in self.parse_phrase:
+        #     for new_t in newtag:
+        #         if phrase_token.text == new_t[0]:
+        #             tag.append(new_t[1])
+        for each_token in self.span:
+            tag.append(each_token.tag_)
         return '|'.join(tag)
 
     # lemma feature
     def getLemma(self):
         lemma = []
-        for phrase in self.parse_phrase:
-            lemma.append(phrase.lemma_)
+        for each_token in self.span:
+            lemma.append(each_token.lemma_)
         return "|".join(lemma)
 
     #dependenceyrelation
     def getDenpendency(self):
-        newdependency = []
+        #newdependency = []
         dependency = []
-        for token in self.parse_sentence:
-            newdependency.append((token.text, token.dep_))
+        # for token in self.parse_sentence:
+        #     newdependency.append((token.text, token.dep_))
 
-        for phrase_token in self.parse_phrase:
-            for new_t in newdependency:
-                if phrase_token.text == new_t[0]:
-                    dependency.append(new_t[1])
+        # for phrase_token in self.parse_phrase:
+        #     for new_t in newdependency:
+        #         if phrase_token.text == new_t[0]:
+        #             dependency.append(new_t[1])
+        for each_token in self.span:
+            dependency.append(each_token.dep_)
         return '|'.join(dependency)
 
     #phrasetag
@@ -129,19 +167,11 @@ class DataFeature_for_span():
        
         #return phrasepos
 
-    def getShortestDependencyPath(self, entity1, entity2):
-        edges = []
-        for token in self.parse_sentence:
-            for child in token.children:
-                edges.append(('{0}'.format(token.lower_),
-                              '{0}'.format(child.lower_)))
-        graph = nx.Graph(edges)
 
-        return nx.shortest_path(graph, source=entity1, target=entity2)
 
     #wordform
     def getWordform(self):
-        return self.getLower()
+        return self.span.getLower()
 
     #semantic role
     def getSemanticRle(self):

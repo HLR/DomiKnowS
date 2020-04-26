@@ -70,7 +70,7 @@ def model_declaration(graph, config):
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
-    triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
+    #triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
     triplet['all'] = ConcatSensor(triplet['cat'],
                                   #triplet['compact_dist'],
                                   triplet['raw_dist'],
@@ -82,12 +82,12 @@ def model_declaration(graph, config):
                                   triplet['tr_1'],
                                   triplet['tr_2'],
                                   triplet['tr_3'],
-                                  triplet['tr_4'],
-                                  triplet['tr_5']
+                                  triplet['tr_4']
+                                  #triplet['tr_5']
                                  )
 
     triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
-    spatial_triplet['candidate'] = JointCandidateSensor(landmark['label'], trajector['label'], spatial_indicator['label'])
+    #spatial_triplet['candidate'] = JointCandidateSensor(landmark['label'], trajector['label'], spatial_indicator['label'])
 
     spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
     none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)

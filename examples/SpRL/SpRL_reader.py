@@ -42,23 +42,24 @@ class SpRLReader(SensableReader):
         (phrases, labels), relations, sentence = raw_sample
         newtoken = []
         for phrase in phrases:
-            token = DataFeature(sentence, phrase).getPhraseTokens()
-            token.set_extension("lemma_", default=False, force=True)
-            token.set_extension('pos_', default=False, force=True)
-            token.set_extension('tag_', default=False, force=True)
-            token.set_extension('dep_', default=False, force=True)
-            token.set_extension('headword_', default=False, force=True)
-            token.set_extension('phrasepos_', default=False, force=True)
-            token.set_extension('sentence_', default=False, force=True)
-            token._.set('lemma_', DataFeature(sentence, phrase).getLemma())
-            token._.set('pos_', DataFeature(sentence, phrase).getPos())
-            token._.set('tag_', DataFeature(sentence, phrase).getTag())
-            token._.set('dep_', DataFeature(sentence, phrase).getDenpendency())
-            token._.set('headword_', DataFeature(sentence, phrase).getHeadword())
-            token._.set('phrasepos_', DataFeature(sentence, phrase).getPhrasepos())
-            token._.set('sentence_', DataFeature(sentence, phrase).getSentence())
+            #token = DataFeature(sentence, phrase).getPhraseTokens()
+            # phrase.set_extension("lemma_", default=False, force=True)
+            # phrase.set_extension('pos_', default=False, force=True)
+            # phrase.set_extension('tag_', default=False, force=True)
+            # phrase.set_extension('dep_', default=False, force=True)
+            # phrase.set_extension('headword_', default=False, force=True)
+            # phrase.set_extension('phrasepos_', default=False, force=True)
+            # phrase.set_extension('sentence_', default=False, force=True)
+            df = DataFeature_for_span(phrase)
 
-            newtoken.append(token)
+            # token._.set('lemma_', df.getLemma())
+            # token._.set('pos_', df.getPos())
+            # token._.set('tag_', df.getTag())
+            # token._.set('dep_', df.getDenpendency())
+            # token._.set('headword_', df.getHeadword())
+            # token._.set('phrasepos_', df.getPhrasepos())
+            # token._.set('sentence_', df.getSentence())
+            newtoken.append(df)
         return newtoken
 
     @cls.textfield('word')
@@ -67,6 +68,7 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
+        tokens = [Token(each_df.span.text) for each_df in tokens]
         indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
@@ -77,7 +79,8 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'pos_tag': PosTaggerIndexer(namespace='pos_tag')}
+        tokens = [Token(each_df.pos_) for each_df in tokens]
+        indexers = {'pos_tag': SingleIdTokenIndexer(namespace='pos_tag', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -87,7 +90,8 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'lemma_tag': LemmaIndexer(namespace='lemma_tag')}
+        tokens = [Token(each_df.lemma_) for each_df in tokens]
+        indexers = {'lemma_tag': SingleIdTokenIndexer(namespace='lemma_tag', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -98,7 +102,8 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'dep_tag': DependencyIndexer(namespace='dep_tag')}
+        tokens = [Token(each_df.dep_) for each_df in tokens]
+        indexers = {'dep_tag': SingleIdTokenIndexer(namespace='dep_tag', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -108,7 +113,8 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'headword_tag': HeadwordIndexer(namespace='headword_tag')}
+        tokens = [Token(each_df.headword_) for each_df in tokens]
+        indexers = {'headword_tag': SingleIdTokenIndexer(namespace='headword_tag', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -118,7 +124,8 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        indexers = {'phrasepos_tag': PhrasePosIndexer(namespace='phrasepos_tag')}
+        tokens = [Token(each_df.phrasepos_) for each_df in tokens]
+        indexers = {'phrasepos_tag': SingleIdTokenIndexer(namespace='phrasepos_tag', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
 
@@ -128,7 +135,6 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-
         length = len(tokens)
 
         # convert ijk index to 1-d array index
@@ -137,7 +143,7 @@ class SpRLReader(SensableReader):
 
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
-            return '::'.join((tokens[tr].text.lower(), tokens[sp].text.lower(), tokens[lm].text.lower()))
+            return '::'.join((tokens[tr].lower_, tokens[sp].lower_, tokens[lm].lower_))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -155,7 +161,6 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-
         length = len(tokens)
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -163,7 +168,7 @@ class SpRLReader(SensableReader):
 
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
-            if tokens[sp].text.lower() in dictionary.prepositions:
+            if tokens[sp].lower_ in dictionary.prepositions:
                 return "true"
             else:
                 return "false"
@@ -184,7 +189,6 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-
         length = len(tokens)
 
         # convert ijk index to 1-d array index
@@ -194,7 +198,7 @@ class SpRLReader(SensableReader):
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
 
-            return '::'.join((tokens[tr]._.headword_.lower(), tokens[lm]._.headword_.lower(), tokens[sp].text.lower()))
+            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].span.text.lower()))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -213,7 +217,7 @@ class SpRLReader(SensableReader):
             tokens
     ) -> Field:
         length = len(tokens)
-        sentence = tokens[0]._.sentence_
+        sentence = tokens[0].span.doc.text
 
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -221,12 +225,12 @@ class SpRLReader(SensableReader):
 
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
-            entity1 = tokens[tr]._.headword_.lower()
-            entity2 = tokens[sp]._.headword_.lower()
+            entity1 = tokens[tr].headword_.lower()
+            entity2 = tokens[sp].headword_.lower()
             entity1 = entity1.split(' ')[0]
             entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature(sentence=sentence,phrase='').getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].text)
+            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
             return "::".join(shortestdepedenceylist)
 
         # prepare a empty list
@@ -239,39 +243,39 @@ class SpRLReader(SensableReader):
         # import pdb; pdb.set_trace()
         return textfield
 
-    @cls.textfield('triplet_feature5')
-    def update_triplet_dummy(
-            self,
-            fields,
-            tokens
-    ) -> Field:
-        length = len(tokens)
-        sentence = tokens[0]._.sentence_
+    # @cls.textfield('triplet_feature5')
+    # def update_triplet_dummy(
+    #         self,
+    #         fields,
+    #         tokens
+    # ) -> Field:
+    #     length = len(tokens)
+    #     sentence = tokens[0].doc
 
-        # convert ijk index to 1-d array index
-        def encap_index(*indices):
-            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+    #     # convert ijk index to 1-d array index
+    #     def encap_index(*indices):
+    #         return sum(i * length ** j for j, i in enumerate(reversed(indices)))
 
-        # just a dummy feature
-        def dummy_feature(lm, tr, sp):
-            entity1 = tokens[sp]._.headword_.lower()
-            entity2 = tokens[lm]._.headword_.lower()
-            entity1 = entity1.split(' ')[0]
-            entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature(sentence=sentence, phrase='').getShortestDependencyPath(entity1,
-                                                                                                         entity2)
-            shortestdepedenceylist.insert(0, tokens[sp].text)
-            return "::".join(shortestdepedenceylist)
+    #     # just a dummy feature
+    #     def dummy_feature(lm, tr, sp):
+    #         entity1 = tokens[sp].headword_.lower()
+    #         entity2 = tokens[lm].headword_.lower()
+    #         entity1 = entity1.split(' ')[0]
+    #         entity2 = entity2.split(' ')[0]
+    #         shortestdepedenceylist = DataFeature(sentence=sentence, phrase='').getShortestDependencyPath(entity1,
+    #                                                                                                      entity2)
+    #         shortestdepedenceylist.insert(0, tokens[sp].text)
+    #         return "::".join(shortestdepedenceylist)
 
-        # prepare a empty list
-        encap_tokens = [None] * (length ** 3)
-        for lm, tr, sp in itertools.product(range(length), repeat=3):
-            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+    #     # prepare a empty list
+    #     encap_tokens = [None] * (length ** 3)
+    #     for lm, tr, sp in itertools.product(range(length), repeat=3):
+    #         encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
 
-        indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
-        textfield = TextField(encap_tokens, indexers)
-        # import pdb; pdb.set_trace()
-        return textfield
+    #     indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
+    #     textfield = TextField(encap_tokens, indexers)
+    #     # import pdb; pdb.set_trace()
+    #     return textfield
 
     def raw_read(
             self,
@@ -279,7 +283,8 @@ class SpRLReader(SensableReader):
     ) -> Iterable[Instance]:
 
         phrase_list = self.parseSprlXML(file_path)
-        raw_examples = self.getCorpus(self.negative_entity_generation(phrase_list))
+       # raw_examples = self.getCorpus(self.negative_entity_generation_for(phrase_list))
+        raw_examples = self.getCorpus(self.entity_candidate_generation_for_train(phrase_list))
         for raw_sample in raw_examples:
             yield raw_sample
 
@@ -437,7 +442,6 @@ class SpRLReader(SensableReader):
         #         numnum +=1
         #     print('\n', end='')
        # print(self.negative_relation_generation_for_train(final_relationship)[0])
-        print(final_relationship)
         return final_relationship
     
     def landmark_candidate_generation(self, phrase):
@@ -461,9 +465,6 @@ class SpRLReader(SensableReader):
         spatial_pos = DataFeature_for_span(phrase).getPhrasepos()
         if phrase.text in spatial_dict or spatial_pos == "ADP":
             return phrase
-
-    
-
 
     def negative_relation_generation_for_test(self, relation_tuple, generated_phrase_list):
         landmark_candidate_list = []
@@ -705,10 +706,10 @@ class SpRLReader(SensableReader):
             except:
                 KeyError
 
-        print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
-        print(
-            f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
-        print(f" negative entity number is {negative_entity} ")
+       # print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
+       # print(
+           # f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
+       # print(f" negative entity number is {negative_entity} ")
 
         return new_phraselist
 
@@ -852,10 +853,10 @@ class NewAdjacencyField(AdjacencyField):
         return adjacency_field
 
 
-sp = SpRLReader()
+#sp = SpRLReader()
 #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
 #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
-sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml')))
+#sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml')))
 # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 
