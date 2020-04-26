@@ -7,7 +7,11 @@ from allennlp.data.fields import Field, TextField, SequenceLabelField, Adjacency
 import cls
 
 from regr.data.allennlp.reader import keep_keys
-from .data_spacy import Conll04SpaCyBinaryReader
+
+if __package__ is None or __package__ == '':
+    from data_spacy import Conll04SpaCyBinaryReader
+else:
+    from .data_spacy import Conll04SpaCyBinaryReader
 
 
 @keep_keys('sentence', 'update_labels()', 'update_relations()')
