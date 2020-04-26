@@ -4,7 +4,7 @@ from spacy.matcher import PhraseMatcher
 
 nlpmodel=spacy.load("en_core_web_sm")
 spatial_dict = []
-with open("examples/SpRL/data/spatial_dic.txt") as f_sp:
+with open("data/spatial_dic.txt") as f_sp:
     for line in f_sp:
         spatial_dict.append(line.strip())
     
