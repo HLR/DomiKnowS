@@ -8,7 +8,7 @@ from allennlp.nn.util import get_text_field_mask
 from ...graph import Property
 from ...utils import prod, guess_device
 from .base import ReaderSensor, ModuleSensor, SinglePreMaskedSensor, MaskedSensor, PreArgsModuleSensor, SinglePreArgMaskedPairSensor
-from .module import Concat, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, TripPhraseDistRelation, JointCandidate
+from .module import Concat, CartesianProduct3, SelfCartesianProduct, SelfCartesianProduct3, NGram, PairTokenDistance, PairTokenDependencyRelation, PairTokenDependencyDistance, LowestCommonAncestor, TripPhraseDistRelation, JointCandidate
 
 
 class SentenceSensor(ReaderSensor):
@@ -145,8 +145,38 @@ class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
             mask = mask.unsqueeze_(-1).matmul(masks[i])
         return mask
 
+class CartesianProduct3Sensor(PreArgsModuleSensor, MaskedSensor):
+    def create_module(self):
+        return CartesianProduct3()
 
-class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
+    @property
+    def output_dim(self):
+        isscalar = True
+        output_dim = 1
+        for pre_dim in self.pre_dims:
+            if len(pre_dim) > 0:
+                isscalar = False
+                output_dim *= prod(pre_dim)  # assume flatten input
+        if isscalar:
+            return ()
+        return (output_dim,) # assume flatten output
+
+    def get_mask(self, context: Dict[str, Any]):
+        for name, sensor in self.pre.find(MaskedSensor):
+            break
+        else:
+            print(self.pre)
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+
+        mask = sensor.get_mask(context).float()
+        ms = mask.size()
+        #(b,l,l)
+        mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
+        mask2 = mask1.view(ms[0], ms[1], ms[1], 1).matmul(mask.view(ms[0], 1, 1, ms[1]))
+        
+        return mask2
+
+class SelfCartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
     def create_module(self):
         return SelfCartesianProduct3()
 

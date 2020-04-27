@@ -1,4 +1,4 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor, SelfCartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner, MLPLearner, ConvLearner, TripletEmbedderLearner
 
 
@@ -57,7 +57,8 @@ def model_declaration(graph, config):
     none_entity['label'] = LogisticRegressionLearner(phrase['encode'])
 
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
-    triplet['cat'] = CartesianProduct3Sensor(phrase['compact'])
+    triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
+    triplet['args_type'] = CartesianProduct3Sensor(landmark['label'], trajector['label'], spatial_indicator['label'])
     #triplet['compact_dist'] = TripPhraseDistSensor(phrase['compact'])
     # triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
     # triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
@@ -72,6 +73,7 @@ def model_declaration(graph, config):
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
     #triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
     triplet['all'] = ConcatSensor(triplet['cat'],
+                                  triplet['args_type'],
                                   #triplet['compact_dist'],
                                 #   triplet['raw_dist'],
                                 #   triplet['pos_dist'],
