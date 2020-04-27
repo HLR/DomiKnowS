@@ -59,31 +59,31 @@ def model_declaration(graph, config):
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
     triplet['cat'] = CartesianProduct3Sensor(phrase['compact'])
     #triplet['compact_dist'] = TripPhraseDistSensor(phrase['compact'])
-    triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
-    triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
-    triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
-    triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
-    triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
-    triplet['dependency_dist'] = TripPhraseDistSensor(phrase['dep'])
+    # triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
+    # triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
+    # triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
+    # triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
+    # triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
+    # triplet['dependency_dist'] = TripPhraseDistSensor(phrase['dep'])
     # new feature example
     triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
-    triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
+    #triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
     triplet['all'] = ConcatSensor(triplet['cat'],
                                   #triplet['compact_dist'],
-                                  triplet['raw_dist'],
-                                  triplet['pos_dist'],
-                                  triplet['lemma_dist'],
-                                  triplet['headword_dist'],
-                                  triplet['phrasepos_dist'],
-                                  triplet['dependency_dist'],
+                                #   triplet['raw_dist'],
+                                #   triplet['pos_dist'],
+                                #   triplet['lemma_dist'],
+                                #   triplet['headword_dist'],
+                                #   triplet['phrasepos_dist'],
+                                #   triplet['dependency_dist'],
                                   triplet['tr_1'],
                                   triplet['tr_2'],
                                   triplet['tr_3'],
-                                  triplet['tr_4'],
-                                  triplet['tr_5']
+                                  triplet['tr_4']
+                                  #triplet['tr_5']
                                  )
 
     #triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
