@@ -254,23 +254,6 @@ def find_base(s, n):
     res = minimize_scalar(lambda b : (length(b) - s) ** 2, method='bounded', bounds=(1, (s-1)**(1./n)))
     return res.x
 
-
-def get_prop_result(prop, data):
-    vals = []
-    mask = None
-    for name, sensor in prop.items():
-        sensor(data)
-        if hasattr(sensor, 'get_mask'):
-            if mask is None:
-                mask = sensor.get_mask(data)
-            else:
-                assert mask == sensor.get_mask(data)
-        tensor = data[sensor.fullname]
-        vals.append(tensor)
-    label = vals[0]  # TODO: from readersensor
-    pred = vals[1]  # TODO: from learner
-    return label, pred, mask
-
 def isbad(x):
     return (
         x != x or  # nan

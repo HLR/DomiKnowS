@@ -16,7 +16,7 @@ class AllenNlpSensor(Sensor):
         self.output_only = output_only
         self.pre_dims = []
         for pre in pres:
-            for name, sensor in pre.find(AllenNlpSensor):
+            for name, sensor in pre.find(AllenNlpSensor, lambda s: not s.output_only):
                 dim = sensor.output_dim
                 self.pre_dims.append(dim)
                 break
@@ -26,7 +26,8 @@ class AllenNlpSensor(Sensor):
     def update_context(
         self,
         context: Dict[str, Any],
-        force=False
+        force=False,
+        propagate=True
     ) -> Dict[str, Any]:
         # update prerequired first
         for pre in self.pres:
@@ -43,7 +44,7 @@ class AllenNlpSensor(Sensor):
                     pre.fullname, self.fullname))
 
         # then call forward
-        Sensor.update_context(self, context, force)
+        Sensor.update_context(self, context, force, propagate=(propagate and not self.output_only))
 
     @property
     def output_dim(self):

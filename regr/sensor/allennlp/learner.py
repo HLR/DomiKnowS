@@ -173,7 +173,7 @@ class ConvLearner(MLPLearner):
         SinglePreLearner.__init__(self, pre, output_only=output_only)
 
 
-class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
+class LogisticRegressionLearner(SinglePreLearner, MaskedSensor):
     def create_module(self):
         fc = Linear(in_features=prod(self.pre_dim), out_features=2)
         sm = LogSoftmax(dim=-1)
@@ -192,6 +192,15 @@ class LogisticRegressionLearner(SinglePreLearner, SinglePreMaskedSensor):
         output_only: bool=False
     ) -> NoReturn:
         SinglePreLearner.__init__(self, pre, output_only=output_only)
+
+    def get_mask(self, context: Dict[str, Any]):
+        try:
+            name, sensor = next(self.pre.find(MaskedSensor, lambda s: not s.output_only))
+        except:
+            raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
+        pre_mask = sensor.get_mask(context)
+        mask = torch.stack((pre_mask, pre_mask), dim=-1)
+        return mask
 
 
 class SoftmaxLogitLearner(SinglePreLearner, SinglePreMaskedSensor):

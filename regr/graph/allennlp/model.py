@@ -11,11 +11,12 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy, F1Measure
 
 from .metrics import Epoch, DatasetType
+from .utils import get_prop_result
 
 from .. import Graph
 from ..trial import Trial
 from ..property import Property
-from ...utils import prod, get_prop_result
+from ...utils import prod
 from ...sensor.allennlp import AllenNlpLearner
 from ...sensor.allennlp.base import ModuleSensor
 from ...sensor.allennlp.sensor import CandidateSensor
@@ -40,7 +41,10 @@ def update_metrics(
         label_masks[mask.shape] = mask
     for metric_name, class_index, prop, metric in metrics:
         label, pred, mask = get_prop_result(prop, data)
-        label_mask = label_masks.get(mask.shape)
+        mask = mask.clone().float()
+        mask_n, mask = mask.unbind(dim=-1)
+        assert (mask_n==mask).all()
+        label_mask = label_masks.get(label.shape)
         if label_mask is not None:
             mask = mask * label_mask.float()
         metric(pred, label, mask)
@@ -255,9 +259,9 @@ class GraphModel(Model):
             # pred  (b, l, c)
             # mask  (b, l)
             label, pred, mask = get_prop_result(prop, data)
-            if mask.shape in label_not_masks:
+            if label.shape in label_not_masks:
                 # label_mask  (b, l)
-                label_not_mask = label_not_masks[mask.shape]
+                label_not_mask = label_not_masks[label.shape]
                 shape = pred.shape
                 # (b*l, c)
                 pred = pred.clone().detach().view(-1, shape[-1])
@@ -266,7 +270,7 @@ class GraphModel(Model):
                 pred[label_not_mask, :] = torch.tensor(float("nan"))
                 # (b, l, c)
                 pred = pred.view(shape)
-                label_not_mask = label_not_mask.view(mask.shape)
+                label_not_mask = label_not_mask.view(label.shape)
                 data[prop.fullname] = pred
                 for name, learner in prop.find(AllenNlpLearner):
                     data[learner.fullname] = pred
@@ -296,8 +300,10 @@ class GraphModel(Model):
                 _, pred_i, _ = get_prop_result(prop, data_i)
                 # (b, l,)
                 pred_i = pred_i.argmax(dim=-1)
-            label = label.clone().detach()
+
             mask = mask.clone().float()
+            mask_n, mask = mask.unbind(dim=-1)
+            assert (mask_n==mask).all()
             label_mask = label_masks.get(mask.shape)
             if label_mask is not None:
                 mask = mask * label_mask.float()

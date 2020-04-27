@@ -273,12 +273,20 @@ from allennlp.models.model import Model
 from allennlp.data import Instance
 from allennlp.data.iterators import DataIterator
 from allennlp.nn import util as nn_util
-from ...utils import get_prop_result
-from ...sensor.allennlp.sensor import SentenceSensor
+from ...sensor.allennlp.sensor import SentenceSensor, LabelSensor
 import torch
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_prop_result(prop, data):
+    _, label_sensor = next(prop.find(LabelSensor))
+    _, pred_sensor = next(prop.find(lambda s: not s.output_only))
+    label = data[label_sensor.fullname]
+    pred = data[pred_sensor.fullname]
+    mask = pred_sensor.get_mask(data)
+    return label, pred, mask
 
 # We want to warn people that tqdm ignores metrics that start with underscores
 # exactly once. This variable keeps track of whether we have.

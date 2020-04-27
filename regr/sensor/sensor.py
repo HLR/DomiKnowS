@@ -19,7 +19,8 @@ class Sensor(BaseGraphTreeNode):
     def update_context(
         self,
         context: Dict[str, Any],
-        force=False
+        force=False,
+        propagate=True
     ) -> Dict[str, Any]:
         if not force and (self.fullname in context):
             # context cached results by sensor name. override if forced recalc is needed
@@ -27,12 +28,12 @@ class Sensor(BaseGraphTreeNode):
         else:
             val = self.forward(context)
             context[self.fullname] = val
-        self.propagate_context(context, self, force)
+        self.propagate_context(context, self, force, propagate)
 
-    def propagate_context(self, context, node, force=False):
-        if node.sup is not None and (node.sup.fullname not in context or force):
+    def propagate_context(self, context, node, force=False, propagate=True):
+        if propagate and node.sup is not None and (node.sup.fullname not in context or force):
             context[node.sup.fullname] = context[self.fullname]
-            self.propagate_context(context, node.sup, force)
+            self.propagate_context(context, node.sup, force, propagate)
 
     def forward(
         self,

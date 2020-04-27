@@ -72,7 +72,7 @@ class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
 
     def get_mask(self, context: Dict[str, Any]):
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
+            for name, sensor in pre.find(MaskedSensor, lambda s: not s.output_only):
                 return sensor.get_mask(context)
             else:
                 # not found
@@ -98,7 +98,7 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
         return (output_dim,)
 
     def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for name, sensor in self.pre.find(MaskedSensor, lambda s: not s.output_only):
             break
         else:
             print(self.pre)
@@ -128,7 +128,7 @@ class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
     def get_mask(self, context: Dict[str, Any]):
         masks = []
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
+            for name, sensor in pre.find(MaskedSensor, lambda s: not s.output_only):
                 break
             else:
                 print(self.pre)
@@ -152,17 +152,19 @@ class CartesianProduct3Sensor(PreArgsModuleSensor, MaskedSensor):
     @property
     def output_dim(self):
         isscalar = True
-        output_dim = 1
+        output_dim = 0
         for pre_dim in self.pre_dims:
             if len(pre_dim) > 0:
                 isscalar = False
-                output_dim *= prod(pre_dim)  # assume flatten input
+                output_dim += prod(pre_dim)  # assume flatten input
+            else:
+                output_dim += 1
         if isscalar:
             return ()
         return (output_dim,) # assume flatten output
 
     def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for name, sensor in self.pre.find(MaskedSensor, lambda s: not s.output_only):
             break
         else:
             print(self.pre)
@@ -189,7 +191,7 @@ class SelfCartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
         return (output_dim,)
 
     def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for name, sensor in self.pre.find(MaskedSensor, lambda s: not s.output_only):
             break
         else:
             print(self.pre)
@@ -227,7 +229,7 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
         self.pretrained_file = pretrained_file
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for name, pre_sensor in pre.find(SentenceSensor, lambda s: not s.output_only):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -278,7 +280,7 @@ class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
         self.pretrained_model = pretrained_model
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for name, pre_sensor in pre.find(SentenceSensor, lambda s: not s.output_only):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -338,7 +340,7 @@ class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
         return (self.pre_dim[0] * 2,)
 
     def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for name, sensor in self.pre.find(MaskedSensor, lambda s: not s.output_only):
             break
         else:
             print(self.pre)

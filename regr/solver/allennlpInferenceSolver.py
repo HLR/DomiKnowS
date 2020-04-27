@@ -6,7 +6,7 @@ import torch
 from ..graph import Graph
 from ..sensor.allennlp.sensor import SentenceEmbedderSensor, SentenceSensor
 from ..sensor.allennlp.base import AllenNlpLearner
-from ..utils import get_prop_result
+from ..graph.allennlp.utils import get_prop_result
 from .ilpOntSolver import ilpOntSolver
 
 
