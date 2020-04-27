@@ -39,14 +39,17 @@ class DataFeature_for_sentence():
         return new_chunk
     
     def getShortestDependencyPath(self, entity1, entity2):
-        edges = []
-        for token in self.parse_sentence:
-            for child in token.children:
-                edges.append(('{0}'.format(token.lower_),
-                              '{0}'.format(child.lower_)))
-        graph = nx.Graph(edges)
+        try:
+            edges = []
+            for token in self.parse_sentence:
+                for child in token.children:
+                    edges.append(('{0}'.format(token.lower_),
+                                '{0}'.format(child.lower_)))
+            graph = nx.Graph(edges)
 
-        return nx.shortest_path(graph, source=entity1, target=entity2)
+            return nx.shortest_path(graph, source=entity1, target=entity2)
+        except:
+            return [entity2]
 
     def getSentence(self):
         return self.sentence
@@ -194,15 +197,15 @@ class DataFeature_for_span():
 #     print(i._.pos_)
 
 
-#sentence="About 20 kids in traditional clothing and hats waiting on stairs along the left side of ."
+#sentence="a tall high-rise building with a facade made of glass ."
 #phrase = ''
 #phrase="in the front of
-# entity1 = 'Convulsions'.lower()
-# entity2 = 'fever'
-#data=DataFeature(sentence,phrase)
+#entity1 = 'high-rise'.lower()
+#entity2 = 'of'
+#data=DataFeature_for_sentence(sentence)
 #for i in data.getChunks():
    #print(i.text)
    #print(i.start)
 #print(data.getHeadword())
-# print(data.getShortestDependencyPath(entity1, entity2))
+#print(data.getShortestDependencyPath(entity1, entity2))
 

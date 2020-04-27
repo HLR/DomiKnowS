@@ -24,7 +24,6 @@ from allennlp.data.fields import TextField, MetadataField, ArrayField
 
 nlpmodel = spacy.load("en_core_web_sm")
 
-
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
     relation_names = ['region', 'direction', 'distance', 'relation_none']
@@ -243,39 +242,38 @@ class SpRLReader(SensableReader):
         # import pdb; pdb.set_trace()
         return textfield
 
-    # @cls.textfield('triplet_feature5')
-    # def update_triplet_dummy(
-    #         self,
-    #         fields,
-    #         tokens
-    # ) -> Field:
-    #     length = len(tokens)
-    #     sentence = tokens[0].doc
+    @cls.textfield('triplet_feature5')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0].span.doc.text
 
-    #     # convert ijk index to 1-d array index
-    #     def encap_index(*indices):
-    #         return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
 
-    #     # just a dummy feature
-    #     def dummy_feature(lm, tr, sp):
-    #         entity1 = tokens[sp].headword_.lower()
-    #         entity2 = tokens[lm].headword_.lower()
-    #         entity1 = entity1.split(' ')[0]
-    #         entity2 = entity2.split(' ')[0]
-    #         shortestdepedenceylist = DataFeature(sentence=sentence, phrase='').getShortestDependencyPath(entity1,
-    #                                                                                                      entity2)
-    #         shortestdepedenceylist.insert(0, tokens[sp].text)
-    #         return "::".join(shortestdepedenceylist)
+        # just a dummy feature
+        def dummy_feature(lm, tr, sp):
+            entity1 = tokens[tr].headword_.lower()
+            entity2 = tokens[sp].headword_.lower()
+            entity1 = entity1.split(' ')[0]
+            entity2 = entity2.split(' ')[0]
+            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
+            return "::".join(shortestdepedenceylist)
 
-    #     # prepare a empty list
-    #     encap_tokens = [None] * (length ** 3)
-    #     for lm, tr, sp in itertools.product(range(length), repeat=3):
-    #         encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
 
-    #     indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
-    #     textfield = TextField(encap_tokens, indexers)
-    #     # import pdb; pdb.set_trace()
-    #     return textfield
+        indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
 
     def raw_read(
             self,
@@ -442,6 +440,7 @@ class SpRLReader(SensableReader):
         #         numnum +=1
         #     print('\n', end='')
        # print(self.negative_relation_generation_for_train(final_relationship)[0])
+        
         return final_relationship
     
     def landmark_candidate_generation(self, phrase):
@@ -459,7 +458,7 @@ class SpRLReader(SensableReader):
 
     def spatial_indicator_candidate_generation(self, phrase):
         spatial_dict = []
-        with open('examples/SpRL/data/spatial_dic.txt') as f_sp:
+        with open('data/spatial_dic.txt') as f_sp:
             for each_sp_word in f_sp:
                 spatial_dict.append(each_sp_word.strip())
         spatial_pos = DataFeature_for_span(phrase).getPhrasepos()
@@ -504,6 +503,7 @@ class SpRLReader(SensableReader):
                     new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
 
         relation_tuple[1].extend(new_relation_triplet)
+
         return relation_tuple
         
     def negative_relation_generation_for_train(self, phrase_relation_list):
@@ -853,10 +853,10 @@ class NewAdjacencyField(AdjacencyField):
         return adjacency_field
 
 
-#sp = SpRLReader()
+sp = SpRLReader()
 #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
 #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
-#sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml')))
+sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('data/new_train.xml')))
 # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 
