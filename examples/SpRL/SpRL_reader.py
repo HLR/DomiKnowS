@@ -23,6 +23,10 @@ from dictionaries import dictionary
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
 nlpmodel = spacy.load("en_core_web_sm")
+spatial_dict = []
+with open('data/spatial_dic.txt') as f_sp:
+    for each_sp_word in f_sp:
+        spatial_dict.append(each_sp_word.strip())
 
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
@@ -167,7 +171,7 @@ class SpRLReader(SensableReader):
 
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
-            if tokens[sp].lower_ in dictionary.prepositions:
+            if tokens[sp].lower_ in spatial_dict or tokens[sp].lower_ in dictionary.prepositions:
                 return "true"
             else:
                 return "false"
@@ -457,10 +461,6 @@ class SpRLReader(SensableReader):
             return phrase
 
     def spatial_indicator_candidate_generation(self, phrase):
-        spatial_dict = []
-        with open('data/spatial_dic.txt') as f_sp:
-            for each_sp_word in f_sp:
-                spatial_dict.append(each_sp_word.strip())
         spatial_pos = DataFeature_for_span(phrase).getPhrasepos()
         if phrase.text in spatial_dict or spatial_pos == "ADP":
             return phrase
@@ -577,6 +577,12 @@ class SpRLReader(SensableReader):
         negative_entity = 0
 
         new_phraselist = []
+        def span_overlap(span1, span2list):
+            for span2 in span2list:
+                if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
+                    return True
+                else:
+                    return False
 
         for each_sentence in phraselist:
                 chunklist = each_sentence.get('phrases')    
@@ -598,14 +604,14 @@ class SpRLReader(SensableReader):
 
                 tag1_headword = []
                 tag2_headword = []
-                tag3_headword = []
+               # tag3_headword = []
 
                 for tag1 in tag1list:
                     tag1_headword.append(DataFeature_for_span(tag1).getHeadword())
                 for tag2 in tag2list:
                     tag2_headword.append(DataFeature_for_span(tag2).getHeadword())
-                for tag3 in tag3list:
-                    tag3_headword.append(DataFeature_for_span(tag3).getHeadword())
+                # for tag3 in tag3list:
+                #     tag3_headword.append(DataFeature_for_span(tag3).getHeadword())
                 chunklist = list(set(chunklist))
 
                 for chunk in chunklist:
@@ -615,7 +621,7 @@ class SpRLReader(SensableReader):
                         landmarklist.append((chunk, chunk.start))
                     elif DataFeature_for_span(chunk).getHeadword() in tag2_headword:
                         trajectorlist.append((chunk, chunk.start))
-                    elif DataFeature_for_span(chunk).getHeadword() in tag3_headword:
+                    elif span_overlap(DataFeature_for_span(chunk).span, tag3list):
                         spatialindicatorlist.append((chunk, chunk.start))
                     else:
                         labelnone.append((chunk, chunk.start))
