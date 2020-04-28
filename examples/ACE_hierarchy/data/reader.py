@@ -19,6 +19,7 @@ properties={
   'annotators': 'ssplit',
   'outputFormat': 'json'
   }
+
 def sentence_split(text, properties={'annotators': 'ssplit', 'outputFormat': 'json'}):
     """Split sentence using Stanford NLP"""
     annotated = nlp.annotate(text, properties)
@@ -563,31 +564,3 @@ class SubSimpleReader():
                 _dict[name] = self.get_prob(item['words'], str(name))
             yield _dict
 
-
-class PickleReader():
-    def __init__(self, file):
-        self.file = file
-        file = open(self.file, 'rb')
-
-        # dump information to that file
-        self.obj = pickle.load(file)
-
-        # close the file
-        file.close()
-
-    def index_finder(self, _class):
-        choices = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "-O-"]
-        return choices.index(_class)
-
-    def get_prob(self, words, label):
-        _list = []
-        for item in words:
-            if item['w-type'] == label:
-                _list.append(1)
-            else:
-                _list.append(0)
-        return _list
-
-    def data(self):
-        for item in self.obj:
-            yield item
