@@ -406,3 +406,20 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
         device, _ = guess_device(context).most_common(1)[0]
         self.module.main_module.default_device = device
         return super().forward(context)
+
+class ActivationSensor(PreArgsModuleSensor, SinglePreMaskedSensor):
+    def create_module(self):
+        return self.activation
+
+    @property
+    def output_dim(self):
+        return self.pre_dim
+
+    def __init__(
+        self,
+        activation: Module,
+        pre: Property,
+        output_only: bool=False
+    ) -> NoReturn:
+        self.activation = activation
+        PreArgsModuleSensor.__init__(self, pre, output_only=output_only)

@@ -879,7 +879,7 @@ sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('data/new_
 
 import pickle
 
-class JsonReader(SensableReader):
+class PickleReader(SensableReader):
     def read(self, file_path, **kwargs):
         with open(file_path, 'rb') as fin:
             return pickle.load(fin)

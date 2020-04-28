@@ -11,13 +11,13 @@ config = {
         'valid_path': "sprl2017_gold.xml"
     },
     'Model': {  # model setting
-        'embedding_dim': 8,
+        'embedding_dim': 16,
         'dropout': 0.5,
         'ngram': 5,
         'encode': {
             'layers': [64, 64],
         },
-        'compact': 32,
+        'compact': 64,
         'graph': {
             'balance_factor': 1,
             'label_smoothing': 0.01,
@@ -26,7 +26,7 @@ config = {
             'inference_training_set': True,
             'inference_loss': True,
             'log_solver': True,
-            'soft_penalty': 0.
+            'soft_penalty': 0.6
         }
     },
     'Train': {
