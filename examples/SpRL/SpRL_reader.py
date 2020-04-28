@@ -501,12 +501,11 @@ class SpRLReader(SensableReader):
                 spatial_indicator_candidate_list.append(self.spatial_indicator_candidate_generation(each_phrase))
 
         raw_triplet_candidates = list(product(landmark_candidate_list, trajector_candidate_list, spatial_indicator_candidate_list))
-        new_triplet_candidates = []
         new_relation_triplet = []
         for arg1, arg2, arg3 in filter(span_not_overlap, raw_triplet_candidates):
             for each_relation in relation_tuple[1]:
                 gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
-                if span_overlap(arg1, gold_arg1[1][0]) and span_overlap(arg2, gold_arg2[1][0]) and span_overlap(arg3, gold_arg3[1][0]):
+                if arg1.headword_ == gold_arg1[1][0].headword_ and arg2.headword_ == gold_arg2[1][0].headword_ and span_overlap(arg3, gold_arg3[1][0]):
                     new_relation_triplet.append((each_relation[0], (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
                 else:
                     new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
