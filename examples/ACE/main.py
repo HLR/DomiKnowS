@@ -30,8 +30,6 @@ def model_declaration():
 
     sentence = graph['linguistic/sentence']
     word = graph['linguistic/word']
-    phrase = graph['linguistic/phrase']
-    pair = graph['linguistic/pair']
 
     FAC = graph['application/FAC']
     GPE = graph['application/GPE']
@@ -40,13 +38,6 @@ def model_declaration():
     LOC = graph['application/LOC']
     VEH = graph['application/VEH']
     WEA = graph['application/WEA']
-    ART = graph['application/ART']
-    GEN_AFF = graph['application/GEN-AFF']
-    METONYMY = graph['application/METONYMY']
-    ORG_AFF = graph['application/ORG-AFF']
-    PART_WHOLE = graph['application/PART-WHOLE']
-    PER_SOC = graph['application/PER-SOC']
-    PHYS = graph['application/PHYS']
 
     sentence['raw'] = ReaderSensor(keyword='raw')
     sentence['flair_sentence'] = FlairSentenceSensor('raw')
@@ -86,58 +77,6 @@ def model_declaration():
     word[LOC] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
     word[VEH] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
     word[WEA] = FullyConnectedLearner('encode_final', input_dim=480, output_dim=2)
-
-    rel_phrase_contains_word['backward'] = WordToPhraseTransformer(FAC, GPE, PER, ORG, LOC, VEH, WEA,
-                                                                   mode="backward", keyword="raw")
-    rel_phrase_contains_word['backward'] = WordToPhraseTagTransformer(FAC, GPE, PER, ORG, LOC, VEH, WEA,
-                                                                   mode="backward", keyword="tag")
-    phrase['ground_bound'] = ReaderSensor(keyword="boundaries")
-    phrase['last_encode'] = LastAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
-    # phrase['first_encode'] = FirstAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
-    # phrase['mean_encode'] = MeanAggregationSensor("raw", edges=[rel_phrase_contains_word['backward']], map_key="encode")
-    phrase['tag_encode'] = PhraseEntityTagger("tag", vocab=[0, 1, 2, 3, 4, 5, 6], edges=[rel_phrase_contains_word['backward']])
-    # phrase['encode'] = ConcatSensor("last_encode", "mean_encode", "tag_encode")
-    phrase['encode'] = ConcatSensor("last_encode", "tag_encode")
-
-    rel_pair_phrase1['backward'] = PhraseToPair('encode', mode="backward", keyword="phrase1_encode")
-    rel_pair_phrase2['backward'] = PhraseToPair('encode', mode="backward", keyword="phrase2_encode")
-    rel_pair_phrase1['backward'] = PhraseToPair('raw', mode="backward", keyword="phrase1_raw")
-    rel_pair_phrase2['backward'] = PhraseToPair('raw', mode="backward", keyword="phrase2_raw")
-
-    pair['index'] = PairIndexGenerator(
-        'phrase1_raw', 'phrase2_raw',
-        edges=[rel_pair_phrase1['backward'], rel_pair_phrase2['backward']]
-    )
-    pair['ranges'] = RangeCreatorSensor('index', 'phrase1_raw', 'phrase2_raw')
-    pair['between_index'] = BetweenIndexGenerator('index', 'phrase1_raw', 'phrase2_raw', 'ranges')
-    pair['phrase_features'] = MultiplyCatSensor('index', 'phrase1_encode', 'phrase2_encode')
-    pair['between_encoder'] = BetweenEncoderSensor('between_index', inside=word, key='encode')
-    pair['features'] = ConcatSensor('phrase_features', 'between_encoder')
-
-    pair['features_final'] = FullyConnectedLearnerRelu('features', input_dim=1454, output_dim=1454)
-
-    pair[ART] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[ART] = RelationReaderSensor(keyword=ART.name)
-    pair[GEN_AFF] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[GEN_AFF] = RelationReaderSensor(keyword=GEN_AFF.name)
-    pair[METONYMY] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[METONYMY] = RelationReaderSensor(keyword=METONYMY.name)
-    pair[ORG_AFF] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[ORG_AFF] = RelationReaderSensor(keyword=ORG_AFF.name)
-    pair[PHYS] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[PHYS] = RelationReaderSensor(keyword=PHYS.name)
-    pair[PER_SOC] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[PER_SOC] = RelationReaderSensor(keyword=PER_SOC.name)
-    pair[PART_WHOLE] = FullyConnectedLearner('features_final', input_dim=1454, output_dim=2)
-    pair[PART_WHOLE] = RelationReaderSensor(keyword=PART_WHOLE.name)
-
-    # phrase.relate_to(FAC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # phrase.relate_to(GPE)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # word.relate_to(PER)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # phrase.relate_to(ORG)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # phrase.relate_to(LOC)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # phrase.relate_to(VEH)[0]['selection'] = ProbabilitySelectionEdgeSensor()
-    # phrase.relate_to(WEA)[0]['selection'] = ProbabilitySelectionEdgeSensor()
 
     from base import ACEGraph, PytorchSolverGraph, NewGraph
     #
