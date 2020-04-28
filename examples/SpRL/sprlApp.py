@@ -4,6 +4,7 @@ from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, Lo
 
 from regr.graph.allennlp import AllenNlpGraph
 from SpRL_reader import SpRLSensorReader as Reader
+#from SpRL_reader import JsonReader as Reader
 from config import Config
 from utils import seed
 

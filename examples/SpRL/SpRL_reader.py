@@ -28,6 +28,29 @@ with open('data/spatial_dic.txt') as f_sp:
     for each_sp_word in f_sp:
         spatial_dict.append(each_sp_word.strip())
 
+
+def span_not_overlap(triplet):
+    arg1, arg2, arg3 = triplet
+
+    if (arg2.start <= arg1.start and arg1.start < arg2.end) or (arg3.start <= arg1.start and arg1.start < arg3.end) or \
+        (arg3.start <= arg2.start and arg2.start < arg3.end) or (arg1.start <= arg2.start and arg2.start < arg1.end) or \
+        (arg1.start <= arg3.start and arg3.start < arg1.end) or (arg2.start <= arg3.start and arg3.start < arg2.end):
+        return False
+    else:
+        return True
+
+def span_overlap(span1, span2):
+    if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
+        return True
+    else:
+        return False
+
+def span_overlap_any(span, spanlist):
+    for span2 in spanlist:
+        if span_overlap(span, span2):
+            return True
+    return False
+
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
     relation_names = ['region', 'direction', 'distance', 'relation_none']
@@ -43,27 +66,27 @@ class SpRLReader(SensableReader):
             raw_sample
     ) -> Dict:
         (phrases, labels), relations, sentence = raw_sample
-        newtoken = []
-        for phrase in phrases:
-            #token = DataFeature(sentence, phrase).getPhraseTokens()
-            # phrase.set_extension("lemma_", default=False, force=True)
-            # phrase.set_extension('pos_', default=False, force=True)
-            # phrase.set_extension('tag_', default=False, force=True)
-            # phrase.set_extension('dep_', default=False, force=True)
-            # phrase.set_extension('headword_', default=False, force=True)
-            # phrase.set_extension('phrasepos_', default=False, force=True)
-            # phrase.set_extension('sentence_', default=False, force=True)
-            df = DataFeature_for_span(phrase)
+        # newtoken = []
+        # for phrase in phrases:
+        #     #token = DataFeature(sentence, phrase).getPhraseTokens()
+        #     # phrase.set_extension("lemma_", default=False, force=True)
+        #     # phrase.set_extension('pos_', default=False, force=True)
+        #     # phrase.set_extension('tag_', default=False, force=True)
+        #     # phrase.set_extension('dep_', default=False, force=True)
+        #     # phrase.set_extension('headword_', default=False, force=True)
+        #     # phrase.set_extension('phrasepos_', default=False, force=True)
+        #     # phrase.set_extension('sentence_', default=False, force=True)
+        #     df = DataFeature_for_span(phrase)
 
-            # token._.set('lemma_', df.getLemma())
-            # token._.set('pos_', df.getPos())
-            # token._.set('tag_', df.getTag())
-            # token._.set('dep_', df.getDenpendency())
-            # token._.set('headword_', df.getHeadword())
-            # token._.set('phrasepos_', df.getPhrasepos())
-            # token._.set('sentence_', df.getSentence())
-            newtoken.append(df)
-        return newtoken
+        #     # token._.set('lemma_', df.getLemma())
+        #     # token._.set('pos_', df.getPos())
+        #     # token._.set('tag_', df.getTag())
+        #     # token._.set('dep_', df.getDenpendency())
+        #     # token._.set('headword_', df.getHeadword())
+        #     # token._.set('phrasepos_', df.getPhrasepos())
+        #     # token._.set('sentence_', df.getSentence())
+        #     newtoken.append(df)
+        return phrases
 
     @cls.textfield('word')
     def update_sentence_word(
@@ -309,7 +332,7 @@ class SpRLReader(SensableReader):
             doc = DataFeature_for_sentence(sentence).parse_sentence
             for each_token in doc:
                  if str(each_token.idx) == start_index:
-                     return doc[each_token.i:each_token.i + token_number_of_span]
+                     return DataFeature_for_span(doc[each_token.i:each_token.i + token_number_of_span])
                      
 
                      
@@ -449,20 +472,20 @@ class SpRLReader(SensableReader):
     
     def landmark_candidate_generation(self, phrase):
         landmark_pos_dic = ["PRON", "NOUN", "DET", "ADJ", "NUM"]
-        landmark_pos = DataFeature_for_span(phrase).getPhrasepos()
+        landmark_pos = phrase.phrasepos_
         if landmark_pos in landmark_pos_dic:
             return phrase
 
 
     def trajector_candidate_generation(self, phrase):
         trajector_pos_dic = ["NOUN", "PRON", "ADJ","DET", "NUM", "VERB"]
-        trajector_pos = DataFeature_for_span(phrase).getPhrasepos()
+        trajector_pos = phrase.phrasepos_
         if trajector_pos in trajector_pos_dic:
             return phrase
 
     def spatial_indicator_candidate_generation(self, phrase):
-        spatial_pos = DataFeature_for_span(phrase).getPhrasepos()
-        if phrase.text in spatial_dict or spatial_pos == "ADP":
+        spatial_pos = phrase.phrasepos_
+        if phrase.span.text in spatial_dict or spatial_pos == "ADP":
             return phrase
 
     def negative_relation_generation_for_test(self, relation_tuple, generated_phrase_list):
@@ -479,20 +502,6 @@ class SpRLReader(SensableReader):
 
         raw_triplet_candidates = list(product(landmark_candidate_list, trajector_candidate_list, spatial_indicator_candidate_list))
         new_triplet_candidates = []
-        def span_not_overlap(triplet):
-            arg1, arg2, arg3 = triplet
-
-            if (arg2.start <= arg1.start and arg1.start < arg2.end) or (arg3.start <= arg1.start and arg1.start < arg3.end) or \
-                (arg3.start <= arg2.start and arg2.start < arg3.end) or (arg1.start <= arg2.start and arg2.start < arg1.end) or \
-                (arg1.start <= arg3.start and arg3.start < arg1.end) or (arg2.start <= arg3.start and arg3.start < arg2.end):
-                return False
-            else:
-                return True
-        def span_overlap(span1, span2):
-            if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
-                return True
-            else:
-                return False
         new_relation_triplet = []
         for arg1, arg2, arg3 in filter(span_not_overlap, raw_triplet_candidates):
             for each_relation in relation_tuple[1]:
@@ -577,60 +586,54 @@ class SpRLReader(SensableReader):
         negative_entity = 0
 
         new_phraselist = []
-        def span_overlap(span1, span2list):
-            for span2 in span2list:
-                if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
-                    return True
-                else:
-                    return False
 
         for each_sentence in phraselist:
-                chunklist = each_sentence.get('phrases')    
-                landmarklist = each_sentence.get('LANDMARK','')
-                trajectorlist = each_sentence.get('TRAJECTOR','')
-                spatialindicatorlist = each_sentence.get('SPATIALINDICATOR','')
-              
- 
-                tag1list = [land[0] for land in landmarklist]                            
-                tag2list = [traj[0] for traj in trajectorlist]
-                tag3list = [spat[0] for spat in spatialindicatorlist]
+            chunklist = each_sentence.get('phrases')
+            landmarklist = each_sentence.get('LANDMARK', '')
+            trajectorlist = each_sentence.get('TRAJECTOR', '')
+            spatialindicatorlist = each_sentence.get('SPATIALINDICATOR', '')
+            
 
-                gold_entity_landmark += len(tag1list)
-                gold_entity_trajector += len(tag2list)
-                gold_entity_spatialindicator += len(tag3list)
+            tag1list = [land[0] for land in landmarklist]                            
+            tag2list = [traj[0] for traj in trajectorlist]
+            tag3list = [spat[0] for spat in spatialindicatorlist]
 
-                each_sentence['NONE'] = list()
-                labelnone = each_sentence['NONE']
+            gold_entity_landmark += len(tag1list)
+            gold_entity_trajector += len(tag2list)
+            gold_entity_spatialindicator += len(tag3list)
 
-                tag1_headword = []
-                tag2_headword = []
-               # tag3_headword = []
+            each_sentence['NONE'] = list()
+            labelnone = each_sentence['NONE']
 
-                for tag1 in tag1list:
-                    tag1_headword.append(DataFeature_for_span(tag1).getHeadword())
-                for tag2 in tag2list:
-                    tag2_headword.append(DataFeature_for_span(tag2).getHeadword())
-                # for tag3 in tag3list:
-                #     tag3_headword.append(DataFeature_for_span(tag3).getHeadword())
-                chunklist = list(set(chunklist))
+            tag1_headword = []
+            tag2_headword = []
+            # tag3_headword = []
 
-                for chunk in chunklist:
-                    if chunk in tag1list or chunk in tag2list or chunk in tag3list:
-                        continue
-                    elif DataFeature_for_span(chunk).getHeadword() in tag1_headword:
-                        landmarklist.append((chunk, chunk.start))
-                    elif DataFeature_for_span(chunk).getHeadword() in tag2_headword:
-                        trajectorlist.append((chunk, chunk.start))
-                    elif span_overlap(DataFeature_for_span(chunk).span, tag3list):
-                        spatialindicatorlist.append((chunk, chunk.start))
-                    else:
-                        labelnone.append((chunk, chunk.start))
+            for tag1 in tag1list:
+                tag1_headword.append(tag1.headword_)
+            for tag2 in tag2list:
+                tag2_headword.append(tag2.headword_)
+            # for tag3 in tag3list:
+            #     tag3_headword.append(tag3.headword_)
+            chunklist = list(set(chunklist))
 
-                positive_entity_landmark += len(landmarklist)
-                positive_entity_trajector += len(trajectorlist)
-                positive_entity_spatialindicator += len(spatialindicatorlist)
-                negative_entity += len(labelnone)
-                new_phraselist.append(each_sentence)
+            for chunk in chunklist:
+                if chunk in tag1list or chunk in tag2list or chunk in tag3list:
+                    continue
+                elif chunk.headword_ in tag1_headword:
+                    landmarklist.append((chunk, chunk.start))
+                elif chunk.headword_ in tag2_headword:
+                    trajectorlist.append((chunk, chunk.start))
+                elif span_overlap_any(chunk, tag3list):
+                    spatialindicatorlist.append((chunk, chunk.start))
+                else:
+                    labelnone.append((chunk, chunk.start))
+
+            positive_entity_landmark += len(landmarklist)
+            positive_entity_trajector += len(trajectorlist)
+            positive_entity_spatialindicator += len(spatialindicatorlist)
+            negative_entity += len(labelnone)
+            new_phraselist.append(each_sentence)
 
         # print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
         # print(
@@ -873,3 +876,10 @@ sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('data/new_
 # print(sentence_list)
 
 # getCorpus(sentence_list)
+
+import pickle
+
+class JsonReader(SensableReader):
+    def read(self, file_path, **kwargs):
+        with open(file_path, 'rb') as fin:
+            return pickle.load(fin)

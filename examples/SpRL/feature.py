@@ -36,7 +36,7 @@ class DataFeature_for_sentence():
                 new_chunk.append(each_span)
         for chunk in pre_chunk.noun_chunks:
            new_chunk.append(chunk)
-        return new_chunk
+        return list(map(DataFeature_for_span, new_chunk))
     
     def getShortestDependencyPath(self, entity1, entity2):
         try:
@@ -56,15 +56,17 @@ class DataFeature_for_sentence():
 
 class DataFeature_for_span():
     def __init__(self, span):
-        self.span = span
-        self.lemma_ = self.getLemma()
-        self.pos_ = self.getPos()
-        self.tag_ = self.getTag()
-        self.dep_ = self.getDenpendency()
-        self.headword_ = self.getHeadword()
-        self.phrasepos_ = self.getPhrasepos()
-        self.lower_ = self.getLower()
-        self.upper_ = self.getUpper()
+        self.start = span.start
+        self.end = span.end
+        self.doc = span.doc
+        self.lemma_ = self.getLemma(span)
+        self.pos_ = self.getPos(span)
+        self.tag_ = self.getTag(span)
+        self.dep_ = self.getDenpendency(span)
+        self.headword_ = self.getHeadword(span)
+        self.phrasepos_ = self.getPhrasepos(span)
+        self.lower_ = self.getLower(span)
+        self.upper_ = self.getUpper(span)
         # self.span.set_extension("lemma_", default=False, force=True)
         # self.span.set_extension('pos_', default=False, force=True)
         # self.span.set_extension('tag_', default=False, force=True)
@@ -89,25 +91,28 @@ class DataFeature_for_span():
     #     span=self.span[0:num]
     #     return span.merge()
 
+    @property
+    def span(self):
+        return self.doc[self.start:self.end]
 
-    def getLower(self):
-        return self.span.text.lower()
+    def getLower(self, span):
+        return span.text.lower()
 
-    def getUpper(self):
-        return self.span.text.upper()
+    def getUpper(self, span):
+        return span.text.upper()
 
 
     # headword
-    def getHeadword(self):
-        if len(list(self.span.noun_chunks))==0:
-            return self.span.text
+    def getHeadword(self, span):
+        if len(list(span.noun_chunks))==0:
+            return span.text
         else:
-            for doc in self.span.noun_chunks:
+            for doc in span.noun_chunks:
                 return str(doc.root.text).lower()
 
 
     #pos feature
-    def getPos(self):
+    def getPos(self, span):
         # newpos=[]
         pos = []
         # for token in self.parse_sentence:
@@ -117,12 +122,12 @@ class DataFeature_for_span():
         #     for new_p in newpos:
         #         if phrase_token.text == new_p[0]:
         #             pos.append(new_p[1])
-        for each_token in self.span:
+        for each_token in span:
             pos.append(each_token.pos_)
         return '|'.join(pos)
 
     #tag feature
-    def getTag(self):
+    def getTag(self, span):
         #newtag = []
         tag = []
         # for token in self.parse_sentence:
@@ -132,19 +137,19 @@ class DataFeature_for_span():
         #     for new_t in newtag:
         #         if phrase_token.text == new_t[0]:
         #             tag.append(new_t[1])
-        for each_token in self.span:
+        for each_token in span:
             tag.append(each_token.tag_)
         return '|'.join(tag)
 
     # lemma feature
-    def getLemma(self):
+    def getLemma(self, span):
         lemma = []
-        for each_token in self.span:
+        for each_token in span:
             lemma.append(each_token.lemma_)
         return "|".join(lemma)
 
     #dependenceyrelation
-    def getDenpendency(self):
+    def getDenpendency(self, span):
         #newdependency = []
         dependency = []
         # for token in self.parse_sentence:
@@ -154,18 +159,18 @@ class DataFeature_for_span():
         #     for new_t in newdependency:
         #         if phrase_token.text == new_t[0]:
         #             dependency.append(new_t[1])
-        for each_token in self.span:
+        for each_token in span:
             dependency.append(each_token.dep_)
         return '|'.join(dependency)
 
     #phrasetag
-    def getPhrasepos(self):
+    def getPhrasepos(self, span):
 
         # with self.span.text.retokenize() as retokenizer:
         #     retokenizer.merge(self.span[0:len(self.span.text)])
         # for doc in iter(self.span):
         #     phrasepos=doc.pos_
-        return self.span.root.pos_
+        return span.root.pos_
 
        
         #return phrasepos
@@ -173,11 +178,11 @@ class DataFeature_for_span():
 
 
     #wordform
-    def getWordform(self):
-        return self.span.getLower()
+    def getWordform(self, span):
+        return span.getLower()
 
     #semantic role
-    def getSemanticRle(self):
+    def getSemanticRle(self, span):
         pass
 
 
