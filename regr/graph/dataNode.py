@@ -14,14 +14,13 @@ if __package__ is None or __package__ == '':
 else:
     from .graph import Graph
     from ..solver import ilpOntSolverFactory
+    
+PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
 
 # Class representing single data instance with relation  links to other data nodes
 class DataNode:
-   
-    PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
-   
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
-        self.myLogger = logging.getLogger(ilpConfig['log_name'])
+        self.__myLogger = logging.getLogger(ilpConfig['log_name'])
 
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
@@ -188,17 +187,19 @@ class DataNode:
 
     # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
     def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
-        # Build probability key
+        # Build probability key to retrieve attribute
         key = '<' + conceptRelation.name + '>'
         
-        # Get probability
+        # Get attribute with probability
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
         elif len(dataNode) == 2:
             value = dataNode[0].getRelationLinks(relationName = "pair", conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+        elif len(dataNode) == 3:
+            value = dataNode[0].getRelationLinks(relationName = "triple", conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
         
         if value is None:
-            return [0, 1]
+            return [1, 0] # ?
         
         # Process probability through function and apply epsilon
         if isinstance(value, torch.Tensor):
@@ -331,7 +332,7 @@ class DataNode:
                     currentCandidate3 = currentCandidate[2]
                     currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun)
                     
-                    self.myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
+                    self.__myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
                     if currentProbability:
                         graphResultsForTripleRelations[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
@@ -353,30 +354,32 @@ class DataNode:
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
         
-        return tokenResult, pairResult, tripleResult
+        #return tokenResult, pairResult, tripleResult
     
-        # Update this to the Relation Link
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         for concept_name in tokenResult:
             concept = conceptOrRelationDict[concept_name]
             currentCandidates = candidates_currentConceptOrRelation[concept]
+            
+            key = '<' + concept_name + '>/ILP'
+            
             for infer_candidate in currentCandidates:
-                if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
-                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]] = {}
-                     
-                infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept] = \
-                    tokenResult[concept_name][infer_candidate[0].instanceID]
+                infer_candidate[0].attributes[key] = torch.tensor([tokenResult[concept_name][infer_candidate[0].getInstanceID()]], device=device) 
                 
         for concept_name in pairResult:
             concept = conceptOrRelationDict[concept_name]
             currentCandidates = candidates_currentConceptOrRelation[concept]
+            
+            key = '<' + concept_name + '>/ILP'
+            
             for infer_candidate in currentCandidates:
-                if infer_candidate[0] != infer_candidate[1]:
-                    if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
-                        infer_candidate[0].attributes[DataNode.PredictionType["ILP"]] = {}
-                     
-                    infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1])] = \
-                        pairResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID]
+                infer_candidate[0].relationLinks['pair'][infer_candidate[1].getInstanceID()].attributes[key] = \
+                    torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
                         
+        return tokenResult, pairResult, tripleResult
+    
+        # Update triple
         for concept_name in tripleResult:
             concept = conceptOrRelationDict[concept_name]
             currentCandidates = candidates_currentConceptOrRelation[concept]
@@ -388,7 +391,7 @@ class DataNode:
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
                 
-        return tokenResult, pairResult, tripleResult
+        
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
