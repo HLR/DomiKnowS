@@ -29,23 +29,23 @@ class ACELogicalSolver(ilpOntSolver):
             if item in predicates1:
                 predicates.append("<"+str(item)+">")
 
-        pairs1 = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
-        pairs = []
-        for item in info:
-            if item in pairs1:
-                pairs.append("<"+str(item)+">")
-        pairs_on = "pair"
-        phrase_order1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
-                 "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
-                 "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
-                 "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
-                 "Government", "Media", "Medical-Science", "Non-Governmental", "Religious", "Sports", "Group",
-                 "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
-                 "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
-        phrase_order = []
-        for item in info:
-            if item in phrase_order1:
-                phrase_order.append(str(item))
+#         pairs1 = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
+#         pairs = []
+#         for item in info:
+#             if item in pairs1:
+#                 pairs.append("<"+str(item)+">")
+#         pairs_on = "pair"
+#         phrase_order1 = ["ORG", "FAC", "PER", "VEH", "LOC", "WEA", "GPE", "Airport", "Building-Grounds", "Path", "Plant",
+#                  "Subarea-Facility", "Continent", "County-or-District", "GPE-Cluster", "Nation", "Population-Center",
+#                  "Special", "State-or-Province", "Address", "Boundary", "Celestial", "Land-Region-Natural",
+#                  "Region-General", "Region-International", "Water-Body", "Commercial", "Educational", "Entertainment",
+#                  "Government", "Media", "Medical-Science", "Non-Governmental", "Religious", "Sports", "Group",
+#                  "Indeterminate", "Individual", "Land", "Subarea-Vehicle", "Underspecified", "Water", "Biological",
+#                  "Blunt", "Chemical", "Exploding", "Nuclear", "Projectile", "Sharp", "Shooting", "WEA-Underspecified"]
+#         phrase_order = []
+#         for item in info:
+#             if item in phrase_order1:
+#                 phrase_order.append(str(item))
         sentence = {"words": {}}
         with torch.no_grad():
             epsilon = 0.00001
@@ -61,7 +61,7 @@ class ACELogicalSolver(ilpOntSolver):
                     elif _list[_it][1] < epsilon:
                         _list[_it][1] = epsilon
                 sentence[item.replace("<", "").replace(">", "")] = _list
-                sentence['words'][item.replace("<", "").replace(">", "")] = [np.log(_it) for _it in _list]
+                sentence['words'][item.replace("<", "").replace(">", "")] = np.log(np.array(_list))
         # import pickle
         # file = open('data.pkl', 'wb')
         #
