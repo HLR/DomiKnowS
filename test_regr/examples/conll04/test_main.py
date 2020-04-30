@@ -34,6 +34,13 @@ def test_case():
         'pair': {
             'emb': torch.randn(4, 4, 2048, device=device),
             'work_for': torch.rand(4, 4, 2, device=device), # TODO: add examable values
+            
+            'work_for': torch.tensor([[[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [0.37, 0.63]],      # John
+                                      [[1.00, float("nan")], [1.00, float("nan")], [0.60, 0.40], [0.70, 0.30]],  # works
+                                      [[0.98, 0.02],         [0.70, 0.03],         [0.95, 0.05], [0.90, 0.10]],  # for
+                                      [[0.35, 0.65],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30]],  # IBM
+                                     ], device=device),
+            
             'live_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
             'located_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
             'orgbase_on': torch.rand(4, 4, 2, device=device), # TODO: add examable values
@@ -249,7 +256,7 @@ def test_main_conll04(case):
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
+    conceptsRelations = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
     
     assert tokenResult['people'][0] == 1
@@ -261,6 +268,12 @@ def test_main_conll04(case):
     assert tokenResult['O'][1] == 1
     assert tokenResult['O'][2] == 1
     assert sum(tokenResult['O']) == 2
+    
+    assert pairResult['work_for'][0][3] == 1
+    assert sum(pairResult['work_for'][0]) == 1
+    assert sum(pairResult['work_for'][1]) == 0
+    assert sum(pairResult['work_for'][2]) == 0
+    assert sum(pairResult['work_for'][3]) == 0
 
 if __name__ == '__main__':
     pytest.main([__file__])
