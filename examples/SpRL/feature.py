@@ -82,6 +82,9 @@ class DataFeature_for_span():
         #self.span._.set('phrasepos_', self.getPhrasepos())
         #self.span._.set('sentence_', self.getSentence())
 
+    def __repr__(self):
+        return repr(self.span)
+
     #get tokens
     # def getPhraseTokens(self):
     #     # docs = nlpmodel(self.phrase)

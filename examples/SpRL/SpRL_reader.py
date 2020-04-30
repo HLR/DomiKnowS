@@ -398,8 +398,8 @@ class SpRLReader(SensableReader):
 
                             relationship.append(each_relationship)
                             sentence_dic[child.tag] = relationship
-                    except:
-                        KeyError   
+                    except KeyError:
+                        pass
             sentences_list.append(sentence_dic)
 
         # create empty dataform for sentences
@@ -438,8 +438,8 @@ class SpRLReader(SensableReader):
                     phrase_list.insert(int(none[1]), none[0])
                     label_list.insert(int(none[1]), output[3])
 
-            except:
-                KeyError
+            except KeyError:
+                pass
 
             phrase_list = [phrase for phrase in phrase_list if phrase]
             label_list = [label for label in label_list if label]
@@ -507,8 +507,9 @@ class SpRLReader(SensableReader):
                 gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
                 if arg1.headword_ == gold_arg1[1][0].headword_ and arg2.headword_ == gold_arg2[1][0].headword_ and span_overlap(arg3, gold_arg3[1][0]):
                     new_relation_triplet.append((each_relation[0], (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
-                else:
-                    new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
+                    break
+            else:
+                new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
 
         relation_tuple[1].extend(new_relation_triplet)
 
@@ -756,11 +757,13 @@ class SpRLBinaryReader(SpRLReader):
             if (src_index, mid_index, dst_index) not in relation_indices:
                 relation_indices.append((src_index, mid_index, dst_index))
 
-            relation_labels.append(rel[0])
-            if rel[0] != "relation_none":
-                triplet_labels.append(self.triplet_names[0])
+                relation_labels.append(rel[0])
+                if rel[0] != "relation_none":
+                    triplet_labels.append(self.triplet_names[0])
+                else:
+                    triplet_labels.append(self.triplet_names[1])
             else:
-                triplet_labels.append(self.triplet_names[1])
+                print(rel)  # ignore repeated
 
         for relation_name in self.relation_names:
             cur_indices = []
@@ -864,7 +867,9 @@ class NewAdjacencyField(AdjacencyField):
 sp = SpRLReader()
 #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
 #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
-sp.getCorpus(sp.entity_candidate_generation_for_train(sp.parseSprlXML('data/new_train.xml')))
+plist = sp.parseSprlXML('data/new_train.xml')
+ecandidate = sp.entity_candidate_generation_for_train(plist)
+sp.getCorpus(ecandidate)
 # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
 # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 
@@ -881,4 +886,5 @@ import pickle
 class PickleReader(SensableReader):
     def read(self, file_path, **kwargs):
         with open(file_path, 'rb') as fin:
-            return pickle.load(fin)
+            data = pickle.load(fin)
+            return data

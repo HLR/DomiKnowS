@@ -89,14 +89,20 @@
 
   <owl:Class rdf:ID="region">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
+    <owl:disjointWith rdf:resource="#distance"/>
+    <owl:disjointWith rdf:resource="#direction"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology region.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="distance">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
+    <owl:disjointWith rdf:resource="#region"/>
+    <owl:disjointWith rdf:resource="#direction"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology distance.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="direction">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
+    <owl:disjointWith rdf:resource="#region"/>
+    <owl:disjointWith rdf:resource="#distance"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology direction.</rdfs:comment>
   </owl:Class>
 

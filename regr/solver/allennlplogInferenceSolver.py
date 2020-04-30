@@ -131,7 +131,7 @@ class AllennlplogInferenceSolver(ilpOntSolver):
                     # (l'...*r)
                     instance_value = results[batch_index][rank][name]
                     # (l...*r)
-                    instance_value_pad = np.empty([length, ] * rank)
+                    instance_value_pad = np.zeros([length, ] * rank)
                     instance_value_pad[(slice(0, mask_len[batch_index]),) * rank] = instance_value
                     # (l...*r)
                     instance_value_d = torch.tensor(instance_value_pad, device=device)
