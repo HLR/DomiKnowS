@@ -19,7 +19,7 @@ class Conll04Reader(SensableReader):
     def __init__(self) -> None:
         super().__init__(lazy=False)
 
-    def raw_read(self, file_path):
+    def raw_read(self, file_path, **kwargs):
         yield from zip(*corpus_reader(file_path))
 
     @cls.tokens('sentence')
@@ -226,7 +226,7 @@ class Conll04CandidateReader(Conll04Reader):
 
 @keep_keys
 class Conll04CandidateFilteredReader(Conll04CandidateReader):
-    def raw_read(self, file_path):
+    def raw_read(self, file_path, **kwargs):
         for (sentence, pos, labels), relation in zip(sentences, relations):
             select = [self._is_candidate(word, p, label, i, relation)
                       for i, (word, p, label) in enumerate(zip(sentence, pos, labels))]
