@@ -18,9 +18,12 @@ class DataFeature_for_sentence():
         self.parse_sentence = nlpmodel(self.sentence)
         #self.parse_phrase = nlpmodel(self.phrase)
 
+    def getSpan(self, start, end):
+        return DataFeature_for_span(self.parse_sentence, start, end)
+
     def getChunks(self):
         
-        pre_chunk=nlpmodel(self.sentence)
+        pre_chunk=self.parse_sentence
         new_chunk=[]
         # read dict
         matcher = PhraseMatcher(nlpmodel.vocab)
@@ -35,8 +38,9 @@ class DataFeature_for_sentence():
             if each_span not in new_chunk:
                 new_chunk.append(each_span)
         for chunk in pre_chunk.noun_chunks:
-           new_chunk.append(chunk)
-        return list(map(DataFeature_for_span, new_chunk))
+            new_chunk.append(chunk)
+        #new_chunk = sorted(new_chunk, key=lambda chunk: chunk.start_char)
+        return list(map(DataFeature_for_span.from_span, new_chunk))
     
     def getShortestDependencyPath(self, entity1, entity2):
         try:
@@ -55,10 +59,20 @@ class DataFeature_for_sentence():
         return self.sentence
 
 class DataFeature_for_span():
-    def __init__(self, span):
-        self.start = span.start
-        self.end = span.end
-        self.doc = span.doc
+    @staticmethod
+    def from_span(span):
+        doc = span.doc
+        start = span.start_char
+        end = span.end_char
+        return DataFeature_for_span(doc, start, end)
+
+    def __init__(self, doc, start, end):
+        self.start = start
+        self.end = end
+        self.doc = doc
+        self.token_start,  self.token_end = self.findSpan()
+
+        span = self.span
         self.lemma_ = self.getLemma(span)
         self.pos_ = self.getPos(span)
         self.tag_ = self.getTag(span)
@@ -82,8 +96,26 @@ class DataFeature_for_span():
         #self.span._.set('phrasepos_', self.getPhrasepos())
         #self.span._.set('sentence_', self.getSentence())
 
+    def findSpan(self):
+        token_i = []
+        for token in self.doc:
+            if self.start <= token.idx and token.idx + len(token) <= self.end:
+                token_i.append(token.i)
+        token_start = min(token_i)
+        token_end = max(token_i) + 1
+        return token_start, token_end
+
     def __repr__(self):
         return repr(self.span)
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, type(self)):
+            return self.start == other.start and self.end == other.end and self.doc == other.doc
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     #get tokens
     # def getPhraseTokens(self):
@@ -96,7 +128,7 @@ class DataFeature_for_span():
 
     @property
     def span(self):
-        return self.doc[self.start:self.end]
+        return self.doc[self.token_start:self.token_end]
 
     def getLower(self, span):
         return span.text.lower()

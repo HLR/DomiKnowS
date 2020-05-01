@@ -327,80 +327,76 @@ class SpRLReader(SensableReader):
 
         # iterate news items
         type_list = []
-        def getspan(sentence, span_text, start_index):
-            token_number_of_span = len(DataFeature_for_sentence(span_text).parse_sentence) 
-            doc = DataFeature_for_sentence(sentence).parse_sentence
-            for each_token in doc:
-                 if str(each_token.idx) == start_index:
-                     return DataFeature_for_span(doc[each_token.i:each_token.i + token_number_of_span])
-                     
-
                      
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
             landmark = []
             trajector = []
             spatialindicator = []
             relationship = []
+
             id_text_list = {}
             id_label_list = {}
+            sentence = None
+
             sentence_dic = {}
             sentence_dic["id"] = sentenceItem.attrib["id"]
+            sentence_dic['LANDMARK'] = landmark
+            sentence_dic['TRAJECTOR'] = trajector
+            sentence_dic['SPATIALINDICATOR'] = spatialindicator
+            sentence_dic['RELATION'] = relationship
 
             # iterate child elements of item
 
             for child in sentenceItem:
 
                 if child.tag == 'TEXT':
-                    chunklist = DataFeature_for_sentence(child.text).getChunks()
-                    sentence_dic[child.tag] = child.text
-                    sentence_dic["phrases"] = chunklist
+                    text = child.text
+                    if not text:
+                        break
+                    sentence = DataFeature_for_sentence(text)
+                    sentence_dic['TEXT'] = sentence
 
-                if child.tag == 'SPATIALINDICATOR':
-                    if "text" in child.attrib: 
-                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
-                        spatialindicator.append((child.attrib['text'], child.attrib['start']))
-                        sentence_dic[child.tag] = spatialindicator
-                        id_text_list[child.attrib['id']] = child.attrib['text']
-                        id_label_list[child.attrib['id']] = child.tag
+                elif child.tag in ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR']:
+                    id_ = child.attrib.get('id')
+                    text = child.attrib.get('text')
+                    start = int(child.attrib.get('start'))
+                    end = int(child.attrib.get('end'))
 
-                if child.tag == 'LANDMARK':
-                    if "text" in child.attrib:
-                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
-                        landmark.append((child.attrib['text'], child.attrib['start']))
-                        sentence_dic[child.tag] = landmark
-                        id_text_list[child.attrib['id']] = child.attrib['text']
-                        id_label_list[child.attrib['id']] = child.tag
+                    if not text or start < 0 or end < 0:  # also skip empty
+                        continue
 
-                if child.tag == 'TRAJECTOR':
-                    if "text" in child.attrib:
-                        child.attrib['text'] = getspan(sentence_dic['TEXT'], child.attrib.get('text'), child.attrib['start'])
-                        trajector.append((child.attrib['text'], child.attrib['start']))
-                        sentence_dic[child.tag] = trajector
-                        id_text_list[child.attrib['id']] = child.attrib['text']
-                        id_label_list[child.attrib['id']] = child.tag
+                    span = sentence.getSpan(start, end)
+                    assert span.span.text in text
+                    sentence_dic[child.tag].append(span)
+                    id_text_list[id_] = span
+                    id_label_list[id_] = child.tag
 
-                if child.tag == "RELATION":
-                    if child.attrib['general_type'] not in type_list:
-                        type_list.append(child.attrib['general_type'])
-                    #
-                    try:
+                elif child.tag == "RELATION":
+                    # if child.attrib['general_type'] not in type_list:
+                    #     type_list.append(child.attrib['general_type'])
+                    # #
+                    general_type = child.attrib.get('general_type')
+                    landmark_id = child.attrib.get('landmark_id')
+                    trajector_id = child.attrib.get('trajector_id')
+                    spatial_indicator_id = child.attrib.get('spatial_indicator_id')
+                    landmark = id_text_list.get(landmark_id)
+                    trajector = id_text_list.get(trajector_id)
+                    spatial_indicator = id_text_list.get(spatial_indicator_id)
 
-                        if 'general_type' in child.attrib:
-                            # if child.attrib['general_type'] not in type_list:
-                            #     type_list.append(child.attrib['general_type'])
-                            each_relationship = ((child.attrib['general_type'],
-                                                  [(id_text_list[child.attrib['landmark_id']],
-                                                    id_label_list[child.attrib['landmark_id']])],
-                                                  [(id_text_list[child.attrib['trajector_id']],
-                                                    id_label_list[child.attrib['trajector_id']])],
-                                                  [(id_text_list[child.attrib['spatial_indicator_id']],
-                                                    id_label_list[child.attrib['spatial_indicator_id']])]))
+                    if not all((general_type, landmark, trajector, spatial_indicator)):
+                        continue
 
-                            relationship.append(each_relationship)
-                            sentence_dic[child.tag] = relationship
-                    except KeyError:
-                        pass
-            sentences_list.append(sentence_dic)
+                    each_relationship = (general_type, landmark, trajector, spatial_indicator)
+                    relationship.append(each_relationship)
+            else:
+                chunks = sentence.getChunks()
+                for each_relationship in relationship:
+                    for arg in each_relationship[1:]:
+                        if arg not in chunks:
+                            chunks.append(arg)
+                chunks = sorted(chunks, key=lambda chunk: chunk.start)
+                sentence_dic['phrases'] = chunks
+                sentences_list.append(sentence_dic)
 
         # create empty dataform for sentences
         # sentences_df = pd.DataFrame(sentences_list)
@@ -415,48 +411,23 @@ class SpRLReader(SensableReader):
 
         for sents in sentences_list:
             sentence = sents['TEXT']
-            phrase_list = [''] * len(sentence)
-            label_list = [''] * len(sentence)
-            temp_relation = []
-
-            if "RELATION" not in sents.keys():
-                continue
-            try:
-                for land in sents[output[0]]:
-                    phrase_list.insert(int(land[1]), land[0])
-                    label_list.insert(int(land[1]), output[0])
-
-                for traj in sents[output[1]]:
-                    phrase_list.insert(int(traj[1]), traj[0])
-                    label_list.insert(int(traj[1]), output[1])
-
-                for sptialindicator in sents[output[2]]:
-                    phrase_list.insert(int(sptialindicator[1]), sptialindicator[0])
-                    label_list.insert(int(sptialindicator[1]), output[2])
-
-                for none in sents[output[3]]:
-                    phrase_list.insert(int(none[1]), none[0])
-                    label_list.insert(int(none[1]), output[3])
-
-            except KeyError:
-                pass
-
-            phrase_list = [phrase for phrase in phrase_list if phrase]
-            label_list = [label for label in label_list if label]
-
-            for rel in sents['RELATION']:
-                temp_temp_element = []
-                temp_temp_element.append(rel[0])
-
-                for element in rel[1:]:
-                    element.insert(0, phrase_list.index(element[0][0]))
-                    temp_temp_element.append(tuple(element))
-
-                temp_relation.append(tuple(temp_temp_element))
-
-            relation_tuple = ((phrase_list, label_list), temp_relation, sents['TEXT'])
+            phrase_list = sents['phrases']
+            label_list = []
+            for phrase in phrase_list:
+                phrase_label = []
+                for phrase_type in self.label_names:
+                    if phrase in sents[phrase_type]:
+                        phrase_label.append(phrase_type)
+                label_list.append(phrase_label)
             
-            relation_tuple = self.negative_relation_generation_for_test(relation_tuple, sents['phrases'])
+            relations = self.negative_relation_generation_for_test(sents['RELATION'], phrase_list)
+            relations_indexed = []
+            for r_type, lm, tr, si in relations:
+                lmi = phrase_list.index(lm)
+                tri = phrase_list.index(tr)
+                sii = phrase_list.index(si)
+                relations_indexed.append((r_type, lmi, tri, sii))
+            relation_tuple = ((phrase_list, label_list), relations_indexed, sentence)
             final_relationship.append(relation_tuple)
             
             
@@ -488,32 +459,34 @@ class SpRLReader(SensableReader):
         if phrase.span.text in spatial_dict or spatial_pos == "ADP":
             return phrase
 
-    def negative_relation_generation_for_test(self, relation_tuple, generated_phrase_list):
+    def negative_relation_generation_for_test(self, relations, generated_phrase_list):
         landmark_candidate_list = []
         trajector_candidate_list = []
         spatial_indicator_candidate_list = []
         for each_phrase in generated_phrase_list:
             if self.landmark_candidate_generation(each_phrase):
-                landmark_candidate_list.append(self.landmark_candidate_generation(each_phrase))
+                landmark_candidate_list.append(each_phrase)
             if self.trajector_candidate_generation(each_phrase):
-                trajector_candidate_list.append(self.trajector_candidate_generation(each_phrase))
+                trajector_candidate_list.append(each_phrase)
             if self.spatial_indicator_candidate_generation(each_phrase):
-                spatial_indicator_candidate_list.append(self.spatial_indicator_candidate_generation(each_phrase))
+                spatial_indicator_candidate_list.append(each_phrase)
 
         raw_triplet_candidates = list(product(landmark_candidate_list, trajector_candidate_list, spatial_indicator_candidate_list))
         new_relation_triplet = []
         for arg1, arg2, arg3 in filter(span_not_overlap, raw_triplet_candidates):
-            for each_relation in relation_tuple[1]:
+            isNone = True
+            for each_relation in relations:
                 gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
-                if arg1.headword_ == gold_arg1[1][0].headword_ and arg2.headword_ == gold_arg2[1][0].headword_ and span_overlap(arg3, gold_arg3[1][0]):
-                    new_relation_triplet.append((each_relation[0], (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
-                    break
-            else:
-                new_relation_triplet.append(("relation_none", (relation_tuple[0][0].index(arg1), (arg1, "LANDMARK")), (relation_tuple[0][0].index(arg2), (arg2, "TRAJECTOR")), (relation_tuple[0][0].index(arg3), (arg3, "SPATIALINDICATOR"))))
+                if (arg1.headword_ == gold_arg1.headword_ and arg2.headword_ == gold_arg2.headword_ and span_overlap(arg3, gold_arg3)):
+                    isNone = False
+                    if not (arg1 == gold_arg1 and arg2 == gold_arg2 and arg3 == gold_arg3):
+                        new_relation_triplet.append((each_relation[0], arg1, arg2, arg3))
+            if isNone:
+                new_relation_triplet.append(("relation_none", arg1, arg2, arg3))
 
-        relation_tuple[1].extend(new_relation_triplet)
+        relations.extend(new_relation_triplet)
 
-        return relation_tuple
+        return relations
         
     def negative_relation_generation_for_train(self, phrase_relation_list):
         for phrase_relation in phrase_relation_list:
@@ -588,46 +561,48 @@ class SpRLReader(SensableReader):
         new_phraselist = []
 
         for each_sentence in phraselist:
+            #chunklist = each_sentence.get('phrases')
+            sentence = each_sentence.get('TEXT')
             chunklist = each_sentence.get('phrases')
-            landmarklist = each_sentence.get('LANDMARK', '')
-            trajectorlist = each_sentence.get('TRAJECTOR', '')
-            spatialindicatorlist = each_sentence.get('SPATIALINDICATOR', '')
-            
 
-            tag1list = [land[0] for land in landmarklist]                            
-            tag2list = [traj[0] for traj in trajectorlist]
-            tag3list = [spat[0] for spat in spatialindicatorlist]
+            landmarklist = each_sentence.get('LANDMARK')
+            trajectorlist = each_sentence.get('TRAJECTOR')
+            spatialindicatorlist = each_sentence.get('SPATIALINDICATOR')
 
-            gold_entity_landmark += len(tag1list)
-            gold_entity_trajector += len(tag2list)
-            gold_entity_spatialindicator += len(tag3list)
+            gold_entity_landmark += len(landmarklist)
+            gold_entity_trajector += len(trajectorlist)
+            gold_entity_spatialindicator += len(spatialindicatorlist)
 
             each_sentence['NONE'] = list()
             labelnone = each_sentence['NONE']
 
-            tag1_headword = []
-            tag2_headword = []
-            # tag3_headword = []
+            landmark_headwords = {lm.headword_ for lm in landmarklist}
+            trajector_headwords = {tr.headword_ for tr in trajectorlist}
+            spatialindicator_headwords = {si.headword_ for si in spatialindicatorlist}
 
-            for tag1 in tag1list:
-                tag1_headword.append(tag1.headword_)
-            for tag2 in tag2list:
-                tag2_headword.append(tag2.headword_)
-            # for tag3 in tag3list:
-            #     tag3_headword.append(tag3.headword_)
-            chunklist = list(set(chunklist))
+            #chunklist = list(set(chunklist))
+
+            def inlist(dflist, df):
+                for other in dflist:
+                    if df == other:
+                        return True
+                return False
 
             for chunk in chunklist:
-                if chunk in tag1list or chunk in tag2list or chunk in tag3list:
+                if (inlist(landmarklist, chunk) or inlist(trajectorlist, chunk) or inlist(spatialindicatorlist, chunk)):
                     continue
-                elif chunk.headword_ in tag1_headword:
-                    landmarklist.append((chunk, chunk.start))
-                elif chunk.headword_ in tag2_headword:
-                    trajectorlist.append((chunk, chunk.start))
-                elif span_overlap_any(chunk, tag3list):
-                    spatialindicatorlist.append((chunk, chunk.start))
-                else:
-                    labelnone.append((chunk, chunk.start))
+                isNone = True
+                if chunk.headword_ in landmark_headwords:
+                    landmarklist.append(chunk)
+                    isNone = False
+                if chunk.headword_ in trajector_headwords:
+                    trajectorlist.append(chunk)
+                    isNone = False
+                if span_overlap_any(chunk, spatialindicatorlist):
+                    spatialindicatorlist.append(chunk)
+                    isNone = False
+                if isNone:
+                    labelnone.append(chunk)
 
             positive_entity_landmark += len(landmarklist)
             positive_entity_trajector += len(trajectorlist)
@@ -735,7 +710,7 @@ class SpRLBinaryReader(SpRLReader):
         (phrase, labels), relations, sentence = raw_sample
         for label_name in self.label_names:
             yield label_name, SequenceLabelField(
-                [str(label == label_name) for label in labels],
+                [str(label_name in label) for label in labels],
                 fields[self.get_fieldname('word')])
 
     @cls.fields
@@ -747,29 +722,12 @@ class SpRLBinaryReader(SpRLReader):
         (phrase, labels), relations, sentence = raw_sample
         if relations is None:
             return None
-        relation_indices = []
-        relation_labels = []
-        triplet_labels = []
-        for rel in relations:
-            src_index = rel[1][0]
-            mid_index = rel[2][0]
-            dst_index = rel[3][0]
-            if (src_index, mid_index, dst_index) not in relation_indices:
-                relation_indices.append((src_index, mid_index, dst_index))
-
-                relation_labels.append(rel[0])
-                if rel[0] != "relation_none":
-                    triplet_labels.append(self.triplet_names[0])
-                else:
-                    triplet_labels.append(self.triplet_names[1])
-            else:
-                print(rel)  # ignore repeated
 
         for relation_name in self.relation_names:
             cur_indices = []
-            for index, label in zip(relation_indices, relation_labels):
-                if label == relation_name:
-                    cur_indices.append(index)
+            for rel in relations:
+                if rel[0] == relation_name:
+                    cur_indices.append(rel[1:])
 
             yield relation_name, NewAdjacencyField(
                 cur_indices,
@@ -777,18 +735,24 @@ class SpRLBinaryReader(SpRLReader):
                 padding_value=0
             )
 
-        for triplet_name in self.triplet_names:
-            cur_indices = []
-            for index, label in zip(relation_indices, triplet_labels):
-                if label == triplet_name:
-                    cur_indices.append(index)
+        triplet_indices = []
+        none_indices = []
+        for rel in relations:
+            if rel[0] == "relation_none":
+                none_indices.append(rel[1:])
+            else:
+                triplet_indices.append(rel[1:])
 
-            yield triplet_name, NewAdjacencyField(
-                cur_indices,
-                fields[self.get_fieldname('word')],
-                padding_value=0
-            )
-
+        yield self.triplet_names[0], NewAdjacencyField(
+            set(triplet_indices),
+            fields[self.get_fieldname('word')],
+            padding_value=0
+        )
+        yield self.triplet_names[1], NewAdjacencyField(
+            none_indices,
+            fields[self.get_fieldname('word')],
+            padding_value=0
+        )
 
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
@@ -803,9 +767,9 @@ class SpRLSensorReader(SpRLBinaryReader):
             return None
         relation_indices = set()
         for rel in relations:
-            src_index = rel[1][0]
-            mid_index = rel[2][0]
-            dst_index = rel[3][0]
+            src_index = rel[1]
+            mid_index = rel[2]
+            dst_index = rel[3]
             relation_indices.add((src_index, mid_index, dst_index))
         return NewAdjacencyField(
             list(relation_indices),
@@ -864,22 +828,27 @@ class NewAdjacencyField(AdjacencyField):
         return adjacency_field
 
 
-sp = SpRLReader()
-#sp.parseSprlXML('examples/SpRL/data/new_train.xml')
-#sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
-plist = sp.parseSprlXML('data/new_train.xml')
-ecandidate = sp.entity_candidate_generation_for_train(plist)
-sp.getCorpus(ecandidate)
-# sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
-# sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
+def test():    
+    sp = SpRLReader()
+    #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
+    #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
+    #plist = sp.parseSprlXML('data/new_train.xml')
+    plist = sp.parseSprlXML('data/newSprl2017_all.xml')
+    ecandidate = sp.entity_candidate_generation_for_train(plist)
+    sp.getCorpus(ecandidate)
+    # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
+    # sp.getCorpus(sp.negative_entity_generation(sp.parseSprlXML('data/newSprl2017_all.xml')))
 
-# sp.getCorpus(phraselist)
-# sp.parseSprlXML('data/sprl2017_train.xml')
+    # sp.getCorpus(phraselist)
+    # sp.parseSprlXML('data/sprl2017_train.xml')
 
-# sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
-# print(sentence_list)
+    # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
+    # print(sentence_list)
 
-# getCorpus(sentence_list)
+    # getCorpus(sentence_list)
+
+if __name__ == '__main__':
+    test()
 
 import pickle
 
