@@ -249,3 +249,7 @@ class DataFeature_for_span():
 #print(data.getHeadword())
 #print(data.getShortestDependencyPath(entity1, entity2))
 
+if __name__ == '__main__':
+    df = DataFeature_for_sentence('people are walking through the park , others are crossing the road in the foreground .')
+    chunks = df.getChunks()
+    print(chunks)

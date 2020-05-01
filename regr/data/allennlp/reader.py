@@ -50,7 +50,7 @@ class SensableReader(with_metaclass(SensableReaderMeta, DatasetReader)):
         return Instance(fields)
 
     def _read(self, file_path, metas=None) -> Iterator[Instance]:
-        for raw_sample in self.raw_read(file_path):
+        for raw_sample in self.raw_read(file_path, metas):
 
             yield self._to_instance(raw_sample, metas)
 

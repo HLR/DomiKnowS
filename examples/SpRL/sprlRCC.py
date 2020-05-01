@@ -62,9 +62,10 @@ def check_sample(lbp, sample):
             assert (entity_candidate >= data).all()
 
     # entity disjoint
-    for (entity1, data1), (entity2, data2) in combinations(entities.items(), r=2):
-        assert entity1 != entity2
-        assert (data1 * data2 == 0).all()
+    for entity, data in entities.items():
+        if entity == 'NONE_ENTITY':
+            continue
+        assert (data * entities['NONE_ENTITY'] == 0).all()
 
     # triplet candidate
     if triplet_candidate is not None:
