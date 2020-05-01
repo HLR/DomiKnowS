@@ -111,6 +111,7 @@ class DataFeature_for_span():
         self.phrasepos_ = '__DUMMY__'
         self.lower_ = '__DUMMY__'
         self.upper_ = '__DUMMY__'
+        self.is_dummy_ = True
 
     def init_feature(self):
         span, self.token_start, self.token_end = self.findSpan()
@@ -124,6 +125,7 @@ class DataFeature_for_span():
         self.phrasepos_ = self.getPhrasepos(span)
         self.lower_ = self.getLower(span)
         self.upper_ = self.getUpper(span)
+        self.is_dummy_ = False
         # self.span.set_extension("lemma_", default=False, force=True)
         # self.span.set_extension('pos_', default=False, force=True)
         # self.span.set_extension('tag_', default=False, force=True)
