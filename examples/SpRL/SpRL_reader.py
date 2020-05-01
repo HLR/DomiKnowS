@@ -732,7 +732,7 @@ class SpRLBinaryReader(SpRLReader):
                     cur_indices.append(rel[1:])
 
             yield relation_name, NewAdjacencyField(
-                cur_indices,
+                set(cur_indices),
                 fields[self.get_fieldname('word')],
                 padding_value=0
             )
