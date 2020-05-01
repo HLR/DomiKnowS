@@ -307,7 +307,7 @@ class SpRLReader(SensableReader):
             file_path: str,
             metas
     ) -> Iterable[Instance]:
-        isTrain = metas and bool(metas.get('dataset_type'))
+        isTrain = metas and metas.get('dataset_type') == "train"
         phrase_list = self.parseSprlXML(file_path)
        # raw_examples = self.getCorpus(self.negative_entity_generation_for(phrase_list))
         phrase_list = self.entity_candidate_generation_for_train(phrase_list, isTrain)
@@ -832,7 +832,7 @@ def test():
     #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
     #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
     #plist = sp.parseSprlXML('data/new_train.xml')
-    plist = sp.parseSprlXML('data/newSprl2017_all.xml')
+    plist = sp.parseSprlXML('data/new_gold.xml')
     ecandidate = sp.entity_candidate_generation_for_train(plist)
     sp.getCorpus(ecandidate)
     # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))
