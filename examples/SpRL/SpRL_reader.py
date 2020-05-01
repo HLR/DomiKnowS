@@ -94,7 +94,7 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        tokens = [Token(each_df.span.text) for each_df in tokens]
+        tokens = [Token(each_df.text) for each_df in tokens]
         indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
@@ -224,7 +224,7 @@ class SpRLReader(SensableReader):
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
 
-            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].span.text.lower()))
+            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].lower_))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -243,7 +243,7 @@ class SpRLReader(SensableReader):
             tokens
     ) -> Field:
         length = len(tokens)
-        sentence = tokens[0].span.doc.text
+        sentence = tokens[0].doc
 
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -255,8 +255,8 @@ class SpRLReader(SensableReader):
             entity2 = tokens[sp].headword_.lower()
             entity1 = entity1.split(' ')[0]
             entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
+            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].text)
             return "::".join(shortestdepedenceylist)
 
         # prepare a empty list
@@ -276,7 +276,7 @@ class SpRLReader(SensableReader):
             tokens
     ) -> Field:
         length = len(tokens)
-        sentence = tokens[0].span.doc.text
+        sentence = tokens[0].doc
 
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -288,8 +288,8 @@ class SpRLReader(SensableReader):
             entity2 = tokens[sp].headword_.lower()
             entity1 = entity1.split(' ')[0]
             entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
+            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].text)
             return "::".join(shortestdepedenceylist)
 
         # prepare a empty list
@@ -365,10 +365,10 @@ class SpRLReader(SensableReader):
                     end = int(child.attrib.get('end'))
 
                     if not text or start < 0 or end < 0:  # also skip empty
-                        continue
-
-                    span = sentence.getSpan(start, end)
-                    assert span.span.text in text
+                        span = sentence.dummy
+                    else:
+                        span = sentence.getSpan(start, end)
+                        assert span.text in text
                     sentence_dic[child.tag].append(span)
                     id_text_list[id_] = span
                     id_label_list[id_] = child.tag
@@ -381,25 +381,24 @@ class SpRLReader(SensableReader):
                     landmark_id = child.attrib.get('landmark_id')
                     trajector_id = child.attrib.get('trajector_id')
                     spatial_indicator_id = child.attrib.get('spatial_indicator_id')
-                    landmark = id_text_list.get(landmark_id)
-                    trajector = id_text_list.get(trajector_id)
-                    spatial_indicator = id_text_list.get(spatial_indicator_id)
+                    landmark = id_text_list.get(landmark_id, sentence.dummy)
+                    trajector = id_text_list.get(trajector_id, sentence.dummy)
+                    spatial_indicator = id_text_list.get(spatial_indicator_id, sentence.dummy)
 
-                    if not all((general_type, landmark, trajector, spatial_indicator)):
-                        continue
+                    if not general_type:
+                        continue  # TODO: skip relation without general type? or add none relation?
 
                     each_relationship = (general_type, landmark, trajector, spatial_indicator)
                     relationship.append(each_relationship)
             else:
-                if not relationship:
-                    continue
+                # if not relationship:
+                #     continue
                 sentence_dic['phrases'] = sentence.getChunks()
                 sentences_list.append(sentence_dic)
 
         # create empty dataform for sentences
         # sentences_df = pd.DataFrame(sentences_list)
-    
-        
+
         return sentences_list
 
     def getCorpus(self, sentences_list):
@@ -454,7 +453,7 @@ class SpRLReader(SensableReader):
 
     def spatial_indicator_candidate_generation(self, phrase):
         spatial_pos = phrase.phrasepos_
-        if phrase.span.text in spatial_dict or spatial_pos == "ADP":
+        if phrase.text in spatial_dict or spatial_pos == "ADP":
             return phrase
 
     def negative_relation_generation_for_test(self, relations, generated_phrase_list):
@@ -583,11 +582,13 @@ class SpRLReader(SensableReader):
             if isTrain:
                 for groundtruthlist in (landmarklist, trajectorlist, spatialindicatorlist):
                     for phrase in groundtruthlist:
-                        if not inlist(chunklist, phrase):
+                        if phrase not in chunklist:
                             chunklist.append(phrase)
-                    groundtruthlist.clear()
             chunklist.sort(key=lambda chunk: chunk.start)
 
+            landmarklist.clear()
+            trajectorlist.clear()
+            spatialindicatorlist.clear()
             for chunk in chunklist:
                 isNone = True
                 if chunk.headword_ in landmark_headwords:
