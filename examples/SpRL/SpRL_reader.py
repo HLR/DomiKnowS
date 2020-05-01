@@ -389,6 +389,8 @@ class SpRLReader(SensableReader):
                     each_relationship = (general_type, landmark, trajector, spatial_indicator)
                     relationship.append(each_relationship)
             else:
+                if not relationship:
+                    continue
                 chunks = sentence.getChunks()
                 for each_relationship in relationship:
                     for arg in each_relationship[1:]:
@@ -749,7 +751,7 @@ class SpRLBinaryReader(SpRLReader):
             padding_value=0
         )
         yield self.triplet_names[1], NewAdjacencyField(
-            none_indices,
+            set(none_indices),
             fields[self.get_fieldname('word')],
             padding_value=0
         )
