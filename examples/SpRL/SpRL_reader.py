@@ -755,6 +755,17 @@ class SpRLBinaryReader(SpRLReader):
 
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
+    @cls.field('entity_mask')
+    def update_entity(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        (phrase, labels), relations, sentence = raw_sample
+        return SequenceLabelField(
+                [str(not phrase.is_dummy_) for phrase in phrase],
+                fields[self.get_fieldname('word')])
+
     @cls.field('triplet_mask')
     def update_relations(
         self,
