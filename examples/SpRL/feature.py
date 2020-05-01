@@ -108,6 +108,7 @@ class DataFeature_for_span():
         self.tag_ = '__DUMMY__'
         self.dep_ = '__DUMMY__'
         self.headword_ = '__DUMMY__'
+        self.headtoken_ = '__DUMMY__'
         self.phrasepos_ = '__DUMMY__'
         self.lower_ = '__DUMMY__'
         self.upper_ = '__DUMMY__'
@@ -122,6 +123,7 @@ class DataFeature_for_span():
         self.tag_ = self.getTag(span)
         self.dep_ = self.getDenpendency(span)
         self.headword_ = self.getHeadword(span)
+        self.headtoken_ = self.getHeadtoken(span)
         self.phrasepos_ = self.getPhrasepos(span)
         self.lower_ = self.getLower(span)
         self.upper_ = self.getUpper(span)
@@ -174,7 +176,7 @@ class DataFeature_for_span():
 
     @property
     def _span(self):
-        return self.doc[self.token_start:self.token_end]
+        return self.doc.parse_sentence[self.token_start:self.token_end]
 
     def getText(self, span):
         return span.text
@@ -188,11 +190,13 @@ class DataFeature_for_span():
 
     # headword
     def getHeadword(self, span):
+        return self.getHeadtoken(span).text
+    
+    def getHeadtoken(self, span):
         if len(list(span.noun_chunks))==0:
-            return span.text
+            return span
         else:
-            for doc in span.noun_chunks:
-                return str(doc.root.text).lower()
+            return self.doc.parse_sentence[span.root.i:span.root.i+1]
 
 
     #pos feature
@@ -299,6 +303,6 @@ class DataFeature_for_span():
 #print(data.getShortestDependencyPath(entity1, entity2))
 
 if __name__ == '__main__':
-    df = DataFeature_for_sentence('people are walking through the park , others are crossing the road in the foreground .')
+    df = DataFeature_for_sentence('behind it a bar with chairs and two people , and a bench with one person lying on it .')
     chunks = df.getChunks()
     print(chunks)
