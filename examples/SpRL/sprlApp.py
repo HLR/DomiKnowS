@@ -3,8 +3,8 @@ from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, Lo
 
 
 from regr.graph.allennlp import AllenNlpGraph
-from SpRL_reader import SpRLSensorReader as Reader
-#from SpRL_reader import PickleReader as Reader
+#from SpRL_reader import SpRLSensorReader as Reader
+from SpRL_reader import PickleReader as Reader
 from config import Config
 from utils import seed
 

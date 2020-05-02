@@ -320,21 +320,16 @@ class SpRLReader(SensableReader):
         type_list = []
                      
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
-            landmark = []
-            trajector = []
-            spatialindicator = []
-            relationship = []
-
             id_text_list = {}
             id_label_list = {}
             sentence = None
 
             sentence_dic = {}
             sentence_dic["id"] = sentenceItem.attrib["id"]
-            sentence_dic['LANDMARK'] = landmark
-            sentence_dic['TRAJECTOR'] = trajector
-            sentence_dic['SPATIALINDICATOR'] = spatialindicator
-            sentence_dic['RELATION'] = relationship
+            sentence_dic['LANDMARK'] = []
+            sentence_dic['TRAJECTOR'] = []
+            sentence_dic['SPATIALINDICATOR'] = []
+            sentence_dic['RELATION'] = []
 
             # iterate child elements of item
 
@@ -378,15 +373,14 @@ class SpRLReader(SensableReader):
                         continue  # TODO: skip relation without general type? or add none relation?
 
                     each_relationship = (general_type, landmark, trajector, spatial_indicator)
-                    relationship.append(each_relationship)
+                    sentence_dic['RELATION'].append(each_relationship)
             else:
-                # if not relationship:
-                #     continue
                 sentence_dic['phrases'] = sentence.getChunks()
+                if len(sentence_dic['phrases']) == 1 and not sentence_dic['LANDMARK'] and not sentence_dic['TRAJECTOR'] and \
+                    not sentence_dic['SPATIALINDICATOR'] and not sentence_dic['RELATION']:
+                    continue
+        
                 sentences_list.append(sentence_dic)
-
-        # create empty dataform for sentences
-        # sentences_df = pd.DataFrame(sentences_list)
 
         return sentences_list
 

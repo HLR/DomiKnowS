@@ -26,6 +26,7 @@ def check_sample(lbp, sample):
             raw = field.as_tensor(padding_lengths={})
             continue
     assert raw, 'Should contain one raw sentence. None is detected.'
+    assert len(raw) > 1, "Should contain at least one span."
 
     entity_candidate = None
     triplet_candidate = None
