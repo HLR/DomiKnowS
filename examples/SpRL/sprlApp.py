@@ -46,6 +46,7 @@ def model_declaration(graph, config):
     phrase['all'] = ConcatSensor(phrase['raw'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
     phrase['ngram'] = NGramSensor(config.ngram, phrase['all'])
     phrase['encode'] = RNNLearner(phrase['ngram'], layers=2, dropout=config.dropout)
+    phrase['candidate'] = CandidateReaderSensor(reader, 'entity_mask', output_only=True)
 
     landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)

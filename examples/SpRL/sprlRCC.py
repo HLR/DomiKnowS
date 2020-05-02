@@ -32,12 +32,14 @@ def check_sample(lbp, sample):
     for name, field in sample.fields.items():
         match = NAME_PATTEN_EN_CANDIDATE.match(name)
         if match:
+            field.index(lbp.model.vocab)
             assert entity_candidate is None, 'Should contain AT MOST one entity candidate. Multiple are detected.'
             entity_candidate = field.as_tensor(padding_lengths={'num_tokens': len(raw)})
             continue
         match = NAME_PATTEN_TR_CANDIDATE.match(name)
         if match:
-            assert entity_candidate is None, 'Should contain AT MOST one triplet candidate. Multiple are detected.'
+            field.index(lbp.model.vocab)
+            assert triplet_candidate is None, 'Should contain AT MOST one triplet candidate. Multiple are detected.'
             triplet_candidate = field.as_tensor(padding_lengths={'num_tokens': len(raw)})
             continue
 
@@ -57,9 +59,11 @@ def check_sample(lbp, sample):
 
     # checking
     # entity candidate
-    if entity_candidate is not None:
-        for entity, data in entities.items():
-            assert (entity_candidate >= data).all()
+    # if entity_candidate is not None:
+    #     for entity, data in entities.items():
+    #         assert (entity_candidate >= data).all()
+    assert entity_candidate[0] == 0, '__DUMMY__ should be masked out.'
+    assert (entity_candidate[1:] == 1).all(), 'Everything other than __DUMMY__ should be left as it is.'
 
     # entity disjoint
     for entity, data in entities.items():
