@@ -26,18 +26,21 @@ def check_sample(lbp, sample):
             raw = field.as_tensor(padding_lengths={})
             continue
     assert raw, 'Should contain one raw sentence. None is detected.'
+    assert len(raw) > 1, "Should contain at least one span."
 
     entity_candidate = None
     triplet_candidate = None
     for name, field in sample.fields.items():
         match = NAME_PATTEN_EN_CANDIDATE.match(name)
         if match:
+            field.index(lbp.model.vocab)
             assert entity_candidate is None, 'Should contain AT MOST one entity candidate. Multiple are detected.'
             entity_candidate = field.as_tensor(padding_lengths={'num_tokens': len(raw)})
             continue
         match = NAME_PATTEN_TR_CANDIDATE.match(name)
         if match:
-            assert entity_candidate is None, 'Should contain AT MOST one triplet candidate. Multiple are detected.'
+            field.index(lbp.model.vocab)
+            assert triplet_candidate is None, 'Should contain AT MOST one triplet candidate. Multiple are detected.'
             triplet_candidate = field.as_tensor(padding_lengths={'num_tokens': len(raw)})
             continue
 
@@ -57,14 +60,18 @@ def check_sample(lbp, sample):
 
     # checking
     # entity candidate
-    if entity_candidate is not None:
-        for entity, data in entities.items():
-            assert (entity_candidate >= data).all()
+    # if entity_candidate is not None:
+    #     for entity, data in entities.items():
+    #         assert (entity_candidate >= data).all()
+    assert entity_candidate[0] == 0, '__DUMMY__ should be masked out.'
+    assert (entity_candidate[1:] == 1).all(), 'Everything other than __DUMMY__ should be left as it is.'
 
-    # entity disjoint
-    for (entity1, data1), (entity2, data2) in combinations(entities.items(), r=2):
-        assert entity1 != entity2
-        assert (data1 * data2 == 0).all()
+    # entity disjoint with none
+    if 'NONE_ENTITY' in entities:
+        for entity, data in entities.items():
+            if entity == 'NONE_ENTITY':
+                continue
+            assert (data * entities['NONE_ENTITY'] == 0).all()
 
     # triplet candidate
     if triplet_candidate is not None:
@@ -81,7 +88,8 @@ def check_sample(lbp, sample):
             assert entities['SPATIAL_INDICATOR'][si] == 1
 
     # triplet disjoint
-    assert (triplets['spatial_triplet'] * triplets['none_relation'] == 0).all()
+    if 'none_relation' in triplet:
+        assert (triplets['spatial_triplet'] * triplets['none_relation'] == 0).all()
 
     # triplet hierarchy
     assert (triplets['spatial_triplet'] >= triplets['region']).all()

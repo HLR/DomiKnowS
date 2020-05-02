@@ -39,17 +39,6 @@ def span_not_overlap(triplet):
     else:
         return True
 
-def span_overlap(span1, span2):
-    if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
-        return True
-    else:
-        return False
-
-def span_overlap_any(span, spanlist):
-    for span2 in spanlist:
-        if span_overlap(span, span2):
-            return True
-    return False
 
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
@@ -94,7 +83,7 @@ class SpRLReader(SensableReader):
             fields,
             tokens
     ) -> Field:
-        tokens = [Token(each_df.span.text) for each_df in tokens]
+        tokens = [Token(each_df.text) for each_df in tokens]
         indexers = {'word': SingleIdTokenIndexer(namespace='word', lowercase_tokens=True)}
         textfield = TextField(tokens, indexers)
         return textfield
@@ -224,7 +213,7 @@ class SpRLReader(SensableReader):
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
 
-            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].span.text.lower()))
+            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].lower_))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -243,7 +232,7 @@ class SpRLReader(SensableReader):
             tokens
     ) -> Field:
         length = len(tokens)
-        sentence = tokens[0].span.doc.text
+        sentence = tokens[0].doc
 
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -255,8 +244,8 @@ class SpRLReader(SensableReader):
             entity2 = tokens[sp].headword_.lower()
             entity1 = entity1.split(' ')[0]
             entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
+            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].text)
             return "::".join(shortestdepedenceylist)
 
         # prepare a empty list
@@ -276,7 +265,7 @@ class SpRLReader(SensableReader):
             tokens
     ) -> Field:
         length = len(tokens)
-        sentence = tokens[0].span.doc.text
+        sentence = tokens[0].doc
 
         # convert ijk index to 1-d array index
         def encap_index(*indices):
@@ -288,8 +277,8 @@ class SpRLReader(SensableReader):
             entity2 = tokens[sp].headword_.lower()
             entity1 = entity1.split(' ')[0]
             entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = DataFeature_for_sentence(sentence=sentence).getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].span.text)
+            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
+            shortestdepedenceylist.insert(-1, tokens[sp].text)
             return "::".join(shortestdepedenceylist)
 
         # prepare a empty list
@@ -304,12 +293,14 @@ class SpRLReader(SensableReader):
 
     def raw_read(
             self,
-            file_path: str
+            file_path: str,
+            metas
     ) -> Iterable[Instance]:
-
+        isTrain = metas and metas.get('dataset_type') == "train"
         phrase_list = self.parseSprlXML(file_path)
        # raw_examples = self.getCorpus(self.negative_entity_generation_for(phrase_list))
-        raw_examples = self.getCorpus(self.entity_candidate_generation_for_train(phrase_list))
+        phrase_list = self.entity_candidate_generation_for_train(phrase_list, isTrain)
+        raw_examples = self.getCorpus(phrase_list)
         for raw_sample in raw_examples:
             yield raw_sample
 
@@ -329,21 +320,16 @@ class SpRLReader(SensableReader):
         type_list = []
                      
         for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
-            landmark = []
-            trajector = []
-            spatialindicator = []
-            relationship = []
-
             id_text_list = {}
             id_label_list = {}
             sentence = None
 
             sentence_dic = {}
             sentence_dic["id"] = sentenceItem.attrib["id"]
-            sentence_dic['LANDMARK'] = landmark
-            sentence_dic['TRAJECTOR'] = trajector
-            sentence_dic['SPATIALINDICATOR'] = spatialindicator
-            sentence_dic['RELATION'] = relationship
+            sentence_dic['LANDMARK'] = []
+            sentence_dic['TRAJECTOR'] = []
+            sentence_dic['SPATIALINDICATOR'] = []
+            sentence_dic['RELATION'] = []
 
             # iterate child elements of item
 
@@ -363,10 +349,10 @@ class SpRLReader(SensableReader):
                     end = int(child.attrib.get('end'))
 
                     if not text or start < 0 or end < 0:  # also skip empty
-                        continue
-
-                    span = sentence.getSpan(start, end)
-                    assert span.span.text in text
+                        span = sentence.dummy
+                    else:
+                        span = sentence.getSpan(start, end)
+                        assert span.text in text
                     sentence_dic[child.tag].append(span)
                     id_text_list[id_] = span
                     id_label_list[id_] = child.tag
@@ -379,36 +365,27 @@ class SpRLReader(SensableReader):
                     landmark_id = child.attrib.get('landmark_id')
                     trajector_id = child.attrib.get('trajector_id')
                     spatial_indicator_id = child.attrib.get('spatial_indicator_id')
-                    landmark = id_text_list.get(landmark_id)
-                    trajector = id_text_list.get(trajector_id)
-                    spatial_indicator = id_text_list.get(spatial_indicator_id)
+                    landmark = id_text_list.get(landmark_id, sentence.dummy)
+                    trajector = id_text_list.get(trajector_id, sentence.dummy)
+                    spatial_indicator = id_text_list.get(spatial_indicator_id, sentence.dummy)
 
-                    if not all((general_type, landmark, trajector, spatial_indicator)):
-                        continue
+                    if not general_type:
+                        continue  # TODO: skip relation without general type? or add none relation?
 
                     each_relationship = (general_type, landmark, trajector, spatial_indicator)
-                    relationship.append(each_relationship)
+                    sentence_dic['RELATION'].append(each_relationship)
             else:
-                if not relationship:
+                sentence_dic['phrases'] = sentence.getChunks()
+                if len(sentence_dic['phrases']) == 1 and not sentence_dic['LANDMARK'] and not sentence_dic['TRAJECTOR'] and \
+                    not sentence_dic['SPATIALINDICATOR'] and not sentence_dic['RELATION']:
                     continue
-                chunks = sentence.getChunks()
-                for each_relationship in relationship:
-                    for arg in each_relationship[1:]:
-                        if arg not in chunks:
-                            chunks.append(arg)
-                chunks = sorted(chunks, key=lambda chunk: chunk.start)
-                sentence_dic['phrases'] = chunks
+        
                 sentences_list.append(sentence_dic)
 
-        # create empty dataform for sentences
-        # sentences_df = pd.DataFrame(sentences_list)
-    
-        
         return sentences_list
 
     def getCorpus(self, sentences_list):
 
-        output = self.label_names
         final_relationship = []
 
         for sents in sentences_list:
@@ -458,7 +435,7 @@ class SpRLReader(SensableReader):
 
     def spatial_indicator_candidate_generation(self, phrase):
         spatial_pos = phrase.phrasepos_
-        if phrase.span.text in spatial_dict or spatial_pos == "ADP":
+        if phrase.text in spatial_dict or spatial_pos == "ADP":
             return phrase
 
     def negative_relation_generation_for_test(self, relations, generated_phrase_list):
@@ -466,11 +443,11 @@ class SpRLReader(SensableReader):
         trajector_candidate_list = []
         spatial_indicator_candidate_list = []
         for each_phrase in generated_phrase_list:
-            if self.landmark_candidate_generation(each_phrase):
+            if self.landmark_candidate_generation(each_phrase) or each_phrase.is_dummy_:
                 landmark_candidate_list.append(each_phrase)
-            if self.trajector_candidate_generation(each_phrase):
+            if self.trajector_candidate_generation(each_phrase) or each_phrase.is_dummy_:
                 trajector_candidate_list.append(each_phrase)
-            if self.spatial_indicator_candidate_generation(each_phrase):
+            if self.spatial_indicator_candidate_generation(each_phrase) or each_phrase.is_dummy_:
                 spatial_indicator_candidate_list.append(each_phrase)
 
         raw_triplet_candidates = list(product(landmark_candidate_list, trajector_candidate_list, spatial_indicator_candidate_list))
@@ -479,79 +456,16 @@ class SpRLReader(SensableReader):
             isNone = True
             for each_relation in relations:
                 gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
-                if (arg1.headword_ == gold_arg1.headword_ and arg2.headword_ == gold_arg2.headword_ and span_overlap(arg3, gold_arg3)):
+                if (arg1.share_headtoken(gold_arg1) and arg2.share_headtoken(gold_arg2) and arg3.overlap(gold_arg3)):
                     isNone = False
-                    if not (arg1 == gold_arg1 and arg2 == gold_arg2 and arg3 == gold_arg3):
-                        new_relation_triplet.append((each_relation[0], arg1, arg2, arg3))
+                    new_relation_triplet.append((each_relation[0], arg1, arg2, arg3))
             if isNone:
                 new_relation_triplet.append(("relation_none", arg1, arg2, arg3))
 
-        relations.extend(new_relation_triplet)
-
-        return relations
+        return new_relation_triplet
         
-    def negative_relation_generation_for_train(self, phrase_relation_list):
-        for phrase_relation in phrase_relation_list:
-            list_indices = list(range(len(phrase_relation[0][0])))
-            list_indices = list(itertools.permutations(list_indices, 3))
 
-            positive_list = []
-            positive_text_list = []
-            for rel in phrase_relation[1]:
-                src_index = rel[1][0]
-                src_text_index = rel[1][1][0]
-                mid_index = rel[2][0]
-                mid_text_index = rel[2][1][0]
-                dst_index = rel[3][0]
-                dst_text_index = rel[3][1][0]
-                positive_list.append((src_index, mid_index, dst_index))
-                positive_text_list.append((rel[0], (src_text_index, mid_text_index, dst_text_index)))
-
-            label_indices_list = phrase_relation[0][1]
-            text_list = phrase_relation[0][0]
-            label_name_list = self.label_names
-
-            for indice in list_indices:
-                new_relationship = ()
-                if indice in positive_list:
-                    continue
-                elif label_indices_list[indice[0]] == label_name_list[0] and \
-                        label_indices_list[indice[1]] == label_name_list[1] and \
-                        label_indices_list[indice[2]] == label_name_list[2]:
-                    src_head = DataFeature("", text_list[indice[0]]).getHeadword()
-                    mid_head = DataFeature("", text_list[indice[1]]).getHeadword()
-                    dst_head = DataFeature("", text_list[indice[2]]).getHeadword()
-                    label_set = set([src_head, mid_head, dst_head])
-                    for positive_text in positive_text_list:
-                        positive_src = DataFeature("", positive_text[1][0]).getHeadword()
-                        positive_mid = DataFeature("", positive_text[1][1]).getHeadword()
-                        positive_dst = DataFeature("", positive_text[1][2]).getHeadword()
-                        positive_set = set([positive_src, positive_mid, positive_dst])
-
-                        if label_set == positive_set:
-
-                            new_relationship = ((positive_text[0],
-                                                 (indice[0], (text_list[indice[0]], label_indices_list[indice[0]])),
-                                                 (indice[1], (text_list[indice[1]], label_indices_list[indice[1]])),
-                                                 (indice[2], (text_list[indice[2]], label_indices_list[indice[2]]))))
-                            break
-                        elif len(label_set.intersection(positive_set)) == 1 or len(
-                                label_set.intersection(positive_set)) == 0:
-                            break
-                        else:
-                            new_relationship = (("relation_none",
-                                                 (indice[0], (text_list[indice[0]], label_indices_list[indice[0]])),
-                                                 (indice[1], (text_list[indice[1]], label_indices_list[indice[1]])),
-                                                 (indice[2], (text_list[indice[2]], label_indices_list[indice[2]]))))
-                            break
-
-                if new_relationship:
-                    phrase_relation[1].append(new_relationship)
-        # for i in phrase_relation_list:
-        #     print(i)
-        return phrase_relation_list
-
-    def entity_candidate_generation_for_train(self, phraselist):
+    def entity_candidate_generation_for_train(self, phraselist, isTrain=False):
         gold_entity_landmark = 0
         gold_entity_trajector = 0
         gold_entity_spatialindicator = 0
@@ -563,44 +477,44 @@ class SpRLReader(SensableReader):
         new_phraselist = []
 
         for each_sentence in phraselist:
-            #chunklist = each_sentence.get('phrases')
             sentence = each_sentence.get('TEXT')
-            chunklist = each_sentence.get('phrases')
+            chunklist = each_sentence.get('phrases', [])
 
-            landmarklist = each_sentence.get('LANDMARK')
-            trajectorlist = each_sentence.get('TRAJECTOR')
-            spatialindicatorlist = each_sentence.get('SPATIALINDICATOR')
+            landmarklist = each_sentence.get('LANDMARK', [])
+            trajectorlist = each_sentence.get('TRAJECTOR', [])
+            spatialindicatorlist = each_sentence.get('SPATIALINDICATOR', [])
+            each_sentence['NONE'] = []
+            labelnone = each_sentence.get('NONE', [])
 
             gold_entity_landmark += len(landmarklist)
             gold_entity_trajector += len(trajectorlist)
             gold_entity_spatialindicator += len(spatialindicatorlist)
 
-            each_sentence['NONE'] = list()
-            labelnone = each_sentence['NONE']
+            landmark_gt = landmarklist.copy()
+            trajector_gt = trajectorlist.copy()
+            spatialindicator_gt = spatialindicatorlist.copy()
+            landmarklist.clear()
+            trajectorlist.clear()
+            spatialindicatorlist.clear()
 
-            landmark_headwords = {lm.headword_ for lm in landmarklist}
-            trajector_headwords = {tr.headword_ for tr in trajectorlist}
-            spatialindicator_headwords = {si.headword_ for si in spatialindicatorlist}
 
-            #chunklist = list(set(chunklist))
+            if isTrain:
+                for groundtruthlist in (landmark_gt, trajector_gt, spatialindicator_gt):
+                    for phrase in groundtruthlist:
+                        if phrase not in chunklist:
+                            chunklist.append(phrase)
+            chunklist.sort(key=lambda chunk: chunk.start)
 
-            def inlist(dflist, df):
-                for other in dflist:
-                    if df == other:
-                        return True
-                return False
-
+        
             for chunk in chunklist:
-                if (inlist(landmarklist, chunk) or inlist(trajectorlist, chunk) or inlist(spatialindicatorlist, chunk)):
-                    continue
                 isNone = True
-                if chunk.headword_ in landmark_headwords:
+                if chunk.share_headtoken_any(landmark_gt):
                     landmarklist.append(chunk)
                     isNone = False
-                if chunk.headword_ in trajector_headwords:
+                if chunk.share_headtoken_any(trajector_gt):
                     trajectorlist.append(chunk)
                     isNone = False
-                if span_overlap_any(chunk, spatialindicatorlist):
+                if chunk.overlap_any(spatialindicator_gt):
                     spatialindicatorlist.append(chunk)
                     isNone = False
                 if isNone:
@@ -616,86 +530,6 @@ class SpRLReader(SensableReader):
         # print(
         #     f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
         # print(f" negative entity number is {negative_entity} ")
-
-        return new_phraselist
-
-
-    def negative_entity_generation(self, phraselist):
-        gold_entity_landmark = 0
-        gold_entity_trajector = 0
-        gold_entity_spatialindicator = 0
-        positive_entity_landmark = 0
-        positive_entity_trajector = 0
-        positive_entity_spatialindicator = 0
-        negative_entity = 0
-
-        new_phraselist = []
-
-        for phrase in phraselist:
-            try:
-                sentence = phrase['TEXT']
-                chunklist = DataFeature(sentence, "").getChunks()
-
-                landmarklist = phrase['LANDMARK']
-                trajectorlist = phrase['TRAJECTOR']
-                spatialindicatorlist = phrase['SPATIALINDICATOR']
-
-                tag1list = [land[0] for land in landmarklist]
-                tag2list = [traj[0] for traj in trajectorlist]
-                tag3list = [spat[0] for spat in spatialindicatorlist]
-
-                gold_entity_landmark += len(tag1list)
-                gold_entity_trajector += len(tag2list)
-                gold_entity_spatialindicator += len(tag3list)
-
-                phrase['NONE'] = list()
-                labelnone = phrase['NONE']
-
-                tag1_headword = []
-                tag2_headword = []
-                tag3_headword = []
-
-                for tag1 in tag1list:
-                    tag1_headword.append(DataFeature("", tag1).getHeadword())
-                for tag2 in tag2list:
-                    tag2_headword.append(DataFeature("", tag2).getHeadword())
-                for tag3 in tag3list:
-                    tag3_headword.append(DataFeature("", tag3).getHeadword())
-                chunklist = list(set(chunklist))
-
-                for chunk in chunklist:
-
-                    if chunk.text in tag1list or chunk.text in tag2list or chunk.text in tag3list:
-                        continue
-                    elif DataFeature("", chunk.text).getHeadword() in tag1_headword and DataFeature("",
-                                                                                                    chunk.text).getPhrasepos() != "VERB":
-
-                        landmarklist.append((chunk.text, sentence.find(chunk.text)))
-
-                    elif DataFeature("", chunk.text).getHeadword() in tag2_headword and DataFeature("",
-                                                                                                    chunk.text).getPhrasepos() != "VERB":
-
-                        trajectorlist.append((chunk.text, sentence.find(chunk.text)))
-                    elif DataFeature("", chunk.text).getHeadword() in tag3_headword:
-
-                        spatialindicatorlist.append((chunk.text, sentence.find(chunk.text)))
-
-                    else:
-                        labelnone.append((chunk.text, sentence.find(chunk.text)))
-
-                positive_entity_landmark += len(landmarklist)
-                positive_entity_trajector += len(trajectorlist)
-                positive_entity_spatialindicator += len(spatialindicatorlist)
-                negative_entity += len(labelnone)
-                new_phraselist.append(phrase)
-
-            except:
-                KeyError
-
-       # print(f" landmark gold number is {gold_entity_landmark}, trajector gold number is {gold_entity_trajector}, spatialindicator gold number is {gold_entity_spatialindicator} , total gold number is {gold_entity_landmark+gold_entity_trajector+gold_entity_spatialindicator}")
-       # print(
-           # f" landmark positive number is {positive_entity_landmark}, trajector positive number is {positive_entity_trajector}, spatialindicator positive number is {positive_entity_spatialindicator}, total positive number is {positive_entity_landmark+positive_entity_trajector+positive_entity_spatialindicator} ")
-       # print(f" negative entity number is {negative_entity} ")
 
         return new_phraselist
 
@@ -758,6 +592,17 @@ class SpRLBinaryReader(SpRLReader):
 
 @keep_keys
 class SpRLSensorReader(SpRLBinaryReader):
+    @cls.field('entity_mask')
+    def update_entity(
+        self,
+        fields: Dict,
+        raw_sample
+    ) -> Field:
+        (phrase, labels), relations, sentence = raw_sample
+        return SequenceLabelField(
+                [str(not phrase.is_dummy_) for phrase in phrase],
+                fields[self.get_fieldname('word')])
+
     @cls.field('triplet_mask')
     def update_relations(
         self,
@@ -835,7 +680,7 @@ def test():
     #sp.parseSprlXML('examples/SpRL/data/new_train.xml')
     #sp.entity_candidate_generation_for_train(sp.parseSprlXML('examples/SpRL/data/new_train.xml'))
     #plist = sp.parseSprlXML('data/new_train.xml')
-    plist = sp.parseSprlXML('data/newSprl2017_all.xml')
+    plist = sp.parseSprlXML('data/new_train.xml')
     ecandidate = sp.entity_candidate_generation_for_train(plist)
     sp.getCorpus(ecandidate)
     # sp.getCorpus(sp.parseSprlXML('data/newSprl2017_all.xml'))

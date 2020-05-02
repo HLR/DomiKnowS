@@ -35,7 +35,6 @@
     <rdfs:subClassOf rdf:resource="#phrase"/>
     <owl:disjointWith rdf:resource="#TRAJECTOR"/>
     <owl:disjointWith rdf:resource="#LANDMARK"/>
-    <owl:disjointWith rdf:resource="#NONE_ENTITY"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology SPATIAL_INDICATOR.</rdfs:comment>
   </owl:Class>
 
@@ -54,17 +53,17 @@
   <owl:ObjectProperty rdf:ID="triplet-first">
     <rdfs:subPropertyOf rdf:resource="#first"/>
     <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#LANDMARK"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="triplet-second">
     <rdfs:subPropertyOf rdf:resource="#second"/>
     <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#TRAJECTOR"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="triplet-third">
     <rdfs:subPropertyOf rdf:resource="#third"/>
     <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#SPATIAL_INDICATOR"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
 
   <owl:Class rdf:ID="spatial_triplet">
@@ -89,20 +88,14 @@
 
   <owl:Class rdf:ID="region">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
-    <owl:disjointWith rdf:resource="#distance"/>
-    <owl:disjointWith rdf:resource="#direction"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology region.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="distance">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
-    <owl:disjointWith rdf:resource="#region"/>
-    <owl:disjointWith rdf:resource="#direction"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology distance.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="direction">
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
-    <owl:disjointWith rdf:resource="#region"/>
-    <owl:disjointWith rdf:resource="#distance"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology direction.</rdfs:comment>
   </owl:Class>
 
@@ -114,16 +107,16 @@
   <owl:ObjectProperty rdf:ID="none_relation-first">
     <rdfs:subPropertyOf rdf:resource="#first"/>
     <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#LANDMARK"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="none_relation-second">
     <rdfs:subPropertyOf rdf:resource="#second"/>
     <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#TRAJECTOR"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="none_relation-third">
     <rdfs:subPropertyOf rdf:resource="#third"/>
     <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#SPATIAL_INDICATOR"/>
+    <rdfs:range rdf:resource="#phrase"/>
   </owl:ObjectProperty>
 </rdf:RDF>

@@ -23,11 +23,11 @@ def model_declaration(graph, config):
     landmark = graph['application/LANDMARK']
     trajector = graph['application/TRAJECTOR']
     spatial_indicator = graph['application/SPATIAL_INDICATOR']
-    none_entity = graph['application/NONE_ENTITY']
+    #none_entity = graph['application/NONE_ENTITY']
 
     triplet = graph['application/triplet']
     spatial_triplet = graph['application/spatial_triplet']
-    none_relation = graph['application/none_relation']
+    #none_relation = graph['application/none_relation']
 
     region = graph['application/region']
     direction = graph['application/direction']
@@ -46,16 +46,17 @@ def model_declaration(graph, config):
     phrase['all'] = ConcatSensor(phrase['raw'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
     phrase['ngram'] = NGramSensor(config.ngram, phrase['all'])
     phrase['encode'] = RNNLearner(phrase['ngram'], layers=2, dropout=config.dropout)
+    phrase['candidate'] = CandidateReaderSensor(reader, 'entity_mask', output_only=True)
 
     landmark['label'] = LabelSensor(reader, 'LANDMARK', output_only=True)
     trajector['label'] = LabelSensor(reader, 'TRAJECTOR', output_only=True)
     spatial_indicator['label'] = LabelSensor(reader, 'SPATIALINDICATOR', output_only=True)
-    none_entity['label'] = LabelSensor(reader, 'NONE', output_only=True)
+    #none_entity['label'] = LabelSensor(reader, 'NONE', output_only=True)
 
     landmark['label'] = LogisticRegressionLearner(phrase['encode'])
     trajector['label'] = LogisticRegressionLearner(phrase['encode'])
     spatial_indicator['label'] = LogisticRegressionLearner(phrase['encode'])
-    none_entity['label'] = LogisticRegressionLearner(phrase['encode'])
+    #none_entity['label'] = LogisticRegressionLearner(phrase['encode'])
 
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
     triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
@@ -89,18 +90,17 @@ def model_declaration(graph, config):
                                   #triplet['tr_5']
                                  )
 
-    #triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
     triplet['candidate'] = CandidateReaderSensor(reader, 'triplet_mask', output_only=True)
 
     spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
-    none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)
+    #none_relation['label'] = LabelSensor(reader, 'relation_none', output_only=True)
 
     region['label'] = LabelSensor(reader, 'region', output_only=True)
     direction['label'] = LabelSensor(reader, 'direction', output_only=True)
     distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
     spatial_triplet['label'] = LogisticRegressionLearner(triplet['all'])
-    none_relation['label'] = LogisticRegressionLearner(triplet['all'])
+    #none_relation['label'] = LogisticRegressionLearner(triplet['all'])
 
     region['label'] = LogisticRegressionLearner(triplet['all'])
     direction['label'] = LogisticRegressionLearner(triplet['all'])

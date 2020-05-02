@@ -48,11 +48,7 @@ with Graph('spLanguage') as splang_Graph:
         distance.is_a(spatial_triplet)
         direction = Concept(name='direction')
         direction.is_a(spatial_triplet)
-        region.not_a(distance)
-        region.not_a(direction)
-        distance.not_a(direction)
 
         none_relation= Concept(name='none_relation')
         none_relation.is_a(triplet)
-        none_relation.has_a(first=landmark, second=trajector, third=spatial_indicator)
         none_relation.not_a(spatial_triplet)

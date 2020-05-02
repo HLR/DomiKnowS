@@ -279,7 +279,7 @@ class Conll04SpaCyReader(SensableReader):
 
         return split_tokens, split_labels, split_relations
 
-    def raw_read(self, file_path):
+    def raw_read(self, file_path, **kwargs):
         sentences, relation_lists = self.corpus_reader(file_path)
         for sentence, relations in zip(sentences, relation_lists):
             tokens, labels, relations = reprocess(sentence, relations)
