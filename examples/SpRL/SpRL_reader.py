@@ -39,28 +39,6 @@ def span_not_overlap(triplet):
     else:
         return True
 
-def span_overlap(span1, span2):
-    if (span1.start <= span2.start and span2.start < span1.end) or (span2.start <= span1.start and span1.start < span2.end):
-        return True
-    else:
-        return False
-
-def span_overlap_any(span, spanlist):
-    for span2 in spanlist:
-        if span_overlap(span, span2):
-            return True
-    return False
-
-def span_share_headtoken(span1, span2):
-    if span1.is_dummy_ != span2.is_dummy_:
-        return False
-    return span1.headtoken_ == span2.headtoken_
-
-def span_share_headtoken_any(span, spanlist):
-    for span2 in spanlist:
-        if span_share_headtoken(span, span2):
-            return True
-    return False
 
 class SpRLReader(SensableReader):
     label_names = ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR', 'NONE']
@@ -484,7 +462,7 @@ class SpRLReader(SensableReader):
             isNone = True
             for each_relation in relations:
                 gold_arg1, gold_arg2, gold_arg3 = each_relation[1:]
-                if (span_share_headtoken(arg1, gold_arg1) and span_share_headtoken(arg2, gold_arg2) and span_overlap(arg3, gold_arg3)):
+                if (arg1.share_headtoken(gold_arg1) and arg2.share_headtoken(gold_arg2) and arg3.overlap(gold_arg3)):
                     isNone = False
                     new_relation_triplet.append((each_relation[0], arg1, arg2, arg3))
             if isNone:
@@ -536,13 +514,13 @@ class SpRLReader(SensableReader):
         
             for chunk in chunklist:
                 isNone = True
-                if span_share_headtoken_any(chunk, landmark_gt):
+                if chunk.share_headtoken_any(landmark_gt):
                     landmarklist.append(chunk)
                     isNone = False
-                if span_share_headtoken_any(chunk, trajector_gt):
+                if chunk.share_headtoken_any(trajector_gt):
                     trajectorlist.append(chunk)
                     isNone = False
-                if span_overlap_any(chunk, spatialindicator_gt):
+                if chunk.overlap_any(spatialindicator_gt):
                     spatialindicatorlist.append(chunk)
                     isNone = False
                 if isNone:

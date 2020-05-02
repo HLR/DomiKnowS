@@ -123,7 +123,7 @@ class DataFeature_for_span():
         self.tag_ = self.getTag(span)
         self.dep_ = self.getDenpendency(span)
         self.headword_ = self.getHeadword(span)
-        self.headtoken_ = self.getHeadtoken(span)
+        #self.headtoken_ = self.getHeadtoken(span)
         self.phrasepos_ = self.getPhrasepos(span)
         self.lower_ = self.getLower(span)
         self.upper_ = self.getUpper(span)
@@ -272,6 +272,29 @@ class DataFeature_for_span():
     #semantic role
     def getSemanticRle(self, span):
         pass
+
+    def share_headtoken(self,other):
+        if self.is_dummy_ != other.is_dummy_:
+            return False
+        return self.getHeadtoken(self._span) == self.getHeadtoken(other._span)
+
+    def share_headtoken_any(self, otherlist):
+        for other in otherlist:
+            if self.share_headtoken(other):
+                return True
+        return False
+
+    def overlap(self, other):
+        if (self.start <= other.start and other.start < self.end) or (other.start <= self.start and self.start < other.end):
+            return True
+        else:
+            return False
+
+    def overlap_any(self, otherlist):
+        for other in otherlist:
+            if self.overlap(other):
+                return True
+        return False
 
 
 
