@@ -60,36 +60,17 @@ def model_declaration(graph, config):
 
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
     triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
-   # triplet['args_type'] = CartesianProduct3Sensor(landmark['label'], trajector['label'], spatial_indicator['label'])
-    #triplet['compact_dist'] = TripPhraseDistSensor(phrase['compact'])
-    # triplet['raw_dist'] = TripPhraseDistSensor(phrase['raw'])
-    # triplet['pos_dist'] = TripPhraseDistSensor(phrase['pos'])
-    # triplet['lemma_dist'] =TripPhraseDistSensor(phrase['lemma'])
-    # triplet['headword_dist'] = TripPhraseDistSensor(phrase['headword'])
-    # triplet['phrasepos_dist'] = TripPhraseDistSensor(phrase['phrasepos'])
-    # triplet['dependency_dist'] = TripPhraseDistSensor(phrase['dep'])
     # new feature example
     triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
-    #triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
-    triplet['all'] = ConcatSensor(triplet['cat'],
-                                 # triplet['args_type'],
-                                  #triplet['compact_dist'],
-                                #   triplet['raw_dist'],
-                                #   triplet['pos_dist'],
-                                #   triplet['lemma_dist'],
-                                #   triplet['headword_dist'],
-                                #   triplet['phrasepos_dist'],
-                                #   triplet['dependency_dist'],
-                                  triplet['tr_1'],
-                                  triplet['tr_2'],
-                                  triplet['tr_3'],
-                                  triplet['tr_4']
-                                  #triplet['tr_5']
-                                 )
-
+    triplet['encode'] = ConcatSensor(triplet['cat'],
+                                     triplet['tr_1'],
+                                     triplet['tr_2'],
+                                     triplet['tr_3'],
+                                     triplet['tr_4'])
+    # triplet['encode'] = MLPLearner([config.compact, config.compact], triplet['all'])
     triplet['candidate'] = CandidateReaderSensor(reader, 'triplet_mask', output_only=True)
 
     spatial_triplet['label'] = LabelSensor(reader, 'is_triplet', output_only=True)
@@ -99,12 +80,12 @@ def model_declaration(graph, config):
     direction['label'] = LabelSensor(reader, 'direction', output_only=True)
     distance['label'] = LabelSensor(reader, 'distance', output_only=True)
 
-    spatial_triplet['label'] = LogisticRegressionLearner(triplet['all'])
-    #none_relation['label'] = LogisticRegressionLearner(triplet['all'])
+    spatial_triplet['label'] = LogisticRegressionLearner(triplet['encode'])
+    #none_relation['label'] = LogisticRegressionLearner(triplet['encode'])
 
-    region['label'] = LogisticRegressionLearner(triplet['all'])
-    direction['label'] = LogisticRegressionLearner(triplet['all'])
-    distance['label'] = LogisticRegressionLearner(triplet['all'])
+    region['label'] = LogisticRegressionLearner(triplet['encode'])
+    direction['label'] = LogisticRegressionLearner(triplet['encode'])
+    distance['label'] = LogisticRegressionLearner(triplet['encode'])
 
     lbp = AllenNlpGraph(graph, **config.graph)
     return lbp
