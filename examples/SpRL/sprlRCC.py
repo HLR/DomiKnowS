@@ -66,11 +66,12 @@ def check_sample(lbp, sample):
     assert entity_candidate[0] == 0, '__DUMMY__ should be masked out.'
     assert (entity_candidate[1:] == 1).all(), 'Everything other than __DUMMY__ should be left as it is.'
 
-    # entity disjoint
-    for entity, data in entities.items():
-        if entity == 'NONE_ENTITY':
-            continue
-        assert (data * entities['NONE_ENTITY'] == 0).all()
+    # entity disjoint with none
+    if 'NONE_ENTITY' in entities:
+        for entity, data in entities.items():
+            if entity == 'NONE_ENTITY':
+                continue
+            assert (data * entities['NONE_ENTITY'] == 0).all()
 
     # triplet candidate
     if triplet_candidate is not None:
@@ -87,7 +88,8 @@ def check_sample(lbp, sample):
             assert entities['SPATIAL_INDICATOR'][si] == 1
 
     # triplet disjoint
-    assert (triplets['spatial_triplet'] * triplets['none_relation'] == 0).all()
+    if 'none_relation' in triplet:
+        assert (triplets['spatial_triplet'] * triplets['none_relation'] == 0).all()
 
     # triplet hierarchy
     assert (triplets['spatial_triplet'] >= triplets['region']).all()
