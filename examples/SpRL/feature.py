@@ -11,12 +11,10 @@ with open("data/spatial_dic.txt") as f_sp:
     
 
 class DataFeature_for_sentence():
-    def __init__(self, sentence):
+    def __init__(self, sentence, **kwargs):
         self.sentence = sentence
-        #self.phrase = phrase
-
         self.parse_sentence = nlpmodel(self.sentence)
-        #self.parse_phrase = nlpmodel(self.phrase)
+        self.metas = kwargs
 
         self.dummy = DataFeature_for_span.dummy(self)
         self.graph = self.getdependenceyGraph()

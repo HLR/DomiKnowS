@@ -91,9 +91,94 @@ def model_declaration(graph, config):
     direction['label'] = LogisticRegressionLearner(triplet['encode'])
     distance['label'] = LogisticRegressionLearner(triplet['encode'])
 
-    lbp = AllenNlpGraph(graph, **config.graph)
+    lbp = AllenNlpGraph(graph, **config.graph, post_action=log_output(config.log_dir))
     return lbp
 
+def log_output(log_dir):
+    from collections import defaultdict
+    import re
+    import os
+    import json
+
+    NAME_PATTEN_RAW = re.compile(r'^spLanguage\/linguistic\/sentence\/raw\/.*$')
+    NAME_PATTEN_EN = re.compile(r'^spLanguage\/application\/([A-Z]+\w+)\/label\/.+learner-?\d*$')
+    NAME_PATTEN_TR = re.compile(r'^spLanguage\/application\/([a-z]+\w+)\/label\/.+learner-?\d*$')
+    NAME_PATTEN_EN_CANDIDATE=re.compile(r'^spLanguage\/linguistic\/phrase\/candidate\/.*$')
+    NAME_PATTEN_TR_CANDIDATE=re.compile(r'^spLanguage\/application\/triplet\/candidate\/.*$')
+
+    def log(data, data_type=''):
+        dataset_type = data['dataset_type']
+        epoch_num = data['epoch_num']
+        raw = None
+        for name, value in data.items():
+            match = NAME_PATTEN_RAW.match(name)
+            if match:
+                raw = value
+                break
+        
+        entity_candidate = None
+        triplet_candidate = None
+        for name, value in data.items():
+            match = NAME_PATTEN_EN_CANDIDATE.match(name)
+            if match:
+                assert entity_candidate is None, 'Should contain AT MOST one entity candidate. Multiple are detected.'
+                entity_candidate = value
+                continue
+            match = NAME_PATTEN_TR_CANDIDATE.match(name)
+            if match:
+                assert triplet_candidate is None, 'Should contain AT MOST one triplet candidate. Multiple are detected.'
+                triplet_candidate = value
+                continue
+
+        entities = {}
+        triplets = {}
+        for name, value in data.items():
+            match = NAME_PATTEN_EN.match(name)
+            if match:
+                entities[match[1]] = value
+                continue
+            match = NAME_PATTEN_TR.match(name)
+            if match:
+                triplets[match[1]] = value
+                continue
+
+        for i, phrases in enumerate(raw):
+            out = defaultdict(dict)
+            df = phrases[0].doc
+            out['id'] = df.metas['id']
+            out['docno'] = df.metas['docno']
+            out['image'] = df.metas['image']
+            out['text'] = df.sentence
+            for name, entity in entities.items():
+                _, entity_idx = entity[i].max(dim=-1)
+                if entity_candidate is not None:
+                    entity_idx = entity_idx * entity_candidate[i]
+                for idx in entity_idx.nonzero():
+                    phrase = phrases[idx]
+                    out[name][id(phrase)] = (phrase.start, phrase.end)
+            for name, triplet in triplets.items():
+                _, triplet_idx = triplet[i].max(dim=-1)
+                if triplet_candidate is not None:
+                    triplet_idx = triplet_idx * triplet_candidate[i].long()
+                for idx in triplet_idx.nonzero():
+                    lm, tr, sp = idx
+                    lm = phrases[lm]
+                    tr = phrases[tr]
+                    sp = phrases[sp]
+                    if 0 not in out['LANDMARK'] and lm.is_dummy_:
+                        out['LANDMARK'][0] = (-1, -1)
+                    if 0 not in out['TRAJECTOR'] and tr.is_dummy_:
+                        out['TRAJECTOR'][0] = (-1, -1)
+                    if 0 not in out['SPATIAL_INDICATOR'] and sp.is_dummy_:
+                        out['SPATIAL_INDICATOR'][0] = (-1, -1)
+                    lmid = id(lm) if not lm.is_dummy_ else 0
+                    trid = id(tr) if not tr.is_dummy_ else 0
+                    spid = id(sp) if not sp.is_dummy_ else 0
+                    out[name][id((lm, tr, sp))] = (lmid, trid, spid)
+            fout_path = os.path.join(log_dir, 'out-{}-{}-{}.jsonl'.format(dataset_type[i], str(epoch_num[i]), data_type))
+            with open(fout_path, 'a') as fout:
+                fout.write(json.dumps(out) + '\n')
+    return log
 
 def main():
     graph = ontology_declaration()

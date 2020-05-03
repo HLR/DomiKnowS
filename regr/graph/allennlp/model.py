@@ -56,14 +56,15 @@ class GraphModel(Model):
         self,
         graph: Graph,
         vocab: Vocabulary,
-        balance_factor: float = 0.5,
+        balance_factor: float= 0.5,
         label_smoothing: float = 0.1,
         focal_gamma: float = 2.,
         inference_interval: int = 10,
         inference_training_set: bool = False,
         inference_testing_set: bool = True,
         inference_loss: bool = False,
-        soft_penalty: float =  1.
+        soft_penalty: float = 1.,
+        post_action = None
     ) -> None:
         super().__init__(vocab)
         self.inference_interval = inference_interval
@@ -78,6 +79,7 @@ class GraphModel(Model):
         self.label_smoothing = label_smoothing
         self.focal_gamma = focal_gamma
         self.soft_penalty = soft_penalty
+        self.post_action = post_action
 
         self.graph = graph
 
@@ -209,7 +211,13 @@ class GraphModel(Model):
         trial['loss'] = self.loss_func(trivial_trial, trial)
         return trial
 
-    i = 0
+    def _post_action(self, trivial_trial, trial):
+        if post_action is not None:
+            self.post_action(trivial_trial, data_type='model')
+            self.post_action(trial, data_type='inference')
+        return trial
+
+    # i = 0
     def forward(
         self,
         **data: DataInstance
@@ -240,6 +248,7 @@ class GraphModel(Model):
                 trial = trivial_trial
         self._update_loss(trivial_trial, trial)
         self._update_metrics(trivial_trial, trial)
+        self._post_action(trivial_trial, trial)
 
         return dict(trial)
 

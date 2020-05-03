@@ -300,69 +300,71 @@ class SpRLReader(SensableReader):
 
         # iterate news items
         type_list = []
-                     
-        for sentenceItem in sprlXMLRoot.findall('./SCENE/SENTENCE'):
-            id_text_list = {}
-            id_label_list = {}
-            sentence = None
+        for scene in sprlXMLRoot.findall('./SCENE'):
+            docno = scene.find('./DOCNO').text
+            image = scene.find('./IMAGE').text
+            for sentenceItem in scene.findall('./SENTENCE'):
+                id_text_list = {}
+                id_label_list = {}
+                sentence = None
 
-            sentence_dic = {}
-            sentence_dic["id"] = sentenceItem.attrib["id"]
-            sentence_dic['LANDMARK'] = []
-            sentence_dic['TRAJECTOR'] = []
-            sentence_dic['SPATIALINDICATOR'] = []
-            sentence_dic['RELATION'] = []
+                sentence_dic = {}
+                sentence_dic["id"] = sentenceItem.attrib["id"]
+                sentence_dic['LANDMARK'] = []
+                sentence_dic['TRAJECTOR'] = []
+                sentence_dic['SPATIALINDICATOR'] = []
+                sentence_dic['RELATION'] = []
 
-            # iterate child elements of item
+                # iterate child elements of item
 
-            for child in sentenceItem:
+                for child in sentenceItem:
 
-                if child.tag == 'TEXT':
-                    text = child.text
-                    if not text:
-                        break
-                    sentence = DataFeature_for_sentence(text)
-                    sentence_dic['TEXT'] = sentence
+                    if child.tag == 'TEXT':
+                        text = child.text
+                        if not text:
+                            break
+                        sentence = DataFeature_for_sentence(text, id=sentence_dic["id"], docno=docno, image=image)
+                        sentence_dic['TEXT'] = sentence
 
-                elif child.tag in ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR']:
-                    id_ = child.attrib.get('id')
-                    text = child.attrib.get('text')
-                    start = int(child.attrib.get('start'))
-                    end = int(child.attrib.get('end'))
+                    elif child.tag in ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR']:
+                        id_ = child.attrib.get('id')
+                        text = child.attrib.get('text')
+                        start = int(child.attrib.get('start'))
+                        end = int(child.attrib.get('end'))
 
-                    if not text or start < 0 or end < 0:  # also skip empty
-                        span = sentence.dummy
-                    else:
-                        span = sentence.getSpan(start, end)
-                        assert span.text in text
-                    sentence_dic[child.tag].append(span)
-                    id_text_list[id_] = span
-                    id_label_list[id_] = child.tag
+                        if not text or start < 0 or end < 0:  # also skip empty
+                            span = sentence.dummy
+                        else:
+                            span = sentence.getSpan(start, end)
+                            assert span.text in text
+                        sentence_dic[child.tag].append(span)
+                        id_text_list[id_] = span
+                        id_label_list[id_] = child.tag
 
-                elif child.tag == "RELATION":
-                    # if child.attrib['general_type'] not in type_list:
-                    #     type_list.append(child.attrib['general_type'])
-                    # #
-                    general_type = child.attrib.get('general_type')
-                    landmark_id = child.attrib.get('landmark_id')
-                    trajector_id = child.attrib.get('trajector_id')
-                    spatial_indicator_id = child.attrib.get('spatial_indicator_id')
-                    landmark = id_text_list.get(landmark_id, sentence.dummy)
-                    trajector = id_text_list.get(trajector_id, sentence.dummy)
-                    spatial_indicator = id_text_list.get(spatial_indicator_id, sentence.dummy)
+                    elif child.tag == "RELATION":
+                        # if child.attrib['general_type'] not in type_list:
+                        #     type_list.append(child.attrib['general_type'])
+                        # #
+                        general_type = child.attrib.get('general_type')
+                        landmark_id = child.attrib.get('landmark_id')
+                        trajector_id = child.attrib.get('trajector_id')
+                        spatial_indicator_id = child.attrib.get('spatial_indicator_id')
+                        landmark = id_text_list.get(landmark_id, sentence.dummy)
+                        trajector = id_text_list.get(trajector_id, sentence.dummy)
+                        spatial_indicator = id_text_list.get(spatial_indicator_id, sentence.dummy)
 
-                    if not general_type:
-                        continue  # TODO: skip relation without general type? or add none relation?
+                        if not general_type:
+                            continue  # TODO: skip relation without general type? or add none relation?
 
-                    each_relationship = (general_type, landmark, trajector, spatial_indicator)
-                    sentence_dic['RELATION'].append(each_relationship)
-            else:
-                sentence_dic['phrases'] = sentence.getChunks()
-                if len(sentence_dic['phrases']) == 1 and not sentence_dic['LANDMARK'] and not sentence_dic['TRAJECTOR'] and \
-                    not sentence_dic['SPATIALINDICATOR'] and not sentence_dic['RELATION']:
-                    continue
-        
-                sentences_list.append(sentence_dic)
+                        each_relationship = (general_type, landmark, trajector, spatial_indicator)
+                        sentence_dic['RELATION'].append(each_relationship)
+                else:
+                    sentence_dic['phrases'] = sentence.getChunks()
+                    if len(sentence_dic['phrases']) == 1 and not sentence_dic['LANDMARK'] and not sentence_dic['TRAJECTOR'] and \
+                        not sentence_dic['SPATIALINDICATOR'] and not sentence_dic['RELATION']:
+                        continue
+            
+                    sentences_list.append(sentence_dic)
 
         return sentences_list
 

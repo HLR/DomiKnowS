@@ -1,6 +1,8 @@
 import time
 from utils import Namespace
 
+log_dir = 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime()))
+# log_dir = None
 
 config = {
     'Data': {  # data setting
@@ -31,15 +33,15 @@ config = {
             'inference_loss': True,
             'log_solver': True,
             'soft_penalty': 0.6
-        }
+        },
+        'log_dir': log_dir,
     },
     'Train': {
         'pretrained_files': None,
         'trainer':{
             'num_epochs': 50,
             'patience': None,
-            'serialization_dir': 'log.{}'.format(time.strftime("%Y%m%d-%H%M%S", time.gmtime())),
-            # 'serialization_dir':None,
+            'serialization_dir': log_dir
         },
         'optimizer': {
             'type': 'adam',
