@@ -1,5 +1,20 @@
 from xml.dom.minidom import Document
 import xml.etree.ElementTree as ET
+import json
+
+def readjsonl(path):
+    docs = {}
+    with open(path) as fin:
+        for line in fin:
+            data = json.loads(line)
+            if data['docno'] not in docs:
+                docs[data['docno']] = {
+                    'docno': data['docno'],
+                    'image': data['image'],
+                    'sentences': []
+                }
+            docs[data['docno']]['sentences'].append(data)
+    return docs
 
 #s(id,text)
 #landmark [（1,(start1, end1）), df2]

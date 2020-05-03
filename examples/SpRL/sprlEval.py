@@ -24,6 +24,7 @@ def test(model_path, data_path, log_solver, batch_size):
 
     graph = ontology_declaration()
 
+    Config.Model.log_dir = '.'
     lbp = model_declaration(graph, Config.Model)
 
     seed()

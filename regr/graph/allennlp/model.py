@@ -212,7 +212,7 @@ class GraphModel(Model):
         return trial
 
     def _post_action(self, trivial_trial, trial):
-        if post_action is not None:
+        if self.post_action is not None:
             self.post_action(trivial_trial, data_type='model')
             self.post_action(trial, data_type='inference')
         return trial
