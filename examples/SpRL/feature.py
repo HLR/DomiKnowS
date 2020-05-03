@@ -1,5 +1,6 @@
 import spacy
 import networkx as nx
+from networkx.exception import NetworkXNoPath
 from spacy.matcher import PhraseMatcher
 
 nlpmodel=spacy.load("en_core_web_sm")
@@ -18,6 +19,7 @@ class DataFeature_for_sentence():
         #self.parse_phrase = nlpmodel(self.phrase)
 
         self.dummy = DataFeature_for_span.dummy(self)
+        self.graph = self.getdependenceyGraph()
 
     def __repr__(self):
         return self.sentence
@@ -67,8 +69,37 @@ class DataFeature_for_sentence():
         #new_chunk.sorted(key=lambda chunk: chunk.start)
 
         return new_chunk
+    def getdependenceyGraph(self):
+        edges = []
+        for token in self.parse_sentence:
+            for child in token.children:
+                edges.append((token.i, child.i))
+        graph = nx.Graph(edges)
+        graph.add_node(-1)
+        graph.add_node(-2)
+        return graph
+
+    def gettokenindex(self, span):
+        if span.doc != self:
+            return -2
+        elif span.is_dummy_:
+            return -1
+        else:
+            return span.headtoken_.i
     
     def getShortestDependencyPath(self, entity1, entity2):
+            index1 = self.gettokenindex(entity1)
+            index2 = self.gettokenindex(entity2)
+            try:
+                shortest_depedencey_index_list = nx.shortest_path(self.graph, source=index1, target=index2)
+            except NetworkXNoPath:
+                return "__unreachable__"
+            shortest_dependency_list = [(self.parse_sentence[each_element].text if (each_element != -1) else "__dummy__" )for each_element in shortest_depedencey_index_list]
+            return "::".join(shortest_dependency_list)
+    
+    
+    
+    def getShortestDependencyPath1(self, entity1, entity2):
         try:
             edges = []
             for token in self.parse_sentence:
@@ -76,8 +107,9 @@ class DataFeature_for_sentence():
                     edges.append(('{0}'.format(token.lower_),
                                 '{0}'.format(child.lower_)))
             graph = nx.Graph(edges)
+            quan = nx.shortest_path(graph, source=entity1, target=entity2)
 
-            return nx.shortest_path(graph, source=entity1, target=entity2)
+            return quan
         except:
             return [entity2]
 
@@ -122,8 +154,8 @@ class DataFeature_for_span():
         self.pos_ = self.getPos(span)
         self.tag_ = self.getTag(span)
         self.dep_ = self.getDenpendency(span)
-        self.headword_ = self.getHeadword(span)
-        #self.headtoken_ = self.getHeadtoken(span)
+        self.headword_ = self.getHeadword()
+        self.headtoken_ = self.getHeadtoken()[0]
         self.phrasepos_ = self.getPhrasepos(span)
         self.lower_ = self.getLower(span)
         self.upper_ = self.getUpper(span)
@@ -189,14 +221,14 @@ class DataFeature_for_span():
 
 
     # headword
-    def getHeadword(self, span):
-        return self.getHeadtoken(span).text
+    def getHeadword(self):
+        return self.getHeadtoken().text
     
-    def getHeadtoken(self, span):
-        if len(list(span.noun_chunks))==0:
-            return span
+    def getHeadtoken(self):
+        if len(list(self._span.noun_chunks))==0:
+            return self._span
         else:
-            return self.doc.parse_sentence[span.root.i:span.root.i+1]
+            return self.doc.parse_sentence[self._span.root.i:self._span.root.i+1]
 
 
     #pos feature
@@ -276,7 +308,7 @@ class DataFeature_for_span():
     def share_headtoken(self,other):
         if self.is_dummy_ != other.is_dummy_:
             return False
-        return self.getHeadtoken(self._span) == self.getHeadtoken(other._span)
+        return self.getHeadtoken() == other.getHeadtoken()
 
     def share_headtoken_any(self, otherlist):
         for other in otherlist:
@@ -326,6 +358,10 @@ class DataFeature_for_span():
 #print(data.getShortestDependencyPath(entity1, entity2))
 
 if __name__ == '__main__':
-    df = DataFeature_for_sentence('behind it a bar with chairs and two people , and a bench with one person lying on it .')
+    df = DataFeature_for_sentence('the other two are just arriving or listening .')
     chunks = df.getChunks()
-    print(chunks)
+    print(len(chunks)>1)
+
+# <SENTENCE id="s123" start="7889" end="7937">
+#             <TEXT>the other two are just arriving or listening .</TEXT>
+#         </SENTENCE>

@@ -13,6 +13,8 @@ from allennlp.common.checks import ConfigurationError
 import itertools
 from itertools import product
 import spacy
+import networkx as nx
+from networkx.exception import NetworkXNoPath
 import torch
 from featureIndexer import PosTaggerIndexer, LemmaIndexer, DependencyIndexer, HeadwordIndexer, PhrasePosIndexer
 from feature import DataFeature_for_sentence, DataFeature_for_span
@@ -158,7 +160,7 @@ class SpRLReader(SensableReader):
 
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
-            return '::'.join((tokens[tr].lower_, tokens[sp].lower_, tokens[lm].lower_))
+            return '::'.join((tokens[lm].lower_, tokens[tr].lower_, tokens[sp].lower_))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -213,7 +215,7 @@ class SpRLReader(SensableReader):
         # just a dummy feature
         def dummy_feature(lm, tr, sp):
 
-            return '::'.join((tokens[tr].headword_.lower(), tokens[lm].headword_.lower(), tokens[sp].lower_))
+            return '::'.join((tokens[lm].headword_.lower(), tokens[tr].headword_.lower(), tokens[sp].lower_))
 
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
@@ -237,21 +239,11 @@ class SpRLReader(SensableReader):
         # convert ijk index to 1-d array index
         def encap_index(*indices):
             return sum(i * length ** j for j, i in enumerate(reversed(indices)))
-
-        # just a dummy feature
-        def dummy_feature(lm, tr, sp):
-            entity1 = tokens[tr].headword_.lower()
-            entity2 = tokens[sp].headword_.lower()
-            entity1 = entity1.split(' ')[0]
-            entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].text)
-            return "::".join(shortestdepedenceylist)
-
+            
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
         for lm, tr, sp in itertools.product(range(length), repeat=3):
-            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+            encap_tokens[encap_index(lm, tr, sp)] = Token(sentence.getShortestDependencyPath(tokens[lm], tokens[sp]))
 
         indexers = {'triplet_feature4': SingleIdTokenIndexer(namespace='triplet_feature4')}
         textfield = TextField(encap_tokens, indexers)
@@ -270,21 +262,11 @@ class SpRLReader(SensableReader):
         # convert ijk index to 1-d array index
         def encap_index(*indices):
             return sum(i * length ** j for j, i in enumerate(reversed(indices)))
-
-        # just a dummy feature
-        def dummy_feature(lm, tr, sp):
-            entity1 = tokens[tr].headword_.lower()
-            entity2 = tokens[sp].headword_.lower()
-            entity1 = entity1.split(' ')[0]
-            entity2 = entity2.split(' ')[0]
-            shortestdepedenceylist = sentence.getShortestDependencyPath(entity1, entity2)
-            shortestdepedenceylist.insert(-1, tokens[sp].text)
-            return "::".join(shortestdepedenceylist)
-
+            
         # prepare a empty list
         encap_tokens = [None] * (length ** 3)
         for lm, tr, sp in itertools.product(range(length), repeat=3):
-            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+            encap_tokens[encap_index(lm, tr, sp)] = Token(sentence.getShortestDependencyPath(tokens[tr], tokens[sp]))
 
         indexers = {'triplet_feature5': SingleIdTokenIndexer(namespace='triplet_feature5')}
         textfield = TextField(encap_tokens, indexers)

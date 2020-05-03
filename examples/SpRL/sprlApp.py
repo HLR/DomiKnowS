@@ -3,8 +3,8 @@ from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, Lo
 
 
 from regr.graph.allennlp import AllenNlpGraph
-#from SpRL_reader import SpRLSensorReader as Reader
-from SpRL_reader import PickleReader as Reader
+from SpRL_reader import SpRLSensorReader as Reader
+#from SpRL_reader import PickleReader as Reader
 from config import Config
 from utils import seed
 
@@ -73,7 +73,7 @@ def model_declaration(graph, config):
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
-    #triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
+    triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
     triplet['all'] = ConcatSensor(triplet['cat'],
                                  # triplet['args_type'],
                                   #triplet['compact_dist'],
@@ -86,8 +86,8 @@ def model_declaration(graph, config):
                                   triplet['tr_1'],
                                   triplet['tr_2'],
                                   triplet['tr_3'],
-                                  triplet['tr_4']
-                                  #triplet['tr_5']
+                                  triplet['tr_4'],
+                                  triplet['tr_5']
                                  )
 
     #triplet['label_mask'] = LabelMaskSensor(reader, 'triplet_mask', output_only=True)
