@@ -450,17 +450,21 @@ class Uncap(Module):
             # mm - (ul...,)
 
             # ()
-            ull = mm.sum().float() ** (1. / 3)
+            ull = mm.sum().float() ** (1. / self.dim)
             ull = ull.round().int()
+            ull = ull.cpu().detach().numpy()
 
             # convert ijk index to 1-d array index
-            def encap_index(*indices):
-                return sum(i * un_len ** j for j, i in enumerate(reversed(indices)))
+            # def encap_index(*indices):
+            #     return sum(i * ull ** j for j, i in enumerate(reversed(indices)))
 
-            # headfirst solution
-            # iter through all and move only the last dim together
-            for indices in itertools.product(range(ull), repeat=self.dim-1):
-                dd[indices] = xx[encap_index(*indices)]
+            # # headfirst solution
+            # # iter through all and move only the last dim together
+            # for indices in itertools.product(range(ull), repeat=self.dim-1):
+            #     dd[indices] = xx[encap_index(*indices)]
+
+            # sub tensor assignment
+            dd[(slice(0, ull),)*self.dim] = xx[:ull**self.dim, :].reshape(*(ull,)*self.dim, -1)
 
             # more efficient solution:
             # try torch.unfold or torch.as_strided

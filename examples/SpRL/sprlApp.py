@@ -66,7 +66,7 @@ def model_declaration(graph, config):
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
     triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
-    triplet['all'] = ConcatSensor(triplet['cat'],
+    triplet['encode'] = ConcatSensor(triplet['cat'],
                                   triplet['tr_1'],
                                   triplet['tr_2'],
                                   triplet['tr_3'],
