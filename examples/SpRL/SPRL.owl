@@ -38,38 +38,19 @@
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology SPATIAL_INDICATOR.</rdfs:comment>
   </owl:Class>
 
-  <owl:Class rdf:ID="triplet">
-    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology triplet.</rdfs:comment>
-  </owl:Class>
-  <owl:ObjectProperty rdf:ID="first">
-    <rdfs:domain rdf:resource="#triplet"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="second">
-    <rdfs:domain rdf:resource="#triplet"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="third">
-    <rdfs:domain rdf:resource="#triplet"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="triplet-first">
-    <rdfs:subPropertyOf rdf:resource="#first"/>
-    <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="triplet-second">
-    <rdfs:subPropertyOf rdf:resource="#second"/>
-    <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="triplet-third">
-    <rdfs:subPropertyOf rdf:resource="#third"/>
-    <rdfs:domain rdf:resource="#triplet"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
-
   <owl:Class rdf:ID="spatial_triplet">
     <rdfs:subClassOf rdf:resource="#triplet"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology spatial_triplet.</rdfs:comment>
   </owl:Class>
+  <owl:ObjectProperty rdf:ID="first">
+    <rdfs:domain rdf:resource="#spatial_triplet"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="second">
+    <rdfs:domain rdf:resource="#spatial_triplet"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="third">
+    <rdfs:domain rdf:resource="#spatial_triplet"/>
+  </owl:ObjectProperty>
   <owl:ObjectProperty rdf:ID="spatial_triplet-first">
     <rdfs:subPropertyOf rdf:resource="#first"/>
     <rdfs:domain rdf:resource="#spatial_triplet"/>
@@ -98,25 +79,4 @@
     <rdfs:subClassOf rdf:resource="#spatial_triplet"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology direction.</rdfs:comment>
   </owl:Class>
-
-  <owl:Class rdf:ID="none_relation">
-    <rdfs:subClassOf rdf:resource="#triplet"/>
-    <owl:disjointWith rdf:resource="#spatial_triplet"/>
-    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology none_relation.</rdfs:comment>
-  </owl:Class>
-  <owl:ObjectProperty rdf:ID="none_relation-first">
-    <rdfs:subPropertyOf rdf:resource="#first"/>
-    <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="none_relation-second">
-    <rdfs:subPropertyOf rdf:resource="#second"/>
-    <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
-  <owl:ObjectProperty rdf:ID="none_relation-third">
-    <rdfs:subPropertyOf rdf:resource="#third"/>
-    <rdfs:domain rdf:resource="#none_relation"/>
-    <rdfs:range rdf:resource="#phrase"/>
-  </owl:ObjectProperty>
 </rdf:RDF>

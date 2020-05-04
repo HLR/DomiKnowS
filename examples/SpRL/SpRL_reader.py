@@ -310,6 +310,8 @@ class SpRLReader(SensableReader):
 
                 sentence_dic = {}
                 sentence_dic["id"] = sentenceItem.attrib["id"]
+                sentence_dic["start"] = sentenceItem.attrib["start"]
+                sentence_dic["end"] = sentenceItem.attrib["end"]
                 sentence_dic['LANDMARK'] = []
                 sentence_dic['TRAJECTOR'] = []
                 sentence_dic['SPATIALINDICATOR'] = []
@@ -323,7 +325,7 @@ class SpRLReader(SensableReader):
                         text = child.text
                         if not text:
                             break
-                        sentence = DataFeature_for_sentence(text, id=sentence_dic["id"], docno=docno, image=image)
+                        sentence = DataFeature_for_sentence(text, id=sentence_dic["id"], docno=docno, image=image, start=sentence_dic['start'], end=sentence_dic['end'])
                         sentence_dic['TEXT'] = sentence
 
                     elif child.tag in ['LANDMARK', 'TRAJECTOR', 'SPATIALINDICATOR']:

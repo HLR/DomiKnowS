@@ -66,14 +66,14 @@ def model_declaration(graph, config):
     triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
     triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
-    triplet['encode'] = ConcatSensor(triplet['cat'],
-                                  triplet['tr_1'],
-                                  triplet['tr_2'],
-                                  triplet['tr_3'],
-                                  triplet['tr_4'],
-                                  triplet['tr_5']
+    triplet['all'] = ConcatSensor(triplet['cat'],
+                                #   triplet['tr_1'],
+                                #   triplet['tr_2'],
+                                #   triplet['tr_3'],
+                                #   triplet['tr_4'],
+                                #   triplet['tr_5']
                                  )
-    # triplet['encode'] = MLPLearner([config.compact, config.compact], triplet['all'])
+    triplet['encode'] = MLPLearner([config.compact, config.compact], triplet['all'])
 
     triplet['candidate'] = CandidateReaderSensor(reader, 'triplet_mask', output_only=True)
 
@@ -115,7 +115,7 @@ def log_output(log_dir):
             if match:
                 raw = value
                 break
-        
+
         entity_candidate = None
         triplet_candidate = None
         for name, value in data.items():
@@ -148,6 +148,8 @@ def log_output(log_dir):
             out['id'] = df.metas['id']
             out['docno'] = df.metas['docno']
             out['image'] = df.metas['image']
+            out['start'] = df.metas['start']
+            out['end'] = df.metas['end']
             out['text'] = df.sentence
             for name, entity in entities.items():
                 _, entity_idx = entity[i].max(dim=-1)
