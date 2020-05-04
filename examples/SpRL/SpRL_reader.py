@@ -16,6 +16,7 @@ import spacy
 import networkx as nx
 from networkx.exception import NetworkXNoPath
 import torch
+import numpy as np
 from featureIndexer import PosTaggerIndexer, LemmaIndexer, DependencyIndexer, HeadwordIndexer, PhrasePosIndexer
 from feature import DataFeature_for_sentence, DataFeature_for_span
 from dictionaries import dictionary
@@ -24,7 +25,7 @@ from dictionaries import dictionary
 # sklearn
 from allennlp.data.fields import TextField, MetadataField, ArrayField
 
-nlpmodel = spacy.load("en_core_web_sm")
+nlpmodel = spacy.load("en_core_web_lg")
 spatial_dict = []
 with open('data/spatial_dic.txt') as f_sp:
     for each_sp_word in f_sp:
@@ -146,6 +147,18 @@ class SpRLReader(SensableReader):
         textfield = TextField(tokens, indexers)
         return textfield
 
+    @cls.field('vec')
+    def update_sentence_vec(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        (tokens, _), _, _ = tokens
+        dummy_vec = np.zeros_like(tokens[-1].headtoken_.vector)
+        tokens_vec = np.array([each_df.headtoken_.vector if not each_df.is_dummy_ else dummy_vec for each_df in tokens])
+        array = ArrayField(tokens_vec)
+        return array
+    
     @cls.textfield('triplet_feature1')
     def update_triplet_dummy(
             self,
@@ -353,7 +366,7 @@ class SpRLReader(SensableReader):
         textfield = TextField(encap_tokens, indexers)
         # import pdb; pdb.set_trace()
         return textfield
-
+    
     def raw_read(
             self,
             file_path: str,

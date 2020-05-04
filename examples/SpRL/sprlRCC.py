@@ -23,7 +23,7 @@ def check_sample(lbp, sample):
         match = NAME_PATTEN_RAW.match(name)
         if match:
             assert raw is None, 'Should contain ONLY one raw sentence. Multiple are detected.'
-            raw = field.as_tensor(padding_lengths={})
+            raw = field.as_tensor(padding_lengths=field.get_padding_lengths())
             continue
     assert raw, 'Should contain one raw sentence. None is detected.'
     assert len(raw) > 1, "Should contain at least one span."

@@ -1,4 +1,4 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, LabelSensor, CartesianProduct3Sensor, SelfCartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor, ActivationSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, ReaderSensor, LabelSensor, CartesianProduct3Sensor, SelfCartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor, ActivationSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner, MLPLearner, ConvLearner, TripletEmbedderLearner
 
 
@@ -37,13 +37,14 @@ def model_declaration(graph, config):
 
     sentence['raw'] = SentenceSensor(reader, 'sentence')
     phrase['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
+    phrase['vec'] = ReaderSensor(reader, 'vec')
     phrase['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
     phrase['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     phrase['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])
     phrase['headword'] = SentenceEmbedderLearner('headword_tag', config.embedding_dim, sentence['raw'])
     phrase['phrasepos'] = SentenceEmbedderLearner('phrasepos_tag', config.embedding_dim, sentence['raw'])
 
-    phrase['all'] = ConcatSensor(phrase['raw'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
+    phrase['all'] = ConcatSensor(phrase['raw'], phrase['vec'], phrase['dep'], phrase['pos'], phrase['lemma'], phrase['headword'], phrase['phrasepos'])
     phrase['ngram'] = NGramSensor(config.ngram, phrase['all'])
     phrase['encode'] = RNNLearner(phrase['ngram'], layers=2, dropout=config.dropout)
     phrase['candidate'] = CandidateReaderSensor(reader, 'entity_mask', output_only=True)
@@ -59,7 +60,7 @@ def model_declaration(graph, config):
     #none_entity['label'] = LogisticRegressionLearner(phrase['encode'])
 
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
-    #triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
+    triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
     # new feature example
    # triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
@@ -69,17 +70,9 @@ def model_declaration(graph, config):
     triplet['tr_6'] = TripletEmbedderLearner('triplet_feature6', config.embedding_dim, sentence['raw'])
     triplet['tr_7'] = TripletEmbedderLearner('triplet_feature7', config.embedding_dim, sentence['raw'])
     triplet['tr_8'] = TripletEmbedderLearner('triplet_feature8', config.embedding_dim, sentence['raw'])
-    triplet['encode'] = ConcatSensor(#triplet['cat'],
-                                  #triplet['tr_1'],
-                                  triplet['tr_2'],
-                                 # triplet['tr_3'],
-                                  triplet['tr_4'],
-                                  triplet['tr_5'],
-                                  triplet['tr_6'],
-                                  triplet['tr_7'],
-                                  triplet['tr_8']
-                                 )
-    triplet['encode'] = MLPLearner([config.compact, config.compact], triplet['all'])
+    triplet['encode'] = ConcatSensor(triplet['cat'],
+                                    )
+    # triplet['encode'] = MLPLearner([config.compact, ], triplet['all'])
 
     triplet['candidate'] = CandidateReaderSensor(reader, 'triplet_mask', output_only=True)
 

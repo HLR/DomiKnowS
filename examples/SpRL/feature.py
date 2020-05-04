@@ -3,7 +3,7 @@ import networkx as nx
 from networkx.exception import NetworkXNoPath
 from spacy.matcher import PhraseMatcher
 
-nlpmodel=spacy.load("en_core_web_sm")
+nlpmodel=spacy.load("en_core_web_lg")
 spatial_dict = []
 with open("data/spatial_dic.txt") as f_sp:
     for line in f_sp:
