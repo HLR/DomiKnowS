@@ -16,12 +16,12 @@ def sprl_input(request):
     # They might not come in the original order.
     # There could be repeated token in different phrase.
     # However, those should not influence the design of inference interface.
-    phrases = ["stairs",                # GT: LANDMARK
-                "About 20 kids ",        # GT: TRAJECTOR
-                "About 20 kids",         # GT: TRAJECTOR
-                "on",                    # GT: SPATIALINDICATOR
-                "hats",                  # GT: NONE
-                "traditional clothing"]  # GT: NONE
+    phrases = ["1_stairs",                # GT: LANDMARK
+                "2_About 20 kids ",        # GT: TRAJECTOR
+                "3_About 20 kids",         # GT: TRAJECTOR
+                "4_on",                    # GT: SPATIALINDICATOR
+                "5_hats",                  # GT: NONE
+                "6_traditional clothing"]  # GT: NONE
     # SPRL relations are triplet with this combination
     # (landmark, trajector, spatialindicator)
     # Relation GT:
@@ -61,7 +61,7 @@ def sprl_input(request):
     # triplet relation is a 3D array
     spatial_triplet_relation_table = np.random.rand(6, 6, 6) * 0.2
     spatial_triplet_relation_table[0, 1, 3] = 0.74 # ("stairs", "About 20 kids ", "on")
-    spatial_triplet_relation_table[0, 2, 3] = 0.83 # ("stairs", "About 20 kids", "on")
+    spatial_triplet_relation_table[0, 2, 3] = 0.23 # ("stairs", "About 20 kids", "on")
     # ... can be more
     test_graphResultsForTripleRelations["spatial_triplet"] = spatial_triplet_relation_table
     
@@ -73,6 +73,21 @@ def sprl_input(request):
     # ... can be more
     test_graphResultsForTripleRelations["region"] = region_relation_table
 
+    # distance
+    # triplet relation is a 3D array
+    distance_relation_table = np.random.rand(6, 6, 6) * 0.2
+    distance_relation_table[0, 1, 3] = 0.65 # ("stairs", "About 20 kids ", "on")
+    distance_relation_table[0, 2, 3] = 0.88 # ("stairs", "About 20 kids", "on")
+    # ... can be more
+    test_graphResultsForTripleRelations["distance"] = distance_relation_table
+
+    # direction
+    # triplet relation is a 3D array
+    direction_relation_table = np.random.rand(6, 6, 6) * 0.2
+    direction_relation_table[0, 1, 3] = 0.65 # ("stairs", "About 20 kids ", "on")
+    direction_relation_table[0, 2, 3] = 0.88 # ("stairs", "About 20 kids", "on")
+    # ... can be more
+    test_graphResultsForTripleRelations["direction"] = direction_relation_table
 
     yield test_phrase, test_graphResultsForPhraseToken, test_graphResultsForTripleRelations
 
@@ -118,6 +133,14 @@ def test_main_sprl(sprl_input):
     assert tripleRelationsResult['region'][0, 2, 3] == 1 # ("stairs", "About 20 kids", "on")
     assert tripleRelationsResult['region'].sum() == 2 # 0 elsewhere
 
-    assert tripleRelationsResult['spatial_triplet'][0, 1, 3] == 1 # ("stairs", "About 20 kids ", "on")
-    assert tripleRelationsResult['spatial_triplet'][0, 2, 3] == 1 # ("stairs", "About 20 kids", "on")
-    assert tripleRelationsResult['spatial_triplet'].sum() == 2 # 0 elsewhere
+    # assert tripleRelationsResult['spatial_triplet'][0, 1, 3] == 1 # ("stairs", "About 20 kids ", "on")
+    # assert tripleRelationsResult['spatial_triplet'][0, 2, 3] == 1 # ("stairs", "About 20 kids", "on")
+    # assert tripleRelationsResult['spatial_triplet'].sum() == 2 # 0 elsewhere
+
+    # spatial_triplet-region sub-type
+    assert tripleRelationsResult['spatial_triplet'][0, 1, 3] >= tripleRelationsResult['region'][0, 1, 3]
+    assert tripleRelationsResult['spatial_triplet'][0, 2, 3] >= tripleRelationsResult['region'][0, 2, 3]
+
+    # direction-distance disjoint
+    assert tripleRelationsResult['distance'][0, 1, 3] + tripleRelationsResult['direction'][0, 1, 3] <= 1 # ("stairs", "About 20 kids ", "on")
+    assert tripleRelationsResult['distance'][0, 2, 3] + tripleRelationsResult['direction'][0, 2, 3] <= 1 # ("stairs", "About 20 kids", "on")

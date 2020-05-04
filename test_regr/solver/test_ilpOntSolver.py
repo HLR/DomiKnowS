@@ -82,7 +82,7 @@ def test_main_emr_owl(emr_input):
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 
     # ------Call solver -------
-    test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/emr/')
+    test_graph = Graph(iri='http://ontology.ihmc.us/ML/EMR.owl', local='./examples/conll04/')
     
     myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(test_graph)
     tokenResult, relationsResult, _ = myilpOntSolver.calculateILPSelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
