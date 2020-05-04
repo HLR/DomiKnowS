@@ -1,4 +1,4 @@
-from regr.sensor.allennlp.sensor import SentenceSensor, ReaderSensor, LabelSensor, CartesianProduct3Sensor, SelfCartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor, ActivationSensor
+from regr.sensor.allennlp.sensor import SentenceSensor, TensorReaderSensor, LabelSensor, CartesianProduct3Sensor, SelfCartesianProduct3Sensor, ConcatSensor, NGramSensor, CartesianProductSensor, TokenDepDistSensor, TokenDepSensor, TokenDistantSensor, TokenLcaSensor, TripPhraseDistSensor, LabelMaskSensor, JointCandidateSensor, CandidateReaderSensor, ActivationSensor
 from regr.sensor.allennlp.learner import SentenceEmbedderLearner, RNNLearner, LogisticRegressionLearner, MLPLearner, ConvLearner, TripletEmbedderLearner
 
 
@@ -37,7 +37,7 @@ def model_declaration(graph, config):
 
     sentence['raw'] = SentenceSensor(reader, 'sentence')
     phrase['raw'] = SentenceEmbedderLearner('word', config.embedding_dim, sentence['raw'])
-    phrase['vec'] = ReaderSensor(reader, 'vec')
+    phrase['vec'] = TensorReaderSensor(reader, 'vec', dims=(300,))
     phrase['dep'] = SentenceEmbedderLearner('dep_tag', config.embedding_dim, sentence['raw'])
     phrase['pos'] = SentenceEmbedderLearner('pos_tag', config.embedding_dim, sentence['raw'])
     phrase['lemma'] = SentenceEmbedderLearner('lemma_tag', config.embedding_dim, sentence['raw'])

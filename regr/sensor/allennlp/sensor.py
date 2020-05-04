@@ -55,6 +55,22 @@ class LabelSensor(ReaderSensor):
 class LabelMaskSensor(LabelSensor):
     pass
 
+    
+class TensorReaderSensor(ReaderSensor):
+    def __init__(
+        self,
+        reader,
+        key: str,
+        dims,
+        output_only: bool=False
+    ) -> NoReturn:
+        ReaderSensor.__init__(self, reader, key, output_only=output_only)
+        self.dims = dims
+
+    @property
+    def output_dim(self):
+        return self.dims
+
 
 class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
     def create_module(self):
