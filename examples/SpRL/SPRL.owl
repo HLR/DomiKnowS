@@ -15,13 +15,11 @@
   <owl:Class rdf:ID="TRAJECTOR">
     <rdfs:subClassOf rdf:resource="#phrase"/>
     <owl:disjointWith rdf:resource="#NONE_ENTITY"/>
-    <owl:disjointWith rdf:resource="#SPATIAL_INDICATOR"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology TRAJECTOR.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="LANDMARK">
     <rdfs:subClassOf rdf:resource="#phrase"/>
     <owl:disjointWith rdf:resource="#NONE_ENTITY"/>
-    <owl:disjointWith rdf:resource="#SPATIAL_INDICATOR"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology LANDMARK.</rdfs:comment>
   </owl:Class>
   <owl:Class rdf:ID="NONE_ENTITY">
@@ -33,8 +31,7 @@
   </owl:Class>
   <owl:Class rdf:ID="SPATIAL_INDICATOR">
     <rdfs:subClassOf rdf:resource="#phrase"/>
-    <owl:disjointWith rdf:resource="#TRAJECTOR"/>
-    <owl:disjointWith rdf:resource="#LANDMARK"/>
+    <owl:disjointWith rdf:resource="#NONE_ENTITY"/>
     <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SPRL ontology SPATIAL_INDICATOR.</rdfs:comment>
   </owl:Class>
 
