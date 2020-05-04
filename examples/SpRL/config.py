@@ -13,8 +13,8 @@ config = {
         'valid_path': "new_gold.xml",
         # 'train_path': "sprl2017_train.xml.pkl",
         # 'valid_path': "sprl2017_gold.xml.pkl",
-        # 'train_path': "sprl2017_train.xml",
-        # 'valid_path': "sprl2017_gold.xml"
+        'train_path': "sprl2017_gold.xml",
+        'valid_path': "sprl2017_train.xml"
     },
     'Model': {  # model setting
         'embedding_dim': 16,

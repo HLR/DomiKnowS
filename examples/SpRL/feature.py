@@ -92,7 +92,7 @@ class DataFeature_for_sentence():
                 shortest_depedencey_index_list = nx.shortest_path(self.graph, source=index1, target=index2)
             except NetworkXNoPath:
                 return "__unreachable__"
-            shortest_dependency_list = [(self.parse_sentence[each_element].text if (each_element != -1) else "__dummy__" )for each_element in shortest_depedencey_index_list]
+            shortest_dependency_list = [(self.parse_sentence[each_element].pos_ if (each_element != -1) else "__dummy__" )for each_element in shortest_depedencey_index_list]
             return "::".join(shortest_dependency_list)
     
     

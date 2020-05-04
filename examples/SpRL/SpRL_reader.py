@@ -272,6 +272,87 @@ class SpRLReader(SensableReader):
         textfield = TextField(encap_tokens, indexers)
         # import pdb; pdb.set_trace()
         return textfield
+    
+    #phrasepos
+    @cls.textfield('triplet_feature6')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0].doc
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+        
+        def dummy_feature(lm, tr, sp):
+            return '::'.join((tokens[lm].phrasepos_, tokens[tr].phrasepos_, tokens[sp].phrasepos_))
+            
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature6': SingleIdTokenIndexer(namespace='triplet_feature6')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
+    
+    #pos
+    @cls.textfield('triplet_feature7')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0].doc
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+        
+        def dummy_feature(lm, tr, sp):
+            return '::'.join((tokens[lm].pos_, tokens[tr].pos_, tokens[sp].pos_))
+            
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature7': SingleIdTokenIndexer(namespace='triplet_feature7')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
+    
+    #dep
+    @cls.textfield('triplet_feature8')
+    def update_triplet_dummy(
+            self,
+            fields,
+            tokens
+    ) -> Field:
+        length = len(tokens)
+        sentence = tokens[0].doc
+
+        # convert ijk index to 1-d array index
+        def encap_index(*indices):
+            return sum(i * length ** j for j, i in enumerate(reversed(indices)))
+        
+        def dummy_feature(lm, tr, sp):
+            return '::'.join((tokens[lm].dep_, tokens[tr].dep_, tokens[sp].dep_))
+            
+        # prepare a empty list
+        encap_tokens = [None] * (length ** 3)
+        for lm, tr, sp in itertools.product(range(length), repeat=3):
+            encap_tokens[encap_index(lm, tr, sp)] = Token(dummy_feature(lm, tr, sp))
+
+        indexers = {'triplet_feature8': SingleIdTokenIndexer(namespace='triplet_feature8')}
+        textfield = TextField(encap_tokens, indexers)
+        # import pdb; pdb.set_trace()
+        return textfield
 
     def raw_read(
             self,
