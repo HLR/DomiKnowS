@@ -62,15 +62,23 @@ def model_declaration(graph, config):
     phrase['compact'] = MLPLearner([config.compact,], phrase['encode'], activation=None)
     triplet['cat'] = SelfCartesianProduct3Sensor(phrase['compact'])
     # new feature example
-   # triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
+    triplet['tr_1'] = TripletEmbedderLearner('triplet_feature1', config.embedding_dim, sentence['raw'])
     triplet['tr_2'] = TripletEmbedderLearner('triplet_feature2', config.embedding_dim, sentence['raw'])
-   # triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
+    triplet['tr_3'] = TripletEmbedderLearner('triplet_feature3', config.embedding_dim, sentence['raw'])
     triplet['tr_4'] = TripletEmbedderLearner('triplet_feature4', config.embedding_dim, sentence['raw'])
     triplet['tr_5'] = TripletEmbedderLearner('triplet_feature5', config.embedding_dim, sentence['raw'])
     triplet['tr_6'] = TripletEmbedderLearner('triplet_feature6', config.embedding_dim, sentence['raw'])
     triplet['tr_7'] = TripletEmbedderLearner('triplet_feature7', config.embedding_dim, sentence['raw'])
     triplet['tr_8'] = TripletEmbedderLearner('triplet_feature8', config.embedding_dim, sentence['raw'])
     triplet['encode'] = ConcatSensor(triplet['cat'],
+                                    triplet['tr_1'],
+                                    triplet['tr_2'],
+                                    triplet['tr_3'],
+                                    triplet['tr_4'],
+                                    triplet['tr_5'],
+                                    triplet['tr_6'],
+                                    triplet['tr_7'],
+                                    triplet['tr_8']
                                     )
     # triplet['encode'] = MLPLearner([config.compact, ], triplet['all'])
 
