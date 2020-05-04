@@ -1,6 +1,10 @@
 from xml.dom.minidom import Document
 import xml.etree.ElementTree as ET
 import json
+from xml.dom import minidom
+
+
+
 
 def readjsonl(path):
     docs = {}
@@ -16,66 +20,53 @@ def readjsonl(path):
             docs[data['docno']]['sentences'].append(data)
     return docs
 
-#s(id,text)
-#landmark [（1,(start1, end1）), df2]
-#trajector [df3, df4]
-#spatial_indicator [df5, df6]
+#doc = Document()
+# doc = ET.Element('SpRL')
 
-# region[(1), 2 df5)]
-# distance[(df2, df4, df6)]
-doc = Document()
-sprl = doc.createElement("SpRL")
-doc.appendChild(sprl)
+sprl = ET.Element('SpRL')
+#sprl = doc.createElement("SpRL")
+#doc.appendChild(sprl)
 
-def writeXML(doc_num, sent_list):
-    scene = doc.createElement("SCENE")
-    sprl.appendChild(scene)
+def writeXML(doc_num, image_num, sent_list):
     
-    for each_sent in sent_list:
-        each_sentence = doc.createElement("SENTENCE")
-        scene.appendChild(each_sentence)
-        text = doc.createElement('TEXT')
-        each_sentence.appendChild(text)
-        for key in each_sent.keys():
-            if key != "RELATION":
-                for each_entity in each_sent.get(key):
-                    entity = doc.createElement(key)
-                    each_sentence.appendChild(entity)
-                    entity.setAttribute('id', each_entity[0])
-                    entity.setAttribute('start', each_entity[1][0])
-                    entity.setAttribute('end', each_entity[1][1])
-            else:
-                 for each_rel in each_sent.get(key):
-                    relation = doc.createElement(key)
-                    each_sentence.appendChild(relation)
-                    relation.setAttribute('id', each_rel[0])
-                    relation.setAttribute('trajctor_id', each_rel[2][0])
-                    relation.setAttribute('landmark_id', each_rel[2][1])
-                    relation.setAttribute('spatial_indicator_id', each_rel[2][1])
-                    relation.setAttribute('general_type', each_rel[1])
-                    relation.setAttribute('specific_type',"")
-                    relation.setAttribute("RCC8_value", "")
-                    relation.setAttribute('FoR', "")
-
-
-
-
-
-
-# for each_sentence in sentence:
-#     if landmark:
-
-
-#     if trajector:
-
-#     if spatial_indicator:
+    scene = ET.SubElement(sprl, "SCENE")
+    doc_num_xml = ET.SubElement(scene, "DOCNO")
+    doc_num_xml.text = doc_num
+    image_num_xml = ET.SubElement(scene, "DOCNO")
+    image_num_xml.text = image_num
     
-#     if region 
-
-#     if distance
-
-#     if direction
-
+    for json_sent in sent_list:
+        # xml_sent = doc.createElement("SENTENCE")
+        # scene.appendChild(xml_sent)
+        xml_sent = ET.SubElement(scene, "SENTENCE")
+        xml_sent.set('id', json_sent['id'])
+        xml_sent.set('start', "0")
+        xml_sent.set('end', str(len(json_sent['text'])))
+        sentence_text = ET.SubElement(xml_sent, "TEXT")
+        sentence_text.text = json_sent['text']
+        entity_names = {'LANDMARK': "LANDMARK", 'TRAJECTOR':"TRAJECTOR", "SPATIAL_INDICATOR":'SPATIALINDICATOR'}
+        relation_names = ['region', 'direction', 'distance']
+        for json_entity in entity_names.keys():
+            if json_sent.get(json_entity):
+                for key, value in json_sent.get(json_entity).items():
+                    xml_entity = ET.SubElement(xml_sent, entity_names[json_entity])
+                    xml_entity.set('id', key)
+                    xml_entity.set('start', str(value[0]))
+                    xml_entity.set('end', str(value[1]))
+                    xml_entity.set('text', sentence_text.text[value[0]:value[1]])
+            
+        for each_rel in relation_names:
+            if json_sent.get(each_rel):
+                for key, value in json_sent.get(each_rel).items():
+                    relation = ET.SubElement(xml_sent,"RELATION")
+                    relation.set('id', key)
+                    relation.set('landmark_id', str(value[0]))
+                    relation.set('trajector_id', str(value[1]))
+                    relation.set('spatial_indicator_id', str(value[2]))
+                    relation.set('general_type', each_rel)
+                    relation.set('specific_type',"na")
+                    relation.set("RCC8_value", "na")
+                    relation.set('FoR', "na")
 
 def get_doc_sent(sprlxmlfile):
 
@@ -92,28 +83,25 @@ def get_doc_sent(sprlxmlfile):
         doc_list.append((docid, sentence_list))
     return doc_list
     
-
-
-                
+             
 if __name__ == "__main__":
     doc_sent_list = get_doc_sent("data/new_gold.xml")
     #doc should contain several sentence
-    doc_num = 'annotations/01/1071.eng'
-    sentence_list = []
-    #sentence1
-    sentence = {}
-    landmark = [("l1",('1', '2')),("l2",('3', '4'))]
-    trajector = [("t1",('5', '6')),("t2",('7', '8'))]
-    spatial_indicator = [("s1", ('9', '10')),("s2",('11', '12'))]
-    relation_list = [("r1", "region",("l1","t1","s1")),("r2","direction",("l2","t2","s2"))]
-    sentence["LANDMARK"] = landmark
-    sentence['TRAJCTOR'] = trajector
-    sentence['SPATIALINDICATOR'] = spatial_indicator
-    sentence['RELATION'] = relation_list
-    sentence_list.append(sentence)
-    
-    writeXML(doc_num, sentence_list)
+    docs = readjsonl('data/model.jsonl')
+    for key, value in docs.items():
+        doc_num = key
+        image_num = value['image']
+        sentence_list = value['sentences']
+        writeXML(doc_num, image_num, sentence_list)
     filename = "people.xml"
-    f = open(filename, "w")
-    f.write(doc.toprettyxml(indent="  "))
+    xmlstr = minidom.parseString(ET.tostring(sprl)).toprettyxml(indent="   ")
+    with open(filename, "w") as f:
+        f.write(xmlstr)
+    # tree = ET.ElementTree(doc)
+    # tree.write(filename)
     
+   #
+   #  f = open(filename, "w")
+    #f.write(doc.toprettyxml(indent="  "))
+    #doc.write(filename)
+   # f.close()
