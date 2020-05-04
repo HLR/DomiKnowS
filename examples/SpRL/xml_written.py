@@ -40,8 +40,8 @@ def writeXML(doc_num, image_num, sent_list):
         # scene.appendChild(xml_sent)
         xml_sent = ET.SubElement(scene, "SENTENCE")
         xml_sent.set('id', json_sent['id'])
-        xml_sent.set('start', "0")
-        xml_sent.set('end', str(len(json_sent['text'])))
+        xml_sent.set('start', json_sent['start'])
+        xml_sent.set('end', json_sent['end'])
         sentence_text = ET.SubElement(xml_sent, "TEXT")
         sentence_text.text = json_sent['text']
         entity_names = {'LANDMARK': "LANDMARK", 'TRAJECTOR':"TRAJECTOR", "SPATIAL_INDICATOR":'SPATIALINDICATOR'}
