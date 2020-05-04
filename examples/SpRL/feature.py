@@ -41,12 +41,12 @@ class DataFeature_for_sentence():
             assert token.doc == self.parse_sentence
             start = token.idx
             end = token.idx + len(token)
-            return DataFeature_for_span(self, start, end)
+            return DataFeature_for_span(self, start, end, init=False)
         def span2df(span):
             assert span.doc == self.parse_sentence
             start = span.start_char
             end = span.end_char
-            return DataFeature_for_span(self, start, end)
+            return DataFeature_for_span(self, start, end, init=False)
 
         pre_chunk=self.parse_sentence
         new_chunk=[self.dummy]
@@ -64,9 +64,39 @@ class DataFeature_for_sentence():
                 new_chunk.append(each_span)
         for chunk in pre_chunk.noun_chunks:
             new_chunk.append(span2df(chunk))
-        #new_chunk.sorted(key=lambda chunk: chunk.start)
+        new_chunk.sort(key=lambda chunk: chunk.start)
+        merged_chunk = self.mergeChunk(new_chunk)
+        merged_chunk = list(map(lambda c: c._init(), merged_chunk))
+        return merged_chunk
 
-        return new_chunk
+    def mergeChunk(self, chunks, strict=False):
+        chunks = sorted(chunks, key=lambda chunk: chunk.start)
+        merging = True
+        while merging:
+            merging = False
+            new_chunks = []
+            last = self.dummy
+            for this in chunks[1:]:
+                # sorted -> last.start <= this.start
+                if strict:
+                    if last.end >= this.end:
+                        # skip this
+                        merging = True
+                        continue
+                    else:
+                        new_chunks.append(last)
+                        last = this
+                else:
+                    if last.overlap(this):
+                        last = DataFeature_for_span(self, last.start, max(last.end, this.end), init=False)
+                        merging = True
+                    else:
+                        new_chunks.append(last)
+                        last = this
+            new_chunks.append(last)
+            chunks = new_chunks
+        return chunks
+
     def getdependenceyGraph(self):
         edges = []
         for token in self.parse_sentence:
@@ -119,17 +149,21 @@ class DataFeature_for_span():
     def dummy(doc):
         return DataFeature_for_span(doc, -1, -1)
 
-    def __init__(self, doc, start, end):
+    def __init__(self, doc, start, end, init=True):
         self.doc = doc
         self.start = start
         self.end = end
+        if init:
+            self._init()
 
+    def _init(self):
         if self.start < 0 and self.end < 0:
-            self.init_dummy()
+            self._init_dummy()
         else:
-            self.init_feature()
+            self._init_feature()
+        return self
 
-    def init_dummy(self):
+    def _init_dummy(self):
         self.token_start = 0
         self.token_end = len(self.doc.parse_sentence)
         self.text = '__DUMMY__'
@@ -143,8 +177,9 @@ class DataFeature_for_span():
         self.lower_ = '__DUMMY__'
         self.upper_ = '__DUMMY__'
         self.is_dummy_ = True
+        return self
 
-    def init_feature(self):
+    def _init_feature(self):
         span, self.token_start, self.token_end = self.findSpan()
 
         self.text = self.getText(span)
@@ -172,6 +207,7 @@ class DataFeature_for_span():
         # self.span._.set('headword_', self.getHeadword())
         #self.span._.set('phrasepos_', self.getPhrasepos())
         #self.span._.set('sentence_', self.getSentence())
+        return self
 
     def findSpan(self):
         token_i = []
