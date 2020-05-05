@@ -32,7 +32,7 @@ def writeXML(doc_num, image_num, sent_list):
     scene = ET.SubElement(sprl, "SCENE")
     doc_num_xml = ET.SubElement(scene, "DOCNO")
     doc_num_xml.text = doc_num
-    image_num_xml = ET.SubElement(scene, "DOCNO")
+    image_num_xml = ET.SubElement(scene, "IMAGE")
     image_num_xml.text = image_num
     
     for json_sent in sent_list:
@@ -85,15 +85,14 @@ def get_doc_sent(sprlxmlfile):
     
              
 if __name__ == "__main__":
-    doc_sent_list = get_doc_sent("data/new_gold.xml")
     #doc should contain several sentence
-    docs = readjsonl('data/model.jsonl')
+    docs = readjsonl('data/json_generation.jsonl')
     for key, value in docs.items():
         doc_num = key
         image_num = value['image']
         sentence_list = value['sentences']
         writeXML(doc_num, image_num, sentence_list)
-    filename = "people.xml"
+    filename = "xml_generation.xml"
     xmlstr = minidom.parseString(ET.tostring(sprl)).toprettyxml(indent="   ")
     with open(filename, "w") as f:
         f.write(xmlstr)

@@ -65,7 +65,7 @@ class DataFeature_for_sentence():
         for chunk in pre_chunk.noun_chunks:
             new_chunk.append(span2df(chunk))
         new_chunk.sort(key=lambda chunk: chunk.start)
-        merged_chunk = self.mergeChunk(new_chunk)
+        merged_chunk = self.mergeChunk(new_chunk, True)
         merged_chunk = list(map(lambda c: c._init(), merged_chunk))
         return merged_chunk
 
@@ -79,10 +79,17 @@ class DataFeature_for_sentence():
             for this in chunks[1:]:
                 # sorted -> last.start <= this.start
                 if strict:
+                    # last: on the right
+                    # this: on
                     if last.end >= this.end:
                         # skip this
                         merging = True
                         continue
+                    # last: on
+                    # this: on the right
+                    elif last.start == this.start and last.end <= this.end:
+                        last = this 
+                        merging = True
                     else:
                         new_chunks.append(last)
                         last = this
