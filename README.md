@@ -7,7 +7,7 @@
 [Parisa Kordjamshidi](https://github.com/kordjamshidi)
 
 
-This repository contains the code for the experiments of our research paper _Inference-Masked Loss for Deep Structured Output Learning_ accepted by IJCAI 2020.
+This repository contains the code for the experiments of our research paper "_Inference-Masked Loss for Deep Structured Output Learning_" accepted by IJCAI 2020.
 
 ## Abstract
 
@@ -19,7 +19,7 @@ We empirically show the inference-masked loss combined with the negative log-lik
 
 ## Cite
 
-If you find this repository useful, please also consider cite our paper:
+If you find this work useful, please also consider cite our paper:
 
 Quan Guo, Hossein Rajaby Faghihi, Yue Zhang, Andrzej Uszok, Parisa Kordjamshidi, Inference-Masked Loss for Deep Structured Output Learning, in _Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence (IJCAI 2020)_, 2020
 
@@ -42,7 +42,7 @@ Quan Guo, Hossein Rajaby Faghihi, Yue Zhang, Andrzej Uszok, Parisa Kordjamshidi,
 * python 3.7
 * [PyTorch](https://pytorch.org) 1.1.0
 * [Gurobi](https://www.gurobi.com) 8.0
-* other dependencies specified in `requirements.txt`
+* other dependencies specified in [`requirements.txt`](requirements.txt)
 
 Our code is tested on Ubuntu 18.04 and with specific version of software mentioned above. It should work with other versions of Ubuntu, however we did not tested.
 
@@ -61,21 +61,23 @@ export PYTHONPATH=$(pwd):$PYTHONPATH
 
 ### Experiments
 
-We evaluate the proposed approach with several structured learning tasks: 
+> We evaluate the proposed approach with several structured learning tasks: 
 Two different entity relation extraction (ER) tasks and spatial role labeling (SpRL) task. We investigate the entity and relation recognition corpora (CoNLL04) and ACE 2005 Corpus (ACE2005) for ER task. The two datasets contain different types of entities and relationships. For SpRL task, CLEF 2017 mSpRL dataset (SpRL2017) is investigated.
 
 #### [`CoNLL04`](examples/conll04/)
-[CoNLL04](https://cogcomp.seas.upenn.edu/page/resource_view/43) is a publicly available corpus for ER.
+
+> [CoNLL04](https://cogcomp.seas.upenn.edu/page/resource_view/43) is a publicly available corpus for ER.
 The task is to recognize four types of entities among tokens in a sentence and classify five types of relations between entities.
 This corpus contains `5,516` sentences, `11,182` entities, and `2,048` relations.
 The applied hard constraints are between the types of relations and the types of their two entities.
 
 #### [`ACE05`](examples/ACE/) / [`ACE05 (w/ hierarchy)`](examples/ACE_hierarchy/)
-The ACE dataset contains documents with annotations defined for several tasks, including Named Entity Recognition, Relation Extraction, and Event Detection and Recognition. The dataset contains seven types of entities and `45` sub-entity types. We use the same data split used in previous work. The training set contains `10,360` sentences each of which includes at least one entity. The test set contains `2,637` sentences  some of which may not contain any entities. The total number of entities within the sentences of the training set is `47,406`, while the testing set contains `10,675` of them.
+
+> The ACE dataset contains documents with annotations defined for several tasks, including Named Entity Recognition, Relation Extraction, and Event Detection and Recognition. The dataset contains seven types of entities and `45` sub-entity types. We use the same data split used in previous work. The training set contains `10,360` sentences each of which includes at least one entity. The test set contains `2,637` sentences  some of which may not contain any entities. The total number of entities within the sentences of the training set is `47,406`, while the testing set contains `10,675` of them.
 
 #### [`SpRL2017`](examples/SpRL)
 
-The SpRL task is to identify and classify the spatial arguments of the spatial expression in a sentence. To be specific, we identify spatial roles, including "Trajector", "Spatial Indicator", and "Landmark", and detect their spatial triplet relation. We evaluated with CLEF 2017 mSpRL dataset, which has `600` sentences in the training set and `613` sentences in the testing set. The dataset is more challenging because of the complicated triplet relations and fewer examples compared to other tasks.
+> The SpRL task is to identify and classify the spatial arguments of the spatial expression in a sentence. To be specific, we identify spatial roles, including "Trajector", "Spatial Indicator", and "Landmark", and detect their spatial triplet relation. We evaluated with CLEF 2017 mSpRL dataset, which has `600` sentences in the training set and `613` sentences in the testing set. The dataset is more challenging because of the complicated triplet relations and fewer examples compared to other tasks.
 
 ### Files
 
