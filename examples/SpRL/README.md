@@ -59,6 +59,7 @@ By [solving the generated ILP problem], we can obtain a set of predictions that 
 * 'AllenNLP': The version of AllenNLP should be 0.8.5
 * `pytorch`: model calculation behind `allennlp`. There is a bunch of selection other than the standard pip package. Please note that AllenNLP requires pytorch < 1.2.
 Follow the [installation instruction](https://pytorch.org/get-started/locally/) and select the correct CUDA version if any available to you.
+* 'SpaCy': Using command "python -m spacy download en_core_web_lg" to download SpaCy language model.
 
 #### Setup
 
