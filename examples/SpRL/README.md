@@ -15,18 +15,6 @@ The task is as follow:
 > **generate** the following output:
 >> *[About 20 kids]*<sub>Trajector</sub> in tradirional clothing and hats waiting *[on]*<sub>SpatialIndicator</sub> *[stairs]*<sub>Landmark</sub>.
 
-
-[//]: # (description of the problem to be added here)
-
-## Pipeline
-
-This example follows the pipeline we discussed in our preliminary paper.
-1. Ontology Declaration
-2. Model Declaration
-3. Explicit inference
-
-The steps are broken down into parts of the program.
-
 ## Components
 
 The example consists of several parts.
@@ -39,8 +27,8 @@ Concepts are nodes in the graph and relations are the edges of the nodes. The gr
 
 3. **Main** [`SpRL/sprlApp.py`](SpRL/sprl_App.py): the main entrance of the program, where the components are [put into one piece]. [`AllenNlpGraph`] is a wrapper class providing a set of helper functions to make the model run with AllenNLP and PyTorch, which connect us to GPU. Learning based program [`lbp`] is constructed in [`model_declaration`] by connecting sensors and learners to the model. This is know as the **Model Declaration** step of the pipeline.
 
-4. **Solver** [`../../regr/ilpSelectClassification.py`](../../regr/solver/ilpSelectClassification.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
-They are done in `AllenNlpGraph` with help of a [base model](../../regr/graph/allennlp/model.py#L225) automatically. Cheers!
+4. **Solver** [`../../regr/solver/gurobiILPOntSolver.py`](../../regr/solver/gurobiILPOntSolver.py): it seems we missed something. **Explicit inference**, is not present explicitly?!
+They are done in `AllenNlpGraph` with help of a [base model](../../regr/graph/allennlp/model.py) automatically. Cheers!
 We convert the inference into an integer linear programming (ILP) problem and maximize the overall confidence of the truth values of all concepts while satisfying the global constraints.
 We derive constraints from the input ontology.
 Two types of constraints are considered: the [disjoint constraints for the concepts] and [the composed-of constraints for the ralation].
@@ -53,34 +41,21 @@ By [solving the generated ILP problem], we can obtain a set of predictions that 
 
 ### Prepare
 
-#### Tools
-
-* Python 3: Python 3 is required by `allennlp`. Install by package management. Remember to mention the version in installation.
-* 'AllenNLP': The version of AllenNLP should be 0.8.5
-* `pytorch`: model calculation behind `allennlp`. There is a bunch of selection other than the standard pip package. Please note that AllenNLP requires pytorch < 1.2.
-Follow the [installation instruction](https://pytorch.org/get-started/locally/) and select the correct CUDA version if any available to you.
-* 'SpaCy': Using command "python -m spacy download en_core_web_lg" to download SpaCy language model.
-
 #### Setup
 
-Follow [instructions](../../README.md#prerequirements-and-setups) of the project to have `regr` ready.
-Install all python dependency specified in `requirements.txt` by
-```bash
-sudo python3 -m pip install -r requirements.txt
-```
+Follow [instructions](../../README.md#requirement) of the project to have `regr` ready.
+Install `SpaCy` model: use command `python -m spacy download en_core_web_lg` to download SpaCy language model.
 
 #### Data
 
-The SpRL data is located in [`SpRL/data`](SpRL/data), and the training set is [SpRL/data/sprl2017_train.xml], and the testing set is [SpRL/data/sprl2017_test.xml].
-If you want to change the dataset directories, you can update [SpRL/config.py] (SpRL/config.py) to update the train and test directories.
+The SpRL data is located in [`data`](data), and the training set is [data/sprl2017_train.xml], and the testing set is [data/sprl2017_gold.xml].
+If you want to change the dataset directories, you can update [config.py] (config.py) to update the train and test directories.
 
-### Run 
+### Run
 
-The implement of the example is in package `SpRL`. 
-
-The example can be run by using the following command, or directly run SpRLApp.py
+The example can be run by using the following command:
 ```bash
-python3 sprlApp.py
+python sprlApp.py
 ```
 
 #### Logs
@@ -110,9 +85,9 @@ Usually last 1000 lines, with option `-n 1000`, is enough for one solution.
 
 To evaluate a trained model with specific dataset,
 ```bash
-python3 SpRL.sprlEval -m log.<starting date and time> -d <path to data corp> -b <batch size>
+python sprlEval.py -m log.<starting date and time> -d <path to data corp> -b <batch size> [-M <model_file.th>]
 ```
 You may want to avoid using GPU because they are used by a training procees. Here is a complete example:
 ```bash
-CUDA_VISIBLE_DEVICES=none python3 SpRL.sprlEval -m ./log.20190724-174229 -d ./data/EntityMentionRelation/conll04.corp_1_test.corp -b=16
+CUDA_VISIBLE_DEVICES= python sprlEval.py -m ./log.20190724-174229 -d ./data/sprl2017_gold.xml -b=16
 ```

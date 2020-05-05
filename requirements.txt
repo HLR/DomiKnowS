@@ -16,3 +16,4 @@ pycorenlp
 tqdm==4.35.0
 tensorboard
 spacy==2.1.9
+networkx==2.3
