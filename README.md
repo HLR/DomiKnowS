@@ -24,7 +24,7 @@ If you find this repository useful, please also consider cite our paper:
 Quan Guo, Hossein Rajaby Faghihi, Yue Zhang, Andrzej Uszok, Parisa Kordjamshidi, Inference-Masked Loss for Deep Structured Output Learning, in _Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence (IJCAI 2020)_, 2020
 
 ```bibtex
-@inproceedings{guo2020inferenced,
+@inproceedings{guo2020inference,
    Author = {Quan Guo and Hossein Rajaby Faghihi and Yue Zhang and Andrzej Uszok and Parisa Kordjamshidi},
    Title = {Inference-Masked Loss for Deep Structured Output Learning},
    Booktitle = {Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence (IJCAI 2020)},
