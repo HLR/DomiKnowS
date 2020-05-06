@@ -221,6 +221,9 @@ def test_graph_naming():
 def test_main_conll04(case):
     from config import CONFIG
     from emr.data import ConllDataLoader
+    from graph import graph, sentence, word, char, phrase, pair
+    from graph import people, organization, location, other, o
+    from graph import work_for, located_in, live_in, orgbase_on, kill
 
     training_set = ConllDataLoader(CONFIG.Data.train_path,
                                    batch_size=CONFIG.Train.batch_size,
@@ -256,24 +259,77 @@ def test_main_conll04(case):
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'O', 'work_for']
-    tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
+    conceptsRelationsConcepts = [people, organization, location, other, o, work_for]
+    conceptsRelationsMix = ["people", organization, location, other, o, "work_for"]
+    conceptsRelationsEmpty = []
     
-    assert tokenResult['people'][0] == 1
-    assert sum(tokenResult['people']) == 1
-    assert tokenResult['organization'][3] == 1
-    assert sum(tokenResult['organization']) == 1
-    assert sum(tokenResult['location']) == 0
-    assert sum(tokenResult['other']) == 0
-    assert tokenResult['O'][1] == 1
-    assert tokenResult['O'][2] == 1
-    assert sum(tokenResult['O']) == 2
+    conceptsRelationsVariants = [conceptsRelationsEmpty, conceptsRelationsStrings, conceptsRelationsConcepts, conceptsRelationsMix]
     
-    assert pairResult['work_for'][0][3] == 1
-    assert sum(pairResult['work_for'][0]) == 1
-    assert sum(pairResult['work_for'][1]) == 0
-    assert sum(pairResult['work_for'][2]) == 0
-    assert sum(pairResult['work_for'][3]) == 0
+    for conceptsRelations in conceptsRelationsVariants:
+        
+        # ------------ Call the ILP Solver
+        datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        
+        # ------------ Concepts Results
+        
+        # Get value of attribute people/ILP for word 0
+        #assert tokenResult['people'][0] == 1
+        assert datanode.findDatanodes(conceptName = word.name)[0].attributes['<' + people.name + '>/ILP'].item() == 1
+        
+        # Sum value of attribute people/ILP for all words
+        #assert sum(tokenResult['people']) == 1
+        assert sum([dn.attributes['<' + people.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 1
+        
+        # Get value of attribute organization/ILP for word 3
+        #assert tokenResult['organization'][3] == 1
+        datanode.findDatanodes(conceptName = word.name)[3].attributes['<' + organization.name + '>/ILP'].item() == 1
+        
+        # Sum value of attribute organization/ILP for all words
+        #assert sum(tokenResult['organization']) == 1
+        assert sum([dn.attributes['<' + organization.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 1
+    
+        # Sum value of attribute location/ILP for all words
+        #assert sum(tokenResult['location']) == 0
+        assert sum([dn.attributes['<' + location.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 0
+    
+        # Sum value of attribute other/ILP for all words
+        #assert sum(tokenResult['other']) == 0
+        assert sum([dn.attributes['<' + other.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 0
+    
+        # Get value of attribute o/ILP for word 1
+        #assert tokenResult['O'][1] == 1
+        assert datanode.findDatanodes(conceptName = word.name)[1].attributes['<' + o.name + '>/ILP'].item() == 1
+        
+        # Get value of attribute o/ILP for word 2
+        #assert tokenResult['O'][2] == 1
+        assert datanode.findDatanodes(conceptName = word.name)[2].attributes['<' + o.name + '>/ILP'].item() == 1
+    
+        # Sum value of attribute o/ILP for all words
+        #assert sum(tokenResult['O']) == 2
+        assert sum([dn.attributes['<' + o.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 2
+        
+        # ------------ Relations Results
+        
+        # Get value of attribute work_for/ILP for pair between 0 and 3
+        #assert pairResult['work_for'][0][3] == 1
+        assert list(datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 0, "arg2": 3}))[0].attributes['<' + work_for.name + '>/ILP'].item() == 1
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 0
+        #assert sum(pairResult['work_for'][0]) == 1
+        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 0})]) == 1
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 1
+        #assert sum(pairResult['work_for'][1]) == 0
+        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 1})]) == 0
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 2
+        #assert sum(pairResult['work_for'][2]) == 0
+        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 2})]) == 0
+    
+        # Sum all value of attribute work_for/ILP  for the pair relation from 3
+        #assert sum(pairResult['work_for'][3]) == 0
+        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 3})]) == 0
 
 if __name__ == '__main__':
     pytest.main([__file__])
