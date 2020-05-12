@@ -131,3 +131,15 @@ class IMLModel(PoiModel):
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
             return local_loss
+
+class PrimalDualModel(torch.nn.Module):
+    def __init__(self, graph, model):
+        super().__init__()
+        self.graph = graph
+        self.register_buffer('primal', model)
+
+    def forward(self, data):
+        # TODO: add dual loss calculation here
+        closs = None
+        return closs, data
+ 
