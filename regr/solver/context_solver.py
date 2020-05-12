@@ -3,6 +3,7 @@ from typing import Dict
 from collections import defaultdict
 import numpy as np
 import torch
+
 from ..graph import Concept
 from .ilpOntSolver import ilpOntSolver
 
@@ -13,16 +14,16 @@ DataInstance = Dict[str, torch.Tensor]
 class ContextSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def get_raw_input(self, data):
+    def get_raw_input(self, context):
         raise NotImplementedError
 
-    def get_prop_result(self, prop, data):
+    def get_prop_result(self, context, prop):
         raise NotImplementedError
 
-    def set_prop_result(self, prop, data, value):
+    def set_prop_result(self, context, prop, value):
         raise NotImplementedError
 
-    def inferSelection(self, data: DataInstance, prop_list) -> DataInstance:
+    def inferSelection(self, context: DataInstance, prop_list) -> DataInstance:
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -51,7 +52,7 @@ class ContextSolver(ilpOntSolver):
         else:
             max_rank = 0
 
-        sentences, mask_len = self.get_raw_input(data)
+        sentences, mask_len = self.get_raw_input(context)
         batch_size = len(sentences)
 
         values = [defaultdict(dict) for _ in range(batch_size)]
@@ -66,7 +67,7 @@ class ContextSolver(ilpOntSolver):
                 name = concept.name # we need concept name to match that in OWL
                 # score - (b, l...*r) / (b, l...*r, c)
                 # mask - (b, l...*r)
-                score, mask = self.get_prop_result(prop, data)
+                score, mask = self.get_prop_result(context, prop)
                 mask = mask.cpu().detach().to(torch.bool).numpy()
                 # copy and detach, time consuming I/O
                 batched_value = score.clone().cpu().detach().numpy()
@@ -120,7 +121,7 @@ class ContextSolver(ilpOntSolver):
         # put results back
         for rank, props in prop_dict.items():
             for prop in props:
-                score, mask = self.get_prop_result(prop, data)  # for device
+                score, mask = self.get_prop_result(context, prop)  # for device
                 mask = mask.cpu().detach().to(torch.bool).numpy()
                 if isinstance(prop.prop_name, Concept):
                     concept = prop.prop_name
@@ -141,6 +142,6 @@ class ContextSolver(ilpOntSolver):
                 batched_value = torch.stack(instance_value_list, dim=0)
                 # Put it back finally
                 #import pdb; pdb.set_trace()
-                self.set_prop_result(prop, data, batched_value)
+                self.set_prop_result(context, prop, batched_value)
 
-        return data
+        return context

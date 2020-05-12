@@ -1,8 +1,8 @@
 import torch
-from regr.solver.solver_session import SolverSession
+from regr.solver.session.solver_session import SolverSession
 
 
-class PytorchPrimalDualSession(SolverSession):
+class PrimalDualSession(SolverSession):
     def __init__(self):
         self.vars = {}
         self.constrs = {}
@@ -30,18 +30,15 @@ class PytorchPrimalDualSession(SolverSession):
     def constr(self, lhs, ctype, rhs, name=None):
         name = name or self.autoname(self.constrs)
         if ctype == SolverSession.CTYPE.EQ:
-            la = torch.ones((2,), dtype=torch.float)
-            penalty = la[0] * max(0, lhs - rhs) + la[1] * max(0, rhs - lhs)
-            constr = (la, penalty)
+            penalty = max(0, lhs - rhs) + max(0, rhs - lhs)
+            constr = penalty
         elif ctype in (SolverSession.CTYPE.GE, SolverSession.CTYPE.GT):
-            la = torch.ones((), dtype=torch.float)
-            penalty = la * max(0, lhs - rhs)
-            constr = (la, penalty)
+            penalty = max(0, lhs - rhs)
+            constr = penalty
         elif ctype in (SolverSession.CTYPE.LE, SolverSession.CTYPE.LT):
-            la = torch.ones((), dtype=torch.float)
-            penalty = la * max(0, rhs - lhs)
-            constr = (la, penalty)
-        self.constrs[name] = (la, penalty)
+            penalty = max(0, rhs - lhs)
+            constr = penalty
+        self.constrs[name] = penalty
         return constr
 
     def obj(self, otype, expr):

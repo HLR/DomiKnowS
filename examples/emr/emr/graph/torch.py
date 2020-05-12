@@ -2,9 +2,9 @@ from itertools import combinations
 
 import torch
 
-from regr.graph.property import Property
+from regr.graph import Property
 
-from emr.sensor.sensor import TorchSensor
+from ..sensor.sensor import TorchSensor
 from ..sensor.learner import ModuleLearner
 
 
@@ -60,19 +60,19 @@ class TorchModel(torch.nn.Module):
                     continue
                 yield prop, output_sensor, target_sensor
 
-    def forward(self, data, inference=True):
-        data = self.move(data)
+    def forward(self, context, inference=True):
+        context = self.move(context)
         loss = 0
         metric = {}
 
         if inference:
-            data = self.inference(data)
+            context = self.inference(context)
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
-            logit = output_sensor(data)
-            mask = output_sensor.mask(data)
-            inference = prop(data)
-            labels = target_sensor(data)
+            logit = output_sensor(context)
+            mask = output_sensor.mask(context)
+            inference = prop(context)
+            labels = target_sensor(context)
 
             if self.loss:
                 local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
@@ -81,65 +81,53 @@ class TorchModel(torch.nn.Module):
                 local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                 metric[output_sensor, target_sensor] = local_metric
 
-        return loss, metric, data
+        return loss, metric, context
 
-    def inference(self, data):
-        data = self.solver.inferSelection(data, list(self.poi))
-        return data
+    def inference(self, context):
+        context = self.solver.inferSelection(context, list(self.poi))
+        return context
 
 
 class PoiModel(TorchModel):
-    def poi_loss(self, data, prop, output_sensor, target_sensor):
-        logit = output_sensor(data)
-        mask = output_sensor.mask(data)
-        labels = target_sensor(data)
+    def poi_loss(self, context, prop, output_sensor, target_sensor):
+        logit = output_sensor(context)
+        mask = output_sensor.mask(context)
+        labels = target_sensor(context)
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
             return local_loss
 
-    def poi_metric(self, data, prop, output_sensor, target_sensor):
-        mask = output_sensor.mask(data)
-        labels = target_sensor(data)
-        inference = prop(data)
+    def poi_metric(self, context, prop, output_sensor, target_sensor):
+        mask = output_sensor.mask(context)
+        labels = target_sensor(context)
+        inference = prop(context)
 
         if self.metric:
             local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
             return local_metric
 
-    def forward(self, data, inference=True):
-        data = self.move(data)
+    def forward(self, context, inference=True):
+        context = self.move(context)
         loss = 0
         metric = {}
 
         if inference:
-            data = self.inference(data)
+            context = self.inference(context)
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
-            loss += self.poi_loss(data, prop, output_sensor, target_sensor)
-            metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
+            loss += self.poi_loss(context, prop, output_sensor, target_sensor)
+            metric[output_sensor, target_sensor] = self.poi_metric(context, prop, output_sensor, target_sensor)
 
-        return loss, metric, data
+        return loss, metric, context
 
 class IMLModel(PoiModel):
-    def poi_loss(self, data, prop, output_sensor, target_sensor):
-        logit = output_sensor(data)
-        mask = output_sensor.mask(data)
-        labels = target_sensor(data)
-        inference = prop(data)
+    def poi_loss(self, context, prop, output_sensor, target_sensor):
+        logit = output_sensor(context)
+        mask = output_sensor.mask(context)
+        labels = target_sensor(context)
+        inference = prop(context)
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
             return local_loss
-
-class PrimalDualModel(torch.nn.Module):
-    def __init__(self, graph, model):
-        super().__init__()
-        self.graph = graph
-        self.register_buffer('primal', model)
-
-    def forward(self, data):
-        # TODO: add dual loss calculation here
-        closs = None
-        return closs, data
- 

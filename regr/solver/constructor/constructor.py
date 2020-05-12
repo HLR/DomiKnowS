@@ -5,6 +5,7 @@ from regr.utils import isbad
 
 from ..session.solver_session import SolverSession
 
+
 class Constructor():
     logger = logging.getLogger(__name__)
 

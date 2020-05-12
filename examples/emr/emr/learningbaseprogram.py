@@ -97,11 +97,14 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
         self.copt = None
 
     def train(self, training_set=None, valid_set=None, test_set=None, config=None):
+        if config.device is not None:
+            self.cmodel.to(config.device)
         if list(self.cmodel.parameters()):
             self.copt = config.copt(self.cmodel.parameters())
         else:
             self.copt = None
         return super().train(training_set, valid_set, test_set, config)
+
     def train_epoch(self, dataset, inference=False):
         self.model.train()
         self.cmodel.train()
