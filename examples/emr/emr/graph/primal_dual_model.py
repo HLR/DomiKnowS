@@ -23,8 +23,9 @@ class PrimalDualModel(TorchModel):
             if isinstance(node, Concept):
                 return node
         def find_relation(node):
-            if isinstance(node, Relation):
-                return node
+            if isinstance(node, Concept):
+                for rel_type, rels in node._out.items():
+                    yield from rels
 
         self.names = {concept.name: concept for concept in graph.traversal_apply(find_concept)}
         self.constructor = ProbConstructor()
@@ -47,16 +48,24 @@ class PrimalDualModel(TorchModel):
 
     def forward(self, context):
         # TODO: add dual loss calculation here
-        closs = self.solver.inferSelection(context, list(self.poi))
+        closs = self.inferSelection(context, list(self.poi))
         max_target = -closs
         return max_target, context
 
     def get_raw_input(self, context):
-        graph = next(iter(self.myGraph))
-        _, sentence_sensor = graph.get_sensors(DataSensor, lambda s: not s.target)[0]
+        _, sentence_sensor = self.graph.get_sensors(DataSensor, lambda s: not s.target)[0]
         sentences = sentence_sensor(context)
         mask_len = [len(s) for s in sentences]  # (b, )
         return sentences, mask_len
+
+    def get_prop_result(self, context, prop):
+        output_sensor, _ = self.graph.poi[prop]
+
+        logit = output_sensor(context)
+        #score = -F.logsigmoid(logit)
+        score = torch.sigmoid(logit)
+        mask = output_sensor.mask(context)
+        return score, mask
 
     def calculateILPSelection(self, data, *predicates_list):
         concepts_list = []

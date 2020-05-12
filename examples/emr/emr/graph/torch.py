@@ -27,7 +27,10 @@ class TorchModel(torch.nn.Module):
 
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
-        self.solver = solver_fn(self.graph)
+        if solver_fn:
+            self.solver = solver_fn(self.graph)
+        else:
+            self.solver = None
         self.graph.poi = self.poi
 
     def move(self, value, device=None):

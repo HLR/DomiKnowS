@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 
 from .utils import consume, print_reformat
-from .graph.torch import PrimalDualModel
+from .graph.primal_dual_model import PrimalDualModel
 
 
 class LearningBasedProgram():
@@ -93,7 +93,7 @@ class LearningBasedProgram():
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     def __init__(self, graph, config):
         super().__init__(graph, config)
-        self.cmodel = PrimalDualModel(graph, self.model)
+        self.cmodel = PrimalDualModel(graph)
         self.copt = None
 
     def train(self, training_set=None, valid_set=None, test_set=None, config=None):
@@ -113,7 +113,7 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            loss, closs, metric, output = self.model(data, inference=inference)
+            loss, metric, output = self.model(data, inference=inference)
             closs, coutput = self.cmodel(output)
             if self.opt is not None:
                 loss.backward()
