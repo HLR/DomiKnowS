@@ -53,7 +53,6 @@ class ContextSolver(ilpOntSolver):
 
         sentences, mask_len = self.get_raw_input(data)
         batch_size = len(sentences)
-        length = max(mask_len)
 
         values = [defaultdict(dict) for _ in range(batch_size)]
         for rank, props in prop_dict.items():
@@ -68,6 +67,7 @@ class ContextSolver(ilpOntSolver):
                 # score - (b, l...*r) / (b, l...*r, c)
                 # mask - (b, l...*r)
                 score, mask = self.get_prop_result(prop, data)
+                mask = mask.cpu().detach().to(torch.bool).numpy()
                 # copy and detach, time consuming I/O
                 batched_value = score.clone().cpu().detach().numpy()
 
@@ -76,7 +76,7 @@ class ContextSolver(ilpOntSolver):
                     value = batched_value[batch_index]
                     # apply mask
                     # (l'...*r)
-                    value = value[(slice(0, mask_len[batch_index]),) * rank]
+                    value = value[tuple(slice(0, mask[batch_index].sum(r).max) for r in range(rank))]
                     values[batch_index][rank][name] = value
         #import pdb; pdb.set_trace()
 
@@ -120,7 +120,8 @@ class ContextSolver(ilpOntSolver):
         # put results back
         for rank, props in prop_dict.items():
             for prop in props:
-                score, _ = self.get_prop_result(prop, data)  # for device
+                score, mask = self.get_prop_result(prop, data)  # for device
+                mask = mask.cpu().detach().to(torch.bool).numpy()
                 if isinstance(prop.prop_name, Concept):
                     concept = prop.prop_name
                 else:
@@ -131,8 +132,8 @@ class ContextSolver(ilpOntSolver):
                     # (l'...*r)
                     instance_value = results[batch_index][rank][name]
                     # (l...*r)
-                    instance_value_pad = np.zeros([length, ] * rank)
-                    instance_value_pad[(slice(0, mask_len[batch_index]),) * rank] = instance_value
+                    instance_value_pad = np.zeros(mask.shape[1:])
+                    instance_value_pad[mask[batch_index]] = instance_value.reshape(-1)
                     # (l...*r)
                     instance_value_d = torch.tensor(instance_value_pad, device=score.device)
                     instance_value_list.append(instance_value_d)
