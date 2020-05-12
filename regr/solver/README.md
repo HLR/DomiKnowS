@@ -1,39 +1,105 @@
+### DataNode and Data Graph
+
+Every example in the learning process has its Data Graph built based on sensors included in the model. 
+The example is partitioned by sensors into a different types of tokens corresponding to different linguistic concepts from the ontology graph.
+
+Each token has its Data Node build which is linked to other Data Nodes corresponding to different tokens from the example through relation links. The Data Node stores the following information about the token:
+* its  linguistic concepts, 
+* unique id in the scope of all token of the given linguistic type,   
+* relation links dictionary with names of relations and related Data Nodes,
+* impactLinks dictionary with dataNodes impacting this datanode by having it as a subject of its relation
+* attributes dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token. 
+
+The Data Graph can queried for specific data nodes using the method called on the root Data Node:
+		
+		findDatanodes(dns = None, select = None, indexes = None)
+The method returns the list of DataNodes satisfying the query provided in the select argument, additionally the indexes arguments can specify queries for related data nodes which have to be satisfied by the returned Data Nodes.
+The examples:
+
+* **datanode.findDatanodes(select = word)** - find all dataNodes of type *word*
+
+
+* **datanode.findDatanodes(select = (char, 'raw', 'J'))** - find dataNode of type *char* with with *raw* attribute equal *J*
+
+
+* **datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')** - find dataNodes of type *word* and containing char with *raw* attribute equal *J*
+
+
+* **datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'))** - find dataNodes of type *word* and containing dataNode of type *char* with *raw* attribute equal *o* and dataNode of type*char* with *raw* attribute equal *h*
+
+
+* **datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})** - find dataNode of type *pair* linking dataNodes with id 0 and 3
+
+
+* **datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})** - find dataNode of type *pair* linking dataNode of type *word* with *raw* attribute equal *John* and dataNode of type *word* with *raw* attribute equal *IBM*
+
+
+
+Additional method facilitate access to dataNode attributes:
+
+		getAttribute(*keys)
+
+The *keys* are connected ito a single key used to access the attribute in the dataNode. The method return teh value of the attribute. The example:
+* **getAttribute(work_for, 'ILP')** - get value of the attribute storing the result of the ILP solver solution for  the concept *work_for*
+
+
 ### ILP Solver 
 
-It builds ILP model based on constrains defined in the model and prediction data for concepts and relations assignment to tokens in order to decide on most optimized assignment.
+It builds the ILP model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to tokens.
+It solves the ILP model and provides the most optimized assignment.
 
-It can be called on the root DataNode with its method:
+It can be called on the root DataNode with the method:
  
 ```
 inferILPConstrains(*_conceptsRelations, fun=None)
 ```
-* *_conceptsRelations* is a collection of concepts and relations for which the ILP mode should be solved. 
+The method retrieves the constrains from the ontology graph associated with the Data Graph and the probabilities from Data Graph nodes attributes.
+It has two arguments:
+* *_conceptsRelations* is a collection of concepts and relations for which the ILP model should be solved. 
 They can be provide as Concepts (nodes in the model graph) or strings representing concepts or relations names. 
 If this collection is empty then the methods will use all concepts and relations in the Data Graph.
 
 
-* *fun* is a function modifying the original probability in the datanode before it is used by ILP 
+* *fun* is a optional function modifying the original probability in the Data Graph before they are used in the ILP model.
 
-The results of the ILP solution are added to nodes in the Data Grpah with key ILP.
+The results of the ILP solution are added to nodes in the Data Graph with key ILP.
 
 #The source of constrains 
 
-It could be the **graph itself with defined logical constrains** or **ontology** provided as url in the model graph.
-
+It could be the **ontology graph itself with defined logical constrains** or **ontology (in OWL)** provided as url in the ontology graph.
+e
 # Graph with logical Constrains
 
-**If ontology url is not provided in the graph then the graph defined constrain and logical constrains will be retrieved by the ILP solver.**
+**If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
 
 The graph can specify constrains:
-* Subclass relation between concepts: e.g. people = word(name='people')
-* Disjointment between concepts: e.g. disjoint(people, organization, location, other, o)
-* Domain and ranges for relations: e.g. work_for.has_a(people, organization)
+* **Subclass relation between concepts**: e.g. people = word(name='people')
+* **Disjointment between concepts**: e.g. disjoint(people, organization, location, other, o)
+* **Domain and ranges for relations**: e.g. work_for.has_a(people, organization)
 
-Additionally logical constrains defined within the graph can express: not, and, or, nand, exists, if, equal, inSet.
+Additional, logical constrains defined within the graph can use the following logical functions to build logical expression: 
+* **notL**, 
+* **andL**, 
+* **orL**, 
+* **nandL**, 
+* **existsL**, 
+* **ifL**, 
+* **equalA**, 
+* **inSetA**.
 
-# Ontology as a source of constrains
+The logical constrain can use variables to associate related objects of the logical expression. 
+The expressions use concepts defined in the graph and set additional constrains on them. 
+Example:
 
-**If ontology url is provided in the graph then only ontology will be used to retrieved constrains by the ILP solver.**
+	ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+	
+This logical constrain specify that if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization.
+
+The constrain are regular Python instructions thus they have to follow definition of tuple in Python.
+
+# Ontology file as a source of constrains
+
+**If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**
 
 The OWL ontology, on which the learning system graph was build is loaded into the [ilpOntSolver](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/ilpOntSolver.py) and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/). 
 
@@ -42,9 +108,9 @@ The OWL ontology language allows to specify constrains on [classes](https://www.
 The [ilpBooleanMethods](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/ilpBooleanMethods.py) module encodes basic logical expressions (*[AND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L48)*, *[OR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L102)*, *[IF](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L264)*, *[NAND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L156)*, *[XOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L245)*, *[EPQ](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L281)*, *[NOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L210)*, *[NOT](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L16)*) into the ILP equations.  
 
 The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. The solver encodes mapping from OWL constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities. 
-The solver ILP model is solved by Gurobi and the found solutions for optimal classifction of tokens and relations is returned. 
+The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned. 
 
-This detail of mapping from OWL to logical representaion is presented below for each OWL constrain.
+This detail of mapping from OWL to logical representation is presented below for each OWL constrain.
 
 **Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
 

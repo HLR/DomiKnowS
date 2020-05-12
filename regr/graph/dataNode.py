@@ -55,16 +55,7 @@ class DataNode:
         return self.ontologyNode
     
     def getAttributes(self):
-        return self.attributes
-    
-    def getAttribute(self, key = None):
-        if key is not None:
-            if key in self.attributes:
-                return self.attributes[key]
-            else:
-                return None
-        else:
-            return None
+        return self.attributes        
             
     def getRelationLinks(self, relationName = None, conceptName = None):
         if relationName is None:
@@ -94,7 +85,7 @@ class DataNode:
             
             return conceptCN
         else:
-            return None
+            return []
         
     def addRelationLink(self, relationName, dn):
         if relationName is None:
@@ -154,8 +145,62 @@ class DataNode:
         # Impact
         dn.impactLinks[relationName].remove(self)
 
+    def __testDataNode(self, dn, test):
+        if test is None:
+            return False
+            
+        if isinstance(test, tuple) or isinstance(test, list): # tuple with at least three elements (concept, key elements, value of attribute)
+            _test = []
+            for t in test:
+                if isinstance(t, tuple):
+                    r = self.__testDataNode(dn, t)
+                    
+                    if not r:
+                        return False
+                else:
+                    _test.append(t)
+             
+            if len(_test) == 0:
+                return True
+            else:
+                test = _test
+               
+            if len(test) >= 3:     
+                if isinstance(test[0], str):
+                    if dn.getOntologyNode().name != test[0]:
+                        return False
+                else:
+                    if dn.getOntologyNode().name != test[0].name:
+                        return False
+                    
+                keys = test[1:-1]
+                v = dn.getAttribute(*keys)
+                
+                last = test[-1]
+                if v == last:
+                    return True
+                else:
+                    return False
+        else:
+            test = [test]
+    
+        for t in test:
+            if isinstance(t, int):
+                if dn.getInstanceID() == t:
+                    return True
+                else:
+                    return False
+                
+            if not isinstance(t, str):
+                t = t.name
+            
+            if t == dn.getOntologyNode().name:
+                return True
+            else:
+                return False
+    
     # Find datanodes in data graph of the given concept 
-    def findDatanodes(self, dns = None, conceptName = None):
+    def findDatanodes(self, dns = None, select = None, indexes = None):
         if dns is None:
             dns = [self]
             
@@ -164,68 +209,108 @@ class DataNode:
         if len(dns) == 0:
             return returnDns
         
-        if conceptName == None:
+        if select == None:
             return returnDns
-            
+       
         for dn in dns:
-            if dn.ontologyNode.name == conceptName:
-               returnDns.append(dn) 
+            if self.__testDataNode(dn, select):
+                if dn not in returnDns:
+                    returnDns.append(dn) 
                
+            for r, rValue in dn.getRelationLinks().items():
+                if r == "contains":
+                    continue
+                
+                for _dn in rValue:
+                    if self.__testDataNode(_dn, select):
+                        if dn not in returnDns:
+                            returnDns.append(_dn) 
+                    
+        if (indexes != None):
+            _returnDns = []
+            for dn in returnDns:
+                fit = True       
+                for indexName, indexValue in indexes.items():
+                    if indexName not in dn.relationLinks:
+                        fit = False
+                        break
+                    
+                    found = False
+                    for _dn in dn.relationLinks[indexName]:
+                        if isinstance(indexValue, tuple):
+                            _test = []
+                            for t in indexValue:
+                                if isinstance(t, tuple):
+                                    r = self.__testDataNode(_dn, t)
+                                    
+                                    if r:
+                                        found = True
+                                        break
+                                else:
+                                    _test.append(t)
+                             
+                            if len(_test) == 0:
+                                continue
+                            else:
+                                indexValue = _test
+                                
+                        if self.__testDataNode(_dn, indexValue):
+                            found = True
+                            break
+                        
+                    if not found:
+                        fit = False
+                        break
+                        
+                if fit:
+                    if dn not in _returnDns:
+                        _returnDns.append(dn)
+                       
+            returnDns = _returnDns
+                
         if len(returnDns) > 0:
             return returnDns
         
-        # Test if fist dn from dns has link to dn of the given concept type
-        dns0CDN = dns[0].getRelationLinks(relationName = None, conceptName = conceptName)
-        if (dns0CDN is not None) and (len(dns0CDN) > 0):
-            for dn in dns:
-                dnCN = dn.getRelationLinks(relationName = None, conceptName = conceptName)
-                
-                if dnCN is not None:
-                    returnDns = returnDns + dnCN
-                else:
-                    pass
-        else:
-            for dn in dns:
-                cDNs = []
-                for r in dn.getRelationLinks().values():
-                    for _dn in r:
-                        cDNs.append(_dn)
-                        
-                returnDns = returnDns + self.findDatanodes(cDNs, conceptName)
+        # Not found - > call recursively
+        for dn in dns:
+            _returnDns = self.findDatanodes(dn.getChildDataNodes(), select, indexes)
+            
+            if _returnDns is not None:
+                for _dn in _returnDns:
+                    if _dn not in returnDns:
+                        returnDns.append(_dn)
     
         return returnDns
 
-    def findRelations(self, relationName = None, indexes = None):
-        foundRels = set()
-
-        if relationName == None:
-            return foundRels
+    def getAttribute(self, *keys):
+        key = ""
         
-        rels = self.getRelationLinks(relationName = relationName)
-             
-        if (rels != None) and (len(rels) > 0):
-            if (indexes != None):
-                for rel in rels:
-                    fit = True
-                    for indexName, indexValue in indexes.items():
-                        if (indexName not in rel.relationLinks) or (rel.relationLinks[indexName][0].instanceID != indexValue):
-                            fit = False
-                            break
-                    if fit:
-                        foundRels.add(rel)  
-            else:
-                 foundRels = rels
-             
-        if len(foundRels) > 0:
-            return foundRels
-            
-        dnChildren = self.getChildDataNodes()
-        if dnChildren != None:
-            for child in dnChildren:
-                foundRels = foundRels.union(child.findRelations(relationName, indexes))
+        for k in keys:
+            if key != "":
+                key = key + "/"
                 
-        return foundRels
-        
+            if isinstance(k, str):
+                _k = self.__findConcept(k)
+                
+                if _k is not None:  
+                    key = key + '<' + k +'>'
+                else:
+                    key = key + k
+            else:
+                key = key + '<' + k.name +'>'
+                    
+        if key in self.attributes:
+            return self.attributes[key]
+        else:
+            return None
+              
+    # Get root of the data node
+    def getRootDataNode(self):
+        if "contains" in self.impactLinks:
+            return self.impactLinks["contains"][0].getRootDataNode()
+        else:
+            return self
+                
     # Find concept in the graph based on concept name
     def __findConcept(self, _conceptName, usedGraph = None):
         if not usedGraph:
@@ -491,8 +576,6 @@ class DataNode:
                         
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
-                
-        
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
@@ -566,13 +649,13 @@ class DataNodeBuilder(dict):
                     return concept
         
         return None 
-            
-    conceptInfoCache = {} 
+        
+    # Cache with found concept infromation    
+    __conceptInfoCache = {} 
     # Collect concept information defined in the graph
     def __findConceptInfo(self, usedGraph, concept):
-        
-        if concept in self.conceptInfoCache:
-            return self.conceptInfoCache[concept]
+        if concept in self.__conceptInfoCache:
+            return self.__conceptInfoCache[concept]
         
         conceptInfo = {}
         
@@ -618,7 +701,7 @@ class DataNodeBuilder(dict):
                 if containedConcept:
                     conceptInfo['containedIn'].append(containedConcept)
         
-        self.conceptInfoCache[concept] = conceptInfo
+        self.__conceptInfoCache[concept] = conceptInfo
         
         return conceptInfo
     

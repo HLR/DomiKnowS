@@ -41,10 +41,10 @@ def test_case():
                                       [[0.35, 0.65],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30]],  # IBM
                                      ], device=device),
             
-            'live_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'located_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'orgbase_on': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'kill': torch.rand(4, 4, 2, device=device), # TODO: add examable values
+            'live_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'located_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'orgbase_on': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'kill': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
         }
     }
     case = Namespace(case)
@@ -245,7 +245,7 @@ def test_main_conll04(case):
                        
             assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
                     
-            assert len(child_node.getRelationLinks(relationName = "pair")) == 4
+            assert len(child_node.findDatanodes(select = "pair")) == 4
             
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
@@ -275,61 +275,81 @@ def test_main_conll04(case):
         
         # Get value of attribute people/ILP for word 0
         #assert tokenResult['people'][0] == 1
-        assert datanode.findDatanodes(conceptName = word.name)[0].attributes['<' + people.name + '>/ILP'].item() == 1
+        assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
+        
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'h')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'I')})[0].getAttribute(people, 'ILP').item() == 0
+        
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'), (char, 'raw', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
+
+        assert len(datanode.findDatanodes(select = (char, 'raw', 'J'))) == 1
+        assert datanode.findDatanodes(select = (char, 'raw', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
         
         # Sum value of attribute people/ILP for all words
         #assert sum(tokenResult['people']) == 1
-        assert sum([dn.attributes['<' + people.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 1
+        assert sum([dn.getAttribute(people, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 1
         
         # Get value of attribute organization/ILP for word 3
         #assert tokenResult['organization'][3] == 1
-        datanode.findDatanodes(conceptName = word.name)[3].attributes['<' + organization.name + '>/ILP'].item() == 1
+        datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
         
         # Sum value of attribute organization/ILP for all words
         #assert sum(tokenResult['organization']) == 1
-        assert sum([dn.attributes['<' + organization.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 1
+        assert sum([dn.getAttribute(organization, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 1
     
         # Sum value of attribute location/ILP for all words
         #assert sum(tokenResult['location']) == 0
-        assert sum([dn.attributes['<' + location.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 0
+        assert sum([dn.getAttribute(location, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 0
     
         # Sum value of attribute other/ILP for all words
         #assert sum(tokenResult['other']) == 0
-        assert sum([dn.attributes['<' + other.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 0
+        assert sum([dn.getAttribute(other, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 0
     
         # Get value of attribute o/ILP for word 1
         #assert tokenResult['O'][1] == 1
-        assert datanode.findDatanodes(conceptName = word.name)[1].attributes['<' + o.name + '>/ILP'].item() == 1
+        assert datanode.findDatanodes(select = word)[1].getAttribute(o, 'ILP').item() == 1
         
         # Get value of attribute o/ILP for word 2
         #assert tokenResult['O'][2] == 1
-        assert datanode.findDatanodes(conceptName = word.name)[2].attributes['<' + o.name + '>/ILP'].item() == 1
+        assert datanode.findDatanodes(select = word)[2].getAttribute(o, 'ILP').item() == 1
     
         # Sum value of attribute o/ILP for all words
         #assert sum(tokenResult['O']) == 2
-        assert sum([dn.attributes['<' + o.name + '>/ILP'].item() for dn in datanode.findDatanodes(conceptName = word.name)]) == 2
+        assert sum([dn.getAttribute(o, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 2
         
         # ------------ Relations Results
         
         # Get value of attribute work_for/ILP for pair between 0 and 3
         #assert pairResult['work_for'][0][3] == 1
-        assert list(datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 0, "arg2": 3}))[0].attributes['<' + work_for.name + '>/ILP'].item() == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
+        
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+         
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+
+
+        #assert list(datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word, 'raw', 'John'), (word, "pos", "N")), "arg2": (word, 'raw', "IBM")}))[0].getAttributes(work_for, 'emb') == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][0]) == 1
-        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 0})]) == 1
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 1
         #assert sum(pairResult['work_for'][1]) == 0
-        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 1})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 2
         #assert sum(pairResult['work_for'][2]) == 0
-        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 2})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 2})]) == 0
     
         # Sum all value of attribute work_for/ILP  for the pair relation from 3
         #assert sum(pairResult['work_for'][3]) == 0
-        assert sum([dn.attributes['<' + work_for.name + '>/ILP'].item() for dn in datanode.findRelations(relationName = pair.name, indexes = {"arg1" : 3})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
 
 if __name__ == '__main__':
     pytest.main([__file__])
