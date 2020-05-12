@@ -76,7 +76,7 @@ class ContextSolver(ilpOntSolver):
                     value = batched_value[batch_index]
                     # apply mask
                     # (l'...*r)
-                    value = value[tuple(slice(0, mask[batch_index].sum(r).max) for r in range(rank))]
+                    value = value[tuple(slice(0, mask[batch_index].sum(r).max()) for r in range(rank))]
                     values[batch_index][rank][name] = value
         #import pdb; pdb.set_trace()
 
