@@ -98,7 +98,7 @@ class Conll04CorpusReader():
         with open(path) as fin:
             lines = [line for line in fin]
 
-        for line in tqdm(lines):
+        for line in tqdm(lines, desc='Reading Corpus'):
             line = line.strip()
             self.logger.debug(line)
             state, trans_func = Conll04CorpusReader.STT[state][bool(line)]

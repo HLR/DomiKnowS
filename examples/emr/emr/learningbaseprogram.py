@@ -24,7 +24,7 @@ class LearningBasedProgram():
 
             if training_set is not None:
                 self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set, opt, config.train_inference), total=len(training_set)))
+                consume(tqdm(self.train_epoch(training_set, opt, config.train_inference), total=len(training_set), desc='Epoch {} Training'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.print_metric(self.model.loss)
                 self.logger.info(' - metric:')
@@ -32,7 +32,7 @@ class LearningBasedProgram():
 
             if valid_set is not None:
                 self.logger.info('Validation:')
-                consume(tqdm(self.test(valid_set, config.valid_inference), total=len(valid_set)))
+                consume(tqdm(self.test(valid_set, config.valid_inference), total=len(valid_set), desc='Epoch {} Validation'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.print_metric(self.model.loss)
                 self.logger.info(' - metric:')
@@ -40,7 +40,7 @@ class LearningBasedProgram():
 
         if test_set is not None:
             self.logger.info('Testing:')
-            consume(tqdm(self.test(test_set, config.valid_inference), total=len(test_set)))
+            consume(tqdm(self.test(test_set, config.valid_inference), total=len(test_set), desc='Epoch {} Testing'.format(epoch)))
             self.logger.info(' - loss:')
             self.print_metric(self.model.loss)
             self.logger.info(' - metric:')
