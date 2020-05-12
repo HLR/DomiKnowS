@@ -10,7 +10,7 @@ from .ilpOntSolver import ilpOntSolver
 DataInstance = Dict[str, torch.Tensor]
 
 
-class NoLogInferenceSolver(ilpOntSolver):
+class ContextSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
     def get_raw_input(self, data):

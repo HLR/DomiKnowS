@@ -1,13 +1,13 @@
 import torch
 from torch.nn import functional as F
 
-from regr.solver.nologInferenceSolver import NoLogInferenceSolver
+from regr.solver.context_solver import ContextSolver
 
 from ..sensor.learner import ModuleLearner
 from ..sensor.sensor import DataSensor
 
 
-class Solver(NoLogInferenceSolver):
+class Solver(ContextSolver):
     def get_raw_input(self, data):
         graph = next(iter(self.myGraph))
         _, sentence_sensor = graph.get_sensors(DataSensor, lambda s: not s.target)[0]

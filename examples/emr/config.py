@@ -6,7 +6,7 @@ from emr.utils import Namespace, caller_source
 from emr.graph.torch import TorchModel, PoiModel, IMLModel
 from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
 from emr.graph.metric import MacroAverageTracker, PRF1Tracker
-from emr.graph.solver import Solver
+from emr.solver.solver import Solver
 
 
 config = {
