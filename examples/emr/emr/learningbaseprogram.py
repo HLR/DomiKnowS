@@ -109,16 +109,16 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
         self.model.train()
         self.cmodel.train()
         for data in dataset:
+            mloss, metric, output = self.model(data, inference=inference)
+            closs, coutput = self.cmodel(output)
+            loss = mloss + closs
+            copt_loss = -closs
             if self.opt is not None:
                 self.opt.zero_grad()
-            if self.copt is not None:
-                self.copt.zero_grad()
-            loss, metric, output = self.model(data, inference=inference)
-            closs, coutput = self.cmodel(output)
-            if self.opt is not None:
-                loss.backward()
+                loss.backward(retain_graph=True)
                 self.opt.step()
             if self.copt is not None:
-                closs.backward()
+                self.copt.zero_grad()
+                copt_loss.backward()
                 self.copt.step()
-            yield loss + closs, metric, output
+            yield loss, metric, output

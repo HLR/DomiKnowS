@@ -47,10 +47,8 @@ class PrimalDualModel(TorchModel):
         torch.nn.init.constant_(self.lmbd, 0.5)
 
     def forward(self, context):
-        # TODO: add dual loss calculation here
         closs = self.inferSelection(context, list(self.poi))
-        max_target = -closs
-        return max_target, context
+        return closs, context
 
     def get_raw_input(self, context):
         _, sentence_sensor = self.graph.get_sensors(DataSensor, lambda s: not s.target)[0]
