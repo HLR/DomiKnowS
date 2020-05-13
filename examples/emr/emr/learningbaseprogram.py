@@ -9,9 +9,9 @@ from .graph.primal_dual_model import PrimalDualModel
 class LearningBasedProgram():
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, config):
+    def __init__(self, graph, model):
         self.graph = graph
-        self.model = config.model(graph)
+        self.model = model(graph)
         self.opt = None
 
     def train(self, training_set=None, valid_set=None, test_set=None, config=None):
