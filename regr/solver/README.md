@@ -10,10 +10,10 @@ Each token has its Data Node build which is linked to other Data Nodes correspon
 * impactLinks dictionary with dataNodes impacting this datanode by having it as a subject of its relation
 * attributes dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token. 
 
-The Data Graph can queried for specific data nodes using the method called on the root Data Node:
+The Data Graph can be queried for specific data nodes using the method called on the root Data Node:
 		
 		findDatanodes(dns = None, select = None, indexes = None)
-The method returns the list of DataNodes satisfying the query provided in the select argument, additionally the indexes arguments can specify queries for related data nodes which have to be satisfied by the returned Data Nodes.
+The method returns the list of DataNodes satisfying the query provided in the *select* argument, additionally the *indexes* argument can specify queries for related data nodes which have to be satisfied by the returned Data Nodes.
 The examples:
 
 * **datanode.findDatanodes(select = word)** - find all dataNodes of type *word*
