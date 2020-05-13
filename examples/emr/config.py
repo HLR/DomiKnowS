@@ -3,11 +3,36 @@ import torch
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 from emr.utils import Namespace, caller_source
+from emr.learningbaseprogram import LearningBasedProgram, PrimalDualLearningBasedProgram
 from emr.graph.torch import TorchModel, PoiModel, IMLModel
 from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
 from emr.graph.metric import MacroAverageTracker, PRF1Tracker
 from emr.solver.solver import Solver
 
+
+lbps = {
+    'nll': {
+        'type': LearningBasedProgram,
+        'model': lambda graph: PoiModel(
+            graph,
+            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            metric=PRF1Tracker(),
+            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+    'iml': {
+        'type': LearningBasedProgram,
+        'model': lambda graph: IMLModel(
+            graph,
+            loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
+            metric=PRF1Tracker(),
+            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+    'primal-dual': {
+        'type': PrimalDualLearningBasedProgram,
+        'model': lambda graph: PoiModel(
+            graph,
+            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            metric=PRF1Tracker(),
+            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+}
 
 config = {
     'Data': {
@@ -44,25 +69,13 @@ config = {
                 'in_features': 200,
             }
         },
-        'lbp': {
-            'model': lambda graph: IMLModel(
-                graph,
-                loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
-                metric=PRF1Tracker(),
-                solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
-                ),
-            # 'model': lambda graph: TorchModel(
-            #     graph,
-            #     loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            #     metric=PRF1Tracker(),
-            #     solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
-            #     )
-        }
+        'lbp': lbps['nll']
     },
     'Train': {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
         'seed': 1,
         'opt': torch.optim.Adam,
+        'copt': torch.optim.Adam,
         'batch_size': 8,
         'epoch': 10,
         'train_inference': True,

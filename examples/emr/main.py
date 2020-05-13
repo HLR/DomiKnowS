@@ -1,5 +1,4 @@
 from emr.data import ConllDataLoader
-from emr.learningbaseprogram import LearningBasedProgram
 from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
 from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 from emr.utils import seed
@@ -66,7 +65,7 @@ def model_declaration(graph, vocab, config):
     pair[kill] = LRLearner(pair['feature'], **config.pair.lr)
 
     # program
-    lbp = LearningBasedProgram(graph, config.lbp)
+    lbp = config.lbp.type(graph, config.lbp.model)
     return lbp
 
 
