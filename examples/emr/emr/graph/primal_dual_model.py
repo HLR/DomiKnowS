@@ -1,23 +1,26 @@
 import logging
 from collections import defaultdict
+from itertools import combinations
 
 import torch
 from torch.nn.parameter import Parameter
 
-from regr.graph import Concept, Relation
+from regr.graph import Concept, Relation, Property
 from regr.solver.constructor.constructor import ProbConstructor
 from regr.solver.session.solver_session import SolverSession
 
 from .torch import TorchModel
-from ..sensor.sensor import DataSensor
+from ..sensor.sensor import TorchSensor, DataSensor
 from ..solver.primal_dual_session import PrimalDualSession
 
 
-class PrimalDualModel(TorchModel):
+class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph):
-        super().__init__(graph)
+        super().__init__()
+        self.graph = graph
+        self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
         def find_concept(node):
             if isinstance(node, Concept):
@@ -36,15 +39,36 @@ class PrimalDualModel(TorchModel):
         for rel in graph.traversal_apply(find_relation):
             self.lmbd_idx[rel] = param_idx
             param_idx += 1
-        for concept in graph.traversal_apply(find_concept):
-            self.lmbd_idx[concept] = param_idx
-            param_idx += 1
+        # for concept in graph.traversal_apply(find_concept):
+        #     self.lmbd_idx[concept] = param_idx
+        #     param_idx += 1
 
         self.lmbd = Parameter(torch.Tensor(param_idx))
         self.reset_parameters()
 
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 0.5)
+
+    def find_poi(self):
+        def all_properties(node):
+            if isinstance(node, Property):
+                return node
+            return None
+        for prop in self.graph.traversal_apply(all_properties):
+            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
+                if sensor1.target:
+                    target_sensor = sensor1
+                    output_sensor = sensor2
+                elif sensor2.target:
+                    target_sensor = sensor2
+                    output_sensor = sensor1
+                else:
+                    # TODO: should different learners get closer?
+                    continue
+                if output_sensor.target:
+                    # two targets, skip
+                    continue
+                yield prop, output_sensor, target_sensor
 
     def forward(self, context):
         closs = self.inferSelection(context, list(self.poi))

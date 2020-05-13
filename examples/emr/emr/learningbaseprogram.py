@@ -90,6 +90,22 @@ class LearningBasedProgram():
             _, _, output = self.model(data, inference=inference)
             return output
 
+# Primal-dual need multiple backward through constraint loss.
+# It requires retain_graph=True.
+# Memory leak problem with `backward(create_graph=True)`
+# https://github.com/pytorch/pytorch/issues/4661#issuecomment-596526199
+# workaround with following functions based on `grad()`
+def backward(loss, parameters):
+    parameters = list(parameters)
+    grads = torch.autograd.grad(outputs=loss, inputs=parameters)
+    assert len(grads) == len(parameters)
+    for grad, parameter in zip(grads, parameters):
+        parameter.grad = grad
+
+def unset_backward(parameters):
+    for parameter in parameters:
+        parameter.grad = None
+
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     def __init__(self, graph, config):
         super().__init__(graph, config)
@@ -115,10 +131,14 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
             copt_loss = -closs
             if self.opt is not None:
                 self.opt.zero_grad()
-                loss.backward(retain_graph=True)
+                #loss.backward(retain_graph=True)
+                backward(loss, self.model.parameters())
                 self.opt.step()
+                unset_backward(self.model.parameters())
             if self.copt is not None:
                 self.copt.zero_grad()
-                copt_loss.backward()
+                #copt_loss.backward()
+                backward(copt_loss, self.cmodel.parameters())
                 self.copt.step()
+                unset_backward(self.cmodel.parameters())
             yield loss, metric, output
