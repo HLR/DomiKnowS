@@ -176,7 +176,7 @@ class PrimalDualModel(torch.nn.Module):
                 score, mask = self.get_prop_result(context, prop)
                 mask = mask.cpu().detach().to(torch.bool).numpy()
                 # copy and detach, time consuming I/O
-                batched_value = score.clone().cpu().detach().numpy()
+                batched_value = score#.clone().cpu().detach().numpy()
 
                 for batch_index in range(batch_size):
                     # (l...*r)

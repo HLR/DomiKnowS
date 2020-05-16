@@ -107,8 +107,8 @@ def unset_backward(parameters):
         parameter.grad = None
 
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
-    def __init__(self, graph, config):
-        super().__init__(graph, config)
+    def __init__(self, graph, model):
+        super().__init__(graph, model)
         self.cmodel = PrimalDualModel(graph)
         self.copt = None
 
