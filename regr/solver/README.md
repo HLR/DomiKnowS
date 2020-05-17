@@ -64,10 +64,10 @@ If this collection is empty then the methods will use all concepts and relations
 
 The results of the ILP solution are added to nodes in the Data Graph with key ILP.
 
-#The source of constrains 
+## The source of constrains 
 
-It could be the **ontology graph itself with defined logical constrains** or **ontology (in OWL)** provided as url in the ontology graph.
-e
+The ILP constrains could be specified in the **ontology graph itself with defined logical constrains** or in the **ontology (in OWL file)** provided as url in the ontology graph.
+
 # Graph with logical Constrains
 
 **If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
