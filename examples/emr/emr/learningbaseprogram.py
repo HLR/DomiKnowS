@@ -106,10 +106,10 @@ def unset_backward(parameters):
     for parameter in parameters:
         parameter.grad = None
 
-def reverse_grad(parameters):
+def reverse_sign_grad(parameters, factor=-1.):
     for parameter in parameters:
         if parameter.grad is not None:
-            parameter.grad = - parameter.grad
+            parameter.grad = factor * parameter.grad
 
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     def __init__(self, graph, model):
@@ -138,14 +138,19 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
                 loss.backward()
                 #backward(loss, self.model.parameters())
                 self.opt.step()
-                unset_backward(self.model.parameters())
-            closs, coutput = self.cmodel(output)
-            copt_loss = -closs
+                # unset_backward(self.model.parameters())
+            # closs, coutput = self.cmodel(output)
+            # copt_loss = -closs
             if self.copt is not None:
-                self.copt.zero_grad()
+                # self.copt.zero_grad()
                 # copt_loss.backward()
-                # reverse_grad(self.cmodel.parameters())
-                backward(copt_loss, self.cmodel.parameters())
+                # NOTE: Based on the face the gradient of lambda in dual
+                #       is reversing signs of their gradient in primal,
+                #       we avoid a repeated backward (and also pytorch's
+                #       retain_graph problem), we simply reverse the sign
+                #       for the dual. Don't zero_grad() here!
+                reverse_sign_grad(self.cmodel.parameters())
+                # backward(copt_loss, self.cmodel.parameters())
                 self.copt.step()
-                unset_backward(self.cmodel.parameters())
-            yield loss.data, metric, output
+                # unset_backward(self.cmodel.parameters())
+            yield loss, metric, output
