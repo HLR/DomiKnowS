@@ -119,7 +119,7 @@ class Constructor():
                             variables[rel.src, xy], SolverSession.CTYPE.LE, variables[rel.dst, (x,)],
                             name='{}_{}_{}'.format(rel.name, str(xy), str(x)))
                         self.logger.debug(' - - add %s', constr)
-                        constraints[rel, xy, x] = constr
+                        constraints[rel, xy, (x,)] = constr
 
         if self.lazy_not:
             self.logger.debug('lazy negative add constraints')
