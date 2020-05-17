@@ -97,7 +97,7 @@ class LearningBasedProgram():
 # workaround with following functions based on `grad()`
 def backward(loss, parameters):
     parameters = list(parameters)
-    grads = torch.autograd.grad(outputs=loss, inputs=parameters)
+    grads = torch.autograd.grad(outputs=loss, inputs=parameters, retain_graph=False)
     assert len(grads) == len(parameters)
     for grad, parameter in zip(grads, parameters):
         parameter.grad = grad
@@ -105,6 +105,11 @@ def backward(loss, parameters):
 def unset_backward(parameters):
     for parameter in parameters:
         parameter.grad = None
+
+def reverse_grad(parameters):
+    for parameter in parameters:
+        if parameter.grad is not None:
+            parameter.grad = - parameter.grad
 
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     def __init__(self, graph, model):
@@ -128,17 +133,19 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
             mloss, metric, output = self.model(data, inference=inference)
             closs, coutput = self.cmodel(output)
             loss = mloss + closs
-            copt_loss = -closs
             if self.opt is not None:
                 self.opt.zero_grad()
-                #loss.backward(retain_graph=True)
-                backward(loss, self.model.parameters())
+                loss.backward()
+                #backward(loss, self.model.parameters())
                 self.opt.step()
                 unset_backward(self.model.parameters())
+            closs, coutput = self.cmodel(output)
+            copt_loss = -closs
             if self.copt is not None:
                 self.copt.zero_grad()
-                #copt_loss.backward()
+                # copt_loss.backward()
+                # reverse_grad(self.cmodel.parameters())
                 backward(copt_loss, self.cmodel.parameters())
                 self.copt.step()
                 unset_backward(self.cmodel.parameters())
-            yield loss, metric, output
+            yield loss.data, metric, output
