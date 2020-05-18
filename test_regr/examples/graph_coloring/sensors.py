@@ -7,6 +7,7 @@ import torch
 class DummyLearner(TorchLearner):
     def forward(self,) -> Any:
         result = torch.ones(self.inputs[0].shape)
+        result = -1 * result
         return result
 
 

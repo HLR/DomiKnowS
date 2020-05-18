@@ -10,7 +10,7 @@ import pytest
 def model_declaration(config, case):
     from regr.sensor.pytorch.sensors import ReaderSensor
 
-    from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2
+    from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
 
     from sensors import DummyLearner, DummyEdgeSensor, CustomReader
 
@@ -24,7 +24,7 @@ def model_declaration(config, case):
 
     neighbor['raw'] = CustomReader(keyword='raw')
 
-    city['firestation'] = DummyLearner('raw')
+    city[firestationCity] = DummyLearner('raw')
 
 
     lbp = LearningBasedProgram(graph, **config)
