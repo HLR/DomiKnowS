@@ -1,3 +1,4 @@
+import sys
 import inspect
 import keyword
 from functools import reduce
@@ -276,3 +277,14 @@ def isbad(x):
         x != x or  # nan
         abs(x) == float('inf')  # inf
     )
+
+
+# consume(it) https://stackoverflow.com/q/50937966
+if sys.implementation.name == 'cpython':
+    import collections
+    def consume(it):
+        collections.deque(it, maxlen=0)
+else:
+    def consume(it):
+        for _ in it:
+            pass
