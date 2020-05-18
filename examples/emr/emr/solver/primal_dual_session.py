@@ -28,14 +28,13 @@ class PrimalDualSession(SolverSession):
     def constr(self, lhs, ctype, rhs, name=None):
         name = name or self.autoname(self.constrs)
         if ctype == SolverSession.CTYPE.EQ:
-            penalty = (lhs - rhs).clamp(min=0) + (rhs - lhs).clamp(min=0)
+            penalty = (rhs - lhs).clamp(min=0) + (lhs - rhs).clamp(min=0)
             constr = penalty
         elif ctype in (SolverSession.CTYPE.GE, SolverSession.CTYPE.GT):
-            # FIXME: reverse pos of lhs and rhs!
-            penalty = (lhs - rhs).clamp(min=0)
+            penalty = (rhs - lhs).clamp(min=0)
             constr = penalty
         elif ctype in (SolverSession.CTYPE.LE, SolverSession.CTYPE.LT):
-            penalty = (rhs - lhs).clamp(min=0)
+            penalty = (lhs - rhs).clamp(min=0)
             constr = penalty
         self.constrs[name] = penalty
         return constr
