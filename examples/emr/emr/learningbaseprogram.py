@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from .utils import consume, print_reformat
 from .graph.primal_dual_model import PrimalDualModel
+from .graph.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
 
 
 class LearningBasedProgram():
@@ -114,7 +115,7 @@ def reverse_sign_grad(parameters, factor=-1.):
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     def __init__(self, graph, model):
         super().__init__(graph, model)
-        self.cmodel = PrimalDualModel(graph)
+        self.cmodel = BigBatchPrimalDualModel(graph)
         self.copt = None
 
     def train(self, training_set=None, valid_set=None, test_set=None, config=None):

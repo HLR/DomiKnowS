@@ -16,6 +16,9 @@ class Constructor():
     def get_predication(self, predicate, idx, negative=False):
         raise NotImplementedError
 
+    def isskip(self, value):
+        return isbad(value)
+
     def candidates(self, data, *predicates_list):
         candidates = {} # concept -> [(object,...), ...]
         if self.self_relation:
@@ -45,7 +48,7 @@ class Constructor():
                 for x in candidates[concept]: # flat: C-order -> last dim first!
                     idx, _ = zip(*x)
                     prediction = self.get_predication(predicate, idx)
-                    if isbad(prediction): continue
+                    if self.isskip(prediction): continue
                     var = session.var(
                         session.VTYPE.BIN, 0, 1,
                         name='{}_{}'.format(concept.name, str(x)))
@@ -64,7 +67,7 @@ class Constructor():
                     for x in candidates[concept]:
                         idx, _ = zip(*x)
                         prediction_not = self.get_predication(predicate, idx, negative=True)
-                        if isbad(prediction_not): continue
+                        if self.isskip(prediction_not): continue
                         var = session.var(
                             session.VTYPE.BIN, 0, 1,
                             name='lazy_not_{}_{}'.format(concept.name, str(x)))
@@ -94,6 +97,7 @@ class Constructor():
                             variables[rel.src, x], SolverSession.CTYPE.LE, variables[rel.dst, x],
                             name='{}_{}'.format(rel.name, str(x)))
                         self.logger.debug(' - - add %s', constr)
+                        assert (rel, x) not in constraints
                         constraints[rel, x] = constr
                 self.logger.debug(' - not_a')
                 for rel in concept.not_a():
@@ -106,6 +110,7 @@ class Constructor():
                             variables[rel.src, x] + variables[rel.dst, x], SolverSession.CTYPE.LE, 1,
                             name='{}_{}'.format(rel.name, str(x)))
                         self.logger.debug(' - - add %s', constr)
+                        assert (rel, x) not in constraints
                         constraints[rel, x] = constr
                 self.logger.debug(' - has_a')
                 for arg_id, rel in enumerate(concept.has_a()): # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
@@ -119,6 +124,7 @@ class Constructor():
                             variables[rel.src, xy], SolverSession.CTYPE.LE, variables[rel.dst, (x,)],
                             name='{}_{}_{}'.format(rel.name, str(xy), str(x)))
                         self.logger.debug(' - - add %s', constr)
+                        assert (rel, xy, (x,)) not in constraints
                         constraints[rel, xy, (x,)] = constr
 
         if self.lazy_not:
@@ -162,7 +168,21 @@ class ScoreConstructor(Constructor):
 
 
 class ProbConstructor(Constructor):
+    def __init__(self, lazy_not=False, self_relation=True):
+        super().__init__(lazy_not=lazy_not, self_relation=self_relation)
+
     def get_predication(self, predicate, idx, negative=False):
         if negative:
             return 1 - predicate[idx]
         return predicate[idx]
+
+
+class BatchMaskProbConstructor(Constructor):
+    def get_predication(self, predicate, idx, negative=False):
+        value, mask = predicate
+        if negative:
+            value = 1 - value
+        return value[(slice(value.shape[0]),*idx)], mask[(slice(mask.shape[0]),*idx)]
+
+    def isskip(self, value):
+        return False

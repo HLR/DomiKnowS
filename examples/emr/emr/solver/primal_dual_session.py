@@ -22,21 +22,20 @@ class PrimalDualSession(SolverSession):
         SolverSession.VTYPE.DEC: torch.float}
     def var(self, vtype, lb, ub, name=None):
         name = name or self.autoname(self.vars)
-        var = torch.empty((), dtype=self.VMAP[vtype])
-        self.vars[name] = var
-        # TODO: handle lb and ub
-        return var
+        self.vars[name] = None
+        return None
 
     def constr(self, lhs, ctype, rhs, name=None):
         name = name or self.autoname(self.constrs)
         if ctype == SolverSession.CTYPE.EQ:
-            penalty = max(0, lhs - rhs) + max(0, rhs - lhs)
+            penalty = (lhs - rhs).clamp(min=0) + (rhs - lhs).clamp(min=0)
             constr = penalty
         elif ctype in (SolverSession.CTYPE.GE, SolverSession.CTYPE.GT):
-            penalty = max(0, lhs - rhs)
+            # FIXME: reverse pos of lhs and rhs!
+            penalty = (lhs - rhs).clamp(min=0)
             constr = penalty
         elif ctype in (SolverSession.CTYPE.LE, SolverSession.CTYPE.LT):
-            penalty = max(0, rhs - lhs)
+            penalty = (rhs - lhs).clamp(min=0)
             constr = penalty
         self.constrs[name] = penalty
         return constr

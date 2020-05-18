@@ -5,11 +5,9 @@ from itertools import combinations
 import torch
 from torch.nn.parameter import Parameter
 
-from regr.graph import Concept, Relation, Property
+from regr.graph import Concept, Property
 from regr.solver.constructor.constructor import ProbConstructor
-from regr.solver.session.solver_session import SolverSession
 
-from .torch import TorchModel
 from ..sensor.sensor import TorchSensor, DataSensor
 from ..solver.primal_dual_session import PrimalDualSession
 
@@ -17,7 +15,7 @@ from ..solver.primal_dual_session import PrimalDualSession
 class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph):
+    def __init__(self, graph, constructor=None, SessionType=None):
         super().__init__()
         self.graph = graph
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
@@ -31,8 +29,8 @@ class PrimalDualModel(torch.nn.Module):
                     yield from rels
 
         self.names = {concept.name: concept for concept in graph.traversal_apply(find_concept)}
-        self.constructor = ProbConstructor()
-        self.SessionType = PrimalDualSession
+        self.constructor = constructor or ProbConstructor()
+        self.SessionType = SessionType or PrimalDualSession
 
         self.lmbd_idx = {}
         param_idx = 0
