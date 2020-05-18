@@ -2,10 +2,9 @@ from itertools import combinations
 
 import torch
 
-from regr.graph.property import Property
-
-from emr.sensor.sensor import TorchSensor
-from ..sensor.learner import ModuleLearner
+from regr.graph import Property, DataNodeBuilder
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+from regr.sensor.pytorch.learners import TorchLearner
 
 
 def all_properties(node):
@@ -15,23 +14,33 @@ def all_properties(node):
 
 
 class TorchModel(torch.nn.Module):
-    def __init__(self, graph, loss=None, metric=None, solver_fn=None):
+    def __init__(self, graph, loss=None, metric=None, Solver=None):
         super().__init__()
         self.graph = graph
         self.loss = loss
         self.metric = metric
 
         for node in self.graph.traversal_apply(all_properties):
-            for _, sensor in node.find(ModuleLearner):
-                self.add_module(sensor.fullname, sensor.module)
+            for _, sensor in node.find(TorchLearner):
+                self.add_module(sensor.fullname, sensor.model)
 
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
-        self.solver = solver_fn(self.graph)
+        self.solver = Solver(self.graph)
         self.graph.poi = self.poi
 
+    def reset(self):
+        if self.loss is not None:
+            self.loss.reset()
+        if self.metric is not None:
+            self.metric.reset()
+
     def move(self, value, device=None):
-        device = device or next(self.parameters()).device
+        parameters = list(self.parameters())
+        if parameters:
+            device = device or next(self.parameters()).device
+        else:
+            device = device
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
@@ -46,46 +55,33 @@ class TorchModel(torch.nn.Module):
     def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.target:
+                if sensor1.label:
                     target_sensor = sensor1
                     output_sensor = sensor2
-                elif sensor2.target:
+                elif sensor2.label:
                     target_sensor = sensor2
                     output_sensor = sensor1
                 else:
                     # TODO: should different learners get closer?
                     continue
-                if output_sensor.target:
+                if output_sensor.label:
                     # two targets, skip
                     continue
                 yield prop, output_sensor, target_sensor
 
-    def forward(self, data, inference=True):
+    def forward(self, data):
         data = self.move(data)
-        loss = 0
-        metric = {}
 
-        if inference:
-            data = self.inference(data)
-
-        for prop, (output_sensor, target_sensor) in self.poi.items():
-            logit = output_sensor(data)
-            mask = output_sensor.mask(data)
-            inference = prop(data)
-            labels = target_sensor(data)
-
-            if self.loss:
-                local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
-                loss += local_loss
-            if self.metric:
-                local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
-                metric[output_sensor, target_sensor] = local_metric
-
-        return loss, metric, data
-
-    def inference(self, data):
-        data = self.solver.inferSelection(data, list(self.poi))
-        return data
+        def all_properties(node):
+            if isinstance(node, Property):
+                return node
+        for prop in self.graph.traversal_apply(all_properties):
+            for _, sensor in prop.find(ReaderSensor):
+                sensor.fill_data(data)
+        data.update({"graph": self.graph, 'READER': 1})
+        context = DataNodeBuilder(data)
+        datanode = context.getDataNode()
+        return datanode
 
 
 class PoiModel(TorchModel):
@@ -112,22 +108,33 @@ class PoiModel(TorchModel):
         loss = 0
         metric = {}
 
-        if inference:
-            data = self.inference(data)
+        def all_properties(node):
+            if isinstance(node, Property):
+                return node
+        for prop in self.graph.traversal_apply(all_properties):
+            for _, sensor in prop.find(ReaderSensor):
+                sensor.fill_data(data)
+        data.update({"graph": self.graph, 'READER': 1})
+        context = DataNodeBuilder(data)
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
+            # make sure the sensors are evaluated
+            output_sensor(data)
+            target_sensor(data)
+            # calculated any loss or metric
             loss += self.poi_loss(data, prop, output_sensor, target_sensor)
             metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
 
-        return loss, metric, data
+        datanode = context.getDataNode()
+        return loss, metric, datanode
 
-class IMLModel(PoiModel):
-    def poi_loss(self, data, prop, output_sensor, target_sensor):
-        logit = output_sensor(data)
-        mask = output_sensor.mask(data)
-        labels = target_sensor(data)
-        inference = prop(data)
+# class IMLModel(PoiModel):
+#     def poi_loss(self, data, prop, output_sensor, target_sensor):
+#         logit = output_sensor(data)
+#         mask = output_sensor.mask(data)
+#         labels = target_sensor(data)
+#         inference = prop(data)
 
-        if self.loss:
-            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
-            return local_loss
+#         if self.loss:
+#             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
+#             return local_loss

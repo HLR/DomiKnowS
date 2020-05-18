@@ -8,23 +8,24 @@ from ..utils import consume
 class LearningBasedProgram():
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, config):
+    def __init__(self, graph, Model, **kwargs):
         self.graph = graph
-        self.model = config.model(graph)
+        self.model = Model(graph)
+        self.opt = None
 
     def train(self, training_set=None, valid_set=None, test_set=None, config=None):
         if config.device is not None:
             self.model.to(config.device)
         if list(self.model.parameters()):
-            opt = config.opt(self.model.parameters())
+            self.opt = config.opt(self.model.parameters())
         else:
-            opt = None
+            self.opt = None
         for epoch in range(config.epoch):
             self.logger.info('Epoch: %d', epoch)
 
             if training_set is not None:
                 self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set, opt, config.train_inference), total=len(training_set)))
+                consume(tqdm(self.train_epoch(training_set, config.train_inference), total=len(training_set), desc='Epoch {} Training'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -32,7 +33,7 @@ class LearningBasedProgram():
 
             if valid_set is not None:
                 self.logger.info('Validation:')
-                consume(tqdm(self.test(valid_set, config.valid_inference), total=len(valid_set)))
+                consume(tqdm(self.test(valid_set, config.valid_inference), total=len(valid_set), desc='Epoch {} Validation'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -40,27 +41,27 @@ class LearningBasedProgram():
 
         if test_set is not None:
             self.logger.info('Testing:')
-            consume(tqdm(self.test(test_set, config.valid_inference), total=len(test_set)))
+            consume(tqdm(self.test(test_set, config.valid_inference), total=len(test_set), desc='Epoch {} Testing'.format(epoch)))
             self.logger.info(' - loss:')
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
             self.logger.info(self.model.metric)
 
-    def train_epoch(self, dataset, opt=None, inference=False):
+    def train_epoch(self, dataset, inference=False):
         self.model.train()
+        self.model.reset()
         for data in dataset:
-            if opt is not None:
-                opt.zero_grad()
+            if self.opt is not None:
+                self.opt.zero_grad()
             loss, metric, output = self.model(data, inference=inference)
-            if opt is not None:
+            if self.opt is not None:
                 loss.backward()
-                opt.step()
+                self.opt.step()
             yield loss, metric, output
 
     def test(self, dataset, inference=True):
         self.model.eval()
-        self.model.loss.reset()
-        self.model.metric.reset()
+        self.model.reset()
         with torch.no_grad():
             for data in dataset:
                 loss, metric, output = self.model(data, inference=inference)
@@ -68,8 +69,7 @@ class LearningBasedProgram():
 
     def eval(self, dataset, inference=True):
         self.model.eval()
-        self.model.loss.reset()
-        self.model.metric.reset()
+        self.model.reset()
         with torch.no_grad():
             for data in dataset:
                 _, _, output = self.model(data, inference=inference)
@@ -78,8 +78,7 @@ class LearningBasedProgram():
     def eval_one(self, data, inference=True):
         # TODO: extend one sample data to 1-batch data
         self.model.eval()
-        self.model.loss.reset()
-        self.model.metric.reset()
+        self.model.reset()
         with torch.no_grad():
             _, _, output = self.model(data, inference=inference)
             return output

@@ -7,8 +7,9 @@ import pytest
 
 
 
-def model_declaration(config, case):
+def model_declaration(config):
     from regr.sensor.pytorch.sensors import ReaderSensor
+    
 
     from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
 
@@ -25,65 +26,28 @@ def model_declaration(config, case):
     neighbor['raw'] = CustomReader(keyword='raw')
 
     city[firestationCity] = DummyLearner('raw')
+    city[firestationCity] = ReaderSensor(keyword='raw', label=True)
 
 
-    lbp = LearningBasedProgram(graph, **config)
-    return lbp
+    program = config.program.Type(graph, **config.program)
+    return program
 
 
 
 @pytest.mark.gurobi
-def test_main_conll04(case):
+def test_graph_coloring_main():
     from config import CONFIG
-    from emr.data import ConllDataLoader
+    lbp = model_declaration(CONFIG.Model)
 
-    training_set = ConllDataLoader(CONFIG.Data.train_path,
-                                   batch_size=CONFIG.Train.batch_size,
-                                   skip_none=CONFIG.Data.skip_none)
-    lbp = model_declaration(CONFIG.Model, case)
-    data = next(iter(training_set))
+    # dataset = None # FIXME: shouldn't this example anyway based on a iterable object as data source?
+    # for output in lbp.eval(dataset=dataset, inference=True):
+    #     print(output)
 
-    _, _, datanode = lbp.model(data)
-
-    for child_node in datanode.getChildDataNodes():
-        if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
-
-            for child_node1 in child_node.getChildDataNodes():
-                if child_node1.ontologyNode.name == 'char':
-                    assert True
-                else:
-                    assert False
-
-            assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
-
-            assert len(child_node.getRelationLinks(relationName="pair")) == 4
-
-            assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<location>') == case.word.location[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<other>') == case.word.other[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<O>') == case.word.O[child_node.instanceID]).all()
-        elif child_node.ontologyNode.name == 'phrase':
-            assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
-            assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
-        else:
-            assert False, 'There should be only word and phrases. {} is unexpected.'.format(
-                child_node.ontologyNode.name)
-
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'O']
+    # using an underlying call
+    loss, metric, datanode = lbp.model({}, inference=True)
+    conceptsRelations = [] # TODO: please fill this
     tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
-
-    assert tokenResult['people'][0] == 1
-    assert sum(tokenResult['people']) == 1
-    assert tokenResult['organization'][3] == 1
-    assert sum(tokenResult['organization']) == 1
-    assert sum(tokenResult['location']) == 0
-    assert sum(tokenResult['other']) == 0
-    assert tokenResult['O'][1] == 1
-    assert tokenResult['O'][2] == 1
-    assert sum(tokenResult['O']) == 2
+    print('I am here!')
 
 
 if __name__ == '__main__':
