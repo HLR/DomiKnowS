@@ -23,9 +23,10 @@ def model_declaration(config, case):
         'raw', mode='forward', keyword='raw')
 
     neighbor['raw'] = CustomReader(keyword='raw')
+    neighbor['raw'] = CustomReader(keyword='raw')
 
     city[firestationCity] = DummyLearner('raw')
-
+    city[firestationCity] = DummyLearner('raw')
 
     lbp = LearningBasedProgram(graph, **config)
     return lbp
