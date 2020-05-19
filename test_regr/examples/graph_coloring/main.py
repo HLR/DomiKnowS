@@ -14,7 +14,7 @@ def model_declaration(config):
 
     from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
 
-    from sensors import DummyLearner, DummyEdgeSensor, CustomReader
+    from sensors import DummyLearner, DummyEdgeSensor, CustomReader, DummyLabelSensor
 
     graph.detach()
 
@@ -28,7 +28,7 @@ def model_declaration(config):
     neighbor['raw'] = CustomReader(keyword='raw')
 
     city[firestationCity] = DummyLearner('raw')
-    city[firestationCity] = ReaderSensor(keyword='raw', label=True)
+    city[firestationCity] = DummyLabelSensor(label=True)
 
 
 

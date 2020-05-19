@@ -10,6 +10,13 @@ class DummyLearner(TorchLearner):
         result = -1 * result
         return result
 
+class DummyLabelSensor(TorchSensor):
+    def __init__(self, *pres, label=True):
+        super().__init__(*pres, label=label)
+
+    def forward(self,) -> Any:
+        return None
+
 
 class DummyEdgeSensor(TorchEdgeSensor):
     def forward(self,) -> Any:
