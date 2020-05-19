@@ -32,7 +32,7 @@ def model_declaration(config):
 
 
 
-    program = config.program.Type(graph, **config.program)
+    program = config.program.Type(graph, config.program.Model)
     return program
 
 
