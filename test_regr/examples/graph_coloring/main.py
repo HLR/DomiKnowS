@@ -44,14 +44,12 @@ def test_graph_coloring_main():
 
     dataset = CityReader().run() # Adding the info on the reader
 
-    # dataset = None # FIXME: shouldn't this example anyway based on a iterable object as data source?
-    for output in lbp.eval(dataset=dataset, inference=True):
-        print(output)
+    for datanode in lbp.eval(dataset=dataset, inference=True):
+        print(datanode)
+        # call solver
+        # conceptsRelations = [] # TODO: please fill this
+        # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
 
-    # using an underlying call
-    # loss, metric, datanode = lbp.model({}, inference=True)
-    conceptsRelations = [] # TODO: please fill this
-    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
     print('I am here!')
 
 
