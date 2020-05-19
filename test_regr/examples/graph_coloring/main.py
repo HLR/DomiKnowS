@@ -7,7 +7,6 @@ import pytest
 from reader import CityReader
 
 
-
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.program import LearningBasedProgram
@@ -26,10 +25,10 @@ def model_declaration():
     world_contains_city['forward'] = DummyEdgeSensor(
         'raw', mode='forward', keyword='raw')
 
-    neighbor['raw'] = CustomReader(keyword='raw')
-    neighbor['raw'] = CustomReader(keyword='raw')
+    neighbor['raw'] = CustomReader(keyword='links')
+    neighbor['raw'] = CustomReader(keyword='links')
 
-    city[firestationCity] = DummyLearner('raw')
+    city[firestationCity] = DummyLearner('raw', edges=[world_contains_city['forward']])
     city[firestationCity] = DummyLabelSensor(label=True)
 
 

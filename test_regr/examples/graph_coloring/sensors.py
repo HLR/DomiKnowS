@@ -6,9 +6,10 @@ import torch
 
 class DummyLearner(TorchLearner):
     def forward(self,) -> Any:
-        result = torch.ones(self.inputs[0].shape)
+        result = torch.ones(len(self.inputs[0]))
         result = -1 * result
         return result
+
 
 class DummyLabelSensor(TorchSensor):
     def __init__(self, *pres, label=True):
