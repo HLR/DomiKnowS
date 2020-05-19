@@ -85,22 +85,24 @@ class TorchModel(torch.nn.Module):
 
 class PoiModel(TorchModel):
     def poi_loss(self, data, prop, output_sensor, target_sensor):
+        if not self.loss:
+            return 0
         logit = output_sensor(data)
         mask = output_sensor.mask(data)
         labels = target_sensor(data)
 
-        if self.loss:
-            local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
-            return local_loss
+        local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+        return local_loss
 
     def poi_metric(self, data, prop, output_sensor, target_sensor):
+        if not self.metric:
+            return None
         mask = output_sensor.mask(data)
         labels = target_sensor(data)
         inference = prop(data)
 
-        if self.metric:
-            local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
-            return local_metric
+        local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
+        return local_metric
 
     def forward(self, data, inference=True):
         data = self.move(data)
