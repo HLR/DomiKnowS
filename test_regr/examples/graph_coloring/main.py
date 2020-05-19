@@ -4,6 +4,7 @@ sys.path.append('.')
 sys.path.append('../..')
 
 import pytest
+from reader import CityReader
 
 
 
@@ -24,9 +25,11 @@ def model_declaration(config):
         'raw', mode='forward', keyword='raw')
 
     neighbor['raw'] = CustomReader(keyword='raw')
+    neighbor['raw'] = CustomReader(keyword='raw')
 
     city[firestationCity] = DummyLearner('raw')
     city[firestationCity] = ReaderSensor(keyword='raw', label=True)
+
 
 
     program = config.program.Type(graph, **config.program)
@@ -39,14 +42,16 @@ def test_graph_coloring_main():
     from config import CONFIG
     lbp = model_declaration(CONFIG.Model)
 
+    dataset = CityReader().run() # Adding the info on the reader
+
     # dataset = None # FIXME: shouldn't this example anyway based on a iterable object as data source?
-    # for output in lbp.eval(dataset=dataset, inference=True):
-    #     print(output)
+    for output in lbp.eval(dataset=dataset, inference=True):
+        print(output)
 
     # using an underlying call
-    loss, metric, datanode = lbp.model({}, inference=True)
+    # loss, metric, datanode = lbp.model({}, inference=True)
     conceptsRelations = [] # TODO: please fill this
-    tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
     print('I am here!')
 
 
