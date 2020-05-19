@@ -8,7 +8,7 @@ from reader import CityReader
 
 
 
-def model_declaration(config):
+def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
@@ -41,8 +41,7 @@ def model_declaration(config):
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
-    from config import CONFIG
-    lbp = model_declaration(CONFIG.Model)
+    lbp = model_declaration()
 
     dataset = CityReader().run() # Adding the info on the reader
 
