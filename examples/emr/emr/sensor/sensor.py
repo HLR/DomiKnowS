@@ -101,3 +101,45 @@ class CartesianSensor(FunctionalSensor):
             input = input.view(dib, *(1,)*len(dol), *dil, dif).repeat(1, *dol, *(1,)*len(dil), 1)
             output = torch.cat((output, input), dim=-1)
         return output
+
+
+class SpacyTokenizorSensor(FunctionalSensor):
+    from spacy.lang.en import English
+    nlp = English()
+
+    def forward_func(self, sentences):
+        tokens = self.nlp.tokenizer(sentences)
+        return tokens
+
+TRANSFORMER_MODEL = 'bert-base-uncased'
+
+class BertTokenizorSensor(FunctionalSensor):
+    from transformers import BartTokenizer
+    tokenizer = BartTokenizer.from_pretrained(TRANSFORMER_MODEL)
+
+    def forward_func(self, sentences):
+        tokens = self.tokenizer.batch_encode_plus(
+            sentences,
+            return_tensors='pt',
+            return_attention_mask=True,
+            #return_offsets_mapping=True,
+        )
+        tokens['tokens'] = self.tokenizer.convert_ids_to_tokens(tokens['input_ids'], skip_special_tokens=True)
+        return tokens
+
+class BertEmbeddingSensor(FunctionalSensor):
+    from transformers import BertModel
+    model = BertModel.from_pretrained(TRANSFORMER_MODEL)
+
+    # {
+    #     tokens: list[List[str]], sting based tokens
+    #     input_ids: list[List[int]],
+    #     -token_type_ids: list[List[int]] if return_token_type_ids is True (default)
+    #     attention_mask: list[List[int]] if return_attention_mask is True (default)
+    #     -overflowing_tokens: list[List[int]] if a ``max_length`` is specified and return_overflowing_tokens is True
+    #     -num_truncated_tokens: List[int] if a ``max_length`` is specified and return_overflowing_tokens is True
+    #     -special_tokens_mask: list[List[int]] if ``add_special_tokens`` if set to ``True`` and return_special_tokens_mask is True
+    # }
+    def forward_func(self, tokens):
+        outputs = self.model(tokens['input_ids'])
+        return outputs
