@@ -120,11 +120,11 @@ class PoiModel(TorchModel):
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
-            output_sensor(data)
-            target_sensor(data)
+            output = output_sensor(context)
+            target = target_sensor(context)
             # calculated any loss or metric
-            loss += self.poi_loss(data, prop, output_sensor, target_sensor)
-            metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
+            loss += self.poi_loss(context, prop, output_sensor, target_sensor)
+            metric[output_sensor, target_sensor] = self.poi_metric(context, prop, output_sensor, target_sensor)
 
         datanode = context.getDataNode()
         return loss, metric, datanode

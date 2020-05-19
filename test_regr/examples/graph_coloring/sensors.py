@@ -16,7 +16,7 @@ class DummyLabelSensor(TorchSensor):
         super().__init__(*pres, label=label)
 
     def forward(self,) -> Any:
-        return None
+        return []
 
 
 class DummyEdgeSensor(TorchEdgeSensor):
