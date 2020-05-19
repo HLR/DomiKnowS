@@ -45,10 +45,10 @@ def test_graph_coloring_main():
     dataset = CityReader().run() # Adding the info on the reader
 
     for datanode in lbp.eval(dataset=dataset, inference=True):
-        print(datanode)
+        assert datanode != None
         # call solver
         # conceptsRelations = [] # TODO: please fill this
-        # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
 
     print('I am here!')
 
