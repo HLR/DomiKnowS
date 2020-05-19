@@ -10,7 +10,9 @@ from reader import CityReader
 
 def model_declaration(config):
     from regr.sensor.pytorch.sensors import ReaderSensor
-    
+    from regr.program import LearningBasedProgram
+    from regr.program.model.pytorch import PoiModel
+
 
     from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
 
@@ -32,7 +34,7 @@ def model_declaration(config):
 
 
 
-    program = config.program.Type(graph, config.program.Model)
+    program = LearningBasedProgram(graph, PoiModel)
     return program
 
 
