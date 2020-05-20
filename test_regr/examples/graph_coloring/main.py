@@ -51,17 +51,25 @@ def model_declaration():
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
+    from graph import city, neighbor, firestationCity
     lbp = model_declaration()
 
-    dataset = CityReader().run() # Adding the info on the reader
+    dataset = CityReader().run()  # Adding the info on the reader
 
     for datanode in lbp.eval(dataset=dataset, inference=True):
         assert datanode != None
-        print(datanode)
-        # call solver
-        # conceptsRelations = [] # TODO: please fill this
-        # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        for datanode in lbp.eval(dataset=dataset, inference=True):
+            assert datanode != None
+            assert len(datanode.getChildDataNodes()) == 9
 
+            for child_node in datanode.getChildDataNodes():
+                assert child_node.ontologyNode == city
+                assert child_node.getAttribute('<' + firestationCity.name + '>').item() == -1
+                # assert child_node.getRelationLinks(relationName = )
+
+        # call solver
+        conceptsRelations = (city, neighbor, firestationCity)  # TODO: please fill this
+        tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
     print('I am here!')
 
 
