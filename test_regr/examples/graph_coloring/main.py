@@ -26,7 +26,7 @@ def model_declaration():
         'raw', mode='forward', keyword='raw')
 
     neighbor['raw'] = CustomReader(keyword='links')
-    neighbor['raw'] = CustomReader(keyword='links')
+    neighbor['raw'] = DummyLabelSensor(label=True)
 
     city[firestationCity] = DummyLearner('raw', edges=[world_contains_city['forward']])
     city[firestationCity] = DummyLabelSensor(label=True)
