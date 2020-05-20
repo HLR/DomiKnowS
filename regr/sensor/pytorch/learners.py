@@ -6,11 +6,12 @@ from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 import os.path
 from os import path
 
+
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, *pre):
-        super(TorchLearner, self).__init__(*pre)
+    def __init__(self, *pre, output=None, edges=None):
+        super(TorchLearner, self).__init__(*pre, output=output, edges=edges)
         self.model = None
         self.updated = False
 
