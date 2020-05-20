@@ -4,10 +4,10 @@ from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 from regr.program import LearningBasedProgram
 from regr.utils import Namespace, caller_source
 
-from emr.program import PrimalDualLearningBasedProgram
-from emr.graph.torch import SolverModel, IMLModel
-from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
-from emr.graph.metric import MacroAverageTracker, PRF1Tracker
+from emr.program.primaldual import PrimalDualLearningBasedProgram
+from emr.program.model.torch import SolverModel, IMLModel
+from emr.program.model.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from emr.program.model.metric import MacroAverageTracker, PRF1Tracker
 from emr.solver.solver import Solver
 
 

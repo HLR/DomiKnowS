@@ -3,8 +3,8 @@ import torch
 
 from regr.program import LearningBasedProgram
 
-from .graph.primal_dual_model import PrimalDualModel
-from .graph.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
+from .model.primal_dual_model import PrimalDualModel
+from .model.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
 
 
 # Primal-dual need multiple backward through constraint loss.
