@@ -13,6 +13,9 @@ class LearningBasedProgram():
         self.model = Model(graph)
         self.opt = None
 
+    def update_nominals(self, dataset):
+        pass
+
     def train(
         self,
         training_set,

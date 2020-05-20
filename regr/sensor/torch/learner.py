@@ -40,14 +40,12 @@ class EmbedderLearner(ModuleLearner):
 
 class NorminalEmbedderLearner(EmbedderLearner):
     def __init__(self, pre, vocab_key=None, num_embeddings=None, target=False, module=None, **kwargs):
-        super().__init__(pre, target=target)
         self.vocab_key = vocab_key
+        self.modele_args = kwargs
         if num_embeddings is None:
-            self.module = module or self.Module(num_embeddings=1, **kwargs)
-            self.modele_args = kwargs
+            super().__init__(pre, num_embeddings=1, **kwargs, target=target)
         else:
-            self.module = module or self.Module(**kwargs)
-            self.modele_args = kwargs
+            super().__init__(pre, num_embeddings=num_embeddings, **kwargs, target=target)
 
     def update_module(self, num_embeddings):
         self.module = self.Module(num_embeddings=num_embeddings, **self.modele_args)
@@ -59,6 +57,20 @@ class NorminalEmbedderLearner(EmbedderLearner):
         else:
             mask = torch.ones_like(input)
         return mask
+
+    def forward_func(self, input):
+        indexes, tokens = input
+        if isinstance(indexes, list):
+            max_len = max(map(len, indexes))
+            def pad(output):
+                return torch.cat((
+                    torch.tensor(output, dtype=torch.long), 
+                    torch.zeros(max_len - len(output), dtype=torch.long)
+                    ))
+            indexes = torch.stack(tuple(map(pad, indexes)))
+        device = next(self.parameters()).device
+        indexes = indexes.to(device=device)
+        return super().forward_func(indexes)
 
 class RNNLearner(ModuleLearner):
     Module=torch.nn.LSTM

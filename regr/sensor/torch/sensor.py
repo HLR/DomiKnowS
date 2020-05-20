@@ -1,7 +1,9 @@
 import abc
 from typing import Any, Dict
+from itertools import chain
 from regr.sensor.sensor import Sensor
 from regr.graph.property import Property
+from regr.utils import consume
 
 import torch
 
@@ -123,7 +125,7 @@ class NorminalSensor(FunctionalSensor):
         self.update_vocab(fixed=True)
 
     def update_counter(self, outputs):
-        self.vocab_counter.update(outputs)
+        comsum(self.vocab_counter.update, chain(*outputs))
 
     def update_vocab(self, fixed=None):
         if self.fixed:
@@ -146,16 +148,23 @@ class NorminalSensor(FunctionalSensor):
         raw_outputs = super().forward(context)
         if not self.fixed:
             self.update_counter(raw_outputs)
-        encoded_outputs = [self.encode(output) for output in raw_outputs]
-        return encoded_outputs, raw_outputs
+        encoded_outputs = [list(map(self.encode, raw_output)) for raw_output in raw_outputs]
+        max_len = max(map(len, encoded_outputs))
+        def pad(output):
+            return torch.cat((
+                torch.tensor(output, dtype=torch.long), 
+                torch.zeros(max_len - len(output), dtype=torch.long)
+                ))
+        encoded_tensor = torch.stack(tuple(map(pad, encoded_outputs)))
+        return encoded_tensor, raw_outputs
 
 class SpacyTokenizorSensor(NorminalSensor):
     from spacy.lang.en import English
     nlp = English()
 
     def forward_func(self, sentences):
-        tokens = self.nlp.tokenizer(sentences)
-        return tokens
+        tokens = self.nlp.tokenizer.pipe(sentences)
+        return list(tokens)
 
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
