@@ -71,6 +71,9 @@ class DataNode:
             
                 return conceptCN
         
+        if not isinstance(relationName, str):
+            relationName = relationName.name
+            
         if relationName in self.relationLinks:
             relDNs = self.relationLinks[relationName]
             
@@ -78,6 +81,9 @@ class DataNode:
                 return relDNs
             else:
                 conceptCN = []
+            
+            if not isinstance(conceptName, str):
+                conceptName = conceptName.name
             
             for dn in relDNs:
                 if dn.ontologyNode.name == conceptName:
@@ -117,8 +123,12 @@ class DataNode:
         conceptCN = []
             
         for dn in containsDNs:
-            if dn.ontologyNode.name == conceptName:
-                conceptCN.append(dn)
+            if isinstance(conceptName, str):
+                if dn.ontologyNode.name == conceptName:
+                    conceptCN.append(dn)
+            else:
+                 if dn.ontologyNode == conceptName:
+                    conceptCN.append(dn)
         
         return conceptCN
             
