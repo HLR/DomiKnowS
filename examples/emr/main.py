@@ -1,6 +1,6 @@
 from emr.data import ConllDataLoader
-from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
-from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
+from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor
+from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 from emr.utils import seed
 
 

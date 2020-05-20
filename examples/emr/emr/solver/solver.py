@@ -2,9 +2,8 @@ import torch
 from torch.nn import functional as F
 
 from regr.solver.context_solver import ContextSolver
-
-from ..sensor.learner import ModuleLearner
-from ..sensor.sensor import DataSensor
+from regr.sensor.torch.sensor import DataSensor
+from regr.sensor.torch.learner import ModuleLearner
 
 
 class Solver(ContextSolver):

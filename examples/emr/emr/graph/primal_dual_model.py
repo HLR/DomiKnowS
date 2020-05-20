@@ -7,17 +7,17 @@ from torch.nn.parameter import Parameter
 
 from regr.graph import Concept, Property
 from regr.solver.constructor.constructor import ProbConstructor
+from regr.program.model.torch import BaseModel, TorchModel
+from regr.sensor.torch.sensor import DataSensor
 
-from ..sensor.sensor import TorchSensor, DataSensor
 from ..solver.primal_dual_session import PrimalDualSession
 
 
-class PrimalDualModel(torch.nn.Module):
+class PrimalDualModel(TorchModel):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, constructor=None, SessionType=None):
-        super().__init__()
-        self.graph = graph
+        BaseModel.__init__(self, graph, loss=None, metric=None)
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
         def find_concept(node):
@@ -46,27 +46,6 @@ class PrimalDualModel(torch.nn.Module):
 
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 0.5)
-
-    def find_poi(self):
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
-            return None
-        for prop in self.graph.traversal_apply(all_properties):
-            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.target:
-                    target_sensor = sensor1
-                    output_sensor = sensor2
-                elif sensor2.target:
-                    target_sensor = sensor2
-                    output_sensor = sensor1
-                else:
-                    # TODO: should different learners get closer?
-                    continue
-                if output_sensor.target:
-                    # two targets, skip
-                    continue
-                yield prop, output_sensor, target_sensor
 
     def forward(self, context):
         closs = self.inferSelection(context, list(self.poi))

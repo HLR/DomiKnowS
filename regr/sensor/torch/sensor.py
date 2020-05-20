@@ -103,7 +103,53 @@ class CartesianSensor(FunctionalSensor):
         return output
 
 
-class SpacyTokenizorSensor(FunctionalSensor):
+from collections import OrderedDict, Counter
+
+class NorminalSensor(FunctionalSensor):
+    UNK = '__UNK__'
+    SPECIAL_TOKENS = [UNK]
+
+    def __init__(self, *pres, vocab_counter=None, least_count=0, special_tokens=[], target=False):
+        super().__init__(*pres, target=target)
+        self.least_count = least_count
+        self.special_tokens = self.SPECIAL_TOKENS.copy()
+        self.special_tokens.extend(special_tokens)
+        self.fixed = False
+        self._vocab = None
+        self.set_vocab(vocab_counter)
+
+    def set_vocab(self, vocab_counter=None):
+        self.vocab_counter = vocab_counter or Counter()
+        self.update_vocab(fixed=True)
+
+    def update_counter(self, outputs):
+        self.vocab_counter.update(outputs)
+
+    def update_vocab(self, fixed=None):
+        if self.fixed:
+            raise RuntimeError('Vocab of {} has been fixed!'.format(self))
+        vocab_list = self.special_tokens.copy()
+        vocab_count = list(filter(lambda kv: kv[1] > self.least_count, self.vocab_counter))
+        if vocab_count:
+            vocab_to_add, _ = zip(*vocab_count)
+        else:
+            vocab_to_add = []
+        vocab_list.extend(vocab_to_add)
+        self._vocab = OrderedDict((token, idx) for idx, token in enumerate(vocab_list))
+        if fixed is not None:
+            self.fixed = fixed
+
+    def encode(self, output):
+        return self._vocab.get(output, self._vocab[self.UNK])
+
+    def forward(self, context):
+        raw_outputs = super().forward(context)
+        if not self.fixed:
+            self.update_counter(raw_outputs)
+        encoded_outputs = [self.encode(output) for output in raw_outputs]
+        return encoded_outputs, raw_outputs
+
+class SpacyTokenizorSensor(NorminalSensor):
     from spacy.lang.en import English
     nlp = English()
 
@@ -111,11 +157,12 @@ class SpacyTokenizorSensor(FunctionalSensor):
         tokens = self.nlp.tokenizer(sentences)
         return tokens
 
+
 TRANSFORMER_MODEL = 'bert-base-uncased'
 
 class BertTokenizorSensor(FunctionalSensor):
-    from transformers import BartTokenizer
-    tokenizer = BartTokenizer.from_pretrained(TRANSFORMER_MODEL)
+    from transformers import BertTokenizer
+    tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
 
     def forward_func(self, sentences):
         tokens = self.tokenizer.batch_encode_plus(

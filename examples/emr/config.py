@@ -1,10 +1,11 @@
 import torch
 
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+from regr.program import LearningBasedProgram
+from regr.utils import Namespace, caller_source
 
-from emr.utils import Namespace, caller_source
-from emr.learningbaseprogram import LearningBasedProgram, PrimalDualLearningBasedProgram
-from emr.graph.torch import TorchModel, PoiModel, IMLModel
+from emr.program import PrimalDualLearningBasedProgram
+from emr.graph.torch import SolverModel, IMLModel
 from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
 from emr.graph.metric import MacroAverageTracker, PRF1Tracker
 from emr.solver.solver import Solver
@@ -13,25 +14,25 @@ from emr.solver.solver import Solver
 lbps = {
     'nll': {
         'type': LearningBasedProgram,
-        'model': lambda graph: PoiModel(
+        'model': lambda graph: SolverModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=PRF1Tracker(),
-            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
     'iml': {
         'type': LearningBasedProgram,
         'model': lambda graph: IMLModel(
             graph,
             loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
             metric=PRF1Tracker(),
-            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
     'primal-dual': {
         'type': PrimalDualLearningBasedProgram,
-        'model': lambda graph: PoiModel(
+        'model': lambda graph: SolverModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=PRF1Tracker(),
-            solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
 }
 
 config = {

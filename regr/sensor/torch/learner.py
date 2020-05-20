@@ -1,7 +1,7 @@
 import torch
 
-from regr.sensor.learner import Learner
-from emr.sensor.sensor import TorchSensor, FunctionalSensor
+from .. import Learner
+from .sensor import TorchSensor, FunctionalSensor
 
 
 class TorchLearner(TorchSensor, Learner):
@@ -38,6 +38,27 @@ class EmbedderLearner(ModuleLearner):
             mask = torch.ones_like(input)
         return mask
 
+class NorminalEmbedderLearner(EmbedderLearner):
+    def __init__(self, pre, vocab_key=None, num_embeddings=None, target=False, module=None, **kwargs):
+        super().__init__(pre, target=target)
+        self.vocab_key = vocab_key
+        if num_embeddings is None:
+            self.module = module or self.Module(num_embeddings=1, **kwargs)
+            self.modele_args = kwargs
+        else:
+            self.module = module or self.Module(**kwargs)
+            self.modele_args = kwargs
+
+    def update_module(self, num_embeddings):
+        self.module = self.Module(num_embeddings=num_embeddings, **self.modele_args)
+
+    def mask(self, context):
+        input = next(self.get_args(context, sensor_filter=lambda s: not s.target))
+        if self.module.padding_idx is not None:
+            mask = input.clone().detach() != self.module.padding_idx
+        else:
+            mask = torch.ones_like(input)
+        return mask
 
 class RNNLearner(ModuleLearner):
     Module=torch.nn.LSTM
