@@ -36,14 +36,32 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
         self.cmodel = BigBatchPrimalDualModel(graph)
         self.copt = None
 
-    def train(self, training_set=None, valid_set=None, test_set=None, config=None):
-        if config.device is not None:
-            self.cmodel.to(config.device)
-        if list(self.cmodel.parameters()):
-            self.copt = config.copt(self.cmodel.parameters())
+    def train(
+        self,
+        training_set,
+        valid_set=None,
+        test_set=None,
+        train_inference=False,
+        valid_inference=False,
+        device=None,
+        train_epoch_num=1,
+        Optim=None,
+        COptim=None):
+        if device is not None:
+            self.cmodel.to(device)
+        if COptim is not None and list(self.cmodel.parameters()):
+            self.copt = COptim(self.cmodel.parameters())
         else:
             self.copt = None
-        return super().train(training_set, valid_set, test_set, config)
+        return super().train(
+            training_set,
+            valid_set=valid_set,
+            test_set=test_set,
+            train_inference=train_inference,
+            valid_inference=valid_inference,
+            device=device,
+            train_epoch_num=train_epoch_num,
+            Optim=Optim)
 
     def train_epoch(self, dataset, inference=False):
         self.model.train()

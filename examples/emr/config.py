@@ -36,10 +36,12 @@ lbps = {
 }
 
 config = {
+    'seed': 1,
     'Data': {
         'train_path': "data/EntityMentionRelation/conll04.corp_1_train.corp",
         'valid_path': "data/EntityMentionRelation/conll04.corp_1_test.corp",
         'skip_none': False,
+        'batch_size': 8,
     },
     'Model': {
         'word': {
@@ -74,11 +76,9 @@ config = {
     },
     'Train': {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-        'seed': 1,
-        'opt': torch.optim.Adam,
-        'copt': torch.optim.Adam,
-        'batch_size': 8,
-        'epoch': 10,
+        'Optim': torch.optim.Adam,
+        'COptim': torch.optim.Adam,
+        'train_epoch_num': 100,
         'train_inference': True,
         'valid_inference': True
     },
