@@ -67,4 +67,5 @@ class NeighborDetector(TorchSensor):
                 detector.append(1)
             else:
                 detector.append(0)
+        return torch.tensor(detector)
 
