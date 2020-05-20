@@ -32,7 +32,7 @@ class CustomReader(ReaderSensor):
             try:
                 info = self.data[self.keyword]
                 pairs = []
-                for city, targets in info.enumerate():
+                for city, targets in info.items():
                     for target in targets:
                         pairs.append([city, target])
                 return pairs
