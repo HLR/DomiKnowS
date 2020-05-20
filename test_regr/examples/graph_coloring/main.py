@@ -15,7 +15,8 @@ def model_declaration():
 
     from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
 
-    from sensors import DummyLearner, DummyEdgeSensor, CustomReader, DummyLabelSensor
+    from sensors import DummyLearner, DummyEdgeSensor, CustomReader, DummyLabelSensor, DummyNeighborgenerator, \
+        DummyNeighbor, NeighborDetector
 
     graph.detach()
 
@@ -25,12 +26,22 @@ def model_declaration():
     world_contains_city['forward'] = DummyEdgeSensor(
         'raw', mode='forward', keyword='raw')
 
-    neighbor['raw'] = CustomReader(keyword='links')
-    neighbor['raw'] = DummyLabelSensor(label=True)
+    neighbor_city1['backward'] = DummyNeighborgenerator(
+        'raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
+
+    neighbor_city2['backward'] = DummyNeighborgenerator(
+        'raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
+
+    neighbor['annotation'] = CustomReader(keyword='links')
+
+    neighbor['raw'] =DummyNeighbor('city1', 'city2', edges=[neighbor_city1['backward'], neighbor_city2['backward']])
+
+    neighbor['bool'] = NeighborDetector('raw', 'annotation')
+
+    neighbor['bool'] = DummyLabelSensor(label=True)
 
     city[firestationCity] = DummyLearner('raw', edges=[world_contains_city['forward']])
     city[firestationCity] = DummyLabelSensor(label=True)
-
 
 
     program = LearningBasedProgram(graph, PoiModel)
@@ -46,9 +57,10 @@ def test_graph_coloring_main():
 
     for datanode in lbp.eval(dataset=dataset, inference=True):
         assert datanode != None
+        print(datanode)
         # call solver
         # conceptsRelations = [] # TODO: please fill this
-        tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
 
     print('I am here!')
 

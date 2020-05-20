@@ -24,6 +24,21 @@ class DummyEdgeSensor(TorchEdgeSensor):
         return self.inputs[0]
 
 
+class DummyNeighborgenerator(TorchEdgeSensor):
+    def forward(self,) -> Any:
+        return self.inputs[0]
+
+
+class DummyNeighbor(TorchSensor):
+    def forward(self,) -> Any:
+        pairs = []
+        print("start of the dummyNeighbor sensor")
+        for item in self.inputs[0]:
+            for item1 in self.inputs[1]:
+                pairs.append((item, item1))
+        return pairs
+
+
 class CustomReader(ReaderSensor):
     def forward(
         self,
@@ -34,7 +49,7 @@ class CustomReader(ReaderSensor):
                 pairs = []
                 for city, targets in info.enumerate():
                     for target in targets:
-                        pairs.append([city, target])
+                        pairs.append((city, target))
                 return pairs
             except:
                 print("the key you requested from the reader doesn't exist")
@@ -42,3 +57,14 @@ class CustomReader(ReaderSensor):
         else:
             print("there is no data to operate on")
             raise Exception('not valid')
+
+
+class NeighborDetector(TorchSensor):
+    def forward(self,) -> Any:
+        detector = []
+        for pair in self.inputs[0]:
+            if pair in self.inputs[1]:
+                detector.append(1)
+            else:
+                detector.append(0)
+
