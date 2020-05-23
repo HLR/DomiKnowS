@@ -5,6 +5,7 @@ This adds a relational overlay over elements in a network that relates physical 
 
 This project is under heavy development and not yet ready to use.
 
+Please refer to our [documentation](docs) for further details.
 
 ## Related
 
