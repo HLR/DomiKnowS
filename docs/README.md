@@ -1,13 +1,31 @@
-# DomiKnowS
+# [DomiKnowS](..)
 
 ## [Get Started](GET_STARTED.md)
 
-## [Knowledge Declaration: `Graph` and `Constraint`](KNOWLEDGE.md)
+## [Tutorials](#)
 
-## [Model Declaration: `Sensor` and `Learner`](MODEL.md)
+## Overview
 
-## [Pipeline: `Program`](PIPELINE.md)
+### [Knowledge Declaration](KNOWLEDGE.md)
 
-## [Query and Access: `Datanode`](QUERY.md)
+Class reference: `Graph`, `Concept`, `Property`, `Relation`, Constraint.
 
-## [Inference: `Solver`](INFERENCE.md)
+### [Model Declaration](MODEL.md)
+
+Class reference: `Sensor` and `Learner`.
+
+### [Pipeline](PIPELINE.md)
+
+Class reference: `Program`.
+
+### [Query and Access](QUERY.md)
+
+Class reference: `Datanode`.
+
+### [Inference](INFERENCE.md)
+
+Class reference: `Solver`.
+
+## [API](#)
+
+## [Legacy Wiki](old_wiki/Home.md)

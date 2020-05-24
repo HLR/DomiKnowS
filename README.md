@@ -14,17 +14,3 @@ closely related to [Saul programing language](https://github.com/HLR/HetSaul).
 [Workshop of DeLBP](http://delbp.github.io/) is held annually to communicate the idea about combining learning models with declarative programming or reasoning.
 [DeLBP 2019](http://delbp.github.io/) will be held in conjunction with IJCAI-2019, August 10-16, 2019, Macao, China.
 At a wider scope, the project is related to [OntologyBasedLearning](https://github.com/HLR/OntologyBasedLearning), which can provide a source of domain knowledge as the graph (ontology) in this project.
-
-
-## Contributing
-
-Some information that might be useful when someone is going to contribute to the project.
-
-`AllenNLP`: https://allennlp.org
-Since we focus on Natural Language Processing (NLP) examples at the current stage, we involve `AllenNLP` as model backend in the examples.
-
-`numpydoc`: https://github.com/numpy/numpydoc
-We plan to use document the code use `doc string` base on `numpydoc`.
-
-Semaphore CI: https://semaphoreci.com/
-We use Semaphore CI to manage code changes.
