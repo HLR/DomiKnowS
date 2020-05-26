@@ -1,4 +1,4 @@
-## Overview
+# Overview
 
 Relational Graph is a learning-based program.
 We propose the pipeline bridging ontologie to a relational graph as a learning-base program.
@@ -25,3 +25,23 @@ To fullfill this pipeline, there are several components in this library:
 1. `solver`
 
    Inference by solving constrained optimization problems.
+
+## [Knowledge Declaration](KNOWLEDGE.md)
+
+Class reference: `Graph`, `Concept`, `Property`, `Relation`, Constraint.
+
+## [Model Declaration](MODEL.md)
+
+Class reference: `Sensor` and `Learner`.
+
+## [Pipeline](PIPELINE.md)
+
+Class reference: `Program`.
+
+## [Query and Access](QUERY.md)
+
+Class reference: `Datanode`.
+
+## [Inference](INFERENCE.md)
+
+Class reference: `Solver`.
