@@ -163,35 +163,38 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
         
             # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
-            for conceptName in conceptNames :
+            for conceptName in conceptNames:
                 
                 currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
                 if currentConcept is None :
                     continue
                     
-                for ancestorConcept in currentConcept.ancestors(include_self = False) :
-                    if ancestorConcept.name not in conceptNames :
+                for ancestorConcept in currentConcept.ancestors(include_self = False):
+                    if ancestorConcept.name not in conceptNames:
                          continue
                                 
                     for tokenIndex, token in enumerate(tokens):
                         if (conceptName, token) not in x:
                             continue
                         
-                        self.myIlpBooleanProcessor.ifVar(m, x[conceptName, token], x[ancestorConcept, token], onlyConstrains = True)
+                        if (ancestorConcept, token) not in x:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.ifVar(m, x[conceptName, token], x[ancestorConcept.name, token], onlyConstrains = True)
                             
                     self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
     
             # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
-            for conceptName in conceptNames :
+            for conceptName in conceptNames:
                 
                 currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
-                if currentConcept is None :
+                if currentConcept is None:
                     continue
                     
-                for conceptConstruct in currentConcept.constructs(Prop = None) :
-                    if type(conceptConstruct) is And :
+                for conceptConstruct in currentConcept.constructs(Prop = None):
+                    if type(conceptConstruct) is And:
                         
                         for tokenIndex, token in enumerate(tokens):
                             if (conceptName, token) not in x:
@@ -212,15 +215,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                             self.myIlpBooleanProcessor.andVar(m, andList, onlyConstrains = True)
                             
             # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
-            for conceptName in conceptNames :
+            for conceptName in conceptNames:
                 
                 currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
-                if currentConcept is None :
+                if currentConcept is None:
                     continue
                     
-                for conceptConstruct in currentConcept.constructs(Prop = None) :
-                    if type(conceptConstruct) is Or :
+                for conceptConstruct in currentConcept.constructs(Prop = None):
+                    if type(conceptConstruct) is Or:
                         
                         for tokenIndex, token in enumerate(tokens):    
                             if (conceptName, token) not in x:
@@ -245,11 +248,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                     
-                if currentConcept is None :
+                if currentConcept is None:
                     continue
                     
-                for conceptConstruct in currentConcept.constructs(Prop = None) :
-                    if type(conceptConstruct) is Not :
+                for conceptConstruct in currentConcept.constructs(Prop = None):
+                    if type(conceptConstruct) is Not:
                         
                         complementClass = conceptConstruct.Class
     
@@ -857,7 +860,98 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info("Created %i ilp variables for triple relations"%(len(z)))
 
         if hasattr(self, 'myOnto'): # --- Use Ontology as a source of constrains 
-            # -- Add constraints 
+            
+            # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
+            for tripleRelationName in tripleRelationNames:
+                
+                tripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
+                    
+                if tripleRelation is None :
+                    continue
+                    
+                for ancestorTripleRelation in tripleRelation.ancestors(include_self = False) :
+                    if ancestorTripleRelation.name not in tripleRelationNames:
+                         continue
+                                
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token2 == token1:
+                                continue
+                        
+                            for token3Index, token3 in enumerate(tokens):
+                                if token3 == token2:
+                                    continue
+                        
+                                if token3 == token1:
+                                    continue
+                                
+                                if (tripleRelationName, token1, token2, token3) not in z:
+                                    continue
+                                
+                                if (ancestorTripleRelation.name, token1, token2, token3) not in z:
+                                    continue
+                        
+                                self.myIlpBooleanProcessor.ifVar(m, z[tripleRelationName, token1, token2, token3], z[ancestorTripleRelation.name, token1, token2, token3], onlyConstrains = True)
+                            
+                    self.myLogger.info("Created - subClassOf - constrains between triple relations \"%s\" -> \"%s\""%(tripleRelationName,ancestorTripleRelation.name))
+                    
+            # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
+            foundDisjoint = dict() # too eliminate duplicates
+            for tripleRelationName in tripleRelationNames:
+                
+                tripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
+                    
+                if tripleRelation is None :
+                    continue
+                                    
+                for d in tripleRelation.disjoints():
+                    disjointTriple = d.entities[1]._name
+                        
+                    if tripleRelationName == disjointTriple:
+                        disjointTriple = d.entities[0]._name
+                            
+                        if tripleRelationName == disjointTriple:
+                            continue
+                            
+                    if disjointTriple not in tripleRelationNames:
+                         continue
+                            
+                    if tripleRelationName in foundDisjoint:
+                        if disjointTriple in foundDisjoint[tripleRelationName]:
+                            continue
+                    
+                    if disjointTriple in foundDisjoint:
+                        if tripleRelationName in foundDisjoint[disjointTriple]:
+                            continue
+                                
+                    for token1Index, token1 in enumerate(tokens): 
+                        for token2Index, token2 in enumerate(tokens):
+                            if token2 == token1:
+                                continue
+                        
+                            for token3Index, token3 in enumerate(tokens):
+                                if token3 == token2:
+                                    continue
+                        
+                                if token3 == token1:
+                                    continue
+                                
+                                if (tripleRelationName, token1, token2, token3) not in z:
+                                    continue
+                                
+                                if (disjointTriple, token1, token2, token3) not in z:
+                                    continue
+                        
+                                self.myIlpBooleanProcessor.nandVar(m, z[tripleRelationName, token1, token2, token3], z[disjointTriple, token1, token2, token3], onlyConstrains = True)
+                    if not (tripleRelationName in foundDisjoint):
+                        foundDisjoint[tripleRelationName] = {disjointTriple}
+                    else:
+                        foundDisjoint[tripleRelationName].add(disjointTriple)
+                               
+                if tripleRelationName in foundDisjoint:
+                    self.myLogger.info("Created - disjoint - constrains between triples \"%s\" and  %s"%(tripleRelationName,foundDisjoint[tripleRelationName]))
+    
+            # -- Add constraints based on triple relation ranges
             for tripleRelationName in graphResultsForPhraseTripleRelation:
                 currentTripleRelation = self.myOnto.search_one(iri = "*%s"%(tripleRelationName))
                     
