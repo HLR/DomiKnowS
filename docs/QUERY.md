@@ -49,7 +49,7 @@ The method returns the value of the attribute. The *keys* are connected into a s
 
 getAttribute(work_for, 'ILP')* - get value of the attribute storing the result of the ILP solver solution for the concept *work_for*
 
-##Data Graph Query
+## Data Graph Query
 
 The Data Graph can be queried for specific data nodes using the method called on any Data Node:
 		
