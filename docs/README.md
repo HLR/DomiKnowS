@@ -2,10 +2,10 @@
 
 ## [Get Started](GET_STARTED.md)
 
-## [Tutorials](#)
+## Tutorials
 
 ## [Overview](OVERVIEW.md)
 
-## [API](#)
+## API
 
 ## [Legacy Wiki](old_wiki/Home.md)
