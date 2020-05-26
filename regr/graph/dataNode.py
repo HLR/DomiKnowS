@@ -738,9 +738,12 @@ class DataNodeBuilder(dict):
             existingDnsForAttr[key] = _existingDnsForAttr
     
         # Check the shape of the value
-        for i, a in enumerate(existingDnsForAttr):
-            if len(a) != value.shape[i]:
-                return # ???? Wrong shape not matching relation - !!!
+        if hasattr(value, 'shape'):
+            for i, (k, a) in enumerate(existingDnsForAttr.items()):
+                if len(a) != value.shape[i]:
+                    return # ???? Wrong shape not matching relation - !!!
+        else:
+            return # Not tensor
             
         # Create or update relation nodes
         if len(existingDnsForRelation) == 0: # No Datanode of this relation created yet

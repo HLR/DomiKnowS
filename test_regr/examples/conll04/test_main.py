@@ -244,7 +244,6 @@ def test_graph_naming():
 @pytest.mark.gurobi
 def test_main_conll04(case):
     from config import CONFIG
-    from emr.data import ConllDataLoader
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
