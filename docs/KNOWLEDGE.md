@@ -112,9 +112,20 @@ The ILP constrains could be specified in the **ontology graph itself with define
 
 The graph can specify constrains:
 
-- **Subclass relation between concepts**: e.g. `people = word(name='people')`
-- **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)`
-- **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)`
+- **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
+
+  *IF(people(token), word(token))*
+
+- **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
+
+  *NAND(people(token), organization(token), location(token), other(token), o(token))*
+  
+- **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)` is mapped to logical expressions-
+
+  *IF(work_for(token1, token2), people(token1))*
+
+  *IF(work_for(token1, token2), organization(token1))*
+
 
 Additional, logical constrains defined within the graph can use the following logical functions to build logical expression:
 
@@ -146,20 +157,6 @@ The constrains are regular Python instructions thus they have to follow definiti
 The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
 
 The OWL ontology language allows to specify constrains on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constrains.
-
-The `regr.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported operations are:
-
-- "NOT": `notVar()`
-- "AND": `and2Var`, `andVar()`
-- "OR": `or2Var()`, `orVar()`
-- "IF": `ifVar()`
-- "NAND": `nand2Var()`, `nandVar()`
-- "XOR": `xorVar()`
-- "EPQ": `epqVar()`
-- "NOR": `nor2Var()`, `norVar()`
-
-The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. The solver encodes mapping from OWL constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities.
-The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned.
 
 This detail of mapping from OWL to logical representation is presented below for each OWL constrain.
 

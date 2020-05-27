@@ -30,4 +30,20 @@ If this collection is empty then the methods will use all concepts and relations
 
 - `fun` is a optional function modifying the original probability in the Data Graph before they are used in the ILP model.
 
+The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. 
+
+The solver encodes mapping from constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities.
+The `regr.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported operations are:
+
+- "NOT": `notVar()`
+- "AND": `and2Var`, `andVar()`
+- "OR": `or2Var()`, `orVar()`
+- "IF": `ifVar()`
+- "NAND": `nand2Var()`, `nandVar()`
+- "XOR": `xorVar()`
+- "EPQ": `epqVar()`
+- "NOR": `nor2Var()`, `norVar()`
+
+The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned.
+
 The results of the ILP solution are added to nodes in the Data Graph with key ILP.
