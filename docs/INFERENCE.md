@@ -15,7 +15,7 @@ The solver builds the ILP (Integer Linear Programming) model based on the constr
 The actual used ILP is Zero-one linear programming in which the variables are restricted to be either 0 or 1.
 It solves the ILP model and provides the most optimized assignment.
 
-The solver can be called on the DataNode (usually the root DataNode of the Data Graph) with DataNode method:
+The solver can be called on the [DataNode](QUERY.md) (usually the root DataNode of the Data Graph) with DataNode method:
 
 ```python
 inferILPConstrains(*_conceptsRelations, fun=None)

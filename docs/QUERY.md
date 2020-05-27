@@ -13,17 +13,17 @@
 ## DataNode and Data Graph
 
 Every example in the learning process has its Data Graph built based on sensors included in the model.
-The example is partitioned by sensors into a different types of tokens corresponding to different linguistic concepts from the ontology graph.
+The example is partitioned by sensors into a different types of tokens corresponding to different linguistic concepts from the [knowledge graph](KNOWLEDGE.md).
 
-Each example token has its own Data Node build which is linked to other Data Nodes in the Data Grpah corresponding to other tokens from the example through relation links. The Data Node stores the following information about the token:
+Each example token has its own DataNode build which is linked to other Data Nodes in the Data Graph corresponding to other tokens from the example through relation links. The Data Node stores the following information about the token:
 
-- **ontology concepts**  - from the associated knowledge graph,
+- **ontology concepts**  - from the associated [knowledge graph](KNOWLEDGE.md),
 
 - **id** - unique in the scope of all tokens of the given knowledge concept type,
 
-- **relation links**  - dictionary with names of relations and related Data Nodes,
+- **relation links**  - dictionary with names of relations and related DataNodes,
 
-- **impact links** - dictionary with dataNodes impacting this datanode by having it as a subject of its relation
+- **impact links** - dictionary with DataNodes impacting this DataNode by having it as a subject of its relation,
 
 - **attributes** dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token.
 
@@ -31,7 +31,7 @@ DataNode methods facilitate access to its content:
 
 - **children**: `getChildDataNodes(conceptName=None)`
 
-The method returns a list of DataNode children DataNode. If *conceptName* is provided only DataNodes of the given ontologicall type are returned. The example:
+The method returns a list of DataNode children DataNode. If *conceptName* is provided only DataNodes of the given knowledge type are returned. The example:
 
 ```python
 getChildDataNodes(conceptName=char) # get all children DataNode with *char* type
@@ -55,7 +55,7 @@ getAttribute(work_for, 'ILP')* - get value of the attribute storing the result o
 
 ### Data Graph Query
 
-The Data Graph can be queried for specific data nodes using the method called on any Data Node:
+The Data Graph can be queried for specific DataNodes using the method called on any DataNode:
 
 ```python
 findDatanodes(dns = None, select = None, indexes = None)
