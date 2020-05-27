@@ -6,8 +6,8 @@
 
 ## Class Overview
 
-* package `regr.solver`:
-* `ilpOntSolver`:
+- package `regr.solver`:
+- `ilpOntSolver`:
 
 ### ILP Solver
 

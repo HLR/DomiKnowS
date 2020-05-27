@@ -9,9 +9,9 @@
 
 ## Class Overview
 
-* package `regr.sensor`:
-* `Sensor`:
-* `Learner`:
+- package `regr.sensor`:
+- `Sensor`:
+- `Learner`:
 
 ## Sensor
 
@@ -35,6 +35,7 @@ The learning declaration of the program is where you will define the properties 
 
 a graph (`Graph` object) with its concepts (`Concept` objects) having properties (`Property` objects accessed as items of concepts) connected to learners (`Learner` objects) and pass through sensors (`Sensor` objects). Now the graph is considered a *full program*.
 Example:
+
 ```python
 sentence['embed'] = BertLearner('raw')
 people['label'] = LogisticRegression('embed')
