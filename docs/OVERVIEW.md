@@ -3,6 +3,13 @@
 There are several components in the framework representing different design steps and programming workflows.
 Please refer to each individual page for details and usages of the components.
 
+- [Overview](#overview)
+  - [Knowledge Declaration](#knowledge-declaration)
+  - [Model Declaration](#model-declaration)
+  - [Pipeline](#pipeline)
+  - [Query and Access](#query-and-access)
+  - [Inference](#inference)
+
 ## [Knowledge Declaration](KNOWLEDGE.md)
 
 Class reference: `Graph`, `Concept`, `Property`, `Relation`, Constraint.

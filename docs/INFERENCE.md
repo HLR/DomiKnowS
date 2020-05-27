@@ -1,5 +1,9 @@
 # Inference
 
+- [Inference](#inference)
+  - [Class Overview](#class-overview)
+    - [ILP Solver](#ilp-solver)
+
 ## Class Overview
 
 * package `regr.solver`:

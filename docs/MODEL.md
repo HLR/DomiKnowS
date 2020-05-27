@@ -1,5 +1,12 @@
 # Model Declaration
 
+- [Model Declaration](#model-declaration)
+  - [Class Overview](#class-overview)
+  - [Sensor](#sensor)
+  - [Learner](#learner)
+  - [Reader](#reader)
+  - [Multiple Assigment Convention](#multiple-assigment-convention)
+
 ## Class Overview
 
 * package `regr.sensor`:
