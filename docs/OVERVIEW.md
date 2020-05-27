@@ -12,7 +12,7 @@ Please refer to each individual page for details and usages of the components.
 
 ## [Knowledge Declaration](KNOWLEDGE.md)
 
-Class reference: `Graph`, `Concept`, `Property`, `Relation`, Constraint.
+Class reference: `Graph`, `Concept`, `Property`, `Relation`, `Constraint`.
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
 We provide a graph language based on python for knowledge declaration with notation of "graph", "concept", "property", "relation", and "constraints".
@@ -34,12 +34,12 @@ The graph, attached with sensors and learners, can be turned into a learning bas
 
 ## [Query and Access](QUERY.md)
 
-Class reference: `Datanode`.
+Class reference: `DataNode`, `DataNodeBuilder`.
 
 The program uses and returns a data structure know as the datanode. They are instanitiate of the concept based graph based on the sensor inputs and learner predictions.
 
 ## [Inference](INFERENCE.md)
 
-Class reference: `Solver`.
+Class reference: `ilpOntSolver`.
 
 One of the advantage of the framework is to do global inference over local predictions (made by learners or read by sensors). Solvers are the core component that looks for the best combination of local predictions that satisfies all the explicit constraints, as well as those implied by the relations.
