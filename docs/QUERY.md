@@ -17,13 +17,13 @@ The example is partitioned by sensors into a different types of tokens correspon
 
 Each example token has its own Data Node build which is linked to other Data Nodes in the Data Grpah corresponding to other tokens from the example through relation links. The Data Node stores the following information about the token:
 
-- **ontology concepts**  - from the associated ontology graph,
+- **ontology concepts**  - from the associated knowledge graph,
 
-- **id** - unique in the scope of all tokens of the given ontology concept type,
+- **id** - unique in the scope of all tokens of the given knowledge concept type,
 
-- **relation links** dictionary with names of relations and related Data Nodes,
+- **relation links**  - dictionary with names of relations and related Data Nodes,
 
-- **impact links** dictionary with dataNodes impacting this datanode by having it as a subject of its relation
+- **impact links** - dictionary with dataNodes impacting this datanode by having it as a subject of its relation
 
 - **attributes** dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token.
 
@@ -49,7 +49,9 @@ getRelationLinks(relationName=pair) # get list of related DataNodes through *pai
 
 The method returns the value of the attribute. The *keys* are connected into a single key used to access the attribute in the DataNode. The example:
 
+```python
 getAttribute(work_for, 'ILP')* - get value of the attribute storing the result of the ILP solver solution for the concept *work_for*
+```
 
 ### Data Graph Query
 
@@ -78,12 +80,12 @@ The examples:
 
 ### Data Graph construction
 
-Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. Each sensor has its previous context dictionary replaced with the object of DataNodeBuilder class which also implements Dictionary interace but olerladed its methods and created Data Graph based on sensor context update.
+Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. Each sensor has its previous context dictionary replaced with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. It creates Data Graph based on sensors' context update.
 
-The primary overloaded method is:
+The primary used overloaded method is:
 
 ```python
 __setitem__(self, key, value)
 ```
 
-The method assumes that key idetifies the sensor and the value is a tensor of approperiate dimension.
+The method assumes that key identifies the sensor and the value is a tensor of appropriate dimension.
