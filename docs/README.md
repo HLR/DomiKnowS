@@ -10,4 +10,4 @@
 
 ## API
 
-## [Legacy Wiki](old_wiki/Home.md)
+## [Legacy Wiki](old_wiki)
