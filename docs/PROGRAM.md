@@ -1,8 +1,8 @@
-# Pipeline
+# Program
 
-- [Pipeline](#pipeline)
+- [Program](#program)
   - [Class Overview](#class-overview)
-  - [Program](#program)
+  - [Workflows](#workflows)
     - [Train](#train)
     - [Test](#test)
     - [Eval](#eval)
@@ -12,7 +12,7 @@
 - package `regr.program`:
 - `Program`:
 
-## Program
+## Workflows
 
 ### Train
 
