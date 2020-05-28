@@ -4,6 +4,8 @@
 
 ## Tutorials
 
+## [Pipeline](PIPELINE.md)
+
 ## [Overview](OVERVIEW.md)
 
 ## API
