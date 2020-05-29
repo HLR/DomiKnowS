@@ -75,6 +75,8 @@ The `context` will be updated with a `sensor.fullname` key and `output` value pa
 ```python
 assert context[sensor.fullname] == output
 ```
+The full name is constructed TODO.
+The output is interpreted TODO.
 
 ### `forward()`
 
