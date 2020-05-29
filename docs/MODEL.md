@@ -269,6 +269,21 @@ work_for['label'] = LogisticRegression('embed')
 
 ## Multiple Assigment Convention
 
+A non-trivial semantic we introduced for our language is we allow assigning multiple sensors and learners to one property, while rather than a mean of overriding the variable name, we introduce the multiple assignments as a *consistency constraint*.
+
+For example, the following code assigns a `Learner` and then a `Sensor` to the `"label"` property the `people`, which is a `Concept`.
+
+```python
+people['label'] = Learner()
+people['label'] = Sensor()
+```
+
+The implication is **NOT** that the property has been updated or overridden with the sensor. It means we can get the actual value of `"label"` property with either the `Learner` or the `Sensor`, which should be consistent. However, initially, the output of the `Learner` may not match the output of the `Sensor`. *Learning* of the model should take place here to resolve the inconsistency, i.e. a loss function should be constructed based on the error whenever there is multiple assignments to a property.
+
+To be more specific, a program will look for all properties that has multiple assigmnets and generate all pairs of sensors (including learners). When the pair of sensors is constituted by a sensor with option `label=True` and another with option `label=False` (which is default). They will be used to trigger calculation and apply any loss and metric on.
+
+It should be noticed that even if the two (or more) assignments are not `Learner`, the loss can is still considered. A sensor may rely on the output of another learner. The inconsistency error here can help to update those learners indirectly. If there is no underlying learner is still would not hurt because it is just a constant regarding any parameter in the model.
+
 ## Detach
 
 In the graph - sub-graph - concept - property - sensor hierarchy, each component can trigger `detach` to remove its direct children components. For example,
