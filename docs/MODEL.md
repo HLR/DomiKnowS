@@ -184,7 +184,7 @@ assert context[concept.fullname] == output
 In model declaration, the user will need to assign sensors to properties.
 However, that should not nessesearily reflect the order of calculation that is needed.
 Sensors just look at `context` and try to fetch whatever they need as input.
-Managing one should be call before another is a headache.
+\TODO{this next sentecne is not readable:} Managing one should be call before another is a headache.
 
 Some base sensor extentions (e.g. `TorchSensor` and its subclasses) are able to trace what it need beforehand and invoke automatically. Such automation forms an invocation path.
 
@@ -241,7 +241,7 @@ work_for['label'] = LabelReaderSensor(reader, 'work_for')
 
 ## Learner
 
-`Learner`s are essentially `Sensor`s, except they has the member function `parameters()` that returns a list of parameters used by this learner.
+`Learner`s are essentially `Sensor`s, except they have the member function `parameters()` that returns a list of parameters used by this learner.
 In our `Program`, parameters of the whole model is collected by enumerating all the `Learner`s attached to the graph.
 There are a few leaners implemented by using corresponding torch module. User can also override `TorchLearner` to use any torch module. For example:
 
