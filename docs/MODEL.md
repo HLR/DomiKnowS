@@ -6,12 +6,14 @@
     - [Initiate a Sensor](#initiate-a-sensor)
     - [Invoke a Sensor](#invoke-a-sensor)
     - [`forward()`](#forward)
-      - [`ReaderSensor`](#readersensor)
-      - [`ConcatSensor`](#concatsensor)
+      - [Example: `ReaderSensor`](#example-readersensor)
+      - [Example: `ConcatSensor`](#example-concatsensor)
       - [Overriding `forward()`](#overriding-forward)
     - [Caching output](#caching-output)
     - [Managing invocation path](#managing-invocation-path)
     - [Converting input (WIP)](#converting-input-wip)
+      - [Example: `TorchSensor.forward()`](#example-torchsensorforward)
+      - [Example: `QuerySensor.forward(datanode)`](#example-querysensorforwarddatanode)
   - [Sensor Assignment to Property](#sensor-assignment-to-property)
   - [Learner](#learner)
   - [Reader](#reader)
@@ -67,7 +69,7 @@ Defaultly, it takes the same `context` as the sensor being invoke with.
 
 For example, following are some basic sensors.
 
-#### `ReaderSensor`
+#### Example: `ReaderSensor`
 
 `ReaderSensor` retieves the value with a key, defined when being initiated, from the `context`.
 
@@ -80,15 +82,15 @@ output = sensor(context)
 assert output == 'hello world'
 ```
 
-#### `ConcatSensor`
+#### Example: `ConcatSensor`
 
 `ConcatSensor` concatenates the input tensors (at the last dimension).
 
 ```python
 sensor = ConcatSensor(feat_sensor1, feat_sensor2, key='raw_input')
 context = {
-  feat_sensor1.fullname: torch.random(5, 4, 3),
-  feat_sensor2.fullname: torch.random(5, 4, 7)}
+  feat_sensor1.fullname: torch.rand(5, 4, 3),
+  feat_sensor2.fullname: torch.rand(5, 4, 7)}
 
 output = sensor(context)
 
@@ -107,7 +109,7 @@ class RNGSensor(Sensor):
     self.shape=shape
 
   def forward(self, *args):
-    return torch.random(shape)
+    return torch.rand(shape)
 
 sensor = RNGSensor(shape=(5, 5))
 
@@ -168,15 +170,45 @@ However, that should not nessesearily reflect the order of calculation that is n
 Sensors just look at `context` and try to fetch whatever they need as input.
 Managing one should be call before another is a headache.
 
-Some base sensor extention (`TorchSensor`) are able to trace what it need beforehand and invoke automatically. Such automation forms an invocation path.
+Some base sensor extentions (e.g. `TorchSensor` and its subclasses) are able to trace what it need beforehand and invoke automatically. Such automation forms an invocation path.
 
-`TorchSensor` initiates with extra variables `*pres`
+`TorchSensor` initiates with extra variables `*pres` to specify the properties that are required to be calculated before it and be used as input.
+Just pass the names of the properties that are required when constructing the new sensor.
+For example, the following sensor
+
+```python
+class NoiseSensor(TorchSensor):
+  def forward(self):
+    input = self.inputs[0]
+    return input + torch.rand(input.shape)
+
+concept['clean'] = sensor
+concept['noisy'] = NoiseSensor('clean')
+```
 
 ### Converting input (WIP)
 
-As our program requires readers as the starting point, you have to write some reader classes that interacts with our dataset.
-Readers will have a function for each train, valid and test set that returns a generator over separate parts of the dataset.
-a graph (`Graph` object) with its concepts (`Concept` objects) having properties (`Property` objects accessed as items of concepts) connected to raw data sensors (`Sensor` objects).
+Some base sensor extensions are overrided to accept different input or accept inputs different ways.
+
+#### Example: `TorchSensor.forward()`
+
+`TorchSensor.forward()` does not accept input directly. Instead, it uses a member variable `inputs` to access its inputs. `self.inputs` is assigned with outputs of `self.pres`, as mentioned in [invocation path](#managing-invocation-path).
+One can extend `TorchSensor` with any PyTorch model. For example:
+
+```python
+class LeakyReLUSensor(TorchSensor):
+  def __init__(self, *pres, negative_slope=0.01, output=None, edges=None, label=False):
+    super().__init__(*pres, output, edges, label):
+    self.module = torch.nn.LeakyReLU(negative_slope=negative_slope)
+
+  def forward(self,) -> Any:
+    return self.module(self.inputs)
+```
+
+#### Example: `QuerySensor.forward(datanode)`
+
+As `DataNode` provides a flexible interface to retrieve data, it is desirable to program with `DataNode`.
+
 
 ## Sensor Assignment to Property
 
@@ -193,10 +225,26 @@ work_for['label'] = LabelReaderSensor(reader, 'work_for')
 
 ## Learner
 
-The learning declaration of the program is where you will define the properties of your graph nodes and define edge functionalities. This part will be a combination of reader sensor, edge transformer, execution sensor and learners.
+`Learner`s are essentially `Sensor`s, except they has the member function `parameters()` that returns a list of parameters used by this learner.
+In our `Program`, parameters of the whole model is collected by enumerating all the `Learner`s attached to the graph.
+There are a few leaners implemented by using corresponding torch module. User can also override `TorchLearner` to use any torch module. For example:
 
-a graph (`Graph` object) with its concepts (`Concept` objects) having properties (`Property` objects accessed as items of concepts) connected to learners (`Learner` objects) and pass through sensors (`Sensor` objects). Now the graph is considered a *full program*.
-Example:
+```python
+class MultiheadAttentionLearner(TorchLearner):
+  def __init__(self, *pres, output=None, edges=None, **kwargs):
+    super().__init__(*pres, output=None, edges=None)
+    self.model = torch.nn.MultiheadAttention(**kwargs)
+
+  def parameters(self):
+    return self.model.parameters()
+
+  def forward(self):
+    query, key, value = self.inputs
+    output = self.model(query, key, value)
+    return output
+```
+
+`Learner`s can be assigned to properties the same way as sensors.
 
 ```python
 sentence['embed'] = BertLearner('raw')
@@ -206,6 +254,10 @@ work_for['label'] = LogisticRegression('embed')
 ```
 
 ## Reader
+
+As our program requires readers as the starting point, you have to write some reader classes that interacts with our dataset.
+Readers will have a function for each train, valid and test set that returns a generator over separate parts of the dataset.
+a graph (`Graph` object) with its concepts (`Concept` objects) having properties (`Property` objects accessed as items of concepts) connected to raw data sensors (`Sensor` objects).
 
 To start a chain of learning algorithm first you have to assign a reader sensor to a property of your root node in the graph. The reader job is to initialize the examples for execution of the learning model. The output of this reader sensor is an example per execution.
 
