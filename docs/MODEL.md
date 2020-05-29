@@ -2,6 +2,7 @@
 
 - [Model Declaration](#model-declaration)
   - [Class Overview](#class-overview)
+  - [Reader](#reader)
   - [Sensor](#sensor)
     - [Initiate a Sensor](#initiate-a-sensor)
     - [Invoke a Sensor](#invoke-a-sensor)
@@ -16,7 +17,6 @@
       - [Example: `QuerySensor.forward(datanode)`](#example-querysensorforwarddatanode)
   - [Sensor Assignment to Property](#sensor-assignment-to-property)
   - [Learner](#learner)
-  - [Reader](#reader)
   - [Multiple Assigment Convention](#multiple-assigment-convention)
   - [Detach](#detach)
     - [`detach` use cases](#detach-use-cases)
@@ -24,8 +24,21 @@
 ## Class Overview
 
 - package `regr.sensor`:
+- "Reader":
 - `Sensor`:
 - `Learner`:
+
+## Reader
+
+User will have to write their own reader to read source data.
+To be flexible, the framework does not require user to implement a specific reader class.
+Instead, the user will need to provide an `Iterable` object for the input of the program and yield an sample, or a batch of samples, in a `dict`.
+The reader will be provided to the program for specific workflow like `train()`, `test()` or `eval()`.
+Sensors will also be invoked with a `dict` retrieved from the reader each time (detailed later).
+
+For example, a `list` of `dict` is a simplest input reader.
+Also, `torch.utils.data.DataLoader` instance is a good choice when working with PyTorch.
+The framework also has a simple reader for JSON format input file.
 
 ## Sensor
 
@@ -48,6 +61,7 @@ The framework contains some default sensors that users can use directly. Users c
 ### Invoke a Sensor
 
 A `Sensor` is a callable object that can be invoked by passing a `dict` context variable or a `DataNodeBuilder`.
+When working in a program, the item yield by the reader will be used as the context.
 One can invoke it by
 
 ```python
@@ -252,14 +266,6 @@ people['label'] = LogisticRegression('embed')
 organization['label'] = LogisticRegression('embed')
 work_for['label'] = LogisticRegression('embed')
 ```
-
-## Reader
-
-As our program requires readers as the starting point, you have to write some reader classes that interacts with our dataset.
-Readers will have a function for each train, valid and test set that returns a generator over separate parts of the dataset.
-a graph (`Graph` object) with its concepts (`Concept` objects) having properties (`Property` objects accessed as items of concepts) connected to raw data sensors (`Sensor` objects).
-
-To start a chain of learning algorithm first you have to assign a reader sensor to a property of your root node in the graph. The reader job is to initialize the examples for execution of the learning model. The output of this reader sensor is an example per execution.
 
 ## Multiple Assigment Convention
 
