@@ -175,7 +175,7 @@ context = {}
 output = sensor(context)
 
 assert context[sensor.fullname] == output
-assert context[concept[propertyNameUsedIntheGraphDeclaration].fullname] == output
+assert context[concept['prop'].fullname] == output
 assert context[concept.fullname] == output
 ```
 
