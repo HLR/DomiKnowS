@@ -56,7 +56,7 @@ Sensors should always be initiated by a implmented class, rather the abstract `S
 sensor = ImplementedSensor(...)
 ```
 
-The framework contains some default sensors that users can use directly. Users can also customize their own by extending these sensors.
+The framework contains some default sensors that users can use directly. Users can also customize their own by extending these sensors. The main body of the sensor should be written in a method called forward() inside Sensor class. 
 
 ### Invoke a Sensor
 
