@@ -1,13 +1,23 @@
 # [DomiKnowS](..)
 
-## [Get Started](GET_STARTED.md)
+## 1. User Perspective
 
-## Tutorials
+### 1.1. [Get Started](GET_STARTED.md)
 
-## [Pipeline](PIPELINE.md)
+### 1.2. [Overview](OVERVIEW_USER.md)
 
-## [Overview](OVERVIEW.md)
+### 1.3. [Pipeline](PIPELINE.md)
 
-## API
+### 1.4. Tutorials
 
-## [Legacy Wiki](old_wiki)
+## 2. Developer Perspective
+
+### 2.1. [Overview](OVERVIEW_DEVEL.md)
+
+### 2.2. [Knowledge Declaration](KNOWLEDGE.md)
+
+### 2.1. [Knowledge Declaration](KNOWLEDGE.md)
+
+## 3. API
+
+## 4. [Legacy Wiki](old_wiki)
