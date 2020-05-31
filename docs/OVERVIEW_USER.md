@@ -12,7 +12,7 @@ Please refer to each individual page for details and usages of the components.
 
 ## Knowledge Declaration
 
-Class reference: `Graph`, `Concept`, `Property`, `Relation`, `Constraint`.
+Class reference: `Graph`, `Concept`, `Property`, `Relation`, `LogicalConstrain`.
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
 We provide a graph language based on python for knowledge declaration with notation of "graph", "concept", "property", "relation", and "constraints".

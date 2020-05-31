@@ -11,7 +11,7 @@ Please refer to each individual page for details and usages of the components.
 
 ## [Knowledge Declaration](KNOWLEDGE.md)
 
-Class reference: `Graph`, `Concept`, `Property`, `Relation`, `Constraint`.
+Class reference: `Graph`, `Concept`, `Property`, `Relation`, `LogicalConstrain`.
 
 ## [Model Declaration](MODEL.md)
 
