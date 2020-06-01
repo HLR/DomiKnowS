@@ -13,6 +13,7 @@ Programmer's steps to using our framework.
       - [2.2.2. `Program` Example](#222-program-example)
   - [3. Training and Testing](#3-training-and-testing)
   - [4. Inference](#4-inference)
+  - [5. Takeaway](#5-takeaway)
 
 ## 1. Knowledge Declaration
 
@@ -233,3 +234,79 @@ The `people` attribute of `word_node` shows the model classification result the 
 By adding an extra `'ILP'` indicator, we can retrieve the result after inference.
 
 Please find in specific topic for more information about [how to query a `Datanode`](QUERY.md) and [how inference works](INFERENCE.md).
+
+## 5. Takeaway
+
+Just putting everthing presented above together, we have a user perspective pipeline.
+
+```python
+# 1. Knowledge Declaration
+with Graph('global') as graph:
+  sentence = Concept(name='sentence')
+  word = Concept(name='word')
+  (rel_sentence_contains_word,) = sentence.contains(word)
+  pair = Concept(name='pair')
+  (rel_pair_word1, rel_pair_word2) = pair.has_a(arg1=word, arg2=word)
+
+  people = word(name='people')
+  organization = word(name='organization')
+  disjoint(people, organization)
+
+  work_for = pair(name='work_for')
+  work_for.has_a(people, organization)
+
+# 2.1. Model Declaration - Reader
+class Reader():
+  def __init__(self, source):
+    self.source=source
+
+  def __iter__(self):
+    with open(self.source, 'r') as fin:
+      for line in fin:
+        item = json.loads(line)
+        yield item
+
+reader = Reader('data.txt')
+
+# 2.2. Model Declaration - Program
+# - Sensor
+sentence['__raw__'] = ReaderSensor(key='sentence')
+
+rel_sentence_contains_word['forward'] = TokenizorSensor('__raw__', mode='forward', keyword='__raw__')
+word['emb'] = GloveSensor('__raw__', edges=[rel_sentence_contains_word['forward'],])
+
+word[people] = LabelReaderSensor(key='people')
+word[organization] = LabelReaderSensor(key='organization')
+pair[work_for] = LabelReaderSensor(key='work_for')
+
+# - Learner
+word[people] = LogisticRegressionLearner('emb')
+word[organization] = LogisticRegressionLearner('emb')
+pair[wor_for] = LogisticRegressionLearner('emb')
+
+# - Program
+program = LearningBasedProgram(graph)
+
+# 3. Training and Testing
+# - Training
+program.train(reader, train_epoch_num=10, Optim=torch.optim.Adam)
+print(program.model.loss)  # last training loss will be print
+
+# - Testing
+test_reader = Reader('test.txt')
+program.test(test_reader)
+print(program.model.loss)  # last training loss will be print
+print(program.model.metric)  # last training metrics will be print
+
+# 4. Inference
+sentence_node = program.eval(test_reader)
+sentence_node.inferILPConstrains('people', 'organization', 'work_for', fun=None)
+word_nodes = sentence_node.getChildDataNodes(conceptName='word')
+for word_node in word_nodes:
+  # print the word
+  print(word_node.getAttribute('__raw__').item())
+  # prediction before inference
+  print(word_node.getAttribute(people).item())
+  # prediction after inference
+  print(word_node.getAttribute(people, 'ILP').item())
+```
