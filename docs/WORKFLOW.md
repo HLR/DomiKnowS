@@ -1,6 +1,6 @@
-# Program
+# Workflow
 
-- [Program](#program)
+- [Workflow](#workflow)
   - [Class Overview](#class-overview)
   - [Workflows](#workflows)
     - [Initiate](#initiate)
