@@ -1,29 +1,11 @@
-from regr.sensor.sensor import Sensor
-from regr.graph.dataNode import DataNode
-from regr.graph import Graph
-
 from typing import Dict, Any
-import torch
 
+from ...graph import DataNode
+from .sensors import TorchSensor, Sensor
 
-class TorchSensor(Sensor):
-
+class QuerySensor(TorchSensor):
     def __init__(self, *pres, output=None, edges=None, label=False, query=None):
-        super().__init__()
-        if not edges:
-            edges = []
-        self.pres = pres
-        self.output = output
-        self.context_helper = None
-        self.inputs = []
-        self.edges = edges
-        self.label = label
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.device = torch.device("cuda")
-        else:
-            self.device = torch.device("cpu")
-
+        super().__init__(*pres, output=output, edges=edges, label=label)
         if callable(query):
             self.selector = query
         else:
@@ -50,19 +32,8 @@ class TorchSensor(Sensor):
 
         try:
             return context[self.fullname]
-        except:
+        except KeyError:
             return context[self.sup.sup['raw'].fullname]
-
-    def update_pre_context(
-            self,
-            context: DataNode
-    ) -> Any:
-        for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
-                sensor(context=context)
-        for pre in self.pres:
-            for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(context=context)
 
     def update_context(
             self,
@@ -91,21 +62,13 @@ class TorchSensor(Sensor):
 
         return context
 
-    def fetch_value(self, pre, selector=None):
-        if selector:
-            try:
-                return self.context_helper[list(self.sup.sup[pre].find(selector))[0][1].fullname]
-            except:
-                print("The key you are trying to access to with a selector doesn't exist")
-                raise
-            pass
-        else:
-            return self.context_helper[self.sup.sup[pre].fullname]
-
-    def define_inputs(self):
-        self.inputs = []
+    def update_pre_context(
+            self,
+            context: DataNode
+    ) -> Any:
+        for edge in self.edges:
+            for _, sensor in edge.find(Sensor):
+                sensor(context=context)
         for pre in self.pres:
-            self.inputs.append(self.fetch_value(pre))
-
-    def forward(self, ) -> Any:
-        return None
+            for _, sensor in self.sup.sup[pre].find(Sensor):
+                sensor(context=context)
