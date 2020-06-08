@@ -89,34 +89,11 @@ class FunctionalSensor(TorchSensor):
         raise NotImplementedError
 
 class QuerySensor(FunctionalSensor):
-    def update_context(
-        self,
-        context: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
-        else:
-            self.define_inputs()
-            val = self.forward()
-            
-        if val is not None:
-            context[self.fullname] = val
-            if not self.label:
-                context[self.sup.fullname] = val  # override state under property name
-        else:
-            context[self.fullname] = None
-            if not self.label:
-                context[self.sup.fullname] = None
-            
-        if self.output:
-            context[self.fullname] = self.fetch_value(self.output)
-            context[self.sup.fullname] = self.fetch_value(self.output)
-            
-        return context
-
     def define_inputs(self):
+        super().define_inputs()
+        if self.inputs is None:
+            self.inputs = []
+
         builder = self.context_helper
         if not isinstance(builder, DataNodeBuilder):
             raise TypeError('{} should work with DataNodeBuilder context.'.format(type(self)))
@@ -124,4 +101,13 @@ class QuerySensor(FunctionalSensor):
         concept = self.sup.sup
         datanodes = root.findDatanodes(select=concept)
 
-        self.inputs = [datanodes]
+        self.inputs.insert(0, datanodes)
+
+
+class DataNodeSensor(QuerySensor):
+    def forward(self):
+        datanodes = self.inputs[0]
+        
+        if self.func_ is not None:
+            return [self.func_(datanode, *self.inputs[1:]) for datanode in datanodes]
+        return [self.func(datanode, *self.inputs[1:]) for datanode in datanodes]
