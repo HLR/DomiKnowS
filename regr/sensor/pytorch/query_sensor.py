@@ -1,4 +1,6 @@
 from typing import Dict, Any
+from itertools import product
+import torch
 
 from ...graph import DataNode, DataNodeBuilder, Concept, Property
 from .sensors import TorchSensor, Sensor
@@ -80,24 +82,35 @@ class FunctionalSensor(TorchSensor):
         super().__init__(*pres, output=output, edges=edges, label=label)
         self.func_ = func
 
+    def fetch_value(self, pre, selector=None):
+        if isinstance(pre, str):
+            return super().fetch_value(pre, selector)
+        elif isinstance(pre, Property):
+            return pre(self.context_helper)
+        return pre
+
     def forward(self):
-        if self.func_ is not None:
-            return self.func_(*self.inputs)
         return self.func(*self.inputs)
 
     def func(self, *inputs):
+        if self.func_ is not None:
+            return self.func_(*self.inputs)
         raise NotImplementedError
 
 class QuerySensor(FunctionalSensor):
+    @property
+    def builder(self):
+        builder = self.context_helper
+        if not isinstance(builder, DataNodeBuilder):
+            raise TypeError('{} should work with DataNodeBuilder context.'.format(type(self)))
+        return builder
+
     def define_inputs(self):
         super().define_inputs()
         if self.inputs is None:
             self.inputs = []
 
-        builder = self.context_helper
-        if not isinstance(builder, DataNodeBuilder):
-            raise TypeError('{} should work with DataNodeBuilder context.'.format(type(self)))
-        root = builder.getDataNode()
+        root = self.builder.getDataNode()
         concept = self.sup.sup
         datanodes = root.findDatanodes(select=concept)
 
@@ -108,15 +121,37 @@ class DataNodeSensor(QuerySensor):
     def forward(self):
         datanodes = self.inputs[0]
 
-        if self.func_ is not None:
-            return [self.func_(datanode, *self.inputs[1:]) for datanode in datanodes]
         return [self.func(datanode, *self.inputs[1:]) for datanode in datanodes]
 
-class CandidateSensor(DataNodeSensor):
+class CandidateSensor(QuerySensor):
     def fetch_value(self, pre, selector=None):
-        if isinstance(pre, str):
-            super().fetch_value(pre, selector)
-        elif isinstance(pre, Property):
-            pass
-        elif isinstance(pre, Concept):
-            pass
+        if isinstance(pre, Concept):
+            root = self.builder.getDataNode()
+            return root.findDatanodes(select=pre)
+        return super().fetch_value(pre, selector)
+
+    def forward(self):
+        # current existing datanodes (if any)
+        datanodes = self.inputs[0]
+
+        input_lists = []
+        dims = []
+        dims_index = []
+        for pre, input_ in zip(self.pres, self.inputs[1:]):
+            if isinstance(pre, Concept):
+                # if instance, unpack it
+                input_lists.append(enumerate(input_))
+                dims_index.append(len(dims))
+                dims.append(len(input_))
+            else:
+                # otherwise, repeat it
+                input_lists.append(enumerate([input_]))
+
+        output = torch.zeros(dims, dtype=torch.uint8)
+        for input_ in product(input_lists):
+            index_list, value_list = zip(*input_)
+            index = []
+            for dim_index in dims_index:
+                index.append(index_list[dim_index])
+            output[(*index,)] = self.func(datanodes, value_list)
+        return output
