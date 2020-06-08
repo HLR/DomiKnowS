@@ -80,6 +80,8 @@ class TorchSensor(Sensor):
             for _, sensor in edge.find(Sensor):
                 sensor(context=context)
         for pre in self.pres:
+            if self.sup is None:
+                raise ValueError('{} must be used with with property assignment.'.format(type(self)))
             for _, sensor in self.sup.sup[pre].find(Sensor):
                 sensor(context=context)
 
