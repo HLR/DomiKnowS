@@ -1,6 +1,6 @@
 from typing import Dict, Any
 
-from ...graph import DataNode, DataNodeBuilder
+from ...graph import DataNode, DataNodeBuilder, Concept, Property
 from .sensors import TorchSensor, Sensor
 
 
@@ -107,7 +107,16 @@ class QuerySensor(FunctionalSensor):
 class DataNodeSensor(QuerySensor):
     def forward(self):
         datanodes = self.inputs[0]
-        
+
         if self.func_ is not None:
             return [self.func_(datanode, *self.inputs[1:]) for datanode in datanodes]
         return [self.func(datanode, *self.inputs[1:]) for datanode in datanodes]
+
+class CandidateSensor(DataNodeSensor):
+    def fetch_value(self, pre, selector=None):
+        if isinstance(pre, str):
+            super().fetch_value(pre, selector)
+        elif isinstance(pre, Property):
+            pass
+        elif isinstance(pre, Concept):
+            pass
