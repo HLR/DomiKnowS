@@ -110,7 +110,7 @@ class FunctionalSensor(TorchSensor):
 
     def func(self, *inputs):
         if self.func_ is not None:
-            return self.func_(*self.inputs)
+            return self.func_(*inputs)
         raise NotImplementedError
 
 class QuerySensor(FunctionalSensor):
