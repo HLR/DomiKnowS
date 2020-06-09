@@ -3,69 +3,64 @@ from regr.sensor.pytorch.learners import TorchLearner
 from typing import Any
 import torch
 
-
-class DummyLearner(TorchLearner):
+#  --- City
+class DummyCityEdgeSensor(TorchEdgeSensor): # Get world to city edge
     def forward(self,) -> Any:
-        result = torch.ones(len(self.inputs[0]))
-        result = -1 * result
+        self.inputs.append(self.context_helper[self.edges[0].fullname])
+        return self.inputs[0]
+    
+class DummyCityLearner(TorchLearner):  # Learn Fire station classification for City
+    def forward(self,) -> Any:
+        result = torch.zeros(len(self.inputs[0]), 2)
+        
+        for t in result:
+            t[1]  = -1
+
         return result
 
-
-class DummyLabelSensor(TorchSensor):
+class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classification
     def __init__(self, *pres, label=True):
         super().__init__(*pres, label=label)
 
     def forward(self,) -> Any:
         return []
 
+# --- CityLink
 
-class DummyEdgeSensor(TorchEdgeSensor):
+class DummyCityLinkEdgeSensor(TorchEdgeSensor): # Get CityLink to city edge
     def forward(self,) -> Any:
         return self.inputs[0]
 
-
-class DummyNeighborgenerator(TorchEdgeSensor):
+class DummyCityLinkCandidateGenerator(TorchSensor): # Generate candidates for CityLinks relation
     def forward(self,) -> Any:
-        return self.inputs[0]
+        try:
+            pairs = torch.ones(len(self.context_helper['city']), len(self.context_helper['city']), dtype=torch.int) # torch.int8 or torch.bool
+            
+            return pairs
+        except:
+            print("the key you requested from the reader doesn't exist")
+            raise
 
-
-class DummyNeighbor(TorchSensor):
+class DummyNeighborLearner(TorchLearner):  # Learn Neighbor classification for CityLink
     def forward(self,) -> Any:
-        pairs = []
-        print("start of the dummyNeighbor sensor")
-        for item in self.inputs[0]:
-            for item1 in self.inputs[1]:
-                pairs.append((item, item1))
-        return pairs
+        sh = self.inputs[0].shape
+        neighbor = torch.zeros(*self.inputs[0].shape, 2, dtype=torch.int)
+                
+        info = self.context_helper['links']
+        for city, targets in info.items():
+            for target in targets:
+                neighbor[city - 1, target - 1][1] = 1
+                
+        for t in neighbor:
+            for t1 in t:
+                if t1[1] == 0:
+                    t1[0] = 1
+                    
+        return neighbor
 
+class DummyCityLinkLabelSensor(TorchSensor): # Get Truth for Neighbor classification
+    def __init__(self, *pres, label=True):
+        super().__init__(*pres, label=label)
 
-class CustomReader(ReaderSensor):
-    def forward(
-        self,
-    ) -> Any:
-        if self.data:
-            try:
-                info = self.data[self.keyword]
-                pairs = []
-                for city, targets in info.items():
-                    for target in targets:
-                        pairs.append((city, target))
-                return pairs
-            except:
-                print("the key you requested from the reader doesn't exist")
-                raise
-        else:
-            print("there is no data to operate on")
-            raise Exception('not valid')
-
-
-class NeighborDetector(TorchSensor):
     def forward(self,) -> Any:
-        detector = []
-        for pair in self.inputs[0]:
-            if pair in self.inputs[1]:
-                detector.append(1)
-            else:
-                detector.append(0)
-        return torch.tensor(detector)
-
+        return []
