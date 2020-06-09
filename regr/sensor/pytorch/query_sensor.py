@@ -164,10 +164,10 @@ class CandidateSensor(QuerySensor):
                 input_lists.append(enumerate([input_]))
 
         output = torch.zeros(dims, dtype=torch.uint8)
-        for input_ in product(input_lists):
+        for input_ in product(*input_lists):
             index_list, value_list = zip(*input_)
             index = []
             for dim_index in dims_index:
                 index.append(index_list[dim_index])
-            output[(*index,)] = self.func(datanodes, value_list)
+            output[(*index,)] = self.func(datanodes, *value_list)
         return output

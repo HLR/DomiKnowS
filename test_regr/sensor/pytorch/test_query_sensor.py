@@ -37,7 +37,7 @@ def sensor(case, graph):
     from regr.graph import DataNode
     from regr.sensor.pytorch.query_sensor import QuerySensor
 
-    concept = graph['sub/concept']  # concept is the only child
+    concept = graph['sub/concept']
 
     def func(datanodes, reader1, reader2, constant):
         # datanodes is a list of datanode
