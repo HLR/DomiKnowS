@@ -26,11 +26,14 @@ def case():
 @pytest.fixture()
 def graph(case):
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
-    from regr.graph import Graph, Concept
+    from regr.graph import Graph, Concept, Relation
 
     from .sensors import TestSensor, TestEdgeSensor
 
     # knowledge
+    Graph.clear()
+    Concept.clear()
+    Relation.clear()
     with Graph() as graph:
         with Graph('sub') as subgraph:
             container = Concept('container')

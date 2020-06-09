@@ -21,6 +21,7 @@ def concept(case):
     from regr.graph import Concept
 
     # knowledge
+    Concept.clear()
     concept = Concept()
 
     # model

@@ -21,6 +21,8 @@ def graph(case):
     from regr.graph import Graph, Concept
 
     # knowledge
+    Graph.clear()
+    Concept.clear()
     with Graph() as graph:
         with Graph('sub') as subgraph:
             concept = Concept('concept')
