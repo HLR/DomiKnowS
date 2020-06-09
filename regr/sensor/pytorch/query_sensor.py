@@ -82,6 +82,20 @@ class FunctionalSensor(TorchSensor):
         super().__init__(*pres, output=output, edges=edges, label=label)
         self.func_ = func
 
+    def update_pre_context(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        for edge in self.edges:
+            for _, sensor in edge.find(Sensor):
+                sensor(context=context)
+        for pre in self.pres:
+            if isinstance(pre, str):
+                if self.sup is None:
+                    raise ValueError('{} must be used with with property assignment.'.format(type(self)))
+                for _, sensor in self.sup.sup[pre].find(Sensor):
+                    sensor(context=context)
+
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
             return super().fetch_value(pre, selector)
