@@ -41,7 +41,7 @@ Also, `torch.utils.data.DataLoader` instance is a good choice when working with 
 The framework also has a simple reader for JSON format input file.
 
 There is also a default Reader class implemented in the framework.
-```
+```python
 class RegrReader:
     def __init__(self, file, type="json"):
         self.file = file
