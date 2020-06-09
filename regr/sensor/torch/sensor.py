@@ -17,11 +17,11 @@ class TorchSensor(Sensor):
         super().__init__()
         self.target = target
 
-    def propagate_context(self, context, node, force=False):
+    def propagate_context(self, data_item, node, force=False):
         if not self.target:  # avoid target to be mixed in forward calculation
-            super().propagate_context(context, node, force)
+            super().propagate_context(data_item, node, force)
 
-    def mask(self, context: Dict[str, Any]) -> Any:
+    def mask(self, data_item: Dict[str, Any]) -> Any:
         # allow safely skip mask
         raise SkipSensor
 
@@ -31,8 +31,8 @@ class DataSensor(TorchSensor):
         super().__init__(target=target)
         self.key = key
 
-    def forward(self, context):
-        return context[self.key]
+    def forward(self, data_item):
+        return data_item[self.key]
 
 
 class LabelSensor(DataSensor):
@@ -45,7 +45,7 @@ class FunctionalSensor(TorchSensor):
         super().__init__(target)
         self.pres = pres
 
-    def get_args(self, context, skip_none_prop=False, sensor_fn=None, sensor_filter=None):
+    def get_args(self, data_item, skip_none_prop=False, sensor_fn=None, sensor_filter=None):
         for pre in self.pres:
             if isinstance(pre, Property):
                 for _, sensor in pre.items():
@@ -53,9 +53,9 @@ class FunctionalSensor(TorchSensor):
                         continue
                     try:
                         if sensor_fn:
-                            yield sensor_fn(sensor, context)
+                            yield sensor_fn(sensor, data_item)
                         else:
-                            yield sensor(context)
+                            yield sensor(data_item)
                         break
                     except SkipSensor:
                         pass
@@ -72,13 +72,13 @@ class FunctionalSensor(TorchSensor):
 
     def forward(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
     ) -> Dict[str, Any]:
-        args = self.get_args(context, sensor_filter=lambda s: not s.target)
+        args = self.get_args(data_item, sensor_filter=lambda s: not s.target)
         return self.forward_func(*args)
 
-    def mask(self, context):
-        masks = list(self.get_args(context, sensor_fn=lambda s, c: s.mask(c)))
+    def mask(self, data_item):
+        masks = list(self.get_args(data_item, sensor_fn=lambda s, c: s.mask(c)))
         masks_num = len(masks)
         mask = masks[0]
         mask = mask.float()
@@ -144,8 +144,8 @@ class NorminalSensor(FunctionalSensor):
     def encode(self, output):
         return self._vocab.get(output, self._vocab[self.UNK])
 
-    def forward(self, context):
-        raw_outputs = super().forward(context)
+    def forward(self, data_item):
+        raw_outputs = super().forward(data_item)
         if not self.fixed:
             self.update_counter(raw_outputs)
         encoded_outputs = [list(map(self.encode, raw_output)) for raw_output in raw_outputs]

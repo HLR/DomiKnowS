@@ -62,10 +62,10 @@ class LearningBasedProgram():
     def train_epoch(self, dataset, inference=False):
         self.model.train()
         self.model.reset()
-        for data in dataset:
+        for data_item in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
-            loss, metric, output = self.model(data, inference=inference)
+            loss, metric, output = self.model(data_item, inference=inference)
             if self.opt is not None:
                 loss.backward()
                 self.opt.step()
@@ -75,22 +75,23 @@ class LearningBasedProgram():
         self.model.eval()
         self.model.reset()
         with torch.no_grad():
-            for data in dataset:
-                loss, metric, output = self.model(data, inference=inference)
+            for data_item in dataset:
+                loss, metric, output = self.model(data_item, inference=inference)
                 yield loss, metric, output
 
-    def eval(self, dataset, inference=True):
+    def populate(self, dataset, inference=True):
         self.model.eval()
         self.model.reset()
         with torch.no_grad():
-            for data in dataset:
-                _, _, output = self.model(data, inference=inference)
+            for data_item in dataset:
+                _, _, output = self.model(data_item, inference=inference)
                 yield output
 
-    def eval_one(self, data, inference=True):
-        # TODO: extend one sample data to 1-batch data
+    def populate_one(self, data_item, inference=True):
+        for key, value in data_item:
+            data_item[key] = [value]
         self.model.eval()
         self.model.reset()
         with torch.no_grad():
-            _, _, output = self.model(data, inference=inference)
+            _, _, output = self.model(data_item, inference=inference)
             return output

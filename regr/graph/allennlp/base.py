@@ -269,7 +269,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
         return metrics
 
-    def populate(self, context, root, *concepts, query=None, label_fn=None, data_dict=None):
+    def populate(self, data_item, root, *concepts, query=None, label_fn=None, data_dict=None):
         trial = Trial()
         if data_dict is None:
             data_dict = defaultdict(list)
@@ -303,8 +303,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             return lambda item: contain(node, item[0])
 
         root_data = []
-        sub_context = {}
-        for k, v in filter(contained_by(self), context.items()):
+        sub_data_item = {}
+        for k, v in filter(contained_by(self), data_item.items()):
             node = self[k[len(self.fullname)+1:]]
             if not isinstance(node, Property): # skip sensors and learners
                 continue
@@ -320,7 +320,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
                 for dataNode, pv in zip(root_data, peel(v)):
                     dataNode.__dict__[node.prop_name] = pv
             else:
-                sub_context[k] = v
+                sub_data_item[k] = v
         if label_fn:
             for dataNode in root_data:
                 prob = label_fn(dataNode)
@@ -338,8 +338,8 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
         return trial, data_dict
 
 #     @staticmethod
-#     def peel(context, index):
-#         # get a new context by selecting index for first dim
+#     def peel(data_item, index):
+#         # get a new data_item by selecting index for first dim
 #         def peel_one(node_value):
 #             # closure variable - index
 #             if isinstance(node_value, (torch.Tensor, List, Tuple)):
@@ -350,17 +350,17 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 #             # according to dim(/batch). Return None or return the identical one for all?
 #             return None
 #         peeled = {}
-#         for k, v in context:
+#         for k, v in data_item:
 #             v = peel_one(v)
 #             if v is not None:
 #                 peeled[k] = v
 #         return peeled
 
 #     @staticmethod
-#     def peeled(context):
-#         keys, values = zip(*context.items())
+#     def peeled(data_item):
+#         keys, values = zip(*data_item.items())
 #         zip(values)
-#         # get a new context by selecting index for first dim
+#         # get a new data_item by selecting index for first dim
 #         def peel_one(node_value):
 #             # closure variable - index
 #             if isinstance(node_value, (torch.Tensor, List, Tuple)):
@@ -371,13 +371,13 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 #             # according to dim(/batch). Return None or return the identical one for all?
 #             return None
 #         peeled = {}
-#         for k, v in context:
+#         for k, v in data_item:
 #             v = peel_one(v)
 #             if v is not None:
 #                 peeled[k] = v
 #         return peeled
 
-#     def populate(self, context, *concepts, batch=None, query=None, key='label'):
+#     def populate(self, data_item, *concepts, batch=None, query=None, key='label'):
 #         from ..concept import Concept
 #         from ..property import Property
 #         from ..dataNode import DataNode
@@ -399,7 +399,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 #                 return {k, extract_batch(v): for k, v: node_value.items()}
 #             return None # fields like "loss" fron allennlp might not be divided according to batch, or return the identical one for all?
 
-#         for node_key, node_value in filter(contained, context.items()):
+#         for node_key, node_value in filter(contained, data_item.items()):
 #             node = self[node_key]
 #             if isinstance(node, Property):
 #                 concept_node = node.sup

@@ -30,8 +30,8 @@ class ModuleLearner(FunctionalLearner):
 class EmbedderLearner(ModuleLearner):
     Module = torch.nn.Embedding
 
-    def mask(self, context):
-        input = next(self.get_args(context, sensor_filter=lambda s: not s.target))
+    def mask(self, data_item):
+        input = next(self.get_args(data_item, sensor_filter=lambda s: not s.target))
         if self.module.padding_idx is not None:
             mask = input.clone().detach() != self.module.padding_idx
         else:
@@ -50,8 +50,8 @@ class NorminalEmbedderLearner(EmbedderLearner):
     def update_module(self, num_embeddings):
         self.module = self.Module(num_embeddings=num_embeddings, **self.modele_args)
 
-    def mask(self, context):
-        input = next(self.get_args(context, sensor_filter=lambda s: not s.target))
+    def mask(self, data_item):
+        input = next(self.get_args(data_item, sensor_filter=lambda s: not s.target))
         if self.module.padding_idx is not None:
             mask = input.clone().detach() != self.module.padding_idx
         else:

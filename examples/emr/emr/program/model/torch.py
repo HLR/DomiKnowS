@@ -14,23 +14,23 @@ class SolverModel(PoiModel):
         else:
             self.solver = None
 
-    def inference(self, context):
-        context = self.solver.inferSelection(context, list(self.poi))
-        return context
+    def inference(self, data_item):
+        data_item = self.solver.inferSelection(data_item, list(self.poi))
+        return data_item
 
-    def forward(self, context, inference=True):
-        context = self.move(context)
+    def forward(self, data_item, inference=True):
+        data_item = self.move(data_item)
         if inference:
-            context = self.inference(context)
-        return super().forward(context, inference)
+            data_item = self.inference(data_item)
+        return super().forward(data_item, inference)
 
 
 class IMLModel(SolverModel):
-    def poi_loss(self, context, prop, output_sensor, target_sensor):
-        logit = output_sensor(context)
-        mask = output_sensor.mask(context)
-        labels = target_sensor(context)
-        inference = prop(context)
+    def poi_loss(self, data_item, prop, output_sensor, target_sensor):
+        logit = output_sensor(data_item)
+        mask = output_sensor.mask(data_item)
+        labels = target_sensor(data_item)
+        inference = prop(data_item)
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)

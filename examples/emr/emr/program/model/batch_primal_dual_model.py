@@ -17,9 +17,9 @@ class BatchPrimalDualModel(PrimalDualModel):
         constructor = constructor or BatchMaskProbConstructor
         super().__init__(graph, constructor=constructor(), SessionType=SessionType)
 
-    def forward(self, context):
-        closs = self.inferSelection(context, list(self.poi))
-        return closs, context
+    def forward(self, data_item):
+        closs = self.inferSelection(data_item, list(self.poi))
+        return closs, data_item
 
     def solve_legacy(self, data, *predicates_list):
         # data is a list of objects of the base type
@@ -61,7 +61,7 @@ class BatchPrimalDualModel(PrimalDualModel):
 
         return closs.mean()
 
-    def inferSelection(self, context, prop_list):
+    def inferSelection(self, data_item, prop_list):
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -90,7 +90,7 @@ class BatchPrimalDualModel(PrimalDualModel):
         else:
             max_rank = 0
 
-        sentences, mask_len = self.get_raw_input(context)
+        sentences, mask_len = self.get_raw_input(data_item)
         tokens = list(zip(sentences, mask_len))
 
         table_list = []
@@ -108,7 +108,7 @@ class BatchPrimalDualModel(PrimalDualModel):
                 name = concept.name # we need concept name to match that in OWL
                 # score - (b, l...*r) / (b, l...*r, c)
                 # mask - (b, l...*r)
-                score, mask = self.get_prop_result(context, prop)
+                score, mask = self.get_prop_result(data_item, prop)
                 prop_values[name] = (score, mask)
             table_list.append(prop_values)
 

@@ -11,7 +11,7 @@ from regr.graph import Graph
 class ACELogicalSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def inferILPConstrains(self, context, info):
+    def inferILPConstrains(self, data_item, info):
         global_key = "global/linguistic/"
         root = "sentence"
         root_features = ["raw", ]
@@ -50,7 +50,7 @@ class ACELogicalSolver(ilpOntSolver):
         with torch.no_grad():
             epsilon = 0.00001
             for item in predicates:
-                _list = [_it.cpu().numpy() for _it in context[global_key + predictions_on + "/" + item]]
+                _list = [_it.cpu().numpy() for _it in data_item[global_key + predictions_on + "/" + item]]
                 for _it in range(len(_list)):
                     if _list[_it][0] > 1-epsilon:
                         _list[_it][0] = 1-epsilon
@@ -80,9 +80,9 @@ class ACELogicalSolver(ilpOntSolver):
         results = myilpOntSolver.calculateILPSelection(tokens,
                                    sentence['words'])
 
-        return self.transform_back(result=results, context=context, helper=sentence)
+        return self.transform_back(result=results, data_item=data_item, helper=sentence)
 
-    def transform_back(self, result, context, helper):
+    def transform_back(self, result, data_item, helper):
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.device = torch.device("cuda")

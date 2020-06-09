@@ -47,23 +47,23 @@ class PrimalDualModel(TorchModel):
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 0.5)
 
-    def forward(self, context):
-        closs = self.inferSelection(context, list(self.poi))
-        return closs, context
+    def forward(self, data_item):
+        closs = self.inferSelection(data_item, list(self.poi))
+        return closs, data_item
 
-    def get_raw_input(self, context):
+    def get_raw_input(self, data_item):
         _, sentence_sensor = self.graph.get_sensors(DataSensor, lambda s: not s.target)[0]
-        sentences = sentence_sensor(context)
+        sentences = sentence_sensor(data_item)
         mask_len = [len(s) for s in sentences]  # (b, )
         return sentences, mask_len
 
-    def get_prop_result(self, context, prop):
+    def get_prop_result(self, data_item, prop):
         output_sensor, _ = self.graph.poi[prop]
 
-        logit = output_sensor(context)
+        logit = output_sensor(data_item)
         #score = -F.logsigmoid(logit)
         score = torch.sigmoid(logit)
-        mask = output_sensor.mask(context)
+        mask = output_sensor.mask(data_item)
         return score, mask
 
     def calculateILPSelection(self, data, *predicates_list):
@@ -106,7 +106,7 @@ class PrimalDualModel(TorchModel):
 
         return closs
 
-    def inferSelection(self, context, prop_list):
+    def inferSelection(self, data_item, prop_list):
         # build concept (property) group by rank (# of has-a)
         prop_dict = defaultdict(list)
 
@@ -135,7 +135,7 @@ class PrimalDualModel(TorchModel):
         else:
             max_rank = 0
 
-        sentences, mask_len = self.get_raw_input(context)
+        sentences, mask_len = self.get_raw_input(data_item)
         batch_size = len(sentences)
 
         values = [defaultdict(dict) for _ in range(batch_size)]
@@ -150,7 +150,7 @@ class PrimalDualModel(TorchModel):
                 name = concept.name # we need concept name to match that in OWL
                 # score - (b, l...*r) / (b, l...*r, c)
                 # mask - (b, l...*r)
-                score, mask = self.get_prop_result(context, prop)
+                score, mask = self.get_prop_result(data_item, prop)
                 mask = mask.cpu().detach().to(torch.bool).numpy()
                 # copy and detach, time consuming I/O
                 batched_value = score#.clone().cpu().detach().numpy()

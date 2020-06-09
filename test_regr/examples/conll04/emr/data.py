@@ -118,15 +118,15 @@ class ConllDataLoader(DataLoader):
                 relation_tensors[relation][batch_idx, arg1[arg_idx], arg2[arg_idx]] = True
             #import pdb; pdb.set_trace()
         token_raw, label_raw, relation_raw = zip(*batch)
-        context = {
+        data_item = {
             'token_raw': token_raw,
             'label_raw': label_raw,
             'relation_raw':relation_raw,
             'token': tokens_tensor}
-        context.update(label_tensors)
-        context.update(relation_tensors)
+        data_item.update(label_tensors)
+        data_item.update(relation_tensors)
         #import pdb; pdb.set_trace()
-        return context
+        return data_item
 
     def __init__(self, path, reader=Conll04CorpusReader(), first=True, vocab=None, least_count=0, max_vocab=None, skip_none=True, **kwargs):
         self.reader = reader

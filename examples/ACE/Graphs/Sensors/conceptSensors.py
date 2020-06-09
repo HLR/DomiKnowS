@@ -13,16 +13,16 @@ class LabelSensor(CallingSensor):
 
     def labels(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
            ) -> Any:
-        return context[self.pres[0].fullname][1]
+        return data_item[self.pres[0].fullname][1]
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(LabelSensor, self).forward(context=context)
-        labels = self.labels(context=context)
+        super(LabelSensor, self).forward(data_item)
+        labels = self.labels(data_item)
         output = [1] * len(labels)
         for it in range(len(labels)):
             if labels[it] == self.target:

@@ -56,8 +56,8 @@ class TorchModel(torch.nn.Module):
             for _, sensor in prop.find(ReaderSensor):
                 sensor.fill_data(data)
         data.update({"graph": self.graph, 'READER': 1})
-        context = DataNodeBuilder(data)
-        # context = data
+        data_item = DataNodeBuilder(data)
+        # data_item = data
         for prop in self.graph.traversal_apply(all_properties):
             for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.label:
@@ -72,10 +72,10 @@ class TorchModel(torch.nn.Module):
                 if output_sensor.label:
                     # two targets, skip
                     continue
-                logit = output_sensor(context)
+                logit = output_sensor(data_item)
                 #logit = logit.squeeze()
                 #mask = output_sensor.mask(data)
-                labels = target_sensor(context)
+                labels = target_sensor(data_item)
                 #labels = labels.float()
                 if self.loss:
                     local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
@@ -84,7 +84,7 @@ class TorchModel(torch.nn.Module):
                     local_metric = self.metric[output_sensor, target_sensor](logit, labels, mask)
                     metric[output_sensor, target_sensor] = local_metric
         import numpy as np
-        datanode = context.getDataNode()
+        datanode = data_item.getDataNode()
         return loss, metric, datanode
 
 
