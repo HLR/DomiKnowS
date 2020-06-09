@@ -95,12 +95,14 @@ class FunctionalSensor(TorchSensor):
                     raise ValueError('{} must be used with with property assignment.'.format(type(self)))
                 for _, sensor in self.sup.sup[pre].find(Sensor):
                     sensor(context=context)
+            elif isinstance(pre, (Property, Sensor)):
+                pre(context)            
 
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
             return super().fetch_value(pre, selector)
-        elif isinstance(pre, Property):
-            return pre(self.context_helper)
+        elif isinstance(pre, (Property, Sensor)):
+            return self.context_helper[pre.fullname]
         return pre
 
     def forward(self):
