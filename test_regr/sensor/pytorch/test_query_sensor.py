@@ -10,7 +10,7 @@ def case():
         'reader1': 'hello world, {}'.format(random.random()),
         'reader2': 'hello world, {}'.format(random.random()),
         'constant': random.random(),
-        'query': 'output, {}'.format(random.random())}
+        'output': 'output, {}'.format(random.random())}
     case = Namespace(case)
     return case
 
@@ -39,12 +39,15 @@ def sensor(case, graph):
 
     concept = graph['sub/concept']  # concept is the only child
 
-    def func(datanode, reader1, reader2, constant):
-        assert isinstance(datanode[0], DataNode)
+    def func(datanodes, reader1, reader2, constant):
+        # datanodes is a list of datanode
+        assert len(datanodes) == 1
+        assert isinstance(datanodes[0], DataNode)
+        # other arguments are like functional sensor
         assert reader1 == case.reader1
         assert reader2 == case.reader2
         assert constant == case.constant
-        return case.query
+        return case.output
     sensor = QuerySensor('reader1', concept['reader2'], case.constant, func=func)
     concept['query'] = sensor
     return sensor
@@ -71,9 +74,9 @@ def context(case, graph):
     return context
 
 
-def test_functional_sensor(case, sensor, context):
+def test_query_sensor(case, sensor, context):
     output = sensor(context)
-    assert output == case.query
+    assert output == case.output
 
 if __name__ == '__main__':
     pytest.main([__file__])
