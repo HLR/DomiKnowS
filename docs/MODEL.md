@@ -40,6 +40,41 @@ For example, a `list` of `dict` is a simplest input reader.
 Also, `torch.utils.data.DataLoader` instance is a good choice when working with PyTorch.
 The framework also has a simple reader for JSON format input file.
 
+There is also a default Reader class implemented in the framework.
+```
+class RegrReader:
+    def __init__(self, file, type="json"):
+        self.file = file
+        if type == "json":
+            with open(file, 'r') as myfile:
+                data = myfile.read()
+            # parse file
+            self.objects = json.loads(data)
+        else:
+            self.objects = self.parse_file()
+
+    # you should return the objects list here
+    def parse_file(self):
+        pass
+
+    def make_object(self, item):
+        result = {}
+        pattern = re.compile("^get.+val$")
+        _list = [method_name for method_name in dir(self)
+                 if callable(getattr(self, method_name)) and pattern.match(method_name)]
+        for func in _list:
+            name = func.replace("get", "", 1)
+            k = name.rfind("val")
+            name = name[:k]
+            result[name] = getattr(self, func)(item)
+        return result
+
+    def run(self):
+        for item in self.objects:
+            yield self.make_object(item)
+```
+if you are loading a json file you do not have to write the `parse_file` function for your customized reader. Otherwise, you have to load a file and write a parser to parse it to a list of objects. 
+To generate the outputs of each example you have to write functions in the format of `get$name$val`. each time the object is provided to your function and you should return the value of `$name` inside this function. At the end the output for each example will contain all the keys from the output of function `get$name$val` as `$name`. For getting one example of the reader, you have to call `run()` and it will yield one example at a time.
 ## Sensor
 
 `Sensor`s are procedures to access external resources and procedures. For example, reading from raw data, feature engineering staffs, and preprocessing procedures.
