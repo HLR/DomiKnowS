@@ -18,5 +18,5 @@ class CityReader:
 
     def run(self,):
         for i in range(len(self.data)):
-            item = {'world': self.data[i], 'links': self.links[i]}
+            item = {'world':[0], 'city': self.data[i], 'links': self.links[i]}
             yield item

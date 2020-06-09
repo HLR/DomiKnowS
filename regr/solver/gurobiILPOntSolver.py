@@ -1239,19 +1239,24 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
     def _typeOfConcept (self, e):
         for is_a in e.is_a():
-            is_a_dst = is_a.dst.name
+            is_a_dst = is_a.dst
             
-            if is_a_dst is 'pair':
-                pairConcepts = []
+            relationConcepts = []
+            
+            if len(e.has_a()) > 0: 
                 for has_a in e.has_a():
-                    pairConcepts.append(has_a.dst.name)
-                return 'pair', pairConcepts
-            elif is_a_dst is 'triplet':
-                tripletConcepts = []
-                for has_a in e.has_a():
-                    tripletConcepts.append(has_a.dst.name)
-                return 'triplet', tripletConcepts
-        
+                    relationConcepts.append(has_a.dst.name)
+            else:
+                for has_a in is_a_dst.has_a():
+                    relationConcepts.append(has_a.dst.name)
+                    
+            if len(relationConcepts) == 2:
+                return 'pair', relationConcepts
+            elif len(relationConcepts) == 3:
+                return 'triplet', relationConcepts
+            else:
+                pass
+            
         return 'concept', []
                 
     def checkIContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
