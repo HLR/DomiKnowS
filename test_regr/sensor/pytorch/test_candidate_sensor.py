@@ -47,7 +47,6 @@ def graph(case):
         'raw', mode='forward', keyword='raw',
         expected_inputs=[case.container,],
         expected_outputs=case.container_edge)
-    # WIP:
     edge_concept1['backward'] = TestEdgeSensor(
         'raw', mode='backward', keyword='concept1',
         edges=[container_contains_concept['forward']],
