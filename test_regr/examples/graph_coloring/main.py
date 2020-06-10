@@ -56,11 +56,30 @@ def test_graph_coloring_main():
         for child_node in datanode.getChildDataNodes():
             assert child_node.ontologyNode == city
             assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0
-            assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == -1
+            assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
         conceptsRelations = (neighbor, firestationCity)  # TODO: please fill this
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, epsilon=0)   
+        datanode.inferILPConstrains(*conceptsRelations, fun=None, epsilon=0, minimizeObjective=True) 
+        
+        result = []
+        for child_node in datanode.getChildDataNodes():
+            s = child_node.getAttribute('raw')
+            f = child_node.getAttribute(firestationCity, 'ILP').item()
+            if f > 0:
+                r = (s, True)
+            else:
+                r = (s, False)
+            result.append(r)
+        
+        for child_index, child_node in enumerate(datanode.getChildDataNodes()):
+            if child_index + 1 == 1:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
+            elif child_index + 1 == 6:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0 # 1
+            else:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
 
+            
 if __name__ == '__main__':
     pytest.main([__file__])

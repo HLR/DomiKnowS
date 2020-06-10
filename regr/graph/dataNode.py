@@ -17,8 +17,6 @@ else:
     #from .concept import Concept
     from ..solver import ilpOntSolverFactory
     
-PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
-
 # Class representing single data instance with relation  links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
@@ -434,7 +432,7 @@ class DataNode:
         return conceptsAndRelations
 
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001):
+    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         
         if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
             _conceptsRelations = self.__collectConceptsAndRelations(self)
@@ -563,7 +561,8 @@ class DataNode:
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
-        tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
+        tokenResult, pairResult, tripleResult = \
+            myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, minimizeObjective = minimizeObjective)
             
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

@@ -1125,7 +1125,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return Z_Q
         
-    def addLogicalConstrains(self, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def addLogicalConstrains(self, m, concepts, tokens, x, y, z):
         self.myLogger.info('Starting method addLogicalConstrains')
         
         for graph in self.myGraph:
@@ -1134,9 +1134,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, headLC = True)
+                self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, headLC = True)
                 
-    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName='Final', headLC = False):
+    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, resultVariableName='Final', headLC = False):
         lcVariables = []
         
         for eIndex, e in enumerate(lc.e): 
@@ -1229,7 +1229,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if len(variablesNames) > 1:
                         self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,e))
                     
-                    lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName = variablesNames[0]))
+                    lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, resultVariableName = variablesNames[0]))
             elif isinstance(e, tuple): # tuple with named variable - skip for now
                 pass # Already processed in the previous iteration
             else:
@@ -1259,7 +1259,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return 'concept', []
                 
-    def checkIContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    # Method updating provided probabilities with default negative probabilities if not provided by the user 
+    def __checkIContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
         
         if graphResultsForPhraseToken:
             correctN = True
@@ -1340,9 +1341,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                             temp = np.append(temp, temp1, axis=0)
                                     
                     graphResultsForPhraseTripleRelation[c] = temp        
-                    
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
-    
+                 
+    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
@@ -1356,7 +1357,7 @@ class gurobiILPOntSolver(ilpOntSolver):
               
         concepts = [k for k in graphResultsForPhraseToken.keys()]
 
-        self.checkIContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+        self.__checkIContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
         
         tokens = None
         if all(isinstance(item, tuple) for item in phrase):
@@ -1401,9 +1402,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 Q += Z_Q
             
             if not hasattr(self, 'myOnto'): # --- Not Using Ontology as a source of constrains 
-                self.addLogicalConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+                self.addLogicalConstrains(m, concepts, tokens, x, y, z) # Process Logical constrains defined in graph
 
-            m.setObjective(Q, GRB.MAXIMIZE)
+            if minimizeObjective:
+                 m.setObjective(Q, GRB.MINIMIZE)
+            else:
+                m.setObjective(Q, GRB.MAXIMIZE) # -------- Default
 
             # Token is associated with a single concept
             #for token in tokens:

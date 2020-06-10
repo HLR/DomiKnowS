@@ -14,7 +14,7 @@ class DummyCityLearner(TorchLearner):  # Learn Fire station classification for C
         result = torch.zeros(len(self.inputs[0]), 2)
         
         for t in result:
-            t[1]  = -1
+            t[1]  = 1
 
         return result
 
