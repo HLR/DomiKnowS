@@ -66,7 +66,7 @@ def sensor(case, graph):
     concept = graph['sub/concept']
 
     datanodes = []
-    def func(datanode, reader1, reader2, constant):
+    def forward(datanode, reader1, reader2, constant):
         idx = len(datanodes)
         assert idx < 2
         datanodes.append(datanode)
@@ -81,7 +81,7 @@ def sensor(case, graph):
         assert reader2 == case.reader2
         assert constant == case.constant
         return case.output[idx]
-    sensor = DataNodeSensor('reader1', concept['reader2'], case.constant, func=func)
+    sensor = DataNodeSensor('reader1', concept['reader2'], case.constant, forward=forward)
     concept['output'] = sensor
     return sensor
 

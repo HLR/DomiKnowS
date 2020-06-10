@@ -34,12 +34,12 @@ def concept(case):
 @pytest.fixture()
 def sensor(case, concept):
     from regr.sensor.pytorch.query_sensor import FunctionalSensor
-    def func(reader1, reader2, constant):
+    def forward(reader1, reader2, constant):
         assert reader1 == case.reader1
         assert reader2 == case.reader2
         assert constant == case.constant
         return case.functional
-    sensor = FunctionalSensor('reader1', concept['reader2'], case.constant, func=func)
+    sensor = FunctionalSensor('reader1', concept['reader2'], case.constant, forward=forward)
     concept['functional'] = sensor
     return sensor
 

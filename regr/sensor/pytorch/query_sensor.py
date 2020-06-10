@@ -78,9 +78,9 @@ class QuerySensor0(TorchSensor):
 
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, func=None):
+    def __init__(self, *pres, output=None, edges=None, label=False, forward=None):
         super().__init__(*pres, output=output, edges=edges, label=label)
-        self.func_ = func
+        self.forward_ = forward
 
     def update_pre_context(
         self,
@@ -96,7 +96,34 @@ class FunctionalSensor(TorchSensor):
                 for _, sensor in self.sup.sup[pre].find(Sensor):
                     sensor(context=context)
             elif isinstance(pre, (Property, Sensor)):
-                pre(context)            
+                pre(context)        
+
+    def update_context(
+        self,
+        context: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+        if not force and self.fullname in context:
+            # context cached results by sensor name. override if forced recalc is needed
+            val = context[self.fullname]
+        else:
+            self.define_inputs()
+            val = self.forward_wrap()
+            
+        if val is not None:
+            context[self.fullname] = val
+            if not self.label:
+                context[self.sup.fullname] = val  # override state under property name
+        else:
+            context[self.fullname] = None
+            if not self.label:
+                context[self.sup.fullname] = None
+            
+        if self.output:
+            context[self.fullname] = self.fetch_value(self.output)
+            context[self.sup.fullname] = self.fetch_value(self.output)
+            
+        return context
 
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
@@ -105,12 +132,12 @@ class FunctionalSensor(TorchSensor):
             return self.context_helper[pre.fullname]
         return pre
 
-    def forward(self):
-        return self.func(*self.inputs)
+    def forward_wrap(self):
+        return self.forward(*self.inputs)
 
-    def func(self, *inputs):
-        if self.func_ is not None:
-            return self.func_(*inputs)
+    def forward(self, *inputs):
+        if self.forward_ is not None:
+            return self.forward_(*inputs)
         raise NotImplementedError
 
 class QuerySensor(FunctionalSensor):
@@ -134,10 +161,10 @@ class QuerySensor(FunctionalSensor):
 
 
 class DataNodeSensor(QuerySensor):
-    def forward(self):
+    def forward_wrap(self):
         datanodes = self.inputs[0]
 
-        return [self.func(datanode, *self.inputs[1:]) for datanode in datanodes]
+        return [self.forward(datanode, *self.inputs[1:]) for datanode in datanodes]
 
 class CandidateSensor(QuerySensor):
     def fetch_value(self, pre, selector=None):
@@ -146,7 +173,7 @@ class CandidateSensor(QuerySensor):
             return root.findDatanodes(select=pre)
         return super().fetch_value(pre, selector)
 
-    def forward(self):
+    def forward_wrap(self):
         # current existing datanodes (if any)
         datanodes = self.inputs[0]
 
@@ -169,5 +196,5 @@ class CandidateSensor(QuerySensor):
             index = []
             for dim_index in dims_index:
                 index.append(index_list[dim_index])
-            output[(*index,)] = self.func(datanodes, *value_list)
+            output[(*index,)] = self.forward(datanodes, *value_list)
         return output

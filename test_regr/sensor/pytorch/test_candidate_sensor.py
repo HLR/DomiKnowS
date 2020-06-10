@@ -75,7 +75,7 @@ def sensor(case, graph):
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def func(datanodes_edges, datanode_concept1, datanode_concept2, concept1, concept2, constant):
+    def forward(datanodes_edges, datanode_concept1, datanode_concept2, concept1, concept2, constant):
         # update collector
         idx = len(collector)
         idx1 = int(idx / 2) % 2  # 0:0 1:0 2:1 3:1
@@ -101,7 +101,7 @@ def sensor(case, graph):
         concept, concept,
         'concept1', edge['concept2'], case.constant,
         edges=[edge_concept1['backward'], edge_concept2['backward']],
-        func=func)
+        forward=forward)
     edge['output'] = sensor
     return sensor
 

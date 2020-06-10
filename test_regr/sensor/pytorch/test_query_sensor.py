@@ -41,7 +41,7 @@ def sensor(case, graph):
 
     concept = graph['sub/concept']
 
-    def func(datanodes, reader1, reader2, constant):
+    def forward(datanodes, reader1, reader2, constant):
         # datanodes is a list of datanode
         assert len(datanodes) == 1
         assert isinstance(datanodes[0], DataNode)
@@ -50,7 +50,7 @@ def sensor(case, graph):
         assert reader2 == case.reader2
         assert constant == case.constant
         return case.output
-    sensor = QuerySensor('reader1', concept['reader2'], case.constant, func=func)
+    sensor = QuerySensor('reader1', concept['reader2'], case.constant, forward=forward)
     concept['query'] = sensor
     return sensor
 
