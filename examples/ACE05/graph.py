@@ -404,13 +404,118 @@ with Graph('global') as graph:
 
             # TRANSACTION
             transaction = event(name='TRANSACTION')
+            # TRANSACTION.TRANSFER-OWNERSHIP - TRANSFER-OWNERSHIP Events refer to the buying, selling, loaning, borrowing, giving, or receiving of artifacts or organizations.
+            transfer_ownership = transaction(name='TRANSFER-OWNERSHIP')
+            # These Events are taggable only when the thing transferred is known to be a taggable VEHICLE, FACILITY, ORGANIZATION or WEAPON.
+            transport.involve(vehicle, facility, organization, weapon)
+            # TRANSACTION.TRANSFER-MONEY - TRANSFER-MONEY Events refer to the giving, receiving, borrowing, or lending money when it is not in the context of purchasing something.
+            transfer_money = transaction(name='TRANSFER-MONEY')            
+            
             # BUSINESS
             business = event(name='BUSINESS')
+            # BUSINESS.START-ORG - A START-ORG Event occurs whenever a new ORGANIZATION is created.
+            start_org = business(name='START-ORG')
+            start_org.involve(organization)
+            # BUSINESS.MERGE-ORG - A MERGE-ORG Event occurs whenever two or more ORGANIZATION Entities come together to form a new ORGANIZATION Entity.
+            merge_org = business(name='MERGE-ORG')
+            merge_org.involve(organization)
+            # BUSINESS.DECLARE-BANKRUPTCY - A DECLARE-BANKRUPTCY Event will occur whenever an Entity officially requests legal protection from debt collection due to an extremely negative balance sheet.
+            declare_bankruptcy = business(name='DECLARE-BANKRUPTCY')
+            # BUSINESS.END-ORG - An END-ORG Event occurs whenever an ORGANIZATION ceases to exist (in other words ‘goes out of business’).
+            end_org = business(name='END-ORG')
+            end_org.involve(organization)
+
             # CONFLICT
             conflict = event(name='CONFLICT')
+            # CONFLICT.ATTACK - An ATTACK Event is defined as a violent physical act causing harm or damage.
+            attack = conflict(name='ATTACK')
+            # CONFLICT.DEMONSRATE - A DEMONSRATE Event occurs whenever a large number of people come together in a public area to protest or demand some sort of official action.
+            demonstrate = conflict(name='DEMONSRATE')
+
             # CONTACT
             contact = event(name='CONTACT')
-            # PERSONELL
+            # CONTACT.MEET - A MEET Event occurs whenever two or more Entities come together at a single location and interact with one another face-to-face.
+            meet = contact(name='MEET')
+            # CONTACT.PHONE-WRITE - A PHONE-WRITE Event occurs when two or more people directly engage in discussion which does not take place ‘face-to-face’.
+            phone_write = contact(name='PHONE-WRITE')
+            
+            # PERSONELL - All PERSONNEL Events can have an POSITION attribute. The object populating the POSITION-ARG slot in a PERSONNEL Event will be a VALUE of type JOB- TITLE, which consists of a string taken from within the scope of the Event.
             personell = event(name='PERSONELL')
-            # JUSTICE
+            # NOTE: We do not have VALUE or handle attribute now
+            # PERSONELL.START-POSITION - A START-POSITION Event occurs whenever a PERSON Entity begins working for (or changes offices within) an ORGANIZATION or GPE.
+            start_position = personell(name='START-POSITION')
+            start_position.involve(person, organization, gpe)
+            # PERSONELL.END-POSITION - A START-POSITION Event occurs whenever a PERSON Entity begins working for (or changes offices within) an ORGANIZATION or GPE.
+            end_position = personell(name='END-POSITION')
+            end_position.involve(person, organization, gpe)
+            # PERSONELL.NOMINATE - A NOMINATE Event occurs whenever a PERSON is proposed for a START- POSITION Event by the appropriate PERSON, through official channels.
+            nominate = personell(name='NOMINATE')
+            nominate.involve(person)
+            # PERSONELL.ELECT - An ELECT Event occurs whenever a candidate wins an election designed to determine the PERSON argument of a START-POSITION Event.
+            elect = personell(name='ELECT')
+            elect.involve(person)
+
+            # JUSTICE - Many JUSTICE Events can have a CRIME-ARG attribute. As with the POSITION-ARG in PERSONNEL Events, these argument slots will be filled by Values.
             justice = event(name='JUSTICE')
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.ARREST-JAIL - A JAIL Event occurs whenever the movement of a PERSON is constrained by a state actor (a GPE, its ORGANIZATION subparts, or its PERSON representatives).
+            arrest_jail = justice(name='ARREST-JAIL')
+            arrest_jail.involve(person, gpe, organization)
+            # JUSTICE.RELEASE-PAROLE - A RELEASE Event occurs whenever a state actor (GPE, ORGANIZATION subpart, or PERSON representative) ends its custody of a PERSON Entity.
+            release_parole = justice(name='RELEASE-PAROLE')
+            release_parole.involve(gpe, organization, person)
+            # JUSTICE.TRIAL-HEARING
+            # JUSTICE.TRIAL - A TRIAL Event occurs whenever a court proceeding has been initiated for the purposes of determining the guilt or innocence of a PERSON, ORGANIZATION or GPE accused of committing a crime.
+            trial = justice(name='TRIAL')
+            trial.involve(person, organization, gpe)
+            # JUSTICE.HEARING - A HEARING Event occurs whenever a state actor (GPE, ORGANIZATION subpart, or PERSON representative) officially gathers to discuss some criminal legal matter.
+            hearing = justice(name='HEARING')
+            hearing.involve(person, organization, gpe)
+            # A TRIAL-HEARING Event can have a CRIME attribute filled by a string from the text. It is important that the PROSECUTER-ARG be a state actor (GPE, ORGANIZATION subpart or PERSON representing them).
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.CHARGE-INDICT
+            # JUSTICE.CHARGE - A CHARGE Event occurs whenever a PERSON, ORGANIZATION or GPE is accused of a crime by a state actor (GPE, an ORGANIZATION subpart of a GPE or a PERSON representing a GPE).
+            charge = justice(name='CHARGE')
+            charge.involve(person, organization, gpe)
+            # JUSTICE.INDICT - An INDICT Event occurs whenever a state actor (GPE, ORG subpart of a GPE or PERSON agent of a GPE) takes official legal action to follow up on an accusation.
+            indict = justice(name='INDICT')
+            indict.involve(person, organization, gpe)
+            # A CHARGE-INDICT Event can have a CRIME-ARG attribute filled by a string from the text.
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.SUE - A SUE Event occurs whenever a court proceeding has been initiated for the purposes of determining the liability of a PERSON, ORGANIZATION or GPE accused of committing a crime or neglecting a commitment.
+            sue = justice(name='SUE')
+            sue.involve(person, organization, gpe)
+            # It can have a CRIME attribute filled by a string from the text. It is not important that the PLAINTIFF-ARG be a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.CONVICT - A CONVICT Event occurs whenever a TRY Event ends with a successful prosecution of the DEFENDANT-ARG.
+            # NOTE: TRY -> TRIAL? 
+            convict = justice(name='CONVICT')
+            convict.involve(trial)
+            # JUSTICE.SENTENCE - A SENTENCE Event takes place whenever the punishment (particularly incarceration) for the DEFENDANT-ARG of a TRY Event is issued by a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).
+            sentence = justice(name='SENTENCE')
+            sentence.involve(trial, gpe, organization, person)
+            # It can have a CRIME-ARG attribute filled by a CRIME Value and a SENTENCE-ARG attribute filled by a SENTENCE Value.
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.FINE - A FINE Event takes place whenever a state actor issues a financial punishment to a GPE, PERSON or ORGANIZATION Entity, typically as a result of court proceedings.
+            # NOTE: a state actor -> (gpe, organization, person)?
+            fine = justice(name='FINE')
+            fine.involve(gpe, organization, person)
+            # It can have a CRIME attribute filled by a string from the text.
+            # NOTE: We do not have VALUE or handle attribute now
+            # JUSTICE.EXECUTE - An EXECUTE Event occurs whenever the life of a PERSON is taken by a state actor (a GPE, its ORGANIZATION subparts, or PERSON representatives).
+            execute = justice(name='EXECUTE')
+            execute.involve(person, gpe, organization, person)
+            # It can have a CRIME attribute filled by a string from the text.
+            # JUSTICE.EXTRADITE - An EXTRADITE Event occurs whenever a PERSON is sent by a state actor from one PLACE (normally the GPE associated with the state actor, but sometimes a FACILITY under its control) to another place (LOCATION, GPE or FACILITY) for the purposes of legal proceedings there.
+            extradite = justice(name='EXTRADITE')
+            # PLACE -> GPE, FACILITY
+            extradite.involve(person, gpe, facility, location)
+            # JUSTICE.ACQUIT - An ACQUIT Event occurs whenever a trial ends but fails to produce a conviction.
+            acquit = justice(name='ACQUIT')
+            # a trial -> TRAIL?
+            acquit.involve(trail)
+            # This will include cases where the charges are dropped by the PROSECUTOR-ARG.
+            # JUSTICE.APPEAL - An APPEAL Event occurs whenever the decision of a court is taken to a higher court for review.
+            appeal = justice(name='APPEAL')
+            # JUSTICE.PARDON - A PARDON Event occurs whenever a head-of-state or their appointed representative lifts a sentence imposed by the judiciary.
+            pardon = justice(name='PARDON')
