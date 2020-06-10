@@ -6,6 +6,8 @@ from regr.graph import Property, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
+from .base import Mode
+
 
 def all_properties(node):
     if isinstance(node, Property):
@@ -19,6 +21,7 @@ class TorchModel(torch.nn.Module):
         self.graph = graph
         self.loss = loss
         self.metric = metric
+        self.mode_ = Mode.TRAIN
 
         for node in self.graph.traversal_apply(all_properties):
             for _, sensor in node.find(TorchLearner):
@@ -27,6 +30,13 @@ class TorchModel(torch.nn.Module):
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
         self.graph.poi = self.poi
+
+    def mode(self, mode):
+        if mode in (Mode.TEST, Mode.POPULATE):
+            self.eval()
+        if mode == Mode.TRAIN:
+            self.train()
+        self.mode_ = mode
 
     def reset(self):
         if self.loss is not None:
@@ -122,9 +132,10 @@ class PoiModel(TorchModel):
             # make sure the sensors are evaluated
             output = output_sensor(builder)
             target = target_sensor(builder)
-            # calculated any loss or metric
-            loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
-            metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
+            if self.mode_ not in {Mode.POPULATE,}:
+                # calculated any loss or metric
+                loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
+                metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
 
         datanode = builder.getDataNode()
         return loss, metric, datanode

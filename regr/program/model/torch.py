@@ -7,6 +7,8 @@ from ...sensor import Sensor, Learner
 from ...sensor.torch.sensor import TorchSensor
 from ...sensor.torch.learner import ModuleLearner
 
+from .base import Mode
+
 
 def all_properties(node):
     if isinstance(node, Property):
@@ -20,6 +22,10 @@ class BaseModel(torch.nn.Module):
         self.graph = graph
         self.loss = loss
         self.metric = metric
+        self.mode_ = Mode.TRAIN
+
+    def mode(self, mode):
+        self.mode_ = mode
 
     def reset(self):
         if self.loss is not None:
