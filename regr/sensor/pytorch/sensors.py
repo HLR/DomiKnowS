@@ -119,17 +119,17 @@ class ReaderSensor(TorchSensor):
         self.keyword = keyword
 
     def fill_data(self, data):
-        self.data = data
+        self.data = data[self.keyword]
 
     def forward(
         self,
     ) -> Any:
-        if self.data:
+        if self.data is not None:
             try:
                 if self.label:
-                    return torch.tensor(self.data[self.keyword], device=self.device)
+                    return torch.tensor(self.data, device=self.device)
                 else:
-                    return self.data[self.keyword]
+                    return self.data
             except:
                 print("the key you requested from the reader doesn't exist")
                 raise

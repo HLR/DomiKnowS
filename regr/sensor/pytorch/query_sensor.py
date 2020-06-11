@@ -231,3 +231,35 @@ class InstantiateSensor(TorchSensor):
             return context[self.fullname]
         except KeyError:
             return context[self.sup.sup['index'].fullname]
+
+
+class CandidateReaderSensor(CandidateSensor):
+    def __init__(self, *pres, output=None, edges=None, label=False, forward=None, keyword=None):
+        super().__init__(*pres, output=output, edges=edges, label=label, forward=forward)
+        self.data = None
+        self.keyword = keyword
+        if keyword is None:
+            raise ValueError('{} "keyword" must be assign.'.format(type(self)))
+
+    def fill_data(self, data):
+        self.data = data[self.keyword]
+
+    def forward_wrap(self):
+        # current existing datanodes (if any)
+        datanodes = self.inputs[0]
+        # args
+        args = self.inputs[1:len(self.args)+1]
+        # functional inputs
+        inputs = self.inputs[len(self.args)+1:]
+
+        arg_lists = []
+        dims = []
+        for arg_list in args:
+            arg_lists.append(enumerate(arg_list))
+            dims.append(len(arg_list))
+
+        output = torch.zeros(dims, dtype=torch.uint8)
+        for arg_enum in product(*arg_lists):
+            index, arg_list = zip(*arg_enum)
+            output[(*index,)] = self.forward(self.data, datanodes, index, *arg_list, *inputs)
+        return output

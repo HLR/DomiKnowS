@@ -56,14 +56,14 @@ def graph(case):
 @pytest.fixture()
 def sensor(case, graph):
     from regr.graph import DataNode
-    from regr.sensor.pytorch.query_sensor import CandidateSensor
+    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
 
     concept = graph['sub/concept']
     edge = graph['sub/edge']
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(datanodes_edges, index, datanode_concept1, datanode_concept2, constant):
+    def forward(data, datanodes_edges, index, datanode_concept1, datanode_concept2, constant):
         # update collector
         idx = len(collector)
         assert idx < 4
@@ -84,11 +84,10 @@ def sensor(case, graph):
         assert datanode_concept2.getAttributes().get('index') == case.container_edge[idx2]
         # other arguments are like functional sensor
         assert constant == case.constant
-        return case.edge[idx1][idx2]
-    sensor = CandidateSensor(case.constant, forward=forward)
+        return data[idx1][idx2]
+    sensor = CandidateReaderSensor(case.constant, forward=forward, keyword='edge_keyword')
     edge['index'] = sensor
     return sensor
-
 
 @pytest.fixture()
 def context(case, graph):
@@ -98,7 +97,8 @@ def context(case, graph):
 
     context = {
         "graph": graph, 'READER': 1,
-        'container_keyword': case.container}
+        'container_keyword': case.container,
+        'edge_keyword': case.edge}
 
     context = DataNodeBuilder(context)
 
@@ -107,6 +107,8 @@ def context(case, graph):
             return node
     for prop in graph.traversal_apply(all_properties):
         for _, sensor in prop.find(ReaderSensor):
+            sensor.fill_data(context)
+        for _, sensor in prop.find(CandidateReaderSensor):
             sensor.fill_data(context)
     return context
 
