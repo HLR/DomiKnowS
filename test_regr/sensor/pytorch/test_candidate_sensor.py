@@ -9,10 +9,7 @@ def case():
     case = {
         'container': 'hello world',
         'container_edge': ['hello', 'world'],
-        'concept_edge1': [
-            'hello, {}'.format(random.random()),
-            'world, {}'.format(random.random())],
-        'concept_edge2': [
+        'concept_feature': [
             'hello, {}'.format(random.random()),
             'world, {}'.format(random.random())],
         'constant': random.random(),
@@ -26,6 +23,7 @@ def case():
 @pytest.fixture()
 def graph(case):
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.query_sensor import InstantiateSensor
     from regr.graph import Graph, Concept, Relation, Property
 
     from .sensors import TestSensor, TestEdgeSensor
@@ -45,22 +43,12 @@ def graph(case):
             edge['concept2'] = Property('concept2')
 
     # model
-    container['raw'] = ReaderSensor(keyword='container_keyword')
+    container['index'] = ReaderSensor(keyword='container_keyword')
     container_contains_concept['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
+        'index', mode='forward', keyword='index',
         expected_inputs=[case.container,],
         expected_outputs=case.container_edge)
-    edge_concept1['backward'] = TestEdgeSensor(
-        'raw', mode='backward', keyword='concept1',
-        edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
-        expected_outputs=case.concept_edge1)
-    edge_concept2['backward'] = TestEdgeSensor(
-        'raw', mode='backward', keyword='concept2',
-        edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
-        expected_outputs=case.concept_edge2)
-
+    concept['index'] = InstantiateSensor(edges=[container_contains_concept['forward']])
 
     return graph
 
@@ -75,33 +63,30 @@ def sensor(case, graph):
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(datanodes_edges, datanode_concept1, datanode_concept2, concept1, concept2, constant):
+    def forward(datanodes_edges, index, datanode_concept1, datanode_concept2, constant):
         # update collector
         idx = len(collector)
+        assert idx < 4
         idx1 = int(idx / 2) % 2  # 0:0 1:0 2:1 3:1
         idx2 = idx % 2  # 0:0 1:1 2:0 3:1
-        assert idx < 4
+        assert index[0] == idx1
+        assert index[1] == idx2
         collector.append((datanode_concept1, datanode_concept2))
         # current existing edges
         assert len(datanodes_edges) == 0
         # test concept 1
         assert isinstance(datanode_concept1, DataNode)
         assert datanode_concept1.getOntologyNode() == concept
-        assert datanode_concept1.getAttributes().get('raw') == case.container_edge[idx1]
+        assert datanode_concept1.getAttributes().get('index') == case.container_edge[idx1]
         # test concept 2
         assert isinstance(datanode_concept2, DataNode)
         assert datanode_concept2.getOntologyNode() == concept
-        assert datanode_concept2.getAttributes().get('raw') == case.container_edge[idx2]
+        assert datanode_concept2.getAttributes().get('index') == case.container_edge[idx2]
         # other arguments are like functional sensor
-        assert concept1 == case.concept_edge1
-        assert concept2 == case.concept_edge2
         assert constant == case.constant
         return case.output[idx1][idx2]
-    sensor = CandidateSensor(
-        'concept1', edge['concept2'], case.constant,
-        edges=[edge_concept1['backward'], edge_concept2['backward']],
-        forward=forward)
-    edge['output'] = sensor
+    sensor = CandidateSensor(case.constant, forward=forward)
+    edge['index'] = sensor
     return sensor
 
 

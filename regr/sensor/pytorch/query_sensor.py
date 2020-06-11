@@ -173,6 +173,7 @@ class DataNodeSensor(QuerySensor):
 
         return [self.forward(datanode, *self.inputs[1:]) for datanode in datanodes]
 
+
 class CandidateSensor(QuerySensor):
     @property
     def args(self):
@@ -183,8 +184,8 @@ class CandidateSensor(QuerySensor):
         context: Dict[str, Any]
     ) -> Any:
         super().update_pre_context(context)
-        # for concept in self.args:
-        #     concept['index'](context)  # call index property to make sure it is constructed
+        for concept in self.args:
+            concept['index'](context)  # call index property to make sure it is constructed
     
     def define_inputs(self):
         super().define_inputs()
@@ -212,5 +213,21 @@ class CandidateSensor(QuerySensor):
         output = torch.zeros(dims, dtype=torch.uint8)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
+            output[(*index,)] = self.forward(datanodes, index, *arg_list, *inputs)
         return output
+
+
+class InstantiateSensor(TorchSensor):
+    def __call__(
+        self,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        try:
+            self.update_pre_context(context)
+        except:
+            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            raise
+        try:
+            return context[self.fullname]
+        except KeyError:
+            return context[self.sup.sup['index'].fullname]
