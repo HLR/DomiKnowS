@@ -96,7 +96,7 @@ class FunctionalSensor(TorchSensor):
                 for _, sensor in self.sup.sup[pre].find(Sensor):
                     sensor(context=context)
             elif isinstance(pre, (Property, Sensor)):
-                pre(context)        
+                pre(context)
 
     def update_context(
         self,
@@ -148,14 +148,21 @@ class QuerySensor(FunctionalSensor):
             raise TypeError('{} should work with DataNodeBuilder context.'.format(type(self)))
         return builder
 
+    @property
+    def concept(self):
+        prop = self.sup
+        if prop is None:
+            raise ValueError('{} must be assigned to property'.format(type(self)))
+        concept = prop.sup
+        return concept
+
     def define_inputs(self):
         super().define_inputs()
         if self.inputs is None:
             self.inputs = []
 
         root = self.builder.getDataNode()
-        concept = self.sup.sup
-        datanodes = root.findDatanodes(select=concept)
+        datanodes = root.findDatanodes(select=self.concept)
 
         self.inputs.insert(0, datanodes)
 
@@ -167,34 +174,43 @@ class DataNodeSensor(QuerySensor):
         return [self.forward(datanode, *self.inputs[1:]) for datanode in datanodes]
 
 class CandidateSensor(QuerySensor):
-    def fetch_value(self, pre, selector=None):
-        if isinstance(pre, Concept):
+    @property
+    def args(self):
+        return [rel.dst for rel in self.concept.has_a()]
+
+    def update_pre_context(
+        self,
+        context: Dict[str, Any]
+    ) -> Any:
+        super().update_pre_context(context)
+        # for concept in self.args:
+        #     concept['index'](context)  # call index property to make sure it is constructed
+    
+    def define_inputs(self):
+        super().define_inputs()
+        args = []
+        for concept in self.args:
             root = self.builder.getDataNode()
-            return root.findDatanodes(select=pre)
-        return super().fetch_value(pre, selector)
+            datanodes = root.findDatanodes(select=concept)
+            args.append(datanodes)
+        self.inputs = self.inputs[:1] + args + self.inputs[1:]
 
     def forward_wrap(self):
         # current existing datanodes (if any)
         datanodes = self.inputs[0]
+        # args
+        args = self.inputs[1:len(self.args)+1]
+        # functional inputs
+        inputs = self.inputs[len(self.args)+1:]
 
-        input_lists = []
+        arg_lists = []
         dims = []
-        dims_index = []
-        for pre, input_ in zip(self.pres, self.inputs[1:]):
-            if isinstance(pre, Concept):
-                # if instance, unpack it
-                input_lists.append(enumerate(input_))
-                dims_index.append(len(dims))
-                dims.append(len(input_))
-            else:
-                # otherwise, repeat it
-                input_lists.append(enumerate([input_]))
+        for arg_list in args:
+            arg_lists.append(enumerate(arg_list))
+            dims.append(len(arg_list))
 
         output = torch.zeros(dims, dtype=torch.uint8)
-        for input_ in product(*input_lists):
-            index_list, value_list = zip(*input_)
-            index = []
-            for dim_index in dims_index:
-                index.append(index_list[dim_index])
-            output[(*index,)] = self.forward(datanodes, *value_list)
+        for arg_enum in product(*arg_lists):
+            index, arg_list = zip(*arg_enum)
+            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
         return output

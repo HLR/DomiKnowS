@@ -98,7 +98,6 @@ def sensor(case, graph):
         assert constant == case.constant
         return case.output[idx1][idx2]
     sensor = CandidateSensor(
-        concept, concept,
         'concept1', edge['concept2'], case.constant,
         edges=[edge_concept1['backward'], edge_concept2['backward']],
         forward=forward)
