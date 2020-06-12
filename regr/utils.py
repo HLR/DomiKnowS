@@ -1,3 +1,4 @@
+import sys
 import inspect
 import keyword
 from functools import reduce
@@ -276,3 +277,57 @@ def isbad(x):
         x != x or  # nan
         abs(x) == float('inf')  # inf
     )
+
+
+# consume(it) https://stackoverflow.com/q/50937966
+if sys.implementation.name == 'cpython':
+    import collections
+    def consume(it):
+        collections.deque(it, maxlen=0)
+else:
+    def consume(it):
+        for _ in it:
+            pass
+
+
+class Namespace(dict):
+    def __init__(self, __dict=None, **kwargs):
+        dict_ = __dict or {}
+        dict_.update(kwargs)
+        for k, v in dict_.items():
+            if isinstance(v, dict):
+                dict_[k] = Namespace(v)
+        super().__init__(dict_)
+        self.__dict__ = self
+
+    def __repr__(self):
+        return '{}({})'.format(type(self).__name__, ','.join('\'{}\':{}'.format(k,v) for k,v in self.items()))
+
+    def clone(self):
+        from copy import copy
+        return Namespace(copy(self))
+
+    def deepclone(self):
+        from copy import deepcopy
+        return Namespace(deepcopy(self))
+
+    def __getattr__(self, key):
+        return self.get(key, None)
+
+
+def caller_source():
+    import inspect
+
+    for frame in inspect.getouterframes(inspect.currentframe(), context=1)[2:]:
+        if frame.code_context is not None:
+            try:
+                with open(frame.filename, 'r') as fin:
+                    return fin.read()
+                break
+            except FileNotFoundError as ex:
+                ex = type(ex)('{}\n'
+                              'Please run from a file base environment, '
+                              'rather than something like notebook.'.format(ex))
+                raise ex
+    else:
+        raise RuntimeError('Who is calling?')
