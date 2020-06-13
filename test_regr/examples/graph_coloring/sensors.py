@@ -13,8 +13,9 @@ class DummyCityLearner(TorchLearner):  # Learn Fire station classification for C
     def forward(self,) -> Any:
         result = torch.zeros(len(self.inputs[0]), 2)
         
-        for t in result:
-            t[1]  = 1
+        for t in result: # Initially all cities are firestation cities
+            t[1] = 1
+            t[0] = 0
 
         return result
 
@@ -43,18 +44,19 @@ class DummyCityLinkCandidateGenerator(TorchSensor): # Generate candidates for Ci
 
 class DummyNeighborLearner(TorchLearner):  # Learn Neighbor classification for CityLink
     def forward(self,) -> Any:
-        sh = self.inputs[0].shape
-        neighbor = torch.zeros(*self.inputs[0].shape, 2, dtype=torch.int)
+        neighbor = torch.zeros(*self.inputs[0].shape, 2)
                 
+        # Add neighbor connection from input data
         info = self.context_helper['links']
         for city, targets in info.items():
             for target in targets:
-                neighbor[city - 1, target - 1][1] = 1
+                neighbor[city - 1, target - 1][1] = 1 ## cities are connected
                 
+        # Fix negative probability for not connected cities
         for t in neighbor:
             for t1 in t:
-                if t1[1] == 0:
-                    t1[0] = 1
+                if t1[1] == 0: # Cities are not connected 
+                    t1[0] = 1 # Negative probability is 1
                     
         return neighbor
 

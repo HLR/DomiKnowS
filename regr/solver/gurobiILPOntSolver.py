@@ -67,14 +67,34 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(token, conceptName))
 
-        # Add constraints forcing decision between variable and negative variables 
+        # Add constrain based on robability 
         for conceptName in conceptNames:
-            for token in tokens:
+            for tokenIndex, token in enumerate(tokens): 
+                # Add constraints forcing decision between variable and negative variables 
                 if ('Not_'+conceptName, token) in x:
                     currentConstrLinExpr = x[conceptName, token] + x['Not_'+conceptName, token]
                     m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptName, token))
-                    #self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is not concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
+                # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
+                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                if currentProbability[1] == 1:
+                    m.addConstr(x[conceptName, token] == 1, name='c_%s_%shardConstrain'%(conceptName,token))
+                    self.myLogger.debug("Hard constrain for token %s is concept %s == %i"%(token,conceptName,1))
+                    
+                    if ('Not_'+conceptName, token) in x:
+                        m.addConstr(x['Not_'+conceptName, token] == 0, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
+                        self.myLogger.debug("Hard constrain for token %s is not concept %s == %i"%(token,conceptName,0))
+                        
+                elif currentProbability[1] == 0:
+                    m.addConstr(x[conceptName, token] == 0, name='c_%s_%shardConstrain'%(conceptName, token))
+                    self.myLogger.debug("Hard constrain for token %s is concept %s == %i"%(token,conceptName,0))
+                    
+                    if ('Not_'+conceptName, token) in x:
+                        m.addConstr(x['Not_'+conceptName, token] == 1, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
+                        self.myLogger.debug("Hard constrain for token %s is not concept %s == %i"%(token,conceptName,1))
+
         m.update()
 
         if len(x):
@@ -385,7 +405,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
 
                     # Create variable
-                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
+                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1,relationName,token2))
                     #self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability[1]))
                     
                     # Check if probability is NaN or if and has to be created based on positive value
@@ -395,20 +415,40 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                     # Create negative variable
                     if True: # ilpOntSolver.__negVarTrashhold:
-                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
+                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1,relationName,token2))
                     else:
                         self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s created"%(relationName,token1,token2))
                         
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
-            for token1 in tokens: 
-                for token2 in tokens:
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
                     if token2 == token1:
                         continue
                     
                     if (relationName+'-neg', token1, token2) in y: 
-                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%sselfDisjoint'%(token1, token2, relationName))
-                        #self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
+                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%sselfDisjoint'%(token1,relationName,token2))
+                        self.myLogger.debug("Disjoint constrain between relation %s and not relation %s and tokens - %s, %s == %i"%(relationName,relationName,token1,token2,1))
+                        
+                    # Add constrain for relation with probability 1 or 0 - assuming that they are only information not to be classified
+                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                    
+                    if currentProbability[1] == 1:
+                        m.addConstr(y[relationName, token1, token2] == 1, name='c_%s_%s_%shardConstrain'%(token1,relationName,token2))
+                        self.myLogger.debug("Hard constrain for tokens %s, %s are in relation %s == %i"%(token1,token2,relationName,1))
+                        
+                        if (relationName+'-neg', token1, token2) in y:
+                            m.addConstr(y[relationName+'-neg', token1, token2] == 0, name='c_%s_%s_%shardConstrain'%(token1,relationName+'-neg',token2))
+                            self.myLogger.debug("Hard constrain tokens %s, %s are not in relation %s == %i"%(token1,token2,relationName,0))
+                            
+                    elif currentProbability[1] == 0:
+                        m.addConstr(y[relationName, token1, token2] == 0, name='c_%s_%s_%shardConstrain'%(token1,relationName,token2))
+                        self.myLogger.debug("Hard constrain for tokens %s, %s are in relation %s == %i"%(token1,token2,relationName,0))
+                        
+                        if (relationName+'-neg', token1, token2) in y:
+                            m.addConstr(y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%shardConstrain'%(token1,relationName+'-neg',token2))
+                            self.myLogger.debug("Hard constrain tokens %s, %s are not in relation %s == %i"%(token1,token2,relationName,1))
+                            
 
         m.update()
    

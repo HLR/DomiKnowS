@@ -364,7 +364,7 @@ class DataNode:
         return relationConcept 
 
     # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
-    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
+    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001, hardConstrains=()):
         # Build probability key to retrieve attribute
         key = '<' + conceptRelation.name + '>'
         
@@ -378,15 +378,21 @@ class DataNode:
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
         
-        if value is None:
+        if value is None: # No probability value - return negative probability 
             return [1, 0] # ?
         
-        # Process probability through function and apply epsilon
+        # Translate probability to list
         if isinstance(value, torch.Tensor):
             with torch.no_grad():
                 value = [_it.cpu().detach().numpy() for _it in value]
         if isinstance(value, (np.ndarray, np.generic)):
             value = value.tolist()  
+            
+        # Check if to  Process probability or return it as is  for hard constrains
+        if conceptRelation in hardConstrains: # This concept or relation will have hard constrain 
+            return value
+            
+        # Process probability through function and apply epsilon
         if isinstance(value, (list, tuple)):
                 _list = value
                 if _list[0] > 1-epsilon:
@@ -432,7 +438,7 @@ class DataNode:
         return conceptsAndRelations
 
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
+    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, hardConstrains=None, minimizeObjective = False):
         
         if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
             _conceptsRelations = self.__collectConceptsAndRelations(self)
@@ -523,7 +529,7 @@ class DataNode:
             
             for currentCandidate in currentCandidates:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon, hardConstrains=hardConstrains)
                     if currentProbability:
                         graphResultsForPhraseToken[currentConceptOrRelation.name][currentCandidate[0].instanceID] = currentProbability
                     
@@ -531,7 +537,7 @@ class DataNode:
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     currentProbability = currentConceptOrRelation.predict(self, currentCandidate1, currentCandidate2)
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon, hardConstrains=hardConstrains)
                     if currentProbability:
                         graphResultsForPhraseRelation[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
 
@@ -539,7 +545,7 @@ class DataNode:
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     currentCandidate3 = currentCandidate[2]
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon, hardConstrains=hardConstrains)
                     
                     self.__myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 

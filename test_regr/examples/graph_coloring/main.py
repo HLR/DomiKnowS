@@ -59,8 +59,8 @@ def test_graph_coloring_main():
             assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
-        conceptsRelations = (neighbor, firestationCity)  # TODO: please fill this
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, epsilon=0, minimizeObjective=True) 
+        conceptsRelations = (firestationCity, neighbor)  
+        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
         
         result = []
         for child_node in datanode.getChildDataNodes():
@@ -74,12 +74,11 @@ def test_graph_coloring_main():
         
         for child_index, child_node in enumerate(datanode.getChildDataNodes()):
             if child_index + 1 == 1:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0 #1
+            elif child_index + 1 == 5: #6
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
-            elif child_index + 1 == 6:
-                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0 # 1
             else:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
 
-            
 if __name__ == '__main__':
     pytest.main([__file__])
