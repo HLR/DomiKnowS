@@ -26,8 +26,9 @@ class TorchModel(torch.nn.Module):
 
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
-        self.solver = Solver(self.graph)
-        self.graph.poi = self.poi
+        if Solver is not None:
+            self.solver = Solver(self.graph)
+            self.graph.poi = self.poi
 
     def reset(self):
         if self.loss is not None:
@@ -119,11 +120,13 @@ class PoiModel(TorchModel):
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
-            output_sensor(data)
-            target_sensor(data)
+            output_sensor(context)
+            target_sensor(context)
             # calculated any loss or metric
-            loss += self.poi_loss(data, prop, output_sensor, target_sensor)
-            metric[output_sensor, target_sensor] = self.poi_metric(data, prop, output_sensor, target_sensor)
+            if self.loss:
+                loss += self.poi_loss(context, prop, output_sensor, target_sensor)
+            if self.metric:
+                metric[output_sensor, target_sensor] = self.poi_metric(context, prop, output_sensor, target_sensor)
 
         datanode = context.getDataNode()
         return loss, metric, datanode

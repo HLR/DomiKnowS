@@ -1,10 +1,12 @@
 import os
 
-from emr.utils import Namespace, caller_source
+from regr.utils import Namespace, caller_source
+from regr.program.model.pytorch import PoiModel
 
 
 config = {
     'Model': {
+        'Model': PoiModel,
         'loss': None,
         'metric': None,
     },

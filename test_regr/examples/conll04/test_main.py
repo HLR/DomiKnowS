@@ -55,14 +55,13 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from emr.graph.torch import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.program.learningbaseprogram import LearningBasedProgram
 
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
-    from emr.sensors.Sensors import TestSensor, TestEdgeSensor
+    from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
     graph.detach()
 
