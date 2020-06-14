@@ -431,7 +431,7 @@ class DataNode:
             #elif isinstance(_currentConceptOrRelation, Concept):
                 #currentConceptOrRelation = _currentConceptOrRelation
             else:
-                 currentConceptOrRelation = _currentConceptOrRelation
+                currentConceptOrRelation = _currentConceptOrRelation
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
             currentCandidates = currentConceptOrRelation.candidates(self)
@@ -541,7 +541,9 @@ class DataNode:
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
-            
+        
+        #return tokenResult, pairResult, tripleResult
+    
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         for concept_name in tokenResult:
@@ -576,6 +578,7 @@ class DataNode:
                         
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
+
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):

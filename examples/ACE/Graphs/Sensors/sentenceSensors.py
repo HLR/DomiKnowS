@@ -15,9 +15,9 @@ from flair.data import Sentence
 class SentenceReaderSensor(CallingSensor):
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return context[self.pres[0].fullname][0]
+        return data_item[self.pres[0].fullname][0]
         # return Sentence("I am highly motivated to capture the relationships of washington with berlin")
 
 
@@ -34,10 +34,10 @@ class SentenceBertEmbedderSensor(SentenceSensor):
  
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(SentenceBertEmbedderSensor, self).forward(context=context) 
-        self.bert_embedding.embed(context[self.sentencesensor.fullname])
+        super(SentenceBertEmbedderSensor, self).forward(data_item) 
+        self.bert_embedding.embed(data_item[self.sentencesensor.fullname])
         return None
 
 
@@ -54,10 +54,10 @@ class SentenceGloveEmbedderSensor(SentenceSensor):
                                                         
     def forward(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
     ) -> Any:
-        super(SentenceGloveEmbedderSensor, self).forward(context=context)
-        self.glove_embedding.embed(context[self.sentencesensor.fullname])
+        super(SentenceGloveEmbedderSensor, self).forward(data_item)
+        self.glove_embedding.embed(data_item[self.sentencesensor.fullname])
         return None
 
 
@@ -68,12 +68,12 @@ class SentenceFlairEmbedderSensor(SentenceSensor):
         
     def forward(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
     ) -> Any:
-        super(SentenceFlairEmbedderSensor, self).forward(context=context)
+        super(SentenceFlairEmbedderSensor, self).forward(data_item)
         
         # print("flair")
-        self.flair_embedding_backward.embed(context[self.sentencesensor.fullname])
+        self.flair_embedding_backward.embed(data_item[self.sentencesensor.fullname])
         return None
 
 
@@ -94,11 +94,11 @@ class SentencePosTaggerSensor(SentenceSensor):
         
     def forward(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
     ) -> Any:
-        super(SentencePosTaggerSensor, self).forward(context=context)
-        self.tagger.predict(context[self.sentencesensor.fullname])
-        _dict = context[self.sentencesensor.fullname].to_dict(tag_type='pos')
+        super(SentencePosTaggerSensor, self).forward(data_item)
+        self.tagger.predict(data_item[self.sentencesensor.fullname])
+        _dict = data_item[self.sentencesensor.fullname].to_dict(tag_type='pos')
         _list = []
 
         for item in _dict['entities']:

@@ -16,65 +16,65 @@ class QuerySensor0(TorchSensor):
 
     def __call__(
             self,
-            context: DataNode
+            data_item: DataNode
     ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(context)
+            self.update_pre_context(data_item)
         except:
-            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            print('Error during updating pre with sensor {}'.format(self.fullname))
             raise
-        self.context_helper = context
+        self.context_helper = data_item
         try:
-            context = self.update_context(context)
+            data_item = self.update_context(data_item)
         except:
-            print('Error during updating context with sensor {}'.format(self.fullname))
+            print('Error during updating data_item with sensor {}'.format(self.fullname))
             raise
 
         if self.output:
-            return context[self.sup.sup[self.output].fullname]
+            return data_item[self.sup.sup[self.output].fullname]
 
         try:
-            return context[self.fullname]
+            return data_item[self.fullname]
         except KeyError:
-            return context[self.sup.sup['raw'].fullname]
+            return data_item[self.sup.sup['raw'].fullname]
 
     def update_context(
             self,
-            context: DataNode,
+            data_item: DataNode,
             force=False
     ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             val = self.forward()
 
         if val is not None:
-            context[self.fullname] = val
+            data_item[self.fullname] = val
             if not self.label:
-                context[self.sup.fullname] = val  # override state under property name
+                data_item[self.sup.fullname] = val  # override state under property name
         else:
-            context[self.fullname] = None
+            data_item[self.fullname] = None
             if not self.label:
-                context[self.sup.fullname] = None
+                data_item[self.sup.fullname] = None
 
         if self.output:
-            context[self.fullname] = self.fetch_value(self.output)
-            context[self.sup.fullname] = self.fetch_value(self.output)
+            data_item[self.fullname] = self.fetch_value(self.output)
+            data_item[self.sup.fullname] = self.fetch_value(self.output)
 
-        return context
+        return data_item
 
     def update_pre_context(
             self,
-            context: DataNode
+            data_item: DataNode
     ) -> Any:
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         for pre in self.pres:
             for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
 
 
 class FunctionalSensor(TorchSensor):
@@ -84,46 +84,46 @@ class FunctionalSensor(TorchSensor):
 
     def update_pre_context(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
                 if self.sup is None:
                     raise ValueError('{} must be used with with property assignment.'.format(type(self)))
                 for _, sensor in self.sup.sup[pre].find(Sensor):
-                    sensor(context=context)
+                    sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
-                pre(context)
+                pre(data_item)
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             val = self.forward_wrap()
             
         if val is not None:
-            context[self.fullname] = val
+            data_item[self.fullname] = val
             if not self.label:
-                context[self.sup.fullname] = val  # override state under property name
+                data_item[self.sup.fullname] = val  # override state under property name
         else:
-            context[self.fullname] = None
+            data_item[self.fullname] = None
             if not self.label:
-                context[self.sup.fullname] = None
+                data_item[self.sup.fullname] = None
             
         if self.output:
-            context[self.fullname] = self.fetch_value(self.output)
-            context[self.sup.fullname] = self.fetch_value(self.output)
+            data_item[self.fullname] = self.fetch_value(self.output)
+            data_item[self.sup.fullname] = self.fetch_value(self.output)
             
-        return context
+        return data_item
 
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
@@ -145,7 +145,7 @@ class QuerySensor(FunctionalSensor):
     def builder(self):
         builder = self.context_helper
         if not isinstance(builder, DataNodeBuilder):
-            raise TypeError('{} should work with DataNodeBuilder context.'.format(type(self)))
+            raise TypeError('{} should work with DataNodeBuilder.'.format(type(self)))
         return builder
 
     @property
@@ -181,11 +181,11 @@ class CandidateSensor(QuerySensor):
 
     def update_pre_context(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super().update_pre_context(context)
+        super().update_pre_context(data_item)
         for concept in self.args:
-            concept['index'](context)  # call index property to make sure it is constructed
+            concept['index'](data_item)  # call index property to make sure it is constructed
     
     def define_inputs(self):
         super().define_inputs()
@@ -220,17 +220,17 @@ class CandidateSensor(QuerySensor):
 class InstantiateSensor(TorchSensor):
     def __call__(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(context)
+            self.update_pre_context(data_item)
         except:
-            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            print('Error during updating pre with sensor {}'.format(self.fullname))
             raise
         try:
-            return context[self.fullname]
+            return data_item[self.fullname]
         except KeyError:
-            return context[self.sup.sup['index'].fullname]
+            return data_item[self.sup.sup['index'].fullname]
 
 
 class CandidateReaderSensor(CandidateSensor):

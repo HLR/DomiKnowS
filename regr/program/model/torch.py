@@ -2,9 +2,10 @@ from itertools import combinations
 
 import torch
 
-from regr.graph import Property, DataNodeBuilder
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
-from regr.sensor.pytorch.learners import TorchLearner
+from ...graph import Property
+from ...sensor import Sensor, Learner
+from ...sensor.torch.sensor import TorchSensor
+from ...sensor.torch.learner import ModuleLearner
 
 from .base import Mode
 
@@ -15,7 +16,7 @@ def all_properties(node):
     return None
 
 
-class TorchModel(torch.nn.Module):
+class BaseModel(torch.nn.Module):
     def __init__(self, graph, loss=None, metric=None):
         super().__init__()
         self.graph = graph
@@ -23,19 +24,7 @@ class TorchModel(torch.nn.Module):
         self.metric = metric
         self.mode_ = Mode.TRAIN
 
-        for node in self.graph.traversal_apply(all_properties):
-            for _, sensor in node.find(TorchLearner):
-                self.add_module(sensor.fullname, sensor.model)
-
-        self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
-
-        self.graph.poi = self.poi
-
     def mode(self, mode):
-        if mode in (Mode.TEST, Mode.POPULATE):
-            self.eval()
-        if mode == Mode.TRAIN:
-            self.train()
         self.mode_ = mode
 
     def reset(self):
@@ -61,36 +50,39 @@ class TorchModel(torch.nn.Module):
         else:
             return value
 
+    def forward(self, data_item):
+        data_item = self.move(data_item)
+        return data_item
+
+
+class TorchModel(BaseModel):
+    BaseSensor = TorchSensor
+    BaseLearner = ModuleLearner
+
+    def __init__(self, graph, loss=None, metric=None):
+        super().__init__(graph, loss=loss, metric=metric)
+        self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
+        self.graph.poi = self.poi
+        for node in self.graph.traversal_apply(all_properties):
+            for _, sensor in node.find(self.BaseLearner):
+                self.add_module(sensor.fullname, sensor.module)
+
     def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
-            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.label:
+            for (_, sensor1), (_, sensor2) in combinations(prop.find(self.BaseSensor), r=2):
+                if sensor1.target:
                     target_sensor = sensor1
                     output_sensor = sensor2
-                elif sensor2.label:
+                elif sensor2.target:
                     target_sensor = sensor2
                     output_sensor = sensor1
                 else:
                     # TODO: should different learners get closer?
                     continue
-                if output_sensor.label:
+                if output_sensor.target:
                     # two targets, skip
                     continue
                 yield prop, output_sensor, target_sensor
-
-    def forward(self, data_item):
-        data_item = self.move(data_item)
-
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
-        for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
-                sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
-        builder = DataNodeBuilder(data_item)
-        datanode = builder.getDataNode()
-        return datanode
 
 
 class PoiModel(TorchModel):
@@ -115,29 +107,16 @@ class PoiModel(TorchModel):
         return local_metric
 
     def forward(self, data_item, inference=True):
-        data_item = self.move(data_item)
+        data_item = super().forward(data_item)
         loss = 0
         metric = {}
 
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
-        for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
-                sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
-        builder = DataNodeBuilder(data_item)
-
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
-            output = output_sensor(builder)
-            target = target_sensor(builder)
-            if self.mode_ not in {Mode.POPULATE,}:
-                # calculated any loss or metric
-                if self.loss:
-                    loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
-                if self.metric:
-                    metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
+            output = output_sensor(data_item)
+            target = target_sensor(data_item)
+            # calculated any loss or metric
+            loss += self.poi_loss(data_item, prop, output_sensor, target_sensor)
+            metric[output_sensor, target_sensor] = self.poi_metric(data_item, prop, output_sensor, target_sensor)
 
-        datanode = builder.getDataNode()
-        return loss, metric, datanode
+        return loss, metric, data_item

@@ -84,7 +84,7 @@ class BWithLogitsIMLoss(torch.nn.Module):
 
     def forward(self, input, inference, target, weight=None):
         if weight is None:
-            weight = self.weight or 1
+            weight = 1
 
         logp = F.logsigmoid(input)
         lognp = logp - input  # log(1-1/(1+exp(-x))) = log(exp(-x)/(1+exp(-x))) = log(exp(-x)) + log(1/(1+exp(-x)))
