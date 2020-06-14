@@ -14,7 +14,7 @@ def all_properties(node):
 
 
 class TorchModel(torch.nn.Module):
-    def __init__(self, graph, loss=None, metric=None):
+    def __init__(self, graph, loss=None, metric=None, Solver=None):
         super().__init__()
         self.graph = graph
         self.loss = loss
@@ -26,6 +26,7 @@ class TorchModel(torch.nn.Module):
 
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
 
+        self.solver = Solver(self.graph)
         self.graph.poi = self.poi
 
     def reset(self):

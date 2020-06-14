@@ -1,11 +1,10 @@
-from regr.sensor.sensor import Sensor
-from regr.graph import Graph, DataNode
-
 from typing import Dict, Any
 import torch
 
-class TorchSensor(Sensor):
+from .. import Sensor
 
+
+class TorchSensor(Sensor):
     def __init__(self, *pres, output=None, edges=None, label=False):
         super().__init__()
         if not edges:
@@ -43,7 +42,7 @@ class TorchSensor(Sensor):
 
         try:
             return data_item[self.fullname]
-        except:
+        except KeyError:
             return data_item[self.sup.sup['raw'].fullname]
 
     def update_context(
@@ -81,6 +80,8 @@ class TorchSensor(Sensor):
             for _, sensor in edge.find(Sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
+            if self.sup is None:
+                raise ValueError('{} must be used with with property assignment.'.format(type(self)))
             for _, sensor in self.sup.sup[pre].find(Sensor):
                 sensor(data_item=data_item)
 
@@ -91,7 +92,6 @@ class TorchSensor(Sensor):
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
-            pass
         else:
             return self.context_helper[self.sup.sup[pre].fullname]
 
@@ -101,7 +101,7 @@ class TorchSensor(Sensor):
             self.inputs.append(self.fetch_value(pre))
 
     def forward(self,) -> Any:
-        return None
+        raise NotImplementedError
 
 
 class ConstantSensor(TorchSensor):
@@ -119,17 +119,17 @@ class ReaderSensor(TorchSensor):
         self.keyword = keyword
 
     def fill_data(self, data):
-        self.data = data
+        self.data = data[self.keyword]
 
     def forward(
         self,
     ) -> Any:
-        if self.data:
+        if self.data is not None:
             try:
                 if self.label:
-                    return torch.tensor(self.data[self.keyword], device=self.device)
+                    return torch.tensor(self.data, device=self.device)
                 else:
-                    return self.data[self.keyword]
+                    return self.data
             except:
                 print("the key you requested from the reader doesn't exist")
                 raise
@@ -222,7 +222,7 @@ class TorchEdgeSensor(TorchSensor):
             self.dst[self.keyword] = ConstantSensor()
             self.created = 1
         try:
-           self.update_pre_context(data_item)
+            self.update_pre_context(data_item)
         except:
             print('Error during updating pre data_item with sensor {}'.format(self.fullname))
             raise
@@ -276,7 +276,6 @@ class TorchEdgeSensor(TorchSensor):
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
-            pass
         else:
             return self.context_helper[self.src[pre].fullname]
 
@@ -320,7 +319,7 @@ class AggregationSensor(TorchSensor):
             raise Exception('not valid')
 
     def get_map_value(self, ):
-            self.map_value = self.context_helper[self.src[self.map_key].fullname]
+        self.map_value = self.context_helper[self.src[self.map_key].fullname]
 
     def update_context(
         self,
@@ -416,7 +415,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
     ) -> Dict[str, Any]:
         self.get_initialized()
         try:
-           self.update_pre_context(data_item)
+            self.update_pre_context(data_item)
         except:
             print('Error during updating pre data item with sensor {}'.format(self.fullname))
             raise
@@ -436,7 +435,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for _, sensor in self.src[self.dst].find(Sensor):
-                sensor(data_item)
+            sensor(data_item)
 
     def update_context(
         self,
@@ -464,6 +463,7 @@ class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
 
 class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
     def __init__(self, *pres, threshold=0.5):
+        # FIXME: @hfaghihi, do you mean to call super class of `SelectionEdgeSensor`, so here we skip the constructor of `SelectionEdgeSensor`?
         super(SelectionEdgeSensor).__init__(*pres)
         self.threshold = threshold
 
