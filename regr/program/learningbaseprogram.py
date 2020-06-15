@@ -3,6 +3,7 @@ import torch
 from tqdm import tqdm
 
 from ..utils import consume
+from .model.base import Mode
 
 
 class LearningBasedProgram():
@@ -60,7 +61,7 @@ class LearningBasedProgram():
             self.logger.info(self.model.metric)
 
     def train_epoch(self, dataset, inference=False):
-        self.model.train()
+        self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
             if self.opt is not None:
@@ -72,7 +73,7 @@ class LearningBasedProgram():
             yield loss, metric, output
 
     def test(self, dataset, inference=True):
-        self.model.eval()
+        self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
@@ -80,7 +81,7 @@ class LearningBasedProgram():
                 yield loss, metric, output
 
     def populate(self, dataset, inference=True):
-        self.model.eval()
+        self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
@@ -90,8 +91,4 @@ class LearningBasedProgram():
     def populate_one(self, data_item, inference=True):
         for key, value in data_item:
             data_item[key] = [value]
-        self.model.eval()
-        self.model.reset()
-        with torch.no_grad():
-            _, _, output = self.model(data_item, inference=inference)
-            return output
+        return next(self.populate(data_item, inference))
