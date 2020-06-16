@@ -234,10 +234,10 @@ def prod(iterable):
     return reduce(operator.mul, iterable, 1)
 
 
-def guess_device(context):
+def guess_device(data_item):
     import torch
     poll = Counter()
-    for value in context.values():
+    for value in data_item.values():
         if isinstance(value, dict):
             poll += guess_device(value)
         elif isinstance(value, torch.Tensor):

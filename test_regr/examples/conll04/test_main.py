@@ -1,9 +1,12 @@
 import sys
 sys.path.append('.')
 sys.path.append('../..')
+sys.path.append('examples/emr')
+
+from os.path import abspath
+filename = abspath('examples/emr')
 
 import pytest
-
 
 @pytest.fixture(name='case')
 def test_case():
@@ -12,6 +15,9 @@ def test_case():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     case = {
+        'sentence': {
+            'raw': 'John works for IBM'
+        },
         'char': {
             'raw': [['J', 'o', 'h', 'n'], ['w', 'o', 'r', 'k', 's'], ['f', 'o', 'r'], ['I', 'B', 'M']]
         },
@@ -52,19 +58,17 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from emr.graph.torch import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.program.learningbaseprogram import LearningBasedProgram
 
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
-    from emr.sensors.Sensors import TestSensor, TestEdgeSensor
+    from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
     graph.detach()
 
-    sentence['raw'] = ReaderSensor(keyword='token')
-    sentence['raw'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+    sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = TestEdgeSensor(
@@ -85,7 +89,7 @@ def model_declaration(config, case):
         'raw', edges=[rel_word_contains_char['forward']],
         expected_inputs=[case.char.raw,],
         expected_outputs=case.word.emb)
-    char['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+    char['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: word to phrase backward
     rel_phrase_contains_word['backward'] = TestEdgeSensor(
@@ -97,7 +101,7 @@ def model_declaration(config, case):
         'raw', edges=[rel_phrase_contains_word['backward']],
         expected_inputs=[case.phrase.raw,],
         expected_outputs=case.phrase.emb)
-    phrase['emb'] = ReaderSensor(keyword='token', label=True)  # just to trigger calculation
+    phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = TestEdgeSensor(
@@ -115,11 +119,21 @@ def model_declaration(config, case):
         expected_inputs=[case.word.emb, case.word.emb],
         expected_outputs=case.pair.emb)
 
-    word[people] = ReaderSensor(keyword='Peop', label=True)
-    word[organization] = ReaderSensor(keyword='Org', label=True)
-    word[location] = ReaderSensor(keyword='Loc', label=True)
-    word[other] = ReaderSensor(keyword='Other', label=True)
-    word[o] = ReaderSensor(keyword='O', label=True)
+    word[people] = TestSensor(
+        label=True,
+        expected_outputs=case.word.people)
+    word[organization] = TestSensor(
+        label=True,
+        expected_outputs=case.word.organization)
+    word[location] = TestSensor(
+        label=True,
+        expected_outputs=case.word.location)
+    word[other] = TestSensor(
+        label=True,
+        expected_outputs=case.word.other)
+    word[o] = TestSensor(
+        label=True,
+        expected_outputs=case.word.O)
 
     word[people] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
@@ -142,17 +156,30 @@ def model_declaration(config, case):
         expected_inputs=[case.word.emb,],
         expected_outputs=case.word.O)
 
-    phrase[people] = ReaderSensor(keyword='Peop', label=True)
+    phrase[people] = TestSensor(
+        label=True,
+        expected_outputs=case.phrase.people)
     phrase[people] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
         expected_inputs=[case.phrase.emb,],
         expected_outputs=case.phrase.people)
 
-    pair[work_for] = ReaderSensor(keyword='Work_For', label=True)
-    pair[located_in] = ReaderSensor(keyword='Located_In', label=True)
-    pair[live_in] = ReaderSensor(keyword='Live_In', label=True)
-    pair[orgbase_on] = ReaderSensor(keyword='OrgBased_In', label=True)
-    pair[kill] = ReaderSensor(keyword='Kill', label=True)
+
+    pair[work_for] = TestSensor(
+        label=True,
+        expected_outputs=case.pair.work_for)
+    pair[located_in] = TestSensor(
+        label=True,
+        expected_outputs=case.pair.work_for)
+    pair[live_in] = TestSensor(
+        label=True,
+        expected_outputs=case.pair.work_for)
+    pair[orgbase_on] = TestSensor(
+        label=True,
+        expected_outputs=case.pair.work_for)
+    pair[kill] = TestSensor(
+        label=True,
+        expected_outputs=case.pair.work_for)
 
     pair[work_for] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
@@ -224,11 +251,8 @@ def test_main_conll04(case):
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
 
-    training_set = ConllDataLoader(CONFIG.Data.train_path,
-                                   batch_size=CONFIG.Train.batch_size,
-                                   skip_none=CONFIG.Data.skip_none)
     lbp = model_declaration(CONFIG.Model, case)
-    data = next(iter(training_set))
+    data = {}
 
     _, _, datanode = lbp.model(data)
 

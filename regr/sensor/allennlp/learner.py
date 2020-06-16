@@ -36,12 +36,12 @@ class TripletEmbedderLearner(SentenceEmbedderLearner):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return self.module(context[self.fullname], self.get_mask(context))
+        return self.module(data_item[self.fullname], self.get_mask(data_item))
 
-    def get_mask(self, context: Dict[str, Any]):
-        en_mask = super().get_mask(context)
+    def get_mask(self, data_item: Dict[str, Any]):
+        en_mask = super().get_mask(data_item)
         #import pdb; pdb.set_trace()
         batch, en_len = en_mask.shape
         un_len = en_len ** (1. / 3)

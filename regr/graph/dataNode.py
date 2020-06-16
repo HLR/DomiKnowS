@@ -389,7 +389,7 @@ class DataNode:
             value = value.tolist()  
             
         # Check if to  Process probability or return it as is  for hard constrains
-        if conceptRelation in hardConstrains: # This concept or relation will have hard constrain 
+        if hardConstrains is not None and conceptRelation in hardConstrains: # This concept or relation will have hard constrain 
             return value
             
         # Process probability through function and apply epsilon
@@ -458,7 +458,7 @@ class DataNode:
             #elif isinstance(_currentConceptOrRelation, Concept):
                 #currentConceptOrRelation = _currentConceptOrRelation
             else:
-                 currentConceptOrRelation = _currentConceptOrRelation
+                currentConceptOrRelation = _currentConceptOrRelation
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
             currentCandidates = currentConceptOrRelation.candidates(self)
@@ -605,6 +605,7 @@ class DataNode:
                         
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
+
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):

@@ -1,6 +1,6 @@
-from emr.data import ConllDataLoader
-from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor
-from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
+from emr.data import ConllDataLoader, NaiveDataLoader
+from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, SpacyTokenizorSensor
+from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
 from emr.utils import seed
 
 
@@ -9,7 +9,7 @@ def ontology_declaration():
     return graph
 
 
-def model_declaration(graph, vocab, config):
+def model_declaration(graph, config):
     graph.detach()
 
     sentence = graph['linguistic/sentence']
@@ -29,9 +29,9 @@ def model_declaration(graph, vocab, config):
     kill = graph['application/kill']
 
     # feature
-    sentence['raw'] = DataSensor('token_raw')
-    sentence['tensor'] = DataSensor('token')
-    word['emb'] = EmbedderLearner(sentence['tensor'], padding_idx=vocab['token']['_PAD_'], num_embeddings=len(vocab['token']), **config.word.emb)
+    sentence['raw'] = DataSensor('sentence')
+    word['idx'] = SpacyTokenizorSensor(sentence['raw'])
+    word['emb'] = NorminalEmbedderLearner(word['idx'], **config.word.emb)
     word['ctx_emb'] = RNNLearner(word['emb'], **config.word.ctx_emb)
     word['feature'] = MLPLearner(word['ctx_emb'], **config.word.feature)
 
@@ -69,6 +69,14 @@ def model_declaration(graph, vocab, config):
     return lbp
 
 
+import os
+os.environ['REGR_SOLVER'] = 'mini_prob_debug'
+os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+
+import logging
+logging.basicConfig(level=logging.INFO)
+
+
 def main():
     from config import CONFIG
 
@@ -77,18 +85,18 @@ def main():
 
     graph = ontology_declaration()
 
-    training_set = ConllDataLoader(CONFIG.Data.train_path,
+    training_set = NaiveDataLoader(CONFIG.Data.train_path,
                                    batch_size=CONFIG.Data.batch_size,
-                                   skip_none=CONFIG.Data.skip_none,
                                    shuffle=True)
-    valid_set = ConllDataLoader(CONFIG.Data.valid_path,
+
+    valid_set = NaiveDataLoader(CONFIG.Data.valid_path,
                                 batch_size=CONFIG.Data.batch_size,
-                                skip_none=CONFIG.Data.skip_none,
-                                vocab=training_set.vocab,
                                 shuffle=False)
 
-    lbp = model_declaration(graph, training_set.vocab, CONFIG.Model)
+    lbp = model_declaration(graph, CONFIG.Model)
+    lbp.update_nominals(training_set)
     lbp.train(training_set, valid_set, **CONFIG.Train)
+
 
 if __name__ == '__main__':
     main()
