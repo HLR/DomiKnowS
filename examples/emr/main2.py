@@ -1,5 +1,5 @@
 from emr.data import ConllDataLoader, NaiveDataLoader
-from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, SpacyTokenizorSensor
+from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, Key
 from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
 from emr.utils import seed
 
@@ -29,17 +29,18 @@ def model_declaration(graph, config):
     kill = graph['application/kill']
 
     # feature
-    sentence['raw'] = DataSensor('sentence')
-    word['idx'] = SpacyTokenizorSensor(sentence['raw'])
-    word['emb'] = NorminalEmbedderLearner(word['idx'], **config.word.emb)
+    sentence['index'] = DataSensor(Key('sentence'))
+    word['index'] = SpacyTokenizorSensor(sentence['index'])
+    word['emb'] = NorminalEmbedderLearner(word['index'], **config.word.emb)
     word['ctx_emb'] = RNNLearner(word['emb'], **config.word.ctx_emb)
     word['feature'] = MLPLearner(word['ctx_emb'], **config.word.feature)
 
+    pair['index'] = CartesianCandidateSensor(word['index'], word['index'])
     pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
     pair['feature'] = MLPLearner(pair['emb'], **config.pair.feature)
 
     # label
-    word[people] = LabelSensor('Peop')
+    word[people] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Peop')
     word[organization] = LabelSensor('Org')
     word[location] = LabelSensor('Loc')
     word[other] = LabelSensor('Other')
@@ -71,14 +72,14 @@ def model_declaration(graph, config):
 
 import os
 os.environ['REGR_SOLVER'] = 'mini_prob_debug'
-os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 import logging
 logging.basicConfig(level=logging.INFO)
 
 
 def main():
-    from config import CONFIG
+    from config2 import CONFIG
 
     if CONFIG.seed is not None:
         seed(CONFIG.seed)

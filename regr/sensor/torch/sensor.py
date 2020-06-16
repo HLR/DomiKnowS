@@ -26,13 +26,21 @@ class TorchSensor(Sensor):
         raise SkipSensor
 
 
+class Key():
+    def __init__(self, key):
+        self.key = key
+
+
 class DataSensor(TorchSensor):
     def __init__(self, key, target=False):
         super().__init__(target=target)
-        self.key = key
+        if isinstance(key, Key):
+            self.key = key.key
+        else:
+            self.key = key
 
     def forward(self, data_item):
-        return data_item[self.key]
+        return [True] * len(data_item[self.key]), data_item[self.key]
 
 
 class LabelSensor(DataSensor):
@@ -40,28 +48,36 @@ class LabelSensor(DataSensor):
         super().__init__(key, target=True)
 
 
+def _proc_prop(data_item, pre, sensor_fn=None, sensor_filter=None, **_):
+    for _, sensor in pre.items():
+        if sensor_filter and not sensor_filter(sensor):
+            continue
+        try:
+            if sensor_fn:
+                return sensor_fn(sensor, data_item)
+            else:
+                return sensor(data_item)
+        except SkipSensor:
+            pass
+    else:  # no break
+        raise RuntimeError('Not able to find a sensor for {} as prereqiured by {}'.format(
+            pre.fullname, self.fullname))
+
 class FunctionalSensor(TorchSensor):
     def __init__(self, *pres, target=False):
         super().__init__(target)
         self.pres = pres
 
+    filters = [
+        (Property, _proc_prop),
+        (Key, lambda data_item, pre, **_: data_item[pre.key])
+    ]
     def get_args(self, data_item, skip_none_prop=False, sensor_fn=None, sensor_filter=None):
         for pre in self.pres:
-            if isinstance(pre, Property):
-                for _, sensor in pre.items():
-                    if sensor_filter and not sensor_filter(sensor):
-                        continue
-                    try:
-                        if sensor_fn:
-                            yield sensor_fn(sensor, data_item)
-                        else:
-                            yield sensor(data_item)
-                        break
-                    except SkipSensor:
-                        pass
-                else:  # no break
-                    raise RuntimeError('Not able to find a sensor for {} as prereqiured by {}'.format(
-                        pre.fullname, self.fullname))
+            for Type, func in self.filters:
+                if isinstance(pre, Type):
+                    yield func(data_item, pre, skip_none_prop=skip_none_prop, sensor_fn=sensor_fn, sensor_filter=sensor_filter)
+                    break
             else:
                 if not skip_none_prop:
                     yield pre
@@ -78,6 +94,10 @@ class FunctionalSensor(TorchSensor):
         return self.forward_func(*args)
 
     def mask(self, data_item):
+        if self.sup is not None and self.sup.sup is not None:
+            concept = self.sup.sup
+            mask, raw = concept['index'](data_item)
+            return mask
         masks = list(self.get_args(data_item, sensor_fn=lambda s, c: s.mask(c)))
         masks_num = len(masks)
         mask = masks[0]
@@ -105,11 +125,34 @@ class CartesianSensor(FunctionalSensor):
         return output
 
 
+class CartesianCandidateSensor(FunctionalSensor):
+    def forward_func(self, *inputs):
+        # torch cat is not broadcasting, do repeat manually
+        input_iter = iter(inputs)
+        output, output_raw = next(input_iter)
+        for input, input_raw in input_iter:
+            dob, *dol = output.shape
+            dib, *dil = input.shape
+            assert dob == dib
+            output = output.view(dob, *dol, *(1,)*len(dil)).repeat(1, *(1,)*len(dol), *dil)
+            input = input.view(dib, *(1,)*len(dol), *dil).repeat(1, *dol, *(1,)*len(dil))
+            output = output * input
+
+            dob, *dol, dof = output_raw.shape
+            dib, *dil, dif = input_raw.shape
+            assert dob == dib
+            output_raw = output_raw.view(dob, *dol, *(1,)*len(dil), dof).repeat(1, *(1,)*len(dol), *dil, 1)
+            input_raw = input_raw.view(dib, *(1,)*len(dol), *dil, dif).repeat(1, *dol, *(1,)*len(dil), 1)
+            output_raw = torch.cat((output_raw, input_raw), dim=-1)
+        return output, output_raw
+
+
 from collections import OrderedDict, Counter
 
 class NorminalSensor(FunctionalSensor):
+    PAD = '__PAD__'
     UNK = '__UNK__'
-    SPECIAL_TOKENS = [UNK]
+    SPECIAL_TOKENS = [PAD, UNK]
 
     def __init__(self, *pres, vocab_counter=None, least_count=0, special_tokens=[], target=False):
         super().__init__(*pres, target=target)
@@ -151,20 +194,34 @@ class NorminalSensor(FunctionalSensor):
         encoded_outputs = [list(map(self.encode, raw_output)) for raw_output in raw_outputs]
         max_len = max(map(len, encoded_outputs))
         def pad(output):
-            return torch.cat((
-                torch.tensor(output, dtype=torch.long), 
-                torch.zeros(max_len - len(output), dtype=torch.long)
-                ))
+            padding = torch.full((max_len - len(output),), self.encode(self.PAD), dtype=torch.long)
+            return torch.cat((torch.tensor(output, dtype=torch.long),  padding))
         encoded_tensor = torch.stack(tuple(map(pad, encoded_outputs)))
         return encoded_tensor, raw_outputs
+
 
 class SpacyTokenizorSensor(NorminalSensor):
     from spacy.lang.en import English
     nlp = English()
 
     def forward_func(self, sentences):
+        _, sentences = sentences
         tokens = self.nlp.tokenizer.pipe(sentences)
         return list(tokens)
+
+    def forward(self, data_item):
+        encoded_tokens, raw_outputs = super().forward(data_item)
+        return encoded_tokens != self.encode(self.PAD), encoded_tokens, raw_outputs
+
+
+class LabelAssociateSensor(FunctionalSensor):
+    def __init__(self, *pres, target=True):
+        super().__init__(*pres, target=target)
+
+    def forward_func(self, encoded_tokens, tokens, label, key):
+        mask, encoded_tokens, raw_outputs = encoded_tokens
+        # TODO: WIP match tokens and generate labels
+        return outputs
 
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
@@ -182,6 +239,7 @@ class BertTokenizorSensor(FunctionalSensor):
         )
         tokens['tokens'] = self.tokenizer.convert_ids_to_tokens(tokens['input_ids'], skip_special_tokens=True)
         return tokens
+
 
 class BertEmbeddingSensor(FunctionalSensor):
     from transformers import BertModel

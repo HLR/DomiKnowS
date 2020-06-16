@@ -43,9 +43,9 @@ class NorminalEmbedderLearner(EmbedderLearner):
         self.vocab_key = vocab_key
         self.modele_args = kwargs
         if num_embeddings is None:
-            super().__init__(pre, num_embeddings=1, **kwargs, target=target)
+            super().__init__(pre, num_embeddings=2, padding_idx=0, **kwargs, target=target)
         else:
-            super().__init__(pre, num_embeddings=num_embeddings, **kwargs, target=target)
+            super().__init__(pre, num_embeddings=num_embeddings, padding_idx=0, **kwargs, target=target)
 
     def update_module(self, num_embeddings):
         self.module = self.Module(num_embeddings=num_embeddings, **self.modele_args)
@@ -59,7 +59,7 @@ class NorminalEmbedderLearner(EmbedderLearner):
         return mask
 
     def forward_func(self, input):
-        indexes, tokens = input
+        _, indexes, *_ = input
         if isinstance(indexes, list):
             max_len = max(map(len, indexes))
             def pad(output):
@@ -69,7 +69,7 @@ class NorminalEmbedderLearner(EmbedderLearner):
                     ))
             indexes = torch.stack(tuple(map(pad, indexes)))
         device = next(self.parameters()).device
-        indexes = indexes.to(device=device)
+        indexes = indexes.to(device=device, dtype=torch.long)
         return super().forward_func(indexes)
 
 class RNNLearner(ModuleLearner):

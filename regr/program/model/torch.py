@@ -113,6 +113,7 @@ class PoiModel(TorchModel):
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
+            prop.sup['index'](data_item)
             output = output_sensor(data_item)
             target = target_sensor(data_item)
             # calculated any loss or metric
