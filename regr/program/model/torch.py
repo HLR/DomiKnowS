@@ -6,8 +6,14 @@ from ...graph import Property
 from ...sensor import Sensor, Learner
 from ...sensor.torch.sensor import TorchSensor
 from ...sensor.torch.learner import ModuleLearner
+from ...program.metric import MetricKey
 
 from .base import Mode
+
+
+class POIKey(MetricKey):
+    def __str__(self):
+        return self.pred.sup.prop_name.name
 
 
 def all_properties(node):
@@ -93,7 +99,7 @@ class PoiModel(TorchModel):
         mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
 
-        local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+        local_loss = self.loss[POIKey(output_sensor, target_sensor)](logit, labels, mask)
         return local_loss
 
     def poi_metric(self, data_item, prop, output_sensor, target_sensor):
@@ -103,7 +109,7 @@ class PoiModel(TorchModel):
         labels = target_sensor(data_item)
         inference = prop(data_item)
 
-        local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
+        local_metric = self.metric[POIKey(output_sensor, target_sensor)](inference, labels, mask)
         return local_metric
 
     def forward(self, data_item, inference=True):
@@ -113,7 +119,8 @@ class PoiModel(TorchModel):
 
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
-            prop.sup['index'](data_item)
+            if 'index' in prop.sup:
+                prop.sup['index'](data_item)
             output = output_sensor(data_item)
             target = target_sensor(data_item)
             # calculated any loss or metric

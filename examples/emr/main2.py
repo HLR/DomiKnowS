@@ -1,6 +1,6 @@
-from emr.data import ConllDataLoader, NaiveDataLoader
-from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, LabelRelationAssociateSensor, Key
-from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
+from emr.data import NaiveDataLoader
+from regr.sensor.torch.sensor import ReaderSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, LabelRelationAssociateSensor, Key
+from regr.sensor.torch.learner import RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
 from emr.utils import seed
 
 
@@ -29,7 +29,7 @@ def model_declaration(graph, config):
     kill = graph['application/kill']
 
     # feature
-    sentence['index'] = DataSensor(Key('sentence'))
+    sentence['index'] = ReaderSensor(Key('sentence'))
     word['index'] = SpacyTokenizorSensor(sentence['index'])
     word['emb'] = NorminalEmbedderLearner(word['index'], **config.word.emb)
     word['ctx_emb'] = RNNLearner(word['emb'], **config.word.ctx_emb)

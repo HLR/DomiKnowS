@@ -3,7 +3,7 @@ from typing import Any
 
 import torch
 
-from ...utils import wrap_batch
+from ..utils import wrap_batch
 
 
 class CMWithLogitsMetric(torch.nn.Module):
@@ -78,6 +78,10 @@ class MetricTracker(torch.nn.Module):
             self.reset()
         return value
 
+    def __str__(self):
+        import pprint
+        return pprint.pformat(self.value())
+
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):
@@ -111,3 +115,21 @@ class PRF1Tracker(MetricTracker):
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
         return {'P': p, 'R': r, 'F1': f1}
+
+
+class MetricKey():
+    def __init__(self, pred, target):
+        self.pred = pred
+        self.target = target
+
+    def __eq__(self, other):
+        return self.pred == other.pred and self.target == other.target
+
+    def __hash__(self):
+        return hash((self.pred, self.target))
+
+    def __str__(self):
+        return '{}:{}'.format(self.pred, self.target)
+
+    def __repr__(self):
+        return str(self)

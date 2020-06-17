@@ -238,6 +238,8 @@ class NamedTreeNode(Named):
     def what(self):
         return {'sup': self.sup}
 
+    def __str__(self):
+        return self.fullname
 
 @Scoped.instance_scope
 class NamedTree(NamedTreeNode, OrderedDict):

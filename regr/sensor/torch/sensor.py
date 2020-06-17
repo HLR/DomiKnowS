@@ -34,6 +34,15 @@ class Key():
 class DataSensor(TorchSensor):
     def __init__(self, key, target=False):
         super().__init__(target=target)
+        self.key = key
+
+    def forward(self, context):
+        return context[self.key]
+
+
+class ReaderSensor(TorchSensor):
+    def __init__(self, key, target=False):
+        super().__init__(target=target)
         if isinstance(key, Key):
             self.key = key.key
         else:
@@ -96,8 +105,11 @@ class FunctionalSensor(TorchSensor):
     def mask(self, data_item):
         if self.sup is not None and self.sup.sup is not None:
             concept = self.sup.sup
-            mask, *_ = concept['index'](data_item)
-            return mask
+            try:
+                mask, *_ = concept['index'](data_item)
+                return mask
+            except KeyError:
+                pass
         masks = list(self.get_args(data_item, sensor_fn=lambda s, c: s.mask(c)))
         masks_num = len(masks)
         mask = masks[0]
