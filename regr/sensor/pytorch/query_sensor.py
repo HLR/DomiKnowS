@@ -258,7 +258,10 @@ class CandidateReaderSensor(CandidateSensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
 
-        output = torch.zeros(dims, dtype=torch.uint8)
+        if self.data is None and self.keyword in self.context_helper:
+            self.data = self.context_helper[self.keyword]
+            
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, index, *arg_list, *inputs)

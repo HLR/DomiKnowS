@@ -11,10 +11,11 @@ def model_declaration():
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
-    from graph import graph, world, city, world_contains_city, cityLink, city1, city2, firestationCity, neighbor
+    from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
 
     from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
-    from sensors import DummyCityLinkEdgeSensor, DummyCityLinkCandidateGenerator, DummyNeighborLearner, DummyCityLinkLabelSensor
+    from sensors import DummyCityLinkEdgeSensor
+    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
 
     graph.detach()
 
@@ -22,20 +23,29 @@ def model_declaration():
     
     world['raw'] = ReaderSensor(keyword='world')
     city['raw'] = ReaderSensor(keyword='city')
+    city['index'] = ReaderSensor(keyword='city') # "index" key Required by CandidateReaderSensor ?
     world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
-    
-    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward']])
-    city[firestationCity] = DummyCityLabelSensor(label=True)
 
-    # --- CityLink
+    # --- Neighbor
     
+    # Not used ? - maybe should be used in define_inputs of query_sensor ?
     city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
     city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
-    cityLink['raw'] = DummyCityLinkCandidateGenerator(edges=[city1['backward'], city2['backward']])
     
-    cityLink[neighbor] = DummyNeighborLearner('raw')
-    cityLink[neighbor] = DummyCityLinkLabelSensor(label=True)
-
+    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2, constant):
+        if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader
+            return 1
+        else:
+            return 0
+        
+    # "raw" is it right key?
+    # First argument required ?!!
+    neighbor['raw'] = CandidateReaderSensor(0.1, edges=[city1['backward'], city2['backward']], label=False, forward=readNeighbors, keyword='links')
+    
+    # --- Learners
+    
+    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], neighbor['raw']])
+    city[firestationCity] = DummyCityLabelSensor(label=True)
     
     program = LearningBasedProgram(graph, PoiModel)
     return program
@@ -47,8 +57,9 @@ def test_graph_coloring_main():
     lbp = model_declaration()
 
     dataset = CityReader().run()  # Adding the info on the reader
-
-    for datanode in lbp.eval(dataset=dataset, inference=True):
+    # neighbor['raw'].fill_data(dataset) # Does not work
+    
+    for datanode in lbp.populate(dataset=dataset, inference=True):
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
 

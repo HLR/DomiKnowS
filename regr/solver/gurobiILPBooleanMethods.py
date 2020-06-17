@@ -75,8 +75,15 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             m.addConstr(var1 + var2 >= 2)
             return
         
-        varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1, var2))
+        var1Name = var1
+        var2Name = var2
+        if isinstance(var1, Var):
+            var1Name = var1.VarName
+        if  isinstance(var2, Var):
+            var2Name = var2.VarName
             
+        varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1Name, var2Name))
+
         m.addConstr(varAND <= var1)
         m.addConstr(varAND <= var2)
         m.addConstr(var1 + var2 <= varAND + 2 - 1)
@@ -88,6 +95,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         if N <= 1:
             return None
+        
+        if N == 2:
+            return self.and2Var(m, var[0], var[1], onlyConstrains)
         
         if onlyConstrains:
             varSumLinExpr = LinExpr()
