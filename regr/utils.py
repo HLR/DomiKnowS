@@ -378,6 +378,8 @@ class FormatPrinter(pprint.PrettyPrinter):
         self.formats = formats
 
     def format(self, obj, ctx, maxlvl, lvl):
-        if type(obj) in self.formats:
+        if isinstance(obj, tuple(self.formats)):
+            # return code: https://docs.python.org/3/library/pprint.html#pprint.PrettyPrinter.format
+            # ...: formated obj; 1: readable; 0: no recursion
             return self.formats[type(obj)] % obj, 1, 0
-        return pprint.PrettyPrinter.format(self, obj, ctx, maxlvl, lvl)
+        return super().format(obj, ctx, maxlvl, lvl)
