@@ -1,5 +1,5 @@
 from emr.data import ConllDataLoader, NaiveDataLoader
-from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, Key
+from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, LabelRelationAssociateSensor, Key
 from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
 from emr.utils import seed
 
@@ -53,11 +53,11 @@ def model_declaration(graph, config):
     word[o] = LRLearner(word['feature'], **config.word.lr)
 
     # relation
-    pair[work_for] = LabelSensor('Work_For')
-    pair[live_in] = LabelSensor('Live_In')
-    pair[located_in] = LabelSensor('Located_In')
-    pair[orgbase_on] = LabelSensor('OrgBased_In')
-    pair[kill] = LabelSensor('Kill')
+    pair[work_for] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Work_For')
+    pair[live_in] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Live_In')
+    pair[located_in] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Located_In')
+    pair[orgbase_on] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'OrgBased_In')
+    pair[kill] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Kill')
 
     pair[work_for] = LRLearner(pair['feature'], **config.pair.lr)
     pair[live_in] = LRLearner(pair['feature'], **config.pair.lr)

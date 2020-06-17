@@ -42,11 +42,11 @@ class BaseModel(torch.nn.Module):
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
-            return [self.move(v, device) for v in value]
+            return list(self.move(v, device) for v in value)
         elif isinstance(value, tuple):
-            return (self.move(v, device) for v in value)
+            return tuple(self.move(v, device) for v in value)
         elif isinstance(value, dict):
-            return {k: self.move(v, device) for k, v in value.items()}
+            return dict({k: self.move(v, device) for k, v in value.items()})
         else:
             return value
 

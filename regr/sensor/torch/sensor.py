@@ -261,25 +261,53 @@ def overlap(start1, end1, start2, end2):
     return ((start1 <= start2 and start2 < end1) or
             (start2 <= start1 and start1 < end2))
 
+
+def match_in_spacy(doc, tokens, idx, token):
+    start = 0
+    for t in tokens[:idx]:
+        start += len(t) + 1
+    end = start + len(token)
+    doc_iter = iter(doc)
+    matched = []
+    for tkn in doc_iter:
+        if tkn.idx + len(tkn) > start:
+            matched.append(tkn)
+            break
+    for tkn in doc_iter:
+        if tkn.idx < end:
+            matched.append(tkn)
+        else:
+            break
+    return matched
+
+
 class LabelAssociateSensor(FunctionalSensor):
     def __init__(self, *pres, target=True):
         super().__init__(*pres, target=target)
 
     def forward_func(self, encoded_tokens, tokens, labels, key):
         masks, encoded_tokens, raw_outputs = encoded_tokens
-        label_tensor = torch.zeros_like(encoded_tokens)
+        label_tensor = torch.zeros_like(masks)
         for sample_idx, (mask, encoded_token, raw_output, token, label) in enumerate(zip(masks, encoded_tokens, raw_outputs, tokens, labels)):
-            start = 0
-            raws = iter(raw_output)
-            for token_item, label_item in zip(token, label):
-                end = start + len(token_item)
+            for token_idx, (token_item, label_item) in enumerate(zip(token, label)):
                 if label_item == key:
-                    # find overlap
-                    for raw in raws:
-                        if overlap(start, end, raw.idx, raw.idx + len(raw)):
-                            label_tensor[sample_idx, raw.i] = 1
-                            break
-                start = end + 1
+                    raw_i = match_in_spacy(raw_output, token, token_idx, token_item)[0].i
+                    label_tensor[sample_idx, raw_i] = 1
+        return label_tensor
+
+
+class LabelRelationAssociateSensor(LabelAssociateSensor):
+    def forward_func(self, encoded_tokens, tokens, relations, key):
+        masks, encoded_tokens, raw_outputs = encoded_tokens
+        label_tensor = torch.zeros_like(masks)
+        for sample_idx, (mask, encoded_token, raw_output, token, relation) in enumerate(zip(masks, encoded_tokens, raw_outputs, tokens, relations)):
+            for rkey, (sidx, (stoken, *_)), (didx, (dtoken, *_)) in relation:
+                if key != rkey:
+                    continue
+                doc = raw_output[0][0][0].doc
+                si = match_in_spacy(doc, token, sidx, stoken)[0].i
+                di = match_in_spacy(doc, token, didx, dtoken)[0].i
+                label_tensor[sample_idx, si, di] = 1
         return label_tensor
 
 
