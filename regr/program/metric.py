@@ -3,7 +3,7 @@ from typing import Any
 
 import torch
 
-from ..utils import wrap_batch
+from ..utils import wrap_batch, value, FormatPrinter
 
 
 class CMWithLogitsMetric(torch.nn.Module):
@@ -34,7 +34,7 @@ class PRF1WithLogitsMetric(CMWithLogitsMetric):
             p = torch.zeros_like(tp)
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+        return {'P': value(p), 'R': value(r), 'F1': value(f1)}
 
 
 class MetricTracker(torch.nn.Module):
@@ -78,22 +78,23 @@ class MetricTracker(torch.nn.Module):
             self.reset()
         return value
 
+    printer = FormatPrinter({float: "%.4f"})
+
     def __str__(self):
-        import pprint
-        return pprint.pformat(self.value())
+        return self.printer.pformat(self.value())
 
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):
-        def func(value):
-            return value.clone().detach().mean()
-        def apply(value):
-            if isinstance(value, dict):
-                return {k: apply(v) for k, v in value.items()}
-            elif isinstance(value, torch.Tensor):
-                return func(value)
+        def func(x):
+            return value(x.clone().detach().mean())
+        def apply(x):
+            if isinstance(x, dict):
+                return {k: apply(v) for k, v in x.items()}
+            elif isinstance(x, torch.Tensor):
+                return func(x)
             else:
-                return apply(torch.tensor(value))
+                return apply(torch.tensor(x))
         retval = apply(values)
         return retval
 
@@ -114,7 +115,7 @@ class PRF1Tracker(MetricTracker):
             p = torch.zeros_like(tp)
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+        return {'P': value(p), 'R': value(r), 'F1': value(f1)}
 
 
 class MetricKey():

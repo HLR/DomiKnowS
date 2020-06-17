@@ -350,3 +350,34 @@ def wrap_batch(values, fillvalue=0):
     elif isinstance(values, dict):
         values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
     return values
+
+
+def value(x):
+    import torch
+    import numpy as np
+    if isinstance(x, torch.Tensor):
+        return x.data.cpu().numpy().item()
+    elif isinstance(x, (np.ndarray, np.generic)):
+        return x.item()
+    elif isinstance(x, list):
+        return list(value(xx) for xx in x)
+    elif isinstance(x, tuple):
+        return tuple(value(xx) for xx in x)
+    elif isinstance(x, dict):
+        return dict((key, value(xx)) for key, xx in x.items())
+    else:
+        return value
+
+
+# https://stackoverflow.com/a/44356856
+import pprint
+
+class FormatPrinter(pprint.PrettyPrinter):
+    def __init__(self, formats):
+        super(FormatPrinter, self).__init__()
+        self.formats = formats
+
+    def format(self, obj, ctx, maxlvl, lvl):
+        if type(obj) in self.formats:
+            return self.formats[type(obj)] % obj, 1, 0
+        return pprint.PrettyPrinter.format(self, obj, ctx, maxlvl, lvl)
