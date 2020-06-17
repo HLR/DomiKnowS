@@ -16,6 +16,8 @@ class TorchSensor(Sensor):
     def __init__(self, target=False):
         super().__init__()
         self.target = target
+        self._to_args = []
+        self._to_kwargs = {}
 
     def propagate_context(self, data_item, node, force=False):
         if not self.target:  # avoid target to be mixed in forward calculation
@@ -24,6 +26,10 @@ class TorchSensor(Sensor):
     def mask(self, data_item: Dict[str, Any]) -> Any:
         # allow safely skip mask
         raise SkipSensor
+
+    def to(self, *args, **kwargs):
+        self._to_args = args
+        self._to_kwargs = kwargs
 
 
 class Key():
@@ -249,8 +255,10 @@ class NorminalSensor(FunctionalSensor):
         encoded_outputs = [list(map(self.encode, raw_output)) for raw_output in raw_outputs]
         max_len = max(map(len, encoded_outputs))
         def pad(output):
-            padding = torch.full((max_len - len(output),), self.encode(self.PAD), dtype=torch.long)
-            return torch.cat((torch.tensor(output, dtype=torch.long),  padding))
+            padding = torch.full((max_len - len(output),), self.encode(self.PAD), dtype=torch.long).to(*self._to_args, **self._to_kwargs)
+            return torch.cat((
+                torch.tensor(output).to(*self._to_args, **self._to_kwargs),
+                padding))
         encoded_tensor = torch.stack(tuple(map(pad, encoded_outputs)))
         return encoded_tensor, raw_outputs
 
@@ -299,7 +307,7 @@ class LabelAssociateSensor(FunctionalSensor):
 
     def forward_func(self, encoded_tokens, tokens, labels, key):
         masks, encoded_tokens, raw_outputs = encoded_tokens
-        label_tensor = torch.zeros_like(masks)
+        label_tensor = torch.zeros_like(masks).to(*self._to_args, **self._to_kwargs)
         for sample_idx, (mask, encoded_token, raw_output, token, label) in enumerate(zip(masks, encoded_tokens, raw_outputs, tokens, labels)):
             for token_idx, (token_item, label_item) in enumerate(zip(token, label)):
                 if label_item == key:
@@ -311,7 +319,7 @@ class LabelAssociateSensor(FunctionalSensor):
 class LabelRelationAssociateSensor(LabelAssociateSensor):
     def forward_func(self, encoded_tokens, tokens, relations, key):
         masks, encoded_tokens, raw_outputs = encoded_tokens
-        label_tensor = torch.zeros_like(masks)
+        label_tensor = torch.zeros_like(masks).to(*self._to_args, **self._to_kwargs)
         for sample_idx, (mask, encoded_token, raw_output, token, relation) in enumerate(zip(masks, encoded_tokens, raw_outputs, tokens, relations)):
             for rkey, (sidx, (stoken, *_)), (didx, (dtoken, *_)) in relation:
                 if key != rkey:

@@ -90,6 +90,12 @@ class TorchModel(BaseModel):
                     continue
                 yield prop, output_sensor, target_sensor
 
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        for node in self.graph.traversal_apply(all_properties):
+            for _, sensor in node.find(self.BaseSensor):
+                sensor.to(*args, **kwargs)
+
 
 class PoiModel(TorchModel):
     def poi_loss(self, data_item, prop, output_sensor, target_sensor):
