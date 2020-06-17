@@ -30,7 +30,7 @@ class Solver(ContextSolver):
 class IndexSolver(Solver):
     def get_raw_input(self, data_item):
         graph = next(iter(self.myGraph))
-        _, sentence_sensor = graph.get_sensors(SpacyTokenizorSensor, lambda s: not s.target)[0]
-        mask, sentences = sentence_sensor(data_item)
+        _, word_index_sensor = graph.get_sensors(SpacyTokenizorSensor, lambda s: not s.target)[0]
+        mask, sentences, *_ = word_index_sensor(data_item)
         mask_len = mask.sum(1)  # (b, )
         return sentences, mask_len
