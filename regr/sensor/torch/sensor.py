@@ -96,7 +96,7 @@ class FunctionalSensor(TorchSensor):
     def mask(self, data_item):
         if self.sup is not None and self.sup.sup is not None:
             concept = self.sup.sup
-            mask, raw = concept['index'](data_item)
+            mask, *_ = concept['index'](data_item)
             return mask
         masks = list(self.get_args(data_item, sensor_fn=lambda s, c: s.mask(c)))
         masks_num = len(masks)
@@ -129,22 +129,65 @@ class CartesianCandidateSensor(FunctionalSensor):
     def forward_func(self, *inputs):
         # torch cat is not broadcasting, do repeat manually
         input_iter = iter(inputs)
-        output, output_raw = next(input_iter)
-        for input, input_raw in input_iter:
-            dob, *dol = output.shape
-            dib, *dil = input.shape
-            assert dob == dib
-            output = output.view(dob, *dol, *(1,)*len(dil)).repeat(1, *(1,)*len(dol), *dil)
-            input = input.view(dib, *(1,)*len(dol), *dil).repeat(1, *dol, *(1,)*len(dil))
-            output = output * input
+        output, *output_t = next(input_iter)
+        for idx, output_raw in enumerate(output_t):
+            if isinstance(output_raw, list):
+                output_rawn = []
+                for output_raw_sample in output_raw:
+                    output_raw_sample = list(map(lambda x: (x,), output_raw_sample))
+                    output_rawn.append(output_raw_sample)
+                output_t[idx] = output_rawn
+        for input, *input_t in input_iter:
+            batch, *lengths = output.shape
+            output = tensor_index_cartprod(output, input)
 
-            dob, *dol, dof = output_raw.shape
-            dib, *dil, dif = input_raw.shape
-            assert dob == dib
-            output_raw = output_raw.view(dob, *dol, *(1,)*len(dil), dof).repeat(1, *(1,)*len(dol), *dil, 1)
-            input_raw = input_raw.view(dib, *(1,)*len(dol), *dil, dif).repeat(1, *dol, *(1,)*len(dil), 1)
-            output_raw = torch.cat((output_raw, input_raw), dim=-1)
-        return output, output_raw
+            output_tn = []
+            for output_raw, input_raw in zip(output_t, input_t):
+                if isinstance(output_raw, torch.Tensor):
+                    if len(output_raw.shape) == len(lengths)+1:
+                        output_raw = tensor_index_cartprod(output_raw, input_raw, func=lambda x, y: torch.stack((x,y),dim=-1))
+                    elif len(output_raw.shape) == len(lengths)+2:
+                        output_raw = tensor_cartprod(output_raw, input_raw)
+                    output_tn.append(output_raw)
+                elif isinstance(output_raw, list):
+                    output_rawn = []
+                    for output_raw_sample, input_raw_sample in zip(output_raw, input_raw):
+                        output_rawn.append(nested_list_cartprod(output_raw_sample, input_raw_sample, lengths=lengths))
+                    output_tn.append(output_rawn)
+            output_t = tuple(output_tn)
+        return (output, *output_t)
+
+def tensor_index_cartprod(output, input, func=None):
+    dob, *dol = output.shape
+    dib, *dil = input.shape
+    assert dob == dib
+    output = output.view(dob, *dol, *(1,)*len(dil)).repeat(1, *(1,)*len(dol), *dil)
+    input = input.view(dib, *(1,)*len(dol), *dil).repeat(1, *dol, *(1,)*len(dil))
+    if func is None:
+        output = output * input
+    else:
+        output = func(output, input)
+    return output
+
+def tensor_feat_cartprod(output_raw, input_raw):
+    dob, *dol, dof = output_raw.shape
+    dib, *dil, dif = input_raw.shape
+    assert dob == dib
+    output_raw = output_raw.view(dob, *dol, *(1,)*len(dil), dof).repeat(1, *(1,)*len(dol), *dil, 1)
+    input_raw = input_raw.view(dib, *(1,)*len(dol), *dil, dif).repeat(1, *dol, *(1,)*len(dil), 1)
+    output_raw = torch.cat((output_raw, input_raw), dim=-1)
+    return output_raw
+
+def nested_list_cartprod(output_raw, input_raw, lengths=None):
+    #if lengths:
+        #length = lengths[0]
+        #assert len(output_raw) == lengths[0]
+    if lengths or (isinstance(output_raw, list) and lengths is None):
+        for idx, output_item in enumerate(output_raw):
+            output_raw[idx] = nested_list_cartprod(output_item, input_raw, lengths=lengths[1:])
+        return output_raw
+    else:
+        return [(*output_raw, input_item) for input_item in input_raw]
 
 
 from collections import OrderedDict, Counter
@@ -214,14 +257,30 @@ class SpacyTokenizorSensor(NorminalSensor):
         return encoded_tokens != self.encode(self.PAD), encoded_tokens, raw_outputs
 
 
+def overlap(start1, end1, start2, end2):
+    return ((start1 <= start2 and start2 < end1) or
+            (start2 <= start1 and start1 < end2))
+
 class LabelAssociateSensor(FunctionalSensor):
     def __init__(self, *pres, target=True):
         super().__init__(*pres, target=target)
 
-    def forward_func(self, encoded_tokens, tokens, label, key):
-        mask, encoded_tokens, raw_outputs = encoded_tokens
-        # TODO: WIP match tokens and generate labels
-        return outputs
+    def forward_func(self, encoded_tokens, tokens, labels, key):
+        masks, encoded_tokens, raw_outputs = encoded_tokens
+        label_tensor = torch.zeros_like(encoded_tokens)
+        for sample_idx, (mask, encoded_token, raw_output, token, label) in enumerate(zip(masks, encoded_tokens, raw_outputs, tokens, labels)):
+            start = 0
+            raws = iter(raw_output)
+            for token_item, label_item in zip(token, label):
+                end = start + len(token_item)
+                if label_item == key:
+                    # find overlap
+                    for raw in raws:
+                        if overlap(start, end, raw.idx, raw.idx + len(raw)):
+                            label_tensor[sample_idx, raw.i] = 1
+                            break
+                start = end + 1
+        return label_tensor
 
 
 TRANSFORMER_MODEL = 'bert-base-uncased'

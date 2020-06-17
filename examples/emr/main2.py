@@ -41,10 +41,10 @@ def model_declaration(graph, config):
 
     # label
     word[people] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Peop')
-    word[organization] = LabelSensor('Org')
-    word[location] = LabelSensor('Loc')
-    word[other] = LabelSensor('Other')
-    word[o] = LabelSensor('O')
+    word[organization] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Org')
+    word[location] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Loc')
+    word[other] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Other')
+    word[o] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'O')
 
     word[people] = LRLearner(word['feature'], **config.word.lr)
     word[organization] = LRLearner(word['feature'], **config.word.lr)
