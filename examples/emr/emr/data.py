@@ -1,5 +1,6 @@
 from collections import OrderedDict, Counter
 from itertools import chain
+# import re
 
 import torch
 from torch.utils.data import DataLoader
@@ -7,6 +8,7 @@ from spacy.lang.en import English
 
 from .conll import Conll04CorpusReader
 from .data_spacy import reprocess
+from .utils import KnuthMorrisPratt
 
 
 class ConllDataLoader(DataLoader):
@@ -143,11 +145,70 @@ class ConllDataLoader(DataLoader):
         super().__init__(samples, collate_fn=self._collate_fn, **kwargs)
 
 
+DELIM = '/'
+REPL = {'COMMA': ',',
+        '-LRB-': '(',
+        '-RRB-': ')',
+        }
+def conll_senitize_token(token):
+    if token in REPL:
+        return REPL[token]
+    if DELIM in token:
+        return token.replace(DELIM, ' ')
+    return token
+
+class FuzzyKMP(KnuthMorrisPratt):
+    @staticmethod
+    def ele_ne(pattern_elm, other_elm):
+        if re.match(pattern_elm[0], other_elm[0]):
+            return False
+        else:
+            return True
+
+MERGE = {KnuthMorrisPratt([('`', '``', 'O'), ('`', '``', 'O')]): [('``', '``', 'O')],
+         KnuthMorrisPratt([('\'', '\'\'', 'O'), ('\'', '\'\'', 'O')]): [('\'\'', '\'\'', 'O')]}
+# fkmp = FuzzyKMP([(r'(.+)\.', None, None)],)
+
+def conll_senitize_sentences(sentences):
+    sentences = list(zip(*sentences))
+    for kmp, rep in MERGE.items():
+        tokens_pieces = []
+        last = 0
+        for start, end in kmp(sentences):
+            # last:start
+            tokens_pieces.append(sentences[last:start])
+            # start:end
+            tokens_pieces.append(rep)
+            # end:
+            last = end
+        tokens_pieces.append(sentences[last:])
+        sentences = list(chain(*tokens_pieces))
+
+    # tokens_pieces = []
+    # last = 0
+    # for start, end in fkmp(sentences):
+    #     # last:start
+    #     tokens_pieces.append(sentences[last:start])
+    #     # start:end
+    #     elm = list(sentences[start])
+    #     elm[0] = elm[0][:-1]
+    #     elm = tuple(elm)
+    #     tokens_pieces.append([elm, ('.', '.', 'O')])
+    #     # end:
+    #     last = end
+    # tokens_pieces.append(sentences[last:])
+    # sentences = list(chain(*tokens_pieces))
+
+    sentences = list(zip(*sentences))
+    return sentences
+
 def collate(batch):
     sentences, relations = zip(*batch)
+    sentences = list(map(conll_senitize_sentences, sentences))
     # (tokens, pos, label)
     # (relation_type, (src_index, src_token), (dst_index, dst_token))
     tokens, postags, labels = zip(*sentences)
+    tokens = [list(map(conll_senitize_token, token)) for token in tokens]
     data_item = {
         'sentence': [' '.join(token_list) for token_list in tokens],
         'tokens': list(tokens),
