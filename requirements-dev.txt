@@ -4,3 +4,4 @@ flaky
 torch
 gekko
 allennlp
+python-constraint
