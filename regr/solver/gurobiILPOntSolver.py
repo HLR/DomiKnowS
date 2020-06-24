@@ -49,7 +49,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and token %s - skipping it"%(currentProbability[1],token,conceptName))
+                    self.myLogger.info("Probability is %f for variable concept %s and token %s - skipping it"%(currentProbability[1],token,conceptName))
                     continue
 
                 # Create variable
@@ -74,26 +74,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if ('Not_'+conceptName, token) in x:
                     currentConstrLinExpr = x[conceptName, token] + x['Not_'+conceptName, token]
                     m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptName, token))
-                    self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is not concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
                 # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
                 currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
                 
                 if currentProbability[1] == 1:
                     m.addConstr(x[conceptName, token] == 1, name='c_%s_%shardConstrain'%(conceptName,token))
-                    self.myLogger.debug("Hard constrain for token %s is concept %s == %i"%(token,conceptName,1))
+                    self.myLogger.debug("Hard constrain for variable \"token %s is concept %s\" == %i"%(token,conceptName,1))
                     
                     if ('Not_'+conceptName, token) in x:
                         m.addConstr(x['Not_'+conceptName, token] == 0, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
-                        self.myLogger.debug("Hard constrain for token %s is not concept %s == %i"%(token,conceptName,0))
+                        self.myLogger.debug("Hard constrain for variable \"token %s is not concept %s\" == %i"%(token,conceptName,0))
                         
                 elif currentProbability[1] == 0:
                     m.addConstr(x[conceptName, token] == 0, name='c_%s_%shardConstrain'%(conceptName, token))
-                    self.myLogger.debug("Hard constrain for token %s is concept %s == %i"%(token,conceptName,0))
+                    self.myLogger.debug("Hard constrain for variable \"token %s is concept %s\" == %i"%(token,conceptName,0))
                     
                     if ('Not_'+conceptName, token) in x:
                         m.addConstr(x['Not_'+conceptName, token] == 1, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
-                        self.myLogger.debug("Hard constrain for token %s is not concept %s == %i"%(token,conceptName,1))
+                        self.myLogger.debug("Hard constrain for variable \"token %s is not concept %s\"== %i"%(token,conceptName,1))
 
         m.update()
 
@@ -1287,7 +1287,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, \
                                                                         hardConstrainsConceptsRelations=hardConstrainsConceptsRelations, resultVariableName = variablesNames[0], headLC = False))
             elif isinstance(e, tuple): # tuple with named variable - skip for now
-                pass # Already processed in the previous iteration
+                resultVariableName = e
             else:
                 self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lcKey,e))
 

@@ -358,6 +358,31 @@ class DataNode:
         
         return False 
     
+    def __getRelationAttrNames(self, conceptRelation, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+            
+        if len(conceptRelation.has_a()) > 0:  
+            relationAttrs = OrderedDict()
+            for arg_id, rel in enumerate(conceptRelation.has_a()): 
+                srcName = rel.src.name
+                dstName = rel.dst.name                
+                relationAttr = self.__findConcept(dstName, usedGraph)
+    
+                relationAttrs[rel.name] = relationAttr
+                
+            return relationAttrs
+        
+        for _isA in conceptRelation.is_a():
+            _conceptRelation = _isA.dst
+            
+            resultForCurrent = self.__getRelationAttrNames(_conceptRelation, usedGraph)
+            
+            if bool(resultForCurrent):
+                return resultForCurrent
+        
+        return None 
+    
     def __findRootRelation(self, relationConcept, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
@@ -368,6 +393,65 @@ class DataNode:
             return  self.__findRootRelation(_relationConcept, usedGraph)
         
         return relationConcept 
+
+    def __isHardConstrains(self, conceptRelation):
+        currentConceptOrRelationDNs = self.findDatanodes(select = conceptRelation)
+        if len(currentConceptOrRelationDNs) > 0:
+            return True
+        
+        rootRelation = self.__findRootRelation(conceptRelation)
+        
+        if bool(rootRelation):
+            rootRelationDNs = self.findDatanodes(select = rootRelation)
+            
+            key = conceptRelation # Has to exactly not subkey
+            if not isinstance(key, str):
+                key = key.name
+                
+            for dn in rootRelationDNs:
+                if key in dn.attributes:
+                    return True
+                
+        return False
+            
+    def __getHardConstrains(self, conceptRelation, reltationAttrs, currentCandidate):
+        key = conceptRelation.name  
+        rootRelation = self.__findRootRelation(conceptRelation)
+        
+        if rootRelation == conceptRelation:
+            if bool(reltationAttrs):
+                indexes = {}
+                for i, attr in enumerate(reltationAttrs):
+                    if len(currentCandidate) > i:
+                        indexes[attr] = ('instanceID', currentCandidate[i].instanceID)
+            
+                v = self.findDatanodes(select = conceptRelation, indexes = indexes)
+                if len(v) == 0:
+                    currentProbability = [1, 0]
+                else:
+                    currentProbability = [0, 1]
+                    
+                return currentProbability
+        else:
+            dns = currentCandidate[0].getRelationLinks(relationName = rootRelation, conceptName = None)
+            if bool(dns):
+                dn = dns[currentCandidate[1].getInstanceID()]
+        
+                value = None
+                if key in dn.attributes:
+                    value = dn.attributes[key]
+        
+                if value is not None:
+                    _value = value.item()
+                    
+                    if _value == 0:
+                        currentProbability = [1, 0]
+                    else:
+                        currentProbability = [0, 1]
+                        
+                    return currentProbability
+        
+        return [1, 0]
 
     # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
     def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
@@ -462,8 +546,7 @@ class DataNode:
                 currentConceptOrRelation = _currentConceptOrRelation
                 
             # Check if it is a hard constrain concept or relation - check if DataNote exist of this type
-            currentConceptOrRelationDNs = self.findDatanodes(select = currentConceptOrRelation)
-            if len(currentConceptOrRelationDNs) > 0:
+            if self.__isHardConstrains(currentConceptOrRelation):
                 hardConstrainsConceptsRelations.append(currentConceptOrRelation) # Hard Constrain
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
@@ -533,6 +616,8 @@ class DataNode:
             if currentCandidates is None:
                 continue
             
+            reltationAttrs = self.__getRelationAttrNames(currentConceptOrRelation)
+            
             for currentCandidate in currentCandidates:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
                     currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
@@ -543,11 +628,7 @@ class DataNode:
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     if currentConceptOrRelation in hardConstrainsConceptsRelations:
-                        v = currentCandidate1.findDatanodes(select = currentConceptOrRelation, indexes = {"arg1" : ('instanceID', currentCandidate1.instanceID), "arg2": ('instanceID', currentCandidate2.instanceID)})
-                        if len(v) == 0:
-                            currentProbability = [1, 0]
-                        else:
-                            currentProbability = [0, 1]
+                        currentProbability = self.__getHardConstrains(currentConceptOrRelation, reltationAttrs, currentCandidate)
                     else:
                         currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
@@ -796,7 +877,7 @@ class DataNodeBuilder(dict):
             for p in product(*existingDnsForAttr.values()): # Candidates
                 _p = tuple([__p.getInstanceID() for __p in p])
                 _t = value[_p] == 0                
-                if ('Candidate' in value.names[0]) and (value[_p] == 0):
+                if (value.names[0] is not None) and ('Candidate' in value.names[0]) and (value[_p] == 0):
                     continue
                 
                 instanceValue = ""
