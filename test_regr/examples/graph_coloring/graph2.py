@@ -17,12 +17,11 @@ with Graph('global') as graph2:
         cityLink = Concept(name='cityLink')
         (city1, city2) = cityLink.has_a(arg1=city, arg2=city)
 
-        neighbor = cityLink(name='neighbor')
-        
-        # Nee to change arg1 to arg3 and arg2 to arg4 - system changed them  if there are the same but do change is not consistent
-        (neighbor1, neighbor2) = neighbor.has_a(arg3=city, arg4=city) # Required for CandidateReaderSensor to work
-       
         firestationCity = city(name='firestationCity')
         
         # Constraints
-        existsL(orL(firestationCity, ('x',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
+        orL(firestationCity, ('x',), existsL((y,), andL(eql(cityLink, 'neighbor', 1), ('x', 'y'), firestationCity, ('y',))))
+
+       
+        # Each city has no more then 3 neighbors
+        #atMostL(3, (x, ), andL(firestationCity, ('x',), eql(cityLink, 'neighbor', 1), ('x', 'y'))

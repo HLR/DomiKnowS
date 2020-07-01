@@ -1,9 +1,14 @@
 import logging
 from itertools import product
+
+import numpy
  
 #from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.ilpConfig import ilpConfig 
-
+   
+myLogger = logging.getLogger(ilpConfig['log_name'])
+ifLog =  ilpConfig['ifLog']
+        
 class LogicalConstrain:
     def __init__(self, *e):
         self.active = True
@@ -15,16 +20,21 @@ class LogicalConstrain:
         self.e = e
         
         if e:
-            contexts = self.__getContext(e[0])
+            if not isinstance(e[0], (tuple, int)):
+                contexts = self.__getContext(e[0])
+            elif len(e) > 1 and not isinstance(e[1], (tuple, int)):
+                contexts = self.__getContext(e[1])
+            elif len(e) > 2 and not isinstance(e[2], (tuple, int)):
+                contexts = self.__getContext(e[2])
+            else:
+                contexts = None
+
             if contexts:
                 context = contexts[-1]
             
                 self.lcName = "LC%i"%(len(context.logicalConstrains))
                 context.logicalConstrains[self.lcName] = self
-        
-        self.myLogger = logging.getLogger(ilpConfig['log_name'])
-        self.ifLog =  ilpConfig['ifLog']
-        
+     
     def __str__(self):
         return self.__class__.__name__
           
@@ -37,11 +47,11 @@ class LogicalConstrain:
         else:
             return e._context
         
-    def createILPConstrains(self, lcName, lcFun, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False):
-        #if self.ifLog: self.myLogger.debug("%s Logical Constrain invoked with variables: %s"%([[[x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-
+    def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
+        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if x is None or isinstance(x, (int, numpy.float64)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        
         if len(v) < 2:
-            self.myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
+            myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
             return None
         
         # input variable names
@@ -117,7 +127,7 @@ class LogicalConstrain:
             else:
                 pass # Support only 2 elements in key now !
         
-        if len(v) > 2: # Support only up to 3 keys !
+        if len(v) > 2: # Support more then 2 variables  if all are the same
             equals = True
             for k in vKeys:
                 if  len(k) > 1 or vKeys[0][0] != k[0]:
@@ -139,45 +149,89 @@ class LogicalConstrain:
         model.update()
 
         return ilpV
-   
-        # --------------    ???
-        if  headConstrain:
-            #if self.ifLog: self.myLogger.debug("% Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
-            pass
-        else:
-            #if self.ifLog: self.myLogger.debug("%s Logical Constrain result - ILP variables created : %s"%(lcName,[x.VarName for x in ilpV]))
-            pass
 
+class andL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)
+
+class orL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False):
+        return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, resultVariableNames, headConstrain)
+    
+class nandL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, resultVariableNames, headConstrain)
+        
+class ifL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+    
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+    
+class norL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+    
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+
+class xorL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+    
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+    
+class epqL(LogicalConstrain):
+    def __init__(self, *e):
+        LogicalConstrain.__init__(self, *e)
+    
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
+        return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+        
 class notL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
-        notV = []
-        _notV = {}
-        notV.append(_notV)
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
+        lcName = 'notL'
+        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if x is None or isinstance(x, (int, numpy.float64)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+              
+        if not resultVariableNames:
+            resultVariableNames = ('x',)
             
-        if self.ifLog: self.myLogger.debug("Not Logical Constrain invoked with variables: %s"%([[[x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-        
+        notV = {}
+                    
         if len(v) > 1:
-            self.myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(v)))
+            myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(v)))
             return notV
         
         _v = v[0]
-        for currentVar in _v:
-            _notV[resultVariableName] = {}
-
-            for currentToken in _v[currentVar]:
-                currentILPVar = _v[currentVar][currentToken]
-                
-                notVar= myIlpBooleanProcessor.notVar(model, currentILPVar, onlyConstrains = headConstrain)
+        _vKey = next(iter(_v))
+        _v=next(iter(_v.values()))
         
-                _notV[resultVariableName][currentToken] = notVar
-                   
+        notV[resultVariableNames] = {}
+
+        for currentToken in _v:
+            currentILPVar = _v[currentToken]
+            
+            notVar = myIlpBooleanProcessor.notVar(model, currentILPVar, onlyConstrains = headConstrain)
+            notV[resultVariableNames][currentToken] = notVar
+        
         if headConstrain:
-            if self.ifLog: self.myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
+            if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
         else:
-            if self.ifLog: self.myLogger.debug("Not Logical Constrain result - ILP variables created: %s"%([x.VarName for x in notV]))
+            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variables created: %s"%([x.VarName for x in notV]))
             
         model.update()
         
@@ -187,29 +241,35 @@ class existsL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
-        #if self.ifLog: self.myLogger.debug("Exists Logical Constrain invoked with variables: %s"%([[[x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-        existsV = []
-        _existsV = {}
-        existsV.append(_existsV)
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+        lcName = 'existsL'
+        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if x is None or isinstance(x, (int, numpy.float64)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        
+        if isinstance(self.e[0], tuple):
+            cVariable = self.e[0]
+                  
+        if not resultVariableNames:
+            resultVariableNames = ('x',)
+            
+        existsV = {}
         
         _v = v[0]
         _vKey = next(iter(_v))
         _v=next(iter(_v.values()))
         
-        if isinstance(resultVariableName, str):
+        if cVariable is None:
             existsVars = []
             for currentToken in _v:
                 existsVars.append(_v[currentToken])
         
             existsVarResult = myIlpBooleanProcessor.orVar(model, *existsVars, onlyConstrains = headConstrain)
                 
-            _existsV[resultVariableName] = {}
-            _existsV[resultVariableName][(0,)] = [existsVarResult]
-        elif isinstance(resultVariableName, tuple):
-            if len(resultVariableName) == 1:
-                if resultVariableName[0] in _vKey:
-                    n1Index = _vKey.index(resultVariableName[0]) 
+            existsV[resultVariableNames] = {}
+            existsV[resultVariableNames][(0,)] = existsVarResult
+        elif isinstance(cVariable, tuple):
+            if len(cVariable) == 1:
+                if cVariable[0] in _vKey:
+                    n1Index = _vKey.index(cVariable[0]) 
                     
                     existsVars = {}
                     for currentToken in _v:
@@ -218,61 +278,64 @@ class existsL(LogicalConstrain):
                         else:
                             existsVars[currentToken[0]] = [_v[currentToken]]
                         
-                    _existsV[resultVariableName] = {}     
+                    existsV[resultVariableNames] = {}     
                     for k in existsVars:
-                        existsVarResult = myIlpBooleanProcessor.orVar(model, *existsVars[k], onlyConstrains = headConstrain)
+                        existsVarResult = myIlpBooleanProcessor.orVar(model, *existsVars[k], onlyConstrains = headConstrain, limit=cLimit)
         
-                        _existsV[resultVariableName][(k,)] = [existsVarResult]
+                        existsV[resultVariableNames][(k,)] = existsVarResult
                 else:
                     pass
-            elif len(resultVariableName) == 2:
+            elif len(cVariable) == 2:
                 pass
-            elif len(resultVariableName) == 3:
+            elif len(cVariable) == 3:
                 pass
             else:
                 pass
 
         if  headConstrain:
-            if self.ifLog: self.myLogger.debug("Exists Logical Constrain is the head constrain - only ILP constrain created")
+            if ifLog: myLogger.debug("Exists Logical Constrain is the head constrain - only ILP constrain created")
         else:
-            if self.ifLog: self.myLogger.debug("Exists Logical Constrain result - ILP variables created: %s"%([x.VarName for x in existsV]))
+            #if ifLog: myLogger.debug("Exists Logical Constrain result - ILP variables created: %s"%([x.VarName for x in existsV]))
+            pass
                  
         model.update()
         
         return existsV
     
-class andL(LogicalConstrain):
+class atLeastL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
-        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, myIlpBooleanProcessor, v, resultVariableName, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+        if isinstance(self.e[0], int):
+            cLimit = self.e[0]
+            
+        if not isinstance(self.e[1], tuple):             
+            pass # error 
+        
+        if ifLog: myLogger.debug("atLeastL Logical Constrain called with limit: %i"%(cLimit))
 
-class orL(LogicalConstrain):
+        mExistsL = existsL(*self.e[1:2])
+        return mExistsL(model, myIlpBooleanProcessor, v, resultVariableNames=resultVariableNames, headConstrain = headConstrain, cLimit = cLimit)
+    
+class atMostL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False):
-        return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, myIlpBooleanProcessor, v, resultVariableName, headConstrain)
-    
-class nandL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
-        return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, myIlpBooleanProcessor, v, resultVariableName, headConstrain)
-        
-class ifL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
-    
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableName='Final', headConstrain = False): 
-        return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, myIlpBooleanProcessor, v, resultVariableName, headConstrain)
-    
-class equalA(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+        if isinstance(self.e[0], int):
+            pass # error
+            
+        if isinstance(self.e[1], tuple):
+            pass # error 
 
-class inSetA(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+        if ifLog: myLogger.debug("atMostL Logical Constrain called with limit: %i"%(cLimit))
+        
+        # Calculate atMostL first
+        mAtLeastL= atLeastL(*self.e[:2])
+        atLeastLV = []
+        atLeastLV.append(mAtLeastL(model, myIlpBooleanProcessor, v, resultVariableNames=resultVariableNames, headConstrain = False))
+        
+        # atMostL is negation of atLeastL
+        mNotL= notL(*[])
+        return mNotL(model, myIlpBooleanProcessor, atLeastLV, resultVariableNames=resultVariableNames, headConstrain = headConstrain)

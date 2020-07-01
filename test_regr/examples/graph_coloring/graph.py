@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import orL, andL, existsL, notL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL
 
 
 Graph.clear()
@@ -19,5 +19,13 @@ with Graph('global') as graph:
         
         firestationCity = city(name='firestationCity')
         
-        # Constraints
-        existsL(orL(firestationCity, ('x',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
+        # Constraints - For each city x either it is a fire station city or exist a city y which is neighbor of city x and is a fire station city
+        orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
+         
+        # FirestationCity has at least 2 neighbors
+        #atLeastL(2, ('x',), andL(firestationCity, ('x',), neighbor, ('x', 'y')))
+               
+        # FirestationCity has at most 3 neighbors
+        #atMostL(3, ('x',), andL(firestationCity, ('x',), neighbor, ('x', 'y')))
+        
+        

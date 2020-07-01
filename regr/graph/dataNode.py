@@ -530,7 +530,7 @@ class DataNode:
         if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
             _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
         
-        hardConstrainsConceptsRelations = []
+        hardConstrains = []
         _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
         candidates_currentConceptOrRelation = OrderedDict()
         conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
@@ -547,7 +547,7 @@ class DataNode:
                 
             # Check if it is a hard constrain concept or relation - check if DataNote exist of this type
             if self.__isHardConstrains(currentConceptOrRelation):
-                hardConstrainsConceptsRelations.append(currentConceptOrRelation) # Hard Constrain
+                hardConstrains.append(currentConceptOrRelation) # Hard Constrain
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
             currentCandidates = currentConceptOrRelation.candidates(self)
@@ -627,7 +627,7 @@ class DataNode:
                 elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
-                    if currentConceptOrRelation in hardConstrainsConceptsRelations:
+                    if currentConceptOrRelation in hardConstrains:
                         currentProbability = self.__getHardConstrains(currentConceptOrRelation, reltationAttrs, currentCandidate)
                     else:
                         currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
@@ -662,14 +662,13 @@ class DataNode:
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         tokenResult, pairResult, tripleResult = \
-            myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, \
-            minimizeObjective = minimizeObjective, hardConstrainsConceptsRelations = hardConstrainsConceptsRelations)
+            myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, minimizeObjective = minimizeObjective, hardConstrains = hardConstrains)
             
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         for concept_name in tokenResult:
             concept = conceptOrRelationDict[concept_name]
-            if concept in hardConstrainsConceptsRelations:
+            if concept in hardConstrains:
                 continue
             
             currentCandidates = candidates_currentConceptOrRelation[concept]
@@ -681,7 +680,7 @@ class DataNode:
                 
         for concept_name in pairResult:
             concept = conceptOrRelationDict[concept_name]
-            if concept in hardConstrainsConceptsRelations:
+            if concept in hardConstrains:
                 continue
             
             rootRelation = self.__findRootRelation(concept)
@@ -698,7 +697,7 @@ class DataNode:
         # Update triple
         for concept_name in tripleResult:
             concept = conceptOrRelationDict[concept_name]
-            if concept in hardConstrainsConceptsRelations:
+            if concept in hardConstrains:
                 continue
             
             currentCandidates = candidates_currentConceptOrRelation[concept]
