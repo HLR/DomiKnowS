@@ -8,15 +8,10 @@ from itertools import product
 from regr.solver.ilpConfig import ilpConfig 
 from torch.tensor import Tensor
 
-if __package__ is None or __package__ == '':
-    from graph import Graph
-    #from concept import Concept
-    from solver import ilpOntSolverFactory
-else:
-    from .graph import Graph
-    #from .concept import Concept
-    from ..solver import ilpOntSolverFactory
-    
+from regr.graph import graph
+from regr.graph.logicalConstrain import eql
+from regr.solver import ilpOntSolverFactory
+
 # Class representing single data instance with relation  links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
@@ -523,6 +518,17 @@ class DataNode:
 
         return conceptsAndRelations
 
+    def __collectProbabilitiesForLC(self, dn, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+            
+        for id, lc in usedGraph._logicalConstrains.items():
+            if isinstance(lc, eql):
+                dns = dn.findDatanodes(select = lc.e[0], indexes = {lc.e[1]: lc.e[2]})
+                
+                for _dn in dns:
+                    pass
+                    
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001,  minimizeObjective = False):
         
@@ -649,7 +655,9 @@ class DataNode:
                 else: # No support for more then three candidates yet
                     pass
 
-        # Get ontology graph and then  ilpOntsolver
+        self.__collectProbabilitiesForLC(self)
+        
+        # Get ontology graphs and then ilpOntsolver
         myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
         
         for currentConceptOrRelation in conceptsRelations:

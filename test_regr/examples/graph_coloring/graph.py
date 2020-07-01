@@ -19,7 +19,7 @@ with Graph('global') as graph:
         
         firestationCity = city(name='firestationCity')
         
-        # Constraints - For each city x either it is a fire station city or exist a city y which is neighbor of city x and is a fire station city
+        # Constraints - For each city x either it is a firestationCity or exists a city y which is in neighbor relation to city x and y is a firestationCity
         orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
          
         # FirestationCity has at least 2 neighbors

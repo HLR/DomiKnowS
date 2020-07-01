@@ -11,7 +11,7 @@ def model_declaration():
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
-    from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, neighbor, firestationCity
+    from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
 
     from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
     from sensors import DummyCityLinkEdgeSensor
@@ -45,10 +45,8 @@ def model_declaration():
         
     # "raw" is it right key?
     # First argument required ?!!
-    #neighbor['raw'] = CandidateReaderSensor(edges=[cityLink['raw']], label=False, forward=readNeighbors, keyword='links')
     cityLink['neighbor'] = CandidateReaderSensor(edges=[cityLink['raw']], label=False, forward=readNeighbors, keyword='links')
 
-    
     # --- Learners
     
     city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], cityLink['neighbor']])
@@ -60,7 +58,7 @@ def model_declaration():
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
-    from graph2 import city, neighbor, firestationCity
+    from graph2 import city, firestationCity, cityLink
     lbp = model_declaration()
 
     dataset = CityReader().run()  # Adding the info on the reader
@@ -77,7 +75,7 @@ def test_graph_coloring_main():
             assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
-        conceptsRelations = (firestationCity, neighbor)  
+        conceptsRelations = (firestationCity, cityLink)  
         datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
         
         result = []
