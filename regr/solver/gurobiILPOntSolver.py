@@ -15,7 +15,7 @@ from gurobipy import *
 from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
+from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL, eql
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -1232,14 +1232,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                             
                         conceptVariables = {}
 
-                        for tokensPair in permutations(tokens, r=2):
-                            if (conceptName, *tokensPair) in y:
-                                conceptVariables[tokensPair] = y[(conceptName, *tokensPair)]
+                        for tokensPermutation in permutations(tokens, r=2):
+                            if (conceptName, *tokensPermutation) in y:
+                                conceptVariables[tokensPermutation] = y[(conceptName, *tokensPermutation)]
                             else:
                                 if conceptName in hardConstrains:
-                                    conceptVariables[tokensPair] =  hardConstrains[conceptName][tokensPair][1]
+                                    conceptVariables[tokensPermutation] =  hardConstrains[conceptName][tokensPermutation][1]
                                 else:
-                                    conceptVariables[tokensPair] = None
+                                    conceptVariables[tokensPermutation] = None
                        
                         _lcVariables = {}
                         _lcVariables[variablesNames] = conceptVariables
@@ -1268,6 +1268,28 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         lcVariables.append(_lcVariables)
                        
+                elif isinstance(e, eql):
+                    key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
+                    typeOfConcept, conceptTypes = self._typeOfConcept(e.e[0])
+
+                    eqlVariables = {}                        
+                    if typeOfConcept == 'concept':
+                        for token in tokens:
+                            eqlVariables[(token, )] = hardConstrains[key][token][1]
+                    elif typeOfConcept == 'pair':
+                        for tokensPermutation in permutations(tokens, r=2):
+                            eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                    elif typeOfConcept == 'triplet':                        
+                        for tokensPermutation in permutations(tokens, r=3):   
+                            eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                    else:
+                        pass
+                    
+                    if eqlVariables is not None: 
+                        _lcVariables = {}
+                        _lcVariables[variablesNames] = eqlVariables
+                            
+                        lcVariables.append(_lcVariables)
                 # LogicalConstrain - process recursively 
                 elif isinstance(e, LogicalConstrain):
                     lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, resultVariableNames = variablesNames, headLC = False))
@@ -1467,11 +1489,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 hardConstrains = {}
                 for c in hardConstrainsConceptsRelationsNames:
                     if c in graphResultsForPhraseToken:
-                        pass
+                        hardConstrains[c] = graphResultsForPhraseToken[c]
                     elif c in graphResultsForPhraseRelation:
                         hardConstrains[c] = graphResultsForPhraseRelation[c]
                     elif c in graphResultsForPhraseTripleRelation:
-                        pass 
+                        hardConstrains[c] = graphResultsForPhraseTripleRelation[c]
                     else:
                         pass
                     
