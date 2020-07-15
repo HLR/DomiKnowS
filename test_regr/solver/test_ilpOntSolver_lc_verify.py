@@ -219,7 +219,7 @@ def test_main_emr_verify(emr_input):
     # -------Evaluate results
     assert not verifyResult # - uncorrected
     
-    # Test uncorrected  model - conflict with nandL(people, organization) and ifL(work_for, ('x','y'), people, ('x',)) ifL(work_for, ('x','y'), organization, ('y',))
+    # Test uncorrected  model - conflict with  ifL(work_for, ('x','y'), organization, ('y',))
     test_graphResultsForPhraseToken = {}
     for c in conceptNamesList:
         test_graphResultsForPhraseToken[c] = np.zeros((len(test_phrase), ))
@@ -229,10 +229,10 @@ def test_main_emr_verify(emr_input):
         test_graphResultsForPhraseRelation[r] = np.zeros((len(test_phrase), len(test_phrase)))
         
     test_graphResultsForPhraseToken['people'][0] = 1  # John
-    test_graphResultsForPhraseToken['people'][3] = 1  # IBM - conflict
     test_graphResultsForPhraseToken['O'][1] = 1  # works
     test_graphResultsForPhraseToken['O'][2] = 1  # for
-    test_graphResultsForPhraseToken['organization'][3] = 1  # IBM
+    test_graphResultsForPhraseToken['people'][3] = 1  # IBM - conflict
+
 
     test_graphResultsForPhraseRelation['work_for'][0][3] = 1 # John work_for IBM 
     
