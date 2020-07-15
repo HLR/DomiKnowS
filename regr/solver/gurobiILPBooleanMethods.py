@@ -112,22 +112,29 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         # If this is a standalone or head method - do not create ILP variable for OR        
         if onlyConstrains:
-            if not isinstance(var1, Var):
+            if not isinstance(var1, Var) and not isinstance(var2, Var):
+                if var1 == 1 and var2 == 1:
+                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
+                    return 1
+                else:
+                    if self.ifLog: self.myLogger.debug("%s always False returning %i"%(logicMethodName,0))
+                    return 0
+            elif not isinstance(var1, Var):
                 if var1 == 1:
                     m.addConstr(var2 >= 1)
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= 1"%(logicMethodName,var2Name))
                     return
                 else:
                     self.myLogger.error("%s always False: %s is 0"%(logicMethodName,var1Name))
-                    return 
-            if  not isinstance(var2, Var):
+                    return 0
+            elif  not isinstance(var2, Var):
                 if var2 == 1:
                     m.addConstr(var1 >= 1)
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= 1"%(logicMethodName,var1Name))
                     return
                 else:
-                    self.myLogger.error("%s always False: %s is 0"%(logicMethodName,var2Name))
-                    return 
+                    if self.ifLog: self.myLogger.error("%s always False: %s is 0"%(logicMethodName,var2Name))
+                    return 0
             else: # Both variables are ILP variables
                 m.addConstr(var1 + var2 >= 2) 
                 if self.ifLog: self.myLogger.debug("% created constrain only: and %s %s >= 2"%(logicMethodName,var1.VarName,var2.Name))
@@ -135,14 +142,22 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
                 return
         
-        if not isinstance(var1, Var):
+        # -- Create new variable 
+        if not isinstance(var1, Var) and not isinstance(var2, Var):
+                if var1 == 1 and var2 == 1:
+                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
+                    return 1
+                else:
+                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,0))
+                    return 0
+        elif not isinstance(var1, Var):
             if var1 == 0:
                 if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,0))
                 return 0
             else:
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
                 return var2
-        if  not isinstance(var2, Var):
+        elif  not isinstance(var2, Var):
             if var2 == 0:
                 if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,0))
                 return 0
@@ -406,20 +421,99 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         return varOR
     
     def nand2Var(self, m, var1, var2, onlyConstrains = False):
-        #if self.ifLog: self.myLogger.debug("NAND called with : %s"%(var1,var2))
-
-        if onlyConstrains:
-            m.addConstr(var1 + var2 <= 1)
-            return
+        methodName = "nand2Var"
+        logicMethodName = "NAND"
         
-        varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
+        # Get names of ILP variables
+        var1Name = var1
+        var2Name = var2
+        if isinstance(var1, Var):
+            var1Name = var1.VarName
+        if  isinstance(var2, Var):
+            var2Name = var2.VarName
             
-        m.addConstr(self.notVar(m, varNAND) <= var1)
-        m.addConstr(self.notVar(m, varNAND) <= var2)
+        if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1Name,var2Name))
         
-        m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1)
+        # Check caches
+        if isinstance(var1, Var) and isinstance(var2, Var):
+            cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var1, var2))
+            if cacheResult[0]:
+                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
+                return cacheResult[1]
         
-        return varNAND
+        # If this is a standalone or head method - do not create ILP variable for OR        
+        if onlyConstrains:
+            if not isinstance(var1, Var) and not isinstance(var2, Var):
+                if var1 == 1 and var2 == 1:
+                    if self.ifLog: self.myLogger.debug("%s always False returning %i"%(logicMethodName,0))
+                    return 0
+                else:
+                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
+                    return 1
+            elif not isinstance(var1, Var):
+                if var1 == 1:
+                    m.addConstr(var2 <= 0)
+                    if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %i"%(logicMethodName,var2Name,0))
+                    return
+                else:
+                    self.myLogger.error("%s always True: %s is %i"%(logicMethodName,var1Name,var1))
+                    return 1
+            elif  not isinstance(var2, Var):
+                if var2 == 1:
+                    m.addConstr(var1 <= 0)
+                    if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %i"%(logicMethodName,var1Name,0))
+                    return
+                else:
+                    self.myLogger.error("%s always True: %s is %i"%(logicMethodName,var2Name,var2))
+                    return 1
+            else: # Both variables are ILP variables
+                m.addConstr(var1 + var2 <= 1)
+                if self.ifLog: self.myLogger.debug("% created constrain only: and %s %s <= %i"%(logicMethodName,var1.VarName,var2.Name,1))
+    
+                #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
+                return
+        
+        # -- Create new variable 
+        if not isinstance(var1, Var) and not isinstance(var2, Var):
+            if var1 == 1 and var2 == 1:
+                if self.ifLog: self.myLogger.debug("%s always False returning %i"%(logicMethodName,0))
+                return 0
+            else:
+                if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
+                return 1
+        elif not isinstance(var1, Var):
+            if var1 == 0:
+                if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,1))
+                return 1
+            else:
+                if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
+                return var2
+        elif  not isinstance(var2, Var):
+            if var2 == 0:
+                if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,1))
+                return 1
+            else:
+                if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
+                return var1
+        else:
+            varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
+    
+            m.addConstr(self.notVar(m, varNAND) <= var1)
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varAND.VarName,var1Name))
+
+            m.addConstr(self.notVar(m, varNAND) <= var2) # varAND <= var2
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varAND.VarName,var2Name))
+
+            m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1) # var1 + var2 <= varAND + 2 - 1
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s  - %s <= 1 "%(logicMethodName,VarName,var1Name,varAND.VarName,var2Name))
+
+            # Update cache
+            self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), varNAND) 
+            
+            if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,varNAND.VarName))
+            
+            if m: m.update()
+            return varNAND
     
     def nandVar(self, m, *var, onlyConstrains = False):
         #if self.ifLog: self.myLogger.debug("NAND called with : %s"%(var,))
