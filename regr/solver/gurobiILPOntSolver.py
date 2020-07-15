@@ -1624,3 +1624,36 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Return results of ILP optimization
         return tokenResult, relationResult, tripleRelationResult
+    
+    
+    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    def verifySelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
+        tokenResult, relationResult, tripleRelationResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, minimizeObjective, hardConstrains)
+        concepts = [k for k in graphResultsForPhraseToken.keys()]
+        self.__checkIContainNegativeProbability(concepts, tokenResult, relationResult, tripleRelationResult)
+
+        if graphResultsForPhraseToken:
+            for key in graphResultsForPhraseToken:
+                if key not in tokenResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseToken[key], tokenResult[key]):
+                    return False
+                
+        if graphResultsForPhraseRelation:
+            for key in graphResultsForPhraseRelation:
+                if key not in relationResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseRelation[key], relationResult[key]):
+                    return False
+                
+        if graphResultsForPhraseTripleRelation:
+            for key in graphResultsForPhraseTripleRelation:
+                if key not in tripleRelationResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseTripleRelation[key], tripleRelationResult[key]):
+                    return False
+                
+        return True
