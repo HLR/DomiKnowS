@@ -6,54 +6,61 @@ sys.path.append('../..')
 import pytest
 from reader import CityReader
 
-
-
-def model_declaration(config):
+def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
-    
+    from regr.program import LearningBasedProgram
+    from regr.program.model.pytorch import PoiModel
 
-    from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
+    from graph import graph, world, city, world_contains_city, cityLink, city1, city2, firestationCity, neighbor
 
-    from sensors import DummyLearner, DummyEdgeSensor, CustomReader
+    from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
+    from sensors import DummyCityLinkEdgeSensor, DummyCityLinkCandidateGenerator, DummyNeighborLearner, DummyCityLinkLabelSensor
 
     graph.detach()
 
+    # --- City
+    
     world['raw'] = ReaderSensor(keyword='world')
+    city['raw'] = ReaderSensor(keyword='city')
+    world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
+    
+    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward']])
+    city[firestationCity] = DummyCityLabelSensor(label=True)
 
-    # Edge: sentence to word forward
-    world_contains_city['forward'] = DummyEdgeSensor(
-        'raw', mode='forward', keyword='raw')
+    # --- CityLink
+    
+    city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
+    city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
+    cityLink['raw'] = DummyCityLinkCandidateGenerator(edges=[city1['backward'], city2['backward']])
+    
+    cityLink[neighbor] = DummyNeighborLearner('raw')
+    cityLink[neighbor] = DummyCityLinkLabelSensor(label=True)
 
-    neighbor['raw'] = CustomReader(keyword='raw')
-    neighbor['raw'] = CustomReader(keyword='raw')
-
-    city[firestationCity] = DummyLearner('raw')
-    city[firestationCity] = ReaderSensor(keyword='raw', label=True)
-
-
-
-    program = config.program.Type(graph, **config.program)
+    
+    program = LearningBasedProgram(graph, PoiModel)
     return program
-
 
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
-    from config import CONFIG
-    lbp = model_declaration(CONFIG.Model)
+    from graph import city, neighbor, firestationCity
+    lbp = model_declaration()
 
-    dataset = CityReader().run() # Adding the info on the reader
+    dataset = CityReader().run()  # Adding the info on the reader
 
-    # dataset = None # FIXME: shouldn't this example anyway based on a iterable object as data source?
-    for output in lbp.eval(dataset=dataset, inference=True):
-        print(output)
+    for datanode in lbp.eval(dataset=dataset, inference=True):
+        assert datanode != None
+        assert len(datanode.getChildDataNodes()) == 9
 
-    # using an underlying call
-    # loss, metric, datanode = lbp.model({}, inference=True)
-    conceptsRelations = [] # TODO: please fill this
-    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
-    print('I am here!')
+        _dataset = next(CityReader().run())
+        for child_node in datanode.getChildDataNodes():
+            assert child_node.ontologyNode == city
+            assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0
+            assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == -1
 
+        # call solver
+        conceptsRelations = (neighbor, firestationCity)  # TODO: please fill this
+        datanode.inferILPConstrains(*conceptsRelations, fun=None, epsilon=0)   
 
 if __name__ == '__main__':
     pytest.main([__file__])

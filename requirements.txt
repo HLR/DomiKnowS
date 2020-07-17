@@ -1,4 +1,4 @@
-pandas
-owlready2
+acls==1.0.2
+Owlready2==0.22
+pandas==0.25.3
 setuptools
-acls

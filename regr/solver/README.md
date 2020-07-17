@@ -1,54 +1,10 @@
-### DataNode and Data Graph
-
-Every example in the learning process has its Data Graph built based on sensors included in the model. 
-The example is partitioned by sensors into a different types of tokens corresponding to different linguistic concepts from the ontology graph.
-
-Each token has its Data Node build which is linked to other Data Nodes corresponding to different tokens from the example through relation links. The Data Node stores the following information about the token:
-* its  linguistic concepts, 
-* unique id in the scope of all token of the given linguistic type,   
-* relation links dictionary with names of relations and related Data Nodes,
-* impactLinks dictionary with dataNodes impacting this datanode by having it as a subject of its relation
-* attributes dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token. 
-
-The Data Graph can be queried for specific data nodes using the method called on the root Data Node:
-		
-		findDatanodes(dns = None, select = None, indexes = None)
-The method returns the list of DataNodes satisfying the query provided in the *select* argument, additionally the *indexes* argument can specify queries for related data nodes which have to be satisfied by the returned Data Nodes.
-The examples:
-
-* **datanode.findDatanodes(select = word)** - find all dataNodes of type *word*
-
-
-* **datanode.findDatanodes(select = (char, 'raw', 'J'))** - find dataNode of type *char* with with *raw* attribute equal *J*
-
-
-* **datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')** - find dataNodes of type *word* and containing char with *raw* attribute equal *J*
-
-
-* **datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'))** - find dataNodes of type *word* and containing dataNode of type *char* with *raw* attribute equal *o* and dataNode of type*char* with *raw* attribute equal *h*
-
-
-* **datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})** - find dataNode of type *pair* linking dataNodes with id 0 and 3
-
-
-* **datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})** - find dataNode of type *pair* linking dataNode of type *word* with *raw* attribute equal *John* and dataNode of type *word* with *raw* attribute equal *IBM*
-
-
-
-Additional method facilitate access to dataNode attributes:
-
-		getAttribute(*keys)
-
-The *keys* are connected ito a single key used to access the attribute in the dataNode. The method return teh value of the attribute. The example:
-* **getAttribute(work_for, 'ILP')** - get value of the attribute storing the result of the ILP solver solution for  the concept *work_for*
-
-
 ### ILP Solver 
 
-It builds the ILP model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to tokens.
+The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
+The actual used ILP is Zero-one linear programming in which the variables are restricted to be either 0 or 1.
 It solves the ILP model and provides the most optimized assignment.
 
-It can be called on the root DataNode with the method:
+The solver can be called on the DataNode (usually the root DataNode of the Data Graph) with DataNode method:
  
 ```
 inferILPConstrains(*_conceptsRelations, fun=None)
@@ -93,9 +49,9 @@ Example:
 
 	ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
 	
-This logical constrain specify that if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization.
+This above example logical constrain specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
 
-The constrain are regular Python instructions thus they have to follow definition of tuple in Python.
+The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
 # Ontology file as a source of constrains
 
