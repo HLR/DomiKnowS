@@ -26,7 +26,8 @@ class TorchSensor(Sensor):
         data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(data_item)
+            if self.fullname not in data_item:
+                self.update_pre_context(data_item)
         except:
             print('Error during updating pre data item with sensor {}'.format(self.fullname))
             raise
@@ -222,7 +223,8 @@ class TorchEdgeSensor(TorchSensor):
             self.dst[self.keyword] = ConstantSensor()
             self.created = 1
         try:
-            self.update_pre_context(data_item)
+            if self.fullname not in data_item:
+                self.update_pre_context(data_item)
         except:
             print('Error during updating pre data_item with sensor {}'.format(self.fullname))
             raise

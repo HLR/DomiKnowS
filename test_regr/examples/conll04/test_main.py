@@ -331,6 +331,16 @@ def test_main_conll04(case):
         #assert tokenResult['O'][1] == 1
         assert datanode.findDatanodes(select = word)[1].getAttribute(o, 'ILP').item() == 1
         
+        JohnDN = datanode.findDatanodes(select = word)[1]
+        assert JohnDN.getAttribute(organization)[0] == 0.8
+        assert len(JohnDN.getChildDataNodes()) == 5
+        
+        assert len(JohnDN.getChildDataNodes(conceptName=char)) == 5
+        assert len(JohnDN.getChildDataNodes(conceptName=phrase)) == 0
+        
+        assert len(JohnDN.getRelationLinks()) == 2
+        assert len(JohnDN.getRelationLinks(relationName=pair)) == 4
+
         # Get value of attribute o/ILP for word 2
         #assert tokenResult['O'][2] == 1
         assert datanode.findDatanodes(select = word)[2].getAttribute(o, 'ILP').item() == 1
@@ -351,9 +361,6 @@ def test_main_conll04(case):
         assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
          
         assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-
-
-        #assert list(datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word, 'raw', 'John'), (word, "pos", "N")), "arg2": (word, 'raw', "IBM")}))[0].getAttributes(work_for, 'emb') == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][0]) == 1
