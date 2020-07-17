@@ -155,7 +155,13 @@ class andL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)
+        # TODO: not sure this is merged correctly, @auszok can you help to check this?
+        if  headConstrain:
+            if self.ifLog: self.myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+        else:
+            #if self.ifLog: self.myLogger.debug("%s Logical Constrain result - ILP variables created : %s"%(lcName,[x.VarName for x in ilpV]))
+            pass
+        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)        
 
 class orL(LogicalConstrain):
     def __init__(self, *e):

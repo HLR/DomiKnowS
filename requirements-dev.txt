@@ -5,4 +5,4 @@ flaky==3.6.1
 torch==1.1.0
 gekko==0.2.6
 allennlp==0.8.5
-python-constraint
+python-constraint==1.4.0
