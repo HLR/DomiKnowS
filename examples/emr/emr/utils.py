@@ -34,7 +34,7 @@ class KnuthMorrisPratt():
         shifts = [1] * (len(pattern) + 1)
         shift = 1
         for pos in range(len(pattern)):
-            while shift <= pos and pattern[pos] != pattern[pos-shift]:
+            while shift <= pos and self.ele_ne(pattern[pos], pattern[pos-shift]):
                 shift += shifts[pos-shift]
             shifts[pos+1] = shift
         self._shifts = shifts
