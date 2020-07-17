@@ -80,7 +80,7 @@ class LogicalConstrain:
         ilpV[ilpKey] = zVars
         
         if  headConstrain:
-            if self.ifLog: self.myLogger.debug("% Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+            if self.ifLog: self.myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
         else:
             #if self.ifLog: self.myLogger.debug("%s Logical Constrain result - ILP variables created : %s"%(lcName,[x.VarName for x in ilpV]))
             pass

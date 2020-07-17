@@ -12,9 +12,9 @@ Created on Mon Nov 11 11:21:25 2019
 import numpy as np
 import owlready2 
 from owlready2 import *
-from ilpOntSolverFactory import ilpOntSolverFactory
-from ilpOntSolver import ilpOntSolver
-from graph import Graph
+from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+from regr.solver.ilpOntSolver import ilpOntSolver
+from regr.graph import Graph
 
 from constraint import *
 
