@@ -1,7 +1,8 @@
-pytest
-pytest-benchmark
-flaky
-torch
-gekko
-allennlp
+pytest==5.3.2
+pytest-benchmark==3.2.3
+pytest-cov==2.8.1
+flaky==3.6.1
+torch==1.1.0
+gekko==0.2.6
+allennlp==0.8.5
 python-constraint
