@@ -3,7 +3,7 @@ def model_declaration():
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
     from regr.program.loss import BCEWithLogitsLoss
-    from regr.program.metric import MacroAverageTracker
+    from regr.program.metric import MacroAverageTracker, ValueTracker
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import FullyConnectedLearner
     from graph import graph
@@ -20,12 +20,20 @@ def model_declaration():
     x[y0] = FullyConnectedLearner('val', input_dim=1, output_dim=2)
     x[y1] = FullyConnectedLearner('val', input_dim=1, output_dim=2)
 
-    program = LearningBasedProgram(graph, lambda graph: PoiModel(graph, loss=MacroAverageTracker(BCEWithLogitsLoss())))
+    program = LearningBasedProgram(
+        graph, 
+        lambda graph: PoiModel(
+            graph, 
+            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            metric=ValueTracker(lambda pr, gt: pr)))
     return program
 
 
 def main():
+    import logging
     import torch
+
+    logging.basicConfig(level=logging.INFO)
 
     program = model_declaration()
     data = [{

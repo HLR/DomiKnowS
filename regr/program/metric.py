@@ -78,6 +78,9 @@ class MetricTracker(torch.nn.Module):
             self.reset()
         return value
 
+    def __str__(self):
+        return str(self.value())
+
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):
@@ -92,6 +95,12 @@ class MacroAverageTracker(MetricTracker):
                 return apply(torch.tensor(value))
         retval = apply(values)
         return retval
+
+
+class ValueTracker(MetricTracker):
+    def forward(self, values):
+        return values
+
 
 class PRF1Tracker(MetricTracker):
     def __init__(self):
