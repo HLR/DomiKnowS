@@ -25,7 +25,7 @@ def model_declaration():
         lambda graph: PoiModel(
             graph, 
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            metric=ValueTracker(lambda pr, gt: pr)))
+            metric=ValueTracker(lambda pr, gt: pr.data)))
     return program
 
 
