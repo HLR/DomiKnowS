@@ -3,7 +3,7 @@ from typing import Any
 
 import torch
 
-from ...utils import wrap_batch
+from ..utils import wrap_batch
 
 
 class CMWithLogitsMetric(torch.nn.Module):
