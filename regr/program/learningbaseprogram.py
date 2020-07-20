@@ -66,7 +66,7 @@ class LearningBasedProgram():
         for data_item in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
-            loss, metric, output = self.model(data_item, inference=inference)
+            loss, metric, output = self.model(data_item)
             if self.opt is not None:
                 loss.backward()
                 self.opt.step()

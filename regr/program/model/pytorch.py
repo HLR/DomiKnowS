@@ -98,10 +98,10 @@ class PoiModel(TorchModel):
         if not self.loss:
             return 0
         logit = output_sensor(data_item)
-        mask = output_sensor.mask(data_item)
+        #mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
 
-        local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+        local_loss = self.loss[output_sensor, target_sensor](logit, labels)
         return local_loss
 
     def poi_metric(self, data_item, prop, output_sensor, target_sensor):
