@@ -1,11 +1,13 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from regr.program.model.pytorch import PoiModel, IMLModel
     from regr.program.loss import BCEWithLogitsLoss
     from regr.program.metric import MacroAverageTracker, ValueTracker
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import FullyConnectedLearner
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from regr.solver.contextsolver.pytorch import Solver
     from graph import graph
 
     graph.detach()
@@ -22,10 +24,11 @@ def model_declaration():
 
     program = LearningBasedProgram(
         graph, 
-        lambda graph: PoiModel(
+        lambda graph: IMLModel(
             graph, 
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            metric=ValueTracker(lambda pr, gt: pr.data)))
+            metric=ValueTracker(lambda pr, gt: pr.data),
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)))
     return program
 
 

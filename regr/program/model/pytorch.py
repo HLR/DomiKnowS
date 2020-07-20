@@ -89,8 +89,12 @@ class TorchModel(torch.nn.Module):
                 sensor.fill_data(data_item)
         data_item.update({"graph": self.graph, 'READER': 1})
         builder = DataNodeBuilder(data_item)
+        *out, = self.populate(builder)
         datanode = builder.getDataNode()
-        return datanode
+        return (datanode, *out)
+
+    def populate(self):
+        raise NotImplementedError
 
 
 class PoiModel(TorchModel):
@@ -114,20 +118,9 @@ class PoiModel(TorchModel):
         local_metric = self.metric[output_sensor, target_sensor](inference, labels)
         return local_metric
 
-    def forward(self, data_item, inference=True):
-        data_item = self.move(data_item)
+    def populate(self, builder):
         loss = 0
         metric = {}
-
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
-        for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
-                sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
-        builder = DataNodeBuilder(data_item)
-
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
             output = output_sensor(builder)
@@ -138,6 +131,33 @@ class PoiModel(TorchModel):
                     loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
                 if self.metric:
                     metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
+        return loss, metric
 
-        datanode = builder.getDataNode()
-        return loss, metric, datanode
+
+class SolverModel(PoiModel):
+    def __init__(self, graph, loss=None, metric=None, Solver=None):
+        super().__init__(graph, loss, metric)
+        if Solver:
+            self.solver = Solver(self.graph)
+        else:
+            self.solver = None
+
+    def inference(self, data_item):
+        data_item = self.solver.inferSelection(data_item, list(self.poi))
+        return data_item
+
+    def populate(self, builder):
+        data_item = self.inference(builder)
+        return super().forward(builder)
+
+
+class IMLModel(SolverModel):
+    def poi_loss(self, data_item, prop, output_sensor, target_sensor):
+        logit = output_sensor(data_item)
+        mask = output_sensor.mask(data_item)
+        labels = target_sensor(data_item)
+        inference = prop(data_item)
+
+        if self.loss:
+            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
+            return local_loss
