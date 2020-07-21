@@ -1,4 +1,4 @@
-from regr.graph import Graph, Concept, Relation
+from regr.graph import Graph, Concept, Relation, Property
 from regr.graph.relation import disjoint
 from regr.graph.logicalConstrain import ifL, orL, andL
 
@@ -30,7 +30,7 @@ with Graph('global') as graph:
             # Entity Class - Each taggable entity must be assigned a class that describes the kind of reference the entity makes to something in the world.
             # TODO: this is a property has a value being one of NEG, SPC, GEN, USP
             # TODO: "must be assigned a class" suggest a constraint that a class is required
-            entity['Class']
+            entity['Class'] = Property('Class')
             # An alternative way is creating subtypes for classes and mention disjoint among them
             # Negatively Quantified (NEG) - An entity is NEG when it has been quantified such that it refers to the empty set of the type of object mentioned.
             neg = entity(name='Class.NEG')
@@ -46,19 +46,19 @@ with Graph('global') as graph:
 
             # Types
             # Person - Person entities are limited to humans. A person may be a single individual or a group
-            person = entity(name='Person')
+            person = entity(name='PER')
             # Organization - Organization entities are limited to corporations, agencies, and other groups of people defined by an established organizational structure.
-            organization = entity(name='Organization')
+            organization = entity(name='ORG')
             # GPE (Geo-political Entity) - GPE entities are geographical regions defined by political and/or social groups. A GPE entity subsumes and does not distinguish between a nation, its region, its government, or its people.
             gpe = entity(name='GPE')
             # Location - Location entities are limited to geographical entities such as geographical areas and landmasses, bodies of water, and geological formations.
-            location = entity(name='Location')
+            location = entity(name='LOC')
             # Facility - Facility entities are limited to buildings and other permanent man-made structures and real estate improvements.
-            facility = entity(name='Facility')
+            facility = entity(name='FAC')
             # Vehicle – A vehicle entity is a physical device primarily designed to move an object from one location to another, by (for example) carrying, pulling, or pushing the transported object. Vehicle entities may or may not have their own power source.
-            vehicle = entity(name='Vehicle')
+            vehicle = entity(name='VEH')
             # Weapon – Weapon entities are limited to physical devices primarily used as instruments for physically harming or destroying other entities.
-            weapon = entity(name='Weapon')
+            weapon = entity(name='WEA')
 
             # disjoint
             disjoint(person, organization, gpe, location, facility, vehicle, weapon)
@@ -74,58 +74,58 @@ with Graph('global') as graph:
 
             # person subtypes
             # PER.Individual - If the Person entity refers to a single person, tag it as PER.Individual.
-            individual = person('Individual')
+            individual = person('PER-Individual')
             # PER.Group - If the Person entity refers to more than one person, tag it as PER.Group unless the group meets the requirements of an Organization or a GPE described below. This will include family names and ethnic and religious groups that do not have a formal organization unifying them.
-            group = person('Group')
+            group = person('PER-Group')
             # PER.Indefinite - If from the context you can’t judge whether the Person entity refers to one or more than one person, tag it as PER.Indefinite.
-            indefinite = person('Indefinite')
+            indefinite = person('PER-Indeterminate')
             # disjoint
             disjoint(individual, group, indefinite)
 
             # organization subtypes
             # Government (GOV) - Government organizations are those that are of, relating to, or dealing with the structure or affairs of government, politics, or the state.
-            government = organization('Government')
+            government = organization('ORG-Government')
             # Commercial (COM) - A commercial organization is an entire organization or a taggable portion of an organization that is focused primarily upon providing ideas, products, or services for profit.
-            commercial = organization('Commercial')
+            commercial = organization('ORG-Commercial')
             # Educational (EDU) - An educational organization is an entire institution or taggable portion of an institution that is focused primarily upon the furthering or promulgation of learning/education.
-            educational = organization('Educational')
+            educational = organization('ORG-Educational')
             # Entertainment (ENT) - Entertainment organizations are those whose primary activity is entertainment.
-            entertainment = organization('Entertainment')
+            entertainment = organization('ORG-Entertainment')
             # Non-Governmental Organizations (NonGov) - Non-governmental organizations are those organizations that are not a part of a government or commercial organization and whose main role is advocacy, charity or politics (in a broad sense).
-            non_governmental = organization('Non-Governmental')
+            non_governmental = organization('ORG-Non-Governmental')
             # Media (MED) - Media organizations are those whose primary interest is the distribution of news or publications, regardless of whether the organization is privately or publicly owned.
-            media = organization('Media')
+            media = organization('ORG-Media')
             # Religious (REL) - Religious organizations are those that are primarily devoted to issues of religious worship.
-            religious = organization('Religious')
+            religious = organization('ORG-Religious')
             # Medical-Science (SCI) - Medical-Science organizations are those whose primary activity is the application of medical care or the pursuit of scientific research, regardless of whether that organization is publicly or privately owned.
-            medical_science = organization('Medical-Science')
+            medical_science = organization('ORG-Medical-Science')
             # Sports (SPO) - Sports organizations are those that are primarily concerned with participating in or governing organized sporting events, whether professional, amateur, or scholastic.
-            sports = organization('Sports')
+            sports = organization('ORG-Sports')
             # NOTE: The collection of organization subtypes is hierarchical in nature. ACE05 assigns the most specific type possible. So the annotated results are disjoint.
             # disjoint
             disjoint(government, commercial, educational, entertainment, non_governmental, media, religious, medical_science, sports)
 
             # GPE subtypes
             # Continent - Taggable mentions of the entireties of any of the seven continents.
-            continent = organization('Continent')
+            continent = GPE('GPE-Continent')
             # Nation - Taggable mentions of the entireties of any nation.
-            nation = organization('Nation')
+            nation = GPE('GPE-Nation')
             # State-or-Province - Taggable mentions of the entireties of any state, province, or canton of any nation.
-            state_or_province = organization('State-or-Province')
+            state_or_province = GPE('GPE-State-or-Province')
             # County-or-District - Taggable mentions of the entireties of any county, district, prefecture, or analogous body of any state/province/canton.
-            county_or_district = organization('County-or-District')
+            county_or_district = GPE('GPE-County-or-District')
             # Population-Center - Taggable mentions of the entireties of any GPE below the level of County-or- District.
-            population_center = organization('Population-Center')
+            population_center = GPE('GPE-Population-Center')
             # GPE-Cluster - Named groupings of GPEs that can function as political entities.
-            gpe_cluster = organization('GPE-Cluster')
+            gpe_cluster = GPE('GPE-GPE-Cluster')
             # Special - A closed set of GPEs for which the conventional labels do not straightforwardly apply.
-            special = organization('Special')
+            special = GPE('GPE-Special')
             # disjoint
             disjoint(continent, nation, state_or_province, county_or_district, population_center, gpe_cluster, special)
 
             # GPE Roles - Annotators need to decide for each entity mention in the text which role (Person, Organization, Location, GPE) the context of that mention invokes. This judgment typically depends on the relations that the entity enters into.
             # TODO: Similar to Class, this is a field required from one the the following four.
-            gpe['Role']
+            gpe['Role'] = Property('Role')
             # For now, implemented as disjoint subtypes
             # GPE.ORG - GPE.ORG is used for GPE mentions that refer to the entire governing body of a GPE.
             gpe_org = gpe('Role.ORG')
@@ -140,67 +140,67 @@ with Graph('global') as graph:
 
             # Location subtypes
             # Address - A location denoted as a point such as in a postal system or abstract coordinates. The name of a location in a postal system is also an address.
-            address = location('Address')
+            address = location('LOC-Address')
             # Boundary - A one-dimensional location such as a border between GPE’s or other locations.
-            boundary = location('Boundary')
+            boundary = location('LOC-Boundary')
             # Celestial - A location which is otherworldly or entire-world-inclusive.
-            celestial = location('Celestial')
+            celestial = location('LOC-Celestial')
             # Water-Body - Bodies of water, natural or artificial (man-made).
-            water_body = location('Water-Body')
+            water_body = location('LOC-Water-Body')
             # Land-Region-natural - Geologically or ecosystemically designated, non-artificial locations.
-            land_region_natural = location('Land-Region-natural')
+            land_region_natural = location('LOC-Land-Region-Natural')
             # Region-International - Taggable locations that cross national borders.
-            region_international = location('Region-International')
+            region_international = location('LOC-Region-International')
             # Region-General - Taggable locations that do not cross national borders.
-            region_general = location('Region-General')
+            region_general = location('LOC-Region-General')
             # disjoint
             disjoint(address, boundary, celestial, water_body, land_region_natural, region_international, region_general)
 
             # Facilities subtypes
             # Airport - A facility whose primary use is as an airport.
-            airport = facility('Airport')
+            airport = facility('FAC-Airport')
             # Plant - One or more buildings that are used and/or designed solely for industrial purposes: manufacturing, power generation, etc.
-            plant = facility('Plant')
+            plant = facility('FAC-Plant')
             # Building-or-Grounds - Man-made/-maintained buildings, outdoor spaces, and other such facilities.
-            building_or_grounds = facility('Building-or-Grounds')
+            building_or_grounds = facility('FAC-Building-Grounds')
             # Subarea-Facility - Taggable portions of facilities. The threshold of taggability of subarea-facility is the ability of the area to contain a normally proportioned person comfortably.
-            subarea_facility = facility('Subarea-Facility')
+            subarea_facility = facility('FAC-Subarea-Facility')
             # Path - A facility that allows fluids, energies, persons or vehicles to pass from one location to another.
-            path = facility('Path')
+            path = facility('FAC-Path')
             # disjoint
             disjoint(airport, plant, building_or_grounds, subarea_facility, path)
 
             # Vehicle subtypes
             # Air - Vehicles designed to locomote primarily through the air, not touching water or land.
-            air = vehicle('Air')
+            air = vehicle('VEH-Air')
             # Land - Vehicles designed to locomote primarily upon land.
-            land = vehicle('Land')
+            land = vehicle('VEH-Land')
             # Water - Vehicles designed to locomote primarily on or submerged in water.
-            water = vehicle('Water')
+            water = vehicle('VEH-Water')
             # Subarea-Vehicle - A portion of a Vehicle entity that is of a size such that humans can fit inside with some degree of comfort.
-            subarea_vehicle = vehicle('Subarea-Vehicle')
+            subarea_vehicle = vehicle('VEH-Subarea-Vehicle')
             # Underspecified - Vehicles whose subtype is not specified in the text, or sets of vehicles of different subtypes.
-            underspecified_vihicle = vehicle('Underspecified-Vehicle')
+            underspecified_vihicle = vehicle('VEH-Underspecified')
 
             # Weapon subtypes
             # Blunt - Blunt weapons are those designed or used as bludgeoning instruments.
-            blunt = vehicle('Blunt')
+            blunt = weapon('WEA-Blunt')
             # Exploding - Exploding weapons are those that are designed or used to accomplish damage through explosion.
-            exploding = vehicle('Exploding')
+            exploding = weapon('WEA-Exploding')
             # Sharp - Sharp weapons are those designed or used to cut, slash, jab, & hack.
-            sharp = vehicle('Sharp')
+            sharp = weapon('WEA-Sharp')
             # Chemical - A chemical weapon is any device or substance that is designed or has been used for the purpose of causing death or serious injury through the release, dissemination or impact of toxic or poisonous chemicals or their immediate precursors.
-            chemical = vehicle('Chemical')
+            chemical = weapon('WEA-Chemical')
             # Biological - Biological weapons are bacteria, viruses, fungi, toxins, as well as the means of their dispersal, used for the spread of disease among humans, plants & animals.
-            biological = vehicle('Biological')
+            biological = weapon('WEA-Biological')
             # Shooting - Shooting weapons are weapons designed or used to send projectile objects at great speed for the purpose of causing harm.
-            shooting = vehicle('Shooting')
+            shooting = weapon('WEA-Shooting')
             # Projectile - Projectile weapons are weapons designed or used to be projected at great speed for the purpose of causing harm.
-            projectile = vehicle('Projectile')
+            projectile = weapon('WEA-Projectile')
             # Nuclear - Nuclear weapons are those designed or used for the purpose of causing damage, death, and harm through the expenditure of radiological or nuclear energies.
-            nuclear = vehicle('Nuclear')
+            nuclear = weapon('WEA-Nuclear')
             # Underspecified - Underspecified weapons are weapons whose subtype is not specified in the text, or sets of weapons of different subtypes.
-            underspecified_weapon = vehicle('Underspecified-Weapon')
+            underspecified_weapon = weapon('WEA-Underspecified')
 
         with Graph('Relations') as relations_graph:
             # ACE (Automatic Content Extraction) English Annotation Guidelines for Relations
@@ -211,19 +211,19 @@ with Graph('global') as graph:
             relation.has_a(arg1=entity, arg2=entity)
 
             # Modality
-            relation['Modality']
+            relation['Modality'] = Property('Modality')
             # Asserted - when the Reasonable Reader Rule is interpreted relative to the 'Real' world;
             # Other - when the Reasonable Reader Rule is taken to hold in a particular counterfactual world.
             
             # Tense - TENSE will be defined relative to the time of speech.
-            relation['Tense']
+            relation['Tense'] = Property('Tense')
             # Past - the Relation is taken to hold only for some span prior to the time of speech;
             # Future - the Relation is taken to hold only for some span after the time of speech;
             # Present - the Relation is taken to hold for a limited time overlapping with the time of speech;
             # Unspecified - the Relation is ‘static’ or the span of time for which it holds cannot be determined with certainty;
 
             # Classes
-            relation['Class']
+            relation['Class'] = Property('Class')
             # Possessive - The Possessive Syntactic class is used when the Entity Mention of one argument is possessive case and the Entity Mention of the other argument is clearly the ‘possessed object’ in the construction.
             # Preposition - The Preposition Syntactic class is used when the one entity mention is linked to the other with a Preposition.
             # PreMod - The PreMod Syntactic Class is used for those Relations that are established by the construction in which a proper adjective or proper noun modifies a taggable entity.
@@ -237,7 +237,7 @@ with Graph('global') as graph:
 
             # Types
             # Physical
-            physical = relation(name='Physical')
+            physical = relation(name='PHYS')
             # Physical.Located - The Located Relation captures the physical location of an entity.
             located = physical(name='Located')
             located.has_a(arg1=person, arg2=entity)
@@ -252,7 +252,7 @@ with Graph('global') as graph:
             ifL(near, ('x', 'y'), orL(FAC, 'y', orL(GPE, 'y', LOC, 'y')))
 
             # Part-whole
-            part_whole = relation(name='Part-whole')
+            part_whole = relation(name='PART-WHOLE')
             # Part-whole.Geographical - The Geographical Relation captures the location of a Facility, Location, or GPE in or at or as a part of another Facility, Location, or GPE.
             geographical = part_whole(name='Geographical')
             geographical.has_a(arg1=entity, arg2=entity)
@@ -273,7 +273,7 @@ with Graph('global') as graph:
 
             # Personal-Social - Personal-Social relations describe the relationship between people. Both arguments must be entities of type PER.
             # The arguments of these Relations are not ordered. The Relations are symmetric.
-            personal_social = relation(name='Personal-Social')
+            personal_social = relation(name='PER-SOC')
             personal_social.has_a(arg1=person, arg2=person)
             # Personal-Social.Business - The Business Relation captures the connection between two entities in any professional relationship.
             business = personal_social(name='Business')
@@ -283,7 +283,7 @@ with Graph('global') as graph:
             lasting_personal = personal_social(name='Lasting-Personal')
             
             # ORG-Affiliation
-            org_affiliation = relation(name='ORG-Affiliation')
+            org_affiliation = relation(name='ORG-AFF')
             # ORG-Affiliation.Employment - Employment captures the relationship between Persons and their employers.
             employment = org_affiliation(name='Employment')
             employment.has_a(arg1=person, arg2=entity)
@@ -319,7 +319,7 @@ with Graph('global') as graph:
             ifL(membership, ('x', 'y'), orL(PER, 'x', orL(ORG, 'x', GPE, 'x')))
 
             # Agent-Artifact
-            agent_artifact = relation('Agent-Artifact')
+            agent_artifact = relation('ART')
             # Agent-Artifact.User-Owner-Inventor-Manufacturer - This Relation applies when an agent owns an artifact, has possession of an artifact, uses an artifact, or caused an artifact to come into being.
             user_owner_inventor_manufacturer = agent_artifact(name='User-Owner-Inventor-Manufacturer')
             user_owner_inventor_manufacturer.has_a(arg1=entity, arg2=entity)
@@ -329,17 +329,20 @@ with Graph('global') as graph:
             ifL(user_owner_inventor_manufacturer, ('x', 'y'), orL(WEA, 'y', orL(VEH, 'y', FAC, 'y')))
             
             # Gen-Affiliation
-            gen_affiliation = relation('Gen-Affiliation')
+            gen_affiliation = relation('GEN-AFF')
             # Gen-Affiliation.Citizen-Resident-Religion-Ethnicity - Citizen-Resident-Religion-Ethnicity describes the Relation between a PER entity and PER.Group, LOC, GPE, ORG
             citizen_resident_religion_ethnicity = gen_affiliation('Citizen-Resident-Religion-Ethnicity')
             citizen_resident_religion_ethnicity.has_a(arg1=person, arg2=entity)
             # TODO: arg2 is one of PER.Group, LOC, GPE, ORG
             ifL(user_owner_inventor_manufacturer, ('x', 'y'), orL(group, 'y', orL(LOC, 'y', orL(GPE, 'y', ORG, 'y'))))
             # Gen-Affiliation.Org-Location-Origin - Org-Location-Origin captures the relationship between an organization and the LOC or GPE where it is located, based, or does business.
-            org_location_origin = gen_affiliation('Org-Location-Origin')
+            org_location_origin = gen_affiliation('Org-Location')
             org_location_origin.has_a(arg1=organization, arg2=entity)
             # TODO: arg2 is one of LOC, GPE
             ifL(org_location_origin, ('x', 'y'), orL(LOC, 'y', GPE, 'y'))
+
+            metonymy = relation('METONYMY')
+            
 
         with Graph('Events') as events_graph:
             # ACE (Automatic Content Extraction) English Annotation Guidelines for Events
@@ -359,7 +362,7 @@ with Graph('global') as graph:
             @Concept.relation_type('involve')
             class Involve(Relation): pass
             event.involve(participant)
-            event.with_(attribute)
+            # event.with_(attribute)
             #
             # or Concept:
             # involve = pair(name='Involve')
@@ -368,13 +371,13 @@ with Graph('global') as graph:
             # with_.has_a(event, attribute)
 
             # Polarity [POSITIVE, NEGATIVE]- An Event is NEGATIVE when it is explicitly indicated that the Event did not occur (see examples). All other Events are POSITIVE.
-            event['Polarity']
+            event['Polarity'] = Property('Polarity')
             # Tense [PAST, FUTURE, PRESENT] - TENSE is determined with respect to the speaker or author.
-            event['Tense']
+            event['Tense'] = Property('Tense')
             # Genericity [SPECIFIC, GENERIC] - An Event is SPECIFIC if it is understood as a singular occurrence at a particular place and time, or a finite set of such occurrences.
-            event['Genericity']
+            event['Genericity'] = Property('Genericity')
             # Modality [ASSERTED, OTHER] - An Event is ASSERTED when the author or speaker makes reference to it as though it were a real occurrence.
-            event['Modality']
+            event['Modality'] = Property('Modality')
 
             # Types
             # LIFE
@@ -513,7 +516,7 @@ with Graph('global') as graph:
             # JUSTICE.ACQUIT - An ACQUIT Event occurs whenever a trial ends but fails to produce a conviction.
             acquit = justice(name='ACQUIT')
             # a trial -> TRAIL?
-            acquit.involve(trail)
+            # acquit.involve(trail)
             # This will include cases where the charges are dropped by the PROSECUTOR-ARG.
             # JUSTICE.APPEAL - An APPEAL Event occurs whenever the decision of a court is taken to a higher court for review.
             appeal = justice(name='APPEAL')
