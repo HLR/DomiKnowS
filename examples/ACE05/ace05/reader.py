@@ -1,4 +1,4 @@
-from graph import ace05
+from .graph import ace05
 
 
 class APFObject():
@@ -100,8 +100,14 @@ class Relation(APFObject):
     class Mention(APFObject):
         tag = 'relation_mention'
 
-        class Argument(Relation.Argument):
+        class Argument(APFObject):
             tag = 'relation_mention_argument'
+
+            def __init__(self, node, referables, text):
+                super().__init__(node, text)
+                self.refid = node.attrib['REFID']
+                self.ref = referables[self.refid]
+                self.role = node.attrib['ROLE']
 
         def __init__(self, node, referables, text):
             super().__init__(node, text)
@@ -137,3 +143,12 @@ class Relation(APFObject):
                 self.additional_arguments.append(argument)
         for mention_node in node.findall('relation_mention'):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention, referables, text)
+
+
+class Reader():
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, path):
+        return
+        yield
