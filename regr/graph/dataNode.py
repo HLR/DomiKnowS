@@ -12,10 +12,11 @@ from regr.graph import graph
 from regr.graph.logicalConstrain import eql
 from regr.solver import ilpOntSolverFactory
 
+_DataNode__myLogger = logging.getLogger(ilpConfig['log_name'])
+
 # Class representing single data instance with relation  links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
-        self.__myLogger = logging.getLogger(ilpConfig['log_name'])
 
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
@@ -458,13 +459,20 @@ class DataNode:
             value = dataNode[0].getAttribute(key) 
         else:
             rootRelation = self.__findRootRelation(conceptRelation)
+            rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
+            
+            if not rl:
+                return [float("nan"), float("nan")]
+            
             if len(dataNode) == 2:
                  value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+            else:
+                return [float("nan"), float("nan")] # ?
         
         if value is None: # No probability value - return negative probability 
-            return [1, 0] # ?
+            return [float("nan"), float("nan")]
         
         # Translate probability to list
         if isinstance(value, torch.Tensor):
@@ -492,7 +500,7 @@ class DataNode:
                 
                 return _list # Return probability
 
-        return [1, 0] # ?
+        return [float("nan"), float("nan")]
                     
     def __collectConceptsAndRelations(self, dn):
         conceptsAndRelations = set()
@@ -697,7 +705,7 @@ class DataNode:
                     currentCandidate3 = currentCandidate[2]
                     currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
-                    self.__myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
+                    __myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
                     if currentProbability:
                         graphResultsForTripleRelations[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
