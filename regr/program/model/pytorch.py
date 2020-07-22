@@ -91,7 +91,7 @@ class TorchModel(torch.nn.Module):
         builder = DataNodeBuilder(data_item)
         *out, = self.populate(builder)
         datanode = builder.getDataNode()
-        return (datanode, *out)
+        return (*out, datanode)
 
     def populate(self):
         raise NotImplementedError
@@ -148,16 +148,16 @@ class SolverModel(PoiModel):
 
     def populate(self, builder):
         data_item = self.inference(builder)
-        return super().forward(builder)
+        return super().populate(builder)
 
 
 class IMLModel(SolverModel):
     def poi_loss(self, data_item, prop, output_sensor, target_sensor):
         logit = output_sensor(data_item)
-        mask = output_sensor.mask(data_item)
+        # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
         inference = prop(data_item)
 
         if self.loss:
-            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels, mask)
+            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
             return local_loss

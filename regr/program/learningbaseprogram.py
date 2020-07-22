@@ -85,7 +85,7 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                _, _, output = self.model(data_item, inference=inference)
+                _, _, output = self.model(data_item)
                 yield output
 
     def populate_one(self, data_item, inference=True):

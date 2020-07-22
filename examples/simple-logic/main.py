@@ -2,7 +2,7 @@ def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel, IMLModel
-    from regr.program.loss import BCEWithLogitsLoss
+    from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
     from regr.program.metric import MacroAverageTracker, ValueTracker
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import FullyConnectedLearner
@@ -26,7 +26,7 @@ def model_declaration():
         graph, 
         lambda graph: IMLModel(
             graph, 
-            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.5)),
             metric=ValueTracker(lambda pr, gt: pr.data),
             Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)))
     return program

@@ -76,7 +76,7 @@ class BCEWithLogitsFocalLoss(torch.nn.Module):
         raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
 
 
-class BWithLogitsIMLoss(torch.nn.Module):
+class BCEWithLogitsIMLoss(torch.nn.Module):
     def __init__(self, lmbd, reduction='mean'):
         super().__init__()
         self.lmbd = lmbd
