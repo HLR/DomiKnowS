@@ -1,3 +1,10 @@
+import os
+import re
+import itertools
+import glob
+import difflib
+import xml.etree.ElementTree as ET
+
 from .graph import ace05
 
 
@@ -5,18 +12,26 @@ class APFObject():
     tag = None
 
     def __init__(self, node, text):
-        assert node.tag == self.tag, '{} must be created from {} node, {} is given.'.format(type(self), self.tag, node.tag)
+        assert node.tag == self.tag, '{} must be created from "{}" node, "{}" is given.'.format(type(self), self.tag, node.tag)
 
 
 class Charseq(APFObject):
     tag = 'charseq'
+    differ = difflib.Differ()
 
     def __init__(self, node, text):
         super().__init__(node, text)
         self.start = int(node.attrib['START'])
         self.end = int(node.attrib['END']) + 1  # pythonic upper bound exclusion
         self.text = node.text
-        assert text[self.start:self.end] == self.text, 'Text not match in {}: (index) {} != (text) {}'.format(node, text[self.start:self.end], self.text)
+        # assert text[self.start:self.end] == self.text, 'Text not match in {}: (index) "{}" != (text) "{}"'.format(node, text[self.start:self.end], self.text)
+        if text[self.start:self.end] != self.text:
+            a = text[self.start:self.end] + '\n'
+            b = self.text + '\n'
+            print('<charseq> mismatch:\n', ''.join(self.differ.compare(
+                a.splitlines(keepends=True),
+                b.splitlines(keepends=True))))
+
 
 
 class Entity(APFObject):
@@ -37,7 +52,7 @@ class Entity(APFObject):
 
         def __init__(self, node, text):
             super().__init__(node, text)
-            self.name = node['NAME']
+            self.name = node.attrib['NAME']
             self.text = Charseq(node.find('charseq'), text)
 
     def __init__(self, node, text):
@@ -51,8 +66,9 @@ class Entity(APFObject):
         for mention_node in node.findall('entity_mention'):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
         attributes_node = node.find('entity_attributes')
-        for name_node in attributes_node.find('name'):
-            self.attributes.append(self.Attribute(name_node, text))
+        if attributes_node:
+            for name_node in attributes_node.findall('name'):
+                self.attributes.append(self.Attribute(name_node, text))
 
 class Timex2(APFObject):
     tag = 'timex2'
@@ -113,14 +129,14 @@ class Relation(APFObject):
             super().__init__(node, text)
             self.id = node.attrib['ID']
             self.lexical_condition = node.attrib['LEXICALCONDITION']
-            self.extent = create_charseq(node.find('extent/charseq'), text)
+            self.extent = Charseq(node.find('extent/charseq'), text)
             self.arguments = [None, None]
-            self.additional_arguments: []
+            self.additional_arguments = []
             for argument_node in node.findall('relation_mention_argument'):
                 referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
                 argument = self.Argument(argument_node, referable.mentions, text)
                 if argument.role.startswith('Arg-'):
-                    self.arguments[int(role_str[-1])-1] = argument
+                    self.arguments[int(argument.role[-1])-1] = argument
                 else:
                     self.additional_arguments.append(argument)
 
@@ -138,17 +154,69 @@ class Relation(APFObject):
         for argument_node in node.findall('relation_argument'):
             argument = self.Argument(argument_node, referables, text)
             if argument.role.startswith('Arg-'):
-                self.arguments[int(role_str[-1])-1] = argument
+                self.arguments[int(argument.role[-1])-1] = argument
             else:
                 self.additional_arguments.append(argument)
         for mention_node in node.findall('relation_mention'):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention, referables, text)
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
 
 
 class Reader():
-    def __init__(self):
-        super().__init__()
+    languages = ['Arabic', 'Chinese', 'English', '*']
+    status = ['fp1', 'fp2', 'adj', 'timex2norm', '*']
+    re_tag = re.compile(r'\<\/?.*?\>', flags=re.M|re.S)
 
-    def __call__(self, path):
-        return
-        yield
+    def __init__(self, root):
+        super().__init__()
+        self.root = root
+
+    def __call__(self, language='English', status='adj'):
+        for doc_id, sgm_path, apf_path in self.docs(language=language, status=status):
+            yield self.load(doc_id, sgm_path, apf_path)
+
+    def docs(self, language='*', source='*', status='*'):
+        for sgm_path in glob.glob(os.path.join(self.root, 'data', language, source, status, '*.sgm')):
+            folder, basename = os.path.split(sgm_path)
+            doc_id, ext = os.path.splitext(basename)
+            apf_path = os.path.join(folder, f'{doc_id}.apf.xml')
+            yield doc_id, sgm_path, apf_path
+
+    def load(self, doc_id, sgm_path, apf_path):
+        text = self.load_text(doc_id, sgm_path)
+        anno = self.load_anno(doc_id, apf_path, text)
+        return {'text': text, 'anno': anno}
+
+    def load_text(self, doc_id, path):
+        # tree = ET.parse(path)
+        # root = tree.getroot()
+        # offset = {'OIADVANTAGE_20050105.0922': 4}
+        # if doc_id in offset:
+        #    print(list(root.itertext()))
+        #    ssss
+        # text = ''.join(itertools.chain(*root.itertext()))
+        with open(path) as fin:
+            text = fin.read()
+        text = self.re_tag.sub('', text)
+        return text
+
+    def load_anno(self, doc_id, path, text):
+        tree = ET.parse(path)
+        root = tree.getroot()
+        document = root.find('document')
+        referables = {}
+        relations = {}
+        events = {}
+
+        for node in document.findall('entity'):
+            entity = Entity(node, text)
+            referables[entity.id] = entity
+
+        for node in document.findall('timex2'):
+            timex2 = Timex2(node, text)
+            referables[timex2.id] = timex2
+
+        for node in document.findall('relation'):
+            relation = Relation(node, referables, text)
+            relations[relation.id] = relation
+
+        return referables, relations, events

@@ -3,9 +3,10 @@ import config
 
 
 def main():
-    reader = Reader()
-    for data_item in reader(config.path):
-        print(data_item)
+    reader = Reader(config.path)
+    for data_item in reader():
+        # print(data_item)
+        pass
     print('done')
 
 
