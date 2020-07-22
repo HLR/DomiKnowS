@@ -19,8 +19,8 @@ with Graph('global') as graph2:
 
         firestationCity = city(name='firestationCity')
         
-        # No less then 3 firestationCity
-        #atLeastL(3, ('x', ), firestationCity, ('x', ))
+        # No less then 2 firestationCity
+        atLeastL(2, ('x', ), firestationCity, ('x', ))
         
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
         orL(firestationCity, ('x',), existsL(('y',), andL(eql(cityLink, 'neighbor', 1), ('x', 'y'), firestationCity, ('y',))))
