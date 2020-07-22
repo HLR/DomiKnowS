@@ -7,7 +7,9 @@ Relation.clear()
 
 with Graph('global') as graph:
     with Graph('input'):
+        world = Concept(name='world')
         x = Concept('x')
+        (world_contains_x,) = world.contains(x)
     with Graph('output'):
         y0 = x('y0')
         y1 = x('y1')

@@ -142,9 +142,16 @@ class SolverModel(PoiModel):
         else:
             self.solver = None
 
-    def inference(self, data_item):
-        data_item = self.solver.inferSelection(data_item, list(self.poi))
-        return data_item
+    def inference(self, builder):
+        for prop, (output_sensor, target_sensor) in self.poi.items():
+            # make sure the sensors are evaluated
+            output = output_sensor(builder)
+            target = target_sensor(builder)
+        # data_item = self.solver.inferSelection(builder, list(self.poi))
+        datanode = builder.getDataNode()
+        # trigger inference
+        datanode.inferILPConstrains(fun=None, epsilon=0)
+        return builder
 
     def populate(self, builder):
         data_item = self.inference(builder)
