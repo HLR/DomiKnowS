@@ -7,7 +7,7 @@ There are a bunch of cities and each city can have a firestation in it. Each cit
 ### Define the Graph
 Each program in the Domiknows framework starts with a concept graph which defines the concepts interacting inside the problem world. 
 Here we have a `world` , several `city`, `firestationCity`, and the concept of `neighbor`
-```python3
+```python
 Graph.clear()  
 Concept.clear()  
 Relation.clear()  
@@ -20,7 +20,7 @@ with Graph('global') as graph:
 ```
 
 In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `has_a` or `contains` keywords. 
-```python3
+```python
 Graph.clear()  
 Concept.clear()  
 Relation.clear()  
@@ -38,14 +38,14 @@ with Graph('global') as graph:
 
 on last thing that we have to introduce inside our graph declaration is the set of rules we want to apply on the inference.
 We add the following line to the previous code.
-``` python3 
+``` python 
 orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
 ```
 This constraint is expressing that each city is either of type `firestationcity` or `has_a` `neighbor` that is a `firestationCity`.
 
 ### Define the Reader
 Next step is to define the data of the problem. In this step we have to define a reader class which will load the inputs of the datasource into our framework. Reader class has a free style of coding and the only limitation is that it has to provide an iterative object over data which each data is a dictionary containing keyword and values. 
-```python3
+```python
 class CityReader:  
     def __init__(self,):  
         self.data = [[1, 2, 3, 4, 5, 6, 7, 8, 9]]  
@@ -73,7 +73,7 @@ The interaction between the data and the graph inside the framework is by using 
 We can use the default `ReaderSensor` to read the `city` , `world` and use default `CandidateReaderSensor` to read `neighbor` instances.
 We should define an Edge sensor connecting the world instances to the cities read from our datasource. 
 **There is a problem in the definition of this sensor**
-```python3
+```python
 class DummyCityEdgeSensor(TorchEdgeSensor): # Get world to city edge  
   def forward(self,) -> Any:  
         self.inputs.append(self.context_helper[self.edges[0].fullname])  
@@ -83,7 +83,7 @@ This sensor  maps a world instance to a set of cities.
 
 As each program in our framework requires variable as input to the inference phase and variables are only valid as outcomes of a learner. We define a learner on the `city` conept and the subconcept of `firestationCity`.
 **This learner doesn't seem right to me**
-```python3
+```python
 class DummyCityLearner(TorchLearner):
   def forward(self,) -> Any:  
         result = torch.zeros(len(self.inputs[0]), 2)  
@@ -93,7 +93,7 @@ class DummyCityLearner(TorchLearner):
 	  return result
   ```
 To enable learning on each learner, we have to define a label and assign this to the same instance in the graph. 
-```python3
+```python
 class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classification  
   def __init__(self, *pres, label=True):  
         super().__init__(*pres, label=label)  
@@ -104,21 +104,21 @@ class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classifica
 
 ### Model Declaration
 The next step toward solving a problem in our framework is to define a model flow or declaration for each example of the data.
-```python3
+```python
 def model_declaration():
 ```
 we start by linking the `ReaderSensor`s to the concepts and properties of the graph.
-```python3
+```python
 world['raw'] = ReaderSensor(keyword='world')  
 city['raw'] = ReaderSensor(keyword='city')
 ```
 then, we link the `world` and `city` concepts:
 **This implementation doesn't seem right to me**
-```python3
+```python
 world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
 ```
 Then we define the `CandidateReaderSensor` to read the `neighbor` concept into the graph.
-```python3
+```python
 def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):  
     if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader  
 		return 1  
@@ -127,24 +127,24 @@ def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_conc
 neighbor['raw'] = CandidateReaderSensor(label=False, forward=readNeighbors, keyword='links')
 ```
 Next, we apply the learner and the label sensor to the `city[firestationCity]`.
-```python3
+```python
 city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], neighbor['raw']])  
 city[firestationCity] = DummyCityLabelSensor(label=True)
 ```
 Add the end of the definition of the `model_declaration` function we have to add the following lines to return an executable instance from the declaration of the graph attached to the new sensors and learners.
-```python3
+```python
 program = LearningBasedProgram(graph, PoiModel)  
 return program
 ```
   
   ### Model Execution
   To run the model, you have to call the reader and the `model_declaration`.
-```python3
+```python
   lbp = model_declaration()  
   dataset = CityReader().run()  # Adding the info on the reader
 ```
 Next, we have to populate `datanode` and call inference on each sample.
-```python3
+```python
 for datanode in lbp.populate(dataset=dataset, inference=True):  
   _dataset = next(CityReader().run())  
   # call solver  
