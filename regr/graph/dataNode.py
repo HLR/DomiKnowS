@@ -449,11 +449,7 @@ class DataNode:
         
         return [1, 0]
 
-    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
-    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
-        # Build probability key to retrieve attribute
-        key = '<' + conceptRelation.name + '>'
-        
+    def __getAttributeValue(self, key, conceptRelation, *dataNode):
         # Get attribute with probability
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
@@ -480,25 +476,43 @@ class DataNode:
                 value = [_it.cpu().detach().numpy() for _it in value]
         if isinstance(value, (np.ndarray, np.generic)):
             value = value.tolist()  
+        
+        return value
+    
+     # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
+    def __getLabel(self, conceptRelation,  *dataNode, fun=None, epsilon = None):
+        # Build probability key to retrieve attribute
+        key = '<' + conceptRelation.name + '>/label'
+        
+        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
+        
+        return value
+        
+    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
+    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
+        # Build probability key to retrieve attribute
+        key = '<' + conceptRelation.name + '>'
+        
+        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
             
         # Process probability through function and apply epsilon
         if isinstance(value, (list, tuple)):
-                _list = value
-                if _list[0] > 1-epsilon:
-                    _list[0] = 1-epsilon
-                elif _list[1] > 1-epsilon:
-                    _list[1] = 1-epsilon
-                    
-                if _list[0] < epsilon:
-                    _list[0] = epsilon
-                elif _list[1] < epsilon:
-                    _list[1] = epsilon
-                       
-                # Apply fun on probabilities 
-                if fun is not None:
-                    _list = [fun(_it) for _it in _list]
+            _list = value
+            if _list[0] > 1-epsilon:
+                _list[0] = 1-epsilon
+            elif _list[1] > 1-epsilon:
+                _list[1] = 1-epsilon
                 
-                return _list # Return probability
+            if _list[0] < epsilon:
+                _list[0] = epsilon
+            elif _list[1] < epsilon:
+                _list[1] = epsilon
+                   
+            # Apply fun on probabilities 
+            if fun is not None:
+                _list = [fun(_it) for _it in _list]
+            
+            return _list # Return probability
 
         return [float("nan"), float("nan")]
                     
@@ -551,8 +565,8 @@ class DataNode:
                 
         return lcEqls
                     
-    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001,  minimizeObjective = False):
+    # Prepare data for ILP based on data graph with this instance as a root based on the provided list of concepts and relations
+    def __prepareILPData(self, *_conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001,  minimizeObjective = False):
         # Check if concepts and/or relations have been provided for inference
         if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
             _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
@@ -669,7 +683,7 @@ class DataNode:
             
             for currentCandidate in currentCandidates:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     if currentProbability:
                         graphResultsForPhraseToken[str(currentConceptOrRelation)][currentCandidate[0].instanceID] = currentProbability
                     
@@ -679,7 +693,7 @@ class DataNode:
                     if str(currentConceptOrRelation) in hardConstrains:
                         currentProbability = self.__getHardConstrains(currentConceptOrRelation, reltationAttrs, currentCandidate)
                     else:
-                        currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                        currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
                     if currentProbability:
                         graphResultsForPhraseRelation[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
@@ -703,7 +717,7 @@ class DataNode:
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     currentCandidate3 = currentCandidate[2]
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
                     __myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
@@ -723,6 +737,14 @@ class DataNode:
                 myOntologyGraphs.add(currentOntologyGraph)
                 
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
+                        
+        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
+    
+    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
+    def inferILPConstrains(self, *_conceptsRelations ,fun=None, epsilon = 0.00001,  minimizeObjective = False):
+        
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation= \
+            self.__prepareILPData(*_conceptsRelations,  dnFun = self.__getProbability, fun = fun, epsilon = epsilon)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         tokenResult, pairResult, tripleResult = \
@@ -769,7 +791,14 @@ class DataNode:
                         
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
-
+    
+    def verifySelection(self,*_conceptsRelations):
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
+            self.__prepareILPData(_conceptsRelations, dnFun = self.__getLabel)
+            
+        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
+        
+        return verifyResult
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
