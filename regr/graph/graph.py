@@ -21,10 +21,12 @@ class Graph(BaseGraphTree):
             self.ontology = (ontology, local)
         self._concepts = OrderedDict()
         self._logicalConstrains = OrderedDict()
+        self._relations = OrderedDict()
 
     def __iter__(self):
         yield from BaseGraphTree.__iter__(self)
         yield from self._concepts
+        yield from self._relations
 
     @property
     def ontology(self):
@@ -49,20 +51,26 @@ class Graph(BaseGraphTree):
     def get_apply(self, name):
         if name in self.concepts:
             return self.concepts[name]
+        if name in self.relations:
+            return self.relations[name]
         return BaseGraphTree.get_apply(self, name)
 
     def set_apply(self, name, sub):
         if __package__ is None or __package__ == '':
             from concept import Concept
+            from relation import Relation
         else:
             from .concept import Concept
+            from .relation import Relation
         # TODO: what if a concept has same name with a subgraph?
         if isinstance(sub, Graph):
             BaseGraphTree.set_apply(self, name, sub)
         elif isinstance(sub, Concept):
             self.concepts[name] = sub
+        elif isinstance(sub, Relation):
+            self.relations[name] = sub
         else:
-            # FIXME: known issue is that relation goes here
+            # TODO: what are other cases
             pass
 
     @property
@@ -72,6 +80,10 @@ class Graph(BaseGraphTree):
     @property
     def logicalConstrains(self):
         return self._logicalConstrains
+
+    @property
+    def relations(self):
+        return self._relations
 
     def what(self):
         wht = BaseGraphTree.what(self)

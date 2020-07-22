@@ -3,7 +3,7 @@ from itertools import combinations
 import torch
 
 from regr.graph import Property, DataNodeBuilder
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
@@ -85,7 +85,7 @@ class TorchModel(torch.nn.Module):
             if isinstance(node, Property):
                 return node
         for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
+            for _, sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
                 sensor.fill_data(data_item)
         data_item.update({"graph": self.graph, 'READER': 1})
         builder = DataNodeBuilder(data_item)
