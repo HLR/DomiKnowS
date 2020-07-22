@@ -1,6 +1,7 @@
 from itertools import combinations
 
 import torch
+import torch.nn.functional as F
 
 from regr.graph import Property, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor
@@ -150,7 +151,7 @@ class SolverModel(PoiModel):
         # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPConstrains(fun=None, epsilon=0)
+        datanode.inferILPConstrains(fun=F.softmax, epsilon=0)
         return builder
 
     def populate(self, builder):

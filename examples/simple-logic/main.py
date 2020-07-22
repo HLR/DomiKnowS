@@ -23,6 +23,7 @@ def model_declaration():
     world_contains_x['forward'] = TorchEdgeReaderSensor('x', mode='forward', keyword='x')
     with x:
         Property('x')
+    # x['x'] = ReaderSensor(keyword='x')
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
     x[y0] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
@@ -34,7 +35,7 @@ def model_declaration():
             graph, 
             loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.5)),
             metric=ValueTracker(lambda pr, gt: pr.data),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)))
+            Solver=ilpOntSolverFactory.getOntSolverInstance))
     return program
 
 
@@ -51,9 +52,10 @@ def main():
         'y1': torch.tensor([[[0.,1.]]])
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
-    datanode = next(program.populate(data))
-    print(datanode.getAttribute('<y0>'))
-    print(datanode.getAttribute('<y1>'))
+    for metric, x_node in program.test(data):
+        print(metric)
+        print(x_node.getAttribute('<y0>'))
+        print(x_node.getAttribute('<y1>'))
 
 
 if __name__ == '__main__':
