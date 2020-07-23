@@ -6,7 +6,7 @@ def model_declaration():
     from regr.graph import Property
 
     from graph import graph, world_contains_x
-    from model import Model
+    from model import MyModel, MyIMLModel
 
     graph.detach()
 
@@ -25,7 +25,7 @@ def model_declaration():
     x[y0] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
     x[y1] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
 
-    program = LearningBasedProgram(graph, Model)
+    program = LearningBasedProgram(graph, MyModel)
     return program
 
 
@@ -37,9 +37,9 @@ def main():
 
     program = model_declaration()
     data = [{
-        'x': torch.tensor([[[1.]]]),
-        'y0': torch.tensor([[[1.,0.]]]),
-        'y1': torch.tensor([[[0.,1.]]])
+        'x': [[[1.]]],
+        'y0': [[[1.,0.]]],
+        'y1': [[[0.,1.]]]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     for metric, x_node in program.test(data):
