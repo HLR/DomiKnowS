@@ -1,16 +1,12 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel, IMLModel
-    from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
-    from regr.program.metric import MacroAverageTracker, ValueTracker
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
     from regr.sensor.pytorch.learners import FullyConnected2Learner
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.contextsolver.pytorch import Solver
     from regr.graph import Property
 
     from graph import graph, world_contains_x
+    from model import Model
 
     graph.detach()
 
@@ -29,13 +25,7 @@ def model_declaration():
     x[y0] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
     x[y1] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
 
-    program = LearningBasedProgram(
-        graph, 
-        lambda graph: IMLModel(
-            graph, 
-            loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.5)),
-            metric=ValueTracker(lambda pr, gt: pr.data),
-            Solver=ilpOntSolverFactory.getOntSolverInstance))
+    program = LearningBasedProgram(graph, Model)
     return program
 
 
