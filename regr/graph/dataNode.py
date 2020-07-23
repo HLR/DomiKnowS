@@ -473,7 +473,7 @@ class DataNode:
         # Translate probability to list
         if isinstance(value, torch.Tensor):
             with torch.no_grad():
-                value = [_it.cpu().detach().numpy() for _it in value]
+                value = value.cpu().detach().numpy()
         if isinstance(value, (np.ndarray, np.generic)):
             value = value.tolist()  
         
@@ -498,19 +498,20 @@ class DataNode:
         # Process probability through function and apply epsilon
         if isinstance(value, (list, tuple)):
             _list = value
-            if _list[0] > 1-epsilon:
-                _list[0] = 1-epsilon
-            elif _list[1] > 1-epsilon:
-                _list[1] = 1-epsilon
-                
-            if _list[0] < epsilon:
-                _list[0] = epsilon
-            elif _list[1] < epsilon:
-                _list[1] = epsilon
+            if epsilon is not None:
+                if _list[0] > 1-epsilon:
+                    _list[0] = 1-epsilon
+                elif _list[1] > 1-epsilon:
+                    _list[1] = 1-epsilon
+                    
+                if _list[0] < epsilon:
+                    _list[0] = epsilon
+                elif _list[1] < epsilon:
+                    _list[1] = epsilon
                    
             # Apply fun on probabilities 
             if fun is not None:
-                _list = [fun(_it) for _it in _list]
+                _list = fun(_list)
             
             return _list # Return probability
 
