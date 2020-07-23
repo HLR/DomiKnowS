@@ -1,9 +1,10 @@
 from itertools import combinations
 
 import torch
+import torch.nn.functional as F
 
 from regr.graph import Property, DataNodeBuilder
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
@@ -85,12 +86,16 @@ class TorchModel(torch.nn.Module):
             if isinstance(node, Property):
                 return node
         for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
+            for _, sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
                 sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
+        data_item.update({"graph": self.graph, 'READER': 0})
         builder = DataNodeBuilder(data_item)
+        *out, = self.populate(builder)
         datanode = builder.getDataNode()
-        return datanode
+        return (*out, datanode)
+
+    def populate(self):
+        raise NotImplementedError
 
 
 class PoiModel(TorchModel):
@@ -98,36 +103,25 @@ class PoiModel(TorchModel):
         if not self.loss:
             return 0
         logit = output_sensor(data_item)
-        mask = output_sensor.mask(data_item)
+        # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
 
-        local_loss = self.loss[output_sensor, target_sensor](logit, labels, mask)
+        local_loss = self.loss[output_sensor, target_sensor](logit, labels)
         return local_loss
 
     def poi_metric(self, data_item, prop, output_sensor, target_sensor):
         if not self.metric:
             return None
-        mask = output_sensor.mask(data_item)
+        # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
         inference = prop(data_item)
 
-        local_metric = self.metric[output_sensor, target_sensor](inference, labels, mask)
+        local_metric = self.metric[output_sensor, target_sensor](inference, labels)
         return local_metric
 
-    def forward(self, data_item, inference=True):
-        data_item = self.move(data_item)
+    def populate(self, builder):
         loss = 0
         metric = {}
-
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
-        for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(ReaderSensor):
-                sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
-        builder = DataNodeBuilder(data_item)
-
         for prop, (output_sensor, target_sensor) in self.poi.items():
             # make sure the sensors are evaluated
             output = output_sensor(builder)
@@ -138,6 +132,40 @@ class PoiModel(TorchModel):
                     loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
                 if self.metric:
                     metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
+        return loss, metric
 
+
+class SolverModel(PoiModel):
+    def __init__(self, graph, loss=None, metric=None, Solver=None):
+        super().__init__(graph, loss, metric)
+        if Solver:
+            self.solver = Solver(self.graph)
+        else:
+            self.solver = None
+
+    def inference(self, builder):
+        for prop, (output_sensor, target_sensor) in self.poi.items():
+            # make sure the sensors are evaluated
+            output = output_sensor(builder)
+            target = target_sensor(builder)
+        # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
-        return loss, metric, datanode
+        # trigger inference
+        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        return builder
+
+    def populate(self, builder):
+        data_item = self.inference(builder)
+        return super().populate(builder)
+
+
+class IMLModel(SolverModel):
+    def poi_loss(self, data_item, prop, output_sensor, target_sensor):
+        logit = output_sensor(data_item)
+        # mask = output_sensor.mask(data_item)
+        labels = target_sensor(data_item)
+        inference = prop(data_item)
+
+        if self.loss:
+            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
+            return local_loss

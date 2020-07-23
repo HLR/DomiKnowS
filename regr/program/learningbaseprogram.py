@@ -66,7 +66,7 @@ class LearningBasedProgram():
         for data_item in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
-            loss, metric, output = self.model(data_item, inference=inference)
+            loss, metric, output = self.model(data_item)
             if self.opt is not None:
                 loss.backward()
                 self.opt.step()
@@ -77,7 +77,7 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                loss, metric, output = self.model(data_item, inference=inference)
+                loss, metric, output = self.model(data_item)
                 yield loss, metric, output
 
     def populate(self, dataset, inference=True):
@@ -85,7 +85,7 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                _, _, output = self.model(data_item, inference=inference)
+                _, _, output = self.model(data_item)
                 yield output
 
     def populate_one(self, data_item, inference=True):

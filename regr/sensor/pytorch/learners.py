@@ -83,6 +83,24 @@ class FullyConnectedLearner(TorchLearner):
         return output
 
 
+class FullyConnected2Learner(TorchLearner):
+    def __init__(self, *pres, input_dim, output_dim, edges=None):
+        super(FullyConnected2Learner, self).__init__(*pres, edges=edges)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.model = torch.nn.Linear(self.input_dim, self.output_dim)
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.model.cuda()
+
+    def forward(
+            self,
+    ) -> Any:
+        _tensor = self.inputs[0]
+        output = self.model(_tensor)
+        return output
+
+
 class FullyConnectedLearnerRelu(TorchLearner):
     def __init__(self, *pres, input_dim, output_dim):
         super(FullyConnectedLearnerRelu, self).__init__(*pres)

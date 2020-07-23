@@ -120,18 +120,17 @@ class ReaderSensor(TorchSensor):
         self.keyword = keyword
 
     def fill_data(self, data):
-        self.data = data[self.keyword]
+        self.data = data
 
     def forward(
         self,
     ) -> Any:
         if self.data is not None:
             try:
-                if self.label:
-                    return torch.tensor(self.data, device=self.device)
-                else:
-                    return self.data
-            except:
+                return torch.tensor(self.data[self.keyword], device=self.device)
+            except TypeError:
+                return self.data[self.keyword]
+            except KeyError:
                 print("the key you requested from the reader doesn't exist")
                 raise
         else:
@@ -292,18 +291,19 @@ class TorchEdgeReaderSensor(TorchEdgeSensor):
         self.data = data
 
     def forward(
-            self,
+        self,
     ) -> Any:
-        if self.data:
+        if self.data is not None:
             try:
+                return torch.tensor(self.data[self.keyword], device=self.device)
+            except TypeError:
                 return self.data[self.keyword]
-            except:
+            except KeyError:
                 print("the key you requested from the reader doesn't exist")
                 raise
         else:
             print("there is no data to operate on")
             raise Exception('not valid')
-
 
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edges, map_key, deafault_dim = 480):
