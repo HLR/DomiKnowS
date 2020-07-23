@@ -77,7 +77,7 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                loss, metric, output = self.model(data_item, inference=inference)
+                loss, metric, output = self.model(data_item)
                 yield loss, metric, output
 
     def populate(self, dataset, inference=True):
