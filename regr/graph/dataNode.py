@@ -611,7 +611,7 @@ class DataNode:
             candidates_currentConceptOrRelation[str(currentConceptOrRelation)] = _currentInstances
           
         if len(_instances) == 0:
-            return 
+            return None, None, None, None, None, None, None
         
         # Get ids of the instances
         infer_candidatesID = []
@@ -743,8 +743,14 @@ class DataNode:
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations ,fun=None, epsilon = 0.00001,  minimizeObjective = False):
         
+        if not _conceptsRelations:
+            _conceptsRelations = ()
+            
         myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation= \
             self.__prepareILPData(*_conceptsRelations,  dnFun = self.__getProbability, fun = fun, epsilon = epsilon)
+        
+        if not myilpOntSolver:
+            return
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         tokenResult, pairResult, tripleResult = \
@@ -793,9 +799,15 @@ class DataNode:
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
     
     def verifySelection(self,*_conceptsRelations):
-        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
-            self.__prepareILPData(_conceptsRelations, dnFun = self.__getLabel)
+        if not _conceptsRelations:
+            _conceptsRelations = ()
             
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
+            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getLabel)
+            
+        if not myilpOntSolver:
+            return False
+        
         verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
         
         return verifyResult
@@ -832,7 +844,7 @@ class DataNodeBuilder(dict):
             _value = self.__changToTuple(_value)
             
         counterNanme = 'Counter'
-        for s in skey[2:]:
+        for s in skey: # skey[2:]:
             counterNanme = counterNanme + '/' + s
             
         if not dict.__contains__(self, counterNanme):
@@ -1000,6 +1012,7 @@ class DataNodeBuilder(dict):
 
     # Build or update dataNode in the data graph for a given key
     def __buildDataNode(self, value, conceptInfo, keyDataName):
+        
         # ------ No DataNode yet
         if not dict.__contains__(self, 'dataNode'): 
             dns = []
@@ -1027,38 +1040,59 @@ class DataNodeBuilder(dict):
         
         # ---------- DataNodes already created
         
-        existingRootDns = dict.__getitem__(self, 'dataNode') # DataNodes roots
-        existingDnsForConcept = existingRootDns[0].findDatanodes(existingRootDns, conceptInfo['concept'].name) # DataNodes of the current concept
+        existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
+        existingDnsForConcept = existingRootDns[0].findDatanodes(existingRootDns, conceptInfo['concept'].name) # Try to get DataNodes of the current concept
         dns = []
         
-        # -------- No Datanode of this concept created yet
-        
-        if len(existingDnsForConcept) == 0: 
-            if isinstance(value, (list, Tensor)):
-                if (len(value) == 1):
-                    value = value[0]
+        if len(existingDnsForConcept) == 0:# Check if datannote for this concept already created
                     
-            if not isinstance(value, (list, Tensor)) :# Assuming that value is single element
+            # -------- No Datanode of this concept created yet
+
+            # -- If attribute value is a single element
+            if (len(value) == 1): 
+                # Unpack the value
+                if isinstance(value, list):
+                    value = value[0]
+                elif isinstance(value, Tensor):
+                    value = value.item()
+                    
+                # Create the datanote for this element
                 instanceValue = ""
                 instanceID = dict.__getitem__(self, "READER")
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-                
                 _dn.attributes[keyDataName] = value
-                ''
-                if conceptInfo['root'] and len(conceptInfo['contains']) > 0:
+                
+                _dnLinked = False
+                
+                # Add it to the children as parent
+                if len(conceptInfo['contains']) > 0:
                     for _contains in conceptInfo['contains']:
                         _existingDnsForConcept = existingRootDns[0].findDatanodes(existingRootDns, _contains.name) # DataNodes of the current concept
                         
                         for eDN in _existingDnsForConcept:
                             _dn.addChildDataNode(eDN)
-                         
-                    dns.append(_dn)   
-                    dict.__setitem__(self, 'dataNode', dns) # New root
-                else:
-                    pass # ????
+                            _dnLinked == True
 
-            else: # Value is multiple elements
-                if not isinstance(value[0], (list, Tensor)): # Internal Value is not Tensor or list
+                    if conceptInfo['root']:  # New root
+                        dns = [_dn] 
+                        dict.__setitem__(self, 'dataNode', dns)
+                
+                # Add it as child to existing datanodes
+                if len(conceptInfo['containedIn']) > 0:
+                    myContainedInDns = existingRootDns[0].findDatanodes(existingRootDns, conceptInfo['containedIn'][0].name) # Assume single containedIn concept for now
+                       
+                    for myContainedIn in myContainedInDns:
+                        myContainedIn.addChildDataNode(_dn)   
+                        _dnLinked == True
+
+                if not _dnLinked:
+                    dns = dict.__getitem__(self, 'dataNode')
+                    dns.append(_dn)
+
+            # -- Value is multiple elements
+            else: 
+                v0 = value[0]
+                if not isinstance(value[0], list) or (isinstance(value[0], Tensor) and value[0].dim() == 0): # Internal Value is not Tensor or list
                     dns1 = []
                     for vIndex, v in enumerate(value):
                         instanceValue = ""
@@ -1107,26 +1141,26 @@ class DataNodeBuilder(dict):
                        
                     for myContainedInIndex, myContainedIn in enumerate(myContainedIn):
                         for dn in dns[myContainedInIndex]:
-                            myContainedIn.addChildDataNode(dn)
-                            
-            return
+                            myContainedIn.addChildDataNode(dn)                            
+        else:   
+            # ---------  DataNode with this concept already created - update it
             
-        # ---------  DataNode with this concept already created - update it
-        
-        if not isinstance(value, (list, Tensor)): # Value is not Tensor or list
-            if isinstance(existingDnsForConcept[0], DataNode):
+            if len(existingDnsForConcept) == 1:
                 existingDnsForConcept[0].attributes[keyDataName] = value
-        else: # Value is Tensor or List
-            if len(existingDnsForConcept) > len(value): # Not enough elements in the value 
-                pass
-            elif len(existingDnsForConcept) == len(value):
-                for vIndex, v in enumerate(value):
-                    if isinstance(existingDnsForConcept[vIndex], DataNode):
-                       existingDnsForConcept[vIndex].attributes[keyDataName] = v
-                    else:
-                       pass
-            elif len(existingDnsForConcept) < len(value): # Too many elements in the value
-                pass
+            elif not isinstance(value, (list, Tensor)): # Value is not Tensor or list or is tensor with two element
+                if isinstance(existingDnsForConcept[0], DataNode):
+                    existingDnsForConcept[0].attributes[keyDataName] = value
+            else: # Value is Tensor or List
+                if len(existingDnsForConcept) > len(value): # Not enough elements in the value 
+                    pass
+                elif len(existingDnsForConcept) == len(value):
+                    for vIndex, v in enumerate(value):
+                        if isinstance(existingDnsForConcept[vIndex], DataNode):
+                           existingDnsForConcept[vIndex].attributes[keyDataName] = v
+                        else:
+                           pass
+                elif len(existingDnsForConcept) < len(value): # Too many elements in the value
+                    pass
 
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
     def __setitem__(self, key, value):
@@ -1135,8 +1169,11 @@ class DataNodeBuilder(dict):
           
         skey = key.split('/')
         
+        # Check if the key with this value has been set recently
+        # If not create a new sensor for it
+        # If yes stop __setitem__ and return - the same value for the key was added last time that key was set
         if self.__addSensorCounters(skey, value):
-            return
+            return # Stop __setitem__ for repeated key value combination
 
         if value is None:
             return dict.__setitem__(self, key, value)
@@ -1146,16 +1183,19 @@ class DataNodeBuilder(dict):
         
         usedGraph = dict.__getitem__(self, "graph")
 
+        # Find if teh key include concept from graph
         conceptIndex = 0
         for k in skey:
-            if usedGraph.isGraphName(k):
+            if usedGraph.isGraphName(k): # find the latest concept in the key
                 conceptIndex = conceptIndex + 1
             else:
                 break
             
+        # Check if found concept in the key
         if conceptIndex + 1 > len(skey):
             return dict.__setitem__(self, key, value)
  
+        # Find description of the concept in the grpah
         _conceptName = skey[conceptIndex]
         concept = self.__findConcept(_conceptName, usedGraph)
         
@@ -1164,9 +1204,11 @@ class DataNodeBuilder(dict):
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
         
+        # Create key for datanonde construction
         keyDataName = "".join(map(lambda x: '/' + x, skey[conceptIndex+1:]))
         keyDataName = keyDataName[1:]
 
+        # Decide if this is datanode for concept or relation link
         if conceptInfo['relation']:
             self.__buildRelationLink(value, conceptInfo, keyDataName) # Build or update relation link
         else:                       
@@ -1186,7 +1228,7 @@ class DataNodeBuilder(dict):
         # -------------------
         
         if not r:
-            pass
+            pass # Error when adding entry to dictionary ?
         
         return r                
                                              
