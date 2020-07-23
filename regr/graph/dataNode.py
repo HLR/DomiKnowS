@@ -8,21 +8,15 @@ from itertools import product
 from regr.solver.ilpConfig import ilpConfig 
 from torch.tensor import Tensor
 
-if __package__ is None or __package__ == '':
-    from graph import Graph
-    #from concept import Concept
-    from solver import ilpOntSolverFactory
-else:
-    from .graph import Graph
-    #from .concept import Concept
-    from ..solver import ilpOntSolverFactory
-    
-PredictionType = {"Learned" : "Learned", "ILP" : "ILP"}
+from regr.graph import graph
+from regr.graph.logicalConstrain import eql
+from regr.solver import ilpOntSolverFactory
+
+_DataNode__myLogger = logging.getLogger(ilpConfig['log_name'])
 
 # Class representing single data instance with relation  links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
-        self.__myLogger = logging.getLogger(ilpConfig['log_name'])
 
         self.instanceID = instanceID                     # The data instance id (e.g. paragraph number, sentence number, phrase  number, image number, etc.)
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
@@ -194,9 +188,15 @@ class DataNode:
         else:
             test = [test]
     
-        for t in test:
+        for i, t in enumerate(test):
             if isinstance(t, int):
                 if dn.getInstanceID() == t:
+                    return True
+                else:
+                    return False
+                
+            if t == "instanceID" and i < len(test) - 1:
+                if dn.getInstanceID() == test[i+1]:
                     return True
                 else:
                     return False
@@ -354,6 +354,31 @@ class DataNode:
         
         return False 
     
+    def __getRelationAttrNames(self, conceptRelation, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+            
+        if len(conceptRelation.has_a()) > 0:  
+            relationAttrs = OrderedDict()
+            for arg_id, rel in enumerate(conceptRelation.has_a()): 
+                srcName = rel.src.name
+                dstName = rel.dst.name                
+                relationAttr = self.__findConcept(dstName, usedGraph)
+    
+                relationAttrs[rel.name] = relationAttr
+                
+            return relationAttrs
+        
+        for _isA in conceptRelation.is_a():
+            _conceptRelation = _isA.dst
+            
+            resultForCurrent = self.__getRelationAttrNames(_conceptRelation, usedGraph)
+            
+            if bool(resultForCurrent):
+                return resultForCurrent
+        
+        return None 
+    
     def __findRootRelation(self, relationConcept, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
@@ -365,49 +390,131 @@ class DataNode:
         
         return relationConcept 
 
-    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
-    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
-        # Build probability key to retrieve attribute
-        key = '<' + conceptRelation.name + '>'
+    def __isHardConstrains(self, conceptRelation):
+        currentConceptOrRelationDNs = self.findDatanodes(select = conceptRelation)
+        if len(currentConceptOrRelationDNs) > 0:
+            return True
         
+        rootRelation = self.__findRootRelation(conceptRelation)
+        
+        if bool(rootRelation):
+            rootRelationDNs = self.findDatanodes(select = rootRelation)
+            
+            key = conceptRelation # Has to exactly not subkey
+            if not isinstance(key, str):
+                key = key.name
+                
+            for dn in rootRelationDNs:
+                if key in dn.attributes:
+                    return True
+                
+        return False
+            
+    def __getHardConstrains(self, conceptRelation, reltationAttrs, currentCandidate):
+        key = conceptRelation.name  
+        rootRelation = self.__findRootRelation(conceptRelation)
+        
+        if rootRelation == conceptRelation:
+            if bool(reltationAttrs):
+                indexes = {}
+                for i, attr in enumerate(reltationAttrs):
+                    if len(currentCandidate) > i:
+                        indexes[attr] = ('instanceID', currentCandidate[i].instanceID)
+            
+                v = self.findDatanodes(select = conceptRelation, indexes = indexes)
+                if len(v) == 0:
+                    currentProbability = [1, 0]
+                else:
+                    currentProbability = [0, 1]
+                    
+                return currentProbability
+        else:
+            dns = currentCandidate[0].getRelationLinks(relationName = rootRelation, conceptName = None)
+            if bool(dns):
+                dn = dns[currentCandidate[1].getInstanceID()]
+        
+                value = None
+                if key in dn.attributes:
+                    value = dn.attributes[key]
+        
+                if value is not None:
+                    _value = value.item()
+                    
+                    if _value == 0:
+                        currentProbability = [1, 0]
+                    else:
+                        currentProbability = [0, 1]
+                        
+                    return currentProbability
+        
+        return [1, 0]
+
+    def __getAttributeValue(self, key, conceptRelation, *dataNode):
         # Get attribute with probability
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
         else:
             rootRelation = self.__findRootRelation(conceptRelation)
+            rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
+            
+            if not rl:
+                return [float("nan"), float("nan")]
+            
             if len(dataNode) == 2:
                  value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+            else:
+                return [float("nan"), float("nan")] # ?
         
-        if value is None:
-            return [1, 0] # ?
+        if value is None: # No probability value - return negative probability 
+            return [float("nan"), float("nan")]
         
-        # Process probability through function and apply epsilon
+        # Translate probability to list
         if isinstance(value, torch.Tensor):
             with torch.no_grad():
                 value = [_it.cpu().detach().numpy() for _it in value]
         if isinstance(value, (np.ndarray, np.generic)):
             value = value.tolist()  
+        
+        return value
+    
+     # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
+    def __getLabel(self, conceptRelation,  *dataNode, fun=None, epsilon = None):
+        # Build probability key to retrieve attribute
+        key = '<' + conceptRelation.name + '>/label'
+        
+        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
+        
+        return value
+        
+    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
+    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
+        # Build probability key to retrieve attribute
+        key = '<' + conceptRelation.name + '>'
+        
+        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
+            
+        # Process probability through function and apply epsilon
         if isinstance(value, (list, tuple)):
-                _list = value
-                if _list[0] > 1-epsilon:
-                    _list[0] = 1-epsilon
-                elif _list[1] > 1-epsilon:
-                    _list[1] = 1-epsilon
-                    
-                if _list[0] < epsilon:
-                    _list[0] = epsilon
-                elif _list[1] < epsilon:
-                    _list[1] = epsilon
-                       
-                # Apply fun on probabilities 
-                if fun is not None:
-                    _list = [fun(_it) for _it in _list]
+            _list = value
+            if _list[0] > 1-epsilon:
+                _list[0] = 1-epsilon
+            elif _list[1] > 1-epsilon:
+                _list[1] = 1-epsilon
                 
-                return _list # Return probability
+            if _list[0] < epsilon:
+                _list[0] = epsilon
+            elif _list[1] < epsilon:
+                _list[1] = epsilon
+                   
+            # Apply fun on probabilities 
+            if fun is not None:
+                _list = [fun(_it) for _it in _list]
+            
+            return _list # Return probability
 
-        return [1, 0] # ?
+        return [float("nan"), float("nan")]
                     
     def __collectConceptsAndRelations(self, dn):
         conceptsAndRelations = set()
@@ -433,28 +540,55 @@ class DataNode:
 
         return conceptsAndRelations
 
-    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001):
-        
+    def __collectEqlsFromLC(self, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+            
+        lcEqls = {}
+        for id, lc in usedGraph._logicalConstrains.items(): 
+            if isinstance(lc, eql):
+                if len(lc.e) != 3:
+                    continue
+                
+                if str(lc.e[0]) in lcEqls:
+                    lcEqls[str(lc.e[0])].append(lc.e)
+                else:
+                    lcEqls[str(lc.e[0])] = [lc.e]
+                    
+                continue
+                
+                key = str(lc.e[0])+ ":" + lc.e[1] + ":" + str(lc.e[2])
+                dns = self.findDatanodes(select = (lc.e[0], lc.e[1], lc.e[2]))
+                
+                for _dn in dns:
+                    pass
+                
+        return lcEqls
+                    
+    # Prepare data for ILP based on data graph with this instance as a root based on the provided list of concepts and relations
+    def __prepareILPData(self, *_conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001,  minimizeObjective = False):
+        # Check if concepts and/or relations have been provided for inference
         if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
-            _conceptsRelations = self.__collectConceptsAndRelations(self)
+            _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
         
+        conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
+        hardConstrains = []
         _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
         candidates_currentConceptOrRelation = OrderedDict()
-        conceptsRelations = []
         # Collect all the candidates for concepts and relations in conceptsRelations
         for _currentConceptOrRelation in _conceptsRelations:
-            
             # Convert string to concept if provided as string
             if isinstance(_currentConceptOrRelation, str):
                 currentConceptOrRelation = self.__findConcept(_currentConceptOrRelation)
                 
                 if currentConceptOrRelation is None:
-                    continue
-            #elif isinstance(_currentConceptOrRelation, Concept):
-                #currentConceptOrRelation = _currentConceptOrRelation
+                    continue # String is not a name of concept or relation
             else:
                 currentConceptOrRelation = _currentConceptOrRelation
+                
+            # Check if it is a hard constrain concept or relation - check if DataNote exist of this type
+            if self.__isHardConstrains(currentConceptOrRelation):
+                hardConstrains.append(str(currentConceptOrRelation)) # Hard Constrain
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
             currentCandidates = currentConceptOrRelation.candidates(self)
@@ -474,7 +608,7 @@ class DataNode:
                 for candidateElement in currentCandidate:
                     _instances.add(candidateElement)
 
-            candidates_currentConceptOrRelation[currentConceptOrRelation] = _currentInstances
+            candidates_currentConceptOrRelation[str(currentConceptOrRelation)] = _currentInstances
           
         if len(_instances) == 0:
             return 
@@ -488,6 +622,9 @@ class DataNode:
 
         no_candidateds = len(infer_candidatesID)    # Number of candidates
         
+        # Get eqls from LCs
+        lcEqls = self.__collectEqlsFromLC()
+        
         # Create numpy arrays for collected probabilities and zero them
         graphResultsForPhraseToken = dict()
         
@@ -495,63 +632,102 @@ class DataNode:
         graphResultsForPhraseRelation = dict()
         graphResultsForTripleRelations = dict()
 
-        conceptOrRelationDict = {} # maps concept name to concept - Used to put the ILP calculated probabilities back into the data graph 
         for currentConceptOrRelation in conceptsRelations:
-            conceptOrRelationDict[currentConceptOrRelation.name] = currentConceptOrRelation
-            currentCandidates = candidates_currentConceptOrRelation[currentConceptOrRelation]
+            currentCandidates = candidates_currentConceptOrRelation[str(currentConceptOrRelation)]
             
-            if currentCandidates is None:
+            if not currentCandidates:
                 continue
             
-            for currentCandidate in currentCandidates:
-                if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                    graphResultsForPhraseToken[currentConceptOrRelation.name] = np.zeros((no_candidateds, 2))
+            c = next(iter(currentCandidates or []), None)
+            if len(c) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
+                graphResultsForPhraseToken[str(currentConceptOrRelation)] = np.zeros((no_candidateds, 2))
                     
-                elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
-                    graphResultsForPhraseRelation[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, 2))
+                if str(currentConceptOrRelation) in lcEqls:
+                    for e in lcEqls[str(currentConceptOrRelation)]:
+                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                        hardConstrains.append(key) # Hard Constrain
+
+                        graphResultsForPhraseToken[key] = np.zeros((no_candidateds, 2))
                     
-                elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element
-                    graphResultsForTripleRelations[currentConceptOrRelation.name] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
-                        
-                else: # No support for more then three candidates yet
-                    pass
+            elif len(c) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
+                graphResultsForPhraseRelation[str(currentConceptOrRelation)] = np.zeros((no_candidateds, no_candidateds, 2))
+                
+                if str(currentConceptOrRelation) in lcEqls:
+                    for e in lcEqls[str(currentConceptOrRelation)]:
+                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                        hardConstrains.append(key) # Hard Constrain
+
+                        graphResultsForPhraseRelation[key] = np.zeros((no_candidateds, no_candidateds, 2))
+
+            elif len(c) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element
+                graphResultsForTripleRelations[str(currentConceptOrRelation)] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
+                
+                if str(currentConceptOrRelation) in lcEqls:
+                    for e in lcEqls[str(currentConceptOrRelation)]:
+                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                        hardConstrains.append(key) # Hard Constrain
+                
+                        graphResultsForTripleRelations[key] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
+                    
+            else: # No support for more then three candidates yet
+                pass
                 
         # Collect probabilities for candidates 
         for currentConceptOrRelation in conceptsRelations:
-            currentCandidates = candidates_currentConceptOrRelation[currentConceptOrRelation]
+            currentCandidates = candidates_currentConceptOrRelation[str(currentConceptOrRelation)]
             
             if currentCandidates is None:
                 continue
             
+            reltationAttrs = self.__getRelationAttrNames(currentConceptOrRelation)
+            
             for currentCandidate in currentCandidates:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     if currentProbability:
-                        graphResultsForPhraseToken[currentConceptOrRelation.name][currentCandidate[0].instanceID] = currentProbability
+                        graphResultsForPhraseToken[str(currentConceptOrRelation)][currentCandidate[0].instanceID] = currentProbability
                     
                 elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
-                    currentProbability = currentConceptOrRelation.predict(self, currentCandidate1, currentCandidate2)
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    if str(currentConceptOrRelation) in hardConstrains:
+                        currentProbability = self.__getHardConstrains(currentConceptOrRelation, reltationAttrs, currentCandidate)
+                    else:
+                        currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    
                     if currentProbability:
-                        graphResultsForPhraseRelation[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
+                        graphResultsForPhraseRelation[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
+
+                    if str(currentConceptOrRelation) in lcEqls:
+                        for e in lcEqls[str(currentConceptOrRelation)]:
+                            #dns = self.findDatanodes(select = (e[0], e[1], e[2]))
+                            
+                            _e2 = currentCandidate[0].relationLinks[str(e[0])][currentCandidate[1].instanceID].attributes[e[1]].item()
+                            
+                            if e[2] == _e2:
+                                 currentProbability = [0, 1]
+                            else:
+                                currentProbability = [1, 0]
+                            
+                            key = str(e[0])+ ":" + e[1] + ":" + str(e[2])
+                            
+                            graphResultsForPhraseRelation[key][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
 
                 elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element     
                     currentCandidate1 = currentCandidate[0]
                     currentCandidate2 = currentCandidate[1]
                     currentCandidate3 = currentCandidate[2]
-                    currentProbability = self.__getProbability(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
-                    self.__myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
+                    __myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
                     if currentProbability:
-                        graphResultsForTripleRelations[currentConceptOrRelation.name][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
+                        graphResultsForTripleRelations[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
                     
                 else: # No support for more then three candidates yet
                     pass
-
-        # Get ontology graph and then  ilpOntsolver
+        
+        # Get ontology graphs and then ilpOntsolver
         myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
         
         for currentConceptOrRelation in conceptsRelations:
@@ -561,17 +737,26 @@ class DataNode:
                 myOntologyGraphs.add(currentOntologyGraph)
                 
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
+                        
+        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
+    
+    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
+    def inferILPConstrains(self, *_conceptsRelations ,fun=None, epsilon = 0.00001,  minimizeObjective = False):
+        
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation= \
+            self.__prepareILPData(*_conceptsRelations,  dnFun = self.__getProbability, fun = fun, epsilon = epsilon)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
-        tokenResult, pairResult, tripleResult = myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
-        
-        #return tokenResult, pairResult, tripleResult
-    
+        tokenResult, pairResult, tripleResult = \
+            myilpOntSolver.calculateILPSelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, minimizeObjective = minimizeObjective, hardConstrains = hardConstrains)
+            
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         for concept_name in tokenResult:
-            concept = conceptOrRelationDict[concept_name]
-            currentCandidates = candidates_currentConceptOrRelation[concept]
+            if concept_name in hardConstrains:
+                continue
+            
+            currentCandidates = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
             
@@ -579,9 +764,11 @@ class DataNode:
                 infer_candidate[0].attributes[key] = torch.tensor([tokenResult[concept_name][infer_candidate[0].getInstanceID()]], device=device) 
                 
         for concept_name in pairResult:
-            concept = conceptOrRelationDict[concept_name]
+            if concept_name in hardConstrains:
+                continue
+            
             rootRelation = self.__findRootRelation(concept)
-            currentCandidates = candidates_currentConceptOrRelation[concept]
+            currentCandidates = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
             
@@ -593,8 +780,10 @@ class DataNode:
     
         # Update triple
         for concept_name in tripleResult:
-            concept = conceptOrRelationDict[concept_name]
-            currentCandidates = candidates_currentConceptOrRelation[concept]
+            if concept_name in hardConstrains:
+                continue
+            
+            currentCandidates = candidates_currentConceptOrRelation[concept_name]
             for infer_candidate in currentCandidates:
                 if infer_candidate[0] != infer_candidate[1] and infer_candidate[0] != infer_candidate[2] and infer_candidate[1] != infer_candidate[2]:
                     if DataNode.PredictionType["ILP"] not in infer_candidate[0].attributes:
@@ -602,7 +791,14 @@ class DataNode:
                         
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
-
+    
+    def verifySelection(self,*_conceptsRelations):
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
+            self.__prepareILPData(_conceptsRelations, dnFun = self.__getLabel)
+            
+        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
+        
+        return verifyResult
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
@@ -768,11 +964,14 @@ class DataNodeBuilder(dict):
             keys = [*existingDnsForAttr]
             
             for p in product(*existingDnsForAttr.values()): # Candidates
+                _p = tuple([__p.getInstanceID() for __p in p])
+                _t = value[_p] == 0                
+                if (value.names[0] is not None) and ('Candidate' in value.names[0]) and (value[_p] == 0):
+                    continue
+                
                 instanceValue = ""
                 instanceID = ' -> '.join([n.ontologyNode.name + ' ' + str(n.getInstanceID()) for n in p])
                 rDn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-                
-                _p = tuple([__p.getInstanceID() for __p in p])                
                 rDn.attributes[keyDataName] = value[_p]
                 
                 for i, dn in enumerate(p):
@@ -942,11 +1141,22 @@ class DataNodeBuilder(dict):
         if value is None:
             return dict.__setitem__(self, key, value)
         
-        if len(skey) < 3:
+        if len(skey) < 2:
             return dict.__setitem__(self, key, value)
         
         usedGraph = dict.__getitem__(self, "graph")
-        _conceptName = skey[2]
+
+        conceptIndex = 0
+        for k in skey:
+            if usedGraph.isGraphName(k):
+                conceptIndex = conceptIndex + 1
+            else:
+                break
+            
+        if conceptIndex + 1 > len(skey):
+            return dict.__setitem__(self, key, value)
+ 
+        _conceptName = skey[conceptIndex]
         concept = self.__findConcept(_conceptName, usedGraph)
         
         if not concept:
@@ -954,7 +1164,7 @@ class DataNodeBuilder(dict):
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
         
-        keyDataName = "".join(map(lambda x: '/' + x, skey[3:]))
+        keyDataName = "".join(map(lambda x: '/' + x, skey[conceptIndex+1:]))
         keyDataName = keyDataName[1:]
 
         if conceptInfo['relation']:

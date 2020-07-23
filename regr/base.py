@@ -370,6 +370,12 @@ class NamedTree(NamedTreeNode, OrderedDict):
             names = names[1:]
         return name, names
 
+    def isGraphName(self, name):
+        if name in self._names:
+            return True
+        else:
+            return False
+        
     def parse_query_apply(self, func, *names, delim='/', trim=True):
         name, names = self.extract_name(*names, delim=delim, trim=trim)
         if names:

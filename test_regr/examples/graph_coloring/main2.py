@@ -11,13 +11,13 @@ def model_declaration():
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
-    from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
+    from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
 
     from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
     from sensors import DummyCityLinkEdgeSensor
     from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
 
-    graph.detach()
+    graph2.detach()
 
     # --- City
     
@@ -32,6 +32,11 @@ def model_declaration():
     city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
     city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
     
+    def readCitylinks(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
+        return 1
+    
+    cityLink['raw'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readCitylinks, keyword='city')
+    
     def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
         if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader
             return 1
@@ -40,20 +45,20 @@ def model_declaration():
         
     # "raw" is it right key?
     # First argument required ?!!
-    neighbor['raw'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readNeighbors, keyword='links')
-    
+    cityLink['neighbor'] = CandidateReaderSensor(edges=[cityLink['raw']], label=False, forward=readNeighbors, keyword='links')
+
     # --- Learners
     
-    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], neighbor['raw']])
+    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], cityLink['neighbor']])
     city[firestationCity] = DummyCityLabelSensor(label=True)
     
-    program = LearningBasedProgram(graph, PoiModel)
+    program = LearningBasedProgram(graph2, PoiModel)
     return program
 
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
-    from graph import city, neighbor, firestationCity
+    from graph2 import city, firestationCity, cityLink
     lbp = model_declaration()
 
     dataset = CityReader().run()  # Adding the info on the reader
@@ -70,7 +75,7 @@ def test_graph_coloring_main():
             assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
-        conceptsRelations = (firestationCity, neighbor)  
+        conceptsRelations = (firestationCity, cityLink)  
         datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
         
         result = []

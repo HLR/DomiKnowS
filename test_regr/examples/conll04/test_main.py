@@ -1,9 +1,12 @@
 import sys
 sys.path.append('.')
 sys.path.append('../..')
+sys.path.append('examples/emr')
+
+from os.path import abspath
+filename = abspath('examples/emr')
 
 import pytest
-
 
 @pytest.fixture(name='case')
 def test_case():
