@@ -39,9 +39,9 @@ def main():
 
     program = model_declaration()
     data = [{
-        'x': [[[1.]]],
-        'y0': [[[1.,0.]]],
-        'y1': [[[0.,1.]]]
+        'x': [1.],
+        'y0': [[1.,0.]],
+        'y1': [[0.,1.]]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     for loss, metric, world_node in program.test(data):
