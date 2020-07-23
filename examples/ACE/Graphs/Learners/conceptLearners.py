@@ -58,10 +58,10 @@ class LSTMLearner(CallingLearner):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(LSTMLearner, self).forward(context=context)
-        output = self.model(context[self.pres[0].fullname])
+        super(LSTMLearner, self).forward(data_item)
+        output = self.model(data_item[self.pres[0].fullname])
         return output
 
 
@@ -77,10 +77,10 @@ class FullyConnectedLearner(CallingLearner):
             
     def forward(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
     ) -> Any:
-        super(FullyConnectedLearner, self).forward(context=context)
-        _tensor = context[self.pres[0].fullname]
+        super(FullyConnectedLearner, self).forward(data_item)
+        _tensor = data_item[self.pres[0].fullname]
         output = self.model(_tensor)
         return output
 

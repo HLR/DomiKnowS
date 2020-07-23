@@ -1,11 +1,10 @@
-from regr.sensor.sensor import Sensor
-from regr.graph import Graph, DataNode
-
 from typing import Dict, Any
 import torch
 
-class TorchSensor(Sensor):
+from .. import Sensor
 
+
+class TorchSensor(Sensor):
     def __init__(self, *pres, output=None, edges=None, label=False):
         super().__init__()
         if not edges:
@@ -24,65 +23,68 @@ class TorchSensor(Sensor):
 
     def __call__(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(context)
+            if self.fullname not in data_item:
+                self.update_pre_context(data_item)
         except:
-            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            print('Error during updating pre data item with sensor {}'.format(self.fullname))
             raise
-        self.context_helper = context
+        self.context_helper = data_item
         try:
-            context = self.update_context(context)
+            data_item = self.update_context(data_item)
         except:
-            print('Error during updating context with sensor {}'.format(self.fullname))
+            print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
 
         if self.output:
-            return context[self.sup.sup[self.output].fullname]
+            return data_item[self.sup.sup[self.output].fullname]
 
         try:
-            return context[self.fullname]
-        except:
-            return context[self.sup.sup['raw'].fullname]
+            return data_item[self.fullname]
+        except KeyError:
+            return data_item[self.sup.sup['raw'].fullname]
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             val = self.forward()
             
         if val is not None:
-            context[self.fullname] = val
+            data_item[self.fullname] = val
             if not self.label:
-                context[self.sup.fullname] = val  # override state under property name
+                data_item[self.sup.fullname] = val  # override state under property name
         else:
-            context[self.fullname] = None
+            data_item[self.fullname] = None
             if not self.label:
-                context[self.sup.fullname] = None
+                data_item[self.sup.fullname] = None
             
         if self.output:
-            context[self.fullname] = self.fetch_value(self.output)
-            context[self.sup.fullname] = self.fetch_value(self.output)
+            data_item[self.fullname] = self.fetch_value(self.output)
+            data_item[self.sup.fullname] = self.fetch_value(self.output)
             
-        return context
+        return data_item
 
     def update_pre_context(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
-                sensor(context=context)
+                sensor(data_item=data_item)
         for pre in self.pres:
+            if self.sup is None:
+                raise ValueError('{} must be used with with property assignment.'.format(type(self)))
             for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(context=context)
+                sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None):
         if selector:
@@ -91,7 +93,6 @@ class TorchSensor(Sensor):
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
-            pass
         else:
             return self.context_helper[self.sup.sup[pre].fullname]
 
@@ -101,7 +102,7 @@ class TorchSensor(Sensor):
             self.inputs.append(self.fetch_value(pre))
 
     def forward(self,) -> Any:
-        return None
+        raise NotImplementedError
 
 
 class ConstantSensor(TorchSensor):
@@ -119,17 +120,17 @@ class ReaderSensor(TorchSensor):
         self.keyword = keyword
 
     def fill_data(self, data):
-        self.data = data
+        self.data = data[self.keyword]
 
     def forward(
         self,
     ) -> Any:
-        if self.data:
+        if self.data is not None:
             try:
                 if self.label:
-                    return torch.tensor(self.data[self.keyword], device=self.device)
+                    return torch.tensor(self.data, device=self.device)
                 else:
-                    return self.data[self.keyword]
+                    return self.data
             except:
                 print("the key you requested from the reader doesn't exist")
                 raise
@@ -165,26 +166,26 @@ class NominalSensor(TorchSensor):
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             val = self.forward()
             val = self.one_hot_encoder(val)
         if val is not None:
-            context[self.fullname] = val
-            context[self.sup.fullname] = val  # override state under property name
+            data_item[self.fullname] = val
+            data_item[self.sup.fullname] = val  # override state under property name
         else:
-            context[self.fullname] = None
-            context[self.sup.fullname] = None
+            data_item[self.fullname] = None
+            data_item[self.sup.fullname] = None
         if self.output:
-            context[self.fullname] = self.fetch_value(self.output)
-            context[self.sup.fullname] = self.fetch_value(self.output)
-        return context
+            data_item[self.fullname] = self.fetch_value(self.output)
+            data_item[self.sup.fullname] = self.fetch_value(self.output)
+        return data_item
 
 
 class TorchEdgeSensor(TorchSensor):
@@ -215,59 +216,60 @@ class TorchEdgeSensor(TorchSensor):
 
     def __call__(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
         self.get_initialized()
         if not self.created:
             self.dst[self.keyword] = ConstantSensor()
             self.created = 1
         try:
-           self.update_pre_context(context)
+            if self.fullname not in data_item:
+                self.update_pre_context(data_item)
         except:
-            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            print('Error during updating pre data_item with sensor {}'.format(self.fullname))
             raise
-        self.context_helper = context
+        self.context_helper = data_item
         try:
-            context = self.update_context(context)
+            data_item = self.update_context(data_item)
         except:
-            print('Error during updating context with sensor {}'.format(self.fullname))
+            print('Error during updating data_item with sensor {}'.format(self.fullname))
             raise
-        return context[self.dst[self.keyword].fullname]
+        return data_item[self.dst[self.keyword].fullname]
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
 
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             val = self.forward()
         if val is not None:
-            context[self.fullname] = val
-            context[self.dst[self.keyword].fullname] = val # override state under property name
+            data_item[self.fullname] = val
+            data_item[self.dst[self.keyword].fullname] = val # override state under property name
         else:
             print("val is none")
-        return context
+        return data_item
 
     def update_pre_context(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         if self.edges:
             for edge in self.edges:
                 for _, sensor in edge.find(Sensor):
-                    sensor(context=context)
+                    sensor(data_item)
         for pre in self.pres:
             if pre not in self.src:
                 continue
             for _, sensor in self.src[pre].find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         if self.output:
-            return context[self.output.fullname]
+            return data_item[self.output.fullname]
 
     def fetch_value(self, pre, selector=None):
         if selector:
@@ -276,7 +278,6 @@ class TorchEdgeSensor(TorchSensor):
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
-            pass
         else:
             return self.context_helper[self.src[pre].fullname]
 
@@ -320,26 +321,26 @@ class AggregationSensor(TorchSensor):
             raise Exception('not valid')
 
     def get_map_value(self, ):
-            self.map_value = self.context_helper[self.src[self.map_key].fullname]
+        self.map_value = self.context_helper[self.src[self.map_key].fullname]
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
 
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             self.get_map_value()
             self.get_data()
             val = self.forward()
         if val is not None:
-            context[self.fullname] = val
-            context[self.sup.fullname] = val # override state under property name
-        return context
+            data_item[self.fullname] = val
+            data_item[self.sup.fullname] = val # override state under property name
+        return data_item
 
     def get_data(self):
         result = []
@@ -412,49 +413,49 @@ class SelectionEdgeSensor(TorchEdgeSensor):
 
     def __call__(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
         self.get_initialized()
         try:
-           self.update_pre_context(context)
+            self.update_pre_context(data_item)
         except:
-            print('Error during updating pre context with sensor {}'.format(self.fullname))
+            print('Error during updating pre data item with sensor {}'.format(self.fullname))
             raise
-        self.context_helper = context
+        self.context_helper = data_item
         try:
-            context = self.update_context(context)
+            data_item = self.update_context(data_item)
         except:
-            print('Error during updating context with sensor {}'.format(self.fullname))
+            print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
-        return context[self.src[self.dst].fullname]
+        return data_item[self.src[self.dst].fullname]
 
     def get_selection_helper(self):
         self.selection_helper = self.context_helper[self.src[self.dst].fullname]
 
     def update_pre_context(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         for _, sensor in self.src[self.dst].find(Sensor):
-                sensor(context=context)
+            sensor(data_item)
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
 
-        if not force and self.fullname in context:
-            # context cached results by sensor name. override if forced recalc is needed
-            val = context[self.fullname]
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
         else:
             self.define_inputs()
             self.get_selection_helper()
             val = self.forward()
         if val is not None:
-            context[self.fullname] = val
-            context[self.sup.fullname] = val  # override state under property name
-        return context
+            data_item[self.fullname] = val
+            data_item[self.sup.fullname] = val  # override state under property name
+        return data_item
 
 
 class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
@@ -464,6 +465,7 @@ class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
 
 class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
     def __init__(self, *pres, threshold=0.5):
+        # FIXME: @hfaghihi, do you mean to call super class of `SelectionEdgeSensor`, so here we skip the constructor of `SelectionEdgeSensor`?
         super(SelectionEdgeSensor).__init__(*pres)
         self.threshold = threshold
 

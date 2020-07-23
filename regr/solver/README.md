@@ -1,4 +1,61 @@
-# ILP Solver based on constrains extracted from ontology
+### ILP Solver 
+
+The solver builds the ILP (Integer Linear Programming) model based on the constrains defined in the learning model and the prediction data for graph concepts and relations assignment to example tokens.
+The actual used ILP is Zero-one linear programming in which the variables are restricted to be either 0 or 1.
+It solves the ILP model and provides the most optimized assignment.
+
+The solver can be called on the DataNode (usually the root DataNode of the Data Graph) with DataNode method:
+ 
+```
+inferILPConstrains(*_conceptsRelations, fun=None)
+```
+The method retrieves the constrains from the ontology graph associated with the Data Graph and the probabilities from Data Graph nodes attributes.
+It has two arguments:
+* *_conceptsRelations* is a collection of concepts and relations for which the ILP model should be solved. 
+They can be provide as Concepts (nodes in the model graph) or strings representing concepts or relations names. 
+If this collection is empty then the methods will use all concepts and relations in the Data Graph.
+
+
+* *fun* is a optional function modifying the original probability in the Data Graph before they are used in the ILP model.
+
+The results of the ILP solution are added to nodes in the Data Graph with key ILP.
+
+## The source of constrains 
+
+The ILP constrains could be specified in the **ontology graph itself with defined logical constrains** or in the **ontology (in OWL file)** provided as url in the ontology graph.
+
+# Graph with logical Constrains
+
+**If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
+
+The graph can specify constrains:
+* **Subclass relation between concepts**: e.g. people = word(name='people')
+* **Disjointment between concepts**: e.g. disjoint(people, organization, location, other, o)
+* **Domain and ranges for relations**: e.g. work_for.has_a(people, organization)
+
+Additional, logical constrains defined within the graph can use the following logical functions to build logical expression: 
+* **notL**, 
+* **andL**, 
+* **orL**, 
+* **nandL**, 
+* **existsL**, 
+* **ifL**, 
+* **equalA**, 
+* **inSetA**.
+
+The logical constrain can use variables to associate related objects of the logical expression. 
+The expressions use concepts defined in the graph and set additional constrains on them. 
+Example:
+
+	ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+	
+This above example logical constrain specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
+
+The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
+
+# Ontology file as a source of constrains
+
+**If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**
 
 The OWL ontology, on which the learning system graph was build is loaded into the [ilpOntSolver](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/ilpOntSolver.py) and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/). 
 
@@ -7,10 +64,11 @@ The OWL ontology language allows to specify constrains on [classes](https://www.
 The [ilpBooleanMethods](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/ilpBooleanMethods.py) module encodes basic logical expressions (*[AND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L48)*, *[OR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L102)*, *[IF](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L264)*, *[NAND](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L156)*, *[XOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L245)*, *[EPQ](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L281)*, *[NOR](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L210)*, *[NOT](https://github.com/kordjamshidi/RelationalGraph/blob/5abe2795ca219c81ee8fb8d39ca294e2f0d7738c/regr/solver/ilpBooleanMethods.py#L16)*) into the ILP equations.  
 
 The solver [implementation using Gurobi](https://github.com/kordjamshidi/RelationalGraph/blob/master/regr/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. The solver encodes mapping from OWL constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities. 
-The solver ILP model is solved by Gurobi and the found solutions for optimal classifction of tokens and relations is returned. 
+The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned. 
 
-This detail of mapping from OWL to logical representaion is presented below for each OWL constrain.
-# Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*):
+This detail of mapping from OWL to logical representation is presented below for each OWL constrain.
+
+**Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
 
 - **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Classes "OWL example of disjoint statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression -  
   
@@ -42,7 +100,7 @@ This detail of mapping from OWL to logical representaion is presented below for 
 
 - **[oneOf](https://www.w3.org/TR/owl2-syntax/#Enumeration_of_Individuals "OWL example of enumeration of individuals for classes")** statements for a class *Concept* in ontology 
    
-# Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)
+**Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)**
 
 - **[domain](https://www.w3.org/TR/owl2-syntax/#Object_Property_Domain "OWL example of domain statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
 

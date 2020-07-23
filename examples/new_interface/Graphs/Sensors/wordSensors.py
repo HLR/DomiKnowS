@@ -49,26 +49,26 @@ class BetweenEncoderSensor(TorchSensor):
 
     def update_pre_context(
             self,
-            context: Dict[str, Any]
+            data_item: Dict[str, Any]
     ) -> Any:
         
-        if not "counter_BetweenEncoderSensor" in context:
-            context["counter_BetweenEncoderSensor" ] = {}
+        if not "counter_BetweenEncoderSensor" in data_item:
+            data_item["counter_BetweenEncoderSensor" ] = {}
             
-        if self.fullname in context["counter_BetweenEncoderSensor" ]:
-            context["counter_BetweenEncoderSensor" ][self.fullname] = context["counter_BetweenEncoderSensor" ][self.fullname] + 1
+        if self.fullname in data_item["counter_BetweenEncoderSensor" ]:
+            data_item["counter_BetweenEncoderSensor" ][self.fullname] = data_item["counter_BetweenEncoderSensor" ][self.fullname] + 1
         else:
-            context["counter_BetweenEncoderSensor" ][self.fullname] = 1
+            data_item["counter_BetweenEncoderSensor" ][self.fullname] = 1
             
         for edge in self.edges:
             for _, sensor in edge.find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         for pre in self.pres:
             for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         if self.inside:
             for _, sensor in self.inside[self.key].find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
 
     def define_inputs(self):
         super().define_inputs()

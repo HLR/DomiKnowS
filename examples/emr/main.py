@@ -1,7 +1,6 @@
 from emr.data import ConllDataLoader
-from emr.learningbaseprogram import LearningBasedProgram
-from emr.sensor.sensor import DataSensor, LabelSensor, CartesianSensor
-from emr.sensor.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
+from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor
+from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner
 from emr.utils import seed
 
 
@@ -66,30 +65,30 @@ def model_declaration(graph, vocab, config):
     pair[kill] = LRLearner(pair['feature'], **config.pair.lr)
 
     # program
-    lbp = LearningBasedProgram(graph, config.lbp)
+    lbp = config.lbp.type(graph, config.lbp.model)
     return lbp
 
 
 def main():
     from config import CONFIG
 
-    if CONFIG.Train.seed is not None:
-        seed(CONFIG.Train.seed)
+    if CONFIG.seed is not None:
+        seed(CONFIG.seed)
 
     graph = ontology_declaration()
 
     training_set = ConllDataLoader(CONFIG.Data.train_path,
-                                   batch_size=CONFIG.Train.batch_size,
+                                   batch_size=CONFIG.Data.batch_size,
                                    skip_none=CONFIG.Data.skip_none,
                                    shuffle=True)
     valid_set = ConllDataLoader(CONFIG.Data.valid_path,
-                                batch_size=CONFIG.Train.batch_size,
+                                batch_size=CONFIG.Data.batch_size,
                                 skip_none=CONFIG.Data.skip_none,
                                 vocab=training_set.vocab,
                                 shuffle=False)
 
     lbp = model_declaration(graph, training_set.vocab, CONFIG.Model)
-    lbp.train(training_set, valid_set, config=CONFIG.Train)
+    lbp.train(training_set, valid_set, **CONFIG.Train)
 
 if __name__ == '__main__':
     main()

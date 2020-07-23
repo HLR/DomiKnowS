@@ -1,19 +1,47 @@
 import torch
 
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
+from regr.program import LearningBasedProgram
+from regr.utils import Namespace, caller_source
 
-from emr.utils import Namespace, caller_source
-from emr.graph.torch import TorchModel, PoiModel, IMLModel
-from emr.graph.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
-from emr.graph.metric import MacroAverageTracker, PRF1Tracker
-from emr.graph.solver import Solver
+from emr.program.primaldual import PrimalDualLearningBasedProgram
+from emr.program.model.torch import SolverModel, IMLModel
+from emr.program.model.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from emr.program.model.metric import MacroAverageTracker, PRF1Tracker
+from emr.solver.solver import Solver
 
+
+lbps = {
+    'nll': {
+        'type': LearningBasedProgram,
+        'model': lambda graph: SolverModel(
+            graph,
+            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            metric=PRF1Tracker(),
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+    'iml': {
+        'type': LearningBasedProgram,
+        'model': lambda graph: IMLModel(
+            graph,
+            loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
+            metric=PRF1Tracker(),
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+    'primal-dual': {
+        'type': PrimalDualLearningBasedProgram,
+        'model': lambda graph: SolverModel(
+            graph,
+            loss=MacroAverageTracker(BCEWithLogitsLoss()),
+            metric=PRF1Tracker(),
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+}
 
 config = {
+    'seed': 1,
     'Data': {
         'train_path': "data/EntityMentionRelation/conll04.corp_1_train.corp",
         'valid_path': "data/EntityMentionRelation/conll04.corp_1_test.corp",
         'skip_none': False,
+        'batch_size': 8,
     },
     'Model': {
         'word': {
@@ -44,27 +72,13 @@ config = {
                 'in_features': 200,
             }
         },
-        'lbp': {
-            'model': lambda graph: IMLModel(
-                graph,
-                loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
-                metric=PRF1Tracker(),
-                solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
-                ),
-            # 'model': lambda graph: TorchModel(
-            #     graph,
-            #     loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            #     metric=PRF1Tracker(),
-            #     solver_fn=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver)
-            #     )
-        }
+        'lbp': lbps['nll']
     },
     'Train': {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-        'seed': 1,
-        'opt': torch.optim.Adam,
-        'batch_size': 8,
-        'epoch': 10,
+        'Optim': torch.optim.Adam,
+        'COptim': torch.optim.Adam,
+        'train_epoch_num': 100,
         'train_inference': True,
         'valid_inference': True
     },
