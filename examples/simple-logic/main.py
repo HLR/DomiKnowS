@@ -14,10 +14,10 @@ def model_declaration():
 
     graph.detach()
 
-    world = graph['input/world']
-    x = graph['input/x']
-    y0 = graph['output/y0']
-    y1 = graph['output/y1']
+    world = graph['world']
+    x = graph['x']
+    y0 = graph['y0']
+    y1 = graph['y1']
 
     world['x'] = ReaderSensor(keyword='x')
     world_contains_x['forward'] = TorchEdgeReaderSensor('x', mode='forward', keyword='x')
