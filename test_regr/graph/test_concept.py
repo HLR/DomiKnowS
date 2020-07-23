@@ -183,22 +183,22 @@ def test_candidates_query_dummy(graph, sentence_data):
     assert candidates[2] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[1])
     assert candidates[3] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[3])
 
-def test_candidates_query_trial(graph, sentence_data, model_trial):
-    work_for = graph['application/work_for']
-    people = graph['application/people']
-    organization = graph['application/organization']
-    def query(candidate):
-        with model_trial:
-            return (people.predict(sentence_data, candidate[0])[1] > 0.5 and
-                    organization.predict(sentence_data, candidate[1])[1] > 0.5 and
-                    candidate[0] != candidate[1]
-                   )
-    candidates = list(work_for.candidates(sentence_data, query=query))
-    assert len(candidates) == 2
-    # John 0.80 people, IBM 0.70 organization
-    assert candidates[0] == (sentence_data.getChildDataNodes()[0], sentence_data.getChildDataNodes()[3])
-    # IBM 0.51 people, John 0.51 organization, just for testing
-    assert candidates[1] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[0])
+# def test_candidates_query_trial(graph, sentence_data, model_trial):
+#     work_for = graph['application/work_for']
+#     people = graph['application/people']
+#     organization = graph['application/organization']
+#     def query(candidate):
+#         with model_trial:
+#             return (people.predict(sentence_data, candidate[0])[1] > 0.5 and
+#                     organization.predict(sentence_data, candidate[1])[1] > 0.5 and
+#                     candidate[0] != candidate[1]
+#                    )
+#     candidates = list(work_for.candidates(sentence_data, query=query))
+#     assert len(candidates) == 2
+#     # John 0.80 people, IBM 0.70 organization
+#     assert candidates[0] == (sentence_data.getChildDataNodes()[0], sentence_data.getChildDataNodes()[3])
+#     # IBM 0.51 people, John 0.51 organization, just for testing
+#     assert candidates[1] == (sentence_data.getChildDataNodes()[3], sentence_data.getChildDataNodes()[0])
 
 def test_getOntologyGraph(graph):
     linguistic = graph['linguistic']
@@ -208,11 +208,8 @@ def test_getOntologyGraph(graph):
     application = graph['application']
     people = application['people']
     assert people.getOntologyGraph() == application
-    
-    
-    
-    
-    
+
+
 from regr.graph import Concept, Relation, Property
 from regr.graph.relation import Contains, HasA, IsA
 from regr.sensor import Sensor
@@ -261,3 +258,8 @@ class TestConcept(object):
         assert phrase[people] is phrase['<people>']
         assert sensor.fullname == 'phrase/<people>/sensor'
         assert phrase[people, 'sensor'] is sensor
+
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main([__file__])
