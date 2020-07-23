@@ -88,7 +88,7 @@ class TorchModel(torch.nn.Module):
         for prop in self.graph.traversal_apply(all_properties):
             for _, sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
                 sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 1})
+        data_item.update({"graph": self.graph, 'READER': 0})
         builder = DataNodeBuilder(data_item)
         *out, = self.populate(builder)
         datanode = builder.getDataNode()
