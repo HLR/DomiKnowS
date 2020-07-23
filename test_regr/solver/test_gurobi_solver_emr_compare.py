@@ -128,25 +128,6 @@ def passby(fn, *args, **kwargs):
     return fn(*args, **kwargs)
 
 
-def gurobi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
-    # prepare solver
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    import logging
-    ilpConfig = {
-        'ilpSolver' : 'gurobi',
-        'log_level' : logging.DEBUG,
-        'log_filename' : 'ilpOntSolver.log',
-        'log_filesize' : 5*1024*1024*1024,
-        'log_backupCount' : 5,
-        'log_fileMode' : 'a'
-    }
-    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
-    
-    # call solver
-    results = benchmark(solver.solve_legacy, phrase, *inputs)
-    return results
-
-
 def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     # prepare solver
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
@@ -163,43 +144,6 @@ def mini_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     
     # call solver
     results = benchmark(solver.solve_legacy, phrase, *inputs)
-    return results
-
-
-def gurobi_owlapi_wrap(emr_graph, phrase, *inputs, benchmark=passby):
-    if len(inputs) > 3:
-        raise NotImplementedError
-    # prepare input
-    owl_inputs = []
-    key_maps = []
-    for input_ in inputs:
-        owl_input = {}
-        key_map = {}
-        for k, v in input_.items():
-            owl_input[k.name] = v
-            key_map[k.name] = k
-        owl_inputs.append(owl_input)
-        key_maps.append(key_map)
-
-    # prepare solver
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    import logging
-    ilpConfig = {
-        'ilpSolver' : 'gurobi',
-        'log_level' : logging.DEBUG,
-        'log_filename' : 'ilpOntSolver.log',
-        'log_filesize' : 5*1024*1024*1024,
-        'log_backupCount' : 5,
-        'log_fileMode' : 'a'
-    }
-    solver = ilpOntSolverFactory.getOntSolverInstance(emr_graph, _ilpConfig=ilpConfig, lazy_not=True, self_relation=False)
-
-    # call solver
-    owl_results = benchmark(solver.calculateILPSelection, phrase, *owl_inputs)
-
-    # prepare result
-    results = [{key_map[k]:v for k, v in owl_result.items()}
-               for owl_result, key_map in zip(owl_results, key_maps)]
     return results
 
 
@@ -231,7 +175,7 @@ def owl_wrap(emr_graph, phrase, *inputs, benchmark=passby):
     return results
 
 
-solver_list = [gurobi_wrap, mini_wrap, gurobi_owlapi_wrap, owl_wrap]
+solver_list = [mini_wrap, owl_wrap]
 
 
 @pytest.fixture(params=solver_list)
