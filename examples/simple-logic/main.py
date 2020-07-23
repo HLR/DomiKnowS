@@ -25,13 +25,15 @@ def model_declaration():
     x[y0] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
     x[y1] = FullyConnected2Learner('x', edges=[world_contains_x['forward']], input_dim=1, output_dim=2)
 
-    program = LearningBasedProgram(graph, MyModel)
+    program = LearningBasedProgram(graph, MyIMLModel)
     return program
 
 
 def main():
     import logging
     import torch
+
+    from graph import x
 
     logging.basicConfig(level=logging.INFO)
 
@@ -42,11 +44,12 @@ def main():
         'y1': [[[0.,1.]]]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
-    for metric, x_node in program.test(data):
-        print(metric)
-        print(x_node.getAttribute('<y0>'))
-        print(x_node.getAttribute('<y1>'))
-
+    for loss, metric, world_node in program.test(data):
+        print('loss:', loss)
+        # print(metric)
+        x_node = world_node.getChildDataNodes(x)[0]
+        print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
+        print('y1:', torch.softmax(x_node.getAttribute('<y1>'), dim=-1))
 
 if __name__ == '__main__':
     main()
