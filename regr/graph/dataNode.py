@@ -686,6 +686,7 @@ class DataNode:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
                     currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     if currentProbability:
+                        id = currentCandidate[0].instanceID
                         graphResultsForPhraseToken[str(currentConceptOrRelation)][currentCandidate[0].instanceID] = currentProbability
                     
                 elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
@@ -1059,7 +1060,7 @@ class DataNodeBuilder(dict):
                     
                 # Create the datanote for this element
                 instanceValue = ""
-                instanceID = dict.__getitem__(self, "READER")
+                instanceID = 0
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 _dn.attributes[keyDataName] = value
                 
@@ -1076,6 +1077,7 @@ class DataNodeBuilder(dict):
 
                     if conceptInfo['root']:  # New root
                         dns = [_dn] 
+                        _dn.instanceID = dict.__getitem__(self, "READER")
                         dict.__setitem__(self, 'dataNode', dns)
                 
                 # Add it as child to existing datanodes

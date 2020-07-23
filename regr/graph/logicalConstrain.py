@@ -241,7 +241,7 @@ class notL(LogicalConstrain):
         if headConstrain:
             if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
         else:
-            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variables created: %s"%([x.VarName for x in notV]))
+            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variable created: %s"%(notVar.VarName))
             
         model.update()
         
