@@ -4,11 +4,6 @@ from typing import Any
 import torch
 
 #  --- City
-class DummyCityEdgeSensor(TorchEdgeSensor): # Get world to city edge
-    def forward(self,) -> Any:
-        self.inputs.append(self.context_helper[self.edges[0].fullname])
-        return self.inputs[0]
-    
 class DummyCityLearner(TorchLearner):  # Learn Fire station classification for City
     def forward(self,) -> Any:
         result = torch.zeros(len(self.inputs[0]), 2)

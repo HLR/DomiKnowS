@@ -7,49 +7,41 @@ import pytest
 from reader import CityReader
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
     from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
 
-    from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
+    from sensors import DummyCityLearner, DummyCityLabelSensor
     from sensors import DummyCityLinkEdgeSensor
     from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
 
     graph2.detach()
 
     # --- City
-    
-    world['raw'] = ReaderSensor(keyword='world')
-    city['raw'] = ReaderSensor(keyword='city')
-    city['index'] = ReaderSensor(keyword='city') # "index" key Required by CandidateReaderSensor ?
-    world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', to='world_contains_city_edge', edges=[city['raw']])
+    world['index'] = ReaderSensor(keyword='world')
+    world_contains_city['forward'] = TorchEdgeReaderSensor('index', to='index', keyword='city', mode='forward')
 
     # --- Neighbor
-    
-    # Not used ? - maybe should be used in define_inputs of query_sensor ?
-    city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', to='city1', edges=[world_contains_city['forward']])
-    city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', to='city2', edges=[world_contains_city['forward']])
+    city1['backward'] = DummyCityLinkEdgeSensor('index', mode='backward', to='city1', edges=[world_contains_city['forward']])
+    city2['backward'] = DummyCityLinkEdgeSensor('index', mode='backward', to='city2', edges=[world_contains_city['forward']])
     
     def readCitylinks(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
         return 1
     
-    cityLink['raw'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readCitylinks, keyword='city')
-    
-    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader
+    cityLink['index'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readCitylinks, keyword='city')
+
+    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2, _):
+        if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
             return 1
         else:
             return 0
         
-    # "raw" is it right key?
-    # First argument required ?!!
-    cityLink['neighbor'] = CandidateReaderSensor(edges=[cityLink['raw']], label=False, forward=readNeighbors, keyword='links')
+    cityLink['neighbor'] = CandidateReaderSensor('index', forward=readNeighbors, keyword='links', edges=[city1['backward'], city2['backward']])
 
     # --- Learners
-    
-    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], cityLink['neighbor']])
+    city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward'], cityLink['neighbor']])
     city[firestationCity] = DummyCityLabelSensor(label=True)
     
     program = LearningBasedProgram(graph2, PoiModel)
