@@ -105,9 +105,73 @@ class TorchSensor(Sensor):
         raise NotImplementedError
 
 
+class FunctionalSensor(TorchSensor):
+    def __init__(self, *pres, output=None, edges=None, label=False, forward=None):
+        super().__init__(*pres, output=output, edges=edges, label=label)
+        self.forward_ = forward
+
+    def update_pre_context(
+        self,
+        data_item: Dict[str, Any]
+    ) -> Any:
+        for edge in self.edges:
+            for _, sensor in edge.find(Sensor):
+                sensor(data_item)
+        for pre in self.pres:
+            if isinstance(pre, str):
+                if self.sup is None:
+                    raise ValueError('{} must be used with with property assignment.'.format(type(self)))
+                for _, sensor in self.sup.sup[pre].find(Sensor):
+                    sensor(data_item)
+            elif isinstance(pre, (Property, Sensor)):
+                pre(data_item)
+
+    def update_context(
+        self,
+        data_item: Dict[str, Any],
+        force=False
+    ) -> Dict[str, Any]:
+        if not force and self.fullname in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self.fullname]
+        else:
+            self.define_inputs()
+            val = self.forward_wrap()
+            
+        if val is not None:
+            data_item[self.fullname] = val
+            if not self.label:
+                data_item[self.sup.fullname] = val  # override state under property name
+        else:
+            data_item[self.fullname] = None
+            if not self.label:
+                data_item[self.sup.fullname] = None
+            
+        if self.output:
+            data_item[self.fullname] = self.fetch_value(self.output)
+            data_item[self.sup.fullname] = self.fetch_value(self.output)
+            
+        return data_item
+
+    def fetch_value(self, pre, selector=None):
+        if isinstance(pre, str):
+            return super().fetch_value(pre, selector)
+        elif isinstance(pre, (Property, Sensor)):
+            return self.context_helper[pre.fullname]
+        return pre
+
+    def forward_wrap(self):
+        return self.forward(*self.inputs)
+
+    def forward(self, *inputs):
+        if self.forward_ is not None:
+            return self.forward_(*inputs)
+        raise NotImplementedError
+
+
 class ConstantSensor(TorchSensor):
-    def __init__(self, *pres, output=None, edge=None):
-        super().__init__(*pres, output=output, edges=edge)
+    def __init__(self, *pres, output=None, edge=None, label=False):
+        super().__init__(*pres, output=output, edges=edge, label=label)
 
     def forward(self,) -> Any:
         return self.context_helper[self.sup.fullname]
@@ -188,11 +252,11 @@ class NominalSensor(TorchSensor):
 
 
 class TorchEdgeSensor(TorchSensor):
-    def __init__(self, *pres, mode="forward", keyword="default", edges=None):
+    def __init__(self, *pres, to, mode="forward", edges=None):
         super().__init__(*pres, edges=edges)
+        self.to = to
         self.mode = mode
         self.created = 0
-        self.keyword = keyword
         self.edge = None
         self.src = None
         self.dst = None
@@ -219,7 +283,7 @@ class TorchEdgeSensor(TorchSensor):
     ) -> Dict[str, Any]:
         self.get_initialized()
         if not self.created:
-            self.dst[self.keyword] = ConstantSensor()
+            self.dst[self.to] = ConstantSensor()
             self.created = 1
         try:
             if self.fullname not in data_item:
@@ -233,7 +297,7 @@ class TorchEdgeSensor(TorchSensor):
         except:
             print('Error during updating data_item with sensor {}'.format(self.fullname))
             raise
-        return data_item[self.dst[self.keyword].fullname]
+        return data_item[self.dst[self.to].fullname]
 
     def update_context(
         self,
@@ -249,7 +313,7 @@ class TorchEdgeSensor(TorchSensor):
             val = self.forward()
         if val is not None:
             data_item[self.fullname] = val
-            data_item[self.dst[self.keyword].fullname] = val # override state under property name
+            data_item[self.dst[self.to].fullname] = val # override state under property name
         else:
             print("val is none")
         return data_item
@@ -282,9 +346,8 @@ class TorchEdgeSensor(TorchSensor):
 
 
 class TorchEdgeReaderSensor(TorchEdgeSensor):
-    def __init__(self, *pres, keyword, mode="forward"):
-        super().__init__(*pres, mode=mode)
-        self.data = None
+    def __init__(self, *pres, to, keyword, mode="forward", edges=None):
+        super().__init__(*pres, to=to, mode=mode, edges=edges)
         self.keyword = keyword
 
     def fill_data(self, data):

@@ -24,13 +24,13 @@ def model_declaration():
     world['raw'] = ReaderSensor(keyword='world')
     city['raw'] = ReaderSensor(keyword='city')
     city['index'] = ReaderSensor(keyword='city') # "index" key Required by CandidateReaderSensor ?
-    world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
+    world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', to='world_contains_city_edge', edges=[city['raw']])
 
     # --- Neighbor
     
     # Not used ? - maybe should be used in define_inputs of query_sensor ?
-    city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
-    city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
+    city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', to='city1', edges=[world_contains_city['forward']])
+    city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', to='city2', edges=[world_contains_city['forward']])
     
     def readCitylinks(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
         return 1
