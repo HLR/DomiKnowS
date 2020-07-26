@@ -1,17 +1,12 @@
 import sys
-sys.path.append('.')
 sys.path.append('../..')
-sys.path.append('examples/emr')
-
-from os.path import abspath
-filename = abspath('examples/emr')
 
 import pytest
 
 @pytest.fixture(name='case')
 def test_case():
     import torch
-    from emr.utils import Namespace
+    from regr.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     case = {

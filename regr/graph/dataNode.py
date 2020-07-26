@@ -383,6 +383,9 @@ class DataNode:
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
+        if isinstance(relationConcept, str):
+            relationConcept = self.__findConcept(relationConcept)
+            
         for _isA in relationConcept.is_a():
             _relationConcept = _isA.dst
             
@@ -775,7 +778,7 @@ class DataNode:
             if concept_name in hardConstrains:
                 continue
             
-            rootRelation = self.__findRootRelation(concept)
+            rootRelation = self.__findRootRelation(concept_name)
             currentCandidates = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
@@ -966,6 +969,9 @@ class DataNodeBuilder(dict):
         # Check the shape of the value if it is a Tensor of shape equal number of relation attributes
         if hasattr(value, 'shape'):
             for i, (k, a) in enumerate(existingDnsForAttr.items()):
+                if value.dim() <= i:
+                    return # Wrong shape not matching relation  attribute number
+                
                 if len(a) != value.shape[i]:
                     return # Wrong shape not matching relation  attribute number
         else:
