@@ -23,15 +23,8 @@ where `is_a()` is a relationship, as will be introduced below.
 
 In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `is_a`, `has_a` or `contains` keywords. 
 ```python
-with Graph('global') as graph:  
-        world = Concept(name='world')  
-        city = Concept(name='city')  
-        (world_contains_city,) = world.contains(city)  
-           
-        neighbor = Concept(name='neighbor')  
-        (city1, city2) = neighbor.has_a(arg1=city, arg2=city)  
-          
-        firestationCity = city(name='firestationCity')
+(world_contains_city,) = world.contains(city)  
+(city1, city2) = neighbor.has_a(arg1=city, arg2=city)  
 ```
 
 on last thing that we have to introduce inside our graph declaration is the set of rules we want to apply on the inference.
@@ -147,7 +140,6 @@ return program
 Next, we have to populate `datanode` and call inference on each sample.
 ```python
 for datanode in lbp.populate(dataset=dataset, inference=True):  
-  _dataset = next(CityReader().run())  
   # call solver  
   conceptsRelations = (firestationCity, neighbor)    
   datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True)   
