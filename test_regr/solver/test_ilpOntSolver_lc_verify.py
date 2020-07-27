@@ -170,7 +170,7 @@ def test_main_emr_verify(emr_input):
     # Call verify on explicite data -------
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
     
-    verifyResult = myilpOntSolver.verifySelectionLC(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
+    verifyResult = myilpOntSolver.verifySelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
     
     assert verifyResult # - correct
     

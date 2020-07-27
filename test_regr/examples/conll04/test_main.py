@@ -1,17 +1,12 @@
 import sys
-sys.path.append('.')
 sys.path.append('../..')
-sys.path.append('examples/emr')
-
-from os.path import abspath
-filename = abspath('examples/emr')
 
 import pytest
 
 @pytest.fixture(name='case')
 def test_case():
     import torch
-    from emr.utils import Namespace
+    from regr.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     case = {
@@ -68,48 +63,48 @@ def model_declaration(config, case):
 
     graph.detach()
 
-    sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
+    sentence['index'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
+        'index', mode='forward', to='index',
         expected_outputs=case.word.raw)
     word['emb'] = TestSensor(
-        'raw', edges=[rel_sentence_contains_word['forward']],
+        'index', edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
     rel_word_contains_char['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
+        'index', mode='forward', to='index',
         edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.char.raw)
     char['emb'] = TestSensor(
-        'raw', edges=[rel_word_contains_char['forward']],
+        'index', edges=[rel_word_contains_char['forward']],
         expected_inputs=[case.char.raw,],
         expected_outputs=case.word.emb)
     char['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: word to phrase backward
     rel_phrase_contains_word['backward'] = TestEdgeSensor(
-        'raw', mode='backward', keyword='raw',
+        'index', mode='backward', to='index',
         edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.phrase.raw)
     phrase['emb'] = TestSensor(
-        'raw', edges=[rel_phrase_contains_word['backward']],
+        'index', edges=[rel_phrase_contains_word['backward']],
         expected_inputs=[case.phrase.raw,],
         expected_outputs=case.phrase.emb)
     phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = TestEdgeSensor(
-        'emb', mode='backward', keyword='word1_emb',
+        'emb', mode='backward', to='word1_emb',
         expected_inputs=[case.word.emb,],
         expected_outputs=case.word.emb)
     rel_pair_word2['backward'] = TestEdgeSensor(
-        'emb', mode='backward', keyword='word2_emb',
+        'emb', mode='backward', to='word2_emb',
         expected_inputs=[case.word.emb,],
         expected_outputs=case.word.emb)
 
@@ -258,7 +253,7 @@ def test_main_conll04(case):
 
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            assert child_node.getAttribute('index') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
                 if child_node1.ontologyNode.name == 'char':
@@ -300,15 +295,15 @@ def test_main_conll04(case):
         #assert tokenResult['people'][0] == 1
         assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
         
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'h')})[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'I')})[0].getAttribute(people, 'ILP').item() == 0
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'J')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'h')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'I')})[0].getAttribute(people, 'ILP').item() == 0
         
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'), (char, 'raw', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h'), (char, 'index', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
 
-        assert len(datanode.findDatanodes(select = (char, 'raw', 'J'))) == 1
-        assert datanode.findDatanodes(select = (char, 'raw', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
+        assert len(datanode.findDatanodes(select = (char, 'index', 'J'))) == 1
+        assert datanode.findDatanodes(select = (char, 'index', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
         
         # Sum value of attribute people/ILP for all words
         #assert sum(tokenResult['people']) == 1
@@ -358,12 +353,12 @@ def test_main_conll04(case):
         #assert pairResult['work_for'][0][3] == 1
         assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
         
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'index', 'John'), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
 
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
          
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][0]) == 1

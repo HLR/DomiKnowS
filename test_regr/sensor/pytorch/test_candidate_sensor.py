@@ -45,7 +45,7 @@ def graph(case):
     # model
     container['index'] = ReaderSensor(keyword='container_keyword')
     container_contains_concept['forward'] = TestEdgeSensor(
-        'index', mode='forward', keyword='index',
+        'index', mode='forward', to='index',
         expected_inputs=[case.container,],
         expected_outputs=case.container_edge)
     concept['index'] = InstantiateSensor(edges=[container_contains_concept['forward']])

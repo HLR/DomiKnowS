@@ -1,56 +1,45 @@
 import sys
+import pytest
 
 sys.path.append('.')
 sys.path.append('../..')
 
-import pytest
-from reader import CityReader
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
+    from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
     from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
-
-    from sensors import DummyCityEdgeSensor, DummyCityLearner, DummyCityLabelSensor
-    from sensors import DummyCityLinkEdgeSensor
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    from sensors import DummyCityLearner
 
     graph2.detach()
 
     # --- City
-    
-    world['raw'] = ReaderSensor(keyword='world')
-    city['raw'] = ReaderSensor(keyword='city')
-    city['index'] = ReaderSensor(keyword='city') # "index" key Required by CandidateReaderSensor ?
-    world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
+    world['index'] = ReaderSensor(keyword='world')
+    world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
     # --- Neighbor
+    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward', edges=[world_contains_city['forward']])
+    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward', edges=[world_contains_city['forward']])
     
-    # Not used ? - maybe should be used in define_inputs of query_sensor ?
-    city1['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city1', edges=[world_contains_city['forward']])
-    city2['backward'] = DummyCityLinkEdgeSensor('raw', mode='backward', keyword='city2', edges=[world_contains_city['forward']])
+    def readCitylinks(datanodes_edges, index, datanode_concept1, datanode_concept2):
+        return True
     
-    def readCitylinks(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        return 1
-    
-    cityLink['raw'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readCitylinks, keyword='city')
-    
-    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader
+    cityLink['index'] = CandidateSensor(forward=readCitylinks, edges=[city1['backward'], city2['backward']])
+
+    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2, _):
+        if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
             return 1
         else:
             return 0
         
-    # "raw" is it right key?
-    # First argument required ?!!
-    cityLink['neighbor'] = CandidateReaderSensor(edges=[cityLink['raw']], label=False, forward=readNeighbors, keyword='links')
+    cityLink['neighbor'] = CandidateReaderSensor('index', keyword='links', forward=readNeighbors, edges=[city1['backward'], city2['backward']])
 
     # --- Learners
-    
-    city[firestationCity] = DummyCityLearner('raw', edges=[world_contains_city['forward'], cityLink['neighbor']])
-    city[firestationCity] = DummyCityLabelSensor(label=True)
+    city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward'], cityLink['neighbor']])
+    city[firestationCity] = ConstantSensor(data=None, label=True)
     
     program = LearningBasedProgram(graph2, PoiModel)
     return program
@@ -58,12 +47,13 @@ def model_declaration():
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
+    from reader import CityReader
     from graph2 import city, firestationCity, cityLink
+
     lbp = model_declaration()
 
     dataset = CityReader().run()  # Adding the info on the reader
-    #neighbor['raw'].fill_data(dataset) # Does not work
-    
+
     for datanode in lbp.populate(dataset=dataset, inference=True):
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
@@ -77,7 +67,7 @@ def test_graph_coloring_main():
         # call solver
         conceptsRelations = (firestationCity, cityLink)  
         datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
-        
+
         result = []
         for child_node in datanode.getChildDataNodes():
             s = child_node.getAttribute('raw')
@@ -87,7 +77,7 @@ def test_graph_coloring_main():
             else:
                 r = (s, False)
             result.append(r)
-        
+
         for child_index, child_node in enumerate(datanode.getChildDataNodes()):
             if child_index + 1 == 1:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
@@ -95,6 +85,7 @@ def test_graph_coloring_main():
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
             else:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

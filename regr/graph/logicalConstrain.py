@@ -241,7 +241,7 @@ class notL(LogicalConstrain):
         if headConstrain:
             if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
         else:
-            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variables created: %s"%([x.VarName for x in notV]))
+            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variable created: %s"%(notVar.VarName))
             
         model.update()
         
@@ -283,16 +283,18 @@ class existsL(LogicalConstrain):
                     
                     existsVars = {}
                     for currentToken in _v:
-                        if currentToken[0] in existsVars:
-                            existsVars[currentToken[0]].append(_v[currentToken])
+                        key = (currentToken[:n1Index] + currentToken[n1Index+1:])
+                        
+                        if key in existsVars:
+                            existsVars[key].append(_v[currentToken])
                         else:
-                            existsVars[currentToken[0]] = [_v[currentToken]]
+                            existsVars[key] = [_v[currentToken]]
                         
                     existsV[resultVariableNames] = {}     
                     for k in existsVars:
                         existsVarResult = myIlpBooleanProcessor.orVar(model, *existsVars[k], onlyConstrains = headConstrain, limit=cLimit)
         
-                        existsV[resultVariableNames][(k,)] = existsVarResult
+                        existsV[resultVariableNames][k] = existsVarResult
                 else:
                     pass
             elif len(cVariable) == 2:
@@ -349,3 +351,6 @@ class atMostL(LogicalConstrain):
         # atMostL is negation of atLeastL
         mNotL= notL(*[])
         return mNotL(model, myIlpBooleanProcessor, atLeastLV, resultVariableNames=resultVariableNames, headConstrain = headConstrain)
+
+class countL(LogicalConstrain):
+    pass
