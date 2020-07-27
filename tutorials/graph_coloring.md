@@ -8,23 +8,21 @@ There are a bunch of cities and each city can have a firestation in it. Each cit
 Each program in the Domiknows framework starts with a concept graph which defines the concepts interacting inside the problem world. 
 Here we have a `world` , several `city`, `firestationCity`, and the concept of `neighbor`
 ```python
-Graph.clear()  
-Concept.clear()  
-Relation.clear()  
-  
 with Graph('global') as graph:  
         world = Concept(name='world')  
         city = Concept(name='city')    
         neighbor = Concept(name='neighbor')            
         firestationCity = city(name='firestationCity')
 ```
-
-In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `has_a` or `contains` keywords. 
+Notice here, for `firestationCity`, instead of creating another `Concept`, we can use concept `city` to create a concept which will impose a hierachy between `city` and `firestationCity`. Please refer to ['inherit declaration'](/docs/KNOWLEDGE.md#inherit-declaration) for more details. This is equivalent to
 ```python
-Graph.clear()  
-Concept.clear()  
-Relation.clear()  
-  
+firestationCity = city(name='firestationCity')
+firestationCity.is_a(city)
+```
+where `is_a()` is a relationship, as will be introduced below.
+
+In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `is_a`, `has_a` or `contains` keywords. 
+```python
 with Graph('global') as graph:  
         world = Concept(name='world')  
         city = Concept(name='city')  
@@ -42,6 +40,9 @@ We add the following line to the previous code.
 orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
 ```
 This constraint is expressing that each city is either of type `firestationcity` or `has_a` `neighbor` that is a `firestationCity`.
+More constraint notion usage can be find in [Constraint](docs/KNOWLEDGE.md#constraints) section of the documentation.
+
+Please refer to [User Pipeline](/docs/PIPELINE.md#1-knowledge-declaration) and [Knowledge Declaration](/docs/KNOWLEDGE.md) in the documentation for more specification.
 
 ### Define the Reader
 Next step is to define the data of the problem. In this step we have to define a reader class which will load the inputs of the datasource into our framework. Reader class has a free style of coding and the only limitation is that it has to provide an iterative object over data which each data is a dictionary containing keyword and values. 
@@ -92,7 +93,7 @@ class DummyCityLearner(TorchLearner):
 		  t[0] = 0  
 	  return result
   ```
-To enable learning on each learner, we have to define a label and assign this to the same instance in the graph. 
+To enable learning on each learner, we have to define a label and assign this to the same instance in the graph based on a [Multiple Assignment Convention](/docs/MODEL.md#multiple-assigment-convention). 
 ```python
 class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classification  
   def __init__(self, *pres, label=True):  
