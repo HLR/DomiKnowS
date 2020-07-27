@@ -93,7 +93,7 @@ class DummyCityLearner(TorchLearner):
 		  t[0] = 0  
 	  return result
   ```
-To enable learning on each learner, we have to define a label and assign this to the same instance in the graph. 
+To enable learning on each learner, we have to define a label and assign this to the same instance in the graph based on a [Multiple Assignment Convention](/docs/MODEL.md#multiple-assigment-convention). 
 ```python
 class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classification  
   def __init__(self, *pres, label=True):  
