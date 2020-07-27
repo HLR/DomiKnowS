@@ -103,13 +103,11 @@ def model_declaration():
 ```
 we start by linking the `ReaderSensor`s to the concepts and properties of the graph.
 ```python
-world['raw'] = ReaderSensor(keyword='world')  
-city['raw'] = ReaderSensor(keyword='city')
+world['index'] = ReaderSensor(keyword='world')
 ```
 then, we link the `world` and `city` concepts:
-**This implementation doesn't seem right to me**
 ```python
-world_contains_city['forward'] = DummyCityEdgeSensor('raw', mode='forward', keyword='world_contains_city_edge', edges=[city['raw']])
+world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 ```
 Then we define the `CandidateReaderSensor` to read the `neighbor` concept into the graph.
 ```python
