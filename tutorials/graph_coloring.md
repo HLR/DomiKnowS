@@ -40,6 +40,7 @@ We add the following line to the previous code.
 orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
 ```
 This constraint is expressing that each city is either of type `firestationcity` or `has_a` `neighbor` that is a `firestationCity`.
+More constraint notion usage can be find in [Constraint](docs/KNOWLEDGE.md#constraints) section of the documentation.
 
 Please refer to [User Pipeline](/docs/PIPELINE.md#1-knowledge-declaration) and [Knowledge Declaration](/docs/KNOWLEDGE.md) in the documentation for more specification.
 
