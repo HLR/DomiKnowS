@@ -100,8 +100,8 @@ class InstantiateSensor(TorchSensor):
 
 
 class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, forward=None, keyword=None):
-        super().__init__(*pres, output=output, edges=edges, label=label, forward=forward)
+    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
+        super().__init__(*pres, edges=edges, forward=forward, label=label)
         self.data = None
         self.keyword = keyword
         if keyword is None:

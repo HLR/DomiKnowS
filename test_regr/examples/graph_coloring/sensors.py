@@ -13,16 +13,3 @@ class DummyCityLearner(TorchLearner):  # Learn Fire station classification for C
             t[0] = 0
 
         return result
-
-class DummyCityLabelSensor(TorchSensor): # Get Truth for Fire station classification
-    def __init__(self, *pres, label=True):
-        super().__init__(*pres, label=label)
-
-    def forward(self,) -> Any:
-        return []
-
-# --- CityLink
-
-class DummyCityLinkEdgeSensor(TorchEdgeSensor): # Get CityLink to city edge
-    def forward(self,) -> Any:
-        return self.inputs[0]

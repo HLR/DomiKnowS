@@ -1,36 +1,33 @@
 import sys
+import pytest
 
 sys.path.append('.')
 sys.path.append('../..')
 
-import pytest
-from reader import CityReader
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
+    from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
     from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
-
-    from sensors import DummyCityLearner, DummyCityLabelSensor
-    from sensors import DummyCityLinkEdgeSensor
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    from sensors import DummyCityLearner
 
     graph2.detach()
 
     # --- City
     world['index'] = ReaderSensor(keyword='world')
-    world_contains_city['forward'] = TorchEdgeReaderSensor('index', to='index', keyword='city', mode='forward')
+    world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
     # --- Neighbor
-    city1['backward'] = DummyCityLinkEdgeSensor('index', mode='backward', to='city1', edges=[world_contains_city['forward']])
-    city2['backward'] = DummyCityLinkEdgeSensor('index', mode='backward', to='city2', edges=[world_contains_city['forward']])
+    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward', edges=[world_contains_city['forward']])
+    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward', edges=[world_contains_city['forward']])
     
-    def readCitylinks(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        return 1
+    def readCitylinks(datanodes_edges, index, datanode_concept1, datanode_concept2):
+        return True
     
-    cityLink['index'] = CandidateReaderSensor(edges=[city1['backward'], city2['backward']], label=False, forward=readCitylinks, keyword='city')
+    cityLink['index'] = CandidateSensor(forward=readCitylinks, edges=[city1['backward'], city2['backward']])
 
     def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2, _):
         if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
@@ -38,11 +35,11 @@ def model_declaration():
         else:
             return 0
         
-    cityLink['neighbor'] = CandidateReaderSensor('index', forward=readNeighbors, keyword='links', edges=[city1['backward'], city2['backward']])
+    cityLink['neighbor'] = CandidateReaderSensor('index', keyword='links', forward=readNeighbors, edges=[city1['backward'], city2['backward']])
 
     # --- Learners
     city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward'], cityLink['neighbor']])
-    city[firestationCity] = DummyCityLabelSensor(label=True)
+    city[firestationCity] = ConstantSensor(data=None, label=True)
     
     program = LearningBasedProgram(graph2, PoiModel)
     return program
@@ -50,12 +47,13 @@ def model_declaration():
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
+    from reader import CityReader
     from graph2 import city, firestationCity, cityLink
+
     lbp = model_declaration()
 
     dataset = CityReader().run()  # Adding the info on the reader
-    #neighbor['raw'].fill_data(dataset) # Does not work
-    
+
     for datanode in lbp.populate(dataset=dataset, inference=True):
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
@@ -69,7 +67,7 @@ def test_graph_coloring_main():
         # call solver
         conceptsRelations = (firestationCity, cityLink)  
         datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
-        
+
         result = []
         for child_node in datanode.getChildDataNodes():
             s = child_node.getAttribute('raw')
@@ -79,7 +77,7 @@ def test_graph_coloring_main():
             else:
                 r = (s, False)
             result.append(r)
-        
+
         for child_index, child_node in enumerate(datanode.getChildDataNodes()):
             if child_index + 1 == 1:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
@@ -87,6 +85,7 @@ def test_graph_coloring_main():
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
             else:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
+
 
 if __name__ == '__main__':
     pytest.main([__file__])
