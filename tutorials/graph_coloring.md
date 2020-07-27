@@ -14,8 +14,14 @@ with Graph('global') as graph:
         neighbor = Concept(name='neighbor')            
         firestationCity = city(name='firestationCity')
 ```
+Notice here, for `firestationCity`, instead of creating another `Concept`, we can use concept `city` to create a concept which will impose a hierachy between `city` and `firestationCity`. Please refer to ['inherit declaration'](/docs/KNOWLEDGE.md#inherit-declaration) for more details. This is equivalent to
+```python
+firestationCity = city(name='firestationCity')
+firestationCity.is_a(city)
+```
+where `is_a()` is a relationship, as will be introduced below.
 
-In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `has_a` or `contains` keywords. 
+In addition to the concepts, we have to introduce the relationships between concepts in one of the forms of `is_a`, `has_a` or `contains` keywords. 
 ```python
 with Graph('global') as graph:  
         world = Concept(name='world')  
