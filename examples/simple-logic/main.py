@@ -23,7 +23,7 @@ def model_declaration():
     x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
     x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
 
-    program = LearningBasedProgram(graph, MyModel)
+    program = LearningBasedProgram(graph, MyIMLModel)
     return program
 
 
@@ -48,6 +48,8 @@ def main():
         x_node = world_node.getChildDataNodes(x)[0]
         print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
         print('y1:', torch.softmax(x_node.getAttribute('<y1>'), dim=-1))
+        print('y0:', x_node.getAttribute('<y0>/ILP'))
+        print('y1:', x_node.getAttribute('<y1>/ILP'))
 
 if __name__ == '__main__':
     main()

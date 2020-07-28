@@ -139,15 +139,15 @@ class PoiModel(TorchModel):
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, loss=None, metric=None, Solver=None):
-        super().__init__(graph, loss, metric)
+    def __init__(self, graph, poi=None, loss=None, metric=None, Solver=None):
+        super().__init__(graph, poi=poi, loss=loss, metric=metric)
         if Solver:
             self.solver = Solver(self.graph)
         else:
             self.solver = None
 
     def inference(self, builder):
-        for prop, (output_sensor, target_sensor) in self.poi.items():
+        for prop, (output_sensor, target_sensor) in self.poi:
             # make sure the sensors are evaluated
             output = output_sensor(builder)
             target = target_sensor(builder)
@@ -168,7 +168,15 @@ class IMLModel(SolverModel):
         logit = output_sensor(data_item)
         # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
-        inference = prop(data_item)
+
+        builder = data_item
+        datanode = builder.getDataNode()
+        concept = prop.sup
+        values = []
+        for cdn in datanode.findDatanodes(select=concept):
+            value = cdn.getAttribute(f'<{prop.name}>/ILP')
+            values.append(torch.cat((1-value, value), dim=-1))
+        inference = torch.stack(values)
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
