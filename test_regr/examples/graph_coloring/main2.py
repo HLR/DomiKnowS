@@ -21,8 +21,8 @@ def model_declaration():
     world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
     # --- Neighbor
-    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward', edges=[world_contains_city['forward']])
-    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward', edges=[world_contains_city['forward']])
+    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
+    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
     
     def readCitylinks(datanodes_edges, index, datanode_concept1, datanode_concept2):
         return True
