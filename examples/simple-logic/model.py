@@ -22,3 +22,13 @@ class MyModel(PoiModel):
             graph, 
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=ValueTracker(prediction_softmax))
+
+class Net(torch.nn.Module):
+    def __init__(self, w=None):
+        super().__init__()
+        if w is not None:
+            self.w = torch.nn.Parameter(torch.tensor(w).float().view(2, 1))
+        else:
+            self.w = torch.nn.Parameter(torch.rand(2, 1))
+    def forward(self, x):
+        return torch.matmul(self.w, x)

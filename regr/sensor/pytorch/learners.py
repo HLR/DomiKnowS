@@ -49,9 +49,9 @@ class TorchLearner(TorchSensor):
             message = f'Failed to load {self} from {save_path}. Continue not loaded.'
             warnings.warn(message, stacklevel=2)
 
-class TorchModuleLearner(ModuleSensor, TorchLearner):
+class ModuleLearner(ModuleSensor, TorchLearner):
     def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
-        super().__init__(*pres, Module, edges=edges, label=label, **kwargs)
+        super().__init__(*pres, Module=Module, edges=edges, label=label, **kwargs)
         self.model = self.module
         self.updated = True  # no need to update
 

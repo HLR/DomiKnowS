@@ -2,11 +2,11 @@ def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
-    from regr.sensor.pytorch.learners import FullyConnected2Learner
+    from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
     from graph_no_world import graph
-    from model import MyModel, MyIMLModel
+    from model import MyModel, MyIMLModel, Net
 
     graph.detach()
 
@@ -17,8 +17,8 @@ def model_declaration():
     x['x'] = ReaderSensor(keyword='x')
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = FullyConnected2Learner('x', input_dim=1, output_dim=2)
-    x[y1] = FullyConnected2Learner('x', input_dim=1, output_dim=2)
+    x[y0] = ModuleLearner('x', Module=Net)
+    x[y1] = ModuleLearner('x', Module=Net)
 
     program = LearningBasedProgram(graph, MyModel)
     return program
