@@ -9,7 +9,7 @@ from ...sensor.pytorch.sensors import ReaderSensor
 class Solver(ContextSolver):
     def get_raw_input(self, data_item):
         graph = next(iter(self.myGraph))
-        _, sentence_sensor = graph.get_sensors(ReaderSensor, lambda s: not s.label)[0]
+        sentence_sensor = next(graph.get_sensors(ReaderSensor, lambda s: not s.label))
         sentences = sentence_sensor(data_item)
         mask_len = [len(s) for s in sentences]  # (b, )
         return sentences, mask_len

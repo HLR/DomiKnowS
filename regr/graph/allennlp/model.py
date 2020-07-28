@@ -34,7 +34,7 @@ def update_metrics(
     metrics: List[Tuple[str, Property, callable]]
 ) -> DataInstance:
     label_masks = {}
-    for name, sensor in graph.get_sensors(CandidateSensor):
+    for sensor in graph.get_sensors(CandidateSensor):
         sensor(data)
         mask = data[sensor.fullname].clone().detach()
         label_masks[mask.shape] = mask
@@ -92,7 +92,7 @@ class GraphModel(Model):
                 self.metrics.append((metric_name, None, prop, MetricClass()))
                 self.metrics_inferenced.append((metric_name, None, prop, MetricClass()))
             for metric_name, MetricClass in class_metrics.items():
-                for name, sensor in prop.find(AllenNlpLearner):
+                for sensor in prop.find(AllenNlpLearner):
                     class_num = prod(sensor.output_dim)
                     if class_num == 2:
                         self.metrics.append((metric_name, None, prop, MetricClass(1)))
@@ -104,8 +104,8 @@ class GraphModel(Model):
 
         #i = 0  # TODO: this looks too bad
         for prop in self.graph.poi:
-            for name, sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
-                self.add_module(name, sensor.module)
+            for sensor in prop.find(ModuleSensor, lambda s: s.module is not None):
+                self.add_module(sensor.name, sensor.module)
                 #i += 1
 
     def _need_inference(
@@ -246,7 +246,7 @@ class GraphModel(Model):
         #import pdb; pdb.set_trace()
         # process candidates
         label_not_masks = {}
-        for name, sensor in self.graph.get_sensors(CandidateSensor):
+        for sensor in self.graph.get_sensors(CandidateSensor):
             sensor(data)
             mask = data[sensor.fullname].clone().detach()
             label_not_masks[mask.shape] = (1-mask).type(torch.uint8)
@@ -268,7 +268,7 @@ class GraphModel(Model):
                 pred = pred.view(shape)
                 label_not_mask = label_not_mask.view(mask.shape)
                 data[prop.fullname] = pred
-                for name, learner in prop.find(AllenNlpLearner):
+                for learner in prop.find(AllenNlpLearner):
                     data[learner.fullname] = pred
         #data = inference(self.graph, self.graph.solver, data, self.vocab)
         data = self.graph.solver.inferSelection(self.graph, data)
@@ -282,7 +282,7 @@ class GraphModel(Model):
         #import pdb; pdb.set_trace()
         loss = 0
         label_masks = {}
-        for name, sensor in self.graph.get_sensors(CandidateSensor):
+        for sensor in self.graph.get_sensors(CandidateSensor):
             sensor(data)
             mask = data[sensor.fullname].clone().detach()
             label_masks[mask.shape] = mask

@@ -44,7 +44,7 @@ class AllennlplogInferenceSolver(ilpOntSolver):
 
         # find base, assume only one base for now
         # FIXME: that [0] means we are only considering problems with only one sentence
-        name, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
+        sentence_sensor = graph.get_sensors(SentenceSensor)[0]
         # Note: SentenceEmbedderSensor is not reliable. For example BERT indexer will introduce redundant wordpiece tokens
 
         sentence = data[sentence_sensor.fullname]
@@ -145,7 +145,7 @@ class AllennlplogInferenceSolver(ilpOntSolver):
                 # Put it back finally
                 #import pdb; pdb.set_trace()
                 data[prop.fullname] = logits_value
-                for name, learner in prop.find(AllenNlpLearner):
+                for learner in prop.find(AllenNlpLearner):
                     data[learner.fullname] = logits_value
 
         return data

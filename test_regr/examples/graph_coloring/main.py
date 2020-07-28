@@ -36,8 +36,8 @@ def model_declaration():
     city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
     
     program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[
-        (city[firestationCity], [next(city[firestationCity].find(TorchSensor))[1]]),
-        (neighbor['index'], [next(neighbor['index'].find(TorchSensor))[1]])]))
+        (city[firestationCity], [next(city[firestationCity].find(TorchSensor))]),
+        (neighbor['index'], [next(neighbor['index'].find(TorchSensor))])]))
     return program
 
 

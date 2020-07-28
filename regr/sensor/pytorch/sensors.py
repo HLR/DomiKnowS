@@ -62,16 +62,16 @@ class TorchSensor(Sensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
-            for _, sensor in self.concept[pre].find(Sensor):
+            for sensor in self.concept[pre].find(Sensor):
                 sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None):
         if selector:
             try:
-                return self.context_helper[list(self.concept[pre].find(selector))[0][1].fullname]
+                return self.context_helper[next(self.concept[pre].find(selector)).fullname]
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
@@ -109,11 +109,11 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for _, sensor in self.concept[pre].find(Sensor):
+                for sensor in self.concept[pre].find(Sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
                 pre(data_item)
@@ -301,11 +301,11 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for _, sensor in self.src[pre].find(Sensor):
+                for sensor in self.src[pre].find(Sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
                 pre(data_item)
@@ -316,7 +316,7 @@ class TorchEdgeSensor(FunctionalSensor):
         if isinstance(pre, str):
             if selector:
                 try:
-                    return self.context_helper[list(self.src[pre].find(selector))[0][1].fullname]
+                    return self.context_helper[next(self.src[pre].find(selector)).fullname]
                 except:
                     print("The key you are trying to access to with a selector doesn't exist")
                     raise
@@ -475,7 +475,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         self,
         data_item: Dict[str, Any]
     ) -> Any:
-        for _, sensor in self.src[self.dst].find(Sensor):
+        for sensor in self.src[self.dst].find(Sensor):
             sensor(data_item)
 
     def update_context(

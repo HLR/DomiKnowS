@@ -106,7 +106,7 @@ def context(case, graph):
         if isinstance(node, Property):
             return node
     for prop in graph.traversal_apply(all_properties):
-        for _, sensor in prop.find(ReaderSensor):
+        for sensor in prop.find(ReaderSensor):
             sensor.fill_data(context)
     return context
 

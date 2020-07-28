@@ -23,7 +23,7 @@ class TorchModel(torch.nn.Module):
         self.mode_ = Mode.TRAIN
 
         for node in self.graph.traversal_apply(all_properties):
-            for _, sensor in node.find(TorchLearner):
+            for sensor in node.find(TorchLearner):
                 self.add_module(sensor.fullname, sensor.model)
 
 
@@ -58,7 +58,7 @@ class TorchModel(torch.nn.Module):
         data_item = self.move(data_item)
 
         for prop in self.graph.traversal_apply(all_properties):
-            for _, sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
+            for sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
                 sensor.fill_data(data_item)
         data_item.update({"graph": self.graph, 'READER': 0})
         builder = DataNodeBuilder(data_item)
@@ -87,7 +87,7 @@ class PoiModel(TorchModel):
 
     def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
-            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
+            for sensor1, sensor2 in combinations(prop.find(TorchSensor), r=2):
                 if sensor1.label:
                     target_sensor = sensor1
                     output_sensor = sensor2

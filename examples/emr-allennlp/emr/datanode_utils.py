@@ -26,7 +26,7 @@ class AllennlpDataNodeSolver(ilpOntSolver):
         sentence = graph['linguistic/sentence']
         word = graph['linguistic/word']
 
-        name, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
+        sentence_sensor = graph.get_sensors(SentenceSensor)[0]
         sentence_data = data_item[sentence_sensor.fullname]
         batch_size = len(sentence)
 
@@ -58,8 +58,8 @@ class AllennlpDataNodeSolver(ilpOntSolver):
             concepts = [people,]
             for concept in concepts:
                 label_prop = concept['label']
-                #_, sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
-                _, learner = next(label_prop.find(Learner))
+                #sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
+                learner = next(label_prop.find(Learner))
                 #sensor_data = data_item[sensor.fullname]
                 learner_data = data_item[learner.fullname][batch_index]
                 learner_data = torch.nn.functional.softmax(learner_data, dim=-1).clone().cpu().detach().numpy()
@@ -70,8 +70,8 @@ class AllennlpDataNodeSolver(ilpOntSolver):
             concepts = [work_for,]
             for concept in concepts:
                 label_prop = concept['label']
-                #_, sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
-                _, learner = next(label_prop.find(Learner))
+                #sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
+                learner = next(label_prop.find(Learner))
                 #sensor_data = data_item[sensor.fullname]
                 learner_data = data_item[learner.fullname][batch_index]
                 learner_data = torch.nn.functional.softmax(learner_data, dim=-1).clone().cpu().detach().numpy()
