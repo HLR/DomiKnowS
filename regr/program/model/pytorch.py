@@ -57,9 +57,6 @@ class TorchModel(torch.nn.Module):
     def forward(self, data_item):
         data_item = self.move(data_item)
 
-        def all_properties(node):
-            if isinstance(node, Property):
-                return node
         for prop in self.graph.traversal_apply(all_properties):
             for _, sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
                 sensor.fill_data(data_item)

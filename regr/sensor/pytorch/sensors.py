@@ -185,7 +185,7 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 class ReaderSensor(ConstantSensor):
     def __init__(self, *pres, keyword=None, edges=None, label=False):
-        super().__init__(*pres, data=None, edges=None, label=False)
+        super().__init__(*pres, data=None, edges=edges, label=label)
         self.keyword = keyword
 
     def fill_data(self, data_item):

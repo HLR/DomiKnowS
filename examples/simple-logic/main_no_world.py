@@ -20,7 +20,7 @@ def model_declaration():
     x[y0] = FullyConnected2Learner('x', input_dim=1, output_dim=2)
     x[y1] = FullyConnected2Learner('x', input_dim=1, output_dim=2)
 
-    program = LearningBasedProgram(graph, MyIMLModel)
+    program = LearningBasedProgram(graph, MyModel)
     return program
 
 
@@ -35,8 +35,8 @@ def main():
     program = model_declaration()
     data = [{
         'x': [1.],
-        'y0': [[1.,0.]],
-        'y1': [[0.,1.]]
+        'y0': [1.,0.],
+        'y1': [0.,1.]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     for loss, metric, x_node in program.test(data):
