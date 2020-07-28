@@ -58,7 +58,6 @@ def test_graph_coloring_main():
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
 
-        _dataset = next(CityReader().run())
         for child_node in datanode.getChildDataNodes():
             assert child_node.ontologyNode == city
             assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0

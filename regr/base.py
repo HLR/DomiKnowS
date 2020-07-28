@@ -204,6 +204,9 @@ class NamedTreeNode(Named):
             context = cls._context[-1]
             context.attach(self, name)
 
+    def attached(self, sup):
+        pass
+
     def __enter__(self):
         cls = type(self)
         #self.sup = cls._context
@@ -274,6 +277,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
         else:
             raise TypeError(
                 'Attach Named instance to NamedTree, {} instance given.'.format(type(sub)))
+        sub.attached(self)
 
     def detach(self, sub=None, all=False):
         if sub is None:

@@ -21,16 +21,16 @@ def model_declaration():
     world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
     # --- Neighbor
-    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward', edges=[world_contains_city['forward']])
-    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward', edges=[world_contains_city['forward']])
-    
+    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
+    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
+
     def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
         if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
             return True
         else:
             return False
 
-    neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors, edges=[city1['backward'], city2['backward']])
+    neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
     neighbor['index'] = ConstantSensor(data=None, label=True)
 
     # --- Learners
@@ -54,7 +54,6 @@ def test_graph_coloring_main():
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
 
-        _dataset = next(CityReader().run())
         for child_node in datanode.getChildDataNodes():
             assert child_node.ontologyNode == city
             assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0

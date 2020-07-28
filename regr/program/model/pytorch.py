@@ -17,20 +17,15 @@ def all_properties(node):
 
 
 class TorchModel(torch.nn.Module):
-    def __init__(self, graph, loss=None, metric=None):
+    def __init__(self, graph):
         super().__init__()
         self.graph = graph
-        self.loss = loss
-        self.metric = metric
         self.mode_ = Mode.TRAIN
 
         for node in self.graph.traversal_apply(all_properties):
             for _, sensor in node.find(TorchLearner):
                 self.add_module(sensor.fullname, sensor.model)
 
-        self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
-
-        self.graph.poi = self.poi
 
     def mode(self, mode):
         if mode in (Mode.TEST, Mode.POPULATE):
@@ -40,10 +35,7 @@ class TorchModel(torch.nn.Module):
         self.mode_ = mode
 
     def reset(self):
-        if self.loss is not None:
-            self.loss.reset()
-        if self.metric is not None:
-            self.metric.reset()
+        pass
 
     def move(self, value, device=None):
         parameters = list(self.parameters())
@@ -61,23 +53,6 @@ class TorchModel(torch.nn.Module):
             return {k: self.move(v, device) for k, v in value.items()}
         else:
             return value
-
-    def find_poi(self):
-        for prop in self.graph.traversal_apply(all_properties):
-            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.label:
-                    target_sensor = sensor1
-                    output_sensor = sensor2
-                elif sensor2.label:
-                    target_sensor = sensor2
-                    output_sensor = sensor1
-                else:
-                    # TODO: should different learners get closer?
-                    continue
-                if output_sensor.label:
-                    # two targets, skip
-                    continue
-                yield prop, output_sensor, target_sensor
 
     def forward(self, data_item):
         data_item = self.move(data_item)
@@ -99,6 +74,39 @@ class TorchModel(torch.nn.Module):
 
 
 class PoiModel(TorchModel):
+    def __init__(self, graph, poi=None, loss=None, metric=None):
+        super().__init__(graph)
+        if poi is None:
+            self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
+        else:
+            self.poi = poi
+        # self.graph.poi = self.poi
+        self.loss = loss
+        self.metric = metric
+
+    def find_poi(self):
+        for prop in self.graph.traversal_apply(all_properties):
+            for (_, sensor1), (_, sensor2) in combinations(prop.find(TorchSensor), r=2):
+                if sensor1.label:
+                    target_sensor = sensor1
+                    output_sensor = sensor2
+                elif sensor2.label:
+                    target_sensor = sensor2
+                    output_sensor = sensor1
+                else:
+                    # TODO: should different learners get closer?
+                    continue
+                if output_sensor.label:
+                    # two targets, skip
+                    continue
+                yield prop, output_sensor, target_sensor
+
+    def reset(self):
+        if self.loss is not None:
+            self.loss.reset()
+        if self.metric is not None:
+            self.metric.reset()
+
     def poi_loss(self, data_item, prop, output_sensor, target_sensor):
         if not self.loss:
             return 0

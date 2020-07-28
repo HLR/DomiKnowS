@@ -5,8 +5,8 @@ from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor
 
 
 class TestSensor(TorchSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, expected_inputs=None, expected_outputs=None, **kwargs):
-        super().__init__(*pres, output=output, edges=edges, label=label)
+    def __init__(self, *pres, edges=None, label=False, expected_inputs=None, expected_outputs=None, **kwargs):
+        super().__init__(*pres, edges=edges, label=label)
         self._expected_inputs = expected_inputs
         self._expected_outputs = expected_outputs
 
