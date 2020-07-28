@@ -78,7 +78,7 @@ class PoiModel(TorchModel):
     def __init__(self, graph, poi=None, loss=None, metric=None):
         super().__init__(graph)
         if poi is None:
-            self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
+            self.poi = [(prop, [output_sensor, target_sensor]) for prop, output_sensor, target_sensor in self.find_poi()]
         else:
             self.poi = poi
         # self.graph.poi = self.poi
