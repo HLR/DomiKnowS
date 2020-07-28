@@ -97,7 +97,7 @@ class Named(Scoped):
         return repr_str
 
     def __str__(self):
-        return self.name
+        return str(self.name)
 
 
 class AutoNamed(Named):

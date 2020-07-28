@@ -24,6 +24,9 @@ def model_declaration():
     x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
 
     program = LearningBasedProgram(graph, MyIMLModel)
+    # With the following line, the inference will not take x into account
+    # which results in a complain (UserWarning) not getting inference result
+    # program.model.inference_with = [world]
     return program
 
 

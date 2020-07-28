@@ -1,4 +1,5 @@
 from itertools import combinations
+import warnings
 
 import torch
 import torch.nn.functional as F
@@ -145,6 +146,7 @@ class SolverModel(PoiModel):
             self.solver = Solver(self.graph)
         else:
             self.solver = None
+        self.inference_with = []
 
     def inference(self, builder):
         for prop, (output_sensor, target_sensor) in self.poi:
@@ -154,7 +156,7 @@ class SolverModel(PoiModel):
         # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        datanode.inferILPConstrains(*self.inference_with, fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         return builder
 
     def populate(self, builder):
@@ -173,10 +175,17 @@ class IMLModel(SolverModel):
         datanode = builder.getDataNode()
         concept = prop.sup
         values = []
-        for cdn in datanode.findDatanodes(select=concept):
-            value = cdn.getAttribute(f'<{prop.name}>/ILP')
-            values.append(torch.cat((1-value, value), dim=-1))
-        inference = torch.stack(values)
+        try:
+            for cdn in datanode.findDatanodes(select=concept):
+                value = cdn.getAttribute(f'<{prop.name}>/ILP')
+                values.append(torch.cat((1-value, value), dim=-1))
+            inference = torch.stack(values)
+        except TypeError:
+            message = (f'Failed to get inference result for {prop}. '
+                       'Is it included in the inference (with `inference_with` attribute)? '
+                       'Continue with predicted value.')
+            warnings.warn(message)
+            inference = logit.softmax(dim=-1).detach()
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
