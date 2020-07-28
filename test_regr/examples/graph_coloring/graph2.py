@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, eql, atLeastL, atMostL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, eql, atLeastL, atMostL, exactL
 
 
 Graph.clear()
@@ -23,10 +23,13 @@ with Graph('global') as graph2:
         atLeastL(2, ('x', ), firestationCity, ('x', ))
         
         # At most 2 firestationCity
-        #atMostL(2, ('x', ), firestationCity, ('x', ))
+        atMostL(2, ('x', ), firestationCity, ('x', ))
+        
+        # Exactly 2 firestationCity
+        exactL(2, ('x', ), firestationCity, ('x', ))
         
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
-        orL(firestationCity, ('x',), existsL(('y',), andL(eql(cityLink, 'neighbor', 1), ('x', 'y'), firestationCity, ('y',))))
+        orL(firestationCity, ('x',), existsL(('y',), andL(eql(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',))))
 
         # Each city has no more then 3 neighbors
         #atMostL(3, ('x', ), andL(firestationCity, ('x',), eql(cityLink, 'neighbor', 1), ('x', 'y'))

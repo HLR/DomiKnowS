@@ -558,14 +558,6 @@ class DataNode:
                     lcEqls[str(lc.e[0])].append(lc.e)
                 else:
                     lcEqls[str(lc.e[0])] = [lc.e]
-                    
-                continue
-                
-                key = str(lc.e[0])+ ":" + lc.e[1] + ":" + str(lc.e[2])
-                dns = self.findDatanodes(select = (lc.e[0], lc.e[1], lc.e[2]))
-                
-                for _dn in dns:
-                    pass
                 
         return lcEqls
                     
@@ -648,30 +640,51 @@ class DataNode:
                     
                 if str(currentConceptOrRelation) in lcEqls:
                     for e in lcEqls[str(currentConceptOrRelation)]:
-                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
-                        hardConstrains.append(key) # Hard Constrain
-
-                        graphResultsForPhraseToken[key] = np.zeros((no_candidateds, 2))
+                        if isinstance(e[2], set):
+                            for e2 in e[2]:
+                                key = str(e[0]) + ":" + e[1] + ":" + str(e2)
+                                hardConstrains.append(key) # Hard Constrain
+        
+                                graphResultsForPhraseToken[key] = np.zeros((no_candidateds, 2))
+                        else:
+                            key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                            hardConstrains.append(key) # Hard Constrain
+    
+                            graphResultsForPhraseToken[key] = np.zeros((no_candidateds, 2))
                     
             elif len(c) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
                 graphResultsForPhraseRelation[str(currentConceptOrRelation)] = np.zeros((no_candidateds, no_candidateds, 2))
                 
                 if str(currentConceptOrRelation) in lcEqls:
                     for e in lcEqls[str(currentConceptOrRelation)]:
-                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
-                        hardConstrains.append(key) # Hard Constrain
-
-                        graphResultsForPhraseRelation[key] = np.zeros((no_candidateds, no_candidateds, 2))
+                        if isinstance(e[2], set):
+                            for e2 in e[2]:
+                                key = str(e[0]) + ":" + e[1] + ":" + str(e2)
+                                hardConstrains.append(key) # Hard Constrain
+                                
+                                graphResultsForPhraseRelation[key] = np.zeros((no_candidateds, no_candidateds, 2))
+                        else:
+                            key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                            hardConstrains.append(key) # Hard Constrain
+    
+                            graphResultsForPhraseRelation[key] = np.zeros((no_candidateds, no_candidateds, 2))
 
             elif len(c) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element
                 graphResultsForTripleRelations[str(currentConceptOrRelation)] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
                 
                 if str(currentConceptOrRelation) in lcEqls:
                     for e in lcEqls[str(currentConceptOrRelation)]:
-                        key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
-                        hardConstrains.append(key) # Hard Constrain
-                
-                        graphResultsForTripleRelations[key] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
+                        if isinstance(e[2], set):
+                            for e2 in e[2]:
+                                key = str(e[0]) + ":" + e[1] + ":" + str(e2)
+                                hardConstrains.append(key) # Hard Constrain
+                                
+                                graphResultsForTripleRelations[key] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
+                        else:
+                            key = str(e[0]) + ":" + e[1] + ":" + str(e[2])
+                            hardConstrains.append(key) # Hard Constrain
+                    
+                            graphResultsForTripleRelations[key] = np.zeros((no_candidateds, no_candidateds, no_candidateds, 2))
                     
             else: # No support for more then three candidates yet
                 pass
@@ -687,9 +700,13 @@ class DataNode:
             
             for currentCandidate in currentCandidates:
                 if len(currentCandidate) == 1:   # currentConceptOrRelation is a concept thus candidates tuple has only single element
-                    currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                    currentCandidate1 = currentCandidate[0]
+                    if str(currentConceptOrRelation) in hardConstrains:
+                        currentProbability = self.__getHardConstrains(currentConceptOrRelation, reltationAttrs, currentCandidate)
+                    else:
+                        currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
+                        
                     if currentProbability:
-                        id = currentCandidate[0].instanceID
                         graphResultsForPhraseToken[str(currentConceptOrRelation)][currentCandidate[0].instanceID] = currentProbability
                     
                 elif len(currentCandidate) == 2: # currentConceptOrRelation is a pair thus candidates tuple has two element
@@ -709,14 +726,25 @@ class DataNode:
                             
                             _e2 = currentCandidate[0].relationLinks[str(e[0])][currentCandidate[1].instanceID].attributes[e[1]].item()
                             
-                            if e[2] == _e2:
-                                 currentProbability = [0, 1]
+                            if isinstance(e[2], set):
+                                for e2 in e[2]:
+                                    if e2 == _e2:
+                                         currentProbability = [0, 1]
+                                    else:
+                                        currentProbability = [1, 0]
+                                    
+                                    key = str(e[0])+ ":" + e[1] + ":" + str(e2)
+                                    
+                                    graphResultsForPhraseRelation[key][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
                             else:
-                                currentProbability = [1, 0]
-                            
-                            key = str(e[0])+ ":" + e[1] + ":" + str(e[2])
-                            
-                            graphResultsForPhraseRelation[key][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
+                                if e[2] == _e2:
+                                     currentProbability = [0, 1]
+                                else:
+                                    currentProbability = [1, 0]
+                                
+                                key = str(e[0])+ ":" + e[1] + ":" + str(e[2])
+                                
+                                graphResultsForPhraseRelation[key][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
 
                 elif len(currentCandidate) == 3: # currentConceptOrRelation is a triple thus candidates tuple has three element     
                     currentCandidate1 = currentCandidate[0]

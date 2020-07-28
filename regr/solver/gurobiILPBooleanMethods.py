@@ -114,7 +114,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var1, var2))
             if cacheResult[0]:
                 if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
-                if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))     
+                if cacheResult[1]:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))     
+                
                 return cacheResult[1]
         
         # If only constructing constrains forcing AND to be true 
@@ -221,7 +223,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, var)
             if cacheResult[0]:
                 if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
-                if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                if cacheResult[1]:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                
                 return cacheResult[1]
         
         # If only constructing constrains forcing AND to be true 
@@ -278,7 +282,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var1, var2))
             if cacheResult[0]:
                 if self.ifLog: self.myLogger.debug("%s constrain already created"%(logicMethodName))
-                if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                if cacheResult[1]:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                
                 return cacheResult[1]
         
         # If only constructing constrains forcing OR to be true 
@@ -374,7 +380,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, var)
             if cacheResult[0]:
                 if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
-                if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                if cacheResult[1]:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                
                 return cacheResult[1]
         
         # If only constructing constrains forcing OR to be true 
@@ -386,7 +394,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 elif currentVar == 1: # currentVar is Number 
                     if self.ifLog: self.myLogger.debug("%s created no constrain variable is already %f"%(logicMethodName, currentVar))
                     return
-                elif currentVar == 1: # currentVar is Number 
+                elif currentVar == 0: # currentVar is Number 
                     if self.ifLog: self.myLogger.debug("%s ignoring %f has not effect on value"%(logicMethodName,currentVar)) 
                 else:
                     if self.ifLog: self.myLogger.warn("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
@@ -583,7 +591,6 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if N - noOfVars == 0:
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, var)
             if cacheResult[0]:
-                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
                 if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
                 return cacheResult[1]
         
@@ -790,3 +797,154 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         if self.ifLog: self.myLogger.debug("EQ returns : %s"%(varEQ.VarName))
         return varEQ
+    
+    def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1):
+        methodName = "countVar"
+        logicMethodName = "COUNT"
+        
+        if not limitOp:
+            if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))
+
+        if not limitOp in ('<', '>', '='):
+            if self.ifLog: self.myLogger.error("%s called with incorrect operation specified for comparing limit %s"%(logicMethodName,limitOp))
+            
+        if limit > 1:
+            if self.ifLog: self.myLogger.debug("%s called with limit: %i and operation %s"%(logicMethodName,limit,limitOp))
+
+        # Get names of variables - some of them can be numbers
+        noOfVars = 0 # count the numbers in variables
+        varsNames = []
+        for currentVar in var:
+            if self.__varIsNumber(currentVar):
+                varsNames.append(currentVar)
+            else:
+                varsNames.append(currentVar.VarName)
+                noOfVars = noOfVars + 1
+            
+        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, varsNames))
+        
+        # Check number of variables
+        N = len(var)
+        
+        # If only constructing constrains forcing OR to be true 
+        if onlyConstrains:
+            varSumLinExpr = LinExpr()
+            countOnes = 0
+            for currentVar in var:
+                if not self.__varIsNumber(currentVar):
+                    varSumLinExpr.addTerms(1.0, currentVar)
+                elif currentVar == 1: # currentVar is Number 
+                    countOnes = countOnes + 1
+
+            if limitOp == '>':
+                if countOnes > limit:
+                    if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                    return 1
+                elif varSumLinExpr.size() - (limit - countOnes) < 0:
+                    m.addConstr(1 <= 0)
+                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    return 0
+                else:
+                    m.addConstr(varSumLinExpr >= limit - countOnes)
+            if limitOp == '<':
+                if varSumLinExpr.size() == 0:
+                    if countOnes < limit:
+                        if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                        return 1
+                    else:
+                        m.addConstr(1 <= 0)
+                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        return 0
+                else:
+                    if limit < countOnes:
+                        m.addConstr(1 <= 0)
+                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        return 0
+                    else:
+                        m.addConstr(varSumLinExpr <= limit - countOnes)
+            if limitOp == '==':
+                if varSumLinExpr.size() == 0:
+                    if countOnes == limit:
+                        if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                        return 1
+                    else:
+                        m.addConstr(1 <= 0)
+                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        return 0
+                else:
+                     m.addConstr(varSumLinExpr == limit - countOnes)
+                 
+            varSumLinExprStr = str(varSumLinExpr)
+            if self.ifLog: self.myLogger.debug("%s created constrain only: %s %s= %i - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,limit,countOnes))
+            
+            return
+        
+        # ------- If creating variables representing value of OR build of provided variables
+        
+        # Build new variables name and add it to model
+        countVarName = ""
+        for currentVar in var:
+            countVarName = countVarName + "or"
+            if self.__varIsNumber(currentVar):
+                countVarName += "_%s_"%(currentVar)
+            else:
+                countVarName += "_%s_"%(currentVar.VarName)
+
+        # Create new variable
+        varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
+        if m: m.update()
+
+        # Build constrains
+        varSumLinExpr = LinExpr()
+        countOnes = 0
+        for currentVar in var:
+            if not self.__varIsNumber(currentVar):
+                varSumLinExpr.addTerms(1.0, currentVar)
+            else:
+                countOnes = countOnes + 1
+
+        if limitOp == '>':
+            if countOnes > limit:
+                if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                return 1
+            elif varSumLinExpr.size() - (limit - countOnes) < 0:
+                m.addConstr(1 <= 0)
+                if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                return 0
+            else:
+                m.addConstr(varSumLinExpr - varCOUNT >= limit - 1 - countOnes)
+        if limitOp == '<':
+            if varSumLinExpr.size() == 0:
+                if countOnes < limit:
+                    if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                    return 1
+                else:
+                    m.addConstr(1 <= 0)
+                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    return 0
+            else:
+                if limit < countOnes:
+                    m.addConstr(1 <= 0)
+                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    return 0
+                else:
+                    m.addConstr(varSumLinExpr - varCOUNT <= limit - 1 - countOnes)
+        if limitOp == '==':
+            if varSumLinExpr.size() == 0:
+                if countOnes == limit:
+                    if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
+                    return 1
+                else:
+                    m.addConstr(1 <= 0)
+                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    return 0
+            else:
+                 m.addConstr(varSumLinExpr == limit - countOnes)
+                 
+        m.addConstr(varSumLinExpr - varCOUNT >= limit-1)
+        
+        varSumLinExprStr = str(varSumLinExpr)
+        if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,countVarName,limit,countOnes))
+             
+        if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varCOUNT.VarName))
+        return varCOUNT
