@@ -6,10 +6,10 @@ sys.path.append('../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
+    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
     from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
     from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from regr.program.model.pytorch import model_helper, PoiModel
 
     from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
     from sensors import DummyCityLearner
@@ -31,13 +31,13 @@ def model_declaration():
             return False
 
     neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
-    neighbor['index'] = ConstantSensor(data=None, label=True)
 
     # --- Learners
     city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
-    city[firestationCity] = ConstantSensor(data=None, label=True)
     
-    program = LearningBasedProgram(graph, PoiModel)
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[
+        (city[firestationCity], [next(city[firestationCity].find(TorchSensor))[1]]),
+        (neighbor['index'], [next(neighbor['index'].find(TorchSensor))[1]])]))
     return program
 
 

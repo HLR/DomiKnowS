@@ -70,6 +70,10 @@ class TorchModel(torch.nn.Module):
         raise NotImplementedError
 
 
+def model_helper(Model, *args, **kwargs):
+    return lambda graph: Model(graph, *args, **kwargs)
+
+
 class PoiModel(TorchModel):
     def __init__(self, graph, poi=None, loss=None, metric=None):
         super().__init__(graph)
@@ -104,39 +108,33 @@ class PoiModel(TorchModel):
         if self.metric is not None:
             self.metric.reset()
 
-    def poi_loss(self, data_item, prop, output_sensor, target_sensor):
+    def poi_loss(self, data_item, prop, sensors):
         if not self.loss:
             return 0
-        logit = output_sensor(data_item)
-        # mask = output_sensor.mask(data_item)
-        labels = target_sensor(data_item)
-
-        local_loss = self.loss[output_sensor, target_sensor](logit, labels)
+        outs = [sensor(data_item) for sensor in sensors]
+        local_loss = self.loss[output_sensor, target_sensor](*outs)
         return local_loss
 
-    def poi_metric(self, data_item, prop, output_sensor, target_sensor):
+    def poi_metric(self, data_item, prop, sensors):
         if not self.metric:
             return None
-        # mask = output_sensor.mask(data_item)
-        labels = target_sensor(data_item)
-        inference = prop(data_item)
-
-        local_metric = self.metric[output_sensor, target_sensor](inference, labels)
+        outs = [sensor(data_item) for sensor in sensors]
+        local_metric = self.metric[output_sensor, target_sensor](*outs)
         return local_metric
 
     def populate(self, builder):
         loss = 0
         metric = {}
-        for prop, (output_sensor, target_sensor) in self.poi.items():
+        for prop, sensors in self.poi:
             # make sure the sensors are evaluated
-            output = output_sensor(builder)
-            target = target_sensor(builder)
+            for sensor in sensors:
+                sensor(builder)
             if self.mode_ not in {Mode.POPULATE,}:
                 # calculated any loss or metric
                 if self.loss:
-                    loss += self.poi_loss(builder, prop, output_sensor, target_sensor)
+                    loss += self.poi_loss(builder, prop, sensors)
                 if self.metric:
-                    metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, output_sensor, target_sensor)
+                    metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, sensors)
         return loss, metric
 
 
