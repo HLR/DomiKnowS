@@ -1,4 +1,5 @@
 from itertools import combinations
+import warnings
 
 import torch
 import torch.nn.functional as F
@@ -112,14 +113,14 @@ class PoiModel(TorchModel):
         if not self.loss:
             return 0
         outs = [sensor(data_item) for sensor in sensors]
-        local_loss = self.loss[output_sensor, target_sensor](*outs)
+        local_loss = self.loss[(*sensors,)](*outs)
         return local_loss
 
     def poi_metric(self, data_item, prop, sensors):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
-        local_metric = self.metric[output_sensor, target_sensor](*outs)
+        local_metric = self.metric[(*sensors,)](*outs)
         return local_metric
 
     def populate(self, builder):
@@ -134,27 +135,28 @@ class PoiModel(TorchModel):
                 if self.loss:
                     loss += self.poi_loss(builder, prop, sensors)
                 if self.metric:
-                    metric[output_sensor, target_sensor] = self.poi_metric(builder, prop, sensors)
+                    metric[(*sensors,)] = self.poi_metric(builder, prop, sensors)
         return loss, metric
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, loss=None, metric=None, Solver=None):
-        super().__init__(graph, loss, metric)
+    def __init__(self, graph, poi=None, loss=None, metric=None, Solver=None):
+        super().__init__(graph, poi=poi, loss=loss, metric=metric)
         if Solver:
             self.solver = Solver(self.graph)
         else:
             self.solver = None
+        self.inference_with = []
 
     def inference(self, builder):
-        for prop, (output_sensor, target_sensor) in self.poi.items():
+        for prop, (output_sensor, target_sensor) in self.poi:
             # make sure the sensors are evaluated
             output = output_sensor(builder)
             target = target_sensor(builder)
         # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        datanode.inferILPConstrains(*self.inference_with, fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         return builder
 
     def populate(self, builder):
@@ -163,11 +165,27 @@ class SolverModel(PoiModel):
 
 
 class IMLModel(SolverModel):
-    def poi_loss(self, data_item, prop, output_sensor, target_sensor):
+    def poi_loss(self, data_item, prop, sensors):
+        output_sensor, target_sensor = sensors
         logit = output_sensor(data_item)
         # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
-        inference = prop(data_item)
+
+        builder = data_item
+        datanode = builder.getDataNode()
+        concept = prop.sup
+        values = []
+        try:
+            for cdn in datanode.findDatanodes(select=concept):
+                value = cdn.getAttribute(f'<{prop.name}>/ILP')
+                values.append(torch.cat((1-value, value), dim=-1))
+            inference = torch.stack(values)
+        except TypeError:
+            message = (f'Failed to get inference result for {prop}. '
+                       'Is it included in the inference (with `inference_with` attribute)? '
+                       'Continue with predicted value.')
+            warnings.warn(message)
+            inference = logit.softmax(dim=-1).detach()
 
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)

@@ -47,7 +47,7 @@ class TorchLearner(TorchSensor):
             self.model.train()
         except FileNotFoundError:
             message = f'Failed to load {self} from {save_path}. Continue not loaded.'
-            warnings.warn(message, stacklevel=2)
+            warnings.warn(message)
 
 class ModuleLearner(ModuleSensor, TorchLearner):
     def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
