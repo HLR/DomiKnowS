@@ -246,6 +246,15 @@ class NominalSensor(TorchSensor):
         return data_item
 
 
+class ModuleSensor(FunctionalSensor):
+    def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
+        super().__init__(*pres, edges=edges, label=label)
+        self.module = Module(**kwargs)
+
+    def forward(self, *inputs):
+        return self.module(*inputs)
+
+
 class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward", "selection")
 
