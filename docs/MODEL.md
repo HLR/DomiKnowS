@@ -73,8 +73,48 @@ class RegrReader:
         for item in self.objects:
             yield self.make_object(item)
 ```
-if you are loading a json file you do not have to write the `parse_file` function for your customized reader. Otherwise, you have to load a file and write a parser to parse it to a list of objects. 
-To generate the outputs of each example you have to write functions in the format of `get$name$val`. each time the object is provided to your function and you should return the value of `$name` inside this function. At the end the output for each example will contain all the keys from the output of function `get$name$val` as `$name`. For getting one example of the reader, you have to call `run()` and it will yield one example at a time.
+if you are loading a json file you do not have to rewrite the `parse_file` function for your customized reader. If you are using other data sources, you have to load a file and write the `parse_file` to parse it to a list of dictionary. 
+To generate the outputs of each example you have to write functions in the format of `get$name$val`. each time one of the items in the list of dictionary is provided to your function and you should return the value of `$name` inside this function. At the end the output for each example will contain all the keys from the output of function `get$name$val` as `$name`. For getting one example of the reader, you have to call `run()` and it will yield one example at a time.
+For an example, If you datasource is a json that has list of items looking like the following, you will just load it and set the keys.
+```json
+{
+	"Sentence": "This book is interestingly boring. I tried to read it 10 times and each time I just felt sleep immediately.",
+	"Label": 'negative',
+	 "Optimistic": False
+}
+```
+As we want our output for each item to contain the following keywords, we will define these functions.
+```python
+class SentimentReader(RegrReader):
+	def getSentenceval(self, item):
+		return item['Sentence']
+		
+	def getNegativeLabelval(self, item):
+		if item['Label'] == 'negative':
+			return True
+		else:
+			return False
+			
+	def getPositiveLabelval(self, item):
+		if item['Label'] == 'positive':
+			return True
+		else:
+			return False
+	
+	def getOptimisticLabelval(self, item):
+		return item['Optimistic']
+``` 
+
+The output of such Reader will be a list of following items.
+```json
+{
+	"Sentence": "This book is interestingly boring. I tried to read it 10 times and each time I just felt sleep immediately.",
+	"PositiveLabel": False,
+	"NegativeLabel": True,
+	"Optimistic": False
+}
+```
+
 ## Sensor
 
 `Sensor`s are procedures to access external resources and procedures. For example, reading from raw data, feature engineering staffs, and preprocessing procedures.
