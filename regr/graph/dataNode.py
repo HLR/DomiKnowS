@@ -1054,7 +1054,10 @@ class DataNodeBuilder(dict):
             dns = []
             if not isinstance(value, (list, Tensor)): # Assuming that value is single element
                 instanceValue = ""
-                instanceID = dict.__getitem__(self, "READER")
+                if "READER" in dict:
+                    instanceID = dict.__getitem__(self, "READER")
+                else:
+                    instanceID = 0
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 _dn.attributes[keyDataName] = value
@@ -1110,7 +1113,10 @@ class DataNodeBuilder(dict):
                             _dnLinked == True
 
                     if conceptInfo['root']:  # New root
-                        _dn.instanceID = dict.__getitem__(self, "READER")
+                        if "READER" in dict:
+                            dn.instanceID = dict.__getitem__(self, "READER")
+                        else:
+                            dn.instanceID = 0
 
                         # Update the list of root datanodes 
                         _dns = dict.__getitem__(self, 'dataNode')
