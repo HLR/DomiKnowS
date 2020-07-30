@@ -224,7 +224,7 @@ class Concept(BaseGraphTree):
          
         returnDns = []
         for dn in dns:
-            if dn.ontologyNode == concept:
+            if str(dn.ontologyNode) == concept:
                returnDns.append(dn) 
                
         if len(returnDns) > 0:
