@@ -24,16 +24,12 @@ def emr_graph():
             location = Concept(name='location')
             other = Concept(name='other')
             o = Concept(name='O')
-            #people.is_a(entity)
-            ifL(people, entity)
-            #organization.is_a(entity)
-            ifL(organization, entity)
-            #location.is_a(entity)
-            ifL(location, entity)
-            #other.is_a(entity)
-            ifL(other, entity)
-            #o.is_a(entity) 
-            ifL(o, entity)
+            
+            people.is_a(entity)
+            organization.is_a(entity)
+            location.is_a(entity)
+            other.is_a(entity)
+            o.is_a(entity) 
             
             #people.not_a(organization)
             nandL(people, organization)
@@ -80,28 +76,17 @@ def emr_graph():
             #o.not_a(other)
             nandL(o, other)
 
-            #existsL(people, ('p',))
-            #notL(other, ('o',))
-            #notL(existsL(location, ('l',)), ('e', ))
-            #existsL(notL(people))
-            
             work_for = Concept(name='work_for')
             work_for.is_a(pair)
-            #work_for.has_a(people, organization)
-            ifL(work_for, ('x','y'), people, ('x',))
-            ifL(work_for, ('x','y'), organization, ('y',))
-
+            work_for.has_a(people, organization)
+           
             located_in = Concept(name='located_in')
             located_in.is_a(pair)
-            #located_in.has_a(location, location)
-            ifL(located_in, ('x','y'), location, ('x',))
-            ifL(located_in, ('x','y'), location, ('y',))
-
+            located_in.has_a(location, location)
+            
             live_in = Concept(name='live_in')
             live_in.is_a(pair)
-            #live_in.has_a(people, location)
-            ifL(live_in, ('x','y'), people, ('x',))
-            ifL(live_in, ('x','y'), location, ('y',))
+            live_in.has_a(people, location)
             
     return app_graph
 
@@ -170,7 +155,7 @@ def test_main_emr_verify(emr_input):
     # Call verify on explicite data -------
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
     
-    verifyResult = myilpOntSolver.verifySelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
+    verifyResult = myilpOntSolver.verifySelectionLC(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
     
     assert verifyResult # - correct
     
@@ -191,7 +176,7 @@ def test_main_emr_verify(emr_input):
     test_graphResultsForPhraseRelation['work_for'][0][3] = 1 # John work_for IBM
 
     # ------Call verify -------
-    verifyResult = myilpOntSolver.verifySelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
+    verifyResult = myilpOntSolver.verifySelectionLC(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
     
     # -------Evaluate results
     assert verifyResult # - correct
@@ -214,7 +199,7 @@ def test_main_emr_verify(emr_input):
     test_graphResultsForPhraseRelation['work_for'][0][3] = 1 # John work_for IBM 
     
      # ------Call verify -------
-    verifyResult = myilpOntSolver.verifySelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
+    verifyResult = myilpOntSolver.verifySelectionLC(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
     
     # -------Evaluate results
     assert not verifyResult # - uncorrected
@@ -237,7 +222,7 @@ def test_main_emr_verify(emr_input):
     test_graphResultsForPhraseRelation['work_for'][0][3] = 1 # John work_for IBM 
     
      # ------Call verify -------
-    verifyResult = myilpOntSolver.verifySelection(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
+    verifyResult = myilpOntSolver.verifySelectionLC(test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation, None)
     
     # -------Evaluate results
     assert not verifyResult # - uncorrected
