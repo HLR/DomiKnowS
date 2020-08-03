@@ -20,10 +20,10 @@ with Graph('global') as graph2:
         firestationCity = city(name='firestationCity')
         
         # No less then 2 firestationCity
-        atLeastL(2, ('x', ), firestationCity, ('x', ))
+        atLeastL(1, ('x', ), firestationCity, ('x', ))
         
         # At most 2 firestationCity
-        atMostL(2, ('x', ), firestationCity, ('x', ))
+        atMostL(3, ('x', ), firestationCity, ('x', ))
         
         # Exactly 2 firestationCity
         exactL(2, ('x', ), firestationCity, ('x', ))
@@ -31,5 +31,5 @@ with Graph('global') as graph2:
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
         orL(firestationCity, ('x',), existsL(('y',), andL(eql(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',))))
 
-        # Each city has no more then 3 neighbors
-        #atMostL(3, ('x', ), andL(firestationCity, ('x',), eql(cityLink, 'neighbor', 1), ('x', 'y'))
+        # Each city has no more then 4 neighbors
+        #atMostL(4, ('x', ), andL(firestationCity, ('x',), eql(cityLink, 'neighbor', 1), ('x', 'y')))

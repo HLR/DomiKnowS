@@ -1054,7 +1054,10 @@ class DataNodeBuilder(dict):
             dns = []
             if not isinstance(value, (list, Tensor)): # Assuming that value is single element
                 instanceValue = ""
-                instanceID = dict.__getitem__(self, "READER")
+                if "READER" in dict:
+                    instanceID = dict.__getitem__(self, "READER")
+                else:
+                    instanceID = 0
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
                 _dn.attributes[keyDataName] = value
@@ -1110,9 +1113,21 @@ class DataNodeBuilder(dict):
                             _dnLinked == True
 
                     if conceptInfo['root']:  # New root
-                        dns = [_dn] 
-                        _dn.instanceID = dict.__getitem__(self, "READER")
-                        dict.__setitem__(self, 'dataNode', dns)
+                        if "READER" in dict:
+                            dn.instanceID = dict.__getitem__(self, "READER")
+                        else:
+                            dn.instanceID = 0
+
+                        # Update the list of root datanodes 
+                        _dns = dict.__getitem__(self, 'dataNode')
+                        dns = []
+                        for dnE in _dns:
+                            if 'contains' not in dnE.impactLinks:
+                                dns.append(dnE)
+                                
+                        dns.append(_dn) # Add the root to the list
+                        
+                        dict.__setitem__(self, 'dataNode', dns) # Updated the dict
                 
                 # Add it as child to existing datanodes
                 if len(conceptInfo['containedIn']) > 0:
@@ -1120,7 +1135,7 @@ class DataNodeBuilder(dict):
                        
                     for myContainedIn in myContainedInDns:
                         myContainedIn.addChildDataNode(_dn)   
-                        _dnLinked == True
+                        _dnLinked = True
 
                 if not _dnLinked:
                     dns = dict.__getitem__(self, 'dataNode')
@@ -1275,8 +1290,18 @@ class DataNodeBuilder(dict):
     def __contains__(self, key):
         return dict.__contains__(self, key)
     
+    # Add or increase generic counter counting number of setitem calls
+    def __addgetDataNodeCounter(self):
+        counterName = 'Counter' + 'GetDataNode'
+        if not dict.__contains__(self, counterName):
+            dict.__setitem__(self, counterName, 1)
+        else:
+            currentCounter =  dict.__getitem__(self, counterName)
+            dict.__setitem__(self, counterName, currentCounter + 1)
+            
     # Method returning constructed datanode
     def getDataNode(self):
+        self.__addgetDataNodeCounter()
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
             

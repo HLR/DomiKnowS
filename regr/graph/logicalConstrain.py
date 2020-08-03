@@ -306,45 +306,55 @@ class exactL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
             cLimit = self.e[0]
+        else:
+            cLimit = 1
             
+        cVariable = self.e[1]
         lcMethodName = 'exactL'
-        cOperation = "="
+        cOperation = '='
+        
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class existsL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None): 
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         cLimit = 1
 
+        cVariable = self.e[1]
         lcMethodName = 'existsL'
-        cOperation = "="
+        cOperation = '>'
+        
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class atLeastL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
             cLimit = self.e[0]
             
+        cVariable = self.e[1]
         lcMethodName = 'atLeastL'
-        cOperation = "<"
+        cOperation = '>'
+        
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
     
 class atMostL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False, cVariable = None, cLimit = 1): 
+    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
             cLimit = self.e[0]
             
-        lcMethodName = 'atLeastL'
-        cOperation = ">"
+        cVariable = self.e[1]
+        lcMethodName = 'atMostL'
+        cOperation = '<'
+        
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)

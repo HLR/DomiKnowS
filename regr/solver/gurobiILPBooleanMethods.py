@@ -64,7 +64,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # If only constructing constrains forcing NOT to be true 
         if onlyConstrains:
             if self.__varIsNumber(var):
-                self.myLogger.warn("%s has set value: %s - do nothing"%(logicMethodName,var1Name))
+                self.myLogger.warning("%s has set value: %s - do nothing"%(logicMethodName,var1Name))
                 return 
             
             m.addConstr(1 - var >= 1)
@@ -397,7 +397,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 elif currentVar == 0: # currentVar is Number 
                     if self.ifLog: self.myLogger.debug("%s ignoring %f has not effect on value"%(logicMethodName,currentVar)) 
                 else:
-                    if self.ifLog: self.myLogger.warn("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
+                    if self.ifLog: self.myLogger.warning("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
 
             if varSumLinExpr.size() == 0:
                 if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is 0"%(logicMethodName))
@@ -426,7 +426,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 elif currentVar == 0:
                     noOfZeros = noOfZeros + 1
                 else:
-                    if self.ifLog: self.myLogger.warn("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
+                    if self.ifLog: self.myLogger.warning("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
             else:
                 orVarName += "_%s_" % (currentVar.VarName)
 
@@ -804,12 +804,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         if not limitOp:
             if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))
+            return None
 
-        if not limitOp in ('<', '>', '='):
+        if limitOp not in ('<', '>', '='):
             if self.ifLog: self.myLogger.error("%s called with incorrect operation specified for comparing limit %s"%(logicMethodName,limitOp))
+            return None
             
-        if limit > 1:
-            if self.ifLog: self.myLogger.debug("%s called with limit: %i and operation %s"%(logicMethodName,limit,limitOp))
+        if self.ifLog: self.myLogger.debug("%s called with limit: %i and operation %s"%(logicMethodName,limit,limitOp))
 
         # Get names of variables - some of them can be numbers
         noOfVars = 0 # count the numbers in variables
@@ -842,7 +843,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 1
                 elif varSumLinExpr.size() - (limit - countOnes) < 0:
                     m.addConstr(1 <= 0)
-                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
                 else:
                     m.addConstr(varSumLinExpr >= limit - countOnes)
@@ -853,23 +854,23 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                         return 1
                     else:
                         m.addConstr(1 <= 0)
-                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                 else:
                     if limit < countOnes:
                         m.addConstr(1 <= 0)
-                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                     else:
                         m.addConstr(varSumLinExpr <= limit - countOnes)
-            if limitOp == '==':
+            if limitOp == '=':
                 if varSumLinExpr.size() == 0:
                     if countOnes == limit:
                         if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
                         return 1
                     else:
                         m.addConstr(1 <= 0)
-                        if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                        if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                 else:
                      m.addConstr(varSumLinExpr == limit - countOnes)
@@ -900,7 +901,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             if not self.__varIsNumber(currentVar):
                 varSumLinExpr.addTerms(1.0, currentVar)
-            else:
+            elif currentVar == 1:
                 countOnes = countOnes + 1
 
         if limitOp == '>':
@@ -909,7 +910,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 return 1
             elif varSumLinExpr.size() - (limit - countOnes) < 0:
                 m.addConstr(1 <= 0)
-                if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                 return 0
             else:
                 m.addConstr(varSumLinExpr - varCOUNT >= limit - 1 - countOnes)
@@ -920,23 +921,23 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 1
                 else:
                     m.addConstr(1 <= 0)
-                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
             else:
                 if limit < countOnes:
                     m.addConstr(1 <= 0)
-                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
                 else:
                     m.addConstr(varSumLinExpr - varCOUNT <= limit - 1 - countOnes)
-        if limitOp == '==':
+        if limitOp == '=':
             if varSumLinExpr.size() == 0:
                 if countOnes == limit:
                     if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
                     return 1
                 else:
                     m.addConstr(1 <= 0)
-                    if self.ifLog: self.myLogger.warn("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
+                    if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
             else:
                  m.addConstr(varSumLinExpr == limit - countOnes)
