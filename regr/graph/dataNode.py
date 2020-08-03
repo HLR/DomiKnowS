@@ -1113,7 +1113,7 @@ class DataNodeBuilder(dict):
                             _dnLinked == True
 
                     if conceptInfo['root']:  # New root
-                        if "READER" in dict:
+                        if "READER" in self:
                             dn.instanceID = dict.__getitem__(self, "READER")
                         else:
                             dn.instanceID = 0
