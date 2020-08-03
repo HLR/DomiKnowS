@@ -1114,9 +1114,9 @@ class DataNodeBuilder(dict):
 
                     if conceptInfo['root']:  # New root
                         if "READER" in self:
-                            dn.instanceID = dict.__getitem__(self, "READER")
+                            _dn.instanceID = dict.__getitem__(self, "READER")
                         else:
-                            dn.instanceID = 0
+                            _dn.instanceID = 0
 
                         # Update the list of root datanodes 
                         _dns = dict.__getitem__(self, 'dataNode')
