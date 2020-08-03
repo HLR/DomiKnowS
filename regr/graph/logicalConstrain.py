@@ -2,6 +2,7 @@ import logging
 from itertools import product
 
 import numpy
+import torch
  
 from regr.solver.ilpConfig import ilpConfig 
    
@@ -47,7 +48,7 @@ class LogicalConstrain:
             return e._context
         
     def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
         
         if len(v) < 2:
             myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
@@ -270,7 +271,7 @@ class notL(LogicalConstrain):
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
         lcName = 'notL'
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
               
         if not resultVariableNames:
             resultVariableNames = ('x',)
