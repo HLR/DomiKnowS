@@ -1054,7 +1054,7 @@ class DataNodeBuilder(dict):
             dns = []
             if not isinstance(value, (list, Tensor)): # Assuming that value is single element
                 instanceValue = ""
-                if "READER" in dict:
+                if "READER" in self:
                     instanceID = dict.__getitem__(self, "READER")
                 else:
                     instanceID = 0
