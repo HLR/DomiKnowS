@@ -1,7 +1,8 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor, TorchEdgeReaderSensor
+    from regr.program.model.pytorch import PoiModelToWorkWithLearnerWithLoss
+    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
@@ -15,18 +16,15 @@ def model_declaration():
     y0 = graph['y0']
     y1 = graph['y1']
 
-    world['index'] = ConstantSensor(data=[[]])
+    world['index'] = ReaderSensor(keyword='x')
     world_contains_x['forward'] = TorchEdgeReaderSensor(keyword='x', mode='forward', to='x')
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
-    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
+    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=None)
+    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=None)
 
-    program = LearningBasedProgram(graph, MyIMLModel)
-    # With the following line, the inference will not take x into account
-    # which results in a complain (UserWarning) not getting inference result
-    # program.model.inference_with = [world]
+    program = LearningBasedProgram(graph, PoiModelToWorkWithLearnerWithLoss)
     return program
 
 
