@@ -3,7 +3,9 @@ import re
 import itertools
 import glob
 import difflib
+import warnings
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import unescape
 
 from .graph import ace05
 
@@ -24,13 +26,14 @@ class Charseq(APFObject):
         self.start = int(node.attrib['START'])
         self.end = int(node.attrib['END']) + 1  # pythonic upper bound exclusion
         self.text = node.text
-        # assert text[self.start:self.end] == self.text, 'Text not match in {}: (index) "{}" != (text) "{}"'.format(node, text[self.start:self.end], self.text)
-        if text[self.start:self.end] != self.text:
-            a = text[self.start:self.end] + '\n'
-            b = self.text + '\n'
-            print('<charseq> mismatch:\n', ''.join(self.differ.compare(
-                a.splitlines(keepends=True),
-                b.splitlines(keepends=True))))
+        a = unescape(text[self.start:self.end]) + '\n'
+        b = unescape(self.text) + '\n'
+        if a != b:
+            warnings.warn(
+                '<charseq> mismatch:\n %s' %
+                ''.join(self.differ.compare(
+                    a.splitlines(keepends=True),
+                    b.splitlines(keepends=True))))
 
 
 
@@ -189,10 +192,6 @@ class Reader():
     def load_text(self, doc_id, path):
         # tree = ET.parse(path)
         # root = tree.getroot()
-        # offset = {'OIADVANTAGE_20050105.0922': 4}
-        # if doc_id in offset:
-        #    print(list(root.itertext()))
-        #    ssss
         # text = ''.join(itertools.chain(*root.itertext()))
         with open(path) as fin:
             text = fin.read()
