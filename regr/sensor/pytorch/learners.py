@@ -1,17 +1,20 @@
 import abc
 from typing import Any
-import torch
-from .sensors import TorchSensor
-from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 import os.path
-from os import path
+import warnings
+
+import torch
+
+from .sensors import TorchSensor, ModuleSensor
+from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
+
 
 
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, *pre, edges=None):
-        super(TorchLearner, self).__init__(*pre, edges=edges)
+    def __init__(self, *pre, edges=None, label=False):
+        super(TorchLearner, self).__init__(*pre, edges=edges, label=label)
         self.model = None
         self.updated = False
 
@@ -28,19 +31,32 @@ class TorchLearner(TorchSensor):
                     self.model.add_module(name=name, module=learner.model)
             self.updated = True
 
+    @property
+    def sanitized_name(self):
+        return self.fullname.replace('/', '_').replace("<","").replace(">","")
+
     def save(self, filepath):
-        #final_name = self.fullname.replace('/', '_')
-        final_name = self.fullname.replace('/', '_').replace("<","").replace(">","")
-        torch.save(self.model.state_dict(), filepath+"/"+final_name)
+        save_path = os.path.join(filepath, self.sanitized_name)
+        torch.save(self.model.state_dict(), save_path)
 
     def load(self, filepath):
-        #final_name = self.fullname.replace('/', '_')
-        final_name = self.fullname.replace('/', '_').replace("<","").replace(">","")
-        if path.exists(filepath+"/"+final_name):
-            self.model.load_state_dict(torch.load(filepath+"/"+final_name))
+        save_path = os.path.join(filepath, self.sanitized_name)
+        try:
+            self.model.load_state_dict(torch.load(save_path))
             self.model.eval()
             self.model.train()
+        except FileNotFoundError:
+            message = f'Failed to load {self} from {save_path}. Continue not loaded.'
+            warnings.warn(message, stacklevel=2)
 
+class TorchModuleLearner(ModuleSensor, TorchLearner):
+    def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
+        super().__init__(*pres, Module, edges=edges, label=label, **kwargs)
+        self.model = self.module
+        self.updated = True  # no need to update
+
+    def update_parameters(self):
+        pass
 
 class LSTMLearner(TorchLearner):
     def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False):
