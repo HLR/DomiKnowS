@@ -261,7 +261,7 @@ class epqL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
         
-class eql(LogicalConstrain):
+class eqL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e)
       

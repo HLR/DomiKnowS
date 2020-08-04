@@ -15,7 +15,7 @@ from gurobipy import *
 from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-from regr.graph import LogicalConstrain, eql
+from regr.graph import LogicalConstrain, eqL
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -1271,7 +1271,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         lcVariables.append(_lcVariables)
                        
-                elif isinstance(e, eql):
+                elif isinstance(e, eqL):
                     typeOfConcept, conceptTypes = self._typeOfConcept(e.e[0])
 
                     r = None
