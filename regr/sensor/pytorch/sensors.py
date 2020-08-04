@@ -6,12 +6,11 @@ from ...graph import Property
 
 
 class TorchSensor(Sensor):
-    def __init__(self, *pres, output=None, edges=None, label=False):
+    def __init__(self, *pres, edges=None, label=False):
         super().__init__()
         if not edges:
             edges = []
         self.pres = pres
-        self.output = output
         self.context_helper = None
         self.inputs = []
         self.edges = edges
@@ -46,7 +45,7 @@ class TorchSensor(Sensor):
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward()
-            
+
         if val is not None:
             data_item[self.fullname] = val
             if not self.label:
@@ -55,11 +54,7 @@ class TorchSensor(Sensor):
             data_item[self.fullname] = None
             if not self.label:
                 data_item[self.prop.fullname] = None
-            
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.prop.fullname] = self.fetch_value(self.output)
-            
+
         return data_item
 
     def update_pre_context(
@@ -178,6 +173,16 @@ class PrefilledSensor(TorchSensor):
         return self.context_helper[self.prop.fullname]
 
 
+class TriggerPrefilledSensor(PrefilledSensor):
+    def __init__(self, *pres, callback_sensor=None, edges=None, label=False):
+        super().__init__(*pres, edges=edges, label=label)
+        self.callback_sensor = callback_sensor
+
+    def forward(self,) -> Any:
+        self.callback_sensor(self.context_helper)
+        return super().forward()
+
+
 class ReaderSensor(ConstantSensor):
     def __init__(self, *pres, keyword=None, edges=None, label=False):
         super().__init__(*pres, data=None, edges=None, label=False)
@@ -238,10 +243,6 @@ class NominalSensor(TorchSensor):
             if not self.label:
                 data_item[self.prop.fullname] = None
 
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.prop.fullname] = self.fetch_value(self.output)
-
         return data_item
 
 
@@ -252,12 +253,14 @@ class TorchEdgeSensor(FunctionalSensor):
         super().__init__(*pres, edges=edges, label=label)
         self.to = to
         self.mode = mode
-        self.runtime_initialized = False
-
-    def _runtime_initialize(self):
         if self.mode not in self.modes:
             raise ValueError('The mode passed to the edge sensor must be one of %s' % self.modes)
-        self.relation = self.prop.sup
+        self.src = None
+        self.dst = None
+
+    def attached(self, sup):
+        super().attached(sup)
+        self.relation = sup.sup
         if self.mode == "forward":
             self.src = self.relation.src
             self.dst = self.relation.dst
@@ -266,15 +269,12 @@ class TorchEdgeSensor(FunctionalSensor):
             self.dst = self.relation.src
         else:
             raise ValueError('The mode passed to the edge is invalid!')
-        self.dst[self.to] = PrefilledSensor()
-        self.runtime_initialized = True
+        self.dst[self.to] = TriggerPrefilledSensor(callback_sensor=self)
 
     def __call__(
         self,
         data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
-        if not self.runtime_initialized:
-            self._runtime_initialize()
         super().__call__(data_item)
         return data_item[self.dst[self.to].fullname]
 

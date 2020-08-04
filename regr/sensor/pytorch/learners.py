@@ -10,8 +10,8 @@ from os import path
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, *pre, output=None, edges=None):
-        super(TorchLearner, self).__init__(*pre, output=output, edges=edges)
+    def __init__(self, *pre, edges=None):
+        super(TorchLearner, self).__init__(*pre, edges=edges)
         self.model = None
         self.updated = False
 
