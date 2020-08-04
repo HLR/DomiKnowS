@@ -5,8 +5,8 @@ import torch
 
 
 class SentenceRepSensor(TorchSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False):
-        super(SentenceRepSensor).__init__(*pres, output=None, edges=None, label=False)
+    def __init__(self, *pres, edges=None, label=False):
+        super().__init__(*pres, edges=None, label=False)
         nlp = spacy.load('en_core_web_lg')
 
     def forward(self,) -> Any:

@@ -61,6 +61,5 @@ def test_graph_coloring_main():
         else:
             assert s == 1
 
-
 if __name__ == '__main__':
     pytest.main([__file__])
