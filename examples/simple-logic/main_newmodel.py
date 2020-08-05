@@ -22,8 +22,8 @@ def model_declaration():
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=None)
-    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=None)
+    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
+    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
 
     program = LearningBasedProgram(graph, PoiModelToWorkWithLearnerWithLoss)
     return program
