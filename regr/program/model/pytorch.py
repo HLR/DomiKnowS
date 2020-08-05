@@ -73,29 +73,34 @@ class PoiModel(TorchModel):
     def __init__(self, graph, poi=None, loss=None, metric=None):
         super().__init__(graph)
         if poi is None:
-            self.poi = list(self.find_poi())
+            self.poi = self.default_poi()
         else:
             self.poi = poi
-        # self.graph.poi = self.poi
         self.loss = loss
         self.metric = metric
 
-    def find_poi(self):
+    def default_poi(self):
+        poi = []
         for prop in self.graph.get_properties():
-            for sensor1, sensor2 in combinations(prop.find(TorchSensor), r=2):
-                if sensor1.label:
-                    target_sensor = sensor1
-                    output_sensor = sensor2
-                elif sensor2.label:
-                    target_sensor = sensor2
-                    output_sensor = sensor1
-                else:
-                    # TODO: should different learners get closer?
-                    continue
-                if output_sensor.label:
-                    # two targets, skip
-                    continue
-                yield prop, (output_sensor, target_sensor)
+            if len(list(prop.find(TorchSensor))) > 1:
+                poi.append(prop)
+        return poi
+
+    def find_sensors(self, prop):
+        for sensor1, sensor2 in combinations(prop.find(TorchSensor), r=2):
+            if sensor1.label:
+                target_sensor = sensor1
+                output_sensor = sensor2
+            elif sensor2.label:
+                target_sensor = sensor2
+                output_sensor = sensor1
+            else:
+                # TODO: should different learners get closer?
+                continue
+            if output_sensor.label:
+                # two targets, skip
+                continue
+            yield output_sensor, target_sensor
 
     def reset(self):
         if self.loss is not None:
@@ -120,16 +125,17 @@ class PoiModel(TorchModel):
     def populate(self, builder):
         loss = 0
         metric = {}
-        for prop, sensors in self.poi:
+        for prop in self.poi:
             # make sure the sensors are evaluated
-            for sensor in sensors:
-                sensor(builder)
-            if self.mode() not in {Mode.POPULATE,}:
-                # calculated any loss or metric
-                if self.loss:
-                    loss += self.poi_loss(builder, prop, sensors)
-                if self.metric:
-                    metric[(*sensors,)] = self.poi_metric(builder, prop, sensors)
+            for sensor in prop.find(TorchSensor):
+                    sensor(builder)
+            for sensors in self.find_sensors(prop):
+                if self.mode() not in {Mode.POPULATE,}:
+                    # calculated any loss or metric
+                    if self.loss:
+                        loss += self.poi_loss(builder, prop, sensors)
+                    if self.metric:
+                        metric[(*sensors,)] = self.poi_metric(builder, prop, sensors)
         return loss, metric
 
 
@@ -143,10 +149,11 @@ class SolverModel(PoiModel):
         self.inference_with = []
 
     def inference(self, builder):
-        for prop, (output_sensor, target_sensor) in self.poi:
+        for prop in self.poi:
+            for output_sensor, target_sensor in self.find_sensors(prop):
             # make sure the sensors are evaluated
-            output = output_sensor(builder)
-            target = target_sensor(builder)
+                output = output_sensor(builder)
+                target = target_sensor(builder)
         # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference

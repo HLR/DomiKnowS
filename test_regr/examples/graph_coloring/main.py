@@ -24,8 +24,8 @@ def model_declaration():
     city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
     city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
 
-    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
+    def readNeighbors(links, current_neighbers, city1, city2):
+        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
             return True
         else:
             return False
@@ -35,9 +35,7 @@ def model_declaration():
     # --- Learners
     city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
     
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[
-        (city[firestationCity], [next(city[firestationCity].find(TorchSensor))]),
-        (neighbor['index'], [next(neighbor['index'].find(TorchSensor))])]))
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[city[firestationCity], neighbor['index']]))
     return program
 
 
