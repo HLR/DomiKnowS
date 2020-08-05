@@ -3,142 +3,8 @@ from itertools import product
 import torch
 
 from ...graph import DataNode, DataNodeBuilder, Concept, Property
-from .sensors import TorchSensor, Sensor
+from .sensors import TorchSensor, FunctionalSensor, Sensor
 
-
-class QuerySensor0(TorchSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, query=None):
-        super().__init__(*pres, output=output, edges=edges, label=label)
-        if callable(query):
-            self.selector = query
-        else:
-            self.selector = None
-
-    def __call__(
-            self,
-            data_item: DataNode
-    ) -> Dict[str, Any]:
-        try:
-            self.update_pre_context(data_item)
-        except:
-            print('Error during updating pre with sensor {}'.format(self.fullname))
-            raise
-        self.context_helper = data_item
-        try:
-            data_item = self.update_context(data_item)
-        except:
-            print('Error during updating data_item with sensor {}'.format(self.fullname))
-            raise
-
-        if self.output:
-            return data_item[self.sup.sup[self.output].fullname]
-
-        try:
-            return data_item[self.fullname]
-        except KeyError:
-            return data_item[self.sup.sup['raw'].fullname]
-
-    def update_context(
-            self,
-            data_item: DataNode,
-            force=False
-    ) -> Dict[str, Any]:
-        if not force and self.fullname in data_item:
-            # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
-        else:
-            self.define_inputs()
-            val = self.forward()
-
-        if val is not None:
-            data_item[self.fullname] = val
-            if not self.label:
-                data_item[self.sup.fullname] = val  # override state under property name
-        else:
-            data_item[self.fullname] = None
-            if not self.label:
-                data_item[self.sup.fullname] = None
-
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.sup.fullname] = self.fetch_value(self.output)
-
-        return data_item
-
-    def update_pre_context(
-            self,
-            data_item: DataNode
-    ) -> Any:
-        for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
-                sensor(data_item)
-        for pre in self.pres:
-            for _, sensor in self.sup.sup[pre].find(Sensor):
-                sensor(data_item)
-
-
-class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, forward=None):
-        super().__init__(*pres, output=output, edges=edges, label=label)
-        self.forward_ = forward
-
-    def update_pre_context(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Any:
-        for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
-                sensor(data_item)
-        for pre in self.pres:
-            if isinstance(pre, str):
-                if self.sup is None:
-                    raise ValueError('{} must be used with with property assignment.'.format(type(self)))
-                for _, sensor in self.sup.sup[pre].find(Sensor):
-                    sensor(data_item)
-            elif isinstance(pre, (Property, Sensor)):
-                pre(data_item)
-
-    def update_context(
-        self,
-        data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
-        if not force and self.fullname in data_item:
-            # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
-        else:
-            self.define_inputs()
-            val = self.forward_wrap()
-            
-        if val is not None:
-            data_item[self.fullname] = val
-            if not self.label:
-                data_item[self.sup.fullname] = val  # override state under property name
-        else:
-            data_item[self.fullname] = None
-            if not self.label:
-                data_item[self.sup.fullname] = None
-            
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.sup.fullname] = self.fetch_value(self.output)
-            
-        return data_item
-
-    def fetch_value(self, pre, selector=None):
-        if isinstance(pre, str):
-            return super().fetch_value(pre, selector)
-        elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre.fullname]
-        return pre
-
-    def forward_wrap(self):
-        return self.forward(*self.inputs)
-
-    def forward(self, *inputs):
-        if self.forward_ is not None:
-            return self.forward_(*inputs)
-        raise NotImplementedError
 
 class QuerySensor(FunctionalSensor):
     @property
@@ -234,8 +100,8 @@ class InstantiateSensor(TorchSensor):
 
 
 class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, output=None, edges=None, label=False, forward=None, keyword=None):
-        super().__init__(*pres, output=output, edges=edges, label=label, forward=forward)
+    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
+        super().__init__(*pres, edges=edges, forward=forward, label=label)
         self.data = None
         self.keyword = keyword
         if keyword is None:
@@ -258,7 +124,10 @@ class CandidateReaderSensor(CandidateSensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
 
-        output = torch.zeros(dims, dtype=torch.uint8)
+        if self.data is None and self.keyword in self.context_helper:
+            self.data = self.context_helper[self.keyword]
+            
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, index, *arg_list, *inputs)

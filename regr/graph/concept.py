@@ -217,17 +217,6 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    def predict(self, root_data, *data):
-        # TODO: make use of root_data to find the best proper trial in the stack
-        if len(data) == 0:
-            return None
-        elif len(data) == 1:
-            return data[0].attributes['<{}>'.format(self.name)]
-        else:
-            # TODO: change based on change of datanode model
-            return None
-            # raise NotImplementedError
-
     # Find datanode in data graph of the given concept 
     def __findDataNodes(self, dns, concept):
         if (dns is None) or (len(dns) == 0):
@@ -235,7 +224,7 @@ class Concept(BaseGraphTree):
          
         returnDns = []
         for dn in dns:
-            if dn.ontologyNode == concept:
+            if str(dn.ontologyNode) == concept:
                returnDns.append(dn) 
                
         if len(returnDns) > 0:

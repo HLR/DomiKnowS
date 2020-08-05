@@ -41,17 +41,17 @@ def graph(case):
             (container_contains_concept,) = container.contains(concept)
 
     # model
-    container['raw'] = ReaderSensor(keyword='container_keyword')
+    container['index'] = ReaderSensor(keyword='container_keyword')
     container_contains_concept['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
+        'index', mode='forward', to='index',
         expected_inputs=[case.container,],
         expected_outputs=case.container_edge)
     concept['reader1'] = TestSensor(
-        'raw', edges=[container_contains_concept['forward']],
+        'index', edges=[container_contains_concept['forward']],
         expected_inputs=[case.container_edge,],
         expected_outputs=case.reader1)
     concept['reader2'] = TestSensor(
-        'raw', edges=[container_contains_concept['forward']],
+        'index', edges=[container_contains_concept['forward']],
         expected_inputs=[case.container_edge,],
         expected_outputs=case.reader2)
 
@@ -73,7 +73,7 @@ def sensor(case, graph):
         # unlike query sensor that takes the list
         # here datanode is a datanode,
         assert isinstance(datanode, DataNode)
-        assert datanode.getAttributes().get('raw') == case.container_edge[idx]
+        assert datanode.getAttributes().get('index') == case.container_edge[idx]
         assert datanode.getAttributes().get('reader1') == case.reader1[idx]
         assert datanode.getAttributes().get('reader2') == case.reader2[idx]
         # other arguments are like functional sensor
@@ -101,7 +101,7 @@ def context(case, graph):
         if isinstance(node, Property):
             return node
     for prop in graph.traversal_apply(all_properties):
-        for _, sensor in prop.find(ReaderSensor):
+        for sensor in prop.find(ReaderSensor):
             sensor.fill_data(context)
     return context
 

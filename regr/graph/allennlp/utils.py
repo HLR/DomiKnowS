@@ -288,7 +288,7 @@ class HasBeenWarned:
 
 def show_violation(graph, data):
     viol_logger = logging.getLogger(__name__ + '.violation')
-    _, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
+    sentence_sensor = next(graph.get_sensors(SentenceSensor))
     sentence = data[sentence_sensor.fullname]
 
     for prop in graph.poi:

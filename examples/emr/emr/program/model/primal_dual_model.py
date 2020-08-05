@@ -52,7 +52,7 @@ class PrimalDualModel(TorchModel):
         return closs, data_item
 
     def get_raw_input(self, data_item):
-        _, sentence_sensor = self.graph.get_sensors(DataSensor, lambda s: not s.target)[0]
+        sentence_sensor = self.graph.get_sensors(DataSensor, lambda s: not s.target)[0]
         sentences = sentence_sensor(data_item)
         mask_len = [len(s) for s in sentences]  # (b, )
         return sentences, mask_len

@@ -45,7 +45,7 @@ def graph(case):
     # model
     container['index'] = ReaderSensor(keyword='container_keyword')
     container_contains_concept['forward'] = TestEdgeSensor(
-        'index', mode='forward', keyword='index',
+        'index', mode='forward', to='index',
         expected_inputs=[case.container,],
         expected_outputs=case.container_edge)
     concept['index'] = InstantiateSensor(edges=[container_contains_concept['forward']])
@@ -106,7 +106,7 @@ def context(case, graph):
         if isinstance(node, Property):
             return node
     for prop in graph.traversal_apply(all_properties):
-        for _, sensor in prop.find(ReaderSensor):
+        for sensor in prop.find(ReaderSensor):
             sensor.fill_data(context)
     return context
 

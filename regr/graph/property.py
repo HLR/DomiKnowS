@@ -47,7 +47,7 @@ class Property(BaseGraphShallowTree):
             else:
                 from ..sensor import Sensor
                 if isinstance(sensor, Sensor):
-                    yield name, sensor
+                    yield sensor
 
     def __call__(self, data_item):
         # make sure every sensor are visited

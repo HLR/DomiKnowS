@@ -331,3 +331,22 @@ def caller_source():
                 raise ex
     else:
         raise RuntimeError('Who is calling?')
+
+
+def dict_zip(*dicts, fillvalue=None):  # https://codereview.stackexchange.com/a/160584
+    all_keys = {k for d in dicts for k in d.keys()}
+    return {k: [d.get(k, fillvalue) for d in dicts] for k in all_keys}
+
+
+def wrap_batch(values, fillvalue=0):
+    import torch
+
+    if isinstance(values, (list, tuple)):
+        if isinstance(values[0], dict):
+            values = dict_zip(*values, fillvalue=fillvalue)
+            values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
+        elif isinstance(values[0], torch.Tensor):
+            values = torch.stack(values)
+    elif isinstance(values, dict):
+        values = {k: wrap_batch(v, fillvalue=fillvalue) for k, v in values.items()}
+    return values

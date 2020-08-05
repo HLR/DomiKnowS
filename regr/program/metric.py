@@ -3,7 +3,8 @@ from typing import Any
 
 import torch
 
-from ...utils import wrap_batch
+from ..base import AutoNamed
+from ..utils import wrap_batch
 
 
 class CMWithLogitsMetric(torch.nn.Module):
@@ -61,6 +62,16 @@ class MetricTracker(torch.nn.Module):
     def __getitem__(self, keys):
         return lambda *args, **kwargs: self.__call_dict__(keys, *args, **kwargs)
 
+    def kprint(self, k):
+        if (
+            isinstance(k, tuple) and
+            len(k) == 2 and
+            isinstance(k[0], AutoNamed) and 
+            isinstance(k[1], AutoNamed)):
+            return k[0].sup.name.name
+        else:
+            return k
+
     def value(self, reset=False):
         if self.list and self.dict:
             raise RuntimeError('{} cannot be used as list-like and dict-like the same time.'.format(type(self)))
@@ -71,12 +82,15 @@ class MetricTracker(torch.nn.Module):
             #value = wrap_batch(self.dict)
             #value = super().__call__(value)
             func = super().__call__
-            value = {k: func(v) for k, v in self.dict.items()}
+            value = {self.kprint(k): func(v) for k, v in self.dict.items()}
         else:
             value = None
         if reset:
             self.reset()
         return value
+
+    def __str__(self):
+        return str(self.value())
 
 
 class MacroAverageTracker(MetricTracker):
@@ -92,6 +106,12 @@ class MacroAverageTracker(MetricTracker):
                 return apply(torch.tensor(value))
         retval = apply(values)
         return retval
+
+
+class ValueTracker(MetricTracker):
+    def forward(self, values):
+        return values
+
 
 class PRF1Tracker(MetricTracker):
     def __init__(self):
