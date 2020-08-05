@@ -111,12 +111,13 @@ world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city
 ```
 Then we define the `CandidateReaderSensor` to read the `neighbor` concept into the graph.
 ```python
-def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):  
-    if index[1] + 1 in data[index[0] + 1]: # data contain 'links' from reader  
-		return 1  
-	else:  
-        return 0    
-neighbor['raw'] = CandidateReaderSensor(label=False, forward=readNeighbors, keyword='links')
+def readNeighbors(links, current_neighbers, city1, city2):
+    if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
+        return True
+    else:
+        return False
+
+neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
 ```
 Next, we apply the learner and the label sensor to the `city[firestationCity]`.
 ```python
@@ -125,7 +126,7 @@ city[firestationCity] = DummyCityLabelSensor(label=True)
 ```
 Add the end of the definition of the `model_declaration` function we have to add the following lines to return an executable instance from the declaration of the graph attached to the new sensors and learners.
 ```python
-program = LearningBasedProgram(graph, PoiModel)  
+program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[city[firestationCity], neighbor['index']]))
 return program
 ```
   
@@ -135,7 +136,7 @@ return program
   lbp = model_declaration()  
   dataset = CityReader().run()  # Adding the info on the reader
 ```
-Next, we have to populate `datanode` and call inference on each sample.
+Next, we have to populate `datanode` and call inference on each sample. The `minimizeObjective` will make the solver to solve a minimization problem instead of maximization which is the default behavior of the solver.
 ```python
 for datanode in lbp.populate(dataset=dataset, inference=True):  
   # call solver  
