@@ -49,9 +49,9 @@ class Property(BaseGraphShallowTree):
                 if isinstance(sensor, Sensor):
                     yield name, sensor
 
-    def __call__(self, context):
+    def __call__(self, data_item):
         # make sure every sensor are visited
         for _, sensor in self.items():
-            sensor(context)
+            sensor(data_item)
         # and see what is lefted
-        return context[self.fullname]
+        return data_item[self.fullname]

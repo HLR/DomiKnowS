@@ -17,13 +17,13 @@ class CallingSensor(Sensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         for pre in self.pres:
             for _, sensor in pre.find(Sensor):
-                sensor(context=context)
+                sensor(data_item)
         if self.output:
-            return context[self.output.fullname]
+            return data_item[self.output.fullname]
 
 
 class ReaderSensor(CallingSensor):
@@ -34,9 +34,9 @@ class ReaderSensor(CallingSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(ReaderSensor, self).forward(context=context)
+        super(ReaderSensor, self).forward(data_item)
         # return Sentence("I am highly motivated to capture the relationships of washington with berlin"), ["FAC",
         #                                                                                                       'LOC',
         #                                                                                                       'NONE',
@@ -55,12 +55,12 @@ class ReaderSensor(CallingSensor):
 class SequenceConcatSensor(CallingSensor):
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(SequenceConcatSensor, self).forward(context=context)
+        super(SequenceConcatSensor, self).forward(data_item)
         _list = []
         for item in self.pres:
-            _list.append(context[item.fullname])
+            _list.append(data_item[item.fullname])
         it = 0
         _data = []
         for item in _list[0]:
@@ -76,11 +76,11 @@ class FlairEmbeddingSensor(CallingSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        super(FlairEmbeddingSensor, self).forward(context=context)
+        super(FlairEmbeddingSensor, self).forward(data_item)
         _list = []
-        for token in context[self.pres[0].fullname]:
+        for token in data_item[self.pres[0].fullname]:
             _list.append(token.embedding.view(1, self.embedding_dim))
         _tensor = torch.stack(_list)
         return _tensor

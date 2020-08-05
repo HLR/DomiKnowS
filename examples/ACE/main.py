@@ -70,12 +70,12 @@ def model_declaration(graph, data, reader):
     sentence['glove'] = SentenceGloveEmbedderSensor(sentence['raw'])
     sentence['flair'] = SentenceFlairEmbedderSensor(sentence['raw'])
     sentence['pos'] = SentencePosTaggerSensor(sentence['raw'], reader=reader)
-    # next(sentence['flair'].find(SentenceFlairEmbedderSensor))[1](context={})
+    # next(sentence['flair'].find(SentenceFlairEmbedderSensor))[1](data_item={})
 
     sentence['raw_ready'] = CallingSensor(sentence['bert'], sentence['glove'], sentence['flair'], output=sentence['raw'])
     sentence['embedding'] = FlairEmbeddingSensor(sentence['raw_ready'], embedding_dim=5220)
     sentence['all'] = SequenceConcatSensor(sentence['embedding'], sentence['pos'])
-    # next(sentence['output'].find(CallingSensor))[1](context={})
+    # next(sentence['output'].find(CallingSensor))[1](data_item={})
     #
     word['encode'] = LSTMLearner(sentence['all'], input_dim=5234, hidden_dim=240, num_layers=1, bidirectional=True)
 
@@ -103,7 +103,7 @@ def model_declaration(graph, data, reader):
     ACEsolver.set_reader_instance(reader=reader)
     return ACEsolver
     #
-    # next(sentence['encode'].find(CallingSensor))[1](context={})
+    # next(sentence['encode'].find(CallingSensor))[1](data_item={})
 
     # sentence['all'] = ConcatSensor(sentence['flair'], sentence['bert'], sentence['glove'])
     # #### `TokenInSequenceSensor` provides the ability to index tokens in a `TextField`.

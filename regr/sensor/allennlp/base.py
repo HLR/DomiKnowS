@@ -25,7 +25,7 @@ class AllenNlpSensor(Sensor):
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
         # update prerequired first
@@ -36,14 +36,14 @@ class AllenNlpSensor(Sensor):
                 # choose one result to update finally
                 # TODO: consider priority or confidence or merge somehow
                 if isinstance(sensor, AllenNlpSensor) and not sensor.output_only:
-                    sensor(context)
+                    sensor(data_item)
                     break
             else:  # no break
                 raise RuntimeError('Not able to find a sensor for {} as prereqiured by {}'.format(
                     pre.fullname, self.fullname))
 
         # then call forward
-        Sensor.update_context(self, context, force)
+        Sensor.update_context(self, data_item, force)
 
     @property
     def output_dim(self):
@@ -63,9 +63,9 @@ class ReaderSensor(AllenNlpSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return context[self.fullname]
+        return data_item[self.fullname]
 
 
 
@@ -101,10 +101,10 @@ class AllenNlpLearner(ModuleSensor, Learner):
 class PreArgsModuleSensor(ModuleSensor):
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         try:
-            return self.module(*(context[pre.fullname] for pre in self.pres))
+            return self.module(*(data_item[pre.fullname] for pre in self.pres))
         except:
             print('Error during forward with sensor {}'.format(self.fullname))
             print('module:', self.module)
@@ -143,26 +143,26 @@ class SinglePreLearner(SinglePreSensor, PreArgsModuleLearner):
 
 
 class MaskedSensor(AllenNlpSensor):
-    def get_mask(self, context: Dict[str, Any]):
+    def get_mask(self, data_item: Dict[str, Any]):
         raise NotImplementedError('Implement get_mask in subclass of MaskedSensor.')
 
 
 class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
-    def get_mask(self, context: Dict[str, Any]):
+    def get_mask(self, data_item: Dict[str, Any]):
         for name, sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
             raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
-        return sensor.get_mask(context)
+        return sensor.get_mask(data_item)
 
 
 class SinglePreMaskedLearner(SinglePreMaskedSensor, SinglePreLearner):
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return self.module(context[self.pre.fullname], self.get_mask(context))
+        return self.module(data_item[self.pre.fullname], self.get_mask(data_item))
 
 
 class SinglePreArgMaskedPairSensor(PreArgsModuleSensor, SinglePreMaskedSensor):

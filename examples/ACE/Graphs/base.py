@@ -241,7 +241,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     truth = []
                     pred = []
                     info = {}
-                    context = {}
+                    data_item = {}
                     for prop1 in self.poi:
                         entity = prop1.sup.name
                         prop_name = prop1.name
@@ -249,11 +249,11 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             info[entity] = {}
                         if prop_name not in info[entity]:
                             info[entity][prop_name] = {"start" : len(truth)}
-                        list(prop1.find(LabelSensor))[0][1](context=context)
-                        list(prop1.find(CallingLearner))[0][1](context=context)
+                        list(prop1.find(LabelSensor))[0][1](data_item)
+                        list(prop1.find(CallingLearner))[0][1](data_item)
                         # check this with quan
-                        truth.append(context[list(prop1.find(LabelSensor))[0][1].fullname])
-                        pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
+                        truth.append(data_item[list(prop1.find(LabelSensor))[0][1].fullname])
+                        pred.append(data_item[list(prop1.find(CallingLearner))[0][1].fullname])
 
                     total_loss = 0
                     weights = self.weights(info=info, truth=truth).float()
@@ -293,12 +293,12 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             try:
                 truth = []
                 pred = []
-                context = {}
+                data_item = {}
                 for prop1 in self.poi:
-                    list(prop1.find(LabelSensor))[0][1](context=context)
-                    list(prop1.find(CallingLearner))[0][1](context=context)
-                    truth.append(context[list(prop1.find(LabelSensor))[0][1].fullname])
-                    pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
+                    list(prop1.find(LabelSensor))[0][1](data_item)
+                    list(prop1.find(CallingLearner))[0][1](data_item)
+                    truth.append(data_item[list(prop1.find(LabelSensor))[0][1].fullname])
+                    pred.append(data_item[list(prop1.find(CallingLearner))[0][1].fullname])
             except StopIteration:
                 break
 

@@ -18,16 +18,16 @@ DataInstance = Dict[str, torch.Tensor]
 class AllennlpDataNodeSolver(ilpOntSolver):
     __metaclass__ = abc.ABCMeta
 
-    def inferSelection(self, graph: Graph, context: DataInstance, vocab=None) -> DataInstance:
-        for nodes, model_trial in self.populate(graph, context):
+    def inferSelection(self, graph: Graph, data_item: DataInstance, vocab=None) -> DataInstance:
+        for nodes, model_trial in self.populate(graph, data_item):
             import pdb; pdb.set_trace()
 
-    def populate(self, graph, context):
+    def populate(self, graph, data_item):
         sentence = graph['linguistic/sentence']
         word = graph['linguistic/word']
 
         name, sentence_sensor = graph.get_sensors(SentenceSensor)[0]
-        sentence_data = context[sentence_sensor.fullname]
+        sentence_data = data_item[sentence_sensor.fullname]
         batch_size = len(sentence)
 
         counter = Counter()
@@ -60,8 +60,8 @@ class AllennlpDataNodeSolver(ilpOntSolver):
                 label_prop = concept['label']
                 #_, sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
                 _, learner = next(label_prop.find(Learner))
-                #sensor_data = context[sensor.fullname]
-                learner_data = context[learner.fullname][batch_index]
+                #sensor_data = data_item[sensor.fullname]
+                learner_data = data_item[learner.fullname][batch_index]
                 learner_data = torch.nn.functional.softmax(learner_data, dim=-1).clone().cpu().detach().numpy()
                 for i, word_node in enumerate(word_node_list):
                     model_trial[concept, word_node] = learner_data[i, 1]
@@ -72,8 +72,8 @@ class AllennlpDataNodeSolver(ilpOntSolver):
                 label_prop = concept['label']
                 #_, sensor = next(label_prop.find(Sensor, lambda x: not isinstance(x, Learner)))
                 _, learner = next(label_prop.find(Learner))
-                #sensor_data = context[sensor.fullname]
-                learner_data = context[learner.fullname][batch_index]
+                #sensor_data = data_item[sensor.fullname]
+                learner_data = data_item[learner.fullname][batch_index]
                 learner_data = torch.nn.functional.softmax(learner_data, dim=-1).clone().cpu().detach().numpy()
                 for i, word_node_1 in enumerate(word_node_list):
                     for j, word_node_2 in enumerate(word_node_list):
