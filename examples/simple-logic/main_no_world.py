@@ -17,8 +17,8 @@ def model_declaration():
     x['x'] = ReaderSensor(keyword='x')
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', Module=Net)
-    x[y1] = ModuleLearner('x', Module=Net)
+    x[y0] = ModuleLearner('x', module=Net())
+    x[y1] = ModuleLearner('x', module=Net())
 
     program = LearningBasedProgram(graph, MyIMLModel)
     return program

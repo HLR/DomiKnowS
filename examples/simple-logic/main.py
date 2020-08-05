@@ -20,8 +20,8 @@ def model_declaration():
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
-    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
+    x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
+    x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
 
     program = LearningBasedProgram(graph, MyIMLModel)
     # With the following line, the inference will not take x into account

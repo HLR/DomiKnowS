@@ -64,8 +64,8 @@ class TorchLearner(TorchSensor):
 
 
 class ModuleLearner(ModuleSensor, TorchLearner):
-    def __init__(self, *pres, Module, edges=None, loss=None, metric=None, label=False, **kwargs):
-        super().__init__(*pres, Module=Module, edges=edges, label=label, **kwargs)
+    def __init__(self, *pres, module, edges=None, loss=None, metric=None, label=False, **kwargs):
+        super().__init__(*pres, module=module, edges=edges, label=label, **kwargs)
         self.model = self.module
         self.updated = True  # no need to update
         self._loss = loss
