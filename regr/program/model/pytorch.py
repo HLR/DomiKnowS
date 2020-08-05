@@ -9,6 +9,7 @@ from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeRead
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
+from ..tracker import MacroAverageTracker
 
 
 class TorchModel(torch.nn.Module):
@@ -190,6 +191,14 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
             self.poi = poi
         else:
             self.poi = self.default_poi()
+        self.loss_tracker = MacroAverageTracker()
+        self.metric_tracker = None
+
+    def reset(self):
+        if self.loss_tracker is not None:
+            self.loss_tracker.reset()
+        if self.metric_tracker is not None:
+            self.metric_tracker.reset()
 
     def default_poi(self):
         poi = []
@@ -215,9 +224,21 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
                 pass
             for target, predictor in product(targets, predictors):
                 if predictor._loss is not None:
-                    losses[predictor] = predictor.loss(builder, target)
+                    losses[predictor, target] = predictor.loss(builder, target)
                 if predictor._metric is not None:
-                    metrics[predictor] = predictor.metric(builder, target)
+                    metrics[predictor, target] = predictor.metric(builder, target)
+
+        self.loss_tracker.append(losses)
+        # self.metrics_tracker.append(metrics)
 
         loss = sum(losses.values())
         return loss, metrics
+
+    @property
+    def loss(self):
+        return self.loss_tracker
+
+    @property
+    def metric(self):
+        # return self.metrics_tracker
+        pass

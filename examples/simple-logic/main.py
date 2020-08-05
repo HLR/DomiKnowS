@@ -15,7 +15,7 @@ def model_declaration():
     y0 = graph['y0']
     y1 = graph['y1']
 
-    world['index'] = ConstantSensor(data=[[]])
+    world['index'] = ConstantSensor(data=[[0.]])
     world_contains_x['forward'] = TorchEdgeReaderSensor(keyword='x', mode='forward', to='x')
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
