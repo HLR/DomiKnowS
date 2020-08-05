@@ -79,7 +79,7 @@ class CandidateSensor(QuerySensor):
         output = torch.zeros(dims, dtype=torch.uint8)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, index, *arg_list, *inputs)
+            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
         return output
 
 
@@ -130,5 +130,5 @@ class CandidateReaderSensor(CandidateSensor):
         output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(self.data, datanodes, index, *arg_list, *inputs)
+            output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
         return output

@@ -247,9 +247,9 @@ class NominalSensor(TorchSensor):
 
 
 class ModuleSensor(FunctionalSensor):
-    def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
+    def __init__(self, *pres, module, edges=None, label=False):
         super().__init__(*pres, edges=edges, label=label)
-        self.module = Module(**kwargs)
+        self.module = module
 
     def forward(self, *inputs):
         return self.module(*inputs)

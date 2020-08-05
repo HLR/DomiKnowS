@@ -9,7 +9,7 @@ from regr.solver.ilpConfig import ilpConfig
 from torch.tensor import Tensor
 
 from regr.graph import graph
-from regr.graph.logicalConstrain import eql
+from regr.graph.logicalConstrain import eqL
 from regr.solver import ilpOntSolverFactory
 
 _DataNode__myLogger = logging.getLogger(ilpConfig['log_name'])
@@ -379,43 +379,49 @@ class DataNode:
         
         return None 
     
-    def __findRootRelation(self, relationConcept, usedGraph = None):
+    # Find the root parent of relation of the given relation
+    def __findRootConceptOrRelation(self, relationConcept, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
         if isinstance(relationConcept, str):
             relationConcept = self.__findConcept(relationConcept)
             
+        # Does this concept or elation has parent (through _isA)
         for _isA in relationConcept.is_a():
             _relationConcept = _isA.dst
             
-            return  self.__findRootRelation(_relationConcept, usedGraph)
+            return  self.__findRootConceptOrRelation(_relationConcept, usedGraph)
         
+        # If the provided concept or relation is root (has not parents)
         return relationConcept 
 
     def __isHardConstrains(self, conceptRelation):
+        # Check if dedicated DataNodes has been created for this concept or relation
         currentConceptOrRelationDNs = self.findDatanodes(select = conceptRelation)
         if len(currentConceptOrRelationDNs) > 0:
             return True
         
-        rootRelation = self.__findRootRelation(conceptRelation)
+        # Find the root parent  of the given concept or relation
+        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
         
         if bool(rootRelation):
+            # Find dedicated DataNodes for this rootRelation
             rootRelationDNs = self.findDatanodes(select = rootRelation)
             
-            key = conceptRelation # Has to exactly not subkey
-            if not isinstance(key, str):
-                key = key.name
-                
-            for dn in rootRelationDNs:
-                if key in dn.attributes:
-                    return True
+            if bool(rootRelationDNs):
+                key = str(conceptRelation) # Key is just the name of the concept or relation
+               
+                # Check if the DataNode has this attribute
+                for dn in rootRelationDNs:
+                    if key in dn.attributes:
+                        return True
                 
         return False
             
     def __getHardConstrains(self, conceptRelation, reltationAttrs, currentCandidate):
         key = conceptRelation.name  
-        rootRelation = self.__findRootRelation(conceptRelation)
+        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
         
         if rootRelation == conceptRelation:
             if bool(reltationAttrs):
@@ -457,7 +463,7 @@ class DataNode:
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
         else:
-            rootRelation = self.__findRootRelation(conceptRelation)
+            rootRelation = self.__findRootConceptOrRelation(conceptRelation)
             rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
             
             if not rl:
@@ -550,7 +556,7 @@ class DataNode:
             
         lcEqls = {}
         for id, lc in usedGraph._logicalConstrains.items(): 
-            if isinstance(lc, eql):
+            if isinstance(lc, eqL):
                 if len(lc.e) != 3:
                     continue
                 
@@ -774,8 +780,7 @@ class DataNode:
         return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
     
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPConstrains(self, *_conceptsRelations ,fun=None, epsilon = 0.00001,  minimizeObjective = False):
-        
+    def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if not _conceptsRelations:
             _conceptsRelations = ()
             
@@ -806,7 +811,7 @@ class DataNode:
             if concept_name in hardConstrains:
                 continue
             
-            rootRelation = self.__findRootRelation(concept_name)
+            rootRelation = self.__findRootConceptOrRelation(concept_name)
             currentCandidates = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
@@ -831,7 +836,7 @@ class DataNode:
                     infer_candidate[0].attributes[DataNode.PredictionType["ILP"]][concept, (infer_candidate[1], infer_candidate[2])] = \
                         tripleResult[concept_name][infer_candidate[0].instanceID, infer_candidate[1].instanceID, infer_candidate[2].instanceID]
     
-    def verifySelection(self,*_conceptsRelations):
+    def verifySelection(self, *_conceptsRelations):
         if not _conceptsRelations:
             _conceptsRelations = ()
             
@@ -1052,7 +1057,8 @@ class DataNodeBuilder(dict):
         # ------ No DataNode yet
         if not dict.__contains__(self, 'dataNode'): 
             dns = []
-            if not isinstance(value, (list, Tensor)): # Assuming that value is single element
+            vLen = len(value)
+            if not isinstance(value, (list, Tensor)) or len(value) == 1 or (len(value) == 2 and keyDataName[0] == '<'): # Assuming that value is single element
                 instanceValue = ""
                 if "READER" in self:
                     instanceID = dict.__getitem__(self, "READER")
@@ -1137,7 +1143,7 @@ class DataNodeBuilder(dict):
                         myContainedIn.addChildDataNode(_dn)   
                         _dnLinked = True
 
-                if not _dnLinked:
+                if not _dnLinked and _dn not in dns:
                     dns = dict.__getitem__(self, 'dataNode')
                     dns.append(_dn)
 
