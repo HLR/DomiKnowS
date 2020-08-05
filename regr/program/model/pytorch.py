@@ -1,4 +1,4 @@
-from itertools import combinations
+from itertools import combinations, product
 import warnings
 
 import torch
@@ -9,31 +9,26 @@ from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeRead
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
-
-
-def all_properties(node):
-    if isinstance(node, Property):
-        return node
-    return None
+from ..tracker import MacroAverageTracker
 
 
 class TorchModel(torch.nn.Module):
     def __init__(self, graph):
         super().__init__()
         self.graph = graph
-        self.mode_ = Mode.TRAIN
+        self.mode(Mode.TRAIN)
 
-        for node in self.graph.traversal_apply(all_properties):
-            for sensor in node.find(TorchLearner):
-                self.add_module(sensor.fullname, sensor.model)
+        for learner in self.graph.get_sensors(TorchLearner):
+            self.add_module(learner.fullname, learner.model)
 
-
-    def mode(self, mode):
+    def mode(self, mode=None):
+        if mode is None:
+            return self._mode
         if mode in (Mode.TEST, Mode.POPULATE):
             self.eval()
         if mode == Mode.TRAIN:
             self.train()
-        self.mode_ = mode
+        self._mode = mode
 
     def reset(self):
         pass
@@ -58,9 +53,8 @@ class TorchModel(torch.nn.Module):
     def forward(self, data_item):
         data_item = self.move(data_item)
 
-        for prop in self.graph.traversal_apply(all_properties):
-            for sensor in prop.find(lambda s: isinstance(s, (ReaderSensor, TorchEdgeReaderSensor))):
-                sensor.fill_data(data_item)
+        for sensor in self.graph.get_sensors(ReaderSensor):
+            sensor.fill_data(data_item)
         data_item.update({"graph": self.graph, 'READER': 0})
         builder = DataNodeBuilder(data_item)
         *out, = self.populate(builder)
@@ -175,7 +169,6 @@ class IMLModel(SolverModel):
     def poi_loss(self, data_item, prop, sensors):
         output_sensor, target_sensor = sensors
         logit = output_sensor(data_item)
-        # mask = output_sensor.mask(data_item)
         labels = target_sensor(data_item)
 
         builder = data_item
@@ -197,3 +190,62 @@ class IMLModel(SolverModel):
         if self.loss:
             local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
             return local_loss
+
+class PoiModelToWorkWithLearnerWithLoss(TorchModel):
+    def __init__(self, graph, poi=None):
+        super().__init__(graph)
+        if poi is not None:
+            self.poi = poi
+        else:
+            self.poi = self.default_poi()
+        self.loss_tracker = MacroAverageTracker()
+        self.metric_tracker = None
+
+    def reset(self):
+        if self.loss_tracker is not None:
+            self.loss_tracker.reset()
+        if self.metric_tracker is not None:
+            self.metric_tracker.reset()
+
+    def default_poi(self):
+        poi = []
+        for prop in self.graph.get_properties():
+            if len(list(prop.find(TorchSensor))) > 1:
+                poi.append(prop)
+        return poi
+
+    def populate(self, builder):
+        losses = {}
+        metrics = {}
+        for prop in self.poi:
+            targets = []
+            predictors = []
+            for sensor in prop.find(TorchSensor):
+                sensor(builder)
+                if sensor.label:
+                    targets.append(sensor)
+                else:
+                    predictors.append(sensor)
+            for predictor in predictors:
+                # TODO: any loss or metric or genaral function apply to just prediction?
+                pass
+            for target, predictor in product(targets, predictors):
+                if predictor._loss is not None:
+                    losses[predictor, target] = predictor.loss(builder, target)
+                if predictor._metric is not None:
+                    metrics[predictor, target] = predictor.metric(builder, target)
+
+        self.loss_tracker.append(losses)
+        # self.metrics_tracker.append(metrics)
+
+        loss = sum(losses.values())
+        return loss, metrics
+
+    @property
+    def loss(self):
+        return self.loss_tracker
+
+    @property
+    def metric(self):
+        # return self.metrics_tracker
+        pass

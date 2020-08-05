@@ -1,7 +1,7 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor, TorchEdgeReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
@@ -15,13 +15,13 @@ def model_declaration():
     y0 = graph['y0']
     y1 = graph['y1']
 
-    world['index'] = ReaderSensor(keyword='x')
+    world['index'] = ConstantSensor(data=[[0.]])
     world_contains_x['forward'] = TorchEdgeReaderSensor(keyword='x', mode='forward', to='x')
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
-    x[y1] = ModuleLearner('x', Module=Net, edges=[world_contains_x['forward']])
+    x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
+    x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
 
     program = LearningBasedProgram(graph, MyIMLModel)
     # With the following line, the inference will not take x into account

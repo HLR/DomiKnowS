@@ -67,7 +67,7 @@ class LearningBasedProgram():
             if self.opt is not None:
                 self.opt.zero_grad()
             loss, metric, output = self.model(data_item)
-            if self.opt is not None:
+            if self.opt and loss:
                 loss.backward()
                 self.opt.step()
             yield loss, metric, output
