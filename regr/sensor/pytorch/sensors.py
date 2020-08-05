@@ -6,12 +6,11 @@ from ...graph import Property
 
 
 class TorchSensor(Sensor):
-    def __init__(self, *pres, output=None, edges=None, label=False):
+    def __init__(self, *pres, edges=None, label=False):
         super().__init__()
         if not edges:
             edges = []
         self.pres = pres
-        self.output = output
         self.context_helper = None
         self.inputs = []
         self.edges = edges
@@ -46,7 +45,7 @@ class TorchSensor(Sensor):
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward()
-            
+
         if val is not None:
             data_item[self.fullname] = val
             if not self.label:
@@ -55,11 +54,7 @@ class TorchSensor(Sensor):
             data_item[self.fullname] = None
             if not self.label:
                 data_item[self.prop.fullname] = None
-            
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.prop.fullname] = self.fetch_value(self.output)
-            
+
         return data_item
 
     def update_pre_context(
@@ -67,16 +62,16 @@ class TorchSensor(Sensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
-            for _, sensor in self.concept[pre].find(Sensor):
+            for sensor in self.concept[pre].find(Sensor):
                 sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None):
         if selector:
             try:
-                return self.context_helper[list(self.concept[pre].find(selector))[0][1].fullname]
+                return self.context_helper[next(self.concept[pre].find(selector)).fullname]
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
@@ -114,11 +109,11 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for _, sensor in self.concept[pre].find(Sensor):
+                for sensor in self.concept[pre].find(Sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
                 pre(data_item)
@@ -178,9 +173,19 @@ class PrefilledSensor(TorchSensor):
         return self.context_helper[self.prop.fullname]
 
 
+class TriggerPrefilledSensor(PrefilledSensor):
+    def __init__(self, *pres, callback_sensor=None, edges=None, label=False):
+        super().__init__(*pres, edges=edges, label=label)
+        self.callback_sensor = callback_sensor
+
+    def forward(self,) -> Any:
+        self.callback_sensor(self.context_helper)
+        return super().forward()
+
+
 class ReaderSensor(ConstantSensor):
     def __init__(self, *pres, keyword=None, edges=None, label=False):
-        super().__init__(*pres, data=None, edges=None, label=False)
+        super().__init__(*pres, data=None, edges=edges, label=label)
         self.keyword = keyword
 
     def fill_data(self, data_item):
@@ -238,11 +243,16 @@ class NominalSensor(TorchSensor):
             if not self.label:
                 data_item[self.prop.fullname] = None
 
-        if self.output:
-            data_item[self.fullname] = self.fetch_value(self.output)
-            data_item[self.prop.fullname] = self.fetch_value(self.output)
-
         return data_item
+
+
+class ModuleSensor(FunctionalSensor):
+    def __init__(self, *pres, module, edges=None, label=False):
+        super().__init__(*pres, edges=edges, label=label)
+        self.module = module
+
+    def forward(self, *inputs):
+        return self.module(*inputs)
 
 
 class TorchEdgeSensor(FunctionalSensor):
@@ -252,12 +262,14 @@ class TorchEdgeSensor(FunctionalSensor):
         super().__init__(*pres, edges=edges, label=label)
         self.to = to
         self.mode = mode
-        self.runtime_initialized = False
-
-    def _runtime_initialize(self):
         if self.mode not in self.modes:
             raise ValueError('The mode passed to the edge sensor must be one of %s' % self.modes)
-        self.relation = self.prop.sup
+        self.src = None
+        self.dst = None
+
+    def attached(self, sup):
+        super().attached(sup)
+        self.relation = sup.sup
         if self.mode == "forward":
             self.src = self.relation.src
             self.dst = self.relation.dst
@@ -266,15 +278,12 @@ class TorchEdgeSensor(FunctionalSensor):
             self.dst = self.relation.src
         else:
             raise ValueError('The mode passed to the edge is invalid!')
-        self.dst[self.to] = PrefilledSensor()
-        self.runtime_initialized = True
+        self.dst[self.to] = TriggerPrefilledSensor(callback_sensor=self)
 
     def __call__(
         self,
         data_item: Dict[str, Any]
     ) -> Dict[str, Any]:
-        if not self.runtime_initialized:
-            self._runtime_initialize()
         super().__call__(data_item)
         return data_item[self.dst[self.to].fullname]
 
@@ -292,11 +301,11 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for _, sensor in self.src[pre].find(Sensor):
+                for sensor in self.src[pre].find(Sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
                 pre(data_item)
@@ -307,7 +316,7 @@ class TorchEdgeSensor(FunctionalSensor):
         if isinstance(pre, str):
             if selector:
                 try:
-                    return self.context_helper[list(self.src[pre].find(selector))[0][1].fullname]
+                    return self.context_helper[next(self.src[pre].find(selector)).fullname]
                 except:
                     print("The key you are trying to access to with a selector doesn't exist")
                     raise
@@ -466,7 +475,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         self,
         data_item: Dict[str, Any]
     ) -> Any:
-        for _, sensor in self.src[self.dst].find(Sensor):
+        for sensor in self.src[self.dst].find(Sensor):
             sensor(data_item)
 
     def update_context(

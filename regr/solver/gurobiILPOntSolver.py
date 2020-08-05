@@ -15,7 +15,7 @@ from gurobipy import *
 from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL, eql
+from regr.graph import LogicalConstrain, eqL
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -1271,22 +1271,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         lcVariables.append(_lcVariables)
                        
-                elif isinstance(e, eql):
-                    key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
+                elif isinstance(e, eqL):
                     typeOfConcept, conceptTypes = self._typeOfConcept(e.e[0])
 
-                    eqlVariables = {}                        
+                    r = None
                     if typeOfConcept == 'concept':
-                        for token in tokens:
-                            eqlVariables[(token, )] = hardConstrains[key][token][1]
+                        r = 1
                     elif typeOfConcept == 'pair':
-                        for tokensPermutation in permutations(tokens, r=2):
-                            eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                        r = 2
                     elif typeOfConcept == 'triplet':                        
-                        for tokensPermutation in permutations(tokens, r=3):   
-                            eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                        r =3
                     else:
                         pass
+                    
+                    eqlVariables = {}       
+
+                    if r:
+                        for tokensPermutation in permutations(tokens, r=r):
+                            if isinstance(e.e[2], set):
+                                eqlVariables[tokensPermutation] = 0
+                                for e2 in e.e[2]:
+                                    key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e2)
+                                    if hardConstrains[key][tokensPermutation][1] == 1:
+                                       eqlVariables[tokensPermutation] = 1
+                                       break 
+                            else:
+                                key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
+                                eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
                     
                     if eqlVariables is not None: 
                         _lcVariables = {}
@@ -1295,6 +1306,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         lcVariables.append(_lcVariables)
                 # LogicalConstrain - process recursively 
                 elif isinstance(e, LogicalConstrain):
+                    self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(e.lcName, e, [str(e1) for e1 in lc.e]))
                     lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, resultVariableNames = variablesNames, headLC = False))
             # Tuple with named variable 
             elif isinstance(e, tuple): 
