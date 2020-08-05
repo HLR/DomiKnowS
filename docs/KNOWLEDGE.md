@@ -155,7 +155,7 @@ Additional, logical constrains defined within the graph can use the following lo
 
 - `atMostL()`,  e.g.:
 
-*atMostL(3, ('x', ), firestationCity, ('x', ))* - exists at most 3 *firestationCity*.
+*atMostL(4, ('y', ), andL(firestationCity, ('x',), eqL(cityLink, 'neighbor', 1), ('x', 'y')))* - Each city has no more then 4 *neighbors*.
 
 The logical constrain can use variables to associate related objects of the logical expression.
 The expressions use concepts defined in the graph and set additional constrains on them.
@@ -168,6 +168,38 @@ ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
 This above example logical constrain specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
+
+Backus–Naur form of the Logical Constrain:
+
+	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain>
+
+	<notLogicalConstrain> ::= <NotOperator> "(" <logicalConstrainElement> ',' <variables> ")"
+	<2ElementsLogicalConstrain> ::= <2ElementsOperator> "(" <logicalConstrainElement> ',' <logicalConstrainElement> ',' <variables> ")"
+	<multiElementsLogicalConstrain> ::= <multiElementsOperator> "(" <logicalConstrainElements> ',' <variables> ")"
+	<countConstrain> ::= <CountOperator> "(" <number> ',' <variables> ',' <logicalConstrainElement> ',' <variables> ")" 
+
+	<notOperator> ::= notL
+	<epOperator> ::=  eqLL
+	<2ElementsOperator> : ::=fL | epqL | xorL
+	<multiElementsOperator> ::= andL | orL | nandL | norL
+	<countOperator> ::= existsL | exactL | atLeastL | atMostL
+	<eqElement> ::= <eqOperator> "(" <conceptOrRelation> ',' '"' <attributeName> '"'  ',' <eqValue> ")	
+	<conceptOrRelation> ::= <name
+	<logicalConstrainElement> ::= <conceptOrRelation> | <eqElement>| <logicalConstrai
+	<logicalConstrainElements> ::= <logicalConstrainElement> | <logicalConstrainElement> ',' <logicalConstrainElements>
+	<variables> ::= <variablesTuple> | 
+	<attributeName> :: = <name>
+	<eqValue> :: = <value | "{" <values> "}
+	<value> :: = <number> | <name>
+	<values> :: = <value> | <value> "," <values>
+	<number> ::= <digit> | <digit> <number>
+	<name> :: = <character> | <character> <name>	
+	<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9
+	<character> ::= <letter> | <digit> | <symbol>
+	<letter> :: = <upLetter> | <loLetter
+	<upLetter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z
+	<loLetter> ::=  "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z
+	<symbol>  ::= "_" | "-"
 
 ### Ontology file as a source of constrains
 
