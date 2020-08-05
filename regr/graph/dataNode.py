@@ -1057,7 +1057,8 @@ class DataNodeBuilder(dict):
         # ------ No DataNode yet
         if not dict.__contains__(self, 'dataNode'): 
             dns = []
-            if not isinstance(value, (list, Tensor)): # Assuming that value is single element
+            vLen = len(value)
+            if not isinstance(value, (list, Tensor)) or len(value) == 1 or (len(value) == 2 and keyDataName[0] == '<'): # Assuming that value is single element
                 instanceValue = ""
                 if "READER" in self:
                     instanceID = dict.__getitem__(self, "READER")
@@ -1142,7 +1143,7 @@ class DataNodeBuilder(dict):
                         myContainedIn.addChildDataNode(_dn)   
                         _dnLinked = True
 
-                if not _dnLinked:
+                if not _dnLinked and _dn not in dns:
                     dns = dict.__getitem__(self, 'dataNode')
                     dns.append(_dn)
 
