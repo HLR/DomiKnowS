@@ -766,7 +766,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         return varIF
            
-    def eqVar(self, m, var1, var2, onlyConstrains = False):
+    def epqVar(self, m, var1, var2, onlyConstrains = False):
         #if self.ifLog: self.myLogger.debug("EQ called with : %s"%(var1,var2))
 
         cacheResult = self.__isInConstrainCaches('eqVar', onlyConstrains, (var1, var2))

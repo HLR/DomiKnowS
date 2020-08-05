@@ -133,10 +133,29 @@ Additional, logical constrains defined within the graph can use the following lo
 - `andL()`,
 - `orL()`,
 - `nandL()`,
-- `existsL()`,
 - `ifL()`,
-- `equalA()`,
-- `inSetA()`.
+- `norL()`,
+- `xorL()`,
+- `epqL()`,
+- `eqL()`, -  used to select, for the logical constrain, instances with value for specified attribute in the provided set or equal to the provided value, e.g.: 
+
+*eqL(cityLink, 'neighbor', {1}* - instances of *cityLink* with attribute *neighbor* in the set containing only single value 1,
+
+- `existsL()`, e.g.:
+
+*existsL(('y',), andL(eqL(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',)))* - exists a city *y* which is in *cityLink* relation with *neighbor* attribute equal 1 to city x and y is a *firestationCity*,
+
+- `exactL()`, e.g.:
+
+*exactL(2, ('x', ), firestationCity, ('x', ))* - exists exactly 2 *firestationCity*,
+
+- `atLeastL()`, e.g.:
+
+*atLeastL(1, ('x', ), firestationCity, ('x', ))* - exists at least 1 *firestationCity*,
+
+- `atMostL()`,  e.g.:
+
+*atMostL(3, ('x', ), firestationCity, ('x', ))* - exists at most 3 *firestationCity*.
 
 The logical constrain can use variables to associate related objects of the logical expression.
 The expressions use concepts defined in the graph and set additional constrains on them.
