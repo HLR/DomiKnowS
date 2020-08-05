@@ -72,7 +72,7 @@ class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
 
     def get_mask(self, data_item: Dict[str, Any]):
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
+            for sensor in pre.find(MaskedSensor):
                 return sensor.get_mask(data_item)
             else:
                 # not found
@@ -98,7 +98,7 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
         return (output_dim,)
 
     def get_mask(self, data_item: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
@@ -128,7 +128,7 @@ class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
     def get_mask(self, data_item: Dict[str, Any]):
         masks = []
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
+            for sensor in pre.find(MaskedSensor):
                 break
             else:
                 print(self.pre)
@@ -159,7 +159,7 @@ class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
         return (output_dim,)
 
     def get_mask(self, data_item: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
@@ -197,7 +197,7 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
         self.pretrained_file = pretrained_file
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for pre_sensor in pre.find(SentenceSensor):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -248,7 +248,7 @@ class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
         self.pretrained_model = pretrained_model
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for pre_sensor in pre.find(SentenceSensor):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -308,7 +308,7 @@ class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
         return (self.pre_dim[0] * 2,)
 
     def get_mask(self, data_item: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)

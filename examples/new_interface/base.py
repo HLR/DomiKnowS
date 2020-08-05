@@ -315,7 +315,7 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
     @property
     def readers(self):
         sentence_sensors = self.get_sensors(ReaderSensor)
-        readers = [sensor for name, sensor in sentence_sensors]
+        readers = [sensor for sensor in sentence_sensors]
         return readers
 
 
@@ -333,7 +333,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
     def parameters(self):
         _list = []
         learners = self.get_sensors(TorchLearner)
-        for _, learner in learners:
+        for learner in learners:
             _list.extend(learner.parameters)
         return set(_list)
 
@@ -350,7 +350,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def load(self):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.load(self.filename)
 
@@ -492,7 +492,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def save(self, ):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.save(self.filename)
 
@@ -522,7 +522,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     pred = []
                     data_item = {}
                     # learners = self.get_sensors(FullyConnectedLearner)
-                    # _learners = [learner for name, learner in learners]
+                    # _learners = [learner for learner in learners]
                     for prop1 in self.poi:
                         Do = True
                         dict_key = prop1.sup.name + "-" + prop1.name.name

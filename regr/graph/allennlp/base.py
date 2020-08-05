@@ -149,8 +149,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
     @property
     def reader(self):
-        sentence_sensors = self.get_sensors(ReaderSensor)
-        readers = {sensor.reader for name, sensor in sentence_sensors}
+        readers = set(self.get_sensors(ReaderSensor))
         assert len(readers) == 1 # consider only 1 reader now
         return readers.pop()
 
@@ -171,7 +170,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
             scheduler = None
 
         # prepare iterator
-        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in self.get_sensors(SentenceEmbedderSensor)]
+        sorting_keys = [(sensor.fullname, 'num_tokens') for sensor in self.get_sensors(SentenceEmbedderSensor)]
         iterator = BucketIterator(sorting_keys=sorting_keys,
                                   track_epoch=True,
                                   **train_config.iterator)
@@ -246,7 +245,7 @@ class AllenNlpGraph(Graph, metaclass=WrapperMetaClass):
 
         # prepare iterator
         sentence_sensors = self.get_sensors(SentenceEmbedderLearner)
-        sorting_keys = [(sensor.fullname, 'num_tokens') for name, sensor in sentence_sensors]
+        sorting_keys = [(sensor.fullname, 'num_tokens') for sensor in sentence_sensors]
         iterator = BucketIterator(batch_size=batch,
                                   sorting_keys=sorting_keys,
                                   track_epoch=True)

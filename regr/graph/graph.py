@@ -41,12 +41,19 @@ class Graph(BaseGraphTree):
         elif isinstance(ontology, tuple) and len(ontology) == 2:
             self._ontology = Graph.Ontology(*ontology)
 
-    def get_sensors(self, *tests):
+    def get_properties(self, *tests):
         def func(node):
-            # use a closure to collect sensors
             if isinstance(node, Property):
-                return node.find(*tests)
-        return list(chain(*self.traversal_apply(func)))
+                for test in tests:
+                    if not test(node):
+                        return None
+                else:
+                    return node
+            return None
+        return list(self.traversal_apply(func))
+
+    def get_sensors(self, *tests):
+        return list(chain(*(prop.find(*tests) for prop in self.get_properties())))
 
     def get_apply(self, name):
         if name in self.concepts:

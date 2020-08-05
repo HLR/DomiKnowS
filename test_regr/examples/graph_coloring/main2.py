@@ -29,11 +29,11 @@ def model_declaration():
     
     cityLink['index'] = CandidateSensor(forward=readCitylinks, edges=[city1['backward'], city2['backward']])
 
-    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2, _):
-        if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
-            return 1
+    def readNeighbors(links, current_neighbers, city1, city2, _):
+        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
+            return True
         else:
-            return 0
+            return False
         
     cityLink['neighbor'] = CandidateReaderSensor('index', keyword='links', forward=readNeighbors, edges=[city1['backward'], city2['backward']])
 

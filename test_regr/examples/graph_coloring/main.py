@@ -6,10 +6,10 @@ sys.path.append('../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
+    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
     from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
     from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from regr.program.model.pytorch import model_helper, PoiModel
 
     from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
     from sensors import DummyCityLearner
@@ -24,20 +24,18 @@ def model_declaration():
     city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
     city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
 
-    def readNeighbors(data, datanodes_edges, index, datanode_concept1, datanode_concept2):
-        if datanode_concept1.getAttribute('index') in data[int(datanode_concept2.getAttribute('index'))]: # data contain 'links' from reader
+    def readNeighbors(links, current_neighbers, city1, city2):
+        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
             return True
         else:
             return False
 
     neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
-    neighbor['index'] = ConstantSensor(data=None, label=True)
 
     # --- Learners
     city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
-    city[firestationCity] = ConstantSensor(data=None, label=True)
     
-    program = LearningBasedProgram(graph, PoiModel)
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[city[firestationCity], neighbor['index']]))
     return program
 
 

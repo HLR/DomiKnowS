@@ -6,6 +6,9 @@ def case():
     from regr.utils import Namespace
     import random
 
+    edge_value = [
+        [random.random() > 0.5, random.random() > 0.5],
+        [random.random() > 0.5, random.random() > 0.5]]
     case = {
         'container': 'hello world',
         'container_edge': ['hello', 'world'],
@@ -13,9 +16,14 @@ def case():
             'hello, {}'.format(random.random()),
             'world, {}'.format(random.random())],
         'constant': random.random(),
-        'edge': [
-            [random.random() > 0.5, random.random() > 0.5],
-            [random.random() > 0.5, random.random() > 0.5]]}
+        'edge_value': edge_value,
+        'edge': {
+            'hello':{
+                'hello': edge_value[0][0],
+                'world': edge_value[0][1]},
+            'world':{
+                'hello': edge_value[1][0],
+                'world': edge_value[1][1]}}}
     case = Namespace(case)
     return case
 
@@ -63,28 +71,23 @@ def sensor(case, graph):
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(data, datanodes_edges, index, datanode_concept1, datanode_concept2, constant):
+    def forward(data, datanodes, datanode_concept1, datanode_concept2, constant):
         # update collector
         idx = len(collector)
-        assert idx < 4
-        idx1 = int(idx / 2) % 2  # 0:0 1:0 2:1 3:1
-        idx2 = idx % 2  # 0:0 1:1 2:0 3:1
-        assert index[0] == idx1
-        assert index[1] == idx2
         collector.append((datanode_concept1, datanode_concept2))
-        # current existing edges
-        assert len(datanodes_edges) == 0
+        # current existing datanodes
+        assert len(datanodes) == 0
         # test concept 1
         assert isinstance(datanode_concept1, DataNode)
         assert datanode_concept1.getOntologyNode() == concept
-        assert datanode_concept1.getAttributes().get('index') == case.container_edge[idx1]
         # test concept 2
         assert isinstance(datanode_concept2, DataNode)
         assert datanode_concept2.getOntologyNode() == concept
-        assert datanode_concept2.getAttributes().get('index') == case.container_edge[idx2]
         # other arguments are like functional sensor
         assert constant == case.constant
-        return data[idx1][idx2]
+        index1 = datanode_concept1.getAttributes().get('index')
+        index2 = datanode_concept2.getAttributes().get('index')
+        return data[index1][index2]
     sensor = CandidateReaderSensor(case.constant, forward=forward, keyword='edge_keyword')
     edge['index'] = sensor
     return sensor
@@ -106,9 +109,9 @@ def context(case, graph):
         if isinstance(node, Property):
             return node
     for prop in graph.traversal_apply(all_properties):
-        for _, sensor in prop.find(ReaderSensor):
+        for sensor in prop.find(ReaderSensor):
             sensor.fill_data(context)
-        for _, sensor in prop.find(CandidateReaderSensor):
+        for sensor in prop.find(CandidateReaderSensor):
             sensor.fill_data(context)
     return context
 
@@ -116,7 +119,7 @@ def context(case, graph):
 def test_functional_sensor(case, sensor, context):
     import torch
     output = sensor(context)
-    assert (output == torch.tensor(case.edge)).all()
+    assert (output == torch.tensor(case.edge_value)).all()
 
 
 if __name__ == '__main__':

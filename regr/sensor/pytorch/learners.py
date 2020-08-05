@@ -9,14 +9,15 @@ from .sensors import TorchSensor, ModuleSensor
 from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 
 
-
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, *pre, edges=None, label=False):
+    def __init__(self, *pre, edges=None, loss=None, metric=None, label=False):
         super(TorchLearner, self).__init__(*pre, edges=edges, label=label)
         self.model = None
         self.updated = False
+        self._loss = loss
+        self._metric = metric
 
     @property
     @abc.abstractmethod
@@ -27,8 +28,8 @@ class TorchLearner(TorchSensor):
     def update_parameters(self):
         if not self.updated:
             for pre in self.pres:
-                for name, learner in self.sup.sup[pre].find(TorchLearner):
-                    self.model.add_module(name=name, module=learner.model)
+                for learner in self.sup.sup[pre].find(TorchLearner):
+                    self.model.add_module(learner.name, module=learner.model)
             self.updated = True
 
     @property
@@ -47,16 +48,32 @@ class TorchLearner(TorchSensor):
             self.model.train()
         except FileNotFoundError:
             message = f'Failed to load {self} from {save_path}. Continue not loaded.'
-            warnings.warn(message, stacklevel=2)
+            warnings.warn(message)
 
-class TorchModuleLearner(ModuleSensor, TorchLearner):
-    def __init__(self, *pres, Module, edges=None, label=False, **kwargs):
-        super().__init__(*pres, Module, edges=edges, label=label, **kwargs)
+    def loss(self, data_item, target):
+        if self._loss is not None:
+            pred = self(data_item)
+            label = target(data_item)
+            return self._loss(pred, label)
+
+    def metric(self, data_item, target):
+        if self._metric:
+            pred = self(data_item)
+            label = target(data_item)
+            return self._metric(pred, label)
+
+
+class ModuleLearner(ModuleSensor, TorchLearner):
+    def __init__(self, *pres, module, edges=None, loss=None, metric=None, label=False, **kwargs):
+        super().__init__(*pres, module=module, edges=edges, label=label, **kwargs)
         self.model = self.module
         self.updated = True  # no need to update
+        self._loss = loss
+        self._metric = metric
 
     def update_parameters(self):
         pass
+
 
 class LSTMLearner(TorchLearner):
     def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False):
@@ -87,24 +104,6 @@ class FullyConnectedLearner(TorchLearner):
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.model = PyTorchFC(input_dim=self.input_dim, output_dim=self.output_dim)
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.model.cuda()
-
-    def forward(
-            self,
-    ) -> Any:
-        _tensor = self.inputs[0]
-        output = self.model(_tensor)
-        return output
-
-
-class FullyConnected2Learner(TorchLearner):
-    def __init__(self, *pres, input_dim, output_dim, edges=None):
-        super(FullyConnected2Learner, self).__init__(*pres, edges=edges)
-        self.output_dim = output_dim
-        self.input_dim = input_dim
-        self.model = torch.nn.Linear(self.input_dim, self.output_dim)
         is_cuda = torch.cuda.is_available()
         if is_cuda:
             self.model.cuda()

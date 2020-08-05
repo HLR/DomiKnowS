@@ -16,7 +16,7 @@ class AllenNlpSensor(Sensor):
         self.output_only = output_only
         self.pre_dims = []
         for pre in pres:
-            for name, sensor in pre.find(AllenNlpSensor):
+            for sensor in pre.find(AllenNlpSensor):
                 dim = sensor.output_dim
                 self.pre_dims.append(dim)
                 break
@@ -149,7 +149,7 @@ class MaskedSensor(AllenNlpSensor):
 
 class SinglePreMaskedSensor(SinglePreSensor, MaskedSensor):
     def get_mask(self, data_item: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
