@@ -97,7 +97,7 @@ class Named(Scoped):
         return repr_str
 
     def __str__(self):
-        return self.name
+        return str(self.name)
 
 
 class AutoNamed(Named):
@@ -204,6 +204,9 @@ class NamedTreeNode(Named):
             context = cls._context[-1]
             context.attach(self, name)
 
+    def attached(self, sup):
+        pass
+
     def __enter__(self):
         cls = type(self)
         #self.sup = cls._context
@@ -274,6 +277,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
         else:
             raise TypeError(
                 'Attach Named instance to NamedTree, {} instance given.'.format(type(sub)))
+        sub.attached(self)
 
     def detach(self, sub=None, all=False):
         if sub is None:
@@ -370,6 +374,12 @@ class NamedTree(NamedTreeNode, OrderedDict):
             names = names[1:]
         return name, names
 
+    def isGraphName(self, name):
+        if name in self._names:
+            return True
+        else:
+            return False
+        
     def parse_query_apply(self, func, *names, delim='/', trim=True):
         name, names = self.extract_name(*names, delim=delim, trim=trim)
         if names:

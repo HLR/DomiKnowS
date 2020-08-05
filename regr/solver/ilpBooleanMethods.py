@@ -47,8 +47,12 @@ class ilpBooleanProcessor(object):
     # var1 + var2 >= varOR 
     # return varOR
     # if onlyConstrains then only construct constrain var1 + var2 >= 1
+    #
+    # if limit > 1
+    # var1 + var2 - (limit - 1) >= varOR 
+    # if onlyConstrains then only construct constrain var1 + var2 >= limit
     @abc.abstractmethod
-    def or2Var(m, _var1, _var2,  onlyConstrains = False): pass
+    def or2Var(m, _var1, _var2,  onlyConstrains = False, limit = 1): pass
         
     # OR Disjunction
     # Create new variable varOR, create constrains:
@@ -59,8 +63,11 @@ class ilpBooleanProcessor(object):
     # var1 + var2 + ... + varN >= varOR
     # return varOR
     # if onlyConstrains then only construct constrain var1 + var2 + ... + varN >= 1
+    # if limit > 1
+    # var1 + var2 + ... + varN - (limit - 1) >= varOR 
+    # if onlyConstrains then only construct constrain var1 + var2 + ... + varN >= limit
     @abc.abstractmethod
-    def orVar(m, *_var, onlyConstrains = False): pass
+    def orVar(m, *_var, onlyConstrains = False, linit = 1): pass
 
     # NAND (Alternative denial) with 2 variables
     # Create new variable varNAND, create constrains:

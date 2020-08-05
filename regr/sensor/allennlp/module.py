@@ -13,7 +13,7 @@ class WrapperModule(Module):
         self.main_module = module
         for pre in pres:
             from .base import ModuleSensor
-            for name, sensor in pre.find(ModuleSensor, lambda s: not s.output_only):
+            for sensor in pre.find(ModuleSensor, lambda s: not s.output_only):
                 self.add_module(sensor.fullname, sensor.module)
 
     def forward(self, *args, **kwargs):

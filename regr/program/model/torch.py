@@ -64,12 +64,12 @@ class TorchModel(BaseModel):
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
         self.graph.poi = self.poi
         for node in self.graph.traversal_apply(all_properties):
-            for _, sensor in node.find(self.BaseLearner):
+            for sensor in node.find(self.BaseLearner):
                 self.add_module(sensor.fullname, sensor.module)
 
     def find_poi(self):
         for prop in self.graph.traversal_apply(all_properties):
-            for (_, sensor1), (_, sensor2) in combinations(prop.find(self.BaseSensor), r=2):
+            for sensor1, sensor2 in combinations(prop.find(self.BaseSensor), r=2):
                 if sensor1.target:
                     target_sensor = sensor1
                     output_sensor = sensor2

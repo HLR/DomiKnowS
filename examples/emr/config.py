@@ -2,12 +2,13 @@ import torch
 
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 from regr.program import LearningBasedProgram
+from regr.program.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from regr.program.metric import MacroAverageTracker, PRF1Tracker
+
 from regr.utils import Namespace, caller_source
 
 from emr.program.primaldual import PrimalDualLearningBasedProgram
 from emr.program.model.torch import SolverModel, IMLModel
-from emr.program.model.loss import BWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
-from emr.program.model.metric import MacroAverageTracker, PRF1Tracker
 from emr.solver.solver import Solver
 
 

@@ -52,13 +52,13 @@ class BetweenEncoderSensor(TorchSensor):
             data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for _, sensor in edge.find(Sensor):
+            for sensor in edge.find(Sensor):
                 sensor(data_item)
         for pre in self.pres:
-            for _, sensor in self.sup.sup[pre].find(Sensor):
+            for sensor in self.sup.sup[pre].find(Sensor):
                 sensor(data_item)
         if self.inside:
-            for _, sensor in self.inside[self.key].find(Sensor):
+            for sensor in self.inside[self.key].find(Sensor):
                 sensor(data_item)
 
     def define_inputs(self):
