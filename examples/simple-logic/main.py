@@ -1,12 +1,15 @@
 def model_declaration():
     import torch
-    from regr.program import LearningBasedProgram
+    from regr.program import LearningBasedProgram, IMLProgram
     from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor, TorchEdgeReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
+    from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
+    from regr.program.metric import MacroAverageTracker, ValueTracker
+    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
     from graph import graph, world_contains_x
-    from model import MyModel, MyIMLModel, Net
+    from model import MyModel, MyIMLModel, Net, prediction_softmax
 
     graph.detach()
 
@@ -23,7 +26,12 @@ def model_declaration():
     x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
     x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
 
-    program = LearningBasedProgram(graph, MyIMLModel)
+    # program = LearningBasedProgram(graph, MyIMLModel)
+    program = IMLProgram(
+        graph,
+        loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.)),
+        metric=ValueTracker(prediction_softmax),
+        Solver=ilpOntSolverFactory.getOntSolverInstance)
     # With the following line, the inference will not take x into account
     # which results in a complain (UserWarning) not getting inference result
     # program.model.inference_with = [world]
@@ -49,8 +57,8 @@ def main():
         print('loss:', loss)
         # print(metric)
         x_node = world_node.getChildDataNodes(x)[0]
-        print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
-        print('y1:', torch.softmax(x_node.getAttribute('<y1>'), dim=-1))
+        print('y0:', x_node.getAttribute('<y0>').softmax(dim=-1))
+        print('y1:', x_node.getAttribute('<y1>').softmax(dim=-1))
         print('y0:', x_node.getAttribute('<y0>/ILP'))
         print('y1:', x_node.getAttribute('<y1>/ILP'))
 

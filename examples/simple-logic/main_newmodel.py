@@ -1,6 +1,6 @@
 def model_declaration():
     import torch
-    from regr.program import LearningBasedProgram
+    from regr.program import POILossProgram
     from regr.program.model.pytorch import PoiModelToWorkWithLearnerWithLoss
     from regr.program.loss import BCEWithLogitsLoss
     from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor, TorchEdgeReaderSensor
@@ -8,7 +8,7 @@ def model_declaration():
     from regr.graph import Property
 
     from graph import graph, world_contains_x
-    from model import MyModel, MyIMLModel, Net
+    from model import Net
 
     graph.detach()
 
@@ -25,7 +25,7 @@ def model_declaration():
     x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
     x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
 
-    program = LearningBasedProgram(graph, PoiModelToWorkWithLearnerWithLoss)
+    program = POILossProgram(graph)
     return program
 
 
