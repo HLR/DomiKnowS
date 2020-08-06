@@ -15,7 +15,7 @@ class RegrReader:
 
     # you should return the objects list here
     def parse_file(self):
-        pass
+       pass
 
     def make_object(self, item):
         result = {}
@@ -32,3 +32,4 @@ class RegrReader:
     def run(self):
         for item in self.objects:
             yield self.make_object(item)
+
