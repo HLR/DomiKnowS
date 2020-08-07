@@ -1,7 +1,6 @@
 import os
 from regr.data.reader import RegrReader
 
-
 class EmailSpamReader(RegrReader):
     def parse_file(self, ):
         folder = self.file
@@ -55,7 +54,7 @@ class EmailSpamReader(RegrReader):
     def getBodyval(self, item):
         return item['body']
 
-    def getForwarSubjectdval(self, item):
+    def getForwardSubjectval(self, item):
         if 'forward_subject' in item:
             return item['forward_subject']
         else:
