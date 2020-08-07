@@ -20,7 +20,7 @@ class CallingSensor(Sensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for pre in self.pres:
-            for _, sensor in pre.find(Sensor):
+            for sensor in pre.find(Sensor):
                 sensor(data_item)
         if self.output:
             return data_item[self.output.fullname]
