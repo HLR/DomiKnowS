@@ -68,12 +68,12 @@ class EmailSpamReader(RegrReader):
 
     def getSpamval(self, item):
         if item['label'] == "spam":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
 
     def getRegularval(self, item):
         if item['label'] == "ham":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
