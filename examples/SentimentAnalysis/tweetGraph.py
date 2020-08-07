@@ -1,14 +1,12 @@
 import torch
 
 from examples.SentimentAnalysis.reader_to_jason import SentimentReader
-
 from examples.SentimentAnalysis.sensors.tweetSensor import SentenceRepSensor
 from regr.graph import Graph, Concept, Relation
-from regr.program import LearningBasedProgram, POIProgram
-from regr.program.loss import BCEWithLogitsLoss
-from regr.program.metric import MacroAverageTracker, ValueTracker
+from regr.program import LearningBasedProgram
 from regr.sensor.torch.learner import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor
+from regr.program.model.pytorch import PoiModel
 
 Graph.clear()
 Concept.clear()
@@ -24,17 +22,24 @@ with Graph('tweet') as graph:
 
   (twit_contains_words,) = twit.contains(word)
 
-
+#Reading the data from a dictionary per learning example using reader sensors
 twit['raw'] = ReaderSensor(keyword= 'tweet')
-twit['emb'] = SentenceRepSensor('raw')
 twit['Label'] = ReaderSensor(keyword='PositiveLabel', label = True)
+
+#Reading the features of each tweet using a sensor
+twit['emb'] = SentenceRepSensor('raw')
+
+#Associating the output lable with a learnig module
 twit['Label'] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
 
 
-a = SentimentReader("twitter_data/train5k.csv", "csv")
+#The reader will return the whole list of learning examples each of which is a dictionary
+ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 
-program = POIProgram(graph,
-            loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            metric=ValueTracker(prediction_softmax))
-program.train(list(a.run()))
+#The program takes the graph and learning approach as input
+program = LearningBasedProgram(graph, PoiModel)
+
+#The program is ready to train:
+
+program.train(list(ReaderObjectsIterator.run()))
 print(program.model.loss)
