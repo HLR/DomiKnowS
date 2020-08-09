@@ -1,7 +1,7 @@
 import torch
 
-from examples.SentimentAnalysis.reader_to_jason import SentimentReader
 from examples.SentimentAnalysis.sensors.tweetSensor import SentenceRepSensor
+from examples.SentimentAnalysis.tweet_reader import SentimentReader
 from regr.graph import Graph, Concept, Relation
 from regr.program import LearningBasedProgram
 from regr.sensor.torch.learner import ModuleLearner
@@ -17,15 +17,19 @@ def prediction_softmax(pr, gt):
   return torch.softmax(pr.data, dim=-1)
 
 with Graph('tweet') as graph:
+
   twit= Concept(name = 'twit')
   word = Concept (name = 'word')
+
+  PositiveLabel = twit(name = 'PositiveLabel')
+  NegativeLabel = twit(name ='NegativeLabel')
 
   (twit_contains_words,) = twit.contains(word)
 
 #Reading the data from a dictionary per learning example using reader sensors
 twit['raw'] = ReaderSensor(keyword= 'tweet')
-twit['Label'] = ReaderSensor(keyword='PositiveLabel', label = True)
-
+twit['PositiveLabel'] = ReaderSensor(keyword='PositiveLabel', label = True)
+twit['NegativeLabel'] = ReaderSensor(keyword='NegativeLabel', label = True)
 #Reading the features of each tweet using a sensor
 twit['emb'] = SentenceRepSensor('raw')
 
