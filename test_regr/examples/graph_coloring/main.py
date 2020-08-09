@@ -20,9 +20,6 @@ def model_declaration():
     world['index'] = ReaderSensor(keyword='world')
     world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
-    # --- Neighbor
-    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
-    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
 
     def readNeighbors(links, current_neighbers, city1, city2):
         if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
