@@ -18,7 +18,7 @@ def prediction_softmax(pr, gt):
 
 with Graph('tweet') as graph:
 
-  twit= Concept(name = 'twit')
+  twit= Concept(name = 'tweet')
   word = Concept (name = 'word')
 
   PositiveLabel = twit(name = 'PositiveLabel')
