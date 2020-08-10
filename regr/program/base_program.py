@@ -6,7 +6,7 @@ from ..utils import consume
 from .model.base import Mode
 
 
-class LearningBasedProgram():
+class Program():
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, Model, **kwargs):

@@ -2,13 +2,15 @@
 
 ## 1. User Perspective
 
-### 1.1. [Get Started](GET_STARTED.md)
+### 1.1. [Install](INSTALL.md)
 
 ### 1.2. [Overview](OVERVIEW_USER.md)
 
 ### 1.3. [Pipeline](PIPELINE.md)
 
-### 1.4. Tutorials
+### 1.4. [Tutorials](../tutorials)
+
+### 1.5. [Examples](../examples)
 
 ## 2. [Developer Perspective](OVERVIEW_DEVEL.md)
 
@@ -22,6 +24,6 @@
 
 ### 2.5. [Inference](INFERENCE.md)
 
-## 3. API
+## 3. APIs
 
 ## 4. [Legacy Wiki](old_wiki)

@@ -31,6 +31,8 @@ Notice that this graph, the *"conceptual graph"*, declare a data structure. When
 Follows is an example showing how to declare a graph.
 
 ```python
+from regr.graph import Graph, Concept
+
 with Graph('global') as graph:
   sentence = Concept(name='sentence')
   word = Concept(name='word')
@@ -125,10 +127,10 @@ The framework also has a simple reader for JSON format input file.
 To create a program, user need to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
 ```python
-sentence['__raw__'] = ReaderSensor(key='sentence')
+sentence['index'] = ReaderSensor(key='sentence')
 
-rel_sentence_contains_word['forward'] = TokenizorSensor('__raw__', mode='forward', keyword='__raw__')
-word['emb'] = GloveSensor('__raw__', edges=[rel_sentence_contains_word['forward'],])
+rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', keyword='index')
+word['emb'] = GloveSensor('index', edges=[rel_sentence_contains_word['forward'],])
 
 word[people] = LabelReaderSensor(key='people')
 word[organization] = LabelReaderSensor(key='organization')
@@ -136,12 +138,12 @@ pair[work_for] = LabelReaderSensor(key='work_for')
 ```
 
 There are different pre-defined sensors for basic data operation. Users can also extend base `Sensor` to customize for their task [by overriding `forward()` method](MODEL.md#overriding-forward).
-In the example above, a `ReaderSensor` is assigned to a special property `'__raw__'`, which indicate an candiate generator.
+In the example above, a `ReaderSensor` is assigned to a special property `'index'`, which indicate an candiate generator.
 `ReaderSensor` will simple read the key `'sentence'` from an sample, which is expected to be a `dict`, retrieved by enumerating through the reader.
 As the candiate generator for sentence, sentence `Datanode` will be created based on the output of this sensor when being populated.
-Next, a `TokenizorSensor` is assigned to `'forward'` property of the edge `rel_sentence_contains_word`. As the first argument `'__raw__'` suggest, this sensor will take the property of `sentence` keyed by `'__raw__'` as input, and output the tokenized result to a property of `word` indicated by `keyword='__raw__'`.
+Next, a `TokenizorSensor` is assigned to `'forward'` property of the edge `rel_sentence_contains_word`. As the first argument `'index'` suggest, this sensor will take the property of `sentence` keyed by `'index'` as input, and output the tokenized result to a property of `word` indicated by `keyword='index'`.
 Now `word` has its candidate generator.
-We assign `GloveSensor` to `'emb'` property of `word` as its vectorized representation taking `'__raw__'` as input, which requires `rel_sentence_contains_word['forward']` as preceding calculation.
+We assign `GloveSensor` to `'emb'` property of `word` as its vectorized representation taking `'index'` as input, which requires `rel_sentence_contains_word['forward']` as preceding calculation.
 The last three lines of the example shows `LabelReaderSensor`s assigned to property of `word` and `pair`. The inherit concepts `people`, `organization`, and `work_for` are used as property name to indicate a classification property. `LabelReaderSensor`s, like `ReaderSensor`, read from the `dict` retrieved from `reader`.
 The only different is that `LabelReaderSensor`s has a option `label=True` (while most other `Sensor`s are defaulted to `False`).
 This indicates that this `Sensor` is only used for testing. It should not be taked into accont the process of forward computing.
@@ -221,7 +223,7 @@ This method `inferILPConstrains` will invoke a solver to find the global best pr
 word_nodes = sentence_node.getChildDataNodes(conceptName='word')
 for word_node in word_nodes:
   # print the word
-  print(word_node.getAttribute('__raw__').item())
+  print(word_node.getAttribute('index').item())
   # prediction before inference
   print(word_node.getAttribute(people).item())
   # prediction after inference
@@ -270,10 +272,10 @@ reader = Reader('data.txt')
 
 # 2.2. Model Declaration - Program
 # - Sensor
-sentence['__raw__'] = ReaderSensor(key='sentence')
+sentence['index'] = ReaderSensor(key='sentence')
 
-rel_sentence_contains_word['forward'] = TokenizorSensor('__raw__', mode='forward', keyword='__raw__')
-word['emb'] = GloveSensor('__raw__', edges=[rel_sentence_contains_word['forward'],])
+rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', keyword='index')
+word['emb'] = GloveSensor('index', edges=[rel_sentence_contains_word['forward'],])
 
 word[people] = LabelReaderSensor(key='people')
 word[organization] = LabelReaderSensor(key='organization')
@@ -304,7 +306,7 @@ sentence_node.inferILPConstrains('people', 'organization', 'work_for', fun=None)
 word_nodes = sentence_node.getChildDataNodes(conceptName='word')
 for word_node in word_nodes:
   # print the word
-  print(word_node.getAttribute('__raw__').item())
+  print(word_node.getAttribute('index').item())
   # prediction before inference
   print(word_node.getAttribute(people).item())
   # prediction after inference
