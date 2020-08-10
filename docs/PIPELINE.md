@@ -1,6 +1,6 @@
 # Pipeline
 
-Programmer's steps to using our framework.
+The following is user's steps to using our framework.
 
 - [Pipeline](#pipeline)
   - [1. Knowledge Declaration](#1-knowledge-declaration)
