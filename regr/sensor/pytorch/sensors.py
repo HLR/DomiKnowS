@@ -195,6 +195,11 @@ class ReaderSensor(ConstantSensor):
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
 
 
+class LabelReaderSensor(ReaderSensor):
+    def __init__(self, *pres, keyword=None, edges=None):
+        super().__init__(*pres, keyword=keyword, edges=edges, label=True)
+
+
 class NominalSensor(TorchSensor):
     def __init__(self, *pres, vocab=None, edges=None):
         super().__init__(*pres, edges=edges)

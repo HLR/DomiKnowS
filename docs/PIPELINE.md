@@ -17,6 +17,15 @@ The following is user's steps to using our framework.
 
 ## 1. Knowledge Declaration
 
+Class reference:
+
+- `regr.graph.Graph`
+- `regr.graph.Concept`
+- `regr.graph.Property`
+- `regr.graph.Relation`
+- `regr.graph.LogicalConstrain`
+- `regr.graph.Datanode`
+
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
 We provide a graph language based on python for knowledge declaration with notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
 
@@ -31,8 +40,6 @@ Notice that this graph, the *"conceptual graph"*, declare a data structure. When
 Follows is an example showing how to declare a graph.
 
 ```python
-from regr.graph import Graph, Concept
-
 with Graph('global') as graph:
   sentence = Concept(name='sentence')
   word = Concept(name='word')
@@ -57,9 +64,16 @@ With in the graph, there are `Concept`s named `'sentence'`, `'word'`, and `'pair
 There are inheritance (relation `IsA` or logical `ifL()`), disjoint (relation `NotA`, or logical `nandL()`), and composition (relation `HasA` or a compositional logical expression) constraints implied in the above `graph`.
 One can add more complex logical constraints with our logical expression notations.
 
-See [here](KNOWLEDGE.md) for more details about declaring graph and constraints.
+See [here](developer/KNOWLEDGE.md) for more details about declaring graph and constraints.
 
 ## 2. Model Declaration
+
+Class reference:
+
+- `regr.data.reader.RegrReader`
+- `regr.sensor.Sensor`
+- `regr.sensor.Learner`
+- `regr.program.Program`
 
 In model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
 We use `Reader`s, `Sensor`s, and `Learner`s accodingly for model declaration to create a *"full program"* as `Program`.
@@ -120,24 +134,24 @@ for item in reader:
 ```
 
 Also, `torch.utils.data.DataLoader` is a good choice when working with PyTorch.
-The framework also has a simple reader for JSON format input file.
+The framework also has a simple reader `RegrReader`.
 
 #### 2.2.2. `Program` Example
 
-To create a program, user need to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
+To create a program, user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
 ```python
-sentence['index'] = ReaderSensor(key='sentence')
+sentence['index'] = ReaderSensor(keyword='sentence')
 
-rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', keyword='index')
+rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', to='index')
 word['emb'] = GloveSensor('index', edges=[rel_sentence_contains_word['forward'],])
 
-word[people] = LabelReaderSensor(key='people')
-word[organization] = LabelReaderSensor(key='organization')
-pair[work_for] = LabelReaderSensor(key='work_for')
+word[people] = LabelReaderSensor(keyword='people')
+word[organization] = LabelReaderSensor(keyword='organization')
+pair[work_for] = LabelReaderSensor(keyword='work_for')
 ```
 
-There are different pre-defined sensors for basic data operation. Users can also extend base `Sensor` to customize for their task [by overriding `forward()` method](MODEL.md#overriding-forward).
+There are different pre-defined sensors for basic data operation. Users can also extend base `Sensor` to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
 In the example above, a `ReaderSensor` is assigned to a special property `'index'`, which indicate an candiate generator.
 `ReaderSensor` will simple read the key `'sentence'` from an sample, which is expected to be a `dict`, retrieved by enumerating through the reader.
 As the candiate generator for sentence, sentence `Datanode` will be created based on the output of this sensor when being populated.
