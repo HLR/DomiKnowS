@@ -12,17 +12,17 @@
 
 ### 3.3. [Examples](../examples)
 
-## 4. [Developer Perspective](OVERVIEW_DEVEL.md)
+## 4. [Developer Perspective](developer/OVERVIEW_DEVEL.md)
 
-### 4.1. [Knowledge Declaration](KNOWLEDGE.md)
+### 4.1. [Knowledge Declaration](developer/KNOWLEDGE.md)
 
-### 4.2. [Model Declaration](MODEL.md)
+### 4.2. [Model Declaration](developer/MODEL.md)
 
-### 4.3. [Workflow](WORKFLOW.md)
+### 4.3. [Workflow](developer/WORKFLOW.md)
 
-### 4.4. [Query and Access](QUERY.md)
+### 4.4. [Query and Access](developer/QUERY.md)
 
-### 4.5. [Inference](INFERENCE.md)
+### 4.5. [Inference](developer/INFERENCE.md)
 
 ## 5. [APIs](apis)
 
