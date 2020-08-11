@@ -24,6 +24,6 @@
 
 ### 2.5. [Inference](INFERENCE.md)
 
-## 3. APIs
+## 3. [APIs](apis)
 
 ## 4. [Legacy Wiki](old_wiki)

@@ -523,3 +523,28 @@ class ListConcator(TorchSensor):
             if isinstance(self.inputs[it], list):
                 self.inputs[it] = torch.stack(self.inputs[it])
         return torch.cat(self.inputs, dim=-1)
+
+
+class SpacyTokenizorSensor(FunctionalSensor):
+    from spacy.lang.en import English
+    nlp = English()
+
+    def forward(self, sentences):
+        tokens = self.nlp.tokenizer.pipe(sentences)
+        return list(tokens)
+
+
+class BertTokenizorSensor(FunctionalSensor):
+    from transformers import BertTokenizer
+    TRANSFORMER_MODEL = 'bert-base-uncased'
+    tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
+
+    def forward(self, sentences):
+        tokens = self.tokenizer.batch_encode_plus(
+            sentences,
+            return_tensors='pt',
+            return_attention_mask=True,
+            #return_offsets_mapping=True,
+        )
+        tokens['tokens'] = self.tokenizer.convert_ids_to_tokens(tokens['input_ids'], skip_special_tokens=True)
+        return tokens
