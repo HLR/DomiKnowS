@@ -3,7 +3,7 @@ import torch
 from examples.SentimentAnalysis.sensors.tweetSensor import SentenceRepSensor
 from examples.SentimentAnalysis.tweet_reader import SentimentReader
 from regr.graph import Graph, Concept, Relation
-from regr.program import LearningBasedProgram
+from regr.program import LearningBasedProgram, POIProgram
 from regr.sensor.torch.learner import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.program.model.pytorch import PoiModel
@@ -28,22 +28,28 @@ with Graph('tweet') as graph:
 
 #Reading the data from a dictionary per learning example using reader sensors
 twit['raw'] = ReaderSensor(keyword= 'tweet')
-twit['PositiveLabel'] = ReaderSensor(keyword='PositiveLabel', label = True)
-twit['NegativeLabel'] = ReaderSensor(keyword='NegativeLabel', label = True)
+twit[PositiveLabel] = ReaderSensor(keyword='PositiveLabel', label = True)
+twit[NegativeLabel] = ReaderSensor(keyword='NegativeLabel', label = True)
 #Reading the features of each tweet using a sensor
 twit['emb'] = SentenceRepSensor('raw')
 
 #Associating the output lable with a learnig module
-twit['Label'] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
+#If you have more features you need to concat them and introduce a new name before using them for the learner
 
+twit[PositiveLabel] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
+twit[NegativeLabel] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
 
 #The reader will return the whole list of learning examples each of which is a dictionary
 ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 
 #The program takes the graph and learning approach as input
-program = LearningBasedProgram(graph, PoiModel)
+program = POIProgram(graph, loss= torch.nn.CrossEntropyLoss())
+
 
 #The program is ready to train:
+for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[1:2]):
+    print(datanode)
 
-program.train(list(ReaderObjectsIterator.run()))
-print(program.model.loss)
+# program.populate(list(ReaderObjectsIterator.run())[1:2])
+# program.train(list(ReaderObjectsIterator.run()))
+# print(program.model.loss)
