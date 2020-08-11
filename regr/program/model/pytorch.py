@@ -10,6 +10,7 @@ from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
 from ..tracker import MacroAverageTracker
+from ..metric import MetricTracker
 
 
 class TorchModel(torch.nn.Module):
@@ -103,9 +104,9 @@ class PoiModel(TorchModel):
             yield output_sensor, target_sensor
 
     def reset(self):
-        if self.loss is not None:
+        if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        if self.metric is not None:
+        if isinstance(self.metric, MetricTracker):
             self.metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):

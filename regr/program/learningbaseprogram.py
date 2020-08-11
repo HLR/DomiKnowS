@@ -11,7 +11,7 @@ class LearningBasedProgram():
 
     def __init__(self, graph, Model, **kwargs):
         self.graph = graph
-        self.model = Model(graph)
+        self.model = Model(graph, **kwargs)
         self.opt = None
 
     def update_nominals(self, dataset):
@@ -38,7 +38,7 @@ class LearningBasedProgram():
 
             if training_set is not None:
                 self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set, train_inference), total=len(training_set), desc='Epoch {} Training'.format(epoch)))
+                consume(tqdm(self.train_epoch(training_set, train_inference), desc='Epoch {} Training'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -46,7 +46,7 @@ class LearningBasedProgram():
 
             if valid_set is not None:
                 self.logger.info('Validation:')
-                consume(tqdm(self.test(valid_set, valid_inference), total=len(valid_set), desc='Epoch {} Validation'.format(epoch)))
+                consume(tqdm(self.test(valid_set, valid_inference), desc='Epoch {} Validation'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -54,7 +54,7 @@ class LearningBasedProgram():
 
         if test_set is not None:
             self.logger.info('Testing:')
-            consume(tqdm(self.test(test_set, valid_inference), total=len(test_set), desc='Epoch {} Testing'.format(epoch)))
+            consume(tqdm(self.test(test_set, valid_inference), desc='Epoch {} Testing'.format(epoch)))
             self.logger.info(' - loss:')
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
