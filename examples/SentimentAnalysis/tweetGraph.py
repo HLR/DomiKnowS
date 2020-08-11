@@ -4,7 +4,7 @@ from examples.SentimentAnalysis.sensors.tweetSensor import SentenceRepSensor
 from examples.SentimentAnalysis.tweet_reader import SentimentReader
 from regr.graph import Graph, Concept, Relation
 from regr.program import LearningBasedProgram, POIProgram
-from regr.sensor.torch.learner import ModuleLearner
+from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.program.model.pytorch import PoiModel
 
@@ -36,8 +36,8 @@ twit['emb'] = SentenceRepSensor('raw')
 #Associating the output lable with a learnig module
 #If you have more features you need to concat them and introduce a new name before using them for the learner
 
-twit[PositiveLabel] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
-twit[NegativeLabel] = ModuleLearner('emb', module = torch.nn.Linear(300,2))
+twit[PositiveLabel] = ModuleLearner('emb', module = torch.nn.Linear(96,2))
+twit[NegativeLabel] = ModuleLearner('emb', module = torch.nn.Linear(96,2))
 
 #The reader will return the whole list of learning examples each of which is a dictionary
 ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
@@ -51,5 +51,6 @@ for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[1:2])
     print(datanode)
 
 # program.populate(list(ReaderObjectsIterator.run())[1:2])
-# program.train(list(ReaderObjectsIterator.run()))
-# print(program.model.loss)
+program.train(list(ReaderObjectsIterator.run()))
+print(program.model.loss)
+program.test(list(ReaderObjectsIterator.run()))
