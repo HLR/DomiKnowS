@@ -1603,6 +1603,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                
             # Collect head logical constraints
             _lcP = {}
+            _lcP[100] = []
             for graph in self.myGraph:
                 for lcKey, lc in graph.logicalConstrains.items():
                     if lc.headLC:                        
@@ -1616,9 +1617,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             for p in lcP:
                 self.myLogger.info('Found logical constraints with p %i - %s'%(p,lcP[p]))
 
-            # Search through set of logical constrain for subset satisfying and the mmax/min calculated objective value
-            lcRun = {} # keeps information about subsequent model runs
-            ps = [] # list with processed p 
+            # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
+            lcRun = {} # Keeps information about subsequent model runs
+            ps = [] # List with processed p 
             for p in lcP:
                 ps.append(p)
                 mP = m.copy() # Copy model for this run
@@ -1628,11 +1629,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 for _x in x:
                     xP[_x] = mP.getVarByName(x[_x].VarName)
                     
-                # TODO
-                yP= {}
-                zP = {}
+                yP = {}
+                for _y in y:
+                    yP[_y] = mP.getVarByName(y[_y].VarName)
                     
-                
+                zP = {}
+                for _z in z:
+                    yP[_z] = mP.getVarByName(z[_z].VarName)
+                    
                 # Prepare set with logical constraints for this run
                 lcs = []
                 for _p in lcP:
@@ -1657,7 +1661,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('Optimal solution was found %f - elapsed time: %ims'%(mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('%s optimal solution was found with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', mP.ObjVal,elapsedOptimize.microseconds/1000))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
@@ -1772,7 +1776,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         z = {} 
         for graph in self.myGraph:
             for lcKey, lc in graph.logicalConstrains.items():
-                if not lc.active:
+                if not lc.headLC:
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))

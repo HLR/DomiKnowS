@@ -12,7 +12,15 @@ ifLog =  ilpConfig['ifLog']
 class LogicalConstrain:
     def __init__(self, *e, p=100):
         self.headLC = True
-        self.p = p
+        
+        if p < 0:
+            self.p = 0
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 0"%(lcName,p))
+        elif p > 100:
+            self.p = 100
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 100"%(lcName,p))
+        else:
+            self.p = p
         
         for e_item in e:
             if isinstance(e_item, LogicalConstrain):
