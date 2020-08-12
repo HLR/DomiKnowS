@@ -1635,7 +1635,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 zP = {}
                 for _z in z:
-                    yP[_z] = mP.getVarByName(z[_z].VarName)
+                    zP[_z] = mP.getVarByName(z[_z].VarName)
                     
                 # Prepare set with logical constraints for this run
                 lcs = []
