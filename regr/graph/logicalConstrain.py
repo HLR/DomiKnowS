@@ -10,12 +10,13 @@ myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
 class LogicalConstrain:
-    def __init__(self, *e):
-        self.active = True
+    def __init__(self, *e, p=100):
+        self.headLC = True
+        self.p = p
         
         for e_item in e:
             if isinstance(e_item, LogicalConstrain):
-                e_item.active = False
+                e_item.headLC = False
                 
         self.e = e
         
@@ -36,6 +37,9 @@ class LogicalConstrain:
                 context.logicalConstrains[self.lcName] = self
      
     def __str__(self):
+        return self.__class__.__name__
+    
+    def __repr__(self):
         return self.__class__.__name__
           
     def __call__(self, model, myIlpBooleanProcessor, v): 
@@ -213,61 +217,61 @@ class LogicalConstrain:
         return existsV
 
 class andL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)        
 
 class orL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False):
         return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, resultVariableNames, headConstrain)
     
 class nandL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, resultVariableNames, headConstrain)
         
 class ifL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
     
 class norL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
 
 class xorL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
     
 class epqL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
         
 class eqL(LogicalConstrain):
     def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+        LogicalConstrain.__init__(self, *e, p=100)
       
 class notL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
         lcName = 'notL'
@@ -304,8 +308,8 @@ class notL(LogicalConstrain):
         return notV
 
 class exactL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
@@ -320,8 +324,8 @@ class exactL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class existsL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         cLimit = 1
@@ -333,8 +337,8 @@ class existsL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class atLeastL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
@@ -347,8 +351,8 @@ class atLeastL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
     
 class atMostL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
