@@ -1,7 +1,9 @@
+import sys
+
+sys.path.append('.')
+
 import torch
 
-from examples.SentimentAnalysis.sensors.tweetSensor import SentenceRepSensor
-from examples.SentimentAnalysis.tweet_reader import SentimentReader
 from regr.graph import Graph, Concept, Relation
 from regr.program import LearningBasedProgram, POIProgram
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -9,6 +11,10 @@ from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.program.model.pytorch import PoiModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss
+
+from sensors.tweetSensor import SentenceRepSensor
+from tweet_reader import SentimentReader
+
 
 Graph.clear()
 Concept.clear()
@@ -49,13 +55,12 @@ ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 #The program takes the graph and learning approach as input
 program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 
-
 #The program is ready to train:
 # for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[1:2]):
 #     print(datanode)
-program.train(ReaderObjectsIterator.run())
 
 # program.populate(list(ReaderObjectsIterator.run())[1:2])
-program.train(list(ReaderObjectsIterator.run()))
+program.train(list(ReaderObjectsIterator.run())[:10], train_epoch_num=30, Optim=torch.optim.Adam)
 print(program.model.loss)
+print(program.model.metric)
 program.test(list(ReaderObjectsIterator.run()))
