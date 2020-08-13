@@ -36,7 +36,6 @@ class Charseq(APFObject):
                     b.splitlines(keepends=True))))
 
 
-
 class Entity(APFObject):
     tag = 'entity'
 
@@ -66,7 +65,7 @@ class Entity(APFObject):
         self.entity_class = node.attrib['CLASS']
         self.mentions = {}
         self.attributes = []
-        for mention_node in node.findall('entity_mention'):
+        for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
         attributes_node = node.find('entity_attributes')
         if attributes_node:
@@ -101,7 +100,7 @@ class Value(Timex2):
     def __init__(self, node, text):
         super().__init__(node, text)
         self.type = node.attrib['TYPE']
-        self.subtype = node.attrib['SUBTYPE']
+        self.subtype = node.attrib.get('SUBTYPE', None)
 
 
 class Relation(APFObject):
@@ -135,7 +134,7 @@ class Relation(APFObject):
             self.extent = Charseq(node.find('extent/charseq'), text)
             self.arguments = [None, None]
             self.additional_arguments = []
-            for argument_node in node.findall('relation_mention_argument'):
+            for argument_node in node.findall(self.Argument.tag):
                 referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
                 argument = self.Argument(argument_node, referable.mentions, text)
                 if argument.role.startswith('Arg-'):
@@ -154,13 +153,73 @@ class Relation(APFObject):
         self.arguments = [None, None]
         self.additional_arguments = []
         self.mentions = {}
-        for argument_node in node.findall('relation_argument'):
+        for argument_node in node.findall(self.Argument.tag):
             argument = self.Argument(argument_node, referables, text)
             if argument.role.startswith('Arg-'):
                 self.arguments[int(argument.role[-1])-1] = argument
             else:
                 self.additional_arguments.append(argument)
-        for mention_node in node.findall('relation_mention'):
+        for mention_node in node.findall(self.Mention.tag):
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
+
+class Event(APFObject):
+    tag = 'event'
+
+    type_map = {
+        'Business': 'Business-Event'
+    }
+
+    class Argument(APFObject):
+        tag = 'event_argument'
+
+        def __init__(self, node, referables, text):
+            super().__init__(node, text)
+            self.refid = node.attrib['REFID']
+            self.ref = referables[self.refid]
+            self.role = node.attrib['ROLE']
+
+    class Mention(APFObject):
+        tag = 'event_mention'
+
+        class Argument(APFObject):
+            tag = 'event_mention_argument'
+
+            def __init__(self, node, referables, text):
+                super().__init__(node, text)
+                self.refid = node.attrib['REFID']
+                self.ref = referables[self.refid]
+                self.role = node.attrib['ROLE']
+
+        def __init__(self, node, referables, text):
+            super().__init__(node, text)
+            self.id = node.attrib['ID']
+            self.extent = Charseq(node.find('extent/charseq'), text)
+            self.ldc_scope = Charseq(node.find('ldc_scope/charseq'), text)
+            self.anchor = Charseq(node.find('anchor/charseq'), text)
+            self.arguments = []
+            for argument_node in node.findall(self.Argument.tag):
+                referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
+                argument = self.Argument(argument_node, referable.mentions, text)
+                self.arguments.append(argument)
+
+    def __init__(self, node, referables, text):
+        super().__init__(node, text)
+        self.id = node.attrib['ID']
+        type_str = node.attrib['TYPE']
+        type_str = self.type_map.get(type_str, type_str)
+        self.type = ace05['Events'][type_str]
+        subtype = node.attrib.get('SUBTYPE', None)
+        self.subtype = ace05['Events'][subtype] if subtype else None
+        self.modality = node.attrib['MODALITY']
+        self.polarity = node.attrib['POLARITY']
+        self.genericity = node.attrib['GENERICITY']
+        self.tense = node.attrib['TENSE']
+        self.arguments = []
+        self.mentions = {}
+        for argument_node in node.findall(self.Argument.tag):
+            argument = self.Argument(argument_node, referables, text)
+            self.arguments.append(argument)
+        for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
 
 
@@ -186,8 +245,8 @@ class Reader():
 
     def load(self, doc_id, sgm_path, apf_path):
         text = self.load_text(doc_id, sgm_path)
-        anno = self.load_anno(doc_id, apf_path, text)
-        return {'text': text, 'anno': anno}
+        referables, relations, events = self.load_anno(doc_id, apf_path, text)
+        return {'text': text, 'referables': referables, 'relations': relations, 'events': events}
 
     def load_text(self, doc_id, path):
         # tree = ET.parse(path)
@@ -206,16 +265,24 @@ class Reader():
         relations = {}
         events = {}
 
-        for node in document.findall('entity'):
+        for node in document.findall(Entity.tag):
             entity = Entity(node, text)
             referables[entity.id] = entity
 
-        for node in document.findall('timex2'):
+        for node in document.findall(Timex2.tag):
             timex2 = Timex2(node, text)
             referables[timex2.id] = timex2
 
-        for node in document.findall('relation'):
+        for node in document.findall(Value.tag):
+            value = Value(node, text)
+            referables[value.id] = value
+
+        for node in document.findall(Relation.tag):
             relation = Relation(node, referables, text)
             relations[relation.id] = relation
+
+        for node in document.findall(Event.tag):
+            event = Event(node, referables, text)
+            events[event.id] = event
 
         return referables, relations, events
