@@ -87,16 +87,25 @@ class Timex2(APFObject):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
 
 
-class Value(Timex2):
+class Value(APFObject):
     tag = 'value'
 
-    class Mention(Timex2.Mention):
+    class Mention(APFObject):
         tag = 'value_mention'
+
+        def __init__(self, node, text):
+            super().__init__(node, text)
+            self.id = node.attrib['ID']
+            self.extent = Charseq(node.find('extent/charseq'), text)
 
     def __init__(self, node, text):
         super().__init__(node, text)
+        self.id = node.attrib['ID']
         self.type = node.attrib['TYPE']
         self.subtype = node.attrib.get('SUBTYPE', None)
+        self.mentions = {}
+        for mention_node in node.findall(self.Mention.tag):
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
 
 
 class Relation(APFObject):
@@ -162,7 +171,8 @@ class Event(APFObject):
     tag = 'event'
 
     type_map = {
-        'Business': 'Business-Event'
+        'Business': 'Business-Event',
+        'Sentence': 'Sentence-Event'
     }
 
     class Argument(APFObject):
@@ -204,8 +214,9 @@ class Event(APFObject):
         type_str = node.attrib['TYPE']
         type_str = self.type_map.get(type_str, type_str)
         self.type = ace05['Events'][type_str]
-        subtype = node.attrib.get('SUBTYPE', None)
-        self.subtype = ace05['Events'][subtype] if subtype else None
+        subtype_str = node.attrib.get('SUBTYPE', None)
+        subtype_str = self.type_map.get(subtype_str, subtype_str)
+        self.subtype = ace05['Events'][subtype_str] if subtype_str else None
         self.modality = node.attrib['MODALITY']
         self.polarity = node.attrib['POLARITY']
         self.genericity = node.attrib['GENERICITY']

@@ -59,14 +59,15 @@ with Graph('global') as graph:
             vehicle = entity(name='VEH')
             # Weapon – Weapon entities are limited to physical devices primarily used as instruments for physically harming or destroying other entities.
             weapon = entity(name='WEA')
-            # special - timex2, value
+            # special - timex2
             timex2 = entity(name='Timex2')
+            # special - value
             value = entity(name='value')
-            num = value(name='NUM')
-            money = value(name='MONEY')
-            job = value(name='JOB')
-            crime = value(name='CRIME')
-            sen = value(name='SEN')
+            num = value(name='Numeric')
+            money = num(name='Money')
+            job = value(name='Job-Title')
+            crime = value(name='Crime')
+            sen = value(name='Sentence')
 
             # disjoint
             disjoint(person, organization, gpe, location, facility, vehicle, weapon, timex2, value)
@@ -418,7 +419,7 @@ with Graph('global') as graph:
             # die.involve(person)
             # S6 - participant: Agent: (PER, ORG, GPE), Victim: PER, Instrument: (WEA, VEH)
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            injure.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
+            die.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
 
             # MOVEMENT
             movement = event(name='Movement')
@@ -461,9 +462,9 @@ with Graph('global') as graph:
             merge_org.involve(ORG, timex2, GPE, LOC, FAC)
             # BUSINESS.DECLARE-BANKRUPTCY - A DECLARE-BANKRUPTCY Event will occur whenever an Entity officially requests legal protection from debt collection due to an extremely negative balance sheet.
             declare_bankruptcy = business(name='Declare-Bankruptcy')
-            # S6 - participant: Org: ORG
+            # S6 - participant: Org: (ORG, PER, GPE)
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            declare_bankruptcy.involve(ORG, timex2, GPE, LOC, FAC)
+            declare_bankruptcy.involve(ORG, PER, GPE, timex2, LOC, FAC)
             # BUSINESS.END-ORG - An END-ORG Event occurs whenever an ORGANIZATION ceases to exist (in other words ‘goes out of business’).
             end_org = business(name='End-Org')
             # end_org.involve(organization)
@@ -495,7 +496,7 @@ with Graph('global') as graph:
             phone_write = contact(name='Phone-Write')
             # S6 - participant: Entity: (PER, ORG, GPE)
             # S6 - attribute: Time: Time
-            meet.involve(PER, ORG, GPE, timex2)
+            phone_write.involve(PER, ORG, GPE, timex2)
             
             # PERSONELL - All PERSONNEL Events can have an POSITION attribute. The object populating the POSITION-ARG slot in a PERSONNEL Event will be a VALUE of type JOB- TITLE, which consists of a string taken from within the scope of the Event.
             personell = event(name='Personnel')
@@ -523,7 +524,7 @@ with Graph('global') as graph:
             # elect.involve(person)
             # S6 - participant: Person: PER, Entity: (PER, ORG, GPE)
             # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
-            nominate.involve(PER, ORG, GPE, job, timex2, LOC, FAC)
+            elect.involve(PER, ORG, GPE, job, timex2, LOC, FAC)
 
             # JUSTICE - Many JUSTICE Events can have a CRIME-ARG attribute. As with the POSITION-ARG in PERSONNEL Events, these argument slots will be filled by Values.
             justice = event(name='Justice')
@@ -570,7 +571,7 @@ with Graph('global') as graph:
             # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
             convict.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.SENTENCE - A SENTENCE Event takes place whenever the punishment (particularly incarceration) for the DEFENDANT-ARG of a TRY Event is issued by a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).
-            sentence = justice(name='Sentence')
+            sentence = justice(name='Sentence-Event')
             # sentence.involve(trial, gpe, organization, person)
             # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
             # S6 - attribute: Crime: CRIME, Sentence: SEN, Time: Time, Place: (GPE, LOC, FAC)
