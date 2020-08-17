@@ -59,9 +59,17 @@ with Graph('global') as graph:
             vehicle = entity(name='VEH')
             # Weapon – Weapon entities are limited to physical devices primarily used as instruments for physically harming or destroying other entities.
             weapon = entity(name='WEA')
+            # special - timex2, value
+            timex2 = entity(name='Timex2')
+            value = entity(name='value')
+            num = value(name='NUM')
+            money = value(name='MONEY')
+            job = value(name='JOB')
+            crime = value(name='CRIME')
+            sen = value(name='SEN')
 
             # disjoint
-            disjoint(person, organization, gpe, location, facility, vehicle, weapon)
+            disjoint(person, organization, gpe, location, facility, vehicle, weapon, timex2, value)
 
             # Abbreviation
             PER = person
@@ -384,137 +392,227 @@ with Graph('global') as graph:
             life = event(name='Life')
             # LIFE.BE-BORN - A BE-BORN Event occurs whenever a PERSON Entity is given birth to.
             be_born = life(name='Be-Born')
-            be_born.involve(person)
+            # S6 - participant: Person: PER
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            be_born.involve(PER, timex2, GPE, LOC, FAC)
             # LIFE.MARRY - MARRY Events are official Events, where two people are married under the legal definition.
             marry = life(name='Marry')
             # marry.involve(person)  # not documented explicitly
+            # S6 - participant: Person: PER
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            marry.involve(PER, timex2, GPE, LOC, FAC)
             # LIFE.DIVORCE - A DIVORCE Event occurs whenever two people are officially divorced under the legal definition of divorce.
             divorce = life(name='Divorce')
             # divorce.involve(person)  # no document
+            # S6 - participant: Person: PER
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            divorce.involve(PER, timex2, GPE, LOC, FAC)
             # LIFE.INJURE - An INJURE Event occurs whenever a PERSON Entity experiences physical harm.
             injure = life(name='Injure')
-            injure.involve(person)
+            # injure.involve(person)
+            # S6 - participant: Agent: (PER, ORG, GPE), Victim: PER, Instrument: (WEA, VEH)
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            injure.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
             # LIFE.DIE - A DIE Event occurs whenever the life of a PERSON Entity ends.
             die = life(name='Die')
-            die.involve(person)
+            # die.involve(person)
+            # S6 - participant: Agent: (PER, ORG, GPE), Victim: PER, Instrument: (WEA, VEH)
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            injure.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
 
             # MOVEMENT
             movement = event(name='Movement')
             # MOVEMENT.TRANSPORT - A TRANSPORT Event occurs whenever an ARTIFACT (WEAPON or VEHICLE) or a PERSON is moved from one PLACE (GPE, FACILITY, LOCATION) to another.
             transport = movement(name='Transport')
-            # NOTE: not sure how to use `involve`...
-            transport.involve(weapon, vehicle, person, gpe, facility, location)
+            # transport.involve(weapon, vehicle, person, gpe, facility, location)
+            # S6 - participant: Agent: (PER, ORG, GPE), Artifact: (PER, WEA, VEH), Vehicle: VEH, Price: num, Origin: (GPE, LOC, FAC), Destination: (GPE, LOC, FAC)
+            # S6 - attribute: Time: Time
+            transport.involve(PER, ORG, GPE, WEA, VEH, num, LOC, FAC, timex2)
 
             # TRANSACTION
             transaction = event(name='Transaction')
             # TRANSACTION.TRANSFER-OWNERSHIP - TRANSFER-OWNERSHIP Events refer to the buying, selling, loaning, borrowing, giving, or receiving of artifacts or organizations.
             transfer_ownership = transaction(name='Transfer-Ownership')
             # These Events are taggable only when the thing transferred is known to be a taggable VEHICLE, FACILITY, ORGANIZATION or WEAPON.
-            transport.involve(vehicle, facility, organization, weapon)
+            # transport.involve(vehicle, facility, organization, weapon)
+            # S6 - participant: Buyer: (PER, ORG, GPE), Seller: (PER, ORG, GPE), Beneficiary: (PER, ORG, GPE), Artifact: (VEH, WEA, FAC, ORG), Price: money
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            transfer_ownership.involve(PER, ORG, GPE, VEH, WEA, money, timex2, LOC, FAC)
+
             # TRANSACTION.TRANSFER-MONEY - TRANSFER-MONEY Events refer to the giving, receiving, borrowing, or lending money when it is not in the context of purchasing something.
-            transfer_money = transaction(name='Transfer-Money')            
+            transfer_money = transaction(name='Transfer-Money')
+            # S6 - participant: Giver: (PER, ORG, GPE), Recipient: (PER, ORG, GPE), Beneficiary: (PER, ORG, GPE), Money: money
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            transfer_money.involve(PER, ORG, GPE, money, timex2, LOC, FAC)
             
             # BUSINESS
             business = event(name='Business-Event')
             # BUSINESS.START-ORG - A START-ORG Event occurs whenever a new ORGANIZATION is created.
             start_org = business(name='Start-Org')
-            start_org.involve(organization)
+            # start_org.involve(organization)
+            # S6 - participant: Agent: (PER, ORG, GPE), Org: ORG
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            start_org.involve(PER, ORG, GPE, timex2, LOC, FAC)
             # BUSINESS.MERGE-ORG - A MERGE-ORG Event occurs whenever two or more ORGANIZATION Entities come together to form a new ORGANIZATION Entity.
             merge_org = business(name='Merge-Org')
             merge_org.involve(organization)
+            # S6 - participant: Org: ORG
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            merge_org.involve(ORG, timex2, GPE, LOC, FAC)
             # BUSINESS.DECLARE-BANKRUPTCY - A DECLARE-BANKRUPTCY Event will occur whenever an Entity officially requests legal protection from debt collection due to an extremely negative balance sheet.
             declare_bankruptcy = business(name='Declare-Bankruptcy')
+            # S6 - participant: Org: ORG
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            declare_bankruptcy.involve(ORG, timex2, GPE, LOC, FAC)
             # BUSINESS.END-ORG - An END-ORG Event occurs whenever an ORGANIZATION ceases to exist (in other words ‘goes out of business’).
             end_org = business(name='End-Org')
-            end_org.involve(organization)
+            # end_org.involve(organization)
+            # S6 - participant: Org: ORG
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            end_org.involve(ORG, timex2, GPE, LOC, FAC)
 
             # CONFLICT
             conflict = event(name='Conflict')
             # CONFLICT.ATTACK - An ATTACK Event is defined as a violent physical act causing harm or damage.
             attack = conflict(name='Attack')
+            # S6 - participant: Attacker: (PER, ORG, GPE), Target: (PER, ORG, VEH, FAC, WEA), Instrument: (WEA, VEH)
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            attack.involve(PER, ORG, GPE, VEH, FAC, WEA, timex2, LOC, FAC)
             # CONFLICT.DEMONSRATE - A DEMONSRATE Event occurs whenever a large number of people come together in a public area to protest or demand some sort of official action.
             demonstrate = conflict(name='Demonstrate')
+            # S6 - participant: Entity: (PER, ORG)
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            demonstrate.involve(PER, ORG, timex2, GPE, LOC, FAC)
 
             # CONTACT
             contact = event(name='Contact')
             # CONTACT.MEET - A MEET Event occurs whenever two or more Entities come together at a single location and interact with one another face-to-face.
             meet = contact(name='Meet')
+            # S6 - participant: Entity: (PER, ORG, GPE)
+            # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
+            meet.involve(PER, ORG, GPE, timex2, LOC, FAC)
             # CONTACT.PHONE-WRITE - A PHONE-WRITE Event occurs when two or more people directly engage in discussion which does not take place ‘face-to-face’.
             phone_write = contact(name='Phone-Write')
+            # S6 - participant: Entity: (PER, ORG, GPE)
+            # S6 - attribute: Time: Time
+            meet.involve(PER, ORG, GPE, timex2)
             
             # PERSONELL - All PERSONNEL Events can have an POSITION attribute. The object populating the POSITION-ARG slot in a PERSONNEL Event will be a VALUE of type JOB- TITLE, which consists of a string taken from within the scope of the Event.
             personell = event(name='Personnel')
             # NOTE: We do not have VALUE or handle attribute now
             # PERSONELL.START-POSITION - A START-POSITION Event occurs whenever a PERSON Entity begins working for (or changes offices within) an ORGANIZATION or GPE.
             start_position = personell(name='Start-Position')
-            start_position.involve(person, organization, gpe)
+            # start_position.involve(person, organization, gpe)
+            # S6 - participant: Person: PER, Entity: (ORG, GPE)
+            # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
+            start_position.involve(PER, ORG, GPE, job, timex2, LOC, FAC)
             # PERSONELL.END-POSITION - A START-POSITION Event occurs whenever a PERSON Entity begins working for (or changes offices within) an ORGANIZATION or GPE.
             end_position = personell(name='End-Position')
-            end_position.involve(person, organization, gpe)
+            # end_position.involve(person, organization, gpe)
+            # S6 - participant: Person: PER, Entity: (ORG, GPE)
+            # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
+            end_position.involve(PER, ORG, GPE, job, timex2, LOC, FAC)
             # PERSONELL.NOMINATE - A NOMINATE Event occurs whenever a PERSON is proposed for a START- POSITION Event by the appropriate PERSON, through official channels.
             nominate = personell(name='Nominate')
-            nominate.involve(person)
+            # nominate.involve(person)
+            # S6 - participant: Person: PER, Entity: (PER, ORG, GPE, FAC)
+            # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
+            nominate.involve(PER, ORG, GPE, FAC, job, timex2, LOC)
             # PERSONELL.ELECT - An ELECT Event occurs whenever a candidate wins an election designed to determine the PERSON argument of a START-POSITION Event.
             elect = personell(name='Elect')
-            elect.involve(person)
+            # elect.involve(person)
+            # S6 - participant: Person: PER, Entity: (PER, ORG, GPE)
+            # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
+            nominate.involve(PER, ORG, GPE, job, timex2, LOC, FAC)
 
             # JUSTICE - Many JUSTICE Events can have a CRIME-ARG attribute. As with the POSITION-ARG in PERSONNEL Events, these argument slots will be filled by Values.
             justice = event(name='Justice')
-            # NOTE: We do not have VALUE or handle attribute now
             # JUSTICE.ARREST-JAIL - A JAIL Event occurs whenever the movement of a PERSON is constrained by a state actor (a GPE, its ORGANIZATION subparts, or its PERSON representatives).
             arrest_jail = justice(name='Arrest-Jail')
-            arrest_jail.involve(person, gpe, organization)
+            # arrest_jail.involve(person, gpe, organization)
+            # S6 - participant: Person: PER, Agent: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            arrest_jail.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.RELEASE-PAROLE - A RELEASE Event occurs whenever a state actor (GPE, ORGANIZATION subpart, or PERSON representative) ends its custody of a PERSON Entity.
             release_parole = justice(name='Release-Parole')
-            release_parole.involve(gpe, organization, person)
+            # release_parole.involve(gpe, organization, person)
+            # S6 - participant: Person: PER, Agent: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            release_parole.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.TRIAL-HEARING
             # JUSTICE.TRIAL - A TRIAL Event occurs whenever a court proceeding has been initiated for the purposes of determining the guilt or innocence of a PERSON, ORGANIZATION or GPE accused of committing a crime.
             # JUSTICE.HEARING - A HEARING Event occurs whenever a state actor (GPE, ORGANIZATION subpart, or PERSON representative) officially gathers to discuss some criminal legal matter.
             trial = justice(name='Trial-Hearing')
-            trial.involve(person, organization, gpe)
-            # A TRIAL-HEARING Event can have a CRIME attribute filled by a string from the text. It is important that the PROSECUTER-ARG be a state actor (GPE, ORGANIZATION subpart or PERSON representing them).
-            # NOTE: We do not have VALUE or handle attribute now
+            # trial.involve(person, organization, gpe)
+            # S6 - participant: Defendant: (PER, ORG, GPE), Prosecutor: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            trial.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.CHARGE-INDICT
             # JUSTICE.CHARGE - A CHARGE Event occurs whenever a PERSON, ORGANIZATION or GPE is accused of a crime by a state actor (GPE, an ORGANIZATION subpart of a GPE or a PERSON representing a GPE).
             # JUSTICE.INDICT - An INDICT Event occurs whenever a state actor (GPE, ORG subpart of a GPE or PERSON agent of a GPE) takes official legal action to follow up on an accusation.
             charge = justice(name='Charge-Indict')
-            charge.involve(person, organization, gpe)
-            # A CHARGE-INDICT Event can have a CRIME-ARG attribute filled by a string from the text.
-            # NOTE: We do not have VALUE or handle attribute now
+            # charge.involve(person, organization, gpe)
+            # S6 - participant: Defendant: (PER, ORG, GPE), Prosecutor: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            charge.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.SUE - A SUE Event occurs whenever a court proceeding has been initiated for the purposes of determining the liability of a PERSON, ORGANIZATION or GPE accused of committing a crime or neglecting a commitment.
             sue = justice(name='Sue')
-            sue.involve(person, organization, gpe)
+            # sue.involve(person, organization, gpe)
+            # S6 - participant: Plaintiff: (PER, ORG, GPE), Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            sue.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # It can have a CRIME attribute filled by a string from the text. It is not important that the PLAINTIFF-ARG be a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).
-            # NOTE: We do not have VALUE or handle attribute now
             # JUSTICE.CONVICT - A CONVICT Event occurs whenever a TRY Event ends with a successful prosecution of the DEFENDANT-ARG.
             # NOTE: TRY -> TRIAL? 
             convict = justice(name='Convict')
-            convict.involve(trial)
+            # convict.involve(trial)
+            # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            convict.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.SENTENCE - A SENTENCE Event takes place whenever the punishment (particularly incarceration) for the DEFENDANT-ARG of a TRY Event is issued by a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).
             sentence = justice(name='Sentence')
-            sentence.involve(trial, gpe, organization, person)
+            # sentence.involve(trial, gpe, organization, person)
+            # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Sentence: SEN, Time: Time, Place: (GPE, LOC, FAC)
+            sentence.involve(PER, ORG, GPE, crime, sen, timex2, LOC, FAC)
             # It can have a CRIME-ARG attribute filled by a CRIME Value and a SENTENCE-ARG attribute filled by a SENTENCE Value.
-            # NOTE: We do not have VALUE or handle attribute now
             # JUSTICE.FINE - A FINE Event takes place whenever a state actor issues a financial punishment to a GPE, PERSON or ORGANIZATION Entity, typically as a result of court proceedings.
             # NOTE: a state actor -> (gpe, organization, person)?
             fine = justice(name='Fine')
-            fine.involve(gpe, organization, person)
+            # fine.involve(gpe, organization, person)
+            # S6 - participant: Entity: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE), Money: NUM
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            fine.involve(PER, ORG, GPE, num, crime, timex2, LOC, FAC)
             # It can have a CRIME attribute filled by a string from the text.
-            # NOTE: We do not have VALUE or handle attribute now
             # JUSTICE.EXECUTE - An EXECUTE Event occurs whenever the life of a PERSON is taken by a state actor (a GPE, its ORGANIZATION subparts, or PERSON representatives).
             execute = justice(name='Execute')
-            execute.involve(person, gpe, organization, person)
+            # execute.involve(person, gpe, organization, person)
+            # S6 - participant: Person: PER, Agent: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            execute.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # It can have a CRIME attribute filled by a string from the text.
             # JUSTICE.EXTRADITE - An EXTRADITE Event occurs whenever a PERSON is sent by a state actor from one PLACE (normally the GPE associated with the state actor, but sometimes a FACILITY under its control) to another place (LOCATION, GPE or FACILITY) for the purposes of legal proceedings there.
             extradite = justice(name='Extradite')
             # PLACE -> GPE, FACILITY
-            extradite.involve(person, gpe, facility, location)
+            # extradite.involve(person, gpe, facility, location)
+            # S6 - participant: Agent: (PER, ORG, GPE), Person: PER, Destination: (GPE, LOC, FAC), Origin: (GPE, LOC, FAC)
+            # S6 - attribute: Crime: CRIME, Time: Time
+            extradite.involve(PER, ORG, GPE, LOC, FAC, crime, timex2)
             # JUSTICE.ACQUIT - An ACQUIT Event occurs whenever a trial ends but fails to produce a conviction.
             acquit = justice(name='Acquit')
             # a trial -> TRAIL?
             # acquit.involve(trail)
+            # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            acquit.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # This will include cases where the charges are dropped by the PROSECUTOR-ARG.
             # JUSTICE.APPEAL - An APPEAL Event occurs whenever the decision of a court is taken to a higher court for review.
             appeal = justice(name='Appeal')
+            # S6 - participant: Defendant: (PER, ORG, GPE), Prosecutor: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            appeal.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             # JUSTICE.PARDON - A PARDON Event occurs whenever a head-of-state or their appointed representative lifts a sentence imposed by the judiciary.
             pardon = justice(name='Pardon')
+            # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
+            # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
+            pardon.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
