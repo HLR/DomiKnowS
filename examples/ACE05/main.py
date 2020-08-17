@@ -1,12 +1,15 @@
 from ace05.reader import Reader, DictReader
 from ace05.annotation import Entity, Timex2, Value
 from ace05.graph import timex2, value
-from ace05.errors import KNOWN_ERRORS
+from ace05.errors import KNOWN_ERRORS_TIMEX2NORM as KNOWN_ERRORS
 import config
 
 
+# errors = {}
+
+
 def main():
-    reader = Reader(config.path)
+    reader = Reader(config.path, status='timex2norm')
     for data_item in reader:
         text = data_item['text']
         spans = data_item['referables']
@@ -26,11 +29,15 @@ def main():
             for arg in event.arguments:
                 if (event_id, arg.refid) in KNOWN_ERRORS['event-arg']: continue
                 if isinstance(arg.ref, Entity):
-                    assert arg.ref.type in set(map(lambda e: e.dst, event.subtype.involve()))
+                    assert arg.ref.type in set(map(lambda e: e.dst, event.subtype.involve())), f'Value type mismatch in {(event_id, arg.refid)}: {event.subtype.name}: {arg.role} is {arg.ref.type}'
+                    # if arg.ref.type not in set(map(lambda e: e.dst, event.subtype.involve())):
+                    #     errors.setdefault(f'{event.subtype.name}: {arg.role} is {arg.ref.type}', []).append((event_id, arg.refid))
                 elif isinstance(arg.ref, Timex2):
                     assert timex2 in set(map(lambda e: e.dst, event.subtype.involve()))
                 elif isinstance(arg.ref, Value):
                     assert arg.ref.type in set(map(lambda e: e.dst.name, event.subtype.involve())).intersection(set(map(lambda e: e.src.name, value._in['is_a']))), f'Value type mismatch in {(event_id, arg.refid)}: {event.subtype.name}: {arg.role} is {arg.ref.type}'
+                    # if arg.ref.type not in set(map(lambda e: e.dst.name, event.subtype.involve())).intersection(set(map(lambda e: e.src.name, value._in['is_a']))):
+                    #     errors.setdefault(f'{event.subtype.name}: {arg.role} is {arg.ref.type}', []).append((event_id, arg.refid))
                 else:
                     assert False, f'Unsupported argument type {type(arg.ref)}'
             # if there is event.subtype, then event.subtype is a event.type
@@ -43,3 +50,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # print(errors)
