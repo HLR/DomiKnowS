@@ -31,8 +31,11 @@ class LearningBasedProgram():
                 self.device = torch.device("cuda")
             else:
                 self.device = torch.device("cpu")
-        for sensor in self.graph.get_sensors(TorchSensor):
-            sensor.device = device
+        else:
+            self.device = device
+        if self.device is not None:
+            for sensor in self.graph.get_sensors(TorchSensor):
+                sensor.device = self.device
 
     def train(
         self,
