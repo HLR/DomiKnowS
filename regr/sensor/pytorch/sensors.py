@@ -6,7 +6,7 @@ from ...graph import Property
 
 
 class TorchSensor(Sensor):
-    def __init__(self, *pres, edges=None, label=False):
+    def __init__(self, *pres, edges=None, label=False, device='auto'):
         super().__init__()
         if not edges:
             edges = []
@@ -15,11 +15,14 @@ class TorchSensor(Sensor):
         self.inputs = []
         self.edges = edges
         self.label = label
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.device = torch.device("cuda")
+        if device == 'auto':
+            is_cuda = torch.cuda.is_available()
+            if is_cuda:
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
         else:
-            self.device = torch.device("cpu")
+            self.device = device
 
     def __call__(
         self,
@@ -100,8 +103,8 @@ class TorchSensor(Sensor):
 
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.forward_ = forward
 
     def update_pre_context(
@@ -155,8 +158,8 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(TorchSensor):
-    def __init__(self, *pres, data, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, data, edges=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.data = data
 
     def forward(
@@ -174,8 +177,8 @@ class PrefilledSensor(TorchSensor):
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
-    def __init__(self, *pres, callback_sensor=None, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, callback_sensor=None, edges=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.callback_sensor = callback_sensor
 
     def forward(self,) -> Any:
@@ -184,8 +187,8 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 
 class ReaderSensor(ConstantSensor):
-    def __init__(self, *pres, keyword=None, edges=None, label=False):
-        super().__init__(*pres, data=None, edges=edges, label=label)
+    def __init__(self, *pres, keyword=None, edges=None, label=False, device='auto'):
+        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
         self.keyword = keyword
 
     def fill_data(self, data_item):
@@ -196,8 +199,8 @@ class ReaderSensor(ConstantSensor):
 
 
 class NominalSensor(TorchSensor):
-    def __init__(self, *pres, vocab=None, edges=None):
-        super().__init__(*pres, edges=edges)
+    def __init__(self, *pres, vocab=None, edges=None, device='auto'):
+        super().__init__(*pres, edges=edges, device=device)
         self.vocab = vocab
 
     def complete_vocab(self):
@@ -247,9 +250,9 @@ class NominalSensor(TorchSensor):
 
 
 class ModuleSensor(FunctionalSensor):
-    def __init__(self, *pres, module, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, module, edges=None, label=False, device='auto'):
         self.module = module
+        super().__init__(*pres, edges=edges, label=label, device=device)
 
     def forward(self, *inputs):
         return self.module(*inputs)
@@ -258,8 +261,8 @@ class ModuleSensor(FunctionalSensor):
 class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward", "selection")
 
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, to, mode="forward", edges=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.to = to
         self.mode = mode
         if self.mode not in self.modes:
@@ -333,8 +336,8 @@ class TorchEdgeSensor(FunctionalSensor):
 
 
 class TorchEdgeReaderSensor(TorchEdgeSensor, ReaderSensor):
-    def __init__(self, *pres, to, keyword, mode="forward", edges=None, label=False):
-        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label)
+    def __init__(self, *pres, to, keyword, mode="forward", edges=None, label=False, device='auto'):
+        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         self.keyword = keyword
         self.data = None
 
@@ -345,8 +348,8 @@ class ForwardEdgeSensor(TorchEdgeSensor):
 
 
 class AggregationSensor(TorchSensor):
-    def __init__(self, *pres, edges, map_key, deafault_dim = 480):
-        super().__init__(*pres, edges=edges)
+    def __init__(self, *pres, edges, map_key, deafault_dim=480, device='auto'):
+        super().__init__(*pres, edges=edges, device=device)
         self.edge_node = self.edges[0].sup
         self.map_key = map_key
         self.map_value = None
@@ -446,8 +449,8 @@ class FirstAggregationSensor(AggregationSensor):
 
 
 class SelectionEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, mode="selection"):
-        super().__init__(*pres, mode=mode)
+    def __init__(self, *pres, mode="selection", device='auto'):
+        super().__init__(*pres, mode=mode, device=device)
         self.selection_helper = None
 
     def __call__(
@@ -503,9 +506,9 @@ class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
 
 
 class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
-    def __init__(self, *pres, threshold=0.5):
+    def __init__(self, *pres, threshold=0.5, device='auto'):
         # FIXME: @hfaghihi, do you mean to call super class of `SelectionEdgeSensor`, so here we skip the constructor of `SelectionEdgeSensor`?
-        super(SelectionEdgeSensor).__init__(*pres)
+        super(SelectionEdgeSensor).__init__(*pres, device=device)
         self.threshold = threshold
 
     def forward(self,) -> Any:

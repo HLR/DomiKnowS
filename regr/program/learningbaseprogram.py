@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from ..utils import consume
 from .model.base import Mode
+from ..sensor.pytorch.sensors import TorchSensor
 
 
 def get_len(dataset, default=None):
@@ -23,6 +24,16 @@ class LearningBasedProgram():
     def update_nominals(self, dataset):
         pass
 
+    def to(self, device='auto'):
+        if device == 'auto':
+            is_cuda = torch.cuda.is_available()
+            if is_cuda:
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+        for sensor in self.graph.get_sensors(TorchSensor):
+            sensor.device = device
+
     def train(
         self,
         training_set,
@@ -34,7 +45,7 @@ class LearningBasedProgram():
         train_epoch_num=1,
         Optim=None):
         if device is not None:
-            self.model.to(device)
+            self.to(device)
         if Optim is not None and list(self.model.parameters()):
             self.opt = Optim(self.model.parameters())
         else:
@@ -78,7 +89,9 @@ class LearningBasedProgram():
                 self.opt.step()
             yield loss, metric, output
 
-    def test(self, dataset, inference=True):
+    def test(self, dataset, device=None, inference=True):
+        if device is not None:
+            self.to(device)
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
@@ -86,7 +99,9 @@ class LearningBasedProgram():
                 loss, metric, output = self.model(data_item)
                 yield loss, metric, output
 
-    def populate(self, dataset, inference=True):
+    def populate(self, dataset, device=None, inference=True):
+        if device is not None:
+            self.to(device)
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
@@ -94,7 +109,7 @@ class LearningBasedProgram():
                 _, _, output = self.model(data_item)
                 yield output
 
-    def populate_one(self, data_item, inference=True):
+    def populate_one(self, data_item, device=None, inference=True):
         for key, value in data_item:
             data_item[key] = [value]
-        return next(self.populate(data_item, inference))
+        return next(self.populate(data_item, device, inference))
