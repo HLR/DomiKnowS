@@ -1,6 +1,8 @@
 import sys
 import pytest
 
+from data.reader import EmailSpamReader
+
 sys.path.append('.')
 sys.path.append('../..')
 
@@ -37,9 +39,7 @@ def model_declaration():
     return program
 
 
-@pytest.mark.gurobi
-def test_graph_coloring_main():
-    from data.reader import EmailSpamReader
+def test_main():
     from graph import email, Spam, Regular
 
     lbp = model_declaration()

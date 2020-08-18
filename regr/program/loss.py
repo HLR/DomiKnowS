@@ -2,6 +2,13 @@ import torch
 from torch.nn import functional as F
 
 
+class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
+    def forward(self, input, target, *args, **kwargs):
+        input = input.view(-1, input.shape[-1])
+        target = target.view(-1)
+        return super().forward(input, target, *args, **kwargs)
+
+
 class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
     def forward(self, input, target, weight=None):
         if weight is None:

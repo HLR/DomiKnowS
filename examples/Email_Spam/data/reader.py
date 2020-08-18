@@ -1,21 +1,19 @@
 import os
 from regr.data.reader import RegrReader
 
-
 class EmailSpamReader(RegrReader):
-
     def parse_file(self, ):
         folder = self.file
         data_spam = []
         data_ham = []
-        for file in [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f)) and f.endswith('.txt')]:
-            with open(file + "/spam", "r") as f:
+        for file in [f for f in os.listdir(folder + "/spam") if os.path.isfile(os.path.join(folder + "/spam", f)) and f.endswith('.txt')]:
+            with open(folder + "/spam/" + file, "r") as f:
                 x = []
                 for i in f:
                     x.append(i)
             data_spam.append(x)
-        for file in [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f)) and f.endswith('.txt')]:
-            with open(file + "/ham", "r") as f:
+        for file in [f for f in os.listdir(folder + "/ham") if os.path.isfile(os.path.join(folder + "/ham", f)) and f.endswith('.txt')]:
+            with open(folder + "/ham/" + file, "r") as f:
                 x = []
                 for i in f:
                     x.append(i)
@@ -56,7 +54,7 @@ class EmailSpamReader(RegrReader):
     def getBodyval(self, item):
         return item['body']
 
-    def getForwarSubjectdval(self, item):
+    def getForwardSubjectval(self, item):
         if 'forward_subject' in item:
             return item['forward_subject']
         else:
@@ -70,12 +68,12 @@ class EmailSpamReader(RegrReader):
 
     def getSpamval(self, item):
         if item['label'] == "spam":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
 
     def getRegularval(self, item):
         if item['label'] == "ham":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
