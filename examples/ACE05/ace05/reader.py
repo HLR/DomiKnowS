@@ -73,22 +73,58 @@ class RawReader():
         return referables, relations, events
 
 
+class SplitRawReader(RawReader):
+    def __init__(self, path, list_path=None, type=None):
+        super().__init__(path)
+        self.list_path = list_path
+        self.type = type
+
+    @property
+    def type(self):
+        return self._type
+    
+    @type.setter
+    def type(self, type):
+        self._type = type
+        id_list = []
+        if type is not None:
+            with open(self.list_path, 'r') as fin:
+                fin.readline()
+                for line in fin:
+                    ltype, lpath = line.split(',')
+                    if ltype == self._type:
+                        lid = lpath.rsplit('/', 1)[-1].rstrip()
+                        id_list.append(lid)
+        self._id_list = id_list
+
+    def docs(self, language='*', source='*', status='*'):
+        if self._type is not None:
+            yield from filter(lambda doc_output: doc_output[0] in self._id_list, super().docs(language=language, source=source, status=status))
+        else:
+            yield from super().docs(language=language, source=source, status=status)
+
+
 class Reader():
-    def __init__(self, path, language='English', status='adj'):
+    def __init__(self, path, list_path=None, type=None, language='English', status='adj'):
         self.path = path
+        self.list_path = list_path
+        self.type = type
+        self.init_reader()
         self.language = language
         self.status = status
 
-    @property
-    def path(self):
-        return self._raw_reader.path
+    def init_reader(self):
+        self._raw_reader = SplitRawReader(path=self.path, list_path=self.list_path, type=self.type)
 
-    @path.setter
-    def path(self, path):
-        self._raw_reader = RawReader(path)
+    @property
+    def raw_reader(self):
+        return self._raw_reader
 
     def __iter__(self):
-        yield from self._raw_reader(language=self.language, status=self.status)
+        yield from self.raw_reader(language=self.language, status=self.status)
+
+    def __len__(self):
+        return len(list(iter(self)))
 
 
 class DictReader(Reader):

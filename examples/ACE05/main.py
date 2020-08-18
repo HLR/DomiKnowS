@@ -1,3 +1,5 @@
+from tqdm import tqdm
+
 from ace05.reader import Reader, DictReader
 from ace05.annotation import Entity, Timex2, Value
 from ace05.graph import timex2, value
@@ -9,8 +11,14 @@ import config
 
 
 def main():
+    traint_reader = Reader(config.path, list_path='data_list.csv', type='train', status='timex2norm')
+    print('Training:', len(traint_reader))
+    dev_reader = Reader(config.path, list_path='data_list.csv', type='dev', status='timex2norm')
+    print('Develepment:', len(dev_reader))
+    test_reader = Reader(config.path, list_path='data_list.csv', type='test', status='timex2norm')
+    print('Testing:', len(test_reader))
     reader = Reader(config.path, status='timex2norm')
-    for data_item in reader:
+    for data_item in tqdm(reader):
         text = data_item['text']
         spans = data_item['referables']
         relations = data_item['relations']
@@ -42,10 +50,8 @@ def main():
                     assert False, f'Unsupported argument type {type(arg.ref)}'
             # if there is event.subtype, then event.subtype is a event.type
             assert not event.subtype or event.type in set(map(lambda e: e.dst, event.subtype.is_a()))
-            # 
-        # print(data_item)
-        pass
-    print('done')
+            #
+    print(f'Checked {len(reader)} examples.')
 
 
 if __name__ == '__main__':
