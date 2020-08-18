@@ -68,22 +68,29 @@ ReaderObjectsIterator = SentimentReader("examples/SentimentAnalysis/twitter_data
 #The program takes the graph and learning approach as input
 program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 
-#The program is ready to train:
-for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[:1], device='auto'):
-    print('datanode:', datanode)
-    print('positive:', datanode.getAttribute(PositiveLabel).softmax(-1))
-    print('negative:', datanode.getAttribute(NegativeLabel).softmax(-1))
-    datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
-    print('inference positive:', datanode.getAttribute(PositiveLabel, 'ILP'))
-    print('inference negative:', datanode.getAttribute(NegativeLabel, 'ILP'))
+# device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
+device = 'auto'
 
-program.train(list(ReaderObjectsIterator.run()), train_epoch_num=30, Optim=torch.optim.Adam, device='auto')
+#The program is ready:
+data_item = next(iter(ReaderObjectsIterator))
+datanode = program.populate_one(data_item, device=device)
+print('datanode:', datanode)
+print('positive:', datanode.getAttribute(PositiveLabel).softmax(-1))
+print('negative:', datanode.getAttribute(NegativeLabel).softmax(-1))
+datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+print('inference positive:', datanode.getAttribute(PositiveLabel, 'ILP'))
+print('inference negative:', datanode.getAttribute(NegativeLabel, 'ILP'))
+
+print('-'*40)
+
+program.train(ReaderObjectsIterator, train_epoch_num=1, Optim=torch.optim.Adam, device=device)
+print('Training result:')
 print(program.model.loss)
 print(program.model.metric)
 
 print('-'*40)
 
-for _ in program.test(list(ReaderObjectsIterator.run())):
-    pass
+program.test(ReaderObjectsIterator, device=device)
+print('Testing result:')
 print(program.model.loss)
 print(program.model.metric)

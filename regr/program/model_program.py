@@ -1,4 +1,4 @@
-from .learningbaseprogram import LearningBasedProgram
+from .program import LearningBasedProgram
 from .model.pytorch import PoiModel, IMLModel, PoiModelToWorkWithLearnerWithLoss
 
 
