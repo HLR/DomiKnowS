@@ -25,20 +25,20 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 def prediction_softmax(pr, gt):
-  return torch.softmax(pr.data, dim=-1)
+    return torch.softmax(pr.data, dim=-1)
 
 with Graph('example') as graph:
 
-  twit= Concept(name = 'tweet')
-  word = Concept (name = 'word')
+    twit= Concept(name = 'tweet')
+    word = Concept (name = 'word')
 
-  PositiveLabel = twit(name = 'PositiveLabel')
-  NegativeLabel = twit(name ='NegativeLabel')
+    PositiveLabel = twit(name = 'PositiveLabel')
+    NegativeLabel = twit(name ='NegativeLabel')
 
-  (twit_contains_words,) = twit.contains(word)
+    (twit_contains_words,) = twit.contains(word)
 
-  # ifL(PositiveLabel, notL(NegativeLabel))
-  orL(andL(NegativeLabel, notL(PositiveLabel)), andL(PositiveLabel, notL(NegativeLabel)))
+    # ifL(PositiveLabel, notL(NegativeLabel))
+    orL(andL(NegativeLabel, notL(PositiveLabel)), andL(PositiveLabel, notL(NegativeLabel)))
 
 #Reading the data from a dictionary per learning example using reader sensors
 twit['raw'] = ReaderSensor(keyword= 'tweet')
@@ -69,7 +69,7 @@ ReaderObjectsIterator = SentimentReader("examples/SentimentAnalysis/twitter_data
 program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 
 #The program is ready to train:
-for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[1:2]):
+for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[:1], device='auto'):
     print('datanode:', datanode)
     print('positive:', datanode.getAttribute(PositiveLabel).softmax(-1))
     print('negative:', datanode.getAttribute(NegativeLabel).softmax(-1))
@@ -77,8 +77,7 @@ for datanode in program.populate(dataset=list(ReaderObjectsIterator.run())[1:2])
     print('inference positive:', datanode.getAttribute(PositiveLabel, 'ILP'))
     print('inference negative:', datanode.getAttribute(NegativeLabel, 'ILP'))
 
-# program.populate(list(ReaderObjectsIterator.run())[1:2])
-program.train(list(ReaderObjectsIterator.run()), train_epoch_num=30, Optim=torch.optim.Adam)
+program.train(list(ReaderObjectsIterator.run()), train_epoch_num=30, Optim=torch.optim.Adam, device='auto')
 print(program.model.loss)
 print(program.model.metric)
 

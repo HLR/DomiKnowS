@@ -12,4 +12,4 @@ class SentenceRepSensor(TorchSensor):
         self.nlp = spacy.load('en_core_web_sm')
     def forward(self,) -> Any:
         email = self.nlp(self.inputs[0])
-        return torch.from_numpy(email.vector)
+        return torch.from_numpy(email.vector).to(device=self.device)
