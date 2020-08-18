@@ -9,16 +9,16 @@ class SentimentReader(RegrReader):
     def getNegativeLabelval(self, item):
 
         if item['Label'] == "\"0\"":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
 
     def getPositiveLabelval(self, item):
 
         if item['Label'] == "\"4\"":
-            return 1
+            return [1]
         else:
-            return 0
+            return [0]
 
     def parse_file(self):
 

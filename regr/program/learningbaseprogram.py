@@ -6,6 +6,12 @@ from ..utils import consume
 from .model.base import Mode
 
 
+def get_len(dataset, default=None):
+    try:
+        return len(dataset)
+    except TypeError:  # `generator` does not have __len__
+        return default
+
 class LearningBasedProgram():
     logger = logging.getLogger(__name__)
 
@@ -38,7 +44,7 @@ class LearningBasedProgram():
 
             if training_set is not None:
                 self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set, train_inference), desc='Epoch {} Training'.format(epoch)))
+                consume(tqdm(self.train_epoch(training_set, train_inference), total=get_len(training_set), desc='Epoch {} Training'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -46,7 +52,7 @@ class LearningBasedProgram():
 
             if valid_set is not None:
                 self.logger.info('Validation:')
-                consume(tqdm(self.test(valid_set, valid_inference), desc='Epoch {} Validation'.format(epoch)))
+                consume(tqdm(self.test(valid_set, valid_inference), total=get_len(valid_set), desc='Epoch {} Validation'.format(epoch)))
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
@@ -54,7 +60,7 @@ class LearningBasedProgram():
 
         if test_set is not None:
             self.logger.info('Testing:')
-            consume(tqdm(self.test(test_set, valid_inference), desc='Epoch {} Testing'.format(epoch)))
+            consume(tqdm(self.test(test_set, valid_inference), total=get_len(test_set), desc='Epoch {} Testing'.format(epoch)))
             self.logger.info(' - loss:')
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
