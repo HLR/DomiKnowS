@@ -54,7 +54,7 @@ def test_graph_coloring_main():
 
     dataset = CityReader().run()  # Adding the info on the reader
 
-    for datanode in lbp.populate(dataset=dataset, inference=True):
+    for datanode in lbp.populate(dataset=dataset):
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
 
