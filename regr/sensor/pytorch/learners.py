@@ -13,9 +13,9 @@ class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto'):
-        super(TorchLearner, self).__init__(*pre, edges=edges, label=label, device=device)
         self.model = None
         self.updated = False
+        super(TorchLearner, self).__init__(*pre, edges=edges, label=label, device=device)
         self._loss = loss
         self._metric = metric
 
@@ -23,7 +23,8 @@ class TorchLearner(TorchSensor):
     @abc.abstractmethod
     def parameters(self) -> Any:
         # self.update_parameters()
-        return self.model.parameters()
+        if self.model is not None:
+            return self.model.parameters()
 
     @property
     def device(self):
@@ -31,7 +32,8 @@ class TorchLearner(TorchSensor):
 
     @device.setter
     def device(self, device):
-        self.parameters.to(deivce)
+        if self.model is not None:
+            self.parameters.to(deivce)
         self._device = device
 
     def update_parameters(self):
