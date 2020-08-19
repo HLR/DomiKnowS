@@ -1,2 +1,2 @@
-from .learningbaseprogram import LearningBasedProgram
-from .program import POIProgram, IMLProgram, POILossProgram
+from .program import LearningBasedProgram
+from .model_program import POIProgram, IMLProgram, POILossProgram
