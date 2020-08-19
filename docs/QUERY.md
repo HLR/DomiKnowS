@@ -81,7 +81,10 @@ The examples:
 
 ### Data Graph construction
 
-Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. Each sensor has its previous context dictionary replaced with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. It creates Data Graph based on sensors' context update.
+Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. 
+
+Each sensor has its previous context dictionary replaced with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. 
+It creates Data Graph based on sensors' context update.
 
 The primary used overloaded method is:
 
@@ -90,26 +93,48 @@ __setitem__(self, key, value)
 ```
 
 The *key* is assumed to consists of three parts: *<graphPath> <conceptOrRelationName> <attributeKey>*.
-The *grapthPath* and *attrubteKey* can be built of multiple names separated by /. The *conceptOrRelationName* is a single word.
-Examples of key:
-- *global/application/neighbor/city2* where *global/application* is the graph path, *neighbor* is the concept name and *city2* is a attribute name
-- *tweet/tweet/<PositiveLabel>/readersensor-1* where first *tweet* is the graph path, the next *tweet* is the concept name and *<PositiveLabel>/readersensor-1* is the attribute name
+
+The *grapthPath* and *attrubteKey* can be built of multiple names separated by /. The *conceptOrRelationName* is assumed to be a single word.
+
+the examples of key:
+- *global/application/neighbor/city2* - where *global/application* is the graph path, *neighbor* is the concept name and *city2* is an attribute key.
+
+
+- *tweet/tweet/<PositiveLabel>/readersensor-1* - where first *tweet* is the graph path, the next *tweet* is the concept name and *<PositiveLabel>/readersensor-1* is an attribute key.
+
+The key needs all these **three** elements otherwise the *set* method is logs and error and returns.
 
 The *conceptOrRelationName* part is used to create the new DataNode when first provided in the key to the *DataNodeBuilder*. The next time it will be used to create or update attribute in existing DataNodes of this *conceptOrRelationName* type.
 The value determine how many new DataNodes are created. 
-The value is assumed to provide single element (contribute to single DataNode) if:
-- it is not Tensor or List,
-- is Tensor but of dim 0,
-- is Tensor or List of length 1
-- is Tensor of length 2 but its key *attributeKey* part has first word embedded in '<'
 
-In this case single new DataNode is created. It the single value is determined to be for created for the root concept then *READER* is used, if set, as it id, otherwise it is set to 0.
+The value cannot be **None** otherwise tthe *set* method is logs and error and returns.
 
-If the value is determined to be Tensor or List and not assumed to represent single value then its dimension is determine for Tensor it is based on dim() method, in the case of List based on nest level of the first list element.
+The value is assumed to provide single element (contribute to single DataNode) if the value is:
+- not Tensor or List,
+- Tensor but of the dimension 0,
+- Tensor or List of length 1,
+- Tensor of length 2 but its key *attributeKey* part has first word embedded in '<'.
+
+In this case a single new DataNode is created. If the single DataNode is determined to be for created for the root concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
+
+If the value is determined to be Tensor or List and not assumed to represent single value then its dimension is determine for Tensor it is based on *dim()* method, in the case of List based on nest level of the first list element.
 The value with dimension equal 1 is assumed to represent single set of DataNodes. The value with dimension 2 represent multiply sets of DataNodes to be created.
+
 After the creation of these sets they are attempted to be connected with other DataNodes, if already created. The graph provide information about parents concept and the sets of the newly created DataNodes are added to the DataNodes found to be parents.
 
-The subsequent submission values length need to match the number of DataNode created for the given concept or relation.
+The subsequent submission values length need to match the number of DataNodes created for the given concept or relation.m
 
+There are two methods returning constructed dataNodes.
 
+- the fist DataNode in the list is returned by the method:
 
+```python
+getDataNode(self)
+```
+
+- all constructed DataNodes are returned by the method:
+
+```python
+getBatchDataNodes(self)
+```
+    
