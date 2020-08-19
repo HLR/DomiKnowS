@@ -171,36 +171,47 @@ The constrains are regular Python instructions thus they have to follow definiti
 
 Backus–Naur form of the Logical Constrain:
 
-	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain>
+	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain> | <existsConstrain>
 
-	<notLogicalConstrain> ::= <NotOperator> "(" <logicalConstrainElement> ',' <variables> ")"
-	<2ElementsLogicalConstrain> ::= <2ElementsOperator> "(" <logicalConstrainElement> ',' <logicalConstrainElement> ',' <variables> ")"
-	<multiElementsLogicalConstrain> ::= <multiElementsOperator> "(" <logicalConstrainElements> ',' <variables> ")"
-	<countConstrain> ::= <CountOperator> "(" <number> ',' <variables> ',' <logicalConstrainElement> ',' <variables> ")" 
-
-	<notOperator> ::= notL
-	<epOperator> ::=  eqLL
-	<2ElementsOperator> : ::=fL | epqL | xorL
-	<multiElementsOperator> ::= andL | orL | nandL | norL
-	<countOperator> ::= existsL | exactL | atLeastL | atMostL
-	<eqElement> ::= <eqOperator> "(" <conceptOrRelation> ',' '"' <attributeName> '"'  ',' <eqValue> ")	
-	<conceptOrRelation> ::= <name
-	<logicalConstrainElement> ::= <conceptOrRelation> | <eqElement>| <logicalConstrai
-	<logicalConstrainElements> ::= <logicalConstrainElement> | <logicalConstrainElement> ',' <logicalConstrainElements>
-	<variables> ::= <variablesTuple> | 
-	<attributeName> :: = <name>
-	<eqValue> :: = <value | "{" <values> "}
-	<value> :: = <number> | <name>
-	<values> :: = <value> | <value> "," <values>
+	<notLogicalConstrain> ::= <notOperator> "(" <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
+	<2ElementsLogicalConstrain> ::= <2ElementsOperator> "(" <opt_whitespace> <logicalConstrainElement> <variables> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
+	<multiElementsLogicalConstrain> ::= <multiElementsOperator> "(" <opt_whitespace> <logicalConstrainElements> <p> ")"
+	<countConstrain> ::= <countOperator> "(" <opt_whitespace> <number> "," <opt_whitespace> <variablesTuple> <opt_whitespace> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")" 
+	<existsConstrain> ::= <existsOperator> "(" <opt_whitespace> <variablesTuple> <opt_whitespace> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
+	
+	<notOperator> ::= "notL"
+	<eqOperator> ::=  "eqL"
+	<2ElementsOperator> ::= "ifL" | "epqL" | "xorL"
+	<multiElementsOperator> ::= "andL" | "orL" | "nandL" | "norL"
+	<countOperator> ::= "exactL" | "atLeastL" | "atMostL"
+	<existsOperator> ::= "existsL" 
+	<eqElement> ::= <eqOperator> "(" <conceptOrRelation> "," <opt_whitespace> "'" <attributeName> "'" "," <opt_whitespace> <eqValue> ")"	
+	<conceptOrRelation> ::= <name>
+	<logicalConstrainElement> ::= <conceptOrRelation> | <eqElement> | <logicalConstrain>
+	<logicalConstrainElements> ::= <logicalConstrainElement> <variables> | <logicalConstrainElement> <variables> "," <opt_whitespace> <logicalConstrainElements>
+	
+	<variables> ::= <opt_whitespace> "," <opt_whitespace> <variablesTuple> <opt_whitespace> | <opt_whitespace>
+	<variablesTuple> ::= "(" <opt_whitespace> <variablesTupleElement> <opt_whitespace> ")"
+    <variablesTupleElement> ::= <variablesTupleElementHead> <variablesTupleElementRest>
+	<variablesTupleElementHead> ::= "'" <loLetter> "'" 
+	<variablesTupleElementRest> ::= <opt_whitespace> "," <opt_whitespace> | <variablesTupleRestElements>
+    <variablesTupleRestElements> ::= <opt_whitespace> "," <opt_whitespace> "'" <loLetter> "'" | "," <opt_whitespace> "'" <loLetter> "'" <opt_whitespace> <variablesTupleRestElements>
+    
+	<p> ::= <opt_whitespace> "," <opt_whitespace> "p" <opt_whitespace> "=" <opt_whitespace> <digit> <digit> <opt_whitespace> | <opt_whitespace>
+	<attributeName> ::= <name>
+	<eqValue> ::= <value> | "{" <values> "}"
+	<value> ::= <number> | <name>
+	<values> ::= <value> | <value> "," <values>
 	<number> ::= <digit> | <digit> <number>
-	<name> :: = <character> | <character> <name>	
-	<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9
+	<name> ::= <character> | <character> <name>
+	<opt_whitespace> ::= " "*	
+	<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 	<character> ::= <letter> | <digit> | <symbol>
-	<letter> :: = <upLetter> | <loLetter
-	<upLetter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z
-	<loLetter> ::=  "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z
-	<symbol>  ::= "_" | "-"
-
+	<letter> ::= <upLetter> | <loLetter>
+	<upLetter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+	<loLetter> ::=  "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+	<symbol> ::= "_" | "-"
+   
 ### Ontology file as a source of constrains
 
 **If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**

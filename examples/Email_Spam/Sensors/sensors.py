@@ -11,12 +11,12 @@ class SentenceRepSensor(TorchSensor):
 
     def forward(self,) -> Any:
         email = self.nlp(self.inputs[0])
-        return torch.from_numpy(email.vector)
+        return torch.from_numpy(email.vector).to(device=self.device)
 
 
 class ForwardPresenceSensor(TorchSensor):
     def forward(self,) -> Any:
         if self.inputs[0]:
-            return torch.ones(1)
+            return torch.ones(1).to(self.device)
         else:
-            return torch.zeros(1)
+            return torch.zeros(1).to(self.device)
