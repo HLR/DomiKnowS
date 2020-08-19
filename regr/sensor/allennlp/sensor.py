@@ -27,7 +27,7 @@ class SentenceSensor(ReaderSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         # This sensor it self can do nothing
         # mayby with self.embedders something more can happen?
@@ -70,10 +70,10 @@ class ConcatSensor(PreArgsModuleSensor, MaskedSensor):
                 output_dim += prod(pre_dim) # assume flatten
         return (output_dim,)
 
-    def get_mask(self, context: Dict[str, Any]):
+    def get_mask(self, data_item: Dict[str, Any]):
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
-                return sensor.get_mask(context)
+            for sensor in pre.find(MaskedSensor):
+                return sensor.get_mask(data_item)
             else:
                 # not found
                 continue
@@ -97,14 +97,14 @@ class CartesianProductSensor(SinglePreArgMaskedPairSensor):
             output_dim = prod(self.pre_dim) * 2 # assume flatten
         return (output_dim,)
 
-    def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+    def get_mask(self, data_item: Dict[str, Any]):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
             raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
 
-        mask = sensor.get_mask(context).float()
+        mask = sensor.get_mask(data_item).float()
         ms = mask.size()
         mask = mask.view(ms[0], ms[1], 1).matmul(
             mask.view(ms[0], 1, ms[1]))  # (b,l,l)
@@ -125,16 +125,16 @@ class JointCandidateSensor(PreArgsModuleSensor, CandidateSensor):
     def output_dim(self):
         return ()
 
-    def get_mask(self, context: Dict[str, Any]):
+    def get_mask(self, data_item: Dict[str, Any]):
         masks = []
         for pre in self.pres:
-            for name, sensor in pre.find(MaskedSensor):
+            for sensor in pre.find(MaskedSensor):
                 break
             else:
                 print(self.pre)
                 raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
             # (b,l)
-            mask = sensor.get_mask(context).float()
+            mask = sensor.get_mask(data_item).float()
             masks.append(mask)
 
         masks_num = len(masks)
@@ -158,14 +158,14 @@ class CartesianProduct3Sensor(SinglePreArgMaskedPairSensor):
             output_dim = prod(self.pre_dim) * 3 # assume flatten
         return (output_dim,)
 
-    def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+    def get_mask(self, data_item: Dict[str, Any]):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
             raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
 
-        mask = sensor.get_mask(context).float()
+        mask = sensor.get_mask(data_item).float()
         ms = mask.size()
         #(b,l,l)
         mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
@@ -197,7 +197,7 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
         self.pretrained_file = pretrained_file
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for pre_sensor in pre.find(SentenceSensor):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -206,23 +206,23 @@ class SentenceEmbedderSensor(SinglePreMaskedSensor, ModuleSensor):
 
     def update_context(
         self,
-        context: Dict[str, Any],
+        data_item: Dict[str, Any],
         force=False
     ) -> Dict[str, Any]:
-        if self.fullname in context and isinstance(context[self.fullname], dict):
-            context[self.fullname + '_index'] = context[self.fullname] # reserve
+        if self.fullname in data_item and isinstance(data_item[self.fullname], dict):
+            data_item[self.fullname + '_index'] = data_item[self.fullname] # reserve
             force = True
-        return SinglePreMaskedSensor.update_context(self, context, force)
+        return SinglePreMaskedSensor.update_context(self, data_item, force)
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return self.module(context[self.fullname])
+        return self.module(data_item[self.fullname])
 
-    def get_mask(self, context: Dict[str, Any]):
+    def get_mask(self, data_item: Dict[str, Any]):
         # TODO: make sure update_context has been called
-        return get_text_field_mask(context[self.fullname + '_index'])
+        return get_text_field_mask(data_item[self.fullname + '_index'])
 
 
 class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
@@ -248,7 +248,7 @@ class SentenceBertEmbedderSensor(SentenceEmbedderSensor):
         self.pretrained_model = pretrained_model
         ModuleSensor.__init__(self, pre, output_only=output_only)
 
-        for name, pre_sensor in pre.find(SentenceSensor):
+        for pre_sensor in pre.find(SentenceSensor):
             pre_sensor.add_embedder(key, self)
             self.tokens_key = pre_sensor.key # used by reader.update_textfield()
             break
@@ -292,11 +292,11 @@ class TokenDistantSensor(SinglePreArgMaskedPairSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        device, _ = guess_device(context).most_common(1)[0]
+        device, _ = guess_device(data_item).most_common(1)[0]
         self.module.main_module.default_device = device
-        return super().forward(context)
+        return super().forward(data_item)
 
 
 class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
@@ -307,14 +307,14 @@ class TripPhraseDistSensor(SinglePreArgMaskedPairSensor):
     def output_dim(self):
         return (self.pre_dim[0] * 2,)
 
-    def get_mask(self, context: Dict[str, Any]):
-        for name, sensor in self.pre.find(MaskedSensor):
+    def get_mask(self, data_item: Dict[str, Any]):
+        for sensor in self.pre.find(MaskedSensor):
             break
         else:
             print(self.pre)
             raise RuntimeError('{} require at least one pre-required sensor to be MaskedSensor.'.format(self.fullname))
 
-        mask = sensor.get_mask(context).float()
+        mask = sensor.get_mask(data_item).float()
         ms = mask.size()
         #(b,l,l)
         mask1 = mask.view(ms[0], ms[1], 1).matmul(mask.view(ms[0], 1, ms[1]))
@@ -329,12 +329,12 @@ class TokenDepSensor(SinglePreArgMaskedPairSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
         #import pdb; pdb.set_trace()
-        device, _ = guess_device(context).most_common(1)[0]
+        device, _ = guess_device(data_item).most_common(1)[0]
         self.module.main_module.default_device = device
-        return super().forward(context)
+        return super().forward(data_item)
 
 
 class TokenLcaSensor(SinglePreArgMaskedPairSensor):
@@ -347,9 +347,9 @@ class TokenLcaSensor(SinglePreArgMaskedPairSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        return PreArgsModuleSensor.forward(self, context)
+        return PreArgsModuleSensor.forward(self, data_item)
 
 
 class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
@@ -369,8 +369,8 @@ class TokenDepDistSensor(SinglePreArgMaskedPairSensor):
 
     def forward(
         self,
-        context: Dict[str, Any]
+        data_item: Dict[str, Any]
     ) -> Any:
-        device, _ = guess_device(context).most_common(1)[0]
+        device, _ = guess_device(data_item).most_common(1)[0]
         self.module.main_module.default_device = device
-        return super().forward(context)
+        return super().forward(data_item)

@@ -167,7 +167,7 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
     @property
     def readers(self):
         sentence_sensors = self.get_sensors(ReaderSensor)
-        readers = [sensor for name, sensor in sentence_sensors]
+        readers = [sensor for sensor in sentence_sensors]
         return readers
 
 
@@ -185,7 +185,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
     def parameters(self):
         _list = []
         learners = self.get_sensors(TorchLearner)
-        for _, learner in learners:
+        for learner in learners:
             _list.extend(learner.parameters)
         return set(_list)
 
@@ -202,13 +202,13 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def load(self):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.load(self.filename)
 
     def save(self, ):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.save(self.filename)
 
@@ -280,22 +280,22 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         truth = []
                         pred = []
                         info = []
-                        context = {}
+                        data_item = {}
 
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.name.name
-                            list(prop1.find(ReaderSensor))[0][1](context=context)
-                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            next(prop1.find(ReaderSensor))(data_item)
+                            next(prop1.find(TorchLearner))(data_item)
                             if Do:
                                 info.append(prop1.name.name)
-                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                truth.append(data_item[next(prop1.find(ReaderSensor)).fullname])
+                                pred.append(data_item[next(prop1.find(TorchLearner)).fullname])
                                 total += len(truth[-1])
 
-                        result = self.solver.inferILPConstrains(context=context, info=info)
+                        result = self.solver.inferILPConstrains(data_item, info=info)
 
                         for _val in range(len(pred)):
                             for item in range(len(pred[_val])):
@@ -385,22 +385,22 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         truth = []
                         pred = []
                         info = []
-                        context = {}
+                        data_item = {}
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.name.name
-                            list(prop1.find(ReaderSensor))[0][1](context=context)
-                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            next(prop1.find(ReaderSensor))(data_item)
+                            next(prop1.find(TorchLearner))(data_item)
                             # check this with quan
                             if Do:
                                 info.append(prop1.name.name)
-                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                truth.append(data_item[next(prop1.find(ReaderSensor)).fullname])
+                                pred.append(data_item[next(prop1.find(TorchLearner)).fullname])
                                 total += len(truth[-1])
                         if self.solver:
-                            result = self.solver.inferILPConstrains(context=context, info=info)
+                            result = self.solver.inferILPConstrains(data_item, info=info)
 
                             inferences = [torch.zeros(1).float().to(self.device) for i in range(len(info))]
                             for _it in range(len(info)):

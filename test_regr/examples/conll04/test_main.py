@@ -1,14 +1,12 @@
 import sys
-sys.path.append('.')
 sys.path.append('../..')
 
 import pytest
 
-
 @pytest.fixture(name='case')
 def test_case():
     import torch
-    from emr.utils import Namespace
+    from regr.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     case = {
@@ -44,10 +42,10 @@ def test_case():
                                       [[0.35, 0.65],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30]],  # IBM
                                      ], device=device),
             
-            'live_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'located_in': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'orgbase_on': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            'kill': torch.rand(4, 4, 2, device=device), # TODO: add examable values
+            'live_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'located_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'orgbase_on': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            'kill': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
         }
     }
     case = Namespace(case)
@@ -55,59 +53,58 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from emr.graph.torch import LearningBasedProgram
+    from regr.program.program import LearningBasedProgram
 
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
     from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
-    from emr.sensors.Sensors import TestSensor, TestEdgeSensor
+    from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
     graph.detach()
 
-    sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
+    sentence['index'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word forward
     rel_sentence_contains_word['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
-        expected_inputs=[case.sentence.raw,],
+        'index', mode='forward', to='index',
         expected_outputs=case.word.raw)
     word['emb'] = TestSensor(
-        'raw', edges=[rel_sentence_contains_word['forward']],
+        'index', edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
     rel_word_contains_char['forward'] = TestEdgeSensor(
-        'raw', mode='forward', keyword='raw',
+        'index', mode='forward', to='index',
         edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.char.raw)
     char['emb'] = TestSensor(
-        'raw', edges=[rel_word_contains_char['forward']],
+        'index', edges=[rel_word_contains_char['forward']],
         expected_inputs=[case.char.raw,],
         expected_outputs=case.word.emb)
     char['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: word to phrase backward
     rel_phrase_contains_word['backward'] = TestEdgeSensor(
-        'raw', mode='backward', keyword='raw',
+        'index', mode='backward', to='index',
         edges=[rel_sentence_contains_word['forward']],
         expected_inputs=[case.word.raw,],
         expected_outputs=case.phrase.raw)
     phrase['emb'] = TestSensor(
-        'raw', edges=[rel_phrase_contains_word['backward']],
+        'index', edges=[rel_phrase_contains_word['backward']],
         expected_inputs=[case.phrase.raw,],
         expected_outputs=case.phrase.emb)
     phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = TestEdgeSensor(
-        'emb', mode='backward', keyword='word1_emb',
+        'emb', mode='backward', to='word1_emb',
         expected_inputs=[case.word.emb,],
         expected_outputs=case.word.emb)
     rel_pair_word2['backward'] = TestEdgeSensor(
-        'emb', mode='backward', keyword='word2_emb',
+        'emb', mode='backward', to='word2_emb',
         expected_inputs=[case.word.emb,],
         expected_outputs=case.word.emb)
 
@@ -161,6 +158,7 @@ def model_declaration(config, case):
         'emb', input_dim=2048, output_dim=2,
         expected_inputs=[case.phrase.emb,],
         expected_outputs=case.phrase.people)
+
 
     pair[work_for] = TestSensor(
         label=True,
@@ -244,14 +242,18 @@ def test_graph_naming():
 @pytest.mark.gurobi
 def test_main_conll04(case):
     from config import CONFIG
+    from graph import graph, sentence, word, char, phrase, pair
+    from graph import people, organization, location, other, o
+    from graph import work_for, located_in, live_in, orgbase_on, kill
 
     lbp = model_declaration(CONFIG.Model, case)
     data = {}
+
     _, _, datanode = lbp.model(data)
 
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            assert child_node.getAttribute('index') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
                 if child_node1.ontologyNode.name == 'char':
@@ -261,7 +263,7 @@ def test_main_conll04(case):
                        
             assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
                     
-            assert len(child_node.getRelationLinks(relationName = "pair")) == 4
+            assert len(child_node.findDatanodes(select = "pair")) == 4
             
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
@@ -275,24 +277,104 @@ def test_main_conll04(case):
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    conceptsRelations = ['people', 'organization', 'location', 'other', 'O', 'work_for']
-    tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
+    conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
+    conceptsRelationsConcepts = [people, organization, location, other, o, work_for]
+    conceptsRelationsMix = ["people", organization, location, other, o, "work_for"]
+    conceptsRelationsEmpty = []
     
-    assert tokenResult['people'][0] == 1
-    assert sum(tokenResult['people']) == 1
-    assert tokenResult['organization'][3] == 1
-    assert sum(tokenResult['organization']) == 1
-    assert sum(tokenResult['location']) == 0
-    assert sum(tokenResult['other']) == 0
-    assert tokenResult['O'][1] == 1
-    assert tokenResult['O'][2] == 1
-    assert sum(tokenResult['O']) == 2
+    conceptsRelationsVariants = [conceptsRelationsEmpty, conceptsRelationsStrings, conceptsRelationsConcepts, conceptsRelationsMix]
     
-    assert pairResult['work_for'][0][3] == 1
-    assert sum(pairResult['work_for'][0]) == 1
-    assert sum(pairResult['work_for'][1]) == 0
-    assert sum(pairResult['work_for'][2]) == 0
-    assert sum(pairResult['work_for'][3]) == 0
+    for conceptsRelations in conceptsRelationsVariants:
+        
+        # ------------ Call the ILP Solver
+        datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        
+        # ------------ Concepts Results
+        
+        # Get value of attribute people/ILP for word 0
+        #assert tokenResult['people'][0] == 1
+        assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
+        
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'J')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'h')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'I')})[0].getAttribute(people, 'ILP').item() == 0
+        
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h'), (char, 'index', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
+
+        assert len(datanode.findDatanodes(select = (char, 'index', 'J'))) == 1
+        assert datanode.findDatanodes(select = (char, 'index', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
+        
+        # Sum value of attribute people/ILP for all words
+        #assert sum(tokenResult['people']) == 1
+        assert sum([dn.getAttribute(people, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 1
+        
+        # Get value of attribute organization/ILP for word 3
+        #assert tokenResult['organization'][3] == 1
+        datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
+        
+        # Sum value of attribute organization/ILP for all words
+        #assert sum(tokenResult['organization']) == 1
+        assert sum([dn.getAttribute(organization, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 1
+    
+        # Sum value of attribute location/ILP for all words
+        #assert sum(tokenResult['location']) == 0
+        assert sum([dn.getAttribute(location, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 0
+    
+        # Sum value of attribute other/ILP for all words
+        #assert sum(tokenResult['other']) == 0
+        assert sum([dn.getAttribute(other, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 0
+    
+        # Get value of attribute o/ILP for word 1
+        #assert tokenResult['O'][1] == 1
+        assert datanode.findDatanodes(select = word)[1].getAttribute(o, 'ILP').item() == 1
+        
+        JohnDN = datanode.findDatanodes(select = word)[1]
+        assert JohnDN.getAttribute(organization)[0] == 0.8
+        assert len(JohnDN.getChildDataNodes()) == 5
+        
+        assert len(JohnDN.getChildDataNodes(conceptName=char)) == 5
+        assert len(JohnDN.getChildDataNodes(conceptName=phrase)) == 0
+        
+        assert len(JohnDN.getRelationLinks()) == 2
+        assert len(JohnDN.getRelationLinks(relationName=pair)) == 4
+
+        # Get value of attribute o/ILP for word 2
+        #assert tokenResult['O'][2] == 1
+        assert datanode.findDatanodes(select = word)[2].getAttribute(o, 'ILP').item() == 1
+    
+        # Sum value of attribute o/ILP for all words
+        #assert sum(tokenResult['O']) == 2
+        assert sum([dn.getAttribute(o, 'ILP').item() for dn in datanode.findDatanodes(select = word)]) == 2
+        
+        # ------------ Relations Results
+        
+        # Get value of attribute work_for/ILP for pair between 0 and 3
+        #assert pairResult['work_for'][0][3] == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
+        
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'index', 'John'), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+         
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 0
+        #assert sum(pairResult['work_for'][0]) == 1
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 0})]) == 1
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 1
+        #assert sum(pairResult['work_for'][1]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
+        
+        # Sum all value of attribute work_for/ILP  for the pair relation from 2
+        #assert sum(pairResult['work_for'][2]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 2})]) == 0
+    
+        # Sum all value of attribute work_for/ILP  for the pair relation from 3
+        #assert sum(pairResult['work_for'][3]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
 
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -315,7 +315,7 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
     @property
     def readers(self):
         sentence_sensors = self.get_sensors(ReaderSensor)
-        readers = [sensor for name, sensor in sentence_sensors]
+        readers = [sensor for sensor in sentence_sensors]
         return readers
 
 
@@ -333,7 +333,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
     def parameters(self):
         _list = []
         learners = self.get_sensors(TorchLearner)
-        for _, learner in learners:
+        for learner in learners:
             _list.extend(learner.parameters)
         return set(_list)
 
@@ -350,7 +350,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def load(self):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.load(self.filename)
 
@@ -382,20 +382,20 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         truth = []
                         pred = []
                         info = []
-                        context = {}
-                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
+                        data_item = {}
+                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](data_item))
                         # print("end")
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.sup.name + "-" + prop1.name.name
-                            list(prop1.find(ReaderSensor))[0][1](context=context)
-                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            list(prop1.find(ReaderSensor))[0][1](data_item)
+                            list(prop1.find(TorchLearner))[0][1](data_item)
                             if prop1.sup == pair:
-                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
-                                phrases_gr = context[phrase['ground_bound'].fullname]
-                                phrases = context[phrase['raw'].fullname]
+                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](data_item)
+                                phrases_gr = data_item[phrase['ground_bound'].fullname]
+                                phrases = data_item[phrase['raw'].fullname]
                                 matches = []
                                 for _ph in phrases:
                                     check = False
@@ -414,8 +414,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                             break
                                     if not check:
                                         matches.append("NONE")
-                                pairs = context[pair['index'].fullname]
-                                pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                                pairs = data_item[pair['index'].fullname]
+                                pairs_gr = data_item[list(prop1.find(ReaderSensor))[0][1].fullname]
                                 _truth = []
                                 for _iteration in range(len(pairs)):
                                     check = False
@@ -428,15 +428,15 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                     if not check:
                                         _truth.append(0)
                                 _truth = torch.tensor(_truth, device=self.device)
-                                context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                                data_item[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
                                 if not len(pairs):
                                     Do = False
 
                             # check this with quan
                             if Do:
                                 info.append(prop1.name.name)
-                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                truth.append(data_item[list(prop1.find(ReaderSensor))[0][1].fullname])
+                                pred.append(data_item[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
                                 for item in range(len(pred[-1])):
                                     _, index = torch.max(pred[-1][item], dim=0)
@@ -492,7 +492,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def save(self, ):
         learners = self.get_sensors(TorchLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.save(self.filename)
 
@@ -520,18 +520,18 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                         item.fill_data(value)
                     truth = []
                     pred = []
-                    context = {}
+                    data_item = {}
                     # learners = self.get_sensors(FullyConnectedLearner)
-                    # _learners = [learner for name, learner in learners]
+                    # _learners = [learner for learner in learners]
                     for prop1 in self.poi:
                         Do = True
                         dict_key = prop1.sup.name + "-" + prop1.name.name
-                        list(prop1.find(ReaderSensor))[0][1](context=context)
-                        list(prop1.find(TorchLearner))[0][1](context=context)
+                        list(prop1.find(ReaderSensor))[0][1](data_item)
+                        list(prop1.find(TorchLearner))[0][1](data_item)
                         if prop1.sup == pair:
-                            list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
-                            phrases_gr = context[phrase['ground_bound'].fullname]
-                            phrases = context[phrase['raw'].fullname]
+                            list(phrase['ground_bound'].find(ReaderSensor))[0][1](data_item)
+                            phrases_gr = data_item[phrase['ground_bound'].fullname]
+                            phrases = data_item[phrase['raw'].fullname]
                             matches = []
                             for _ph in phrases:
                                 check = False
@@ -550,8 +550,8 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                         break
                                 if not check:
                                     matches.append("NONE")
-                            pairs = context[pair['index'].fullname]
-                            pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                            pairs = data_item[pair['index'].fullname]
+                            pairs_gr = data_item[list(prop1.find(ReaderSensor))[0][1].fullname]
                             _truth = []
                             for _iteration in range(len(pairs)):
                                 check = False
@@ -564,13 +564,13 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                                 if not check:
                                     _truth.append(0)
                             _truth = torch.tensor(_truth, device=self.device)
-                            context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                            data_item[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
                             if not len(pairs):
                                 Do = False
 
                         if Do:
-                            truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                            truth.append(data_item[list(prop1.find(ReaderSensor))[0][1].fullname])
+                            pred.append(data_item[list(prop1.find(TorchLearner))[0][1].fullname])
                             total += len(truth[-1])
                             for item in range(len(pred[-1])):
                                 _, index = torch.max(pred[-1][item], dim=0)
@@ -677,20 +677,20 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         truth = []
                         pred = []
                         info = []
-                        context = {}
-                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
+                        data_item = {}
+                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](data_item))
                         # print("end")
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.name.name
-                            list(prop1.find(ReaderSensor))[0][1](context=context)
-                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            list(prop1.find(ReaderSensor))[0][1](data_item)
+                            list(prop1.find(TorchLearner))[0][1](data_item)
                             if prop1.sup == pair:
-                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
-                                phrases_gr = context[phrase['ground_bound'].fullname]
-                                phrases = context[phrase['raw'].fullname]
+                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](data_item)
+                                phrases_gr = data_item[phrase['ground_bound'].fullname]
+                                phrases = data_item[phrase['raw'].fullname]
                                 matches = []
                                 for _ph in phrases:
                                     check = False
@@ -709,8 +709,8 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                             break
                                     if not check:
                                         matches.append("NONE")
-                                pairs = context[pair['index'].fullname]
-                                pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                                pairs = data_item[pair['index'].fullname]
+                                pairs_gr = data_item[list(prop1.find(ReaderSensor))[0][1].fullname]
                                 _truth = []
                                 extra[prop1.name.name] += len(pairs_gr)
                                 for _iteration in range(len(pairs)):
@@ -724,18 +724,18 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     if not check:
                                         _truth.append(0)
                                 _truth = torch.tensor(_truth, device=self.device)
-                                context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                                data_item[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
                                 if not len(pairs):
                                     Do = False
 
                             # check this with quan
                             if Do:
                                 info.append(prop1.name.name)
-                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                truth.append(data_item[list(prop1.find(ReaderSensor))[0][1].fullname])
+                                pred.append(data_item[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
 
-                        result = self.solver.inferILPConstrains(context=context, info=info)
+                        result = self.solver.inferILPConstrains(data_item, info=info)
                         entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                         relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
@@ -833,20 +833,20 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
         truth = []
         pred = []
         info = []
-        context = {}
-        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
+        data_item = {}
+        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](data_item))
         # print("end")
         for prop1 in self.poi:
             Do = True
             entity = prop1.sup.name
             prop_name = prop1.name
             dict_key = prop1.name.name
-            list(prop1.find(TorchLearner))[0][1](context=context)
+            list(prop1.find(TorchLearner))[0][1](data_item)
 
             info.append(prop1.name.name)
-            pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+            pred.append(data_item[list(prop1.find(TorchLearner))[0][1].fullname])
 
-        result = self.solver.inferILPConstrains(context=context, info=info)
+        result = self.solver.inferILPConstrains(data_item, info=info)
         entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
         relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
@@ -900,20 +900,20 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                         info = []
                         _entities = []
                         _relations = []
-                        context = DataNodeBuilder({"graph" : self, 'Iterations' : i, 'READER' : j})
-                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](context=context))
+                        data_item = DataNodeBuilder({"graph" : self, 'Iterations' : i, 'READER' : j})
+                        # print(list(phrase['tag_encode'].find(TorchSensor))[0][1](data_item))
                         # print("end")
                         for prop1 in self.poi:
                             Do = True
                             entity = prop1.sup.name
                             prop_name = prop1.name
                             dict_key = prop1.name.name
-                            list(prop1.find(ReaderSensor))[0][1](context=context)
-                            list(prop1.find(TorchLearner))[0][1](context=context)
+                            list(prop1.find(ReaderSensor))[0][1](data_item)
+                            list(prop1.find(TorchLearner))[0][1](data_item)
                             if prop1.sup == pair:
-                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](context=context)
-                                phrases_gr = context[phrase['ground_bound'].fullname]
-                                phrases = context[phrase['raw'].fullname]
+                                list(phrase['ground_bound'].find(ReaderSensor))[0][1](data_item)
+                                phrases_gr = data_item[phrase['ground_bound'].fullname]
+                                phrases = data_item[phrase['raw'].fullname]
                                 matches = []
                                 for _ph in phrases:
                                     check = False
@@ -932,8 +932,8 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                             break
                                     if not check:
                                         matches.append("NONE")
-                                pairs = context[pair['index'].fullname]
-                                pairs_gr = context[list(prop1.find(ReaderSensor))[0][1].fullname]
+                                pairs = data_item[pair['index'].fullname]
+                                pairs_gr = data_item[list(prop1.find(ReaderSensor))[0][1].fullname]
                                 extra[prop1.name.name] += len(pairs_gr)
                                 _truth = []
                                 for _iteration in range(len(pairs)):
@@ -947,7 +947,7 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                     if not check:
                                         _truth.append(0)
                                 _truth = torch.tensor(_truth, device=self.device)
-                                context[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
+                                data_item[list(prop1.find(ReaderSensor))[0][1].fullname] = _truth
                                 if not len(pairs):
                                     Do = False
 
@@ -960,19 +960,19 @@ class ACEGraph(PytorchSolverGraph, metaclass=WrapperMetaClass):
                                 else:
                                     _entities.append(prop1)
                                 
-                                truth.append(context[list(prop1.find(ReaderSensor))[0][1].fullname])
-                                pred.append(context[list(prop1.find(TorchLearner))[0][1].fullname])
+                                truth.append(data_item[list(prop1.find(ReaderSensor))[0][1].fullname])
+                                pred.append(data_item[list(prop1.find(TorchLearner))[0][1].fullname])
                                 total += len(truth[-1])
                         if self.solver:
                             entities = ["FAC", "VEH", "PER", "ORG", "GPE", "LOC", "WEA"]
                             relations = ["ART", "GEN-AFF", "ORG-AFF", "PER-SOC", "METONYMY", "PART-WHOLE", "PHYS"]
 
-                            currentDataNode = context.getDataNode()
+                            currentDataNode = data_item.getDataNode()
                             
                             result = currentDataNode.inferILPConstrains(np.log, *info) 
                             
                                    
-                            result = self.solver.inferILPConstrains(context=context, info=info)
+                            result = self.solver.inferILPConstrains(data_item, info=info)
                             
                             inferences = [torch.zeros(1).float().to(self.device) for i in range(len(info))]
                             for _it in range(len(info)):

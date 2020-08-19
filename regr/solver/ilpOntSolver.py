@@ -12,11 +12,7 @@ graphMetaOntologyPathname = resource_filename('regr', 'ontology/ML')
 
 # path
 from pathlib import Path
-
-if __package__ is None or __package__ == '': 
-    from regr.solver.ilpConfig import ilpConfig 
-else:
-    from .ilpConfig import ilpConfig 
+from regr.solver.ilpConfig import ilpConfig 
 
 class ilpOntSolver(object):
     __metaclass__ = abc.ABCMeta
@@ -127,7 +123,5 @@ class ilpOntSolver(object):
         return self.myOnto
 
     @abc.abstractmethod
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None): pass
-    
-    @abc.abstractclassmethod
-    def inferILPConstrains(self, context, info): pass
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
+        pass

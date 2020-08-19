@@ -195,7 +195,7 @@ class NewGraph(Graph, metaclass=WrapperMetaClass):
     @property
     def reader(self):
         sentence_sensors = self.get_sensors(ReaderSensor)
-        readers = {sensor for name, sensor in sentence_sensors}
+        readers = {sensor for sensor in sentence_sensors}
         assert len(readers) == 1 # consider only 1 reader now
         return readers.pop()
 
@@ -215,7 +215,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
     def parameters(self):
         _list = []
         for prop1 in self.poi:
-            _list.extend(list(list(prop1.find(CallingLearner))[0][1].parameters))
+            _list.extend(list(next(prop1.find(CallingLearner)).parameters))
         return set(_list)
 
     @property
@@ -241,7 +241,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                     truth = []
                     pred = []
                     info = {}
-                    context = {}
+                    data_item = {}
                     for prop1 in self.poi:
                         entity = prop1.sup.name
                         prop_name = prop1.name
@@ -249,11 +249,11 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
                             info[entity] = {}
                         if prop_name not in info[entity]:
                             info[entity][prop_name] = {"start" : len(truth)}
-                        list(prop1.find(LabelSensor))[0][1](context=context)
-                        list(prop1.find(CallingLearner))[0][1](context=context)
+                        next(prop1.find(LabelSensor))(data_item)
+                        next(prop1.find(CallingLearner))(data_item)
                         # check this with quan
-                        truth.append(context[list(prop1.find(LabelSensor))[0][1].fullname])
-                        pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
+                        truth.append(data_item[next(prop1.find(LabelSensor)).fullname])
+                        pred.append(data_item[next(prop1.find(CallingLearner)).fullname])
 
                     total_loss = 0
                     weights = self.weights(info=info, truth=truth).float()
@@ -274,7 +274,7 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
 
     def save(self, ):
         learners = self.get_sensors(CallingLearner)
-        _learners = [learner for name, learner in learners]
+        _learners = [learner for learner in learners]
         for item in _learners:
             item.save(self.filename)
 
@@ -293,12 +293,12 @@ class PytorchSolverGraph(NewGraph, metaclass=WrapperMetaClass):
             try:
                 truth = []
                 pred = []
-                context = {}
+                data_item = {}
                 for prop1 in self.poi:
-                    list(prop1.find(LabelSensor))[0][1](context=context)
-                    list(prop1.find(CallingLearner))[0][1](context=context)
-                    truth.append(context[list(prop1.find(LabelSensor))[0][1].fullname])
-                    pred.append(context[list(prop1.find(CallingLearner))[0][1].fullname])
+                    next(prop1.find(LabelSensor))(data_item)
+                    next(prop1.find(CallingLearner))(data_item)
+                    truth.append(data_item[next(prop1.find(LabelSensor)).fullname])
+                    pred.append(data_item[next(prop1.find(CallingLearner)).fullname])
             except StopIteration:
                 break
 
