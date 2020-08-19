@@ -1246,7 +1246,7 @@ class DataNodeBuilder(dict):
             _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list %s'%(dns))
             dns.append(_dn)
         
-    def __createMultiplyDataNode(selfvInfo, conceptInfo, keyDataName):
+    def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
         

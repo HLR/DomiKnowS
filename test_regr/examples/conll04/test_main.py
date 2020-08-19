@@ -53,7 +53,7 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from regr.program.learningbaseprogram import LearningBasedProgram
+    from regr.program.program import LearningBasedProgram
 
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
