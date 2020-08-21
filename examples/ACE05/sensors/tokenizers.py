@@ -10,7 +10,8 @@ class Tokenizer(TorchEdgeSensor):
         self.tokenizer = tokenizer
 
     def forward(self, ) -> Any:
-        return self.tokenizer(self.inputs[0])['input_ids']
+        input = self.tokenizer(self.inputs[0], return_tensors="pt")['input_ids']
+        return input[0]
 
 
 class TokenizerSpan(TorchSensor):
