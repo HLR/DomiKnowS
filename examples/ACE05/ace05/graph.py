@@ -60,9 +60,9 @@ with Graph('global') as graph:
             # Weapon – Weapon entities are limited to physical devices primarily used as instruments for physically harming or destroying other entities.
             weapon = entity(name='WEA')
             # special - timex2
-            timex2 = entity(name='Timex2')
+            timex2 = phrase(name='Timex2')
             # special - value
-            value = entity(name='value')
+            value = phrase(name='value')
             num = value(name='Numeric')
             money = num(name='Money')
             job = value(name='Job-Title')
@@ -361,23 +361,29 @@ with Graph('global') as graph:
             # NOTE: do we need the abstract event or base it on trigger?
             event = Concept(name='Event')
             event.has_a(trigger)
-            participant = entity(name='Participant')
-            attribute = entity(name='Attribute')
 
-            # NOTE: there can be variable number of participant(s) and attribute(s)
-            # should we create a new Relation or concept based on pair?
-            #
-            # Relation:
-            @Concept.relation_type('involve')
-            class Involve(Relation): pass
-            event.involve(participant)
-            # event.with_(attribute)
-            #
-            # or Concept:
-            # involve = pair(name='Involve')
-            # involve.has_a(event, participant)
-            # with_ = pair(name='With')
-            # with_.has_a(event, attribute)
+            # @Concept.relation_type('involve')
+            # class Involve(Relation): pass
+            # event.involve(participant)
+
+            event_argument_pair = Concept(name='Argument')
+            participant = event_argument_pair(name='Participant')
+            attribute = event_argument_pair(name='Attribute')
+
+            # There can be variable number of participant(s) and attribute(s)
+            # Create concept based on pair so that we can predit them
+            # Here we define the base concepts
+            event_argument = pair(name='EventArgument')
+            event_argument.has_a(event=event, argument=phrase)
+            participant_argument = event_argument(name='Participant')
+            attribute_argument = event_argument(name='Attribute')
+            # and a shortcut function to create role concept and rule
+            def involve(event_type, argument_type, **kwargs):
+                for role, concepts in kwargs.items():
+                    if isinstance(concepts, Concept):
+                        concepts = (concepts,)
+                    role_argument = argument_type(name=f'{event_type.name}-{role}')
+                    ifL(role_argument, ('x', 'y'), andL(event_type, 'x', orL(*concepts, 'y')))
 
             # Polarity [POSITIVE, NEGATIVE]- An Event is NEGATIVE when it is explicitly indicated that the Event did not occur (see examples). All other Events are POSITIVE.
             event['Polarity'] = Property('Polarity')
@@ -395,31 +401,41 @@ with Graph('global') as graph:
             be_born = life(name='Be-Born')
             # S6 - participant: Person: PER
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            be_born.involve(PER, timex2, GPE, LOC, FAC)
+            # be_born.involve(PER, timex2, GPE, LOC, FAC)
+            involve(be_born, participant_argument, Person=PER)
+            involve(be_born, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
             # LIFE.MARRY - MARRY Events are official Events, where two people are married under the legal definition.
             marry = life(name='Marry')
             # marry.involve(person)  # not documented explicitly
             # S6 - participant: Person: PER
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            marry.involve(PER, timex2, GPE, LOC, FAC)
+            # marry.involve(PER, timex2, GPE, LOC, FAC)
+            involve(marry, participant_argument, Person=PER)
+            involve(marry, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
             # LIFE.DIVORCE - A DIVORCE Event occurs whenever two people are officially divorced under the legal definition of divorce.
             divorce = life(name='Divorce')
             # divorce.involve(person)  # no document
             # S6 - participant: Person: PER
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            divorce.involve(PER, timex2, GPE, LOC, FAC)
+            # divorce.involve(PER, timex2, GPE, LOC, FAC)
+            involve(divorce, participant_argument, Person=PER)
+            involve(divorce, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
             # LIFE.INJURE - An INJURE Event occurs whenever a PERSON Entity experiences physical harm.
             injure = life(name='Injure')
             # injure.involve(person)
             # S6 - participant: Agent: (PER, ORG, GPE), Victim: PER, Instrument: (WEA, VEH)
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            injure.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
+            # injure.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
+            involve(injure, participant_argument, Agent=(PER, ORG, GPE), Victim=PER, Instrument=(WEA, VEH))
+            involve(injure, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
             # LIFE.DIE - A DIE Event occurs whenever the life of a PERSON Entity ends.
             die = life(name='Die')
             # die.involve(person)
             # S6 - participant: Agent: (PER, ORG, GPE), Victim: PER, Instrument: (WEA, VEH)
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            die.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
+            # die.involve(PER, ORG, GPE, WEA, VEH, timex2, GPE, LOC, FAC)
+            involve(die, participant_argument, Agent=(PER, ORG, GPE), Victim=PER, Instrument=(WEA, VEH))
+            involve(die, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
 
             # MOVEMENT
             movement = event(name='Movement')
@@ -428,7 +444,9 @@ with Graph('global') as graph:
             # transport.involve(weapon, vehicle, person, gpe, facility, location)
             # S6 - participant: Agent: (PER, ORG, GPE), Artifact: (PER, WEA, VEH), Vehicle: VEH, Price: num, Origin: (GPE, LOC, FAC), Destination: (GPE, LOC, FAC)
             # S6 - attribute: Time: Time
-            transport.involve(PER, ORG, GPE, WEA, VEH, num, LOC, FAC, timex2)
+            # transport.involve(PER, ORG, GPE, WEA, VEH, num, LOC, FAC, timex2)
+            involve(transport, participant_argument, Agent=(PER, ORG, GPE), Artifact=(PER, WEA, VEH), Vehicle=VEH, Price=num, Origin=(GPE, LOC, FAC), Destination=(GPE, LOC, FAC))
+            involve(transport, attribute_argument, Time=timex2)
 
             # TRANSACTION
             transaction = event(name='Transaction')
@@ -438,14 +456,17 @@ with Graph('global') as graph:
             # transport.involve(vehicle, facility, organization, weapon)
             # S6 - participant: Buyer: (PER, ORG, GPE), Seller: (PER, ORG, GPE), Beneficiary: (PER, ORG, GPE), Artifact: (VEH, WEA, FAC, ORG), Price: money
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            transfer_ownership.involve(PER, ORG, GPE, VEH, WEA, money, timex2, LOC, FAC)
-
+            # transfer_ownership.involve(PER, ORG, GPE, VEH, WEA, money, timex2, LOC, FAC)
+            involve(transfer_ownership, participant_argument, Buyer=(PER, ORG, GPE), Seller=(PER, ORG, GPE), Beneficiary=(PER, ORG, GPE), Artifact=(VEH, WEA, FAC, ORG), Price=money)
+            involve(transfer_ownership, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
             # TRANSACTION.TRANSFER-MONEY - TRANSFER-MONEY Events refer to the giving, receiving, borrowing, or lending money when it is not in the context of purchasing something.
             transfer_money = transaction(name='Transfer-Money')
             # S6 - participant: Giver: (PER, ORG, GPE), Recipient: (PER, ORG, GPE), Beneficiary: (PER, ORG, GPE), Money: money
             # S6 - attribute: Time: Time, Place: (GPE, LOC, FAC)
-            transfer_money.involve(PER, ORG, GPE, money, timex2, LOC, FAC)
-            
+            # transfer_money.involve(PER, ORG, GPE, money, timex2, LOC, FAC)
+            involve(transfer_money, participant_argument, Giver=(PER, ORG, GPE), Recipient=(PER, ORG, GPE), Beneficiary=(PER, ORG, GPE), Money=money)
+            involve(transfer_money, attribute_argument, Time=timex2, Place=(GPE, LOC, FAC))
+
             # BUSINESS
             business = event(name='Business-Event')
             # BUSINESS.START-ORG - A START-ORG Event occurs whenever a new ORGANIZATION is created.
