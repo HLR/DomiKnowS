@@ -76,7 +76,7 @@ class CandidateSensor(QuerySensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
 
-        output = torch.zeros(dims, dtype=torch.uint8)
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
