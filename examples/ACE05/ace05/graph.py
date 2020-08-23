@@ -366,10 +366,6 @@ with Graph('global') as graph:
             # class Involve(Relation): pass
             # event.involve(participant)
 
-            event_argument_pair = Concept(name='Argument')
-            participant = event_argument_pair(name='Participant')
-            attribute = event_argument_pair(name='Attribute')
-
             # There can be variable number of participant(s) and attribute(s)
             # Create concept based on pair so that we can predit them
             # Here we define the base concepts
@@ -380,10 +376,13 @@ with Graph('global') as graph:
             # and a shortcut function to create role concept and rule
             def involve(event_type, argument_type, **kwargs):
                 for role, concepts in kwargs.items():
-                    if isinstance(concepts, Concept):
-                        concepts = (concepts,)
                     role_argument = argument_type(name=f'{event_type.name}-{role}')
-                    ifL(role_argument, ('x', 'y'), andL(event_type, 'x', orL(*concepts, 'y')))
+                    if isinstance(concepts, Concept):
+                        ifL(role_argument, ('x', 'y'), andL(event_type, 'x', concepts, 'y'))
+                    elif isinstance(concepts, (tuple, list)):
+                        ifL(role_argument, ('x', 'y'), andL(event_type, 'x', orL(*concepts, 'y')))
+                    else:
+                        raise TypeError('Argument must be Concept or tuple of Concepts.')
 
             # Polarity [POSITIVE, NEGATIVE]- An Event is NEGATIVE when it is explicitly indicated that the Event did not occur (see examples). All other Events are POSITIVE.
             event['Polarity'] = Property('Polarity')
@@ -624,7 +623,7 @@ with Graph('global') as graph:
             # convict.involve(trial)
             # S6 - participant: Defendant: (PER, ORG, GPE), Adjudicator: (PER, ORG, GPE)
             # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
-            convict.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
+            # convict.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
             involve(convict, participant_argument, Defendant=(PER, ORG, GPE), Adjudicator=(PER, ORG, GPE))
             involve(convict, attribute_argument, Crime=crime, Time=timex2, Place=(GPE, LOC, FAC))
             # JUSTICE.SENTENCE - A SENTENCE Event takes place whenever the punishment (particularly incarceration) for the DEFENDANT-ARG of a TRY Event is issued by a state actor (a GPE, an ORGANIZATION subpart or a PERSON representing them).

@@ -1,14 +1,45 @@
 from tqdm import tqdm
 
+from regr.graph.logicalConstrain import ifL, orL, andL
+
 from ace05.reader import Reader, DictReader
 from ace05.annotation import Entity, Timex2, Value
-from ace05.graph import timex2, value
+from ace05.graph import relations_graph, events_graph, participant_argument, attribute_argument, timex2, value
 from ace05.errors import KNOWN_ERRORS_TIMEX2NORM as KNOWN_ERRORS
 import config
 
 
 # errors = {}
+def compile_event_rules(events_graph):
+    event_rules = {}
+    for _, constraint in events_graph.logicalConstrains.items():
+        if not isinstance(constraint, ifL):
+            continue
+        role_argument, xy, implication = constraint.e
+        rel = role_argument.is_a()[0]
+        assert rel.src == role_argument
+        argument_type = rel.dst
+        x, y = xy
+        assert isinstance(implication, andL)
+        event, x_, *argument_implication = implication.e
+        if len(argument_implication) == 1:  # orL
+            assert isinstance(argument_implication[0], orL)
+            *argument_types, y_ = argument_implication[0].e
+        elif len(argument_implication) == 2:  # type, y
+            argument_type, y_ = argument_implication
+            argument_types = [argument_type]
+        else:
+            assert False
+        assert x == x_ and y == y_
+        role = role_argument.name[len(event.name)+1:]
+        event_rules[event, role] = argument_types
+    return event_rules
 
+
+
+
+            
+compile_event_rules(events_graph)
 
 def main():
     traint_reader = Reader(config.path, list_path='data_list.csv', type='train', status='timex2norm')
@@ -56,4 +87,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # print(errors)
