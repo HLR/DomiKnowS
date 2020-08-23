@@ -36,15 +36,8 @@ def compile_event_rules(events_graph):
     return event_rules
 
 
-def check(event_rules, path, list_path, status, known_errors={}, collect_errror=True):
+def check(event_rules, path, list_path, status, known_errors={}, stop_on_errror=False):
     errors = {}
-    if collect_errror:
-        def check_event_arg(event, arg):
-            if arg.ref.type not in entity_types:
-                errors.setdefault(f'{event.subtype.name}: {arg.role} is {arg.ref.type}', []).append((event_id, arg.refid))
-    else:
-        def check_event_arg(event, arg):
-            assert arg.ref.type not in entity_types
 
     traint_reader = Reader(path, list_path=list_path, type='train', status=status)
     print('Training:', len(traint_reader))
@@ -70,17 +63,24 @@ def check(event_rules, path, list_path, status, known_errors={}, collect_errror=
         for event_id, event in events.items():
             # event arguments
             for arg in event.arguments:
-                if (event_id, arg.refid) in known_errors['event-arg']: continue
                 try:
                     role = arg.role
                     if role.startswith('Time-'):
                         role = 'Time'
-                    entity_types = event_rules[event.subtype, role]
+                    try:
+                        entity_types = event_rules[event.subtype, role]
+                    except KeyError as e:
+                        key = e.args[0]
+                        concept, role = key
+                        raise KeyError(f'{role} is not a valid role in {concept.name}.')
                     assert isinstance(arg.ref, (Entity, Timex2, Value))
-                    check_event_arg(event, arg)
-                except:
-                    errors.setdefault(f'{event.subtype.name}: {arg.role} is {arg.ref.type}', []).append((event_id, arg.refid))
-                    if not collect_errror:
+                    assert arg.ref.type in entity_types, f'{event.subtype.name}: {arg.role} is {arg.ref.type}'
+                except Exception as e:
+                    message = str(e)
+                    if message in known_errors['event-arg'] and (event_id, arg.refid) in known_errors['event-arg'][message]:
+                        continue
+                    errors.setdefault(message, []).append((event_id, arg.refid))
+                    if stop_on_errror:
                         raise
             # if there is event.subtype, then event.subtype is a event.type
             assert not event.subtype or event.type in set(map(lambda e: e.dst, event.subtype.is_a()))
@@ -96,7 +96,7 @@ def main():
     print('- list_path:', config.list_path)
     print('- status:', config.status)
     print('- known errors:', len(list(chain(*config.known_errors.values()))))
-    errors = check(event_rules, path=config.path, list_path=config.list_path, status=config.status, known_errors=config.known_errors)
+    errors = check(event_rules, path=config.path, list_path=config.list_path, status=config.status, known_errors=config.known_errors, stop_on_errror=False)
     pprint(errors)
 
 
