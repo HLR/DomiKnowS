@@ -82,6 +82,7 @@ class Timex2(APFObject):
     def __init__(self, node, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
+        self.type = ace05['Entities']['Timex2']
         self.mentions = {}
         for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
@@ -101,8 +102,9 @@ class Value(APFObject):
     def __init__(self, node, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
-        self.type = node.attrib['TYPE']
-        self.subtype = node.attrib.get('SUBTYPE', None)
+        self.type = ace05['Entities'][node.attrib['TYPE']]
+        subtype_str = node.attrib.get('SUBTYPE', None)
+        self.subtype = subtype_str and ace05['Entities'][subtype_str]
         self.mentions = {}
         for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)

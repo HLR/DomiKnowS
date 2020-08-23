@@ -65,6 +65,11 @@ with Graph('global') as graph:
             value = phrase(name='value')
             num = value(name='Numeric')
             money = num(name='Money')
+            percent = num(name='Percent')
+            contact_info = value(name='Contact-Info')
+            phone_number = contact_info(name='Phone-Number')
+            url = contact_info(name='URL')
+            email = contact_info(name='E-Mail')
             job = value(name='Job-Title')
             crime = value(name='Crime')
             sen = value(name='Sentence')
@@ -556,10 +561,10 @@ with Graph('global') as graph:
             # PERSONELL.NOMINATE - A NOMINATE Event occurs whenever a PERSON is proposed for a START- POSITION Event by the appropriate PERSON, through official channels.
             nominate = personell(name='Nominate')
             # nominate.involve(person)
-            # S6 - participant: Person: PER, Entity: (PER, ORG, GPE, FAC)
+            # S6 - participant: Person: PER, Agent: (PER, ORG, GPE, FAC)
             # S6 - attribute: Position: JOB, Time: Time, Place: (GPE, LOC, FAC)
             # nominate.involve(PER, ORG, GPE, FAC, job, timex2, LOC)
-            involve(nominate, participant_argument, Person=PER, Entity=(PER, ORG, GPE, FAC))
+            involve(nominate, participant_argument, Person=PER, Agent=(PER, ORG, GPE, FAC))
             involve(nominate, attribute_argument, Position=job, Time=timex2, Place=(GPE, LOC, FAC))
             # PERSONELL.ELECT - An ELECT Event occurs whenever a candidate wins an election designed to determine the PERSON argument of a START-POSITION Event.
             elect = personell(name='Elect')
@@ -583,10 +588,10 @@ with Graph('global') as graph:
             # JUSTICE.RELEASE-PAROLE - A RELEASE Event occurs whenever a state actor (GPE, ORGANIZATION subpart, or PERSON representative) ends its custody of a PERSON Entity.
             release_parole = justice(name='Release-Parole')
             # release_parole.involve(gpe, organization, person)
-            # S6 - participant: Person: PER, Agent: (PER, ORG, GPE)
+            # S6 - participant: Person: PER, Entity: (PER, ORG, GPE)
             # S6 - attribute: Crime: CRIME, Time: Time, Place: (GPE, LOC, FAC)
             # release_parole.involve(PER, ORG, GPE, crime, timex2, LOC, FAC)
-            involve(release_parole, participant_argument, Person=PER, Agent=(PER, ORG, GPE))
+            involve(release_parole, participant_argument, Person=PER, Entity=(PER, ORG, GPE))
             involve(release_parole, attribute_argument, Crime=crime, Time=timex2, Place=(GPE, LOC, FAC))
             # JUSTICE.TRIAL-HEARING
             # JUSTICE.TRIAL - A TRIAL Event occurs whenever a court proceeding has been initiated for the purposes of determining the guilt or innocence of a PERSON, ORGANIZATION or GPE accused of committing a crime.
