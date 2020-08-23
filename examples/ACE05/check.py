@@ -95,7 +95,9 @@ def main():
     print('- path:', config.path)
     print('- list_path:', config.list_path)
     print('- status:', config.status)
-    print('- known errors:', len(list(chain(*config.known_errors.values()))))
+    print('- known errors:')
+    for error_type, errors in config.known_errors.items():
+        print(f'  - {error_type}:', len(list(chain(*errors.values()))))
     errors = check(event_rules, path=config.path, list_path=config.list_path, status=config.status, known_errors=config.known_errors, stop_on_errror=False)
     pprint(errors)
 

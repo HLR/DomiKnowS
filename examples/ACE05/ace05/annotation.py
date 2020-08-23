@@ -32,17 +32,32 @@ class Charseq(APFObject):
                     b.splitlines(keepends=True))))
 
 
-class Entity(APFObject):
+class Span(APFObject):
+    class Mention(APFObject):
+        def __init__(self, node, text):
+            super().__init__(node, text)
+            self.id = node.attrib['ID']
+            self.extent = Charseq(node.find('extent/charseq'), text)
+
+    def __init__(self, node, text):
+        super().__init__(node, text)
+        self.id = node.attrib['ID']
+        type_str = node.attrib.get('TYPE', None)
+        self.type = type_str and ace05['Entities'][type_str]
+        self.mentions = {}
+        for mention_node in node.findall(self.Mention.tag):
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
+
+
+class Entity(Span):
     tag = 'entity'
 
-    class Mention(APFObject):
+    class Mention(Span.Mention):
         tag = 'entity_mention'
 
         def __init__(self, node, text):
             super().__init__(node, text)
-            self.id = node.attrib['ID']
             self.type = node.attrib['TYPE']
-            self.extent = Charseq(node.find('extent/charseq'), text)
             self.head = Charseq(node.find('head/charseq'), text)
 
     class Attribute(APFObject):
@@ -55,59 +70,36 @@ class Entity(APFObject):
 
     def __init__(self, node, text):
         super().__init__(node, text)
-        self.id = node.attrib['ID']
-        self.type = ace05['Entities'][node.attrib['TYPE']]
         self.subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
         self.entity_class = node.attrib['CLASS']
-        self.mentions = {}
         self.attributes = []
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
         attributes_node = node.find('entity_attributes')
         if attributes_node:
             for name_node in attributes_node.findall('name'):
                 self.attributes.append(self.Attribute(name_node, text))
 
-class Timex2(APFObject):
+
+class Timex2(Span):
     tag = 'timex2'
 
-    class Mention(APFObject):
+    class Mention(Span.Mention):
         tag = 'timex2_mention'
 
-        def __init__(self, node, text):
-            super().__init__(node, text)
-            self.id = node.attrib['ID']
-            self.extent = Charseq(node.find('extent/charseq'), text)
-
     def __init__(self, node, text):
         super().__init__(node, text)
-        self.id = node.attrib['ID']
         self.type = ace05['Entities']['Timex2']
-        self.mentions = {}
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
 
 
-class Value(APFObject):
+class Value(Span):
     tag = 'value'
 
-    class Mention(APFObject):
+    class Mention(Span.Mention):
         tag = 'value_mention'
-
-        def __init__(self, node, text):
-            super().__init__(node, text)
-            self.id = node.attrib['ID']
-            self.extent = Charseq(node.find('extent/charseq'), text)
 
     def __init__(self, node, text):
         super().__init__(node, text)
-        self.id = node.attrib['ID']
-        self.type = ace05['Entities'][node.attrib['TYPE']]
         subtype_str = node.attrib.get('SUBTYPE', None)
         self.subtype = subtype_str and ace05['Entities'][subtype_str]
-        self.mentions = {}
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
 
 
 class Relation(APFObject):
@@ -168,6 +160,7 @@ class Relation(APFObject):
                 self.additional_arguments.append(argument)
         for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
+
 
 class Event(APFObject):
     tag = 'event'
