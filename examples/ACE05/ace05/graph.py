@@ -268,7 +268,7 @@ with Graph('global') as graph:
             part_whole = relation(name='PART-WHOLE')
             # Part-whole.Geographical - The Geographical Relation captures the location of a Facility, Location, or GPE in or at or as a part of another Facility, Location, or GPE.
             geographical = part_whole(name='Geographical')
-            geographical.has_a(arg1=entity, arg2=entity)
+            # geographical.has_a(arg1=entity, arg2=entity)
             # arg1 is one of FAC, LOC, GPE
             # arg2 is one of FAC, LOC, GPE
             ifL(geographical, ('x', 'y'), andL(orL(FAC, LOC, GPE, 'x'), orL(FAC, LOC, GPE, 'y')))
@@ -304,14 +304,14 @@ with Graph('global') as graph:
             employment = org_affiliation(name='Employment')
             # employment.has_a(arg1=person, arg2=entity)
             # arg2 is one of ORG, GPE
-            ifL(employment, ('x', 'y'), andL(PER, 'x', orL(ORG, GPE, 'y'))
+            ifL(employment, ('x', 'y'), andL(PER, 'x', orL(ORG, GPE, 'y')))
             # ORG-Affiliation.Ownership - Ownership captures the relationship between a Person and an Organization owned by that Person.
             ownership = org_affiliation(name='Ownership')
             # ownership.has_a(arg1=person, arg2=organization)
             ifL(ownership, ('x', 'y'), andL(PER, 'x', ORG, 'y'))
             # ORG-Affiliation.Founder - Founder captures the relationship between an agent (Person, Organization, or GPE) and an Organization or GPE established or set up by that agent.
             founder = org_affiliation(name='Founder')
-            founder.has_a(arg1=entity, arg2=entity)
+            # founder.has_a(arg1=entity, arg2=entity)
             # arg1 is one of PER, ORG
             # arg2 is one of ORG, GPE
             ifL(founder, ('x', 'y'), andL(orL(PER, ORG, 'x'), orL(ORG, GPE, 'y')))
@@ -350,7 +350,7 @@ with Graph('global') as graph:
             citizen_resident_religion_ethnicity = gen_affiliation('Citizen-Resident-Religion-Ethnicity')
             # citizen_resident_religion_ethnicity.has_a(arg1=person, arg2=entity)
             # arg2 is one of PER.Group, LOC, GPE, ORG
-            ifL(citizen_resident_religion_ethnicity, ('x', 'y'), andL(PER, 'x', orL(PER, LOC, GPE, ORG, 'y')))
+            ifL(citizen_resident_religion_ethnicity, ('x', 'y'), andL(PER, 'x', orL(group, LOC, GPE, ORG, 'y')))
             # Gen-Affiliation.Org-Location-Origin - Org-Location-Origin captures the relationship between an organization and the LOC or GPE where it is located, based, or does business.
             org_location_origin = gen_affiliation('Org-Location')
             # org_location_origin.has_a(arg1=organization, arg2=entity)

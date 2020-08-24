@@ -2,7 +2,8 @@ from pprint import pprint
 from itertools import chain
 from tqdm import tqdm
 
-from regr.graph.logicalConstrain import ifL, orL, andL
+from regr.graph import Concept
+from regr.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
 
 from ace05.reader import Reader, DictReader
 from ace05.annotation import Entity, Timex2, Value
@@ -38,9 +39,46 @@ def compile_event_rules(events_graph):
 
 def compile_relation_rules(relations_graph):
     relation_rules = {}
-    for _, constraint in events_graph.logicalConstrains.items():
-        pass
+    for _, constraint in relations_graph.logicalConstrains.items():
+        if not isinstance(constraint, ifL):
+            continue
+        relation, xy, implication = constraint.e
+        relation_rules[relation] = (relation, xy, implication)
     return relation_rules
+
+
+def validate_rel_arg(rel, *args, relation, xy, implication):
+    if isinstance(implication, LogicalConstrain):
+        impls = iter(implication.e)
+        new_impls = []
+        for impl in impls:
+            if isinstance(impl, LogicalConstrain):
+                new_impls.append(impl)
+                continue
+            impl_group = []
+            while not isinstance(impl, str):
+                impl_group.append(impl)
+                impl = next(impls)
+            impl_group.append(impl)
+            new_impls.append(impl_group)
+        vals = [validate_rel_arg(rel, *args, relation=relation, xy=xy, implication=impl) for impl in new_impls]
+        if isinstance(implication, andL):
+            return all(vals)
+        elif isinstance(implication, orL):
+            return any(vals)
+        else:
+            raise ValueError(f'Implication of relation {relation} not recognized: {implication}')
+    elif isinstance(implication, (list, tuple)):
+        *concepts, arg_str = implication
+        assert all(isinstance(concept, Concept) for concept in concepts)
+        assert arg_str in xy
+        index = xy.index(arg_str)
+        arg = args[index]
+        assert arg.role == f'Arg-{index+1}'
+        assert isinstance(arg.ref, Entity)
+        return arg.ref.type in concepts or arg.ref.subtype in concepts  # Citizen-Resident-Religion-Ethnicity Arg-2: PER.Group
+    else:
+        raise ValueError(f'Implication of relation {relation} not recognized: {implication}')
 
 
 def check(relation_rules, event_rules, path, list_path, status, known_errors={}, stop_on_errror=False):
@@ -63,7 +101,17 @@ def check(relation_rules, event_rules, path, list_path, status, known_errors={},
             # relation has two arguments
             assert rel.arguments[0] is not None and rel.arguments[1] is not None
             # relation type match entity type
-            # TODO: there are constraints arg[1] can be one of A, B, or C, which cannot be checked with graph
+            if rel.subtype is not None:
+                relation, xy, implication = relation_rules[rel.subtype]
+                try:
+                    assert validate_rel_arg(rel, *rel.arguments, relation=relation, xy=xy, implication=implication), f'{rel.subtype.name}: Arg-1 is {rel.arguments[0].ref.type}, Arg-2 is {rel.arguments[1].ref.type}'
+                except Exception as e:
+                    message = str(e)
+                    if message in known_errors['relation-arg'] and rel_id in known_errors['relation-arg'][message]:
+                        continue
+                    errors.setdefault(message, []).append(rel_id)
+                    if stop_on_errror:
+                        raise
             # if there is rel.subtype, then rel.subtype is a rel.type
             assert not rel.subtype or rel.type in set(map(lambda r: r.dst, rel.subtype.is_a()))
             # 
