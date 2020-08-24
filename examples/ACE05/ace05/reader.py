@@ -30,8 +30,8 @@ class RawReader():
 
     def load(self, doc_id, sgm_path, apf_path):
         text = self.load_text(doc_id, sgm_path)
-        referables, relations, events = self.load_anno(doc_id, apf_path, text)
-        return {'text': text, 'referables': referables, 'relations': relations, 'events': events}
+        spans, relations, events = self.load_anno(doc_id, apf_path, text)
+        return {'text': text, 'spans': spans, 'relations': relations, 'events': events}
 
     def load_text(self, doc_id, path):
         # tree = ET.parse(path)
@@ -46,31 +46,31 @@ class RawReader():
         tree = ET.parse(path)
         root = tree.getroot()
         document = root.find('document')
-        referables = {}
+        spans = {}
         relations = {}
         events = {}
 
         for node in document.findall(Entity.tag):
             entity = Entity(node, text)
-            referables[entity.id] = entity
+            spans[entity.id] = entity
 
         for node in document.findall(Timex2.tag):
             timex2 = Timex2(node, text)
-            referables[timex2.id] = timex2
+            spans[timex2.id] = timex2
 
         for node in document.findall(Value.tag):
             value = Value(node, text)
-            referables[value.id] = value
+            spans[value.id] = value
 
         for node in document.findall(Relation.tag):
-            relation = Relation(node, referables, text)
+            relation = Relation(node, spans, text)
             relations[relation.id] = relation
 
         for node in document.findall(Event.tag):
-            event = Event(node, referables, text)
+            event = Event(node, spans, text)
             events[event.id] = event
 
-        return referables, relations, events
+        return spans, relations, events
 
 
 class SplitRawReader(RawReader):

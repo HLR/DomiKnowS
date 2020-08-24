@@ -93,7 +93,7 @@ def check(relation_rules, event_rules, path, list_path, status, known_errors={},
     reader = Reader(path, status=status)
     for data_item in tqdm(reader):
         text = data_item['text']
-        spans = data_item['referables']
+        spans = data_item['spans']
         relations = data_item['relations']
         events = data_item['events']
         # validate relations

@@ -5,7 +5,7 @@ from typing import Any
 
 class TransformerRepresentations(TorchLearner):
     def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto', transformer=None):
-        super(TorchLearner, self).__init__(*pre, edges, loss, metric, label, device)
+        super(TransformerRepresentations, self).__init__(*pre, edges, loss, metric, label, device)
         if not transformer:
             raise ValueError('You should select a default Transformer')
         self.model = transformer
