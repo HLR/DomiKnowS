@@ -36,7 +36,14 @@ def compile_event_rules(events_graph):
     return event_rules
 
 
-def check(event_rules, path, list_path, status, known_errors={}, stop_on_errror=False):
+def compile_relation_rules(relations_graph):
+    relation_rules = {}
+    for _, constraint in events_graph.logicalConstrains.items():
+        pass
+    return relation_rules
+
+
+def check(relation_rules, event_rules, path, list_path, status, known_errors={}, stop_on_errror=False):
     errors = {}
 
     traint_reader = Reader(path, list_path=list_path, type='train', status=status)
@@ -90,6 +97,7 @@ def check(event_rules, path, list_path, status, known_errors={}, stop_on_errror=
 
 
 def main():
+    relation_rules = compile_relation_rules(relations_graph)
     event_rules = compile_event_rules(events_graph)
     print('Check for config:')
     print('- path:', config.path)
@@ -98,7 +106,7 @@ def main():
     print('- known errors:')
     for error_type, errors in config.known_errors.items():
         print(f'  - {error_type}:', len(list(chain(*errors.values()))))
-    errors = check(event_rules, path=config.path, list_path=config.list_path, status=config.status, known_errors=config.known_errors, stop_on_errror=False)
+    errors = check(relation_rules, event_rules, path=config.path, list_path=config.list_path, status=config.status, known_errors=config.known_errors, stop_on_errror=False)
     pprint(errors)
 
 

@@ -254,109 +254,110 @@ with Graph('global') as graph:
             physical = relation(name='PHYS')
             # Physical.Located - The Located Relation captures the physical location of an entity.
             located = physical(name='Located')
-            located.has_a(arg1=person, arg2=entity)
-            # TODO: arg2 is one of FAC, LOC, GPE
-            ifL(located, ('x', 'y'), orL(FAC, 'y', orL(LOC, 'y', GPE, 'y')))
+            # located.has_a(arg1=person, arg2=entity)
+            # arg2 is one of FAC, LOC, GPE
+            ifL(located, ('x', 'y'), andL(PER, 'x', orL(FAC, LOC, GPE, 'y')))
             # Physical.Near - Near indicates that an entity is explicitly near another entity, but neither entity is a part of the other or located in/at the other.
             near = physical(name='Near')
-            near.has_a(arg1=entity, arg2=entity)
-            # TODO: arg1 is one of PER, FAC, GPE, LOC
-            ifL(near, ('x', 'y'), orL(PER, 'x', orL(FAC, 'x', orL(GPE, 'x', LOC, 'x'))))
-            # TODO: arg2 is one of FAC, GPE, LOC
-            ifL(near, ('x', 'y'), orL(FAC, 'y', orL(GPE, 'y', LOC, 'y')))
+            # near.has_a(arg1=entity, arg2=entity)
+            # arg1 is one of PER, FAC, GPE, LOC
+            # arg2 is one of FAC, GPE, LOC
+            ifL(near, ('x', 'y'), andL(orL(PER, FAC, GPE, LOC, 'x'), orL(FAC, GPE, LOC, 'y')))
 
             # Part-whole
             part_whole = relation(name='PART-WHOLE')
             # Part-whole.Geographical - The Geographical Relation captures the location of a Facility, Location, or GPE in or at or as a part of another Facility, Location, or GPE.
             geographical = part_whole(name='Geographical')
             geographical.has_a(arg1=entity, arg2=entity)
-            # TODO: arg1 is one of FAC, LOC, GPE
-            ifL(geographical, ('x', 'y'), orL(FAC, 'x', orL(LOC, 'x', GPE, 'x')))
-            # TODO: arg2 is one of FAC, LOC, GPE
-            ifL(geographical, ('x', 'y'), orL(FAC, 'y', orL(LOC, 'y', GPE, 'y')))
+            # arg1 is one of FAC, LOC, GPE
+            # arg2 is one of FAC, LOC, GPE
+            ifL(geographical, ('x', 'y'), andL(orL(FAC, LOC, GPE, 'x'), orL(FAC, LOC, GPE, 'y')))
             # Part-whole.Subsidiary - Subsidiary captures the ownership, administrative, and other hierarchical relationships between organizations and between organizations and GPEs.
             subsidiary = part_whole(name='Subsidiary')
-            subsidiary.has_a(arg1=organization, arg2=entity)
-            # TODO: arg2 is one of ORG, GPE
-            ifL(subsidiary, ('x', 'y'), orL(ORG, 'y', GPE, 'y'))
+            # subsidiary.has_a(arg1=organization, arg2=entity)
+            # arg2 is one of ORG, GPE
+            ifL(subsidiary, ('x', 'y'), andL(ORG, 'x', orL(ORG, GPE, 'y')))
             # Part-whole.Artifact - Artifact characterizes physical relationships between concrete physical objects and their parts.
             artifact = part_whole(name='Artifact')
-            artifact.has_a(arg1=entity, arg2=entity)
-            # TODO: (arg1 is VEH and arg2 is VEH) or (arg1 is WEA and arg2 is WEA)
+            # artifact.has_a(arg1=entity, arg2=entity)
+            # (arg1 is VEH and arg2 is VEH) or (arg1 is WEA and arg2 is WEA)
             ifL(artifact, ('x', 'y'), orL(andL(VEH, 'x', VEH, 'y'), andL(WEA, 'x', WEA, 'y')))
 
             # Personal-Social - Personal-Social relations describe the relationship between people. Both arguments must be entities of type PER.
             # The arguments of these Relations are not ordered. The Relations are symmetric.
             personal_social = relation(name='PER-SOC')
-            personal_social.has_a(arg1=person, arg2=person)
+            # personal_social.has_a(arg1=person, arg2=person)
+            ifL(personal_social, ('x', 'y'), andL(PER, 'x', PER, 'y'))
             # Personal-Social.Business - The Business Relation captures the connection between two entities in any professional relationship.
             business = personal_social(name='Business')
+            ifL(business, ('x', 'y'), andL(PER, 'x', PER, 'y'))
             # Personal-Social.Family - The Family Relation captures the connection between one entity and another with which it is in any familial relationship.
             family = personal_social(name='Family')
+            ifL(family, ('x', 'y'), andL(PER, 'x', PER, 'y'))
             # Personal-Social.Lasting-Personal - The relationship must involve personal contact (or a reasonable assumption thereof); and there must be some indication or expectation that the relationship exists outside of a particular cited interaction.
             lasting_personal = personal_social(name='Lasting-Personal')
+            ifL(lasting_personal, ('x', 'y'), andL(PER, 'x', PER, 'y'))
             
             # ORG-Affiliation
             org_affiliation = relation(name='ORG-AFF')
             # ORG-Affiliation.Employment - Employment captures the relationship between Persons and their employers.
             employment = org_affiliation(name='Employment')
-            employment.has_a(arg1=person, arg2=entity)
-            # TODO: arg2 is one of ORG, GPE
-            ifL(employment, ('x', 'y'), orL(ORG, 'y', GPE, 'y'))
+            # employment.has_a(arg1=person, arg2=entity)
+            # arg2 is one of ORG, GPE
+            ifL(employment, ('x', 'y'), andL(PER, 'x', orL(ORG, GPE, 'y'))
             # ORG-Affiliation.Ownership - Ownership captures the relationship between a Person and an Organization owned by that Person.
             ownership = org_affiliation(name='Ownership')
-            ownership.has_a(arg1=person, arg2=organization)
+            # ownership.has_a(arg1=person, arg2=organization)
+            ifL(ownership, ('x', 'y'), andL(PER, 'x', ORG, 'y'))
             # ORG-Affiliation.Founder - Founder captures the relationship between an agent (Person, Organization, or GPE) and an Organization or GPE established or set up by that agent.
             founder = org_affiliation(name='Founder')
             founder.has_a(arg1=entity, arg2=entity)
-            # TODO: arg1 is one of PER, ORG
-            ifL(founder, ('x', 'y'), orL(PER, 'x', ORG, 'x'))
-            # TODO: arg2 is one of ORG, GPE
-            ifL(founder, ('x', 'y'), orL(ORG, 'y', GPE, 'y'))
+            # arg1 is one of PER, ORG
+            # arg2 is one of ORG, GPE
+            ifL(founder, ('x', 'y'), andL(orL(PER, ORG, 'x'), orL(ORG, GPE, 'y')))
             # ORG-Affiliation.Student-Alum - Student-Alum captures the relationship between a Person and an educational institution the Person attends or attended.
             student_alum = org_affiliation(name='Student-Alum')
-            student_alum.has_a(arg1=person, arg2=educational)
+            # student_alum.has_a(arg1=person, arg2=educational)
+            ifL(student_alum, ('x', 'y'), andL(PER, 'x', educational, 'y'))
             # ORG-Affiliation.Sports-Affiliation - Sports-Affiliation captures the relationship between a player, coach, manager, or assistant and his or her affiliation with a sports organization.
             sports_affiliation = org_affiliation(name='Sports-Affiliation')
-            sports_affiliation.has_a(arg1=person, arg2=organization)
+            # sports_affiliation.has_a(arg1=person, arg2=organization)
+            ifL(sports_affiliation, ('x', 'y'), andL(PER, 'x', ORG, 'y'))
             # ORG-Affiliation.Investor-Shareholder - Investor-Shareholder captures the relationship between an agent (Person, Organization, or GPE) and an Organization in which the agent has invested or in which the agent owns shares/stock.
             investor_shareholder = org_affiliation(name='Investor-Shareholder')
-            investor_shareholder.has_a(arg1=entity, arg2=entity)
-            # TODO: arg1 is one of PER, ORG, GPE
-            ifL(investor_shareholder, ('x', 'y'), orL(PER, 'x', orL(ORG, 'x', GPE, 'x')))
-            # TODO: arg2 is one of ORG, GPE
-            ifL(investor_shareholder, ('x', 'y'), orL(ORG, 'y', GPE, 'y'))
+            # investor_shareholder.has_a(arg1=entity, arg2=entity)
+            # arg1 is one of PER, ORG, GPE
+            # arg2 is one of ORG, GPE
+            ifL(investor_shareholder, ('x', 'y'), andL(orL(PER, ORG, GPE, 'x'), orL(ORG, GPE, 'y')))
             # ORG-Affiliation.Membership - Membership captures the relationship between an agent and an organization of which the agent is a member.
             membership = org_affiliation(name='Membership')
-            membership.has_a(arg1=entity, arg2=organization)
-            # TODO: arg1 is one of PER, ORG, GPE
-            ifL(membership, ('x', 'y'), orL(PER, 'x', orL(ORG, 'x', GPE, 'x')))
+            # membership.has_a(arg1=entity, arg2=organization)
+            # arg1 is one of PER, ORG, GPE
+            ifL(membership, ('x', 'y'), andL(orL(PER, ORG, GPE, 'x'), ORG, 'y'))
 
             # Agent-Artifact
             agent_artifact = relation('ART')
             # Agent-Artifact.User-Owner-Inventor-Manufacturer - This Relation applies when an agent owns an artifact, has possession of an artifact, uses an artifact, or caused an artifact to come into being.
             user_owner_inventor_manufacturer = agent_artifact(name='User-Owner-Inventor-Manufacturer')
-            user_owner_inventor_manufacturer.has_a(arg1=entity, arg2=entity)
-            # TODO: arg1 is one of PER, ORG, GPE
-            ifL(user_owner_inventor_manufacturer, ('x', 'y'), orL(PER, 'x', orL(ORG, 'x', GPE, 'x')))
-            # TODO: arg2 is one of WEA, VEH, FAC
-            ifL(user_owner_inventor_manufacturer, ('x', 'y'), orL(WEA, 'y', orL(VEH, 'y', FAC, 'y')))
-            
+            # user_owner_inventor_manufacturer.has_a(arg1=entity, arg2=entity)
+            # arg1 is one of PER, ORG, GPE
+            # arg2 is one of WEA, VEH, FAC
+            ifL(user_owner_inventor_manufacturer, ('x', 'y'), andL(orL(PER, ORG, GPE, 'x'), orL(WEA, VEH, FAC, 'y')))
+
             # Gen-Affiliation
             gen_affiliation = relation('GEN-AFF')
             # Gen-Affiliation.Citizen-Resident-Religion-Ethnicity - Citizen-Resident-Religion-Ethnicity describes the Relation between a PER entity and PER.Group, LOC, GPE, ORG
             citizen_resident_religion_ethnicity = gen_affiliation('Citizen-Resident-Religion-Ethnicity')
-            citizen_resident_religion_ethnicity.has_a(arg1=person, arg2=entity)
-            # TODO: arg2 is one of PER.Group, LOC, GPE, ORG
-            ifL(user_owner_inventor_manufacturer, ('x', 'y'), orL(group, 'y', orL(LOC, 'y', orL(GPE, 'y', ORG, 'y'))))
+            # citizen_resident_religion_ethnicity.has_a(arg1=person, arg2=entity)
+            # arg2 is one of PER.Group, LOC, GPE, ORG
+            ifL(citizen_resident_religion_ethnicity, ('x', 'y'), andL(PER, 'x', orL(PER, LOC, GPE, ORG, 'y')))
             # Gen-Affiliation.Org-Location-Origin - Org-Location-Origin captures the relationship between an organization and the LOC or GPE where it is located, based, or does business.
             org_location_origin = gen_affiliation('Org-Location')
-            org_location_origin.has_a(arg1=organization, arg2=entity)
-            # TODO: arg2 is one of LOC, GPE
-            ifL(org_location_origin, ('x', 'y'), orL(LOC, 'y', GPE, 'y'))
+            # org_location_origin.has_a(arg1=organization, arg2=entity)
+            # arg2 is one of LOC, GPE
+            ifL(org_location_origin, ('x', 'y'), andL(ORG, 'x', orL(LOC, GPE, 'y')))
 
             metonymy = relation('METONYMY')
-            
 
         with Graph('Events') as events_graph:
             # ACE (Automatic Content Extraction) English Annotation Guidelines for Events
