@@ -4,14 +4,14 @@ from typing import Any
 
 class Tokenizer(TorchEdgeSensor):
     def __init__(self, *pres, to, mode="forward", edges=None, label=False, device='auto', tokenizer=None):
-        super().__init__(*pres, to, mode, edges, label, device)
+        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         if not tokenizer:
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer
 
-    def forward(self, ) -> Any:
-        input = self.tokenizer(self.inputs[0], return_tensors="pt")['input_ids']
-        return input[0]
+    def forward(self, text) -> Any:
+        tokens = self.tokenizer.encode_plus(text, return_tensors="pt")['input_ids']
+        return tokens
 
 
 class TokenizerSpan(TorchSensor):

@@ -13,8 +13,9 @@ with Graph('global') as graph:
         word = Concept(name='word')
         phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
-        phrase.has_many(word)
-        sentence.has_many(phrase)
+        phrase.contains(word)
+        sentence.contains(word)
+        sentence.contains(phrase)
 
         pair = Concept(name='pair')
         pair.has_a(phrase, phrase)
