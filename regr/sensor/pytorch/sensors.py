@@ -167,7 +167,7 @@ class ConstantSensor(TorchSensor):
     ) -> Any:
         try:
             return torch.tensor(self.data, device=self.device)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError, ValueError):
             return self.data
 
 

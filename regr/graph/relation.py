@@ -108,3 +108,7 @@ class HasMany(OTMRelation):
 @Concept.relation_type('contains')
 class Contains(OTMRelation):
     pass
+
+@Concept.relation_type('equal')
+class Equal(OTORelation):
+    pass
