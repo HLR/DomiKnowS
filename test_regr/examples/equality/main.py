@@ -21,7 +21,7 @@ def model_declaration():
     sentence['index'] = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
     sentence_con_word['forward'] = Tokenizer('index', to='index', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
     word1['index'] = ConstantSensor(data=['phrase1', 'phrase2', 'phrase3'])
-    word1['span'] = ConstantSensor(data=[(0, 0), (2, 4), (9, 10)])
+    word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
     def makeSpanPairs(current_spans, phrase1, phrase2):
@@ -30,13 +30,13 @@ def model_declaration():
         else:
             return False
 
-    word['match'] = CandidateEqualSensor(forward=makeSpanPairs)
+    word['match'] = CandidateEqualSensor('span',forward=makeSpanPairs)
 
     program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match']]))
     return program
 
 
-@pytest.mark.gurobi
+# @pytest.mark.gurobi
 def test_graph_coloring_main():
     lbp = model_declaration()
 
@@ -47,7 +47,10 @@ def test_graph_coloring_main():
 
         for child_node in datanode.getChildDataNodes():
             print(child_node)
+            print(child_node.getAttribute('index'))
+            print(child_node.getAttribute('match'))
+            print(child_node.getAttribute('span'))
 
-
-if __name__ == '__main__':
-    pytest.main([__file__])
+test_graph_coloring_main()
+# if __name__ == '__main__':
+#     pytest.main([__file__])

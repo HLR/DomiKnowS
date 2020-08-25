@@ -16,7 +16,7 @@ class Tokenizer(TorchEdgeSensor):
 
 class TokenizerSpan(TorchSensor):
     def __init__(self, *pres, edges=None, label=False, device='auto', tokenizer=None):
-        super().__init__(*pres, edges, label, device)
+        super().__init__(*pres, edges=edges, label=label, device=device)
         if not tokenizer:
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer
@@ -30,5 +30,5 @@ class TokenizerSpan(TorchSensor):
             else:
                 ids_index.append((start, start + len(item) - 1))
             start += len(item)
-
-        return ids_index
+        print(ids_index)
+        return [(None, None)] + ids_index + [(None, None)]
