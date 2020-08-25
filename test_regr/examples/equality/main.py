@@ -22,6 +22,7 @@ def model_declaration():
     sentence_con_word['forward'] = Tokenizer('index', to='index', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
     word1['index'] = ConstantSensor(data=['phrase1', 'phrase2', 'phrase3'])
     word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
+    word1['label'] = ConstantSensor(data=[1, 1, 1])
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
     def makeSpanPairs(current_spans, phrase1, phrase2):
@@ -50,6 +51,7 @@ def test_graph_coloring_main():
             print(child_node.getAttribute('index'))
             print(child_node.getAttribute('match'))
             print(child_node.getAttribute('span'))
+            print(child_node.getAttribute('label'))
 
 test_graph_coloring_main()
 # if __name__ == '__main__':
