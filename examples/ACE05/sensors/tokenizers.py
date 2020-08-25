@@ -11,7 +11,7 @@ class Tokenizer(TorchEdgeSensor):
 
     def forward(self, text) -> Any:
         tokens = self.tokenizer.encode_plus(text, return_tensors="pt")['input_ids'].view(-1)
-        return tokens
+        return tokens.to(device=self.device)
 
 
 class TokenizerSpan(TorchSensor):
