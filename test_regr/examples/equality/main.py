@@ -19,13 +19,13 @@ def model_declaration():
 
     # --- City
     sentence['index'] = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
-    sentence_con_word['forward'] = Tokenizer('index', to='raw', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
-    word1['raw'] = ConstantSensor(data=['phrase1', 'phrase2', 'phrase3'])
-    word1['index'] = ConstantSensor(data=[(0, 0), (2, 4), (9, 10)])
-    word['index'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
+    sentence_con_word['forward'] = Tokenizer('index', to='index', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
+    word1['index'] = ConstantSensor(data=['phrase1', 'phrase2', 'phrase3'])
+    word1['span'] = ConstantSensor(data=[(0, 0), (2, 4), (9, 10)])
+    word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
     def makeSpanPairs(current_spans, phrase1, phrase2):
-        if phrase1.getAttribute('index') == phrase2.getAttribute('index'):
+        if phrase1.getAttribute('span') == phrase2.getAttribute('span'):
             return True
         else:
             return False
