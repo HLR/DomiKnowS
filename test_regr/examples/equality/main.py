@@ -3,7 +3,7 @@ import pytest
 from transformers import BertTokenizer
 
 sys.path.append('.')
-sys.path.append('../..')
+sys.path.append('../../..')
 
 
 def model_declaration():
@@ -30,12 +30,9 @@ def model_declaration():
         else:
             return False
 
-    word_equal_word1['backward'] = CandidateEqualSensor(forward=makeSpanPairs)
+    word['match'] = CandidateEqualSensor(forward=makeSpanPairs)
 
-    word['dummy'] = ConstantSensor(edges=[word_equal_word1['backward']], data=['dummy_value' for i in range(19)])
-
-
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['dummy']]))
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match']]))
     return program
 
 
