@@ -1,8 +1,7 @@
 import logging
 import torch
 
-from regr.program import LearningBasedProgram
-
+from .program import LearningBasedProgram
 from .model.primal_dual_model import PrimalDualModel
 from .model.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
 

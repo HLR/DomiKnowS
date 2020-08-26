@@ -1,7 +1,7 @@
 import torch
 from torch.nn import functional as F
 
-from regr.solver.context_solver import ContextSolver
+from regr.solver.contextsolver.context_solver import ContextSolver
 from regr.sensor.torch.sensor import DataSensor, SpacyTokenizorSensor
 from regr.sensor.torch.learner import ModuleLearner
 
@@ -9,7 +9,7 @@ from regr.sensor.torch.learner import ModuleLearner
 class Solver(ContextSolver):
     def get_raw_input(self, data_item):
         graph = next(iter(self.myGraph))
-        _, sentence_sensor = graph.get_sensors(DataSensor, lambda s: not s.target)[0]
+        sentence_sensor = graph.get_sensors(DataSensor, lambda s: not s.target)[0]
         sentences = sentence_sensor(data_item)
         mask_len = [len(s) for s in sentences]  # (b, )
         return sentences, mask_len

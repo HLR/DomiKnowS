@@ -3,34 +3,13 @@ from regr.sensor.pytorch.learners import TorchLearner
 from typing import Any
 import torch
 
-
-class DummyLearner(TorchLearner):
+#  --- City
+class DummyCityLearner(TorchLearner):  # Learn Fire station classification for City
     def forward(self,) -> Any:
-        result = torch.ones(self.inputs[0].shape)
-        result = -1 * result
+        result = torch.zeros(len(self.inputs[0]), 2)
+        
+        for t in result: # Initially all cities are firestation cities
+            t[1] = 1
+            t[0] = 0
+
         return result
-
-
-class DummyEdgeSensor(TorchEdgeSensor):
-    def forward(self,) -> Any:
-        return self.inputs[0]
-
-
-class CustomReader(ReaderSensor):
-    def forward(
-        self,
-    ) -> Any:
-        if self.data:
-            try:
-                info = self.data[self.keyword]
-                pairs = []
-                for city, targets in info.enumerate():
-                    for target in targets:
-                        pairs.append([city, target])
-                return pairs
-            except:
-                print("the key you requested from the reader doesn't exist")
-                raise
-        else:
-            print("there is no data to operate on")
-            raise Exception('not valid')

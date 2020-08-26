@@ -15,7 +15,7 @@ from gurobipy import *
 from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
-from regr.graph import LogicalConstrain, andL, orL, ifL, existsL, notL
+from regr.graph import LogicalConstrain, eqL
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -30,7 +30,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 abs(x) == float('inf')  # inf 
                 ) 
                
-    def addTokenConstrains(self, m, conceptNames, tokens, x, graphResultsForPhraseToken):
+    def addTokenConstrains(self, m, conceptNames, tokens, x, graphResultsForPhraseToken, hardConstrains = []):
         if graphResultsForPhraseToken is None:
             return None
         
@@ -49,7 +49,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and token %s - skipping it"%(currentProbability[1],token,conceptName))
+                    self.myLogger.info("Probability is %f for variable concept %s and token %s - skipping it"%(currentProbability[1],token,conceptName))
                     continue
 
                 # Create variable
@@ -67,14 +67,34 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(token, conceptName))
 
-        # Add constraints forcing decision between variable and negative variables 
+        # Add constrain based on robability 
         for conceptName in conceptNames:
-            for token in tokens:
+            for tokenIndex, token in enumerate(tokens): 
+                # Add constraints forcing decision between variable and negative variables 
                 if ('Not_'+conceptName, token) in x:
                     currentConstrLinExpr = x[conceptName, token] + x['Not_'+conceptName, token]
                     m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptName, token))
-                    #self.myLogger.debug("Disjoint constrain between token %s is concept %s and token %s is concept - %s == %i"%(token,conceptName,token,'Not_'+conceptName,1))
+                    self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(token,conceptName,token,'Not_'+conceptName,1))
                     
+                # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
+                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
+                
+                if currentProbability[1] == 1:
+                    m.addConstr(x[conceptName, token] == 1, name='c_%s_%shardConstrain'%(conceptName,token))
+                    self.myLogger.debug("Hard constrain for variable \"token %s is concept %s\" == %i"%(token,conceptName,1))
+                    
+                    if ('Not_'+conceptName, token) in x:
+                        m.addConstr(x['Not_'+conceptName, token] == 0, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
+                        self.myLogger.debug("Hard constrain for variable \"token %s is not concept %s\" == %i"%(token,conceptName,0))
+                        
+                elif currentProbability[1] == 0:
+                    m.addConstr(x[conceptName, token] == 0, name='c_%s_%shardConstrain'%(conceptName, token))
+                    self.myLogger.debug("Hard constrain for variable \"token %s is concept %s\" == %i"%(token,conceptName,0))
+                    
+                    if ('Not_'+conceptName, token) in x:
+                        m.addConstr(x['Not_'+conceptName, token] == 1, name='c_%s_%shardConstrain'%('Not_'+conceptName,token))
+                        self.myLogger.debug("Hard constrain for variable \"token %s is not concept %s\"== %i"%(token,conceptName,1))
+
         m.update()
 
         if len(x):
@@ -358,7 +378,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return X_Q
      
-    def addRelationsConstrains(self, m, conceptNames, tokens, x, y, graphResultsForPhraseRelation):
+    def addRelationsConstrains(self, m, conceptNames, tokens, x, y, graphResultsForPhraseRelation, hardConstrains = []):
         if graphResultsForPhraseRelation is None:
             return None
 
@@ -372,7 +392,10 @@ class gurobiILPOntSolver(ilpOntSolver):
         relationNames = list(graphResultsForPhraseRelation)
             
         # Create variables for relation - token - token and negative variables
-        for relationName in relationNames:            
+        for relationName in relationNames:
+            if relationName in hardConstrains:
+                continue
+               
             for token1Index, token1 in enumerate(tokens): 
                 for token2Index, token2 in enumerate(tokens):
                     if token1 == token2:
@@ -385,7 +408,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
 
                     # Create variable
-                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1, relationName, token2))
+                    y[relationName, token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_%s_%s"%(token1,relationName,token2))
                     #self.myLogger.debug("Probability for token %s in relation %s to token %s is %f"%(token1,relationName,token2, currentProbability[1]))
                     
                     # Check if probability is NaN or if and has to be created based on positive value
@@ -395,20 +418,43 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                     # Create negative variable
                     if True: # ilpOntSolver.__negVarTrashhold:
-                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1, relationName, token2))
+                        y[relationName+'-neg', token1, token2]=m.addVar(vtype=GRB.BINARY,name="y_%s_not_%s_%s"%(token1,relationName,token2))
                     else:
                         self.myLogger.info("No ILP negative variable for relation %s and tokens %s %s created"%(relationName,token1,token2))
                         
         # Add constraints forcing decision between variable and negative variables 
         for relationName in relationNames:
-            for token1 in tokens: 
-                for token2 in tokens:
+            if relationName in hardConstrains:
+                continue
+            
+            for token1Index, token1 in enumerate(tokens): 
+                for token2Index, token2 in enumerate(tokens):
                     if token2 == token1:
                         continue
                     
                     if (relationName+'-neg', token1, token2) in y: 
-                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%sselfDisjoint'%(token1, token2, relationName))
-                        #self.myLogger.debug("Disjoint constrain between relation %s and not relation %s between tokens - %s %s == %i"%(relationName,relationName,token1,token2,1))
+                        m.addConstr(y[relationName, token1, token2] + y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%sselfDisjoint'%(token1,relationName,token2))
+                        self.myLogger.debug("Disjoint constrain between relation %s and not relation %s and tokens - %s, %s == %i"%(relationName,relationName,token1,token2,1))
+                        
+                    # Add constrain for relation with probability 1 or 0 - assuming that they are only information not to be classified
+                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
+                    
+                    if currentProbability[1] == 1:
+                        m.addConstr(y[relationName, token1, token2] == 1, name='c_%s_%s_%shardConstrain'%(token1,relationName,token2))
+                        self.myLogger.debug("Hard constrain for tokens %s, %s are in relation %s == %i"%(token1,token2,relationName,1))
+                        
+                        if (relationName+'-neg', token1, token2) in y:
+                            m.addConstr(y[relationName+'-neg', token1, token2] == 0, name='c_%s_%s_%shardConstrain'%(token1,relationName+'-neg',token2))
+                            self.myLogger.debug("Hard constrain tokens %s, %s are not in relation %s == %i"%(token1,token2,relationName,0))
+                            
+                    elif currentProbability[1] == 0:
+                        m.addConstr(y[relationName, token1, token2] == 0, name='c_%s_%s_%shardConstrain'%(token1,relationName,token2))
+                        self.myLogger.debug("Hard constrain for tokens %s, %s are in relation %s == %i"%(token1,token2,relationName,0))
+                        
+                        if (relationName+'-neg', token1, token2) in y:
+                            m.addConstr(y[relationName+'-neg', token1, token2] == 1, name='c_%s_%s_%shardConstrain'%(token1,relationName+'-neg',token2))
+                            self.myLogger.debug("Hard constrain tokens %s, %s are not in relation %s == %i"%(token1,token2,relationName,1))
+                            
 
         m.update()
    
@@ -738,14 +784,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 if (relationName, token1, token2) not in y: 
                                     continue
                                 
-                                if arg_id is 0: # Domain
+                                if arg_id == 0: # Domain
                                     if (conceptName, token1) not in x: 
                                         continue
                                     
                                     self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token1], onlyConstrains = True)
                                     #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token1].VarName))
                                     
-                                elif arg_id is 1: # Range
+                                elif arg_id == 1: # Range
                                     if (conceptName, token2) not in x: 
                                         continue
                                 
@@ -760,6 +806,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         # Add objectives
         Y_Q  = None
         for relationName in relationNames:
+            if relationName in hardConstrains:
+                continue
+            
             for token1Index, token1 in enumerate(tokens):
                 for token2Index, token2 in enumerate(tokens):
                     if token1 == token2 :
@@ -781,7 +830,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return Y_Q
     
-    def addTripleRelationsConstrains(self, m, conceptNames, tokens, x, y, z, graphResultsForPhraseTripleRelation):
+    def addTripleRelationsConstrains(self, m, conceptNames, tokens, x, y, z, graphResultsForPhraseTripleRelation, hardConstrains = []):
         if graphResultsForPhraseTripleRelation is None:
             return None
 
@@ -1125,18 +1174,14 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         return Z_Q
         
-    def addLogicalConstrains(self, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+    def addLogicalConstrains(self, lcs, m, concepts, tokens, x, y, z, hardConstrains = {}):
         self.myLogger.info('Starting method addLogicalConstrains')
         
-        for graph in self.myGraph:
-            for lcKey, lc in graph.logicalConstrains.items():
-                if not lc.active:
-                    continue
-                    
-                self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, headLC = True)
+        for lc in lcs:   
+            self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+            self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
-    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName='Final', headLC = False):
+    def _constructLogicalConstrains(self, lc, m, concepts, tokens, x, y, z, hardConstrains = {}, resultVariableNames=None, headLC = False):
         lcVariables = []
         
         for eIndex, e in enumerate(lc.e): 
@@ -1147,17 +1192,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if eIndex + 1 < len(lc.e):
                     if isinstance(lc.e[eIndex+1], tuple):
                         variablesNames = lc.e[eIndex+1]
-                        
-                if isinstance(e, Concept): # -- Concept or Relation
+                
+                # -- Concept or Relation
+                if isinstance(e, Concept):
                     typeOfConcept, conceptTypes = self._typeOfConcept(e)
                     conceptName = e.name
-                    
-                    if not variablesNames:
-                        #self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,conceptName))
-                        variablesNames = ()
+                    _typeOfConcept = typeOfConcept
                     
                     if typeOfConcept == 'concept':
-                        if len(variablesNames) == 0:
+                        if not variablesNames:
                             variablesNames = ('x', )
                             
                         if len(variablesNames) > 1:
@@ -1169,7 +1212,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if (conceptName, token) in x:
                                 conceptVariables[(token, )] = x[(conceptName, token)]
                             else:
-                                conceptVariables[(token, )] = None
+                                if conceptName in hardConstrains:
+                                    conceptVariables[(token, )] =  hardConstrains[conceptName][token][1]
+                                else:
+                                    conceptVariables[(token, )] = None
    
                         _lcVariables = {}
                         _lcVariables[variablesNames] = conceptVariables
@@ -1177,7 +1223,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         lcVariables.append(_lcVariables)
                         
                     elif typeOfConcept == 'pair':
-                        if len(variablesNames) == 0:
+                        if not variablesNames:
                             variablesNames = ('x', 'y')
                             
                         if len(variablesNames) > 2:
@@ -1185,11 +1231,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                             
                         conceptVariables = {}
 
-                        for tokensPair in permutations(tokens, r=2):
-                            if (conceptName, *tokensPair) in y:
-                                conceptVariables[tokensPair] = y[(conceptName, *tokensPair)]
+                        for tokensPermutation in permutations(tokens, r=2):
+                            if (conceptName, *tokensPermutation) in y:
+                                conceptVariables[tokensPermutation] = y[(conceptName, *tokensPermutation)]
                             else:
-                                conceptVariables[tokensPair] = None
+                                if conceptName in hardConstrains:
+                                    conceptVariables[tokensPermutation] =  hardConstrains[conceptName][tokensPermutation][1]
+                                else:
+                                    conceptVariables[tokensPermutation] = None
                        
                         _lcVariables = {}
                         _lcVariables[variablesNames] = conceptVariables
@@ -1199,7 +1248,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     elif typeOfConcept == 'triplet':                        
                         _lcVariables = {}
                         
-                        if len(variablesNames) == 0:
+                        if not variablesNames:
                             variablesNames = ('x', 'y', 'z')
                             
                         if len(variablesNames) > 3:
@@ -1217,44 +1266,93 @@ class gurobiILPOntSolver(ilpOntSolver):
                         _lcVariables[variablesNames] = conceptVariables
                         
                         lcVariables.append(_lcVariables)
-                        
-                elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively
-                    if not variablesNames:
-                        #self.myLogger.info('Logical Constrain %s has no variables set for %s'%(lc.lcName,e.lcName))
-                        variablesNames = ()
-                        
-                    if len(variablesNames) == 0:
-                        variablesNames = ('variableName1', )
-                            
-                    if len(variablesNames) > 1:
-                        self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,e))
-                    
-                    lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, resultVariableName = variablesNames[0]))
-            elif isinstance(e, tuple): # tuple with named variable - skip for now
-                pass # Already processed in the previous iteration
-            else:
-                self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lcKey,e))
+                       
+                elif isinstance(e, eqL):
+                    typeOfConcept, conceptTypes = self._typeOfConcept(e.e[0])
 
-        return lc(m, self.myIlpBooleanProcessor, lcVariables, resultVariableName=resultVariableName, headConstrain = headLC)
-                
-    def _typeOfConcept (self, e):
-        for is_a in e.is_a():
-            is_a_dst = is_a.dst.name
-            
-            if is_a_dst is 'pair':
-                pairConcepts = []
-                for has_a in e.has_a():
-                    pairConcepts.append(has_a.dst.name)
-                return 'pair', pairConcepts
-            elif is_a_dst is 'triplet':
-                tripletConcepts = []
-                for has_a in e.has_a():
-                    tripletConcepts.append(has_a.dst.name)
-                return 'triplet', tripletConcepts
+                    r = None
+                    if typeOfConcept == 'concept':
+                        r = 1
+                    elif typeOfConcept == 'pair':
+                        r = 2
+                    elif typeOfConcept == 'triplet':                        
+                        r =3
+                    else:
+                        pass
+                    
+                    eqlVariables = {}       
+
+                    if r:
+                        for tokensPermutation in permutations(tokens, r=r):
+                            if isinstance(e.e[2], set):
+                                eqlVariables[tokensPermutation] = 0
+                                for e2 in e.e[2]:
+                                    key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e2)
+                                    if hardConstrains[key][tokensPermutation][1] == 1:
+                                       eqlVariables[tokensPermutation] = 1
+                                       break 
+                            else:
+                                key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
+                                eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                    
+                    if eqlVariables is not None: 
+                        _lcVariables = {}
+                        _lcVariables[variablesNames] = eqlVariables
+                            
+                        lcVariables.append(_lcVariables)
+                # LogicalConstrain - process recursively 
+                elif isinstance(e, LogicalConstrain):
+                    self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(e.lcName, e, [str(e1) for e1 in lc.e]))
+                    lcVariables.append(self._constructLogicalConstrains(e, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, resultVariableNames = variablesNames, headLC = False))
+            # Tuple with named variable 
+            elif isinstance(e, tuple): 
+                if eIndex == 0:
+                   pass
+                else:
+                    pass # Already processed 
+            # Int - limit 
+            elif isinstance(e, int): 
+                if eIndex == 0:
+                    pass # if this lc using it
+                else:
+                    pass # error!
+            else:
+                self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lc,e))
         
+        return lc(m, self.myIlpBooleanProcessor, lcVariables, resultVariableNames=resultVariableNames, headConstrain = headLC)
+
+    def _typeOfConcept (self, e):
+        relationConcepts = []
+        if len(e.has_a()) > 0: 
+            for has_a in e.has_a():
+                relationConcepts.append(has_a.dst.name)
+                
+        if len(relationConcepts) == 2:
+            return 'pair', relationConcepts
+        elif len(relationConcepts) == 3:
+            return 'triplet', relationConcepts
+        else:
+            pass
+                    
+        for is_a in e.is_a():
+            is_a_dst = is_a.dst
+            
+            relationConcepts = []
+            
+            for has_a in is_a_dst.has_a():
+                relationConcepts.append(has_a.dst.name)
+                
+            if len(relationConcepts) == 2:
+                return 'pair', relationConcepts
+            elif len(relationConcepts) == 3:
+                return 'triplet', relationConcepts
+            else:
+                pass
+            
         return 'concept', []
                 
-    def checkIContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    # Method updating provided probabilities with default negative probabilities if not provided by the user 
+    def __checkIContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
         
         if graphResultsForPhraseToken:
             correctN = True
@@ -1335,33 +1433,120 @@ class gurobiILPOntSolver(ilpOntSolver):
                             temp = np.append(temp, temp1, axis=0)
                                     
                     graphResultsForPhraseTripleRelation[c] = temp        
-                    
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+                 
+    def collectILPSelectionResults(self, m, x, y, z, tokens, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation):
+        # Collect results for tokens
+        tokenResult = None
+        if graphResultsForPhraseToken is not None:
+            tokenResult = dict()
+            conceptNames = [k for k in graphResultsForPhraseToken.keys()]
+
+            if x or True:
+                if m.status == GRB.Status.OPTIMAL:
+                    solution = m.getAttr('x', x)
     
+                    self.myLogger.info('')
+                    self.myLogger.info('---- Token Solutions ----')
+    
+                    for conceptName in conceptNames:
+                        tokenResult[conceptName] = np.zeros(len(tokens))
+                        
+                        for tokenIndex, token in enumerate(tokens):
+                            if ((conceptName, token) in solution) and (solution[conceptName, token] == 1):                                    
+                                tokenResult[conceptName][tokenIndex] = 1
+                                self.myLogger.info('\"%s\" is \"%s\"'%(token,conceptName))
+
+        # Collect results for relations
+        relationResult = None
+        if graphResultsForPhraseRelation is not None: 
+            relationResult = dict()
+            relationNames = [k for k in graphResultsForPhraseRelation.keys()]
+            
+            if y or True:
+                if m.status == GRB.Status.OPTIMAL:
+                    solution = m.getAttr('x', y)
+                                            
+                    self.myLogger.info('')
+                    self.myLogger.info('---- Relation Solutions ----')
+
+                    for relationName in relationNames:
+                        relationResult[relationName] = np.zeros((len(tokens), len(tokens)))
+                        
+                        for token1Index, token1 in enumerate(tokens):
+                            for token2Index, token2 in enumerate(tokens):
+                                if token2 == token1:
+                                    continue
+                                
+                                if ((relationName, token1, token2) in solution) and (solution[relationName, token1, token2] == 1):
+                                    relationResult[relationName][token1Index][token2Index] = 1
+                                    
+                                    self.myLogger.info('\"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
+    
+        # Collect results for triple relations
+        tripleRelationResult = None
+        if graphResultsForPhraseTripleRelation is not None:
+            tripleRelationResult = {}
+            tripleRelationNames = [k for k in graphResultsForPhraseTripleRelation.keys()]
+            
+            for tripleRelationName in tripleRelationNames:
+                tripleRelationResult[tripleRelationName] = np.zeros((len(tokens), len(tokens), len(tokens)))
+            
+            if z or True:
+                if m.status == GRB.Status.OPTIMAL:
+                    solution = m.getAttr('x', z)
+                    
+                    self.myLogger.info('')
+                    self.myLogger.info('---- Triple Relation Solutions ----')
+
+                    for tripleRelationName in tripleRelationNames:
+                        self.myLogger.info('Solutions for relation %s\n'%(tripleRelationName))
+
+                        for token1Index, token1 in enumerate(tokens):
+                            for token2Index, token2 in enumerate(tokens):
+                                if token1 == token2:
+                                    continue
+                                
+                                for token3Index, token3 in enumerate(tokens):
+                                    if token3 == token2:
+                                        continue
+                                    
+                                    if token3 == token1:
+                                        continue
+                                
+                                    if ((tripleRelationName, token1, token2, token3) in solution) and (solution[tripleRelationName, token1, token2, token3] == 1):
+                                        tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
+                                    
+                                        self.myLogger.info('\"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
+                                        
+        return tokenResult, relationResult, tripleRelationResult
+    
+    
+    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning unchanged results')
             return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
         
+        if not graphResultsForPhraseToken:
+            self.myLogger.warning('graphResultsForPhraseToken is None or empty - returning unchanged results')
+            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
+        
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
-
-        if graphResultsForPhraseToken is None:
-            self.myLogger.warning('graphResultsForPhraseToken is None - returning unchanged results')
-            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
-              
-        concepts = [k for k in graphResultsForPhraseToken.keys()]
-
-        self.checkIContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
         
-        tokens = None
-        if all(isinstance(item, tuple) for item in phrase):
-            tokens = [x for x, _ in phrase]
-        elif all((isinstance(item, string_types) or isinstance(item, int)) for item in phrase):
-            tokens = phrase
-        else:
-            self.myLogger.warning('Phrase type is not supported %s - returning unchanged results'%(phrase))
-            return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation
-
+        concepts = [k for k in graphResultsForPhraseToken.keys()]
+        hardConstrainsConceptsRelationsNames = []
+        for c in hardConstrains:
+            if isinstance(c, str):
+                hardConstrainsConceptsRelationsNames.append(c)
+            else:
+                hardConstrainsConceptsRelationsNames.append(c.name)
+                
+        self.__checkIContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+            
+        graphResultsForPhraseToken1 = next(iter(graphResultsForPhraseToken.values()))
+        tokens = [i for i ,_ in enumerate(graphResultsForPhraseToken1)]
+        
         try:
             # Create a new Gurobi model
             self.myIlpBooleanProcessor.resetCaches()
@@ -1380,135 +1565,140 @@ class gurobiILPOntSolver(ilpOntSolver):
             # -- Set objective
             Q = None
             
-            X_Q = self.addTokenConstrains(m, concepts, tokens, x, graphResultsForPhraseToken)
+            X_Q = self.addTokenConstrains(m, concepts, tokens, x, graphResultsForPhraseToken, hardConstrains=hardConstrainsConceptsRelationsNames)
             if X_Q is not None:
                 if Q is None:
                     Q = X_Q
                 else:
                     Q += X_Q
             
-            Y_Q = self.addRelationsConstrains(m, concepts, tokens, x, y, graphResultsForPhraseRelation)
+            Y_Q = self.addRelationsConstrains(m, concepts, tokens, x, y, graphResultsForPhraseRelation, hardConstrains=hardConstrainsConceptsRelationsNames)
             if Y_Q is not None:
                 Q += Y_Q
                 
-            Z_Q = self.addTripleRelationsConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseTripleRelation)
+            Z_Q = self.addTripleRelationsConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseTripleRelation, hardConstrains=hardConstrainsConceptsRelationsNames)
             if Z_Q is not None:
                 Q += Z_Q
             
-            if not hasattr(self, 'myOnto'): # --- Not Using Ontology as a source of constrains 
-                self.addLogicalConstrains(m, concepts, tokens, x, y, z, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
-
-            m.setObjective(Q, GRB.MAXIMIZE)
-
-            # Token is associated with a single concept
-            #for token in tokens:
-            #   constrainName = 'c_%s'%(token)
-            #    m.addConstr(quicksum(x[conceptName, token] for conceptName in conceptNames) <= 1, name=constrainName)
-            
-            m.update()
-
-            startOptimize = datetime.datetime.now()
-            self.myLogger.info('Optimizing model with %i variables and %i constrains'%(m.NumVars, m. NumConstrs))
-
-            m.optimize()
-            
-            endOptimize = datetime.datetime.now()
-            elapsedOptimize = endOptimize - startOptimize
-
-            if m.status == GRB.Status.OPTIMAL:
-                self.myLogger.info('Optimal solution was found - elapsed time: %ims'%(elapsedOptimize.microseconds/1000))
-            elif m.status == GRB.Status.INFEASIBLE:
-                 self.myLogger.warning('Model was proven to be infeasible.')
-            elif m.status == GRB.Status.INF_OR_UNBD:
-                 self.myLogger.warning('Model was proven to be infeasible or unbound.')
-            elif m.status == GRB.Status.UNBOUNDED:
-                 self.myLogger.warning('Model was proven to be unbound.')
+             # ILP Model objective setup
+            if minimizeObjective:
+                m.setObjective(Q, GRB.MINIMIZE)
             else:
-                 self.myLogger.warning('Optimal solution not was found - error code %i'%(m.status))
+                m.setObjective(Q, GRB.MAXIMIZE) # -------- Default
 
-            # Collect results for tokens
-            tokenResult = None
-            if graphResultsForPhraseToken is not None:
-                tokenResult = dict()
-                conceptNames = [k for k in graphResultsForPhraseToken.keys()]
-
-                if x or True:
-                    if m.status == GRB.Status.OPTIMAL:
-                        solution = m.getAttr('x', x)
-
-                        self.myLogger.info('')
-                        self.myLogger.info('---- Token Solutions ----')
-
-                        for conceptName in conceptNames:
-                            tokenResult[conceptName] = np.zeros(len(tokens))
-                            
-                            for tokenIndex, token in enumerate(tokens):
-                                if ((conceptName, token) in solution) and (solution[conceptName, token] == 1):                                    
-                                    tokenResult[conceptName][tokenIndex] = 1
-                                    self.myLogger.info('\"%s\" is \"%s\"'%(token,conceptName))
-
-            # Collect results for relations
-            relationResult = None
-            if graphResultsForPhraseRelation is not None: 
-                relationResult = dict()
-                relationNames = [k for k in graphResultsForPhraseRelation.keys()]
-                
-                if y or True:
-                    if m.status == GRB.Status.OPTIMAL:
-                        solution = m.getAttr('x', y)
-                                                
-                        self.myLogger.info('')
-                        self.myLogger.info('---- Relation Solutions ----')
-
-                        for relationName in relationNames:
-                            relationResult[relationName] = np.zeros((len(tokens), len(tokens)))
-                            
-                            for token1Index, token1 in enumerate(tokens):
-                                for token2Index, token2 in enumerate(tokens):
-                                    if token2 == token1:
-                                        continue
-                                    
-                                    if ((relationName, token1, token2) in solution) and (solution[relationName, token1, token2] == 1):
-                                        relationResult[relationName][token1Index][token2Index] = 1
-                                        
-                                        self.myLogger.info('\"%s\" \"%s\" \"%s\"'%(token1,relationName,token2))
-        
-            # Collect results for triple relations
-            tripleRelationResult = None
-            if graphResultsForPhraseTripleRelation is not None:
-                tripleRelationResult = {}
-                tripleRelationNames = [k for k in graphResultsForPhraseTripleRelation.keys()]
-                
-                for tripleRelationName in tripleRelationNames:
-                    tripleRelationResult[tripleRelationName] = np.zeros((len(tokens), len(tokens), len(tokens)))
-                
-                if z or True:
-                    if m.status == GRB.Status.OPTIMAL:
-                        solution = m.getAttr('x', z)
+            m.update()
+            
+            #if not hasattr(self, 'myOnto'): # --- Not Using Ontology as a source of constrains 
+            # - Process Logical constrains defined in graph
+            hardConstrains = {}
+            for c in hardConstrainsConceptsRelationsNames:
+                if c in graphResultsForPhraseToken:
+                    hardConstrains[c] = graphResultsForPhraseToken[c]
+                elif c in graphResultsForPhraseRelation:
+                    hardConstrains[c] = graphResultsForPhraseRelation[c]
+                elif c in graphResultsForPhraseTripleRelation:
+                    hardConstrains[c] = graphResultsForPhraseTripleRelation[c]
+                else:
+                    pass
+               
+            # Collect head logical constraints
+            _lcP = {}
+            _lcP[100] = []
+            for graph in self.myGraph:
+                for lcKey, lc in graph.logicalConstrains.items():
+                    if lc.headLC:                        
+                        if lc.p not in _lcP:
+                            _lcP[lc.p] = []
                         
-                        self.myLogger.info('')
-                        self.myLogger.info('---- Triple Relation Solutions ----')
+                        _lcP[lc.p].append(lc) # Keep constrain with the same p in the list 
+            
+            # Sort constraints according to their p
+            lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
+            for p in lcP:
+                self.myLogger.info('Found logical constraints with p %i - %s'%(p,lcP[p]))
 
-                        for tripleRelationName in tripleRelationNames:
-                            self.myLogger.info('Solutions for relation %s\n'%(tripleRelationName))
+            # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
+            lcRun = {} # Keeps information about subsequent model runs
+            ps = [] # List with processed p 
+            for p in lcP:
+                ps.append(p)
+                mP = m.copy() # Copy model for this run
+                
+                # Map variables to the new copy model
+                xP = {}
+                for _x in x:
+                    xP[_x] = mP.getVarByName(x[_x].VarName)
+                    
+                yP = {}
+                for _y in y:
+                    yP[_y] = mP.getVarByName(y[_y].VarName)
+                    
+                zP = {}
+                for _z in z:
+                    zP[_z] = mP.getVarByName(z[_z].VarName)
+                    
+                # Prepare set with logical constraints for this run
+                lcs = []
+                for _p in lcP:
+                    lcs.extend(lcP[_p])
 
-                            for token1Index, token1 in enumerate(tokens):
-                                for token2Index, token2 in enumerate(tokens):
-                                    if token1 == token2:
-                                        continue
-                                    
-                                    for token3Index, token3 in enumerate(tokens):
-                                        if token3 == token2:
-                                            continue
-                                        
-                                        if token3 == token1:
-                                            continue
-                                    
-                                        if ((tripleRelationName, token1, token2, token3) in solution) and (solution[tripleRelationName, token1, token2, token3] == 1):
-                                            tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
-                                        
-                                            self.myLogger.info('\"%s\" and \"%s\" and \"%s\" is in triple relation %s'%(token1,token2,token3,tripleRelationName))
-        
+                    if _p == p:
+                        break     
+    
+                # Add constraints to the copy model
+                self.addLogicalConstrains(lcs, mP, concepts, tokens, xP, yP, zP, hardConstrains=hardConstrains)
+                self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constrains'%(ps,mP.NumVars,mP.NumConstrs))
+
+                startOptimize = datetime.datetime.now()
+
+                # Run ILP model - Find solution 
+                mP.optimize()
+                
+                endOptimize = datetime.datetime.now()
+                elapsedOptimize = endOptimize - startOptimize
+    
+                # check model run result
+                solved = False
+                objValue = None
+                if mP.status == GRB.Status.OPTIMAL:
+                    self.myLogger.info('%s optimal solution was found with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    solved = True
+                    objValue = mP.ObjVal
+                elif mP.status == GRB.Status.INFEASIBLE:
+                     self.myLogger.warning('Model was proven to be infeasible.')
+                elif mP.status == GRB.Status.INF_OR_UNBD:
+                     self.myLogger.warning('Model was proven to be infeasible or unbound.')
+                elif mP.status == GRB.Status.UNBOUNDED:
+                     self.myLogger.warning('Model was proven to be unbound.')
+                else:
+                     self.myLogger.warning('Optimal solution not was found - error code %i'%(mP.status))
+                 
+                # Keep result of the hmodel run    
+                lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'yP':yP, 'zP':zP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}
+
+            # Select model run with the max/min objective value 
+            maxP = None
+            for p in lcRun:
+                if lcRun[p]['objValue']:
+                    if maxP:
+                        if minimizeObjective and lcRun[maxP]['objValue'] >= lcRun[p]['objValue']:
+                            maxP = p
+                        elif not minimizeObjective and lcRun[maxP]['objValue'] <= lcRun[p]['objValue']:
+                            maxP = p
+                    else:
+                         maxP = p
+               
+            # If found model - return best result          
+            if maxP:
+                self.myLogger.info('Best  solution found for p - %i'%(maxP))
+
+                tokenResult, relationResult, tripleRelationResult = \
+                    self.collectILPSelectionResults(lcRun[maxP]['mP'], lcRun[maxP]['xP'], lcRun[maxP]['yP'], lcRun[maxP]['zP'], tokens, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+            else:
+                tokenResult = None
+                relationResult = None
+                tripleRelationResult = None
+                                       
         except:
             self.myLogger.error('Error returning solutions')
             raise
@@ -1520,3 +1710,76 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Return results of ILP optimization
         return tokenResult, relationResult, tripleRelationResult
+    
+    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    def verifySelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
+        tokenResult, relationResult, tripleRelationResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, minimizeObjective, hardConstrains)
+        concepts = [k for k in graphResultsForPhraseToken.keys()]
+        self.__checkIContainNegativeProbability(concepts, tokenResult, relationResult, tripleRelationResult)
+
+        if graphResultsForPhraseToken:
+            for key in graphResultsForPhraseToken:
+                if key not in tokenResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseToken[key], tokenResult[key]):
+                    return False
+                
+        if graphResultsForPhraseRelation:
+            for key in graphResultsForPhraseRelation:
+                if key not in relationResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseRelation[key], relationResult[key]):
+                    return False
+                
+        if graphResultsForPhraseTripleRelation:
+            for key in graphResultsForPhraseTripleRelation:
+                if key not in tripleRelationResult:
+                    return False
+                
+                if not np.array_equal(graphResultsForPhraseTripleRelation[key], tripleRelationResult[key]):
+                    return False
+                
+        return True
+    
+    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    def verifySelectionLC(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
+        if not graphResultsForPhraseToken:
+            self.myLogger.warning('graphResultsForPhraseToken is None or empty - returning False')
+            return False
+            
+        concepts = [k for k in graphResultsForPhraseToken.keys()]
+        relations = [k for k in graphResultsForPhraseRelation.keys()]
+        
+        graphResultsForPhraseToken1 = next(iter(graphResultsForPhraseToken.values()))
+        tokens = [i for i ,_ in enumerate(graphResultsForPhraseToken1)]
+        
+        self.__checkIContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
+
+        hardConstrainsN = concepts + relations
+        
+        hardConstrains = {}
+        for c in hardConstrainsN:
+            if c in graphResultsForPhraseToken:
+                hardConstrains[c] = graphResultsForPhraseToken[c]
+            elif c in graphResultsForPhraseRelation:
+                hardConstrains[c] = graphResultsForPhraseRelation[c]
+            elif c in graphResultsForPhraseTripleRelation:
+                hardConstrains[c] = graphResultsForPhraseTripleRelation[c]
+            else:
+                pass
+            
+        m = None 
+        x = {}
+        y = {}
+        z = {} 
+        for graph in self.myGraph:
+            for lcKey, lc in graph.logicalConstrains.items():
+                if not lc.headLC:
+                    continue
+                    
+                self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self._constructLogicalConstrains(lc, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
+                
+                

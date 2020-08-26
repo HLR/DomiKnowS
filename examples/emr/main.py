@@ -69,6 +69,10 @@ def model_declaration(graph, vocab, config):
     return lbp
 
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
+
 def main():
     from config import CONFIG
 

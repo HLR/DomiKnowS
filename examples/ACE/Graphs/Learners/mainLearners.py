@@ -21,8 +21,8 @@ class CallingLearner(CallingSensor):
     def update_parameters(self):
         if not self.updated:
             for pre in self.pres:
-                for name, learner in pre.find(CallingLearner):
-                    self.model.add_module(name=name, module=learner.model)
+                for learner in pre.find(CallingLearner):
+                    self.model.add_module(name=learner.name, module=learner.model)
             self.updated = True
 
     def save(self, filepath):

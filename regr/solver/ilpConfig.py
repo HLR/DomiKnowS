@@ -7,6 +7,7 @@ ilpConfig = {
     'ilpSolver' : REGR_SOLVER,
 
     # Logging configuration for ilpOntSolver
+    'ifLog': True,
     'log_name' : 'ilpOntSolver', 
     'log_level' : logging.DEBUG,
     'log_filename' : 'ilpOntSolver.log',

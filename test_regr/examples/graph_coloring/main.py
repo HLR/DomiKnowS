@@ -1,58 +1,80 @@
 import sys
+import pytest
 
 sys.path.append('.')
 sys.path.append('../..')
 
-import pytest
-from reader import CityReader
 
+def model_declaration():
+    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
+    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    from regr.program import LearningBasedProgram
+    from regr.program.model.pytorch import model_helper, PoiModel
 
-
-def model_declaration(config):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    
-
-    from graph import graph, world, city, neighbor, world_contains_city, neighbor_city1, neighbor_city2, firestationCity
-
-    from sensors import DummyLearner, DummyEdgeSensor, CustomReader
+    from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
+    from sensors import DummyCityLearner
 
     graph.detach()
 
-    world['raw'] = ReaderSensor(keyword='world')
-
-    # Edge: sentence to word forward
-    world_contains_city['forward'] = DummyEdgeSensor(
-        'raw', mode='forward', keyword='raw')
-
-    neighbor['raw'] = CustomReader(keyword='raw')
-    neighbor['raw'] = CustomReader(keyword='raw')
-
-    city[firestationCity] = DummyLearner('raw')
-    city[firestationCity] = ReaderSensor(keyword='raw', label=True)
+    # --- City
+    world['index'] = ReaderSensor(keyword='world')
+    world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
 
 
+    def readNeighbors(links, current_neighbers, city1, city2):
+        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
+            return True
+        else:
+            return False
 
-    program = config.program.Type(graph, **config.program)
+    neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
+
+    # --- Learners
+    city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
+    
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[city[firestationCity], neighbor['index']]))
     return program
-
 
 
 @pytest.mark.gurobi
 def test_graph_coloring_main():
-    from config import CONFIG
-    lbp = model_declaration(CONFIG.Model)
+    from reader import CityReader
+    from graph import city, neighbor, firestationCity
 
-    dataset = CityReader().run() # Adding the info on the reader
+    lbp = model_declaration()
 
-    # dataset = None # FIXME: shouldn't this example anyway based on a iterable object as data source?
-    for output in lbp.eval(dataset=dataset, inference=True):
-        print(output)
+    dataset = CityReader().run()  # Adding the info on the reader
 
-    # using an underlying call
-    # loss, metric, datanode = lbp.model({}, inference=True)
-    conceptsRelations = [] # TODO: please fill this
-    # tokenResult, pairResult, tripleResult = datanode.inferILPConstrains(*conceptsRelations, fun=None)
-    print('I am here!')
+    for datanode in lbp.populate(dataset=dataset):
+        assert datanode != None
+        assert len(datanode.getChildDataNodes()) == 9
+
+        for child_node in datanode.getChildDataNodes():
+            assert child_node.ontologyNode == city
+            assert child_node.getAttribute('<' + firestationCity.name + '>')[0] == 0
+            assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
+
+        # call solver
+        conceptsRelations = (firestationCity, neighbor)  
+        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
+
+        result = []
+        for child_node in datanode.getChildDataNodes():
+            s = child_node.getAttribute('index')
+            f = child_node.getAttribute(firestationCity, 'ILP').item()
+            if f > 0:
+                r = (s, True)
+            else:
+                r = (s, False)
+            result.append(r)
+
+        for child_index, child_node in enumerate(datanode.getChildDataNodes()):
+            if child_index + 1 == 1:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
+            elif child_index + 1 == 6:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
+            else:
+                assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
 
 
 if __name__ == '__main__':

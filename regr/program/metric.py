@@ -2,14 +2,17 @@ from collections import defaultdict
 from typing import Any
 
 import torch
+from torch.nn import functional as F
 
 from ..utils import wrap_batch, value, FormatPrinter
+from ..base import AutoNamed
 
 
-class CMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, weight=None):
+class BinaryCMWithLogitsMetric(torch.nn.Module):
+    def forward(self, input, target, weight=None, dim=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
+        weight = weight.long()
         preds = (input > 0).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
         assert (0 <= labels).all() and (labels <= 1).all()
@@ -18,6 +21,14 @@ class CMWithLogitsMetric(torch.nn.Module):
         tn = ((1 - preds) * (1 - labels) * weight).sum()
         fn = ((1 - preds) * labels * weight).sum()
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
+
+
+class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
+    def forward(self, input, target, weight=None):
+        num_classes = input.shape[-1]
+        input = input.view(-1, num_classes)
+        target = F.one_hot(target.view(-1), num_classes=num_classes)
+        return super().forward(input, target, weight)
 
 
 class PRF1WithLogitsMetric(CMWithLogitsMetric):
@@ -61,6 +72,16 @@ class MetricTracker(torch.nn.Module):
     def __getitem__(self, keys):
         return lambda *args, **kwargs: self.__call_dict__(keys, *args, **kwargs)
 
+    def kprint(self, k):
+        if (
+            isinstance(k, tuple) and
+            len(k) == 2 and
+            isinstance(k[0], AutoNamed) and 
+            isinstance(k[1], AutoNamed)):
+            return k[0].sup.name.name
+        else:
+            return k
+
     def value(self, reset=False):
         if self.list and self.dict:
             raise RuntimeError('{} cannot be used as list-like and dict-like the same time.'.format(type(self)))
@@ -71,7 +92,7 @@ class MetricTracker(torch.nn.Module):
             #value = wrap_batch(self.dict)
             #value = super().__call__(value)
             func = super().__call__
-            value = {k: func(v) for k, v in self.dict.items()}
+            value = {self.kprint(k): func(v) for k, v in self.dict.items()}
         else:
             value = None
         if reset:
@@ -98,9 +119,15 @@ class MacroAverageTracker(MetricTracker):
         retval = apply(values)
         return retval
 
-class PRF1Tracker(MetricTracker):
+
+class ValueTracker(MetricTracker):
+    def forward(self, values):
+        return values
+
+
+class BinaryPRF1Tracker(MetricTracker):
     def __init__(self):
-        super().__init__(CMWithLogitsMetric())
+        super().__init__(BinaryCMWithLogitsMetric())
 
     def forward(self, values):
         CM = wrap_batch(values)
@@ -116,6 +143,11 @@ class PRF1Tracker(MetricTracker):
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
         return {'P': value(p), 'R': value(r), 'F1': value(f1)}
+
+
+class PRF1Tracker(BinaryPRF1Tracker):
+    def __init__(self):
+        super(BinaryPRF1Tracker).__init__(CMWithLogitsMetric())
 
 
 class MetricKey():

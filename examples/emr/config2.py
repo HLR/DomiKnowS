@@ -1,14 +1,13 @@
 import torch
 
 from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-from regr.program import LearningBasedProgram
 from regr.utils import Namespace, caller_source
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.loss import BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
+from regr.program.metric import MacroAverageTracker, BinaryPRF1Tracker
+from regr.program.loss import BCEWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
 
+from emr.program.program import LearningBasedProgram
 from emr.program.primaldual import PrimalDualLearningBasedProgram
 from emr.program.model.torch import SolverModel, IMLModel
-from emr.program.model.loss import BWithLogitsIMLoss
 from emr.solver.solver import Solver, IndexSolver
 
 
@@ -18,21 +17,21 @@ lbps = {
         'model': lambda graph: SolverModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            metric=PRF1Tracker(),
+            metric=BinaryPRF1Tracker(),
             Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, IndexSolver))},
     'iml': {
         'type': LearningBasedProgram,
         'model': lambda graph: IMLModel(
             graph,
-            loss=MacroAverageTracker(BWithLogitsIMLoss(0)),
-            metric=PRF1Tracker(),
+            loss=MacroAverageTracker(BCEWithLogitsIMLoss(0)),
+            metric=BinaryPRF1Tracker(),
             Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
     'primal-dual': {
         'type': PrimalDualLearningBasedProgram,
         'model': lambda graph: SolverModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
-            metric=PRF1Tracker(),
+            metric=BinaryPRF1Tracker(),
             Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
 }
 
