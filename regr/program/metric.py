@@ -147,7 +147,7 @@ class BinaryPRF1Tracker(MetricTracker):
 
 class PRF1Tracker(BinaryPRF1Tracker):
     def __init__(self):
-        super(BinaryPRF1Tracker).__init__(CMWithLogitsMetric())
+        super(BinaryPRF1Tracker, self).__init__(CMWithLogitsMetric())
 
 
 class MetricKey():
