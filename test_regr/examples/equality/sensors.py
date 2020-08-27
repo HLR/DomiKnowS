@@ -30,5 +30,4 @@ class TokenizerSpan(TorchSensor):
             else:
                 ids_index.append((start, start + len(item) - 1))
             start += len(item)
-        print(ids_index)
         return [(None, None)] + ids_index + [(None, None)]
