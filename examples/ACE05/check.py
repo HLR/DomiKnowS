@@ -31,7 +31,7 @@ def compile_event_rules(events_graph):
             argument_types = [argument_type]
         else:
             assert False
-        assert x == x_ and y == y_
+        assert xy == x_ + y_
         role = role_argument.name[len(event.name)+1:]
         event_rules[event, role] = argument_types
     return event_rules
@@ -56,7 +56,7 @@ def validate_rel_arg(rel, *args, relation, xy, implication):
                 new_impls.append(impl)
                 continue
             impl_group = []
-            while not isinstance(impl, str):
+            while not isinstance(impl, tuple):
                 impl_group.append(impl)
                 impl = next(impls)
             impl_group.append(impl)
@@ -69,8 +69,10 @@ def validate_rel_arg(rel, *args, relation, xy, implication):
         else:
             raise ValueError(f'Implication of relation {relation} not recognized: {implication}')
     elif isinstance(implication, (list, tuple)):
-        *concepts, arg_str = implication
+        *concepts, arg_tuple = implication
         assert all(isinstance(concept, Concept) for concept in concepts)
+        assert len(arg_tuple) == 1
+        arg_str = arg_tuple[0]
         assert arg_str in xy
         index = xy.index(arg_str)
         arg = args[index]

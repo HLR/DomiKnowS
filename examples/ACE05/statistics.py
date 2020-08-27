@@ -22,11 +22,16 @@ def stat(path, list_path, status):
     print('Testing:', len(test_reader))
 
     reader = Reader(path, status=status)
-    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0}
+    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None}
     for data_item in tqdm(reader):
         spans = data_item['spans']
         mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), filter(lambda span: isinstance(span, Entity), spans.values())))))
         span_stat['mentions'] += len(mentions)
+        for _, mention in mentions:
+            length = mention.extent.end - mention.extent.start
+            if length > span_stat['max_len']:
+                span_stat['max_len'] = length
+                span_stat['max_len_sample'] = data_item['text'] + '-'*40 + '\n' + mention.extent.text
         for (span1, mention1), (span2, mention2) in combinations(mentions, r=2):
             if (mention1.extent.start == mention2.extent.start and
                 mention1.extent.end == mention2.extent.end):
