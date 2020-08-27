@@ -18,11 +18,11 @@ def model(graph, ):
     ling_graph = graph['linguistic']
     document = ling_graph['document']
     token = ling_graph['token']
-    sentence_contains_word = document.relate_to(token)[0]
+    document_contains_word = document.relate_to(token)[0]
 
     document['index'] = ConstantSensor(data='John works for IBM.')  #ReaderSensor(keyword='text')
     tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
-    sentence_contains_word['forward'] = Tokenizer('index', mode='forward', to='index', tokenizer=tokenizer)
+    document_contains_word['forward'] = Tokenizer('index', mode='forward', to='index', tokenizer=tokenizer)
 
     # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
     class BERT(torch.nn.Module):
