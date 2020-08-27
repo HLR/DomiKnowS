@@ -10,15 +10,16 @@ Relation.clear()
 
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:
-        word = Concept(name='word')
-        phrase = Concept(name='phrase')
-        sentence = Concept(name='sentence')
-        phrase.contains(word)
-        sentence.contains(word)
-        sentence.contains(phrase)
+        token = Concept(name='token')
+        span = Concept(name='span')
+        document = Concept(name='document')
+        span.contains(token)
+        span.has_a(start=token, end=token)
+        document.contains(token)
+        document.contains(span)
 
         pair = Concept(name='pair')
-        pair.has_a(phrase, phrase)
+        pair.has_a(span, span)
 
     with Graph('ACE05') as ace05:
         with Graph('Entities') as entities_graph:
@@ -26,7 +27,7 @@ with Graph('global') as graph:
             # Version 5.6.6 2006.08.01
 
             # Entity - Entities may be referenced in a text by their name, indicated by a common noun or noun phrase, or represented by a pronoun.
-            entity = phrase(name='Entity')
+            entity = span(name='Entity')
 
             # Entity Class - Each taggable entity must be assigned a class that describes the kind of reference the entity makes to something in the world.
             # TODO: this is a property has a value being one of NEG, SPC, GEN, USP
@@ -61,9 +62,9 @@ with Graph('global') as graph:
             # Weapon – Weapon entities are limited to physical devices primarily used as instruments for physically harming or destroying other entities.
             weapon = entity(name='WEA')
             # special - timex2
-            timex2 = phrase(name='Timex2')
+            timex2 = span(name='Timex2')
             # special - value
-            value = phrase(name='value')
+            value = span(name='value')
             num = value(name='Numeric')
             money = num(name='Money')
             percent = num(name='Percent')
@@ -364,7 +365,7 @@ with Graph('global') as graph:
             # ACE (Automatic Content Extraction) English Annotation Guidelines for Events
             # Version 5.4.3 2005.07.01
 
-            trigger = word(name='trigger')
+            trigger = span(name='trigger')
             # NOTE: do we need the abstract event or base it on trigger?
             event = Concept(name='Event')
             event.has_a(trigger)
@@ -377,7 +378,7 @@ with Graph('global') as graph:
             # Create concept based on pair so that we can predit them
             # Here we define the base concepts
             event_argument = pair(name='EventArgument')
-            event_argument.has_a(event=event, argument=phrase)
+            event_argument.has_a(event=event, argument=span)
             participant_argument = event_argument(name='Participant')
             attribute_argument = event_argument(name='Attribute')
             # and a shortcut function to create role concept and rule
