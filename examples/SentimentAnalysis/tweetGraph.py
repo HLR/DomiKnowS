@@ -63,7 +63,7 @@ twit[PositiveLabel] = ModuleLearner('emb', module = Net())
 twit[NegativeLabel] = ModuleLearner('emb', module = Net())
 
 #The reader will return the whole list of learning examples each of which is a dictionary
-ReaderObjectsIterator = SentimentReader("examples/SentimentAnalysis/twitter_data/train5k.csv", "csv")
+ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 
 #The program takes the graph and learning approach as input
 program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())

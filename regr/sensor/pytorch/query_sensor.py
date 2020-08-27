@@ -76,7 +76,7 @@ class CandidateSensor(QuerySensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
 
-        output = torch.zeros(dims, dtype=torch.uint8)
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
@@ -131,4 +131,59 @@ class CandidateReaderSensor(CandidateSensor):
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
+        return output
+
+
+class CandidateEqualSensor(QuerySensor):
+    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):
+        super().__init__(*pres, edges=edges, label=label, device=device)
+        if relations:
+            self.relations = relations
+        else:
+            self.relations = []
+        
+    @property
+    def args(self):
+        if len(self.relations):
+            return [self.concept.equal()[0].src, self.relations[0].dst]
+        else:
+            return [self.concept.equal()[0].src, self.concept.equal()[0].dst]
+        
+    def update_pre_context(
+            self,
+            data_item: Dict[str, Any]
+    ) -> Any:
+        super().update_pre_context(data_item)
+        for concept in self.args:
+            concept['index'](data_item)  # call index property to make sure it is constructed
+
+    def define_inputs(self):
+        super().define_inputs()
+        args = []
+        for concept in self.args:
+            print(concept)
+            root = self.builder.getDataNode()
+            datanodes = root.findDatanodes(select=concept)
+            args.append(datanodes)
+        print(args)
+        self.inputs = self.inputs[:1] + args + self.inputs[1:]
+
+    def forward_wrap(self):
+        # current existing datanodes (if any)
+        datanodes = self.inputs[0]
+        # args
+        args = self.inputs[1:len(self.args) + 1]
+        # functional inputs
+        inputs = self.inputs[len(self.args) + 1:]
+
+        arg_lists = []
+        dims = []
+        for arg_list in args:
+            arg_lists.append(enumerate(arg_list))
+            dims.append(len(arg_list))
+        print(list(arg_lists[1]))
+        output = torch.zeros(dims, dtype=torch.uint8, names=(self.args[0].name+'_equal', self.args[1].name + "_equal"))
+        for arg_enum in product(*arg_lists):
+            index, arg_list = zip(*arg_enum)
+            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
         return output

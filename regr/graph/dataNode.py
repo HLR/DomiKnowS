@@ -810,7 +810,7 @@ class DataNode:
                     currentCandidate3 = currentCandidate[2]
                     currentProbability = dnFun(currentConceptOrRelation, *currentCandidate, fun=fun, epsilon=epsilon)
                     
-                    __myLogger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
+                    _DataNode__Logger.debug("currentConceptOrRelation is %s for relation %s and tokens %s %s %s - no variable created"%(currentConceptOrRelation,currentCandidate1,currentCandidate2,currentCandidate3,currentProbability))
 
                     if currentProbability:
                         graphResultsForTripleRelations[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID][currentCandidate3.instanceID]= currentProbability
@@ -1310,26 +1310,75 @@ class DataNodeBuilder(dict):
         # ---------- 
         
         # Add them as children to existing dataNodes - Forward information in the sensor data
-        if len(conceptInfo['containedIn']) > 0: # Number of parent concepts to the new dataNodes
-            for currentParentConcept in conceptInfo['containedIn']:
-                currentParentConceptName = currentParentConcept.name
-                currentParentDns = existingRootDns[0].findDatanodes(existingRootDns, currentParentConceptName)
-                
-                if currentParentDns:
-                    if len(currentParentDns) == len(dns):
-                        _DataNodeBulder__Logger.info('Adding dataNodes as children to %i dataNodes of type %s'%(len(currentParentDns),currentParentConceptName))
-                    else:
-                        _DataNodeBulder__Logger.error('Number of dataNodesets %i different the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
-                        continue
+        for currentParentConcept in conceptInfo['containedIn']:
+            currentParentConceptName = currentParentConcept.name
+            currentParentDns = existingRootDns[0].findDatanodes(existingRootDns, currentParentConceptName)
+            
+            if currentParentDns:
+                if len(currentParentDns) == len(dns):
+                    _DataNodeBulder__Logger.info('Adding dataNodes as children to %i dataNodes of type %s'%(len(currentParentDns),currentParentConceptName))
                 else:
-                    _DataNodeBulder__Logger.info('Not found any dataNode type %s - this type is in the list of types of potential children of the current concept'%(currentParentConceptName))
+                    _DataNodeBulder__Logger.error('Number of dataNodesets %i different the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
+                    continue
+            else:
+                _DataNodeBulder__Logger.info('Not found any dataNode type %s - this type is in the list of types of potential children of the current concept'%(currentParentConceptName))
+            
+            for currentParentDnIndex, currentParentDn in enumerate(currentParentDns):
+                for curentChildDn in dns[currentParentDnIndex]: # Set of new dataNodes for the current parent dataNode
+                    currentParentDn.addChildDataNode(curentChildDn)    
+                                           
+                _DataNodeBulder__Logger.info('Added %i dataNodes %s as children to the dataNode with id %s'%(len(dns[currentParentDnIndex]),dns[currentParentDnIndex],currentParentDn.instanceID))
+                _dnLinked = True # New dataNodes are linked with existing dataNodes
+                    
+        # Checking if are roots
+        if conceptInfo['root']:  # dataNodes belong to Root concept
+            dnsRoots = None
+            
+            if dict.__contains__(self, 'dataNode'):
+                dnsRoots = dict.__getitem__(self, 'dataNode')
+                _DataNodeBulder__Logger.debug('Existing elements in the root dataNodes list - %s'%(dnsRoots))
+            
+            flattenDns = []
+            for dList in dns:
+                flattenDns.extend(dList)
                 
-                for currentParentDnIndex, currentParentDn in enumerate(currentParentDns):
-                    for curentChildDn in dns[currentParentDnIndex]: # Set of new dataNodes for the current parent dataNode
-                        currentParentDn.addChildDataNode(curentChildDn)    
-                                               
-                    _DataNodeBulder__Logger.info('Added %i dataNodes %s as children to the dataNode with id %s'%(len(dns[currentParentDnIndex]),dns[currentParentDnIndex],currentParentDn.instanceID))
-                    _dnLinked = True # New dataNodes are linked with existing dataNodes
+            if (len(flattenDns) == 1):
+                _DataNodeBulder__Logger.info('The new dataNode is a Root dataNode')
+    
+                if "READER" in self:
+                    _dn.instanceID = dict.__getitem__(self, "READER")
+                    _DataNodeBulder__Logger.debug('Using key \"READER\"  - %s, as a id for the dataNode'%(_dn.instanceID))
+            else:
+                 _DataNodeBulder__Logger.info('The new dataNodes are Root dataNode')
+            
+            if not dnsRoots:
+                dnsRoots = []
+                        
+            # Update list of root dataNotes              
+            newDnsRoots = []
+            
+            for dnE in dnsRoots: # How to do it for multiply new dataNodes?
+                if 'contains' not in dnE.impactLinks: # if exiting root dataNote is still not connected to other dataNotes
+                    newDnsRoots.append(dnE)
+                    
+            newDnsRoots.extend(flattenDns) # Add the created datanNodes to the Root list
+            _dnLinked = True
+            
+            _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
+            dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
+            
+        # Check if the new dataNodes are connected to existing dataNodes, if not add them to the list of root dataNodes
+        if not _dnLinked:
+            _DataNodeBulder__Logger.info('The new dataNodes have not been linked with existing dataNodes - adding them to the list of root dataNodes')
+            
+            dnsRoots = dict.__getitem__(self, 'dataNode')
+            
+            flattenDns = []
+            for dList in dns:
+                flattenDns.extend(dList)
+                
+            dnsRoots.extend(flattenDns)
+            _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(dnsRoots))
                     
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1337,7 +1386,6 @@ class DataNodeBuilder(dict):
         existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
         existingDnsForConcept = existingRootDns[0].findDatanodes(existingRootDns, conceptName) # Try to get DataNodes of the current concept
             
-
         if keyDataName in existingDnsForConcept[0].attributes:
             _DataNodeBulder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
         else:
@@ -1368,7 +1416,6 @@ class DataNodeBuilder(dict):
             return # Done - End the method
         else:
             # ---------- DataNodes already created
-            
             existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
             existingDnsForConcept = existingRootDns[0].findDatanodes(existingRootDns, conceptName) # Try to get DataNodes of the current concept
             
@@ -1398,7 +1445,7 @@ class DataNodeBuilder(dict):
             if isinstance(value, list): # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
             elif isinstance(value, Tensor):
-                return ValueInfo(len = 1, value = value.item(), dim=0)
+                return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
         if len(value) ==  2 and keyDataName[0] == '<': 
