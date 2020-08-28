@@ -1,6 +1,7 @@
 from pprint import pprint
 from itertools import chain, combinations
 from tqdm import tqdm
+import numpy as np
 
 from regr.graph import Concept
 from regr.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
@@ -10,6 +11,29 @@ from ace05.annotation import Entity, Timex2, Value
 from ace05.graph import relations_graph, events_graph, participant_argument, attribute_argument, timex2, value
 import config
 
+def get_mentions(data_item):
+    spans = data_item['spans']
+    mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), filter(lambda span: isinstance(span, Entity), spans.values())))))
+    return mentions
+
+def get_mentions_in_event(data_item):
+    spans = data_item['spans']
+    events = data_item['events']
+    in_event = set()
+    for emention in chain(*(event.mentions.values() for event in events.values())):
+        for argument in emention.arguments:
+            in_event.add(argument.ref)
+    def is_entity(span):
+        return isinstance(span, Entity)
+    spans = filter(is_entity, spans.values())
+    mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), spans))))
+    def is_in_event(span_mention):
+        span, mention = span_mention
+        return mention in in_event
+    mentions = list(filter(is_in_event, mentions))
+    return mentions
+
+get_mentions = get_mentions #get_mentions_in_event
 
 def stat(path, list_path, status):
     errors = {}
@@ -22,16 +46,20 @@ def stat(path, list_path, status):
     print('Testing:', len(test_reader))
 
     reader = Reader(path, status=status)
-    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None}
+    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None, 'length': None, 'head_length': None}
+    length_list = []
+    head_length_list = []
     for data_item in tqdm(reader):
-        spans = data_item['spans']
-        mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), filter(lambda span: isinstance(span, Entity), spans.values())))))
+        mentions = get_mentions(data_item)
         span_stat['mentions'] += len(mentions)
         for _, mention in mentions:
             length = mention.extent.end - mention.extent.start
+            length_list.append(length)
+            head_length = mention.head.end - mention.head.start
+            head_length_list.append(head_length)
             if length > span_stat['max_len']:
                 span_stat['max_len'] = length
-                span_stat['max_len_sample'] = data_item['text'] + '-'*40 + '\n' + mention.extent.text
+                span_stat['max_len_sample'] = data_item['text'] + '-'*40 + '\n' + mention.extent.text + '-'*40 + '\n' + mention.head.text
         for (span1, mention1), (span2, mention2) in combinations(mentions, r=2):
             if (mention1.extent.start == mention2.extent.start and
                 mention1.extent.end == mention2.extent.end):
@@ -53,8 +81,9 @@ def stat(path, list_path, status):
             else:
                 span_stat['inclusion'] += 1
 
-        # relations = data_item['relations']
-        # events = data_item['events']
+    span_stat['length'] = np.histogram(length_list)
+    span_stat['head_length'] = np.histogram(head_length_list)
+    del span_stat['max_len_sample']
     return span_stat
 
 
