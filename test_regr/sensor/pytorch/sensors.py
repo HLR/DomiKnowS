@@ -19,7 +19,12 @@ class TestSensor(ConstantSensor):
 
     def forward(self, *inputs) -> Any:
         if self.expected_inputs is not None:
-            assert tuple(inputs) == tuple(self.expected_inputs)
+            assert len(inputs) == len(self.expected_inputs)
+            for input, expected_input in  zip(inputs, self.expected_inputs):
+                if isinstance(input, torch.Tensor):
+                    assert (input == expected_input).all()
+                else:
+                    assert input == expected_input
         return super().forward(*inputs)
 
 

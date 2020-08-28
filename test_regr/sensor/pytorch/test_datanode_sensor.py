@@ -44,15 +44,15 @@ def graph(case):
     container['index'] = ReaderSensor(keyword='container_keyword')
     container_contains_concept['forward'] = TestEdgeSensor(
         'index', mode='forward', to='index',
-        expected_inputs=[case.container,],
+        expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
     concept['reader1'] = TestSensor(
         'index', edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
+        expected_inputs=(case.container_edge,),
         expected_outputs=case.reader1)
     concept['reader2'] = TestSensor(
         'index', edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
+        expected_inputs=(case.container_edge,),
         expected_outputs=case.reader2)
 
     return graph
