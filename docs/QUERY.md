@@ -83,14 +83,16 @@ The examples:
 
 Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. 
 
-Each sensor has its previous context dictionary replaced with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. 
+Each sensor has its context dictionary implemented with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. 
 It creates Data Graph based on sensors' context update.
 
-The primary used overloaded method is:
+The overloaded method:
 
 ```python
 __setitem__(self, key, value)
 ```
+
+updates the created DataNode with information submitted to the dictionary by the sensors.
 
 The *key* is assumed to consists of three parts: *<graphPath> <conceptOrRelationName> <attributeKey>*.
 
@@ -102,27 +104,29 @@ the examples of key:
 
 - *tweet/tweet/<PositiveLabel>/readersensor-1* - where first *tweet* is the graph path, the next *tweet* is the concept name and *<PositiveLabel>/readersensor-1* is an attribute key.
 
-The key needs all these **three** elements otherwise the *set* method is logs and error and returns.
+The key needs all these **three** elements otherwise the *set* method logs an error and returns.
 
 The *conceptOrRelationName* part is used to create the new DataNode when first provided in the key to the *DataNodeBuilder*. The next time it will be used to create or update attribute in existing DataNodes of this *conceptOrRelationName* type.
 The value determine how many new DataNodes are created. 
 
-The value cannot be **None** otherwise tthe *set* method is logs and error and returns.
+The value cannot be **None** otherwise the *set* method logs an error and returns.
 
 The value is assumed to provide single element (contribute to single DataNode) if the value is:
 - not Tensor or List,
 - Tensor but of the dimension 0,
-- Tensor or List of length 1,
+- Tensor or List of length 1 and with dimension 1.
 - Tensor of length 2 but its key *attributeKey* part has first word embedded in '<'.
 
 In this case a single new DataNode is created. If the single DataNode is determined to be for created for the root concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
 
-If the value is determined to be Tensor or List and not assumed to represent single value then its dimension is determine for Tensor it is based on *dim()* method, in the case of List based on nest level of the first list element.
+If the value is Tensor or List and not assumed to represent single value then its dimension is determine -  for Tensor it is based on *dim()* method, for List based on nest level of the first list element.
 The value with dimension equal 1 is assumed to represent single set of DataNodes. The value with dimension 2 represent multiply sets of DataNodes to be created.
 
-After the creation of these sets they are attempted to be connected with other DataNodes, if already created. The graph provide information about parents concept and the sets of the newly created DataNodes are added to the DataNodes found to be parents.
+The sets of newly created dataNode are matched with dataNodes created for the parent concept. So for instance Tensor with shape[1,5] will result with creation of 5 dataNodes and their assignment as children to a single parent dataNode.
+Tensor with shape[3,4] will result with creation of 4 dataNodes sets of 4 dataNodes and their assignment as children to a 3 parent dataNodes.
 
-The subsequent submission values length need to match the number of DataNodes created for the given concept or relation.m
+The subsequent submission values length need to match the number of DataNodes created for the given concept or relation. So for instance Tensor with shape[3,7,4] will update 3 dataNodes with Tensor of shape[7,4].
+In order to assign attribute value to dataNode created with Tensor with shape[3,4] the tensor will need to have it first shape element equal 12.
 
 There are two methods returning constructed dataNodes.
 

@@ -65,7 +65,7 @@ def model(graph, ):
     be_born_participant_person = next(find_event_arg(be_born, participant_argument, PER))
 
     document['index'] = TestSensor(expected_outputs='John works for IBM .')
-    dct['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.arange(5).reshape(5,1))
+    dct['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.arange(5).reshape(1,5))
     # span['index'] = CandidateSensor(token['index'], forward=lambda *_: True)
     # pair['index'] = CandidateSensor(forward=lambda *_: True)
     # pair['emb'] = ConstantSensor('index', data=np.random.randn(5,5,10))
