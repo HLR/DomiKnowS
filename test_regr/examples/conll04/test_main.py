@@ -71,18 +71,18 @@ def model_declaration(config, case):
         expected_outputs=case.word.raw)
     word['emb'] = TestSensor(
         'index', edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
     rel_word_contains_char['forward'] = TestEdgeSensor(
         'index', mode='forward', to='index',
         edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.char.raw)
     char['emb'] = TestSensor(
         'index', edges=[rel_word_contains_char['forward']],
-        expected_inputs=[case.char.raw,],
+        expected_inputs=(case.char.raw,),
         expected_outputs=case.word.emb)
     char['emb'] = TestSensor(label=True)  # just to trigger calculation
 
@@ -90,28 +90,28 @@ def model_declaration(config, case):
     rel_phrase_contains_word['backward'] = TestEdgeSensor(
         'index', mode='backward', to='index',
         edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.phrase.raw)
     phrase['emb'] = TestSensor(
         'index', edges=[rel_phrase_contains_word['backward']],
-        expected_inputs=[case.phrase.raw,],
+        expected_inputs=(case.phrase.raw,),
         expected_outputs=case.phrase.emb)
     phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = TestEdgeSensor(
         'emb', mode='backward', to='word1_emb',
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.emb)
     rel_pair_word2['backward'] = TestEdgeSensor(
         'emb', mode='backward', to='word2_emb',
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.emb)
 
     pair['emb'] = TestSensor(
         'word1_emb', 'word2_emb',
         edges=[rel_pair_word1['backward'], rel_pair_word2['backward']],
-        expected_inputs=[case.word.emb, case.word.emb],
+        expected_inputs=(case.word.emb, case.word.emb),
         expected_outputs=case.pair.emb)
 
     word[people] = TestSensor(
@@ -132,23 +132,23 @@ def model_declaration(config, case):
 
     word[people] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.people)
     word[organization] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.organization)
     word[location] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.location)
     word[other] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.other)
     word[o] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.O)
 
     phrase[people] = TestSensor(
@@ -156,7 +156,7 @@ def model_declaration(config, case):
         expected_outputs=case.phrase.people)
     phrase[people] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.phrase.emb,],
+        expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.people)
 
 
@@ -178,23 +178,23 @@ def model_declaration(config, case):
 
     pair[work_for] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.work_for)
     pair[located_in] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.located_in)
     pair[live_in] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.live_in)
     pair[orgbase_on] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.orgbase_on)
     pair[orgbase_on] = TestSensor(
         'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.kill)
 
     lbp = LearningBasedProgram(graph, **config)
