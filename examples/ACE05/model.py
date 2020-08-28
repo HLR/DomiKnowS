@@ -16,13 +16,13 @@ def model(graph, ):
     graph.detach()
 
     ling_graph = graph['linguistic']
-    sentence = ling_graph['sentence']
-    word = ling_graph['word']
-    sentence_contains_word = sentence.relate_to(word)[0]
+    document = ling_graph['document']
+    token = ling_graph['token']
+    document_contains_word = document.relate_to(token)[0]
 
-    sentence['index'] = ConstantSensor(data='John works for IBM.')  #ReaderSensor(keyword='text')
+    document['index'] = ConstantSensor(data='John works for IBM.')  #ReaderSensor(keyword='text')
     tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
-    sentence_contains_word['forward'] = Tokenizer('index', mode='forward', to='index', tokenizer=tokenizer)
+    document_contains_word['forward'] = Tokenizer('index', mode='forward', to='index', tokenizer=tokenizer)
 
     # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
     class BERT(torch.nn.Module):
@@ -38,7 +38,7 @@ def model(graph, ):
     # to freeze BERT, uncomment the following
     # for param in emb_model.base_model.parameters():
     #     param.requires_grad = False
-    word['emb'] = ModuleLearner('index', module=BERT())
-    program = POIProgram(graph, poi=(word['emb'],))
+    token['emb'] = ModuleLearner('index', module=BERT())
+    program = POIProgram(graph, poi=(token['emb'],))
 
     return program

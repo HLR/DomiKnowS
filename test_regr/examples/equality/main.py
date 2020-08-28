@@ -8,31 +8,31 @@ sys.path.append('../../..')
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, \
-        ConstantSensor
+        ConstantSensor, ConstantEdgeSensor
     from regr.sensor.pytorch.query_sensor import CandidateEqualSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import model_helper, PoiModel
 
-    from graph import graph, word, word1, sentence, word_equal_word1, sentence_con_word
+    from graph import graph, word, word1, sentence, word_equal_word1, sentence_con_word, sentence_con_word1
     from sensors import Tokenizer, TokenizerSpan
     graph.detach()
 
     # --- City
     sentence['index'] = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
     sentence_con_word['forward'] = Tokenizer('index', to='index', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
-    word1['index'] = ConstantSensor(data=['phrase1', 'phrase2', 'phrase3'])
-    word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
+    sentence_con_word1['forward'] = ConstantEdgeSensor('index', to="index", data=['phrase1', 'phrase2', 'phrase3'])
+    word1['span'] = ConstantSensor(edges=[sentence_con_word1['forward']], data=[(0, 3), (7, 12), (20, 26)])
     word1['label'] = ConstantSensor(data=[1, 1, 1])
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
-    def makeSpanPairs(current_spans, phrase1, phrase2):
-        if phrase1.getAttribute('span') == phrase2.getAttribute('span'):
+    def makeSpanPairs(current_spans, word, word1):
+        if word.getAttribute('span') == word1.getAttribute('span'):
             return True
         else:
             return False
 
-    word['match'] = CandidateEqualSensor('span',forward=makeSpanPairs)
-
+    word['match'] = CandidateEqualSensor('span', word1['index'], word1['span'], word1['label'], forward=makeSpanPairs, relations=[word_equal_word1])
+        
     program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match']]))
     return program
 
@@ -50,8 +50,8 @@ def test_graph_coloring_main():
             print(child_node)
             print(child_node.getAttribute('index'))
             print(child_node.getAttribute('match'))
-            print(child_node.getAttribute('span'))
-            print(child_node.getAttribute('label'))
+#             print(child_node.getAttribute('span'))
+#             print(child_node.getAttribute('label'))
 
 test_graph_coloring_main()
 # if __name__ == '__main__':

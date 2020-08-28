@@ -157,19 +157,16 @@ class FunctionalSensor(TorchSensor):
         return super().forward()
 
 
-class ConstantSensor(TorchSensor):
+class ConstantSensor(FunctionalSensor):
     def __init__(self, *pres, data, edges=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, label=label, device=device)
         self.data = data
 
-    def forward(
-        self,
-    ) -> Any:
+    def forward(self, *_) -> Any:
         try:
             return torch.tensor(self.data, device=self.device)
         except (TypeError, RuntimeError, ValueError):
             return self.data
-
 
 class PrefilledSensor(TorchSensor):
     def forward(self,) -> Any:
@@ -346,7 +343,19 @@ class ForwardEdgeSensor(TorchEdgeSensor):
     def forward(self, input) -> Any:
         return input
 
+    
+class ConstantEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, to, data, mode="forward", edges=None, label=False, device='auto'):
+        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
+        self.data = data
 
+    def forward(self, input) -> Any:
+        try:
+            return torch.tensor(self.data, device=self.device)
+        except (TypeError, RuntimeError, ValueError):
+            return self.data
+
+        
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edges, map_key, deafault_dim=480, device='auto'):
         super().__init__(*pres, edges=edges, device=device)
