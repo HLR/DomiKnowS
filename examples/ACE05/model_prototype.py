@@ -3,7 +3,7 @@ import numpy as np
 from transformers import BertTokenizer, BertModel
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor
 from regr.sensor.pytorch.query_sensor import CandidateSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.utils import UnBatchWrap
@@ -14,6 +14,17 @@ from sensors.tokenizers import Tokenizer
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
 
+def cartesian_concat(*inputs):
+    # torch cat is not broadcasting, do repeat manually
+    input_iter = iter(inputs)
+    output = next(input_iter)
+    for input in input_iter:
+        *dol, dof = output.shape
+        *dil, dif = input.shape
+        output = output.view(*dol, *(1,)*len(dil), dof).repeat(*(1,)*len(dol), *dil, 1)
+        input = input.view(*(1,)*len(dol), *dil, dif).repeat(*dol, *(1,)*len(dil), 1)
+        output = torch.cat((output, input), dim=-1)
+    return output
 
 def model(graph, ):
     graph.detach()
@@ -74,7 +85,13 @@ def model(graph, ):
         else:
             return False
     span['index'] = CandidateSensor(token['emb'], forward=token_to_span)
-    
+    def span_emb(token_emb, span_index):
+        embs = cartesian_concat(token_emb, token_emb)
+        span_index = span_index.rename(None)
+        span_index = span_index.unsqueeze(-1).repeat(1, 1, embs.shape[-1])
+        selected = embs.masked_select(span_index).view(-1, embs.shape[-1])
+        return selected
+    span['emb'] = FunctionalSensor(token['emb'], span['index'], forward=span_emb)
     # dcs['backward'] = TestEdgeSensor(to='index', mode='backward', expected_outputs=np.ones((1,25)))
     # pair['index'] = CandidateSensor(forward=lambda *_: True)
     # pair['emb'] = ConstantSensor('index', data=np.random.randn(5,5,10))
@@ -83,7 +100,7 @@ def model(graph, ):
     program = POIProgram(graph, poi=(
         # pair[be_born_participant_person],
         # pair['emb'],
-        # span['emb'],
+        span['emb'],
         span['index'],
         # document['index'],
         token['index'],

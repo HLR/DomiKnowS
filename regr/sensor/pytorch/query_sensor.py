@@ -76,7 +76,7 @@ class CandidateSensor(QuerySensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
 
-        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo')).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
@@ -127,7 +127,7 @@ class CandidateReaderSensor(CandidateSensor):
         if self.data is None and self.keyword in self.context_helper:
             self.data = self.context_helper[self.keyword]
             
-        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
+        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo')).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
@@ -182,7 +182,7 @@ class CandidateEqualSensor(QuerySensor):
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
         print(list(arg_lists[1]))
-        output = torch.zeros(dims, dtype=torch.uint8, names=(self.args[0].name+'_equal', self.args[1].name + "_equal"))
+        output = torch.zeros(dims, dtype=torch.uint8, names=(self.args[0].name+'_equal', self.args[1].name + "_equal")).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
