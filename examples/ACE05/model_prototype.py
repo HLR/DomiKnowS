@@ -66,7 +66,16 @@ def model(graph, ):
 
     document['index'] = TestSensor(expected_outputs='John works for IBM .')
     dct['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.arange(5).reshape(1,5))
-    # span['index'] = CandidateSensor(token['index'], forward=lambda *_: True)
+    token['emb'] = TestSensor(expected_outputs=np.random.randn(5,300))
+    def token_to_span(spans, start, end, token_emb):
+        length = end.instanceID - start.instanceID
+        if length > 0 and length < 10:
+            return True
+        else:
+            return False
+    span['index'] = CandidateSensor(token['emb'], forward=token_to_span)
+    
+    # dcs['backward'] = TestEdgeSensor(to='index', mode='backward', expected_outputs=np.ones((1,25)))
     # pair['index'] = CandidateSensor(forward=lambda *_: True)
     # pair['emb'] = ConstantSensor('index', data=np.random.randn(5,5,10))
     # pair[be_born_participant_person] = ConstantSensor('emb', data=np.random.rand(5,5,2))
@@ -75,7 +84,7 @@ def model(graph, ):
         # pair[be_born_participant_person],
         # pair['emb'],
         # span['emb'],
-        # span['index'],
+        span['index'],
         # document['index'],
         token['index'],
         ))
