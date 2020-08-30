@@ -76,8 +76,9 @@ def model(graph, ):
     be_born_participant_person = next(find_event_arg(be_born, participant_argument, PER))
 
     document['index'] = TestSensor(expected_outputs='John works for IBM .')
-    dct['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.arange(5).reshape(1,5))
+    dct['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.ones((1,5)))
     token['emb'] = TestSensor(expected_outputs=np.random.randn(5,300))
+    # 10 spans in this example
     def token_to_span(spans, start, end, token_emb):
         length = end.instanceID - start.instanceID
         if length > 0 and length < 10:
@@ -92,14 +93,18 @@ def model(graph, ):
         selected = embs.masked_select(span_index).view(-1, embs.shape[-1])
         return selected
     span['emb'] = FunctionalSensor(token['emb'], span['index'], forward=span_emb)
-    # dcs['backward'] = TestEdgeSensor(to='index', mode='backward', expected_outputs=np.ones((1,25)))
-    # pair['index'] = CandidateSensor(forward=lambda *_: True)
-    # pair['emb'] = ConstantSensor('index', data=np.random.randn(5,5,10))
-    # pair[be_born_participant_person] = ConstantSensor('emb', data=np.random.rand(5,5,2))
+    # 100 pairs in this example
+    pair['index'] = CandidateSensor(token['emb'], forward=lambda *_: True)
+    def pair_emb(span_emb):
+        embs = cartesian_concat(span_emb, span_emb)
+        return embs.view(-1, embs.shape[-1])
+    pair['emb'] = FunctionalSensor(span['emb'], forward=pair_emb)
+    pair[be_born_participant_person] = ConstantSensor('emb', data=np.random.rand(100, 2))
 
     program = POIProgram(graph, poi=(
         # pair[be_born_participant_person],
-        # pair['emb'],
+        pair['emb'],
+        pair['index'],
         span['emb'],
         span['index'],
         # document['index'],
