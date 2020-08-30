@@ -102,7 +102,7 @@ def model(graph, ):
     pair[be_born_participant_person] = ConstantSensor('emb', data=np.random.rand(100, 2))
 
     program = POIProgram(graph, poi=(
-        # pair[be_born_participant_person],
+        pair[be_born_participant_person],
         pair['emb'],
         pair['index'],
         span['emb'],
