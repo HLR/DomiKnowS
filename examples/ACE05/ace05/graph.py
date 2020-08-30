@@ -11,10 +11,12 @@ Relation.clear()
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:
         token = Concept(name='token')
-        span = Concept(name='span')
+        span_candidate = Concept(name='span_candidate')
+        span = span_candidate(name='span')
         document = Concept(name='document')
-        span.contains(token)
+        span_candidate.has_a(start=token, end=token)
         span.has_a(start=token, end=token)
+        span.contains(token)
         document.contains(token)
         document.contains(span)
 

@@ -75,12 +75,23 @@ class CandidateSensor(QuerySensor):
         for arg_list in args:
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
-
-        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo')).to(device=self.device)
+        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+        output = torch.zeros(dims, dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims)))).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
         return output
+
+
+class CandidateRelationSensor(CandidateSensor):
+    @property
+    def args(self):
+        concept = self.concept
+        return [(rel.dst if concept is rel.src else rel.src) for rel in self.relations]
+    
+    def __init__(self, *pres, relations, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+        self.relations = relations
 
 
 class InstantiateSensor(TorchSensor):
@@ -126,8 +137,8 @@ class CandidateReaderSensor(CandidateSensor):
 
         if self.data is None and self.keyword in self.context_helper:
             self.data = self.context_helper[self.keyword]
-            
-        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo')).to(device=self.device)
+        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+        output = torch.zeros(dims, dtype=torch.uint8, names=(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims)))).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
