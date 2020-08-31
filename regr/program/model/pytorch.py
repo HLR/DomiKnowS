@@ -4,7 +4,7 @@ import warnings
 import torch
 import torch.nn.functional as F
 
-from regr.graph import Property, DataNodeBuilder
+from regr.graph import Property, Concept, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
@@ -76,7 +76,16 @@ class PoiModel(TorchModel):
         if poi is None:
             self.poi = self.default_poi()
         else:
-            self.poi = poi
+            properties = []
+            for item in poi:
+                if isinstance(item, Property):
+                    properties.append(item)
+                elif isinstance(item, Concept):
+                    for prop in item.values():
+                        properties.append(prop)
+                else:
+                    raise ValueError(f'Unexpected type of POI item {type(item)}: Property or Concept expected.')
+            self.poi = properties
         self.loss = loss
         self.metric = metric
 
