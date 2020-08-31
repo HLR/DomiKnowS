@@ -280,13 +280,6 @@ class TorchEdgeSensor(FunctionalSensor):
             raise ValueError('The mode passed to the edge is invalid!')
         self.dst[self.to] = TriggerPrefilledSensor(callback_sensor=self)
 
-    def __call__(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        super().__call__(data_item)
-        return data_item[self.dst[self.to].fullname]
-
     def update_context(
         self,
         data_item: Dict[str, Any],

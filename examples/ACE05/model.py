@@ -1,5 +1,5 @@
 import torch
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertTokenizerFast, BertModel
 
 from regr.program import POIProgram
 from regr.graph import Concept
@@ -44,8 +44,8 @@ def model(graph):
     span_is_span_candidate = span.relate_to(span_candidate)[0]
 
     document['index'] = ConstantSensor(data='John works for IBM.')  #ReaderSensor(keyword='text')
-    tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
-    document_contains_word['forward'] = Tokenizer('index', mode='forward', to='index', tokenizer=tokenizer)
+    tokenizer = BertTokenizerFast.from_pretrained(TRANSFORMER_MODEL)
+    document_contains_word['forward'] = Tokenizer('index', mode='forward', to=('index', 'offset'), tokenizer=tokenizer)
 
     # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
     # to freeze BERT, uncomment the following
@@ -133,6 +133,6 @@ def model(graph):
             span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
-    program = POIProgram(graph, poi=(span,))
+    program = POIProgram(graph, poi=(token, span,))
 
     return program
