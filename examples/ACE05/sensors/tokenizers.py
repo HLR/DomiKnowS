@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor
+from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
 
 
@@ -10,9 +10,36 @@ class Tokenizer(TorchEdgeSensor):
         self.tokenizer = tokenizer
 
     def forward(self, text) -> Any:
-        tokens = self.tokenizer.encode_plus(text, return_tensors="pt")['input_ids'].view(-1)
-        return tokens.to(device=self.device)
+        tokenized = self.tokenizer.encode_plus(text, return_tensors="pt", return_offsets_mapping=True)
+        tokens = tokenized['input_ids'].view(-1).to(device=self.device)
+        offset = tokenized['offset_mapping'].to(device=self.device)
+        return tokens, offset
 
+    def attached(self, sup):
+        super(TorchEdgeSensor, self).attached(sup)  # skip TorchEdgeSensor
+        self.relation = sup.sup
+        if self.mode == "forward":
+            self.src = self.relation.src
+            self.dst = self.relation.dst
+        elif self.mode == "backward" or self.mode == "selection":
+            self.src = self.relation.dst
+            self.dst = self.relation.src
+        else:
+            raise ValueError('The mode passed to the edge is invalid!')
+        if isinstance(self.to, tuple):
+            for to_ in self.to:
+                self.dst[to_] = TriggerPrefilledSensor(callback_sensor=self)
+        else:
+            self.dst[self.to] = TriggerPrefilledSensor(callback_sensor=self)
+
+    def update_context(self, data_item, force=False):
+        super(TorchEdgeSensor, self).update_context(data_item, force=force)  # skip TorchEdgeSensor
+        if isinstance(self.to, tuple):
+            for to_, value in zip(self.to, data_item[self.fullname]):
+                data_item[self.dst[to_].fullname] = value
+        else:
+            data_item[self.dst[self.to].fullname] = data_item[self.fullname]
+        return data_item
 
 class TokenizerSpan(TorchSensor):
     def __init__(self, *pres, edges=None, label=False, device='auto', tokenizer=None):
