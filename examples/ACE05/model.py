@@ -1,9 +1,10 @@
+from itertools import chain
 import torch
 from transformers import BertTokenizer, BertTokenizerFast, BertModel
 
 from regr.program import POIProgram
 from regr.graph import Concept
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor
+from regr.sensor.pytorch.sensors import FunctionalReaderSensor, ReaderSensor, ConstantSensor, FunctionalSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor
 from regr.sensor.pytorch.utils import UnBatchWrap
@@ -43,9 +44,9 @@ def model(graph):
     document_contains_word = document.relate_to(token)[0]
     span_is_span_candidate = span.relate_to(span_candidate)[0]
 
-    document['index'] = ConstantSensor(data='John works for IBM.')  #ReaderSensor(keyword='text')
+    document['index'] = ReaderSensor(keyword='text')
     tokenizer = BertTokenizerFast.from_pretrained(TRANSFORMER_MODEL)
-    document_contains_word['forward'] = Tokenizer('index', mode='forward', to=('index', 'offset'), tokenizer=tokenizer)
+    document_contains_word['forward'] = Tokenizer('index', mode='forward', to=('index', 'ids', 'offset'), tokenizer=tokenizer)
 
     # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
     # to freeze BERT, uncomment the following
@@ -64,9 +65,9 @@ def model(graph):
             assert out.shape[0] == 1
             out = out.squeeze(0)
             return out
-    token['emb'] = ModuleLearner('index', module=BERT())
+    token['emb'] = ModuleLearner('ids', module=BERT())
     def token_to_span_candidate(spans, start, end):
-        length = end.instanceID - start.instanceID
+        length = end.getAttribute('index') - start.getAttribute('index')
         if length > 0 and length < 10:
             return True
         else:
@@ -80,6 +81,19 @@ def model(graph):
         return selected
     span_candidate['emb'] = FunctionalSensor(token['emb'], span_candidate['index'], forward=span_candidate_emb)
     span_candidate[span] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+    # span_candidate[span] = FunctionalSensor('span', 'index', forward=)
+    def span_label(span_index, token_offset, data):
+        span_index = span_index.rename(None)
+        span_label = span_index.clone()
+        for i, j in span_index.nonzero():
+            for mention in chain(*map(lambda span: span.mentions, data)):
+                if mention.start == i and mention.end == j:
+                    break
+            else:  # match not found
+                span_label[i, j] = 0
+        selected = span_label.masked_select(span_index).view(-1)
+        return selected
+    span_candidate[span] = FunctionalReaderSensor('index', token['offset'], keyword='spans', forward=span_label)
     def span_candidate_to_span(spans, span_candidate, _):
         span_candidate
         # filter based on span_candidate.getAttribute('<span>')
@@ -133,6 +147,6 @@ def model(graph):
             span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
-    program = POIProgram(graph, poi=(token, span,))
+    program = POIProgram(graph, poi=(token, span_candidate, span,))
 
     return program

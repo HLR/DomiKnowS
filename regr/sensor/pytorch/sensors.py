@@ -151,9 +151,9 @@ class FunctionalSensor(TorchSensor):
     def forward_wrap(self):
         return self.forward(*self.inputs)
 
-    def forward(self, *inputs):
+    def forward(self, *inputs, **kwinputs):
         if self.forward_ is not None:
-            return self.forward_(*inputs)
+            return self.forward_(*inputs, **kwinputs)
         return super().forward()
 
 
@@ -190,9 +190,27 @@ class ReaderSensor(ConstantSensor):
 
     def fill_data(self, data_item):
         try:
-            self.data = data_item[self.keyword]
+            if isinstance(self.keyword, tuple):
+                self.data = (data_item[keyword] for keyword in self.keyword)
+            else:
+                self.data = data_item[self.keyword]
         except KeyError as e:
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
+
+    def forward(self, *_) -> Any:
+        if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
+            return (super().forward(data) for data in self.data)
+        else:
+            return super().forward(self.data)
+
+
+class FunctionalReaderSensor(ReaderSensor):
+    def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, keyword=keyword, edges=edges, label=label, device=device)
+        self.forward_ = forward
+
+    def forward(self, *args) -> Any:
+        return super(ConstantSensor, self).forward(*args, data=self.data)  # skip ConstantSensor
 
 
 class NominalSensor(TorchSensor):

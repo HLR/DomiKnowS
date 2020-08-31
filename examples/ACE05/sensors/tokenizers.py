@@ -13,7 +13,8 @@ class Tokenizer(TorchEdgeSensor):
         tokenized = self.tokenizer.encode_plus(text, return_tensors="pt", return_offsets_mapping=True)
         tokens = tokenized['input_ids'].view(-1).to(device=self.device)
         offset = tokenized['offset_mapping'].to(device=self.device)
-        return tokens, offset
+        index = list(range(len(tokens)))
+        return index, tokens, offset
 
     def attached(self, sup):
         super(TorchEdgeSensor, self).attached(sup)  # skip TorchEdgeSensor
