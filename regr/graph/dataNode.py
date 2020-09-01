@@ -1,5 +1,5 @@
 import numpy as np
-import torch
+import torch.cuda
 from collections import OrderedDict, namedtuple
 import time
 from itertools import product
@@ -1246,10 +1246,10 @@ class DataNodeBuilder(dict):
         conceptName = conceptInfo['concept'].name
         existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
         
-        dns = [] # List of lists of created dataNodes
+        dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
                 
         if vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
-            _DataNodeBulder__Logger.info('Adding single set of dataNodes of type %s'%(conceptName))
+            _DataNodeBulder__Logger.info('Adding single set of dataNodes (linked to single parent concept) of type %s'%(conceptName))
 
             dns1 = []
             for vIndex, v in enumerate(vInfo.value):
@@ -1261,8 +1261,25 @@ class DataNodeBuilder(dict):
                 
                 dns1.append(_dn)
                                     
-            _DataNodeBulder__Logger.info('Added %i new dataNodes %s'%(len(dns1),dns1))
+            _DataNodeBulder__Logger.info('Added %i new dataNodes - %s'%(len(dns1),dns1))
             dns.append(dns1)
+
+            # Check if value has information about children - need to be tuples with two indexes - start index of children  - end index of children for the given new dataNode
+            if isinstance(vInfo.value[0], tuple): 
+                # Add it as parent to existing dataNodes - Backward information in the sensor data
+                _DataNodeBulder__Logger.info('The value is build of tuples - providing information about children of the new dataNodes ')
+
+                if len(conceptInfo['contains']) > 0:
+                    childType = conceptInfo['contains'][0].name # Assume single contains for now
+                    childrenDNS = existingRootDns[0].findDatanodes(existingRootDns, childType)
+                    
+                    if len(childrenDNS) > 0:       
+                        for i, v in enumerate(vInfo.value):
+                            _DataNodeBulder__Logger.info('Added dataNodes with indexes from %i to %i of type %s to dataNode %s'%(v[0],v[1],childType,dns1[i]))
+
+                            for _i in range(v[0],v[1]+1):
+                                dns1[i].addChildDataNode(childrenDNS[_i])
+                                           
         elif vInfo.dim == 2:
             _DataNodeBulder__Logger.info('Adding %i sets of dataNodes of type %s'%(vInfo.len,conceptName))
 
@@ -1279,32 +1296,31 @@ class DataNodeBuilder(dict):
                                     
                 _DataNodeBulder__Logger.info('Added %i new dataNodes %s'%(len(dns1),dns1))
                 dns.append(dns1)
+                
+            # Check if value has information about children - need to be tuples with two indexes - start index of children  - end index of children for the given new dataNode
+            if isinstance(vInfo.value[0][0], tuple): 
+                # Add it as parent to existing dataNodes - Backward information in the sensor data
+                _DataNodeBulder__Logger.info('The value is build of tuples - providing information about children of the new dataNodes ')
+
+                if len(conceptInfo['contains']) > 0:
+                    childType = conceptInfo['contains'][0].name # Assume single contains for now
+                    childrenDNS = existingRootDns[0].findDatanodes(existingRootDns, childType)
+                    
+                    childOffset = 0
+                    if len(childrenDNS) > 0:   
+                        for j, _v  in enumerate(vInfo.value):
+                            for i, v in enumerate(_v):
+                                _DataNodeBulder__Logger.info('Added dataNodes with indexes from %i to %i of type %s to dataNode %s'%(v[0],v[1],childType,dns[j][i]))
+    
+                                for _i in range(v[0],v[1]+1):
+                                    dns[j][i].addChildDataNode(childrenDNS[_i + childOffset])
+                                    
+                            childOffset =+ _v[-1][1]
         else: # vInfo.dim > 2
-            _DataNodeBulder__Logger.warning('Dimension of value %i is larger then 2 not supported'%(vInfo.dim))
+            _DataNodeBulder__Logger.warning('Dimension of value %i is larger then 2 -  not supported'%(vInfo.dim))
 
         _dnLinked = False
             
-        # ---------- This section still needs work
-        v0Info = self.__processAttributeValue(vInfo.value[0], keyDataName) # Get internal structure of the value - test first element of the value
-        if v0Info.len == 2: # Add it as parent to existing dataNodes - Backward information in the sensor data
-            if len(conceptInfo['contains']) > 0:
-                myContains = existingRootDns[0].findDatanodes(existingRootDns, conceptInfo['contains'][0].name) # Assume single contains for now
-                
-                if len(myContains) > 0: 
-                                       
-                    i = 0
-            
-                    for _dnsIndex, _dns in enumerate(dns): # Set of dataNodes
-                        for _dnsIndex1, _dns1 in enumerate(_dns): # dataNode in the current set
-                            _i = _dnsIndex * len(_dns) + _dnsIndex1
-                            
-                            indexes = value[_i]
-                        
-                            for _ in range(indexes[0], indexes[1] + 1):
-                                _dns1.addChildDataNode(myContains[i])
-                                i = i + 1
-        # ---------- 
-        
         # Add them as children to existing dataNodes - Forward information in the sensor data
         for currentParentConcept in conceptInfo['containedIn']:
             currentParentConceptName = currentParentConcept.name
@@ -1314,10 +1330,10 @@ class DataNodeBuilder(dict):
                 if len(currentParentDns) == len(dns):
                     _DataNodeBulder__Logger.info('Adding dataNodes as children to %i dataNodes of type %s'%(len(currentParentDns),currentParentConceptName))
                 else:
-                    _DataNodeBulder__Logger.error('Number of dataNode sets %i different the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
+                    _DataNodeBulder__Logger.error('Number of dataNode sets %i is different then the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
                     continue
             else:
-                _DataNodeBulder__Logger.info('Not found any dataNode type %s - this type is in the list of types of potential children of the current concept'%(currentParentConceptName))
+                _DataNodeBulder__Logger.info('Not found any dataNode of type %s - this type is a potential parent of the current concept'%(currentParentConceptName))
             
             for currentParentDnIndex, currentParentDn in enumerate(currentParentDns):
                 for curentChildDn in dns[currentParentDnIndex]: # Set of new dataNodes for the current parent dataNode
@@ -1438,7 +1454,7 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = 1, value = value.item(), dim=0)
         
         if (len(value) == 1): # It is Tensor or list with length 1 - treat it as scalar
-            if isinstance(value, list): # Unpack the value
+            if isinstance(value, list) and not isinstance(value[0], (Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
             elif isinstance(value, Tensor) and value.dim() < 2:
                 return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)

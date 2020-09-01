@@ -9,5 +9,5 @@ dnConfig = {
     'log_filename' : 'datanode.log',
     'log_filesize' : 5*1024*1024*1024,
     'log_backupCount' : 0,
-    'log_fileMode' : 'r'
+    'log_fileMode' : 'w'
 }
