@@ -6,6 +6,8 @@ from regr.sensor.pytorch.sensors import FunctionalSensor
 from regr.sensor.pytorch.query_sensor import CandidateSensor
 from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
+from models import cartesian_concat
+
 
 def model(graph, ):
     graph.detach()
@@ -60,18 +62,19 @@ def model(graph, ):
     dcs['forward'] = TestEdgeSensor('index', to='index', mode='forward', expected_outputs=np.arange(5).reshape(1,5))
     span['emb'] = TestSensor('index', expected_outputs=np.random.randn(5,300))
     # 100 pairs in this example
-    pair['index'] = CandidateSensor(span['emb'], forward=lambda *_: True)
+    pair['index'] = CandidateSensor(span['index'], forward=lambda *_: True)
     def pair_emb(span_emb):
         embs = cartesian_concat(span_emb, span_emb)
-        return embs.view(-1, embs.shape[-1])
+        # embs = embs.view(-1, embs.shape[-1])
+        return embs
     pair['emb'] = FunctionalSensor(span['emb'], forward=pair_emb)
     pair[be_born_participant_person] = TestSensor('emb', expected_outputs=np.random.rand(100, 2))
 
     program = POIProgram(graph, poi=(
         # pair[be_born_participant_person],
-        # pair['emb'],
-        # pair['index'],
-        # span['emb'],
+        pair['emb'],
+        pair['index'],
+        span['emb'],
         span['index'],
         document['index'],
         # token['index'],
