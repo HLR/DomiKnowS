@@ -2,6 +2,7 @@ from typing import Any
 import torch
 
 from regr.sensor.pytorch.sensors import ConstantSensor, ConstantEdgeSensor
+from regr.sensor.pytorch.learners import TorchLearner
 
 
 class TestSensor(ConstantSensor):
@@ -26,6 +27,10 @@ class TestSensor(ConstantSensor):
                 else:
                     assert input == expected_input
         return super().forward(*inputs)
+
+
+class TestLearner(TestSensor, TorchLearner):
+    pass
 
 
 class TestEdgeSensor(ConstantEdgeSensor):
