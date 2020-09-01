@@ -1,30 +1,11 @@
 import torch
 import numpy as np
-from transformers import BertTokenizer, BertModel
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor
 from regr.sensor.pytorch.query_sensor import CandidateSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.utils import UnBatchWrap
 from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
-from sensors.tokenizers import Tokenizer
-
-
-TRANSFORMER_MODEL = 'bert-base-uncased'
-
-def cartesian_concat(*inputs):
-    # torch cat is not broadcasting, do repeat manually
-    input_iter = iter(inputs)
-    output = next(input_iter)
-    for input in input_iter:
-        *dol, dof = output.shape
-        *dil, dif = input.shape
-        output = output.view(*dol, *(1,)*len(dil), dof).repeat(*(1,)*len(dol), *dil, 1)
-        input = input.view(*(1,)*len(dol), *dil, dif).repeat(*dol, *(1,)*len(dil), 1)
-        output = torch.cat((output, input), dim=-1)
-    return output
 
 def model(graph, ):
     graph.detach()
@@ -84,7 +65,7 @@ def model(graph, ):
         embs = cartesian_concat(span_emb, span_emb)
         return embs.view(-1, embs.shape[-1])
     pair['emb'] = FunctionalSensor(span['emb'], forward=pair_emb)
-    pair[be_born_participant_person] = ConstantSensor('emb', data=np.random.rand(100, 2))
+    pair[be_born_participant_person] = TestSensor('emb', expected_outputs=np.random.rand(100, 2))
 
     program = POIProgram(graph, poi=(
         # pair[be_born_participant_person],
