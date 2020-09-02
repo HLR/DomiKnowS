@@ -138,7 +138,7 @@ class CandidateReaderSensor(CandidateSensor):
         if self.data is None and self.keyword in self.context_helper:
             self.data = self.context_helper[self.keyword]
         num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-        output = torch.zeros(dims, dtype=torch.uint8, names=(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims)))).to(device=self.device)
+        output = torch.zeros(tuple(dims), dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims))), device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)

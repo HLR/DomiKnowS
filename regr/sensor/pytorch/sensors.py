@@ -158,15 +158,20 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(FunctionalSensor):
-    def __init__(self, *pres, data, edges=None, label=False, device='auto'):
+    def __init__(self, *pres, data, edges=None, label=False, as_tensor=True, device='auto'):
         super().__init__(*pres, edges=edges, label=label, device=device)
         self.data = data
+        self.as_tensor = as_tensor
 
     def forward(self, *_) -> Any:
         try:
-            return torch.tensor(self.data, device=self.device)
+            if self.as_tensor:
+                return torch.tensor(self.data, device=self.device)
+            else:
+                self.data
         except (TypeError, RuntimeError, ValueError):
             return self.data
+
 
 class PrefilledSensor(TorchSensor):
     def forward(self,) -> Any:
