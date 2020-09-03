@@ -1104,7 +1104,7 @@ class DataNodeBuilder(dict):
             for dList in dns:
                 flattenDns.extend(dList)
                 
-            if isinstance(flattenDns[0], list): 
+            if flattenDns and isinstance(flattenDns[0], list): 
                 _flattenDns = []
                 
                 for dList in flattenDns:

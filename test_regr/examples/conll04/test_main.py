@@ -131,23 +131,23 @@ def model_declaration(config, case):
         expected_outputs=case.word.O)
 
     word[people] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.people)
     word[organization] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.organization)
     word[location] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.location)
     word[other] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.other)
     word[o] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.O)
 
@@ -155,7 +155,7 @@ def model_declaration(config, case):
         label=True,
         expected_outputs=case.phrase.people)
     phrase[people] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.people)
 
@@ -177,23 +177,23 @@ def model_declaration(config, case):
         expected_outputs=case.pair.work_for)
 
     pair[work_for] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.work_for)
     pair[located_in] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.located_in)
     pair[live_in] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.live_in)
     pair[orgbase_on] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.orgbase_on)
     pair[orgbase_on] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
+        'emb',
         expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.kill)
 

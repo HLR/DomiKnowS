@@ -116,10 +116,9 @@ class FunctionalSensor(TorchSensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for sensor in self.concept[pre].find(Sensor):
-                    sensor(data_item)
-            elif isinstance(pre, (Property, Sensor)):
-                pre(data_item)
+                pre = self.concept[pre]
+            # isinstance(pre, (Property, Sensor)):
+            pre(data_item)
 
     def update_context(
         self,
@@ -168,7 +167,7 @@ class ConstantSensor(FunctionalSensor):
             if self.as_tensor:
                 return torch.tensor(self.data, device=self.device)
             else:
-                self.data
+                return self.data
         except (TypeError, RuntimeError, ValueError):
             return self.data
 
@@ -361,13 +360,17 @@ class ForwardEdgeSensor(TorchEdgeSensor):
 
     
 class ConstantEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, to, data, mode="forward", edges=None, label=False, device='auto'):
+    def __init__(self, *pres, to, data, mode="forward", edges=None, label=False, as_tensor=True, device='auto'):
         super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         self.data = data
+        self.as_tensor = as_tensor
 
-    def forward(self, input) -> Any:
+    def forward(self, *_) -> Any:
         try:
-            return torch.tensor(self.data, device=self.device)
+            if self.as_tensor:
+                return torch.tensor(self.data, device=self.device)
+            else:
+                self.data
         except (TypeError, RuntimeError, ValueError):
             return self.data
 
