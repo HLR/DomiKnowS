@@ -26,7 +26,8 @@ def model_declaration():
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
     def makeSpanPairs(current_spans, word, word1):
-        if word.getAttribute('span') == word1.getAttribute('span'):
+        
+        if word.getAttribute('span')[0] == word1.getAttribute('span')[0] and word.getAttribute('span')[1] == word1.getAttribute('span')[1]:
             return True
         else:
             return False
@@ -39,6 +40,8 @@ def model_declaration():
 
 # @pytest.mark.gurobi
 def test_graph_coloring_main():
+    from graph import word
+    
     lbp = model_declaration()
 
     dataset = [{'data': "dummy"}, ]  # Adding the info on the reader
@@ -47,11 +50,13 @@ def test_graph_coloring_main():
         assert datanode != None
 
         for child_node in datanode.getChildDataNodes():
-            print(child_node)
-            print(child_node.getAttribute('index'))
-            print(child_node.getAttribute('match'))
-#             print(child_node.getAttribute('span'))
-#             print(child_node.getAttribute('label'))
+            if child_node.getOntologyNode() != word:
+                continue
+            if child_node.getInstanceID() == 1:
+                assert child_node.getEqualTo()[0].getInstanceID() == 0
+            if child_node.getInstanceID() == 4:
+                assert child_node.getEqualTo()[0].getInstanceID() == 1
+
 
 test_graph_coloring_main()
 # if __name__ == '__main__':

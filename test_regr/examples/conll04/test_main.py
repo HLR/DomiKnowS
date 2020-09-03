@@ -27,7 +27,7 @@ def test_case():
             'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
         },
         'phrase': {
-            'raw': [(0, 0), (1, 2), (3, 3)],  # ['John', 'works for', 'IBM'],
+            'raw': [[(0, 0), (1, 2), (3, 3, 0)]],  # ['John', 'works for', 'IBM'],
             'emb': torch.randn(3, 2048, device=device),
             'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
 
@@ -252,7 +252,7 @@ def test_main_conll04(case):
     _, _, datanode = lbp.model(data)
 
     for child_node in datanode.getChildDataNodes():
-        if child_node.ontologyNode.name == 'word':
+        if child_node.ontologyNode.name == 'word': 
             assert child_node.getAttribute('index') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
@@ -263,7 +263,7 @@ def test_main_conll04(case):
                        
             assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
                     
-            assert len(child_node.findDatanodes(select = "pair")) == 4
+            assert len(child_node.findDatanodes(select = "pair")) == 4 # has relation named "pair"with each word (including itself)
             
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
@@ -276,6 +276,9 @@ def test_main_conll04(case):
             assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
+
+    assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
+    assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]

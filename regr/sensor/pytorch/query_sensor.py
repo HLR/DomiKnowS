@@ -41,6 +41,12 @@ class DataNodeSensor(QuerySensor):
 
 
 class CandidateSensor(QuerySensor):
+    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
+        super().__init__(*pres, edges=edges, forward=forward, label=label)
+                   
+        # Add identification of candidate
+        self.name += "_Candidate_" 
+        
     @property
     def args(self):
         return [rel.dst for rel in self.concept.has_a()]
@@ -147,12 +153,15 @@ class CandidateReaderSensor(CandidateSensor):
 
 class CandidateEqualSensor(QuerySensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+
         if relations:
             self.relations = relations
+            # Add identification of equality and the  name of the equal concept type
+            self.name += "_equality_" +  self.relations[0].dst.name
         else:
             self.relations = []
-        
+
     @property
     def args(self):
         if len(self.relations):
@@ -172,29 +181,21 @@ class CandidateEqualSensor(QuerySensor):
         super().define_inputs()
         args = []
         for concept in self.args:
-            print(concept)
             root = self.builder.getDataNode()
             datanodes = root.findDatanodes(select=concept)
             args.append(datanodes)
-        print(args)
         self.inputs = self.inputs[:1] + args + self.inputs[1:]
 
     def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
-        # args
-        args = self.inputs[1:len(self.args) + 1]
-        # functional inputs
-        inputs = self.inputs[len(self.args) + 1:]
-
-        arg_lists = []
-        dims = []
-        for arg_list in args:
-            arg_lists.append(enumerate(arg_list))
-            dims.append(len(arg_list))
-        print(list(arg_lists[1]))
-        output = torch.zeros(dims, dtype=torch.uint8, names=(self.args[0].name+'_equal', self.args[1].name + "_equal")).to(device=self.device)
-        for arg_enum in product(*arg_lists):
-            index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
+        # current existing datNnodes (if any) for first element of equality
+        conceptDns = self.inputs[1]
+        equalDns = self.inputs[2]        
+    
+        dims = (len(conceptDns), len(equalDns))
+        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
+        
+        for dns_product in product(conceptDns,equalDns):
+            index = (dns_product[0].getInstanceID(), dns_product[1].getInstanceID() )
+            output[(*index,)] = self.forward("", dns_product[0], dns_product[1])
+            
         return output
