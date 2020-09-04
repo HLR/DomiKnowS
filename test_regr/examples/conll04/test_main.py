@@ -28,6 +28,11 @@ def test_case():
         },
         'phrase': {
             'raw': [[(0, 0), (1, 2), (3, 3, 0)]],  # ['John', 'works for', 'IBM'],
+            # expected new format
+            # 'raw': [[1, 0, 0, 0],
+            #         [0, 1, 1, 0],
+            #         [0, 0, 0, 1,]],  # ['John', 'works for', 'IBM'],
+            #
             'emb': torch.randn(3, 2048, device=device),
             'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
 
