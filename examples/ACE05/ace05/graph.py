@@ -369,8 +369,11 @@ with Graph('global') as graph:
 
             trigger = span(name='trigger')
             # NOTE: do we need the abstract event or base it on trigger?
-            event = Concept(name='Event')
-            event.has_a(trigger)
+            # event = Concept(name='Event')
+            # event.has_a(trigger)
+            # NOTE: Instead of predicting event, we predict trigger
+            #       Here event is just a alias of trigger
+            event = trigger
 
             # @Concept.relation_type('involve')
             # class Involve(Relation): pass
