@@ -81,8 +81,8 @@ class CandidateSensor(QuerySensor):
         for arg_list in args:
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
-        
-        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
+        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+        output = torch.zeros(dims, dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims)))).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
@@ -143,8 +143,8 @@ class CandidateReaderSensor(CandidateSensor):
 
         if self.data is None and self.keyword in self.context_helper:
             self.data = self.context_helper[self.keyword]
-            
-        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
+        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+        output = torch.zeros(tuple(dims), dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims))), device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
@@ -153,7 +153,7 @@ class CandidateReaderSensor(CandidateSensor):
 
 class CandidateEqualSensor(QuerySensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
 
         if relations:
             self.relations = relations
@@ -161,9 +161,7 @@ class CandidateEqualSensor(QuerySensor):
             self.name += "_equality_" +  self.relations[0].dst.name
         else:
             self.relations = []
-        
-        self.forward = forward
-        
+
     @property
     def args(self):
         if len(self.relations):

@@ -2,7 +2,7 @@ from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor, TriggerPre
 from typing import Any
 
 
-class Tokenizer(TorchEdgeSensor):
+class TokenizerEdgeSensor(TorchEdgeSensor):
     def __init__(self, *pres, to, mode="forward", edges=None, label=False, device='auto', tokenizer=None):
         super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         if not tokenizer:
@@ -13,7 +13,8 @@ class Tokenizer(TorchEdgeSensor):
         tokenized = self.tokenizer.encode_plus(text, return_tensors="pt", return_offsets_mapping=True)
         tokens = tokenized['input_ids'].view(-1).to(device=self.device)
         offset = tokenized['offset_mapping'].to(device=self.device)
-        return tokens, offset
+        index = list(range(len(tokens)))
+        return index, tokens, offset
 
     def attached(self, sup):
         super(TorchEdgeSensor, self).attached(sup)  # skip TorchEdgeSensor
@@ -41,7 +42,7 @@ class Tokenizer(TorchEdgeSensor):
             data_item[self.dst[self.to].fullname] = data_item[self.fullname]
         return data_item
 
-class TokenizerSpan(TorchSensor):
+class TokenizerSpanEdgeSensor(TorchSensor):
     def __init__(self, *pres, edges=None, label=False, device='auto', tokenizer=None):
         super().__init__(*pres, edges=edges, label=label, device=device)
         if not tokenizer:

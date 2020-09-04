@@ -15,7 +15,7 @@ with Graph('global') as graph:
         span = span_candidate(name='span')
         document = Concept(name='document')
         span_candidate.has_a(start=token, end=token)
-        span.has_a(start=token, end=token)
+        # span.has_a(start=token, end=token)
         span.contains(token)
         document.contains(token)
         document.contains(span)
