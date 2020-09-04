@@ -116,9 +116,12 @@ class FunctionalSensor(TorchSensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                pre = self.concept[pre]
-            # isinstance(pre, (Property, Sensor)):
-            pre(data_item)
+                try:
+                    pre = self.concept[pre]
+                except KeyError:
+                    pass
+            if isinstance(pre, (Property, Sensor)):
+                pre(data_item)
 
     def update_context(
         self,
