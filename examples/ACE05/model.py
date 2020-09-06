@@ -3,9 +3,10 @@ import torch
 from regr.program import POIProgram
 from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, TorchEdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor
+from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
 from sensors.tokenizers import TokenizerEdgeSensor
+from sensors.readerSensor import MultiLevelReaderSensor
 from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, token_to_span_candidate, span_candidate_emb, span_label, span_emb, find_is_a
 
 

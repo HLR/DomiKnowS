@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor, TriggerPrefilledSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
 
 
