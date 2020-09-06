@@ -1,5 +1,6 @@
 from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
+from regr.sensor.pytorch.query_sensor import DataNodeSensor
 
 
 class MultiLevelReaderSensor(ConstantSensor):
@@ -53,3 +54,11 @@ class MultiLevelReaderSensor(ConstantSensor):
             return (super().forward(data) for data in self.data)
         else:
             return super().forward(self.data)
+
+        
+class SpanLabelSensor(DataNodeSensor):
+    def forward(self, datanode):
+        if len(datanode.getEqualTo()):
+            return True
+        else:
+            return False

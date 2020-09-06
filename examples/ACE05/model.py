@@ -6,7 +6,7 @@ from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
 from sensors.tokenizers import TokenizerEdgeSensor
-from sensors.readerSensor import MultiLevelReaderSensor
+from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor
 from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, token_to_span_candidate, span_candidate_emb, span_label, span_emb, find_is_a
 
 
@@ -71,6 +71,8 @@ def model(graph):
             return False
 
     span['match'] = CandidateEqualSensor('index', span_annotation['index'],span_annotation['start'], span_annotation['end'], forward=makeSpanPairs, relations=[span_equal_annotation])
+    
+    span['label'] = SpanLabelSensor('match')
     # span
     for concept in find_is_a(entities_graph, span):
         print(f'Creating learner/reader for span -> {concept}')
