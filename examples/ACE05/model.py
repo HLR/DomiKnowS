@@ -6,7 +6,7 @@ from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
 from sensors.tokenizers import TokenizerEdgeSensor
-from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor
+from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor
 from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, token_to_span_candidate, span_candidate_emb, span_label, span_emb, find_is_a
 
 
@@ -72,6 +72,8 @@ def model(graph):
     span_annotation['index'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.text")
     span_annotation['start'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.start")
     span_annotation['end'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.end")
+    span_annotation['type'] = CustomMultiLevelReaderSensor(keyword="spans.*.type")
+    span_annotation['subtype'] = CustomMultiLevelReaderSensor(keyword="spans.*.subtype")
     
     anchor_annotation['index'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.text")
     anchor_annotation['start'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.start")
