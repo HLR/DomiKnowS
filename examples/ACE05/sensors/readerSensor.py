@@ -1,13 +1,9 @@
-from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, TorchEdgeSensor, TriggerPrefilledSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
 from regr.sensor.pytorch.query_sensor import DataNodeSensor
 
 
-class MultiLevelReaderSensor(ConstantSensor):
-    def __init__(self, *pres, keyword=None, edges=None, label=False, device='auto'):
-        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
-        self.keyword = keyword
-
+class MultiLevelReaderSensor(ReaderSensor):
     def fill_data(self, data_item):
         try:
             if isinstance(self.keyword, tuple):
@@ -47,15 +43,8 @@ class MultiLevelReaderSensor(ConstantSensor):
             data = data_item[key]
 
         return data
-        
-        
-    def forward(self, *_) -> Any:
-        if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
-            return (super().forward(data) for data in self.data)
-        else:
-            return super().forward(self.data)
 
-        
+
 class SpanLabelSensor(DataNodeSensor):
     def forward(self, datanode):
         if len(datanode.getEqualTo()):

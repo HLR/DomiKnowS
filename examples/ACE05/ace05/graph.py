@@ -21,6 +21,7 @@ with Graph('global') as graph:
         span.contains(token)
         document.contains(token)
         document.contains(span)
+        document.contains(span_annotation)
 
         pair = Concept(name='pair')
         pair.has_a(span, span)

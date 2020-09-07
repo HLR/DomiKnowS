@@ -165,9 +165,9 @@ class CandidateEqualSensor(QuerySensor):
     @property
     def args(self):
         if len(self.relations):
-            return [self.concept.equal()[0].src, self.relations[0].dst]
+            return [self.concept, self.relations[0].dst]
         else:
-            return [self.concept.equal()[0].src, self.concept.equal()[0].dst]
+            return [self.concept, self.concept.equal()[0].dst]
         
     def update_pre_context(
             self,

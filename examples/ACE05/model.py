@@ -39,8 +39,16 @@ def model(graph):
     span['label'] = ModuleLearner(token['emb'], module=SpanClassifier(token_emb_dim=768))
     def function(span_label):
         # span_label: NxNx2
-        # span_label
-        return [[(1,2), (3,5,0)]]
+        spans = []
+        for i, row in enumerate(span_label):
+            for j, val in enumerate(row):
+                if i > j or j - i > 20:
+                    continue
+                if i == j or val[1] > val[0]:
+                    spans.append((i, j))
+        if len(spans) > 1:
+            spans[-1] = spans[-1] + (0,)  # to avoid being converted to tensor
+        return [spans]
         # return torch.tensor([[0,1,1,0,0,0,0], [0,0,0,1,1,1,0]], device=span_label.device)
     span_contains_token['backward'] = TorchEdgeSensor(
         span['label'], to='index', forward=function, mode='backward',
@@ -63,16 +71,22 @@ def model(graph):
     span_annotation['start'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.start")
     span_annotation['end'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.end")
 
-    def makeSpanPairs(current_spans, span, span1):
-        
-        if span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0] == span1.getAttribute('start') and span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1] == span1.getAttribute('end'):
+    def makeSpanPairs(current_spans, span, span_anno):
+        start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
+        end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
+        start_anno = span_anno.getAttribute('start')
+        end_anno = span_anno.getAttribute('end')
+        # exact match
+        if start == start_anno and end == end_anno:
+        # overlap
+        # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
             return True
         else:
             return False
 
     span['match'] = CandidateEqualSensor('index', span_annotation['index'],span_annotation['start'], span_annotation['end'], forward=makeSpanPairs, relations=[span_equal_annotation])
     
-    span['label'] = SpanLabelSensor('match')
+    # span['label'] = SpanLabelSensor('match')
     # span
     for concept in find_is_a(entities_graph, span):
         print(f'Creating learner/reader for span -> {concept}')
@@ -109,6 +123,6 @@ def model(graph):
             span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
-    program = POIProgram(graph, poi=(token, span_candidate, span,))
+    program = POIProgram(graph, poi=(token, span, span['match'], span_annotation))
 
     return program
