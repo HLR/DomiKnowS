@@ -27,9 +27,7 @@ class QuerySensor(FunctionalSensor):
         if self.inputs is None:
             self.inputs = []
 
-        root = self.builder.getDataNode()
-        datanodes = root.findDatanodes(select=self.concept)
-
+        datanodes = self.builder.findDataNodesInBuilder(select=self.concept)
         self.inputs.insert(0, datanodes)
 
 
@@ -57,14 +55,14 @@ class CandidateSensor(QuerySensor):
     ) -> Any:
         super().update_pre_context(data_item)
         for concept in self.args:
-            concept['index'](data_item)  # call index property to make sure it is constructed
+            if "index" in concept:
+                concept['index'](data_item)  # call index property to make sure it is constructed
     
     def define_inputs(self):
         super().define_inputs()
         args = []
         for concept in self.args:
-            root = self.builder.getDataNode()
-            datanodes = root.findDatanodes(select=concept)
+            datanodes = self.builder.findDataNodesInBuilder(select=self.concept)
             args.append(datanodes)
         self.inputs = self.inputs[:1] + args + self.inputs[1:]
 
@@ -81,8 +79,7 @@ class CandidateSensor(QuerySensor):
         for arg_list in args:
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
-        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-        output = torch.zeros(dims, dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims)))).to(device=self.device)
+        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
@@ -143,8 +140,7 @@ class CandidateReaderSensor(CandidateSensor):
 
         if self.data is None and self.keyword in self.context_helper:
             self.data = self.context_helper[self.keyword]
-        num2word=['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-        output = torch.zeros(tuple(dims), dtype=torch.uint8, names=tuple(f'CandidateIdx_{num2word[idx]}' for idx in range(len(dims))), device=self.device)
+        output = torch.zeros(tuple(dims), dtype=torch.uint8).to(device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
             output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
@@ -158,7 +154,7 @@ class CandidateEqualSensor(QuerySensor):
         if relations:
             self.relations = relations
             # Add identification of equality and the  name of the equal concept type
-            self.name += "_equality_" +  self.relations[0].dst.name
+            self.name += "_Equality_" +  self.relations[0].dst.name
         else:
             self.relations = []
 
@@ -175,14 +171,14 @@ class CandidateEqualSensor(QuerySensor):
     ) -> Any:
         super().update_pre_context(data_item)
         for concept in self.args:
-            concept['index'](data_item)  # call index property to make sure it is constructed
+            if "index" in concept:
+                concept['index'](data_item)  # call index property to make sure it is constructed
 
     def define_inputs(self):
         super().define_inputs()
         args = []
         for concept in self.args:
-            root = self.builder.getDataNode()
-            datanodes = root.findDatanodes(select=concept)
+            datanodes = self.builder.findDataNodesInBuilder(select=concept)
             args.append(datanodes)
         self.inputs = self.inputs[:1] + args + self.inputs[1:]
 

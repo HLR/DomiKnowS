@@ -236,20 +236,14 @@ class DataNode:
         
     # --- Equality methods
     
-    def getEqualTo(self):
-        relationName = "equalTo"
-
-        return self.getRelationLinks(relationName=relationName)
+    def getEqualTo(self, equalName = "equalTo"):
+        return self.getRelationLinks(relationName=equalName)
     
-    def addEqualTo(self, equalDn):
-        relationName = "equalTo"
-
-        self.addRelationLink(relationName, equalDn)
+    def addEqualTo(self, equalDn, equalName = "equalTo"):
+        self.addRelationLink(equalName, equalDn)
         
-    def removeEqualTo(self, equalDn):
-        relationName = 'contains'
-
-        self.removeRelationLink(relationName, equalDn)
+    def removeEqualTo(self, equalDn, equalName = "equalTo"):
+        self.removeRelationLink(equalName, equalDn)
 
     # --- Query methods
     
@@ -1060,25 +1054,6 @@ class DataNodeBuilder(dict):
         self.__conceptInfoCache[concept] = conceptInfo
         
         return conceptInfo
-    
-    def getRootDataNode(self):
-        if dict.__contains__(self, 'dataNodeRoot'):
-            dnRoot = dict.__getitem__(self, 'dataNodeRoot')
-        else:
-            # Create dummy root dataNode
-            root = Concept(name='root')
-            dnRoot = DataNode(instanceID = "root", instanceValue = "", ontologyNode = root)
-
-        if dict.__contains__(self, 'dataNode'):
-            dnsRoots = dict.__getitem__(self, 'dataNode')
-            
-        # Make it a parent of all dataNotes in the list of root dataNodes
-        dnRoot.resetChildDataNode()
-        
-        for dn in dnsRoots:
-            dnRoot.addChildDataNode(dn)
-            
-        return dnRoot
             
     def __updateRootDataNodeList(self, *dns):
         if not dns:
@@ -1104,7 +1079,7 @@ class DataNodeBuilder(dict):
             for dList in dns:
                 flattenDns.extend(dList)
                 
-            if flattenDns and isinstance(flattenDns[0], list): 
+            if isinstance(flattenDns[0], list): 
                 _flattenDns = []
                 
                 for dList in flattenDns:
@@ -1121,6 +1096,7 @@ class DataNodeBuilder(dict):
         # Set the updated root list 
         _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
+    
 
     # Build or update relation dataNode in the data graph for a given key
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
@@ -1486,6 +1462,13 @@ class DataNodeBuilder(dict):
 
         for conceptDn in existingDnsForConcept:
             for equalDn in existingDnsForEqualityConcept:
+                
+                if conceptDn.getInstanceID() >= vInfo.value.shape[0]:
+                    continue
+                
+                if equalDn.getInstanceID() >= vInfo.value.shape[1]:
+                    continue
+                
                 if vInfo.value[conceptDn.getInstanceID(), equalDn.getInstanceID()]:
                     _DataNodeBulder__Logger.info('DataNodes of %s is equal to %s'%(conceptDn,equalDn))
                     conceptDn.addEqualTo(equalDn)
@@ -1580,8 +1563,8 @@ class DataNodeBuilder(dict):
         
         vInfo = self.__processAttributeValue(value, keyDataName)
         
-        if keyDataName.find("_equality_") > 0:
-            equalityConceptName = keyDataName[keyDataName.find("_equality_") + len("_equality_"):]
+        if keyDataName.find("_Equality_") > 0:
+            equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
             self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
         # Decide if this is dataNode for concept or relation link
         elif conceptInfo['relation']:
@@ -1624,6 +1607,12 @@ class DataNodeBuilder(dict):
             currentCounter =  dict.__getitem__(self, counterName)
             dict.__setitem__(self, counterName, currentCounter + 1)
             
+    def findDataNodesInBuilder(self, select = None, indexes = None):
+        existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
+        foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
+        
+        return foundDns
+    
     # Method returning constructed dataNode - the fist in the list
     def getDataNode(self):
         self.__addGetDataNodeCounter()
