@@ -6,7 +6,7 @@ from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
 from sensors.tokenizers import TokenizerEdgeSensor
-from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor
+from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
 from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, token_to_span_candidate, span_candidate_emb, span_label, span_emb, find_is_a
 
 
@@ -116,6 +116,7 @@ def model(graph):
     for concept in find_is_a(entities_graph, span):
         print(f'Creating learner/reader for span -> {concept}')
         span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+        span_annotation[concept] = LabelConstantSensor(concept=concept.name)
         # span[concept] = ConstantSensor(data=, label=True)
 
     # entity major classes
@@ -125,6 +126,7 @@ def model(graph):
             continue
         print(f'Creating learner/reader for entity -> {concept}')
         span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+        span_annotation[concept] = LabelConstantSensor(concept=concept.name)
         # span[concept] = ConstantSensor(data=, label=True)
 
         # entity sub classes
@@ -133,6 +135,7 @@ def model(graph):
                 continue
             print(f'Creating learner/reader for {concept} -> {sub_concept}')
             span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+            span_annotation[sub_concept] = LabelConstantSensor(concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
     # value major classes
@@ -140,12 +143,14 @@ def model(graph):
     for concept in find_is_a(entities_graph, value):
         print(f'Creating learner/reader for value -> {concept}')
         span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+        span_annotation[concept] = LabelConstantSensor(concept=concept.name)
         # span[concept] = ConstantSensor(data=, label=True)
 
         # value sub classes
         for sub_concept in find_is_a(entities_graph, concept):
             print(f'Creating learner/reader for {concept} -> {sub_concept}')
             span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+            span_annotation[sub_concept] = LabelConstantSensor(concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
     program = POIProgram(graph, poi=(token, span, span['match'], span_annotation))

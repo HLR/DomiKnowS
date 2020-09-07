@@ -1,7 +1,7 @@
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
 from regr.sensor.pytorch.query_sensor import DataNodeSensor
-
+import torch
 
 class MultiLevelReaderSensor(ReaderSensor):
     def fill_data(self, data_item):
@@ -114,3 +114,20 @@ class CustomMultiLevelReaderSensor(ReaderSensor):
             data = data_item[key]
         
         return data
+    
+    
+class LabelConstantSensor(ConstantSensor):
+    def __init__(self, *pres, edges=None, label=True, device='auto', concept=None):
+        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
+        self.concept_name = concept
+        
+    def forward(self, *_) -> Any:
+        output = []
+        for data in self.inputs[0]:
+            if data == self.concept_name:
+                output.append(1)
+            else:
+                output.append(0)
+        if self.label == True:
+            output = torch.tensor(output)
+        return output
