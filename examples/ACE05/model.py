@@ -78,7 +78,9 @@ def model(graph):
     anchor_annotation['index'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.text")
     anchor_annotation['start'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.start")
     anchor_annotation['end'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.end")
-
+    anchor_annotation['type'] = CustomMultiLevelReaderSensor(keyword="events.*.type")
+    anchor_annotation['subtype'] = CustomMultiLevelReaderSensor(keyword="events.*.subtype")
+    
     def makeSpanPairs(current_spans, span, span_anno):
         start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
         end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
