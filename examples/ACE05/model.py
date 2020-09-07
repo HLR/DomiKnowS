@@ -24,7 +24,9 @@ def model(graph):
     span_candidate = ling_graph['span_candidate']
     span = ling_graph['span']
     span_annotation = ling_graph['span_annotation']
+    anchor_annotation = ling_graph['anchor_annotation']
     span_equal_annotation = span.relate_to(span_annotation)[0]
+    anchor_equal_annotation = span.relate_to(anchor_annotation)[0]
     document_contains_token = document.relate_to(token)[0]
     span_contains_token = span.relate_to(token)[0]
     span_is_span_candidate = span.relate_to(span_candidate)[0]
@@ -70,6 +72,10 @@ def model(graph):
     span_annotation['index'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.text")
     span_annotation['start'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.start")
     span_annotation['end'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.end")
+    
+    anchor_annotation['index'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.text")
+    anchor_annotation['start'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.start")
+    anchor_annotation['end'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.end")
 
     def makeSpanPairs(current_spans, span, span_anno):
         start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
@@ -85,6 +91,21 @@ def model(graph):
             return False
 
     span['match'] = CandidateEqualSensor('index', span_annotation['index'],span_annotation['start'], span_annotation['end'], forward=makeSpanPairs, relations=[span_equal_annotation])
+    
+    def makeSpanAnchorPairs(current_spans, span, anchor_anno):
+        start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
+        end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
+        start_anno = anchor_anno.getAttribute('start')
+        end_anno = anchor_anno.getAttribute('end')
+        # exact match
+        if start == start_anno and end == end_anno:
+        # overlap
+        # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
+            return True
+        else:
+            return False
+
+    span['match1'] = CandidateEqualSensor('index', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], forward=makeSpanAnchorPairs, relations=[anchor_equal_annotation])
     
     # span['label'] = SpanLabelSensor('match')
     # span
