@@ -12,6 +12,10 @@ def main():
     traint_reader = DummyDictReader()  # dummy data
     for node in program.populate(traint_reader, device='auto'):
         print(node)
+        tokens = node.findDatanodes(select=graph['linguistic/token'])
+        spans = node.findDatanodes(select=graph['linguistic/span'])
+        span_annotations = node.findDatanodes(select=graph['linguistic/span_annotation'])
+        print(len(tokens), len(spans), len(span_annotations))
 
 if __name__ == "__main__":
     main()

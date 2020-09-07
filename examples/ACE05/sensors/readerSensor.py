@@ -1,6 +1,7 @@
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
 from regr.sensor.pytorch.query_sensor import DataNodeSensor
+from regr.graph import Concept
 import torch
 
 class MultiLevelReaderSensor(ReaderSensor):
@@ -64,7 +65,7 @@ class CustomMultiLevelReaderSensor(ReaderSensor):
         except KeyError as e:
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
 
-    def fetch_key(data_item, key):
+    def fetch_key(self, data_item, key):
         data = []
         if "." in key:
             keys = key.split(".")
@@ -116,14 +117,14 @@ class CustomMultiLevelReaderSensor(ReaderSensor):
         return data
     
     
-class LabelConstantSensor(ConstantSensor):
-    def __init__(self, *pres, edges=None, label=True, device='auto', concept=None):
-        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
+class LabelConstantSensor(FunctionalSensor):
+    def __init__(self, *pres, concept, edges=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=None, label=label, device=device)
         self.concept_name = concept
         
-    def forward(self, *_) -> Any:
+    def forward(self, input) -> Any:
         output = []
-        for data in self.inputs[0]:
+        for data in input:
             if data == self.concept_name:
                 output.append(1)
             else:
