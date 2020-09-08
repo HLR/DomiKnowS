@@ -51,7 +51,7 @@ def stat(path, list_path, status):
     print('Testing:', len(test_reader))
 
     reader = Reader(path, status=status)
-    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different basetype': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None, 'length': None, 'head_length': None}
+    span_stat = {'mentions':0, 'mentions/overlap':0, 'mentions/inclusion':0, 'mentions/exclusion': 0, 'mentions/same': 0, 'same/different basetype': 0, 'same/different type': 0, 'same/different subtype': 0, 'length/max': 0, 'length/max/example': None}
     length_list = []
     head_length_list = []
     for data_item in tqdm(reader):
@@ -62,35 +62,46 @@ def stat(path, list_path, status):
             length_list.append(length)
             head_length = mention.head.end - mention.head.start
             head_length_list.append(head_length)
-            if length > span_stat['max_len']:
-                span_stat['max_len'] = length
-                span_stat['max_len_sample'] = data_item['text'] + '-'*40 + '\n' + mention.extent.text + '-'*40 + '\n' + mention.head.text
-        for (span1, mention1), (span2, mention2) in combinations(mentions, r=2):
-            if (mention1.extent.start == mention2.extent.start and
-                mention1.extent.end == mention2.extent.end):
-                span_stat['same'] += 1
-                if span1.basetype != span2.basetype:
-                    span_stat['same/different basetype'] += 1
-                if span1.type is not span2.type:
-                    span_stat['same/different type'] += 1
-                if span1.subtype is not span2.subtype:
-                    span_stat['same/different subtype'] += 1
-            elif ((mention1.extent.end < mention2.extent.start)
-                or (mention2.extent.end < mention1.extent.start)):
-                span_stat['exclusion'] += 1
-            elif ((mention1.extent.start < mention2.extent.start and 
-                mention2.extent.start < mention1.extent.end and 
-                mention1.extent.end < mention2.extent.end)
-                or ((mention2.extent.start < mention1.extent.start and 
-                mention1.extent.start < mention2.extent.end and 
-                mention2.extent.end < mention1.extent.end))):
-                span_stat['overlap'] += 1
-            else:
-                span_stat['inclusion'] += 1
+            if length > span_stat['length/max']:
+                span_stat['length/max'] = length
+                span_stat['length/max/example'] = data_item['text'] + '-'*40 + '\n' + mention.extent.text + '-'*40 + '\n' + mention.head.text
+        for span1, mention1 in mentions:
+            same = False
+            exclusion = False
+            overlap = False
+            inclusion = False
+            for span2, mention2 in mentions:
+                if span2 is span1:
+                    continue
+                if (mention1.extent.start == mention2.extent.start and
+                    mention1.extent.end == mention2.extent.end):
+                    same = True
+                    if span1.basetype != span2.basetype:
+                        span_stat['same/different basetype'] += 0.5
+                    if span1.type is not span2.type:
+                        span_stat['same/different type'] += 0.5
+                    if span1.subtype is not span2.subtype:
+                        span_stat['same/different subtype'] += 0.5
+                elif ((mention1.extent.end < mention2.extent.start)
+                    or (mention2.extent.end < mention1.extent.start)):
+                    exclusion = True
+                elif ((mention1.extent.start < mention2.extent.start and 
+                    mention2.extent.start < mention1.extent.end and 
+                    mention1.extent.end < mention2.extent.end)
+                    or ((mention2.extent.start < mention1.extent.start and 
+                    mention1.extent.start < mention2.extent.end and 
+                    mention2.extent.end < mention1.extent.end))):
+                    overlap = True
+                else:
+                    inclusion = True
+            span_stat['mentions/same'] += same
+            span_stat['mentions/overlap'] += overlap
+            span_stat['mentions/inclusion'] += inclusion
+            span_stat['mentions/exclusion'] += not(same or overlap or inclusion)
 
-    span_stat['length'] = np.histogram(length_list)
-    span_stat['head_length'] = np.histogram(head_length_list)
-    del span_stat['max_len_sample']
+    span_stat['length/extend'] = np.histogram(length_list)
+    span_stat['length/head'] = np.histogram(head_length_list)
+    del span_stat['length/max/example']
     return span_stat
 
 
