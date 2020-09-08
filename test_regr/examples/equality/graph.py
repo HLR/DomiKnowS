@@ -12,7 +12,9 @@ with Graph('global') as graph:
     sentence = Concept(name='sentence')
     word = Concept(name='word')
     word1 = Concept(name='word1')
+    word2 = Concept(name='word2')
     (word_equal_word1, ) = word.equal(arg1=word1)
+    (word_equal_word2,) = word.equal(arg1=word2)
     (sentence_con_word, ) = sentence.contains(word)
     
     #(sentence_con_word1, ) = sentence.contains(word1)

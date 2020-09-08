@@ -16,7 +16,7 @@ def model_declaration():
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import model_helper, PoiModel
 
-    from graph import graph, word, word1, sentence, word_equal_word1, sentence_con_word #, sentence_con_word1
+    from graph import graph, word, word1, sentence, word_equal_word1, sentence_con_word, word2, word_equal_word2 #, sentence_con_word1
     from sensors import Tokenizer, TokenizerSpan
     graph.detach()
 
@@ -27,6 +27,8 @@ def model_declaration():
     #sentence_con_word1['forward'] = ConstantEdgeSensor('index', to="index", data=['phrase1', 'phrase2', 'phrase3'])
     word1['label'] = ConstantSensor(data=[1, 1, 1])
     word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
+    word2['label'] = ConstantSensor(data=[1, 1])
+    word2['span'] = ConstantSensor(data=[(5, 6), (15, 18), (27, 32)])
    
     
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
@@ -39,8 +41,11 @@ def model_declaration():
             return False
 
     word['match'] = CandidateEqualSensor('span', word1['label'], word1['span'],  forward=makeSpanPairs, relations=[word_equal_word1])
+
+    word['match1'] = CandidateEqualSensor('span', word2['label'], word2['span'], forward=makeSpanPairs,
+                                         relations=[word_equal_word2])
         
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match']]))
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match'], word['match1']]))
     return program
 
 
