@@ -124,6 +124,10 @@ class Trigger(Span):
     class Mention(Span.Mention):
         tag = 'event_mention'
 
+        def __init__(self, span, node, text):
+            super().__init__(span, node, text)
+            self.head = Charseq(node.find('anchor/charseq'), text)
+
     def init_types(self, node, text):
         self.basetype = type(self).__name__.lower()
         type_str = node.attrib.get('TYPE', None)
@@ -229,6 +233,8 @@ class Event(APFObject):
             self.extent = Charseq(node.find('extent/charseq'), text)
             self.ldc_scope = Charseq(node.find('ldc_scope/charseq'), text)
             self.anchor = Charseq(node.find('anchor/charseq'), text)
+            referable = referables[self.id.rsplit('-',1)[0]]
+            self.trigger = referable.mentions[self.id]
             self.arguments = []
             for argument_node in node.findall(self.Argument.tag):
                 referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
@@ -244,6 +250,7 @@ class Event(APFObject):
         subtype_str = node.attrib.get('SUBTYPE', None)
         subtype_str = self.type_map.get(subtype_str, subtype_str)
         self.subtype = ace05['Events'][subtype_str] if subtype_str else None
+        self.trigger = referables[self.id]
         self.modality = node.attrib['MODALITY']
         self.polarity = node.attrib['POLARITY']
         self.genericity = node.attrib['GENERICITY']
