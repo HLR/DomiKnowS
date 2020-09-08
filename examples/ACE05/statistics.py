@@ -11,7 +11,12 @@ from ace05.annotation import Entity, Timex2, Value
 from ace05.graph import relations_graph, events_graph, participant_argument, attribute_argument, timex2, value
 import config
 
-def get_mentions(data_item):
+def get_all_mentions(data_item):
+    spans = data_item['spans']
+    mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), spans.values()))))
+    return mentions
+
+def get_entity_mentions(data_item):
     spans = data_item['spans']
     mentions = list(chain(*(map(lambda span: map(lambda mention: (span, mention), span.mentions.values()), filter(lambda span: isinstance(span, Entity), spans.values())))))
     return mentions
@@ -33,7 +38,7 @@ def get_mentions_in_event(data_item):
     mentions = list(filter(is_in_event, mentions))
     return mentions
 
-get_mentions = get_mentions #get_mentions_in_event
+get_mentions = get_all_mentions # get_all_mentions, get_entity_mentions, get_mentions_in_event
 
 def stat(path, list_path, status):
     errors = {}
@@ -46,7 +51,7 @@ def stat(path, list_path, status):
     print('Testing:', len(test_reader))
 
     reader = Reader(path, status=status)
-    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None, 'length': None, 'head_length': None}
+    span_stat = {'mentions':0, 'overlap':0, 'inclusion':0, 'same': 0, 'same/different basetype': 0, 'same/different type': 0, 'same/different subtype': 0, 'exclusion': 0, 'max_len': 0, 'max_len_sample': None, 'length': None, 'head_length': None}
     length_list = []
     head_length_list = []
     for data_item in tqdm(reader):
@@ -64,6 +69,8 @@ def stat(path, list_path, status):
             if (mention1.extent.start == mention2.extent.start and
                 mention1.extent.end == mention2.extent.end):
                 span_stat['same'] += 1
+                if span1.basetype != span2.basetype:
+                    span_stat['same/different basetype'] += 1
                 if span1.type is not span2.type:
                     span_stat['same/different type'] += 1
                 if span1.subtype is not span2.subtype:
