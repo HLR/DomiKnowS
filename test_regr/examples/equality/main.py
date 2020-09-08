@@ -46,7 +46,7 @@ def model_declaration():
 
 # @pytest.mark.gurobi
 def test_equality_main():
-    from graph import word
+    from graph import word, word1
     
     lbp = model_declaration()
 
@@ -59,9 +59,10 @@ def test_equality_main():
             if child_node.getOntologyNode() != word:
                 continue
             if child_node.getInstanceID() == 1:
-                assert child_node.getEqualTo()[0].getInstanceID() == 0
+                assert child_node.getEqualTo(conceptName = word1.name)[0].getInstanceID() == 0
                 assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([0, 3]))
             if child_node.getInstanceID() == 4:
+                assert child_node.getEqualTo()[0].getInstanceID() == 1
                 assert child_node.getEqualTo(equalName = "equalTo")[0].getInstanceID() == 1
                 assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([7, 12]))
                 assert child_node.getAttribute("span") == (7,12)
