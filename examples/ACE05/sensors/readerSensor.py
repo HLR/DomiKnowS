@@ -125,10 +125,16 @@ class LabelConstantSensor(FunctionalSensor):
     def forward(self, input) -> Any:
         output = []
         for data in input:
-            if data == self.concept_name:
-                output.append(1)
+            if self.concept_name == "Entity":
+                if data != "value" and data != "Timex2":
+                    output.append(1)
+                else:
+                    output.append(0)
             else:
-                output.append(0)
+                if data == self.concept_name:
+                    output.append(1)
+                else:
+                    output.append(0)
         if self.label == True:
             output = torch.tensor(output)
         return output
