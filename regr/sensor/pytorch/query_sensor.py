@@ -151,7 +151,7 @@ class CandidateReaderSensor(CandidateSensor):
         return output
 
 
-class CandidateEqualSensor(QuerySensor):
+class CandidateEqualSensor(CandidateSensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
 
@@ -168,23 +168,6 @@ class CandidateEqualSensor(QuerySensor):
             return [self.concept, self.relations[0].dst]
         else:
             return [self.concept, self.concept.equal()[0].dst]
-        
-    def update_pre_context(
-            self,
-            data_item: Dict[str, Any]
-    ) -> Any:
-        super().update_pre_context(data_item)
-        for concept in self.args:
-            concept['index'](data_item)  # call index property to make sure it is constructed
-
-    def define_inputs(self):
-        super().define_inputs()
-        args = []
-        for concept in self.args:
-            root = self.builder.getDataNode()
-            datanodes = root.findDatanodes(select=concept)
-            args.append(datanodes)
-        self.inputs = self.inputs[:1] + args + self.inputs[1:]
 
     def forward_wrap(self):
         # current existing datNnodes (if any) for first element of equality

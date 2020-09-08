@@ -47,7 +47,7 @@ class MultiLevelReaderSensor(ReaderSensor):
 
 
 class SpanLabelSensor(DataNodeSensor):
-    def forward(self, datanode):
+    def forward(self, datanode, match):
         if len(datanode.getEqualTo()):
             return True
         else:

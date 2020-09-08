@@ -64,11 +64,18 @@ class TorchSensor(Sensor):
         self,
         data_item: Dict[str, Any]
     ) -> Any:
+        def non_label_sensor(sensor):
+            if not isinstance(sensor, Sensor):
+                return False
+            elif isinstance(sensor, TorchSensor):
+                return not sensor.label
+            else:
+                return True
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
-            for sensor in self.concept[pre].find(Sensor):
+            for sensor in self.concept[pre].find(non_label_sensor):
                 sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None):
@@ -102,6 +109,15 @@ class TorchSensor(Sensor):
         return self.prop.sup
 
 
+def non_label_sensor(sensor):
+    if not isinstance(sensor, Sensor):
+        return False
+    elif isinstance(sensor, TorchSensor):
+        return not sensor.label
+    else:
+        return True
+
+
 class FunctionalSensor(TorchSensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, label=label, device=device)
@@ -112,7 +128,7 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
@@ -121,7 +137,8 @@ class FunctionalSensor(TorchSensor):
                 except KeyError:
                     pass
             if isinstance(pre, (Property, Sensor)):
-                pre(data_item)
+                for sensor in pre.find(non_label_sensor):
+                    sensor(data_item)
 
     def update_context(
         self,
@@ -319,14 +336,15 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for sensor in self.src[pre].find(Sensor):
+                for sensor in self.src[pre].find(non_label_sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
-                pre(data_item)
+                for sensor in pre.find(non_label_sensor):
+                    sensor(data_item)
         # besides, make sure src exist
         self.src['index'](data_item=data_item)
 

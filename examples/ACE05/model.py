@@ -111,7 +111,8 @@ def model(graph):
 
     # span['match1'] = CandidateEqualSensor('index', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], forward=makeSpanAnchorPairs, relations=[anchor_equal_annotation])
     
-    # span['label'] = SpanLabelSensor('match')
+    span['label'] = SpanLabelSensor('match', label=True)
+
     # span
     for concept in find_is_a(entities_graph, span):
         print(f'Creating learner/reader for span -> {concept}')
@@ -153,6 +154,6 @@ def model(graph):
             span_annotation[sub_concept] = LabelConstantSensor('subtype', concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
-    program = POIProgram(graph, poi=(token, span, span['match'], span_annotation))
+    program = POIProgram(graph, poi=(token, span, span_annotation))
 
     return program
