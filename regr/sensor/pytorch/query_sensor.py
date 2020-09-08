@@ -39,8 +39,8 @@ class DataNodeSensor(QuerySensor):
 
 
 class CandidateSensor(QuerySensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
-        super().__init__(*pres, edges=edges, forward=forward, label=label)
+    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
                    
         # Add identification of candidate
         self.name += "_Candidate_" 
@@ -91,7 +91,7 @@ class CandidateRelationSensor(CandidateSensor):
     def args(self):
         concept = self.concept
         return [(rel.dst if concept is rel.src else rel.src) for rel in self.relations]
-    
+
     def __init__(self, *pres, relations, edges=None, forward=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.relations = relations
@@ -114,8 +114,8 @@ class InstantiateSensor(TorchSensor):
 
 
 class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
-        super().__init__(*pres, edges=edges, forward=forward, label=label)
+    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.data = None
         self.keyword = keyword
         if keyword is None:
@@ -161,9 +161,9 @@ class CandidateEqualSensor(QuerySensor):
     @property
     def args(self):
         if len(self.relations):
-            return [self.concept.equal()[0].src, self.relations[0].dst]
+            return [self.concept, self.relations[0].dst]
         else:
-            return [self.concept.equal()[0].src, self.concept.equal()[0].dst]
+            return [self.concept, self.concept.equal()[0].dst]
         
     def update_pre_context(
             self,
@@ -186,12 +186,12 @@ class CandidateEqualSensor(QuerySensor):
         # current existing datNnodes (if any) for first element of equality
         conceptDns = self.inputs[1]
         equalDns = self.inputs[2]        
-    
+
         dims = (len(conceptDns), len(equalDns))
         output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
-        
+
         for dns_product in product(conceptDns,equalDns):
             index = (dns_product[0].getInstanceID(), dns_product[1].getInstanceID() )
             output[(*index,)] = self.forward("", dns_product[0], dns_product[1])
-            
+
         return output

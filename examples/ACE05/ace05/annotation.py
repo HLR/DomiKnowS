@@ -38,12 +38,14 @@ class Span(APFObject):
             super().__init__(node, text)
             self.id = node.attrib['ID']
             self.extent = Charseq(node.find('extent/charseq'), text)
+            self.head = self.extent
 
     def __init__(self, node, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
         type_str = node.attrib.get('TYPE', None)
         self.type = type_str and ace05['Entities'][type_str]
+        self.subtype = None
         self.mentions = {}
         for mention_node in node.findall(self.Mention.tag):
             self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)

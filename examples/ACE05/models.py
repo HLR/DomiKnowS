@@ -44,6 +44,23 @@ class BERT(torch.nn.Module):
         return out
 
 
+class SpanClassifier(torch.nn.Module):
+    def __init__(self, token_emb_dim):
+        super().__init__()
+        self.fc1 = torch.nn.Linear(token_emb_dim*2, 1024)
+        self.fc2 = torch.nn.Linear(1024, 2)
+
+    def forward(self, token_emb):
+        # NxNxM
+        emb = cartesian_concat(token_emb, token_emb)
+        emb1 = self.fc1(emb)
+        emb1 = torch.nn.functional.relu(emb1)
+        emb2 = self.fc2(emb1)
+        return emb2
+
+        
+
+
 def token_to_span_candidate(spans, start, end):
     length = end.getAttribute('index') - start.getAttribute('index')
     if length > 0 and length < 10:

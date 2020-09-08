@@ -283,8 +283,8 @@ class ModuleSensor(FunctionalSensor):
 class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward", "selection")
 
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+    def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.to = to
         self.mode = mode
         if self.mode not in self.modes:
@@ -355,6 +355,15 @@ class TorchEdgeReaderSensor(TorchEdgeSensor, ReaderSensor):
         super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         self.keyword = keyword
         self.data = None
+
+
+class ModuleEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, to, module, mode="forward", edges=None, label=False, device='auto'):
+        self.module = module
+        super().__init__(self, *pres, to=to, mode=mode, edges=edges, label=label, device=device)
+
+    def forward(self, *inputs):
+        return self.module(*inputs)
 
 
 class ForwardEdgeSensor(TorchEdgeSensor):
