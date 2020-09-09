@@ -25,25 +25,31 @@ def model_declaration():
     sentence_con_word['forward'] = Tokenizer('index', to='index', mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
     
     #sentence_con_word1['forward'] = ConstantEdgeSensor('index', to="index", data=['phrase1', 'phrase2', 'phrase3'])
+#     word1['index'] = ConstantSensor(data=["a", "b", "c"])
     word1['label'] = ConstantSensor(data=[1, 1, 1])
     word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
+#     word2['index'] = ConstantSensor(data=["a", "b", "c"])
     word2['label'] = ConstantSensor(data=[1, 1])
-    word2['span'] = ConstantSensor(data=[(5, 6), (15, 18), (27, 32)])
+    word2['span'] = ConstantSensor(data=[(15, 18), (0, 3)])
    
     
     word['span'] = TokenizerSpan('index', edges=[sentence_con_word['forward']], tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
     def makeSpanPairs(current_spans, word, word1):
-        
         if word.getAttribute('span')[0] == word1.getAttribute('span')[0] and word.getAttribute('span')[1] == word1.getAttribute('span')[1]:
             return True
         else:
             return False
 
     word['match'] = CandidateEqualSensor('span', word1['label'], word1['span'],  forward=makeSpanPairs, relations=[word_equal_word1])
+    
+    def makeSpanPairs1(current_spans, word, word2):
+        if word.getAttribute('span')[0] == word2.getAttribute('span')[0] and word.getAttribute('span')[1] == word2.getAttribute('span')[1]:
+            return True
+        else:
+            return False
 
-    word['match1'] = CandidateEqualSensor('span', word2['label'], word2['span'], forward=makeSpanPairs,
-                                         relations=[word_equal_word2])
+    word['match1'] = CandidateEqualSensor('span', word2['label'], word2['span'], forward=makeSpanPairs1, relations=[word_equal_word2])
         
     program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word['match'], word['match1']]))
     return program
@@ -51,7 +57,7 @@ def model_declaration():
 
 # @pytest.mark.gurobi
 def test_equality_main():
-    from graph import word, word1
+    from graph import word, word1, word2
     
     lbp = model_declaration()
 
@@ -65,11 +71,12 @@ def test_equality_main():
                 continue
             if child_node.getInstanceID() == 1:
                 assert child_node.getEqualTo(conceptName = word1.name)[0].getInstanceID() == 0
-                assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([0, 3]))
+                assert child_node.getEqualTo(conceptName = word2.name)[0].getInstanceID() == 1
+#                 assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([0, 3]))
             if child_node.getInstanceID() == 4:
                 assert child_node.getEqualTo()[0].getInstanceID() == 1
                 assert child_node.getEqualTo(equalName = "equalTo")[0].getInstanceID() == 1
-                assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([7, 12]))
+#                 assert torch.equal(child_node.getEqualTo()[0].getAttribute("span"), torch.tensor([7, 12]))
                 assert child_node.getAttribute("span") == (7,12)
 
 
