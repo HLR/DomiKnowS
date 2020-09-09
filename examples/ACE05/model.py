@@ -111,7 +111,7 @@ def model(graph):
 
     # span['match1'] = CandidateEqualSensor('index', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], forward=makeSpanAnchorPairs, relations=[anchor_equal_annotation])
     
-    span['label'] = SpanLabelSensor('match', label=True)
+    span['label'] = SpanLabelSensor('match', label=True, concept=span_annotation.name)
 
     # span
     for concept in find_is_a(entities_graph, span):
