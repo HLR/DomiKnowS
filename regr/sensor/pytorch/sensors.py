@@ -284,7 +284,7 @@ class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward", "selection")
 
     def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.to = to
         self.mode = mode
         if self.mode not in self.modes:
