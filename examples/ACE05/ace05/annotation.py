@@ -34,22 +34,28 @@ class Charseq(APFObject):
 
 class Span(APFObject):
     class Mention(APFObject):
-        def __init__(self, node, text):
+        def __init__(self, span, node, text):
             super().__init__(node, text)
             self.id = node.attrib['ID']
             self.extent = Charseq(node.find('extent/charseq'), text)
             self.head = self.extent
+            self.span_basetype = span.basetype
+            self.span_type = span.type
+            self.span_subtype = span.subtype
 
     def __init__(self, node, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
+        self.init_types(node, text)
+        self.mentions = {}
+        for mention_node in node.findall(self.Mention.tag):
+            self.mentions[mention_node.attrib['ID']] = self.Mention(self, mention_node, text)
+
+    def init_types(self, node, text):
+        self.basetype = type(self).__name__.lower()
         type_str = node.attrib.get('TYPE', None)
         self.type = type_str and ace05['Entities'][type_str]
         self.subtype = None
-        self.mentions = {}
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, text)
-
 
 class Entity(Span):
     tag = 'entity'
@@ -57,8 +63,8 @@ class Entity(Span):
     class Mention(Span.Mention):
         tag = 'entity_mention'
 
-        def __init__(self, node, text):
-            super().__init__(node, text)
+        def __init__(self, span, node, text):
+            super().__init__(span, node, text)
             self.type = node.attrib['TYPE']
             self.head = Charseq(node.find('head/charseq'), text)
 
@@ -72,13 +78,16 @@ class Entity(Span):
 
     def __init__(self, node, text):
         super().__init__(node, text)
-        self.subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
         self.entity_class = node.attrib['CLASS']
         self.attributes = []
         attributes_node = node.find('entity_attributes')
         if attributes_node:
             for name_node in attributes_node.findall('name'):
                 self.attributes.append(self.Attribute(name_node, text))
+
+    def init_types(self, node, text):
+        super().init_types(node, text)
+        self.subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
 
 
 class Timex2(Span):
@@ -87,8 +96,8 @@ class Timex2(Span):
     class Mention(Span.Mention):
         tag = 'timex2_mention'
 
-    def __init__(self, node, text):
-        super().__init__(node, text)
+    def init_types(self, node, text):
+        super().init_types(node, text)
         self.type = ace05['Entities']['Timex2']
 
 
@@ -98,10 +107,35 @@ class Value(Span):
     class Mention(Span.Mention):
         tag = 'value_mention'
 
-    def __init__(self, node, text):
-        super().__init__(node, text)
+    def init_types(self, node, text):
+        super().init_types(node, text)
         subtype_str = node.attrib.get('SUBTYPE', None)
         self.subtype = subtype_str and ace05['Entities'][subtype_str]
+
+
+class Trigger(Span):
+    tag = 'event'
+
+    type_map = {
+        'Business': 'Business-Event',
+        'Sentence': 'Sentence-Event'
+    }
+
+    class Mention(Span.Mention):
+        tag = 'event_mention'
+
+        def __init__(self, span, node, text):
+            super().__init__(span, node, text)
+            self.head = Charseq(node.find('anchor/charseq'), text)
+
+    def init_types(self, node, text):
+        self.basetype = type(self).__name__.lower()
+        type_str = node.attrib.get('TYPE', None)
+        type_str = self.type_map.get(type_str, type_str)
+        self.type = type_str and ace05['Events'][type_str]
+        subtype_str = node.attrib.get('SUBTYPE', None)
+        subtype_str = self.type_map.get(subtype_str, subtype_str)
+        self.subtype = subtype_str and ace05['Events'][subtype_str]
 
 
 class Relation(APFObject):
@@ -110,10 +144,10 @@ class Relation(APFObject):
     class Argument(APFObject):
         tag = 'relation_argument'
 
-        def __init__(self, node, referables, text):
+        def __init__(self, node, spans, text):
             super().__init__(node, text)
             self.refid = node.attrib['REFID']
-            self.ref = referables[self.refid]
+            self.ref = spans[self.refid]
             self.role = node.attrib['ROLE']
 
     class Mention(APFObject):
@@ -122,13 +156,13 @@ class Relation(APFObject):
         class Argument(APFObject):
             tag = 'relation_mention_argument'
 
-            def __init__(self, node, referables, text):
+            def __init__(self, node, spans, text):
                 super().__init__(node, text)
                 self.refid = node.attrib['REFID']
-                self.ref = referables[self.refid]
+                self.ref = spans[self.refid]
                 self.role = node.attrib['ROLE']
 
-        def __init__(self, node, referables, text):
+        def __init__(self, node, spans, text):
             super().__init__(node, text)
             self.id = node.attrib['ID']
             self.lexical_condition = node.attrib['LEXICALCONDITION']
@@ -136,14 +170,14 @@ class Relation(APFObject):
             self.arguments = [None, None]
             self.additional_arguments = []
             for argument_node in node.findall(self.Argument.tag):
-                referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
-                argument = self.Argument(argument_node, referable.mentions, text)
+                span = spans[argument_node.attrib['REFID'].rsplit('-',1)[0]]
+                argument = self.Argument(argument_node, span.mentions, text)
                 if argument.role.startswith('Arg-'):
                     self.arguments[int(argument.role[-1])-1] = argument
                 else:
                     self.additional_arguments.append(argument)
 
-    def __init__(self, node, referables, text):
+    def __init__(self, node, spans, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
         self.type = ace05['Relations'][node.attrib['TYPE']]
@@ -155,13 +189,13 @@ class Relation(APFObject):
         self.additional_arguments = []
         self.mentions = {}
         for argument_node in node.findall(self.Argument.tag):
-            argument = self.Argument(argument_node, referables, text)
+            argument = self.Argument(argument_node, spans, text)
             if argument.role.startswith('Arg-'):
                 self.arguments[int(argument.role[-1])-1] = argument
             else:
                 self.additional_arguments.append(argument)
         for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, spans, text)
 
 
 class Event(APFObject):
@@ -175,10 +209,10 @@ class Event(APFObject):
     class Argument(APFObject):
         tag = 'event_argument'
 
-        def __init__(self, node, referables, text):
+        def __init__(self, node, spans, text):
             super().__init__(node, text)
             self.refid = node.attrib['REFID']
-            self.ref = referables[self.refid]
+            self.ref = spans[self.refid]
             self.role = node.attrib['ROLE']
 
     class Mention(APFObject):
@@ -187,25 +221,27 @@ class Event(APFObject):
         class Argument(APFObject):
             tag = 'event_mention_argument'
 
-            def __init__(self, node, referables, text):
+            def __init__(self, node, spans, text):
                 super().__init__(node, text)
                 self.refid = node.attrib['REFID']
-                self.ref = referables[self.refid]
+                self.ref = spans[self.refid]
                 self.role = node.attrib['ROLE']
 
-        def __init__(self, node, referables, text):
+        def __init__(self, node, spans, text):
             super().__init__(node, text)
             self.id = node.attrib['ID']
             self.extent = Charseq(node.find('extent/charseq'), text)
             self.ldc_scope = Charseq(node.find('ldc_scope/charseq'), text)
             self.anchor = Charseq(node.find('anchor/charseq'), text)
+            span = spans[self.id.rsplit('-',1)[0]]
+            self.trigger = span.mentions[self.id]
             self.arguments = []
             for argument_node in node.findall(self.Argument.tag):
-                referable = referables[argument_node.attrib['REFID'].rsplit('-',1)[0]]
-                argument = self.Argument(argument_node, referable.mentions, text)
+                span = spans[argument_node.attrib['REFID'].rsplit('-',1)[0]]
+                argument = self.Argument(argument_node, span.mentions, text)
                 self.arguments.append(argument)
 
-    def __init__(self, node, referables, text):
+    def __init__(self, node, spans, text):
         super().__init__(node, text)
         self.id = node.attrib['ID']
         type_str = node.attrib['TYPE']
@@ -214,6 +250,7 @@ class Event(APFObject):
         subtype_str = node.attrib.get('SUBTYPE', None)
         subtype_str = self.type_map.get(subtype_str, subtype_str)
         self.subtype = ace05['Events'][subtype_str] if subtype_str else None
+        self.trigger = spans[self.id]
         self.modality = node.attrib['MODALITY']
         self.polarity = node.attrib['POLARITY']
         self.genericity = node.attrib['GENERICITY']
@@ -221,7 +258,7 @@ class Event(APFObject):
         self.arguments = []
         self.mentions = {}
         for argument_node in node.findall(self.Argument.tag):
-            argument = self.Argument(argument_node, referables, text)
+            argument = self.Argument(argument_node, spans, text)
             self.arguments.append(argument)
         for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, referables, text)
+            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, spans, text)

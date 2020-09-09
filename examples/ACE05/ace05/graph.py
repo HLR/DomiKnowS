@@ -14,7 +14,7 @@ with Graph('global') as graph:
         span_candidate = Concept(name='span_candidate')
         span_annotation = Concept(name='span_annotation')
         anchor_annotation = Concept(name='anchor_annotation')
-        span = span_candidate(name='span')
+        span = Concept(name='span')
         document = Concept(name='document')
         span_candidate.has_a(start=token, end=token)
         # span.has_a(start=token, end=token)

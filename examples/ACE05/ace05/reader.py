@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 from regr.graph import Concept
 
-from .annotation import APFObject, Entity, Timex2, Value, Relation, Event
+from .annotation import APFObject, Entity, Timex2, Value, Trigger, Relation, Event
 
 
 class RawReader():
@@ -50,17 +50,11 @@ class RawReader():
         relations = {}
         events = {}
 
-        for node in document.findall(Entity.tag):
-            entity = Entity(node, text)
-            spans[entity.id] = entity
-
-        for node in document.findall(Timex2.tag):
-            timex2 = Timex2(node, text)
-            spans[timex2.id] = timex2
-
-        for node in document.findall(Value.tag):
-            value = Value(node, text)
-            spans[value.id] = value
+        base_types = [Entity, Timex2, Value, Trigger]
+        for BaseType in base_types:
+            for node in document.findall(BaseType.tag):
+                span = BaseType(node, text)
+                spans[span.id] = span
 
         for node in document.findall(Relation.tag):
             relation = Relation(node, spans, text)
