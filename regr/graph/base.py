@@ -13,7 +13,8 @@ class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
         super(AutoNamed, self).__init__(self.name)
 
     def __repr__(self):
-        return self.fullname
+        repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
+        return repr_str
 
     @classmethod
     def clear(cls):
@@ -31,7 +32,8 @@ class BaseGraphTree(AutoNamed, NamedTree):
         super(AutoNamed, self).__init__(self.name)
 
     def __repr__(self):
-        return self.fullname
+        repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
+        return repr_str
 
     @classmethod
     def clear(cls):
