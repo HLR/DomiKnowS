@@ -7,7 +7,7 @@ from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationS
 
 from sensors.tokenizers import TokenizerEdgeSensor
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
-from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, token_to_span_candidate, span_candidate_emb, span_label, span_emb, find_is_a
+from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, span_label, span_emb, find_is_a
 
 
 def model(graph):
@@ -21,24 +21,23 @@ def model(graph):
 
     document = ling_graph['document']
     token = ling_graph['token']
-    span_candidate = ling_graph['span_candidate']
     span = ling_graph['span']
     span_annotation = ling_graph['span_annotation']
+    span_candidate = ling_graph['span_candidate']
     anchor_annotation = ling_graph['anchor_annotation']
     span_equal_annotation = span.relate_to(span_annotation)[0]
     anchor_equal_annotation = span.relate_to(anchor_annotation)[0]
     document_contains_token = document.relate_to(token)[0]
     span_contains_token = span.relate_to(token)[0]
-    span_is_span_candidate = span.relate_to(span_candidate)[0]
 
     document['index'] = ReaderSensor(keyword='text')
     document_contains_token['forward'] = TokenizerEdgeSensor('index', mode='forward', to=('index', 'ids', 'offset'), tokenizer=Tokenizer())
     token['emb'] = ModuleLearner('ids', module=BERT())
 
-    # span_candidate['index'] = CandidateSensor(forward=token_to_span_candidate)
-    # span_candidate['emb'] = FunctionalSensor(token['emb'], span_candidate['index'], forward=span_candidate_emb)
+    span_candidate['index'] = CandidateSensor(token['index'], forward=lambda *_: True)
+    span_candidate['emb'] = FunctionalSensor(token['emb'], token['emb'], forward=cartesian_concat)
+    span_candidate['label'] = ModuleLearner('emb', module=SpanClassifier(token_emb_dim=768))
 
-    span['label'] = ModuleLearner(token['emb'], module=SpanClassifier(token_emb_dim=768))
     def function(span_label):
         # span_label: NxNx2
         spans = []
@@ -53,18 +52,9 @@ def model(graph):
         return [spans]
         # return torch.tensor([[0,1,1,0,0,0,0], [0,0,0,1,1,1,0]], device=span_label.device)
     span_contains_token['backward'] = TorchEdgeSensor(
-        span['label'], to='index', forward=function, mode='backward',
+        span_candidate['label'], to='index', forward=function, mode='backward',
         )
 
-    # span detection
-    # span_candidate[span] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
-    # span_candidate[span] = FunctionalReaderSensor('index', token['offset'], keyword='spans', forward=span_label)
-
-    # def span_candidate_to_span(spans, span_candidate, _):
-    #     span_candidate
-    #     # filter based on span_candidate.getAttribute('<span>')
-    #     return True
-    # span['index'] = CandidateRelationSensor(span_candidate[span], relations=(span_is_span_candidate,), forward=span_candidate_to_span)
     def function(token_emb):
         return cartesian_concat(token_emb, token_emb)
     span['emb'] = FunctionalSensor(token['emb'], forward=function)
