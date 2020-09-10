@@ -4,7 +4,7 @@ from itertools import permutations
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from regr.solver.ilpConfig import ilpConfig 
 
-from gurobipy import *
+from gurobipy import Var, GRB, LinExpr
 
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
@@ -17,7 +17,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         self.constrainCaches = {}
 
     def resetCaches(self):
-         self.constrainCaches = {}
+        self.constrainCaches = {}
 
     def __addToConstrainCaches(self, lmName, onlyConstrains, var, cachedValue):
         if lmName in self.constrainCaches:
@@ -64,7 +64,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # If only constructing constrains forcing NOT to be true 
         if onlyConstrains:
             if self.__varIsNumber(var):
-                self.myLogger.warning("%s has set value: %s - do nothing"%(logicMethodName,var1Name))
+                self.myLogger.warning("%s has set value: %s - do nothing"%(logicMethodName,varName))
                 return 
             
             m.addConstr(1 - var >= 1)
@@ -547,13 +547,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if m: m.update()
 
             m.addConstr(self.notVar(m, varNAND) <= var1)
-            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varAND.VarName,var1Name))
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varNAND.VarName,var1Name))
 
             m.addConstr(self.notVar(m, varNAND) <= var2) # varAND <= var2
-            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varAND.VarName,var2Name))
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s  - %s <= 0 "%(logicMethodName,varNAND.VarName,var2Name))
 
             m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1) # var1 + var2 <= varAND + 2 - 1
-            if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s  - %s <= 1 "%(logicMethodName,VarName,var1Name,varAND.VarName,var2Name))
+            if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s  - %s <= 1 "%(logicMethodName,var1Name,var2Name,varNAND.VarName))
 
             # Update cache
             self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), varNAND) 
@@ -660,7 +660,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             _norVarName += "_%s"%(currentVar)
            
-        varNOR = m.addVar(vtype=GRB.BINARY, name=norVarName)
+        varNOR = m.addVar(vtype=GRB.BINARY, name=_norVarName)
         for currentVar in var:
             m.addConstr(currentVar <= self.notVar(m, varNOR))
         
@@ -873,7 +873,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                         if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                 else:
-                     m.addConstr(varSumLinExpr == limit - countOnes)
+                    m.addConstr(varSumLinExpr == limit - countOnes)
                  
             varSumLinExprStr = str(varSumLinExpr)
             if self.ifLog: self.myLogger.debug("%s created constrain only: %s %s= %i - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,limit,countOnes))
@@ -940,7 +940,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
             else:
-                 m.addConstr(varSumLinExpr == limit - countOnes)
+                m.addConstr(varSumLinExpr == limit - countOnes)
                  
         m.addConstr(varSumLinExpr - varCOUNT >= limit-1)
         
