@@ -92,6 +92,34 @@ class DataNode:
         else:
             return '{} {}'.format(self.ontologyNode.name, self.instanceID)
         
+    def __reprDeep__(self,  strRep = ""):
+        
+        rel = [*self.getRelationLinks().keys()]
+        if 'contains' in rel:
+            rel.remove('contains')
+            
+        relSting = None
+        if len(rel) > 0:
+            relSting = ' (' + rel + ')'
+            
+        if relSting:
+            strRep += self.ontologyNode.name + str(rel)
+        else:
+            strRep += self.ontologyNode.name 
+            
+        childrenDns = {}
+        for cDn in self.getChildDataNodes():
+            if cDn.getOntologyNode().name not in childrenDns:
+                childrenDns[cDn.getOntologyNode().name] = []
+
+            childrenDns[cDn.getOntologyNode().name].append(cDn)
+                
+        strRep += '\n'
+        for childType in childrenDns:
+            strRep += '\t' + childrenDns[childType][0].__repr__(strRep)
+        
+        return strRep
+    
     def getInstanceID(self):
         return self.instanceID
     
@@ -322,17 +350,32 @@ class DataNode:
             else:
                 return False
     
+    # Find concept and relation types of DataNodes
+    def findConceptsNamesInDatanodes(self, dns = None, conceptNames = set(), relationNames = set()):
+        if dns is None:
+            dns = [self]
+            
+        for dn in dns:
+            conceptNames.add(dn.getOntologyNode().name)
+            for relName, _ in dn.getRelationLinks().items():
+                if relName != 'contains':
+                    relationNames.add(relName)
+                
+            self.findConceptsNamesInDatanodes(dns=dn.getChildDataNodes(), conceptNames = conceptNames, relationNames = relationNames)
+            
+        return conceptNames, relationNames
+        
     # Find dataNodes in data graph of the given concept 
-    def findDatanodes(self, dns = None, select = None, indexes = None):
+    def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
         if dns is None:
             dns = [self]
             
         returnDns = []
         
-        if len(dns) == 0:
-            return returnDns
-        
-        if select == None:
+        if select is None:
+            if depth == 0 and not returnDns:
+                _DataNode__Logger.warning('Not found any DataNode - no value for select provided')
+                
             return returnDns
        
         for dn in dns:
@@ -391,18 +434,22 @@ class DataNode:
                        
             returnDns = _returnDns
                 
-        if len(returnDns) > 0:
+        if len(returnDns) > 0:     
             return returnDns
         
         # Not found - > call recursively
+        newDepth = depth + 1
         for dn in dns:
-            _returnDns = self.findDatanodes(dn.getChildDataNodes(), select, indexes)
+            _returnDns = self.findDatanodes(dn.getChildDataNodes(), select = select, indexes = indexes, depth = newDepth)
             
             if _returnDns is not None:
                 for _dn in _returnDns:
                     if _dn not in returnDns:
                         returnDns.append(_dn)
     
+        if depth == 0 and not returnDns:
+            _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
+
         return returnDns
           
     # Get root of the dataNode
@@ -616,13 +663,16 @@ class DataNode:
 
         return [float("nan"), float("nan")]
                     
-    def __collectConceptsAndRelations(self, dn):
-        conceptsAndRelations = set()
+    def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
         
+        # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
             if att[0] == '<' and att[-1] == '>':
-                conceptsAndRelations.add(att[1:-1])
-        
+                if att[1:-1] not in conceptsAndRelations:
+                    conceptsAndRelations.add(att[1:-1])
+                    _DataNode__Logger.info('Found concept %s in dataNode %s'%(att[1:-1],dn))
+
+        # Find relations in dataNode - relation are in attributes from learning sensors
         for relName, rel in dn.getRelationLinks().items():
             if relName == "contains":
                 continue
@@ -630,13 +680,16 @@ class DataNode:
             if len(rel) > 0:
                 for att in rel[0].attributes:
                     if att[0] == '<' and att[-1] == '>':
-                        conceptsAndRelations.add(att[1:-1])
-        
+                        if att[1:-1] not in conceptsAndRelations:
+                            conceptsAndRelations.add(att[1:-1])
+                            _DataNode__Logger.info('Found relation %s in dataNode %s'%(att[1:-1],dn))
+
         dnChildren = dn.getChildDataNodes()
         
+        # Recursively find concepts and relations in children dataNodes 
         if dnChildren != None:
             for child in dnChildren:
-                conceptsAndRelations.update(self.__collectConceptsAndRelations(child))
+                self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations)
 
         return conceptsAndRelations
 
@@ -660,14 +713,16 @@ class DataNode:
     # Prepare data for ILP based on data graph with this instance as a root based on the provided list of concepts and relations
     def __prepareILPData(self, *_conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
         # Check if concepts and/or relations have been provided for inference
-        if (_conceptsRelations == None) or len(_conceptsRelations) == 0:
+        if not _conceptsRelations:
             _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
 
-        _DataNode__Logger.info('Found _conceptsRelations %s'%([_conceptsRelations]))
-        
-        if len(_conceptsRelations) == 0:
-            _DataNode__Logger.info('Not found any concepts or relations for inference')
-            raise DataNode.DataNodeError('Not found any concepts or relations for inference')
+            if len(_conceptsRelations) == 0:
+                _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+                raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+            else:        
+                _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
+        else:
+            pass
 
         conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
         hardConstrains = []
@@ -680,6 +735,7 @@ class DataNode:
                 currentConceptOrRelation = self.__findConcept(_currentConceptOrRelation)
                 
                 if currentConceptOrRelation is None:
+                    _DataNode__Logger.warning('Concept or relation name %s not found in the graph'%(currentConceptOrRelation))
                     continue # String is not a name of concept or relation
             else:
                 currentConceptOrRelation = _currentConceptOrRelation
@@ -689,13 +745,16 @@ class DataNode:
                 hardConstrains.append(str(currentConceptOrRelation)) # Hard Constrain
                             
             # Get candidates (dataNodes or relation relationName for the concept) from the graph starting from the current data node
-            currentCandidates = currentConceptOrRelation.candidates(self)
+            currentCandidates = [*currentConceptOrRelation.candidates(self, logger = _DataNode__Logger)]
             
             conceptsRelations.append(currentConceptOrRelation)
 
-            if currentCandidates is None:
+            if not currentCandidates:
+                _DataNode__Logger.warning('Not found any candidates for %s'%(currentConceptOrRelation))
                 continue
-            
+            else:
+                _DataNode__Logger.info('Found candidates - %s - for %s'%(currentCandidates,currentConceptOrRelation))
+
             if self.__isRelation(currentConceptOrRelation): # Check if relation
                 pass
             
@@ -709,7 +768,8 @@ class DataNode:
             candidates_currentConceptOrRelation[str(currentConceptOrRelation)] = _currentInstances
           
         if len(_instances) == 0:
-            return None, None, None, None, None, None, None
+            _DataNode__Logger.error('Not found any candidates in DataNode %s for concepts and relations - %s'%(self,_conceptsRelations))
+            raise DataNode.DataNodeError('Not found any candidates in DataNode %s for concepts and relations - %s'%(self,_conceptsRelations))
         
         # Get ids of the instances
         infer_candidatesID = []
@@ -734,6 +794,7 @@ class DataNode:
             currentCandidates = candidates_currentConceptOrRelation[str(currentConceptOrRelation)]
             
             if not currentCandidates:
+                _DataNode__Logger.warning('No candidates for %s'%(currentConceptOrRelation))
                 continue
             
             c = next(iter(currentCandidates or []), None)
@@ -796,6 +857,7 @@ class DataNode:
             currentCandidates = candidates_currentConceptOrRelation[str(currentConceptOrRelation)]
             
             if currentCandidates is None:
+                _DataNode__Logger.warning('Not found any candidates for %s'%(currentConceptOrRelation))
                 continue
             
             reltationAttrs = self.__getRelationAttrNames(currentConceptOrRelation)
@@ -823,9 +885,7 @@ class DataNode:
                         graphResultsForPhraseRelation[str(currentConceptOrRelation)][currentCandidate1.instanceID][currentCandidate2.instanceID] = currentProbability
 
                     if str(currentConceptOrRelation) in lcEqls:
-                        for e in lcEqls[str(currentConceptOrRelation)]:
-                            #dns = self.findDatanodes(select = (e[0], e[1], e[2]))
-                            
+                        for e in lcEqls[str(currentConceptOrRelation)]:                            
                             _e2 = currentCandidate[0].relationLinks[str(e[0])][currentCandidate[1].instanceID].attributes[e[1]].item()
                             
                             if isinstance(e[2], set):
@@ -877,7 +937,12 @@ class DataNode:
     
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
-        _DataNode__Logger.info('Called with _conceptsRelations %s'%([_conceptsRelations]))
+        if len(_conceptsRelations) == 0:
+            _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
+        else:
+            from regr.graph import Concept
+            _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
+            
         if not _conceptsRelations:
             _conceptsRelations = ()
             
@@ -1150,7 +1215,7 @@ class DataNodeBuilder(dict):
         if hasattr(vInfo.value, 'shape'):
             for i, (_, a) in enumerate(existingDnsForAttr.items()):
                 if vInfo.dim <= i: # check if value tensor has enough dimensions
-                    _DataNodeBulder__Logger.error('Wrong dimension of value; it is %i which is less then % relation attributes - abandon processing relation link dataNode value for %s'%(vInfo.dim,i,relationName))
+                    _DataNodeBulder__Logger.error('Wrong dimension of value; it is %i which is less then %i relation attributes - abandon processing relation link dataNode value for %s'%(vInfo.dim,i,relationName))
                     return # Wrong shape not matching relation attribute number
                 
                 if len(a) != vInfo.value.shape[i]: # check if the given dimension has a size equal to the number of dataNodes found for the given attribute
@@ -1179,7 +1244,7 @@ class DataNodeBuilder(dict):
                 
                 # Check if this relation link is excluded by the provided value (need to have 'Candidate' substring in the tensor column name
                 if (keyDataName.find("_Candidate_") > 0) and (vInfo.value[_p] == 0):
-                    _DataNodeBulder__Logger.debug('DataNode for relation link with id %s is not in the Candidate list - it is not added'%(instanceID))
+                    _DataNodeBulder__Logger.warning('DataNode for relation link with id %s is not in the Candidate list - it is not added'%(instanceID))
                     continue
                 else:
                     _DataNodeBulder__Logger.debug('DataNode for relation link with id %s created'%(instanceID))
