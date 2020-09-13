@@ -7,7 +7,7 @@ from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateRelationS
 
 from sensors.tokenizers import TokenizerEdgeSensor
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
-from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, span_label, span_emb, find_is_a
+from models import Tokenizer, BERT, SpanClassifier, cartesian_concat, find_is_a, token_to_span_label, makeSpanPairs, makeSpanAnchorPairs
 
 
 def model(graph):
@@ -38,26 +38,10 @@ def model(graph):
     span_candidate['emb'] = FunctionalSensor(token['emb'], token['emb'], forward=cartesian_concat)
     span_candidate['label'] = ModuleLearner('emb', module=SpanClassifier(token_emb_dim=768))
 
-    def function(span_label):
-        # span_label: NxNx2
-        spans = []
-        for i, row in enumerate(span_label):
-            for j, val in enumerate(row):
-                if i > j or j - i > 20:
-                    continue
-                if i == j or val[1] > val[0]:
-                    spans.append((i, j))
-        if len(spans) > 1:
-            spans[-1] = spans[-1] + (0,)  # to avoid being converted to tensor
-        return [spans]
-        # return torch.tensor([[0,1,1,0,0,0,0], [0,0,0,1,1,1,0]], device=span_label.device)
     span_contains_token['backward'] = TorchEdgeSensor(
-        span_candidate['label'], to='index', forward=function, mode='backward',
-        )
+        span_candidate['label'], to='index', forward=token_to_span_label, mode='backward',)
 
-    def function(token_emb):
-        return cartesian_concat(token_emb, token_emb)
-    span['emb'] = FunctionalSensor(token['emb'], forward=function)
+    span['emb'] = FunctionalSensor(span_candidate['emb'], forward=lambda x: x)
 
     span_annotation['index'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.text")
     span_annotation['start'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.start")
@@ -70,37 +54,9 @@ def model(graph):
     anchor_annotation['end'] = MultiLevelReaderSensor(keyword="events.*.mentions.*.anchor.end")
     anchor_annotation['type'] = CustomMultiLevelReaderSensor(keyword="events.*.type")
     anchor_annotation['subtype'] = CustomMultiLevelReaderSensor(keyword="events.*.subtype")
-    
-    def makeSpanPairs(current_spans, span, span_anno):
-        start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
-        end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
-        start_anno = span_anno.getAttribute('start')
-        end_anno = span_anno.getAttribute('end')
-        # exact match
-        if start == start_anno and end == end_anno:
-        # overlap
-        # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
-            return True
-        else:
-            return False
 
     span['match'] = CandidateEqualSensor('index', span_annotation['index'],span_annotation['start'], span_annotation['end'], forward=makeSpanPairs, relations=[span_equal_annotation])
-    
-    def makeSpanAnchorPairs(current_spans, span, anchor_anno):
-        start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
-        end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
-        start_anno = anchor_anno.getAttribute('start')
-        end_anno = anchor_anno.getAttribute('end')
-        # exact match
-        if start == start_anno and end == end_anno:
-        # overlap
-        # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
-            return True
-        else:
-            return False
-
-    # span['match1'] = CandidateEqualSensor('index', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], forward=makeSpanAnchorPairs, relations=[anchor_equal_annotation])
-    
+    span['match1'] = CandidateEqualSensor('index', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], forward=makeSpanAnchorPairs, relations=[anchor_equal_annotation])
     span['label'] = SpanLabelSensor('match', label=True, concept=span_annotation.name)
 
     # span

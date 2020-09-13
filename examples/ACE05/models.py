@@ -3,6 +3,8 @@ from itertools import chain
 import torch
 from transformers import BertTokenizer, BertTokenizerFast, BertModel
 
+from ace05.graph import token
+
 
 def cartesian_concat(*inputs):
     # torch cat is not broadcasting, do repeat manually
@@ -58,44 +60,6 @@ class SpanClassifier(torch.nn.Module):
         emb2 = self.fc2(emb1)
         return emb2
 
-        
-
-
-def token_to_span_candidate(spans, start, end):
-    length = end.getAttribute('index') - start.getAttribute('index')
-    if length > 0 and length < 10:
-        return True
-    else:
-        return False
-
-
-def span_candidate_emb(token_emb, span_candidate_index):
-    embs = cartesian_concat(token_emb, token_emb)
-    span_candidate_index = span_candidate_index.rename(None)
-    span_candidate_index = span_candidate_index.unsqueeze(-1).repeat(1, 1, embs.shape[-1])
-    selected = embs.masked_select(span_candidate_index).view(-1, embs.shape[-1])
-    return selected
-
-
-def span_label(span_index, token_offset, data):
-    span_index = span_index.rename(None)
-    span_label = span_index.clone()
-    for i, j in span_index.nonzero():
-        for mention in chain(*map(lambda span: span.mentions, data)):
-            if mention.start == i and mention.end == j:
-                break
-        else:  # match not found
-            span_label[i, j] = 0
-    selected = span_label.masked_select(span_index).view(-1)
-    return selected
-
-
-def span_emb(span_candidate_emb, span_index):
-    span_index = span_index.rename(None)
-    span_index = span_index.unsqueeze(-1).repeat(1, span_candidate_emb.shape[-1])
-    selected = span_candidate_emb.masked_select(span_index).view(-1, span_candidate_emb.shape[-1])
-    return selected
-
 
 def find_is_a(graph, base_concept):
     for name, concept in graph.concepts.items():
@@ -126,3 +90,46 @@ def find_event_arg(events_graph, event_type, role_arg_type=None, arg_type=None):
         if arg_type in concepts:
             yield role_arg
             continue
+
+
+def token_to_span_label(span_label):
+    # span_label: NxNx2
+    spans = []
+    for i, row in enumerate(span_label):
+        for j, val in enumerate(row):
+            if i > j or j - i > 20:
+                continue
+            if i == j or val[1] > val[0]:
+                spans.append((i, j))
+    if len(spans) > 1:
+        spans[-1] = spans[-1] + (0,)  # to avoid being converted to tensor
+    return [spans]
+    # return torch.tensor([[0,1,1,0,0,0,0], [0,0,0,1,1,1,0]], device=span_label.device)
+
+
+def makeSpanPairs(current_spans, span, span_anno):
+    start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
+    end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
+    start_anno = span_anno.getAttribute('start')
+    end_anno = span_anno.getAttribute('end')
+    # exact match
+    if start == start_anno and end == end_anno:
+    # overlap
+    # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
+        return True
+    else:
+        return False
+
+
+def makeSpanAnchorPairs(current_spans, span, anchor_anno):
+    start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
+    end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
+    start_anno = anchor_anno.getAttribute('start')
+    end_anno = anchor_anno.getAttribute('end')
+    # exact match
+    if start == start_anno and end == end_anno:
+    # overlap
+    # if (start < start_anno and start_anno < end) or (start < end_anno and end_anno < end):
+        return True
+    else:
+        return False
