@@ -1,14 +1,33 @@
 # `regr.sensor`
 
-## Base classes
+<!-- TOC depthto:6 withlinks:true -->
 
-### `regr.sensor.Sensor`
+- [1. Base Classes `regr.sensor`](#1-base-classes-regrsensor)
+    - [1.1. `regr.sensor.Sensor`](#11-regrsensorsensor)
+        - [1.1.1. `Sensor` Attributes](#111-sensor-attributes)
+        - [1.1.2. `Sensor` Methods](#112-sensor-methods)
+            - [1.1.2.1. `call(self, dataitem: Dict[str, Any], force=False) -> Any`](#1121-callself-dataitem-dictstr-any-forcefalse---any)
+            - [1.1.2.2. `forward(dataitem: Dict[str, Any]): Any`](#1122-forwarddataitem-dictstr-any-any)
+            - [1.1.2.3. `updatecontext(self, dataitem: Dict[str, Any], force=False)`](#1123-updatecontextself-dataitem-dictstr-any-forcefalse)
+            - [1.1.2.4. `propagatecontext(self, dataitem, node, force=False)`](#1124-propagatecontextself-dataitem-node-forcefalse)
+    - [1.2. `regr.sensor.Learner`](#12-regrsensorlearner)
+        - [1.2.1. `Learner` Attributes](#121-learner-attributes)
+        - [1.2.2. `Learner` Methods](#122-learner-methods)
+- [2. PyTorch Sensors `regr.sensor.pytorch`](#2-pytorch-sensors-regrsensorpytorch)
+- [3. Torch Sensors `regr.sensor.torch` (*Deprecated*)](#3-torch-sensors-regrsensortorch-deprecated)
+- [4. AllenNLP Sensors `regr.sensor.allennlp` (*Deprecated*)](#4-allennlp-sensors-regrsensorallennlp-deprecated)
+
+<!-- /TOC -->
+
+## 1. Base Classes `regr.sensor`
+
+### 1.1. `regr.sensor.Sensor`
 
 The base class of all sensors and learners. All sensors are designed to be callable objects.
 When a sensor is called (with an data item retrieved from the data reader), dependency will be checked and prerequired sensors (or learners) will be called recursively.
 The functionality of the sensor is implemented in its `forward()` function. When all dependency are evaluated, `forward()` function of the current sensor will be invoke.
 
-#### `Sensor` Attributes
+#### 1.1.1. `Sensor` Attributes
 
 Inheriting attributes from `regr.graph.base.BaseGraphTreeNode`.
 
@@ -16,11 +35,11 @@ Inheriting attributes from `regr.graph.base.BaseGraphTreeNode`.
 - `fullname`: a full path from the root of the graph to a property of a concepy and the `name` of this sensor.
 - `sup`: the parent node of this sensor, which is a concepy's property to which this sensor is associated.
 
-#### `Sensor` Methods
+#### 1.1.2. `Sensor` Methods
 
-##### `forward(data_item: Dict[str, Any]): Any`
+##### 1.1.2.1. `__call__(self, data_item: Dict[str, Any], force=False) -> Any`
 
-The abstract function for implementing the functionality of the current sensor.
+A sensor is a callable object. This is the basic interface the sensor used. All the sensors (and learners) are expected to be invoke with this function anywhere in this framework. Interally, it will trigger [`update_context()`](#1123-updatecontextself-dataitem-dictstr-any-forcefalse---dictstr-any) to update the `data_item` based on the return value of [`forward()`](#1122-forwarddataitem-dictstr-any-any) which implement the functionality of this spesific sensor.
 
 - Parameters:
   - `data_item: Dict[str, Any]`: A data item retrieved from the data reader. It is a python `dict` that contain string keys and any (mostly `torch.Tensor`s) value.
@@ -28,109 +47,62 @@ The abstract function for implementing the functionality of the current sensor.
 - Return value:
   - any value that is generated based on the functionality of the sensor. If `None` is returned, the framework consider there is no return from the sensor, which is differently treated internally.
 
-### `regr.sensor.Learner`
+##### 1.1.2.2. `forward(data_item: Dict[str, Any]): Any`
+
+The abstract function for implementing the functionality of the current sensor.
+
+- Parameters:
+  - `data_item: Dict[str, Any]`: A data item retrieved from the data reader, passed from the call to the sensor.
+
+- Return value:
+  - any value that is generated based on the functionality of the sensor. The return value will be cached in the `data_item` with the sensor's and its associations' idendities. If `None` is returned, the framework consider there is no return from the sensor and does not update the data item.
+
+##### 1.1.2.3. `update_context(self, data_item: Dict[str, Any], force=False)`
+
+Update the `data_item` based on the return value of [`forward()`](#1122-forwarddataitem-dictstr-any-any) if it has not been calculated before, with the sensor's idendity. Also update the sensor's associated `Property`, `Concept`, etc. via [`propagate_context()`](#1124-propagatecontextself-dataitem-node-forcefalse) if feasible.
+
+- Parameters:
+  - `data_item: Dict[str, Any]`: A data item retrieved from the data reader, passed from the call to the sensor.
+  - `force`: Whether force recaluclating the value if the sensor's idendity is already in the `data_item`. Default: `False`.
+
+##### 1.1.2.4. `propagate_context(self, data_item, node, force=False)`
+
+Update the `node`'s parent node `node.sup` in the `data_item` with value cached for the `node`. The update propagate to `node.sup` and its parents automatically.
+
+- Parameters:
+  - `data_item: Dict[str, Any]`: A data item retrieved from the data reader, passed from the call to the sensor.
+  - `node`: The node, which is a `Sensor`, `Property`, `Concept`, etc., based on which we propagate the value.
+  - `force`: Whether force update if the parent's value is already assigned. Default: `False`.
+
+### 1.2. `regr.sensor.Learner`
 
 The base class of all the learners.
 The only difference is that `Learner`s has learnable parameters that will be updated during training.
 
-#### `Learner` Attributes
+#### 1.2.1. `Learner` Attributes
 
 Inheriting attributes from `regr.sensor.Sensor` except an additional `paramters`.
 
-Parameters:
+- `paramters`: The attribute that indicates the learnable paramters in this learner.
 
-- `paramters`: attribute or `@property` function that indicate the learnable paramters in this learner.
-
-#### `Learner` Methods
+#### 1.2.2. `Learner` Methods
 
 Inheriting from `regr.sensor.Sensor`
 
-## `regr.sensor.pytorch`
+## 2. PyTorch Sensors `regr.sensor.pytorch`
 
-This package contains the sensors implemented specific to work with pytorch.
+This package contains the sensors implemented specific to work with PyTorch.
 
-### `regr.sensor.pytorch.TorchSensor`
+[Here](./sensor/PYTORCH.md) is a list of avalible sensors.
 
-#### `TorchSensor` Attributes
+[Here](../developer/MODEL.md#sensor) for more information about customizing your own sensor.
 
-#### `TorchSensor` Methods
+## 3. Torch Sensors `regr.sensor.torch` (*Deprecated*)
 
-### `regr.sensor.pytorch.TorchLearner`
+Notice that, sensors and learners in `regr.sensor.torch` are *deprecated*.
+Use [`regr.sensor.pytorch`](#2-pytorch-sensors-regrsensorpytorch) instead.
 
-#### `TorchLearner` Attributes
+## 4. AllenNLP Sensors `regr.sensor.allennlp` (*Deprecated*)
 
-#### `TorchLearner` Methods
-
-### `regr.sensor.pytorch.FunctionalSensor`
-
-#### `FunctionalSensor` Attributes
-
-#### `FunctionalSensor` Methods
-
-### `regr.sensor.pytorch.ModuleSensor`
-
-#### `ModuleSensor` Attributes
-
-#### `ModuleSensor` Methods
-
-### `regr.sensor.pytorch.ModuleLearner`
-
-#### `ModuleLearner` Attributes
-
-#### `ModuleLearner` Methods
-
-### `regr.sensor.pytorch.TorchEdgeSensor`
-
-#### `TorchEdgeSensor` Attributes
-
-#### `TorchEdgeSensor` Methods
-
-### `regr.sensor.pytorch.QuerySensor`
-
-#### `QuerySensor` Attributes
-
-#### `QuerySensor` Methods
-
-### `regr.sensor.pytorch.DataNodeSensor`
-
-#### `DataNodeSensor` Attributes
-
-#### `DataNodeSensor` Methods
-
-### `regr.sensor.pytorch.CandidateSensor`
-
-#### `CandidateSensor` Attributes
-
-#### `CandidateSensor` Methods
-
-## `regr.sensor.pytorch.sensors`
-
-### `regr.sensor.pytorch.ConstantSensor`
-
-#### `ConstantSensor` Attributes
-
-#### `ConstantSensor` Methods
-
-### `regr.sensor.pytorch.ReaderSensor`
-
-#### `ReaderSensor` Attributes
-
-#### `ReaderSensor` Methods
-
-### `regr.sensor.pytorch.CandidateReaderSensor`
-
-#### `CandidateReaderSensor` Attributes
-
-#### `CandidateReaderSensor` Methods
-
-### `regr.sensor.pytorch.TorchEdgeReaderSensor`
-
-#### `TorchEdgeReaderSensor` Attributes
-
-#### `TorchEdgeReaderSensor` Methods
-
-## `regr.sensor.pytorch.learners`
-
-## Deprecated
-
-Notice that, sensors and learners in `regr.sensor.torch` are **deprecated**. Use `regr.sensor.pytorch` instead.
+Notice that, sensors and learners in `regr.sensor.allennlp` are dedicated to AllenNLP examples and thus *deprecated* for common use.
+Use [`regr.sensor.pytorch`](#2-pytorch-sensors-regrsensorpytorch) instead.
