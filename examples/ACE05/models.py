@@ -107,6 +107,14 @@ def token_to_span_label(span_label):
     # return torch.tensor([[0,1,1,0,0,0,0], [0,0,0,1,1,1,0]], device=span_label.device)
 
 
+def token_to_span_candidate_emb(token_emb):
+    return cartesian_concat(token_emb, token_emb)
+
+
+def span_to_pair_emb(span_emb):
+    return cartesian_concat(span_emb, span_emb)
+
+
 def makeSpanPairs(current_spans, span, span_anno):
     start = span.getChildDataNodes(conceptName=token)[0].getAttribute('offset')[0]
     end = span.getChildDataNodes(conceptName=token)[-1].getAttribute('offset')[1]
