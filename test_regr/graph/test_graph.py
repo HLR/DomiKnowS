@@ -56,20 +56,27 @@ class TestGraph(object):
         Concept.clear()
         Relation.clear()
 
-    @pytest.fixture()
-    def target(self):
-        target = \
-        "Graph(name='global', what={'concepts': {},\n 'subs': {'application': Graph(name='application', what={'concepts': {'organization': Concept(name='organization', what={'relations': {'is_a': [IsA(name='organization-is_a-0-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='organization')})],\n               'not_a': [NotA(name='organization-not_a-1-people', what={'dst': Concept(name='people'),\n 'src': Concept(name='organization')})]},\n 'subs': {},\n 'sup': Graph(name='application')}),\n              'people': Concept(name='people', what={'relations': {'is_a': [IsA(name='people-is_a-0-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='people')})],\n               'not_a': [NotA(name='people-not_a-1-organization', what={'dst': Concept(name='organization'),\n 'src': Concept(name='people')})]},\n 'subs': {},\n 'sup': Graph(name='application')}),\n              'work_for': Concept(name='work_for', what={'relations': {'has_a': [HasA(name='employee',what={'dst':Concept(name='people'),'src':Concept(name='work_for')}),HasA(name='employer',what={'dst':Concept(name='organization'),'src':Concept(name='work_for')})],'is_a':[IsA(name='work_for-is_a-0-pair',what={'dst':Concept(name='pair'),'src':Concept(name='work_for')})]},'subs':{},'sup':Graph(name='application')})},'subs':{},'sup':Graph(name='global')}),'linguistic':Graph(name='linguistic',what={'concepts':{'pair':Concept(name='pair',what={'relations':{'has_a':[HasA(name='pair-has_a-0-phrase',what={'dst':Concept(name='phrase'),'src':Concept(name='pair')}),HasA(name='pair-has_a-1-phrase',what={'dst':Concept(name='phrase'),'src':Concept(name='pair')})]},'subs':{},'sup':Graph(name='linguistic')}),'phrase':Concept(name='phrase',what={'relations':{},'subs':{},'sup':Graph(name='linguistic')})},'subs':{},'sup':Graph(name='global')})},'sup':None})"
+    def target(self, graph):
+        target = {
+            'concepts': {},
+            'subs': {
+                'linguistic': graph['linguistic'],
+                'application': graph['application'],
+                },
+            'sup': None,
+        }
         return target
 
-    def test_what(self, graph, target):
-        reg_space = re.compile(r'\s+')
-        what = re.sub(reg_space, '', repr(graph))
-        target = re.sub(reg_space, '', target)
-        assert what == target
+    def test_what(self, graph):
+        what = graph.what()
+        assert what == self.target(graph)
 
-    def test_what_new(self, graph_new, target):
-        reg_space = re.compile(r'\s+')
-        what = re.sub(reg_space, '', repr(graph_new))
-        target = re.sub(reg_space, '', target)
-        assert what == target
+    def test_what_new(self, graph_new):
+        what = graph_new.what()
+        assert what == self.target(graph_new)
+
+    def test_repr(self, graph):
+        assert repr(graph) == 'Graph(name=\'global\', fullname=\'global\')'
+
+    def test_repr_new(self, graph_new):
+        assert repr(graph_new) == 'Graph(name=\'global\', fullname=\'global\')'
