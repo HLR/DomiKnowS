@@ -53,9 +53,12 @@ def main():
         'y1': [0.,1.]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
-    for loss, metric, world_node in program.test(data):
-        print('loss:', loss)
-        # print(metric)
+    print('Train loss:', program.model.loss)
+
+    program.test(data)
+    print('Test loss:', program.model.loss)
+
+    for world_node in program.populate(data):
         x_node = world_node.getChildDataNodes(x)[0]
         print('y0:', x_node.getAttribute('<y0>').softmax(dim=-1))
         print('y1:', x_node.getAttribute('<y1>').softmax(dim=-1))

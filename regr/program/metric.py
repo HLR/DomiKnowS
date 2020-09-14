@@ -2,13 +2,14 @@ from collections import defaultdict
 from typing import Any
 
 import torch
+from torch.nn import functional as F
 
 from ..base import AutoNamed
 from ..utils import wrap_batch
 
 
-class CMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, weight=None):
+class BinaryCMWithLogitsMetric(torch.nn.Module):
+    def forward(self, input, target, weight=None, dim=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
         preds = (input > 0).clone().detach().to(dtype=weight.dtype)
@@ -19,6 +20,14 @@ class CMWithLogitsMetric(torch.nn.Module):
         tn = ((1 - preds) * (1 - labels) * weight).sum()
         fn = ((1 - preds) * labels * weight).sum()
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
+
+
+class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
+    def forward(self, input, target, weight=None):
+        num_classes = input.shape[-1]
+        input = input.view(-1, num_classes)
+        target = F.one_hot(target.view(-1), num_classes=num_classes)
+        return super().forward(input, target, weight)
 
 
 class PRF1WithLogitsMetric(CMWithLogitsMetric):

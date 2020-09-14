@@ -19,14 +19,14 @@ with Graph('global') as graph2:
 
         firestationCity = city(name='firestationCity')
         
-        # No less then 2 firestationCity
-        atLeastL(1, ('x', ), firestationCity, ('x', ))
+        # No less then 1 firestationCity
+        atLeastL(1, ('x', ), firestationCity, ('x', ), p=90)
         
-        # At most 2 firestationCity
-        atMostL(3, ('x', ), firestationCity, ('x', ))
+        # At most 1 firestationCity
+        atMostL(1, ('x', ), firestationCity, ('x', ), p=80)
         
         # Exactly 2 firestationCity
-        exactL(2, ('x', ), firestationCity, ('x', ))
+        exactL(2, ('x', ), firestationCity, ('x', ), p=55)
         
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
         orL(firestationCity, ('x',), existsL(('y',), andL(eqL(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',))))

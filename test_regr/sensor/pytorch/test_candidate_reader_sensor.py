@@ -119,7 +119,7 @@ def context(case, graph):
 def test_functional_sensor(case, sensor, context):
     import torch
     output = sensor(context)
-    assert (output == torch.tensor(case.edge_value)).all()
+    assert (output == torch.tensor(case.edge_value, device=output.device)).all()
 
 
 if __name__ == '__main__':

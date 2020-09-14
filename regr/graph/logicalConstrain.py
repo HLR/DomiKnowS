@@ -1,42 +1,127 @@
 import logging
-from itertools import product
 
 import numpy
 import torch
- 
+
 from regr.solver.ilpConfig import ilpConfig 
    
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
 class LogicalConstrain:
-    def __init__(self, *e):
-        self.active = True
+    def __init__(self, *e, p=100):
+        self.headLC = True # Indicate that it is head constrain and should be process individually
         
+        if not e:
+            myLogger.error("Logical Constrain initialized is empty")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
+        
+        self.e = e
+
+        # Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
+        self.graph = None
+        from regr.graph import Concept
+        conceptOrLc = None
+        
+        if isinstance(e[0], (Concept, LogicalConstrain)):
+            conceptOrLc = e[0]
+        elif len(e) > 1 and isinstance(e[1], (Concept, LogicalConstrain)): 
+            if isinstance(self, existsL):
+                conceptOrLc = e[1]
+            else:
+                myLogger.error("Logical Constrain is incorrect - its type is existsL but its second element is not concept but %s"%(e[1]))
+                raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect - its type is existsL but its second element is not concept but %s"%(e[1]))
+        elif len(e) > 2 and isinstance(e[2], (Concept, LogicalConstrain)):
+            if isinstance(self, (atLeastL, atMostL, exactL)):
+                conceptOrLc = e[2]
+            else:
+                myLogger.error("Logical Constrain is incorrect - its type is %s but its third element is not concept but %s"%(type(self),e[2]))
+                raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect - its type is %s but its third element is not concept but %s"%(type(self),e[2]))
+        else:
+            myLogger.error("Logical Constrain is incorrect")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect")
+            
+        if conceptOrLc != None:
+            if isinstance(conceptOrLc, Concept):
+                if self.__getContext(conceptOrLc):
+                    self.graph = self.__getContext(conceptOrLc)[-1]
+            else:
+                self.graph = conceptOrLc.graph
+                
+        if self.graph == None:
+            myLogger.error("Logical Constrain initialized is not associated with graph")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is not associated with graph")
+                     
+        # Create logical constrain id based on number of existing logical constrain in the graph
+        self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
+        
+        # Add the constrain to the graph
+        self.graph.logicalConstrains[self.lcName] = self
+                
+        # Go though constrain, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
         for e_item in e:
             if isinstance(e_item, LogicalConstrain):
-                e_item.active = False
+                e_item.headLC = False
                 
-        self.e = e
-        
-        if e:
-            if not isinstance(e[0], (tuple, int)):
-                contexts = self.__getContext(e[0])
-            elif len(e) > 1 and not isinstance(e[1], (tuple, int)):
-                contexts = self.__getContext(e[1])
-            elif len(e) > 2 and not isinstance(e[2], (tuple, int)):
-                contexts = self.__getContext(e[2])
-            else:
-                contexts = None
-
-            if contexts:
-                context = contexts[-1]
-            
-                self.lcName = "LC%i"%(len(context.logicalConstrains))
-                context.logicalConstrains[self.lcName] = self
+        # Check correctness of variable number for concept
+        for e_itemNo, e_item in enumerate(e):
+            if isinstance(e_item, Concept):
+                if e_itemNo + 1 >= len(e):
+                    break # No more elements after current
+                
+                if not isinstance(e[e_itemNo + 1], tuple):
+                    continue # The next element is not tuple with variables - skip this concept 
+                    
+                variableNoProvided = len(e[e_itemNo + 1])
+                variableNoRequired, _ = self.__conceptVariableCount(e_item)
+                
+                if(variableNoProvided != variableNoRequired):
+                    myLogger.error("Logical Constrain concept %s is associated with %i variables %s - but requires %i"%(e_item,variableNoProvided,e[e_itemNo + 1],variableNoRequired))
+                    raise LogicalConstrain.LogicalConstrainError("Logical Constrain concept %s is associated with %i variables %s - but requires %i"%(e_item,variableNoProvided,e[e_itemNo + 1],variableNoRequired))
+                
+        # Check soft constrain is activated though p - if certainty in the validity of the constrain or the user preference is provided by p
+        if p < 0:
+            self.p = 0
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 0"%(self.lcName,p))
+        elif p > 100:
+            self.p = 100
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 100"%(self.lcName,p))
+        else:
+            self.p = p
      
+    class LogicalConstrainError(Exception):
+        pass
+    
+    def __conceptVariableCount(self, e):
+        variableTypes = []
+        
+        if len(e.has_a()) > 0: 
+            for has_a in e.has_a():
+                variableTypes.append(has_a.dst)
+                
+        if len(variableTypes) == 2:
+            return 2, variableTypes
+        elif len(variableTypes) == 3:
+            return 3, variableTypes
+        elif len(variableTypes) > 3:
+            self.myLogger.error('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(variableTypes)))
+            raise ValueError('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(variableTypes)))
+                    
+        for is_a in e.is_a():
+            parentConcept = is_a.dst
+            
+            parentType, parentRelationConcepts = self.__conceptVariableCount(parentConcept)
+            
+            if len(parentRelationConcepts) > 0:
+                return parentType, parentRelationConcepts
+            
+        return 1, variableTypes
+    
     def __str__(self):
         return self.__class__.__name__
+    
+    def __repr__(self):
+        return  self.lcName + '(' + self.__class__.__name__ + ')'
           
     def __call__(self, model, myIlpBooleanProcessor, v): 
         pass 
@@ -213,61 +298,61 @@ class LogicalConstrain:
         return existsV
 
 class andL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)        
 
 class orL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False):
         return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, resultVariableNames, headConstrain)
     
 class nandL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, resultVariableNames, headConstrain)
         
 class ifL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
     
 class norL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
 
 class xorL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
     
 class epqL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
         
 class eqL(LogicalConstrain):
     def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+        LogicalConstrain.__init__(self, *e, p=100)
       
 class notL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
         lcName = 'notL'
@@ -304,8 +389,8 @@ class notL(LogicalConstrain):
         return notV
 
 class exactL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
@@ -320,8 +405,8 @@ class exactL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class existsL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         cLimit = 1
@@ -333,8 +418,8 @@ class existsL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
 
 class atLeastL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):
@@ -347,8 +432,8 @@ class atLeastL(LogicalConstrain):
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
     
 class atMostL(LogicalConstrain):
-    def __init__(self, *e):
-        LogicalConstrain.__init__(self, *e)
+    def __init__(self, *e, p=100):
+        LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         if isinstance(self.e[0], int):

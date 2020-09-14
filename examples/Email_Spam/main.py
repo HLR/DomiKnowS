@@ -1,5 +1,6 @@
 import sys
-import pytest
+import torch
+from data.reader import EmailSpamReader
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -37,29 +38,28 @@ def model_declaration():
     return program
 
 
-@pytest.mark.gurobi
-def test_graph_coloring_main():
-    from data.reader import EmailSpamReader
+def test_main():
     from graph import email, Spam, Regular
+
+    # set logger level to see training and testing logs
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
 
-    dataset = EmailSpamReader(file='data/train', type="folder").run()  # Adding the info on the reader
+    dataset = EmailSpamReader(file='data/train', type="folder")  # Adding the info on the reader
 
-    for datanode in lbp.populate(dataset=dataset, inference=True):
-        assert datanode != None
-        # assert len(datanode.getChildDataNodes()) == 9
+    lbp.train(dataset, train_epoch_num=30, Optim=torch.optim.Adam, device='auto')
 
-        # call solver
-        conceptsRelations = (Spam, Regular)
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=False)
+    for datanode in lbp.populate(dataset=dataset):
+        print('datanode:', datanode)
+        print('Spam:', datanode.getAttribute(Spam).softmax(-1))
+        print('Regular:', datanode.getAttribute(Regular).softmax(-1))
+        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(),
+                                    epsilon=None)
+        print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
+        print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
 
-        s = datanode.getAttribute(Spam, 'ILP').item()
-        f = datanode.getAttribute(Regular, 'ILP').item()
-        if f > 0:
-            assert s == 0
-        else:
-            assert s == 1
 
-if __name__ == '__main__':
-    pytest.main([__file__])
+test_main()
+

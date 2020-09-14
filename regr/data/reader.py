@@ -32,3 +32,10 @@ class RegrReader:
     def run(self):
         for item in self.objects:
             yield self.make_object(item)
+
+    def __iter__(self):
+        for item in self.objects:
+            yield self.make_object(item)
+
+    def __len__(self):
+        return len(self.objects)

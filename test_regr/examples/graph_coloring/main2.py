@@ -24,7 +24,7 @@ def model_declaration():
     city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
     city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
     
-    def readCitylinks(datanodes_edges, index, datanode_concept1, datanode_concept2):
+    def readCitylinks(datanodes_edges, datanode_concept1, datanode_concept2):
         return True
     
     cityLink['index'] = CandidateSensor(forward=readCitylinks, edges=[city1['backward'], city2['backward']])
@@ -54,7 +54,7 @@ def test_graph_coloring_main():
 
     dataset = CityReader().run()  # Adding the info on the reader
 
-    for datanode in lbp.populate(dataset=dataset, inference=True):
+    for datanode in lbp.populate(dataset=dataset):
         assert datanode != None
         assert len(datanode.getChildDataNodes()) == 9
 

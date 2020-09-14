@@ -4,12 +4,13 @@ import warnings
 import torch
 import torch.nn.functional as F
 
-from regr.graph import Property, DataNodeBuilder
+from regr.graph import Property, Concept, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode
 from ..tracker import MacroAverageTracker
+from ..metric import MetricTracker
 
 
 class TorchModel(torch.nn.Module):
@@ -75,7 +76,16 @@ class PoiModel(TorchModel):
         if poi is None:
             self.poi = self.default_poi()
         else:
-            self.poi = poi
+            properties = []
+            for item in poi:
+                if isinstance(item, Property):
+                    properties.append(item)
+                elif isinstance(item, Concept):
+                    for prop in item.values():
+                        properties.append(prop)
+                else:
+                    raise ValueError(f'Unexpected type of POI item {type(item)}: Property or Concept expected.')
+            self.poi = properties
         self.loss = loss
         self.metric = metric
 
@@ -103,9 +113,9 @@ class PoiModel(TorchModel):
             yield output_sensor, target_sensor
 
     def reset(self):
-        if self.loss is not None:
+        if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        if self.metric is not None:
+        if isinstance(self.metric, MetricTracker):
             self.metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):

@@ -27,7 +27,12 @@ def test_case():
             'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
         },
         'phrase': {
-            'raw': [(0, 0), (1, 2), (3, 3)],  # ['John', 'works for', 'IBM'],
+            'raw': [[(0, 0), (1, 2), (3, 3, 0)]],  # ['John', 'works for', 'IBM'],
+            # expected new format
+            # 'raw': [[1, 0, 0, 0],
+            #         [0, 1, 1, 0],
+            #         [0, 0, 0, 1,]],  # ['John', 'works for', 'IBM'],
+            #
             'emb': torch.randn(3, 2048, device=device),
             'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
 
@@ -53,7 +58,7 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from regr.program.learningbaseprogram import LearningBasedProgram
+    from regr.program.program import LearningBasedProgram
 
     from graph import graph, sentence, word, char, phrase, pair
     from graph import people, organization, location, other, o
@@ -71,18 +76,18 @@ def model_declaration(config, case):
         expected_outputs=case.word.raw)
     word['emb'] = TestSensor(
         'index', edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
     rel_word_contains_char['forward'] = TestEdgeSensor(
         'index', mode='forward', to='index',
         edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.char.raw)
     char['emb'] = TestSensor(
         'index', edges=[rel_word_contains_char['forward']],
-        expected_inputs=[case.char.raw,],
+        expected_inputs=(case.char.raw,),
         expected_outputs=case.word.emb)
     char['emb'] = TestSensor(label=True)  # just to trigger calculation
 
@@ -90,28 +95,28 @@ def model_declaration(config, case):
     rel_phrase_contains_word['backward'] = TestEdgeSensor(
         'index', mode='backward', to='index',
         edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=[case.word.raw,],
+        expected_inputs=(case.word.raw,),
         expected_outputs=case.phrase.raw)
     phrase['emb'] = TestSensor(
         'index', edges=[rel_phrase_contains_word['backward']],
-        expected_inputs=[case.phrase.raw,],
+        expected_inputs=(case.phrase.raw,),
         expected_outputs=case.phrase.emb)
     phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
     # Edge: pair backward
     rel_pair_word1['backward'] = TestEdgeSensor(
         'emb', mode='backward', to='word1_emb',
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.emb)
     rel_pair_word2['backward'] = TestEdgeSensor(
         'emb', mode='backward', to='word2_emb',
-        expected_inputs=[case.word.emb,],
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.emb)
 
     pair['emb'] = TestSensor(
         'word1_emb', 'word2_emb',
         edges=[rel_pair_word1['backward'], rel_pair_word2['backward']],
-        expected_inputs=[case.word.emb, case.word.emb],
+        expected_inputs=(case.word.emb, case.word.emb),
         expected_outputs=case.pair.emb)
 
     word[people] = TestSensor(
@@ -131,32 +136,32 @@ def model_declaration(config, case):
         expected_outputs=case.word.O)
 
     word[people] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        'emb',
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.people)
     word[organization] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        'emb',
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.organization)
     word[location] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        'emb',
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.location)
     word[other] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        'emb',
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.other)
     word[o] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.word.emb,],
+        'emb',
+        expected_inputs=(case.word.emb,),
         expected_outputs=case.word.O)
 
     phrase[people] = TestSensor(
         label=True,
         expected_outputs=case.phrase.people)
     phrase[people] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.phrase.emb,],
+        'emb',
+        expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.people)
 
 
@@ -177,24 +182,24 @@ def model_declaration(config, case):
         expected_outputs=case.pair.work_for)
 
     pair[work_for] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        'emb',
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.work_for)
     pair[located_in] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        'emb',
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.located_in)
     pair[live_in] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        'emb',
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.live_in)
     pair[orgbase_on] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        'emb',
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.orgbase_on)
     pair[orgbase_on] = TestSensor(
-        'emb', input_dim=2048, output_dim=2,
-        expected_inputs=[case.pair.emb,],
+        'emb',
+        expected_inputs=(case.pair.emb,),
         expected_outputs=case.pair.kill)
 
     lbp = LearningBasedProgram(graph, **config)
@@ -252,7 +257,7 @@ def test_main_conll04(case):
     _, _, datanode = lbp.model(data)
 
     for child_node in datanode.getChildDataNodes():
-        if child_node.ontologyNode.name == 'word':
+        if child_node.ontologyNode.name == 'word': 
             assert child_node.getAttribute('index') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
@@ -263,7 +268,7 @@ def test_main_conll04(case):
                        
             assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
                     
-            assert len(child_node.findDatanodes(select = "pair")) == 4
+            assert len(child_node.findDatanodes(select = "pair")) == 4 # has relation named "pair"with each word (including itself)
             
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
@@ -276,6 +281,9 @@ def test_main_conll04(case):
             assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
+
+    assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
+    assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]

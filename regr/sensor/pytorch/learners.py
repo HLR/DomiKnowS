@@ -12,10 +12,10 @@ from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 class TorchLearner(TorchSensor):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, *pre, edges=None, loss=None, metric=None, label=False):
-        super(TorchLearner, self).__init__(*pre, edges=edges, label=label)
+    def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto'):
         self.model = None
         self.updated = False
+        super(TorchLearner, self).__init__(*pre, edges=edges, label=label, device=device)
         self._loss = loss
         self._metric = metric
 
@@ -23,7 +23,18 @@ class TorchLearner(TorchSensor):
     @abc.abstractmethod
     def parameters(self) -> Any:
         # self.update_parameters()
-        return self.model.parameters()
+        if self.model is not None:
+            return self.model.parameters()
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, device):
+        if self.model is not None:
+            self.parameters.to(deivce)
+        self._device = device
 
     def update_parameters(self):
         if not self.updated:
@@ -71,13 +82,22 @@ class ModuleLearner(ModuleSensor, TorchLearner):
         self._loss = loss
         self._metric = metric
 
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, device):
+        self.module.to(device)
+        self._device = device
+
     def update_parameters(self):
         pass
 
 
 class LSTMLearner(TorchLearner):
-    def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False):
-        super(LSTMLearner, self).__init__(*pres)
+    def __init__(self, *pres, input_dim, hidden_dim, num_layers=1, bidirectional=False, device='auto'):
+        super(LSTMLearner, self).__init__(*pres, device=device)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.bidirectional = bidirectional
@@ -99,8 +119,8 @@ class LSTMLearner(TorchLearner):
 
 
 class FullyConnectedLearner(TorchLearner):
-    def __init__(self, *pres, input_dim, output_dim):
-        super(FullyConnectedLearner, self).__init__(*pres)
+    def __init__(self, *pres, input_dim, output_dim, device='auto'):
+        super(FullyConnectedLearner, self).__init__(*pres, device=device)
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.model = PyTorchFC(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -117,8 +137,8 @@ class FullyConnectedLearner(TorchLearner):
 
 
 class FullyConnectedLearnerRelu(TorchLearner):
-    def __init__(self, *pres, input_dim, output_dim):
-        super(FullyConnectedLearnerRelu, self).__init__(*pres)
+    def __init__(self, *pres, input_dim, output_dim, device='auto'):
+        super(FullyConnectedLearnerRelu, self).__init__(*pres, device=device)
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.model = PyTorchFCRelu(input_dim=self.input_dim, output_dim=self.output_dim)

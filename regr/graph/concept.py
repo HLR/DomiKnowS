@@ -90,7 +90,11 @@ class Concept(BaseGraphTree):
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property
-        if isinstance(sub, Property):
+        if isinstance(name, tuple) and sub.hasattr('components'):
+            for name_, component in zip(name, sub.components):
+                self.set_apply(name_, component)
+            self.set_apply(str(name), sub)
+        elif isinstance(sub, Property):
             # call usually come from attach, further from constructor of property
             BaseGraphTree.set_apply(self, name, sub)
         elif isinstance(sub, Sensor):
@@ -217,36 +221,7 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    # Find datanode in data graph of the given concept 
-    def __findDataNodes(self, dns, concept):
-        if (dns is None) or (len(dns) == 0):
-            return []
-         
-        returnDns = []
-        for dn in dns:
-            if str(dn.ontologyNode) == concept:
-               returnDns.append(dn) 
-               
-        if len(returnDns) > 0:
-            return returnDns
-        
-        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
-        dns0CDN = dns[0].getChildDataNodes(conceptName=concept)
-        if (dns0CDN is not None) and (len(dns0CDN) > 0):
-            for dn in dns:
-                dnCN = dn.getChildDataNodes(conceptName=concept)
-                
-                if dnCN is not None:
-                    returnDns = returnDns + dn.getChildDataNodes(conceptName=concept)
-                else:
-                    pass
-        else:
-            for dn in dns:
-                returnDns = returnDns + self.__findDataNodes(dn.getChildDataNodes(), concept)
-    
-        return returnDns
-
-    def candidates(self, root_data, query=None):
+    def candidates(self, root_data, query=None, logger = None):
         def basetype(concept):
             # get inheritance rank
             basetypes = []
@@ -265,12 +240,13 @@ class Concept(BaseGraphTree):
             return basetypes[-1] or (concept,)
 
         base = basetype(self)
+
         assert len(set(base)) == 1  # homogenous base type
 
         def get_base_data(root_data, single_base):
-            base_data = [root_data,]
-            base_data = self.__findDataNodes(base_data, single_base.name)
-            
+            assert isinstance(root_data, DataNode)
+            base_data = root_data.findDatanodes(select = single_base.name)
+                
             return base_data
         
             while True:
@@ -279,6 +255,13 @@ class Concept(BaseGraphTree):
                 base_data = list(chain(*(bd.getChildDataNodes() for bd in base_data)))
 
         base_data = get_base_data(root_data, base[0])
+        
+        if not base_data:
+            if logger:
+                logger.info('Found base type - %s - for current concept - %s -'%(base[0],self.name))
+                conceptNames, relationNames = root_data.findConceptsNamesInDatanodes()
+                logger.warning('Found no candidates for - %s -, existing concepts in DataNode are - %s, relations - %s'%(base[0],conceptNames,relationNames))
+            
         if query:
             return filter(query, product(base_data, repeat=len(base)))
         else:
@@ -289,4 +272,3 @@ class Concept(BaseGraphTree):
         while isinstance(node, Concept):  # None is not instance of Concept, If this concept has no graph, it will end up None
             node = node.sup
         return node
-

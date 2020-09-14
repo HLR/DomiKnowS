@@ -39,9 +39,12 @@ def main():
         'y1': [0.,1.]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
-    for loss, metric, x_node in program.test(data):
-        print('loss:', loss)
-        # print(metric)
+    print('Train loss:', program.model.loss)
+
+    program.test(data)
+    print('Test loss:', program.model.loss)
+
+    for x_node in program.populate(data):
         print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
         print('y1:', torch.softmax(x_node.getAttribute('<y1>'), dim=-1))
         print('y0:', x_node.getAttribute('<y0>/ILP'))

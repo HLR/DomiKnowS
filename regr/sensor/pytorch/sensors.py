@@ -6,7 +6,7 @@ from ...graph import Property
 
 
 class TorchSensor(Sensor):
-    def __init__(self, *pres, edges=None, label=False):
+    def __init__(self, *pres, edges=None, label=False, device='auto'):
         super().__init__()
         if not edges:
             edges = []
@@ -15,11 +15,14 @@ class TorchSensor(Sensor):
         self.inputs = []
         self.edges = edges
         self.label = label
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.device = torch.device("cuda")
+        if device == 'auto':
+            is_cuda = torch.cuda.is_available()
+            if is_cuda:
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
         else:
-            self.device = torch.device("cpu")
+            self.device = device
 
     def __call__(
         self,
@@ -61,11 +64,18 @@ class TorchSensor(Sensor):
         self,
         data_item: Dict[str, Any]
     ) -> Any:
+        def non_label_sensor(sensor):
+            if not isinstance(sensor, Sensor):
+                return False
+            elif isinstance(sensor, TorchSensor):
+                return not sensor.label
+            else:
+                return True
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
-            for sensor in self.concept[pre].find(Sensor):
+            for sensor in self.concept[pre].find(non_label_sensor):
                 sensor(data_item=data_item)
 
     def fetch_value(self, pre, selector=None):
@@ -99,9 +109,18 @@ class TorchSensor(Sensor):
         return self.prop.sup
 
 
+def non_label_sensor(sensor):
+    if not isinstance(sensor, Sensor):
+        return False
+    elif isinstance(sensor, TorchSensor):
+        return not sensor.label
+    else:
+        return True
+
+
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.forward_ = forward
 
     def update_pre_context(
@@ -109,14 +128,17 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for sensor in self.concept[pre].find(Sensor):
+                try:
+                    pre = self.concept[pre]
+                except KeyError:
+                    pass
+            if isinstance(pre, (Property, Sensor)):
+                for sensor in pre.find(non_label_sensor):
                     sensor(data_item)
-            elif isinstance(pre, (Property, Sensor)):
-                pre(data_item)
 
     def update_context(
         self,
@@ -148,23 +170,25 @@ class FunctionalSensor(TorchSensor):
     def forward_wrap(self):
         return self.forward(*self.inputs)
 
-    def forward(self, *inputs):
+    def forward(self, *inputs, **kwinputs):
         if self.forward_ is not None:
-            return self.forward_(*inputs)
+            return self.forward_(*inputs, **kwinputs)
         return super().forward()
 
 
-class ConstantSensor(TorchSensor):
-    def __init__(self, *pres, data, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+class ConstantSensor(FunctionalSensor):
+    def __init__(self, *pres, data, edges=None, label=False, as_tensor=True, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.data = data
+        self.as_tensor = as_tensor
 
-    def forward(
-        self,
-    ) -> Any:
+    def forward(self, *_) -> Any:
         try:
-            return torch.tensor(self.data, device=self.device)
-        except (TypeError, RuntimeError):
+            if self.as_tensor:
+                return torch.tensor(self.data, device=self.device)
+            else:
+                return self.data
+        except (TypeError, RuntimeError, ValueError):
             return self.data
 
 
@@ -174,8 +198,8 @@ class PrefilledSensor(TorchSensor):
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
-    def __init__(self, *pres, callback_sensor=None, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, callback_sensor=None, edges=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, label=label, device=device)
         self.callback_sensor = callback_sensor
 
     def forward(self,) -> Any:
@@ -184,15 +208,33 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 
 class ReaderSensor(ConstantSensor):
-    def __init__(self, *pres, keyword=None, edges=None, label=False):
-        super().__init__(*pres, data=None, edges=edges, label=label)
+    def __init__(self, *pres, keyword=None, edges=None, label=False, device='auto'):
+        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
         self.keyword = keyword
 
     def fill_data(self, data_item):
         try:
-            self.data = data_item[self.keyword]
+            if isinstance(self.keyword, tuple):
+                self.data = (data_item[keyword] for keyword in self.keyword)
+            else:
+                self.data = data_item[self.keyword]
         except KeyError as e:
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
+
+    def forward(self, *_) -> Any:
+        if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
+            return (super().forward(data) for data in self.data)
+        else:
+            return super().forward(self.data)
+
+
+class FunctionalReaderSensor(ReaderSensor):
+    def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, keyword=keyword, edges=edges, label=label, device=device)
+        self.forward_ = forward
+
+    def forward(self, *args) -> Any:
+        return super(ConstantSensor, self).forward(*args, data=self.data)  # skip ConstantSensor
 
 
 class LabelReaderSensor(ReaderSensor):
@@ -201,8 +243,8 @@ class LabelReaderSensor(ReaderSensor):
 
 
 class NominalSensor(TorchSensor):
-    def __init__(self, *pres, vocab=None, edges=None):
-        super().__init__(*pres, edges=edges)
+    def __init__(self, *pres, vocab=None, edges=None, device='auto'):
+        super().__init__(*pres, edges=edges, device=device)
         self.vocab = vocab
 
     def complete_vocab(self):
@@ -252,9 +294,9 @@ class NominalSensor(TorchSensor):
 
 
 class ModuleSensor(FunctionalSensor):
-    def __init__(self, *pres, module, edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, module, edges=None, label=False, device='auto'):
         self.module = module
+        super().__init__(*pres, edges=edges, label=label, device=device)
 
     def forward(self, *inputs):
         return self.module(*inputs)
@@ -263,8 +305,8 @@ class ModuleSensor(FunctionalSensor):
 class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward", "selection")
 
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False):
-        super().__init__(*pres, edges=edges, label=label)
+    def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.to = to
         self.mode = mode
         if self.mode not in self.modes:
@@ -285,13 +327,6 @@ class TorchEdgeSensor(FunctionalSensor):
             raise ValueError('The mode passed to the edge is invalid!')
         self.dst[self.to] = TriggerPrefilledSensor(callback_sensor=self)
 
-    def __call__(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        super().__call__(data_item)
-        return data_item[self.dst[self.to].fullname]
-
     def update_context(
         self,
         data_item: Dict[str, Any],
@@ -306,14 +341,15 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any]
     ) -> Any:
         for edge in self.edges:
-            for sensor in edge.find(Sensor):
+            for sensor in edge.find(non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
-                for sensor in self.src[pre].find(Sensor):
+                for sensor in self.src[pre].find(non_label_sensor):
                     sensor(data_item)
             elif isinstance(pre, (Property, Sensor)):
-                pre(data_item)
+                for sensor in pre.find(non_label_sensor):
+                    sensor(data_item)
         # besides, make sure src exist
         self.src['index'](data_item=data_item)
 
@@ -338,20 +374,45 @@ class TorchEdgeSensor(FunctionalSensor):
 
 
 class TorchEdgeReaderSensor(TorchEdgeSensor, ReaderSensor):
-    def __init__(self, *pres, to, keyword, mode="forward", edges=None, label=False):
-        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label)
+    def __init__(self, *pres, to, keyword, mode="forward", edges=None, label=False, device='auto'):
+        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
         self.keyword = keyword
         self.data = None
+
+
+class ModuleEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, to, module, mode="forward", edges=None, label=False, device='auto'):
+        self.module = module
+        super().__init__(self, *pres, to=to, mode=mode, edges=edges, label=label, device=device)
+
+    def forward(self, *inputs):
+        return self.module(*inputs)
 
 
 class ForwardEdgeSensor(TorchEdgeSensor):
     def forward(self, input) -> Any:
         return input
 
+    
+class ConstantEdgeSensor(TorchEdgeSensor):
+    def __init__(self, *pres, to, data, mode="forward", edges=None, label=False, as_tensor=True, device='auto'):
+        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
+        self.data = data
+        self.as_tensor = as_tensor
 
+    def forward(self, *_) -> Any:
+        try:
+            if self.as_tensor:
+                return torch.tensor(self.data, device=self.device)
+            else:
+                self.data
+        except (TypeError, RuntimeError, ValueError):
+            return self.data
+
+        
 class AggregationSensor(TorchSensor):
-    def __init__(self, *pres, edges, map_key, deafault_dim = 480):
-        super().__init__(*pres, edges=edges)
+    def __init__(self, *pres, edges, map_key, deafault_dim=480, device='auto'):
+        super().__init__(*pres, edges=edges, device=device)
         self.edge_node = self.edges[0].sup
         self.map_key = map_key
         self.map_value = None
@@ -451,8 +512,8 @@ class FirstAggregationSensor(AggregationSensor):
 
 
 class SelectionEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, mode="selection"):
-        super().__init__(*pres, mode=mode)
+    def __init__(self, *pres, mode="selection", device='auto'):
+        super().__init__(*pres, mode=mode, device=device)
         self.selection_helper = None
 
     def __call__(
@@ -508,9 +569,9 @@ class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
 
 
 class ThresholdSelectionEdgeSensor(SelectionEdgeSensor):
-    def __init__(self, *pres, threshold=0.5):
+    def __init__(self, *pres, threshold=0.5, device='auto'):
         # FIXME: @hfaghihi, do you mean to call super class of `SelectionEdgeSensor`, so here we skip the constructor of `SelectionEdgeSensor`?
-        super(SelectionEdgeSensor).__init__(*pres)
+        super(SelectionEdgeSensor).__init__(*pres, device=device)
         self.threshold = threshold
 
     def forward(self,) -> Any:
