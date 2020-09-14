@@ -1,18 +1,8 @@
 # `regr.sensor`
 
-<!-- TOC depthto:6 withlinks:true -->
+<!-- TOC depthto:2 withlinks:true -->
 
 - [1. Base Classes `regr.sensor`](#1-base-classes-regrsensor)
-    - [1.1. `regr.sensor.Sensor`](#11-regrsensorsensor)
-        - [1.1.1. `Sensor` Attributes](#111-sensor-attributes)
-        - [1.1.2. `Sensor` Methods](#112-sensor-methods)
-            - [1.1.2.1. `call(self, dataitem: Dict[str, Any], force=False) -> Any`](#1121-callself-dataitem-dictstr-any-forcefalse---any)
-            - [1.1.2.2. `forward(dataitem: Dict[str, Any]): Any`](#1122-forwarddataitem-dictstr-any-any)
-            - [1.1.2.3. `updatecontext(self, dataitem: Dict[str, Any], force=False)`](#1123-updatecontextself-dataitem-dictstr-any-forcefalse)
-            - [1.1.2.4. `propagatecontext(self, dataitem, node, force=False)`](#1124-propagatecontextself-dataitem-node-forcefalse)
-    - [1.2. `regr.sensor.Learner`](#12-regrsensorlearner)
-        - [1.2.1. `Learner` Attributes](#121-learner-attributes)
-        - [1.2.2. `Learner` Methods](#122-learner-methods)
 - [2. PyTorch Sensors `regr.sensor.pytorch`](#2-pytorch-sensors-regrsensorpytorch)
 - [3. Torch Sensors `regr.sensor.torch` (*Deprecated*)](#3-torch-sensors-regrsensortorch-deprecated)
 - [4. AllenNLP Sensors `regr.sensor.allennlp` (*Deprecated*)](#4-allennlp-sensors-regrsensorallennlp-deprecated)

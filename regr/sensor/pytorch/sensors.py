@@ -27,7 +27,7 @@ class TorchSensor(Sensor):
     def __call__(
         self,
         data_item: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> Any:
         self.context_helper = data_item
         try:
             data_item = self.update_context(data_item)
