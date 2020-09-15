@@ -2,8 +2,8 @@ import logging
 import torch
 
 from .program import LearningBasedProgram
-from .model.primal_dual_model import PrimalDualModel
-from .model.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
+from .model.torch.primal_dual_model import PrimalDualModel
+from .model.torch.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
 
 
 # Primal-dual need multiple backward through constraint loss.

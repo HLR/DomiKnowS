@@ -2,13 +2,13 @@ from itertools import combinations
 
 import torch
 
-from ...graph import Property
-from ...sensor import Sensor, Learner
-from ...sensor.torch.sensor import TorchSensor
-from ...sensor.torch.learner import ModuleLearner
-from ...program.metric import MetricKey
+from ....graph import Property
+from ....sensor import Sensor, Learner
+from ....sensor.torch.sensor import TorchSensor
+from ....sensor.torch.learner import ModuleLearner
+from ....program.metric import MetricKey
 
-from .base import Mode
+from ..base import Mode
 
 
 class POIKey(MetricKey):
@@ -118,7 +118,7 @@ class PoiModel(TorchModel):
         local_metric = self.metric[POIKey(output_sensor, target_sensor)](inference, labels, mask)
         return local_metric
 
-    def forward(self, data_item, inference=True):
+    def forward(self, data_item):
         data_item = super().forward(data_item)
         loss = 0
         metric = {}
@@ -134,3 +134,22 @@ class PoiModel(TorchModel):
             metric[output_sensor, target_sensor] = self.poi_metric(data_item, prop, output_sensor, target_sensor)
 
         return loss, metric, data_item
+
+
+class SolverModel(PoiModel):
+    def __init__(self, graph, loss=None, metric=None, Solver=None):
+        super().__init__(graph, loss, metric)
+        if Solver:
+            self.solver = Solver(self.graph)
+        else:
+            self.solver = None
+
+    def inference(self, data_item):
+        data_item = self.solver.inferSelection(data_item, list(self.poi))
+        return data_item
+
+    def forward(self, data_item, inference=False):
+        data_item = self.move(data_item)
+        if inference:
+            data_item = self.inference(data_item)
+        return super().forward(data_item)
