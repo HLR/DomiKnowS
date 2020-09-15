@@ -87,10 +87,12 @@ def main():
     graph = ontology_declaration()
 
     training_set = NaiveDataLoader(CONFIG.Data.train_path,
+                                   senitize_sentences=False,
                                    batch_size=CONFIG.Data.batch_size,
                                    shuffle=True)
 
     valid_set = NaiveDataLoader(CONFIG.Data.valid_path,
+                                senitize_sentences=False,
                                 batch_size=CONFIG.Data.batch_size,
                                 shuffle=False)
 

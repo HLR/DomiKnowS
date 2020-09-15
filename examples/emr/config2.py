@@ -4,11 +4,11 @@ from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 from regr.utils import Namespace, caller_source
 from regr.program.metric import MacroAverageTracker, BinaryPRF1Tracker
 from regr.program.loss import BCEWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLoss, BCEWithLogitsFocalLoss
-
-from emr.program.program import LearningBasedProgram
-from emr.program.primaldual import PrimalDualLearningBasedProgram
-from emr.program.model.torch import SolverModel, IMLModel
-from emr.solver.solver import Solver, IndexSolver
+from regr.program.program import LearningBasedProgram
+from regr.program.primaldual import PrimalDualLearningBasedProgram
+from regr.program.model.torch import SolverModel
+from regr.program.model.torch.iml_model import IMLModel
+from regr.solver.contextsolver.torch import Solver, IndexSolver
 
 
 lbps = {
@@ -78,8 +78,8 @@ config = {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
         'Optim': torch.optim.Adam,
         'train_epoch_num': 100,
-        'train_inference': False,
-        'valid_inference': True
+        # 'train_inference': False,
+        # 'valid_inference': True
     },
     'Source': {
         'emr': caller_source(),

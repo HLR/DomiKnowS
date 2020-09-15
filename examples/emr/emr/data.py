@@ -1,6 +1,6 @@
 from collections import OrderedDict, Counter
 from itertools import chain
-# import re
+import re
 
 import torch
 from torch.utils.data import DataLoader
@@ -157,6 +157,7 @@ def conll_senitize_token(token):
         return token.replace(DELIM, ' ')
     return token
 
+
 class FuzzyKMP(KnuthMorrisPratt):
     @staticmethod
     def ele_ne(pattern_elm, other_elm):
@@ -165,10 +166,10 @@ class FuzzyKMP(KnuthMorrisPratt):
         else:
             return True
 
+
 MERGE = {KnuthMorrisPratt([('`', '``', 'O'), ('`', '``', 'O')]): [('``', '``', 'O')],
          KnuthMorrisPratt([('\'', '\'\'', 'O'), ('\'', '\'\'', 'O')]): [('\'\'', '\'\'', 'O')]}
 # fkmp = FuzzyKMP([(r'(.+)\.', None, None)],)
-
 def conll_senitize_sentences(sentences):
     sentences = list(zip(*sentences))
     for kmp, rep in MERGE.items():
@@ -202,28 +203,32 @@ def conll_senitize_sentences(sentences):
     sentences = list(zip(*sentences))
     return sentences
 
-def collate(batch):
-    sentences, relations = zip(*batch)
-    sentences = list(map(conll_senitize_sentences, sentences))
-    # (tokens, pos, label)
-    # (relation_type, (src_index, src_token), (dst_index, dst_token))
-    tokens, postags, labels = zip(*sentences)
-    tokens = [list(map(conll_senitize_token, token)) for token in tokens]
-    data_item = {
-        'sentence': [' '.join(token_list) for token_list in tokens],
-        'tokens': list(tokens),
-        'postag': list(postags),
-        'label': list(labels),
-        'relation': list(relations),
-    }
-    #import pdb; pdb.set_trace()
-    return data_item
-
 
 class NaiveDataLoader(DataLoader):
-    def __init__(self, path, reader=None, **kwargs):
+    def collate(self, batch):
+        sentences, relations = zip(*batch)
+        if self.senitize_sentences:
+            sentences = list(map(conll_senitize_sentences, sentences))
+        # (tokens, pos, label)
+        # (relation_type, (src_index, src_token), (dst_index, dst_token))
+        tokens, postags, labels = zip(*sentences)
+        if self.senitize_token:
+            tokens = [list(map(conll_senitize_token, token)) for token in tokens]
+        data_item = {
+            'sentence': [' '.join(token_list) for token_list in tokens],
+            'tokens': list(tokens),
+            'postag': list(postags),
+            'label': list(labels),
+            'relation': list(relations),
+        }
+        #import pdb; pdb.set_trace()
+        return data_item
+
+    def __init__(self, path, reader=None, senitize_sentences=True, senitize_token=True, **kwargs):
         self.path = path
         self.reader = reader or Conll04CorpusReader()
+        self.senitize_sentences = senitize_sentences
+        self.senitize_token = senitize_token
         sentences_list, relations_list = self.reader(path)
         samples = list(zip(sentences_list, relations_list))
-        super().__init__(samples, collate_fn=collate, **kwargs)
+        super().__init__(samples, collate_fn=self.collate, **kwargs)
