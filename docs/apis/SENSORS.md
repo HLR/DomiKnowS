@@ -13,6 +13,7 @@
 
 ### 1.1. `regr.sensor.Sensor`
 
+Inheriting from `regr.graph.base.BaseGraphTreeNode`
 The base class of all sensors and learners. All sensors are designed to be callable objects.
 When a sensor is called (with an data item retrieved from the data reader), dependency will be checked and prerequired sensors (or learners) will be called recursively.
 The functionality of the sensor is implemented in its `forward()` function. When all dependency are evaluated, `forward()` function of the current sensor will be invoke.

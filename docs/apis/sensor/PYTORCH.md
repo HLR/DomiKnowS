@@ -27,6 +27,8 @@ This package contains the sensors implemented specific to work with pytorch.
 
 ### 1.1. `regr.sensor.pytorch.TorchSensor`
 
+Inheriting from `regr.sensor.Sensor`. The base class of all sensors and learners designed to support interacting with PyTorch.
+
 #### 1.1.1. `TorchSensor` Attributes
 
 Inheriting attributes from `regr.sensor.Sensor`. There are the following additional attributes for `TorchSensor`.
@@ -35,8 +37,8 @@ Inheriting attributes from `regr.sensor.Sensor`. There are the following additio
 - `context_helper`: The sensor-wise reference to the current processing `data_item` when it is called. *Do not count on this in case of multiprocessing scenario*.
 - `inputs`: The inputs that is needed for current `forword()` call, calculated and collected from `pres`.
 - `edges`: List of the pre-required edges' forward or backward property, which will be calculated automatically before invoking current sensor's `forward()`.
-- `label`: Whether this sensor is a label in the data, which should not be used in forward calculation of the model. Default: `False`.
-- `device`: An indicator of device to be used for this sensor. It can be an indicators to instantiate a `torch.device` (`str`, `int`), a `torch.` instance, or `'auto'` to try to use any available CUDA device and fall back to CPU automatically. Default: `'auto'`.
+- `label`: Whether this sensor is a label in the data, which should not be used in forward calculation of the model.
+- `device`: An indicator of device to be used for this sensor. It can be an indicators to instantiate a `torch.device` (`str`, `int`) or a `torch.device` instance.
 - `prop`: The `Property` that the current sensor is associated to. Raise `ValueError` if it is not associated to any `Property`.
 - `concept`: The `Concept` that the current sensor is associated to. Raise `ValueError` if it is not associated to any `Property` or `Concept`.
 
@@ -44,9 +46,21 @@ Inheriting attributes from `regr.sensor.Sensor`. There are the following additio
 
 ##### 1.1.2.1. `__init__(self, *pres, edges=None, label=False, device='auto')`
 
+Instantiate the sensor with attribute specified. Determine device if needed.
+
+- Parameters:
+  - `*pres`: All the positional arguments are treated as the `pres` attribute of the sensor.
+  - `edges`: The `edges` attribute of the sensor. Default: `None`.
+  - `label`: The `label` attribute of the sensor. Default: `False`.
+  - `device`: The `device` attribute of the sensor. If `'auto'` is given, try to use the first available CUDA device or fall back to CPU automatically. Default: `'auto'`.
+
 ##### 1.1.2.2. `__call__(self, data_item: Dict[str, Any]) -> Any`
 
+Override [`Sensor.__call__()`](../SENSORS.md#1121-callself-dataitem-dictstr-any-forcefalse---any) to initiate `context_helper` with current `data_item` before invoking `update_context()`.
+
 ##### 1.1.2.3. `update_context(self, data_item: Dict[str, Any], force=False)`
+
+Override [`Sensor.update_context()`](../SENSORS.md#1123-updatecontextself-dataitem-dictstr-any-forcefalse) to update `pres` before current sensor via [`update_pre_context()`](#1124-updateprecontextself-dataitem-dictstr-any) and limit the propagation to only `Property` level.
 
 ##### 1.1.2.4. `update_pre_context(self, data_item: Dict[str, Any])`
 
