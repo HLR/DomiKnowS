@@ -30,9 +30,11 @@ def reverse_sign_grad(parameters, factor=-1.):
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, **kwargs):
+    def __init__(self, graph, Model, CModel=None, **kwargs):
         super().__init__(graph, Model, **kwargs)
-        self.cmodel = BigBatchPrimalDualModel(graph)
+        if CModel is None:
+            CModel = BigBatchPrimalDualModel
+        self.cmodel = CModel(graph)
         self.copt = None
 
     def train(

@@ -3,8 +3,10 @@ from collections import defaultdict
 import torch
 
 from regr.graph import Concept, Relation
+from regr.sensor.torch.sensor import ReaderSensor
 from regr.solver.constructor.constructor import BatchMaskProbConstructor
 from regr.solver.session.solver_session import SolverSession
+
 
 from .primal_dual_model import PrimalDualModel
 
@@ -204,3 +206,10 @@ class BigBatchPrimalDualModel(BatchPrimalDualModel):
         closs = torch.cat(panelties, dim=1).sum(dim=1)
 
         return closs
+
+class ReaderBigBatchPrimalDualModel(BigBatchPrimalDualModel):
+    def get_raw_input(self, data_item):
+        sentence_sensor = self.graph.get_sensors(ReaderSensor, lambda s: not s.target)[0]
+        masks, sentences = sentence_sensor(data_item)
+        mask_len = [len(s) for s in sentences]  # (b, )
+        return sentences, mask_len

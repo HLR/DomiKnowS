@@ -7,8 +7,9 @@ from regr.program.loss import BCEWithLogitsIMLoss, BCEFocalLoss, BCEWithLogitsLo
 from regr.program.program import LearningBasedProgram
 from regr.program.primaldual import PrimalDualLearningBasedProgram
 from regr.program.model.torch import SolverModel
+from regr.program.model.torch.batch_primal_dual_model import ReaderBigBatchPrimalDualModel
 from regr.program.model.torch.iml_model import IMLModel
-from regr.solver.contextsolver.torch import Solver, IndexSolver
+from regr.solver.contextsolver.torch import Solver, IndexSolver, ReaderSolver
 
 
 lbps = {
@@ -18,21 +19,25 @@ lbps = {
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=BinaryPRF1Tracker(),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, IndexSolver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, ReaderSolver),
+            train_inference=False,
+            test_inference=True)},
     'iml': {
         'type': LearningBasedProgram,
         'model': lambda graph: IMLModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsIMLoss(0)),
             metric=BinaryPRF1Tracker(),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, ReaderSolver),
+            train_inference=True,
+            test_inference=True)},
     'primal-dual': {
-        'type': PrimalDualLearningBasedProgram,
+        'type': lambda graph, model: PrimalDualLearningBasedProgram(graph, model, CModel=ReaderBigBatchPrimalDualModel),
         'model': lambda graph: SolverModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=BinaryPRF1Tracker(),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, ReaderSolver))},
 }
 
 config = {
@@ -77,9 +82,8 @@ config = {
     'Train': {
         'device': torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
         'Optim': torch.optim.Adam,
+        # 'COptim': torch.optim.Adam,
         'train_epoch_num': 100,
-        # 'train_inference': False,
-        # 'valid_inference': True
     },
     'Source': {
         'emr': caller_source(),

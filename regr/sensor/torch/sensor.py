@@ -40,20 +40,16 @@ class Key():
 class DataSensor(TorchSensor):
     def __init__(self, key, target=False):
         super().__init__(target=target)
-        self.key = key
-
-    def forward(self, context):
-        return context[self.key]
-
-
-class ReaderSensor(TorchSensor):
-    def __init__(self, key, target=False):
-        super().__init__(target=target)
         if isinstance(key, Key):
             self.key = key.key
         else:
             self.key = key
 
+    def forward(self, context):
+        return context[self.key]
+
+
+class ReaderSensor(DataSensor):
     def forward(self, data_item):
         return [True] * len(data_item[self.key]), data_item[self.key]
 

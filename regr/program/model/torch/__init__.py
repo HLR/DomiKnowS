@@ -28,7 +28,7 @@ class BaseModel(torch.nn.Module):
         self.graph = graph
         self.loss = loss
         self.metric = metric
-        self.mode_ = Mode.TRAIN
+        self._mode = Mode.TRAIN
 
     def mode(self, mode=None):
         if mode is None:
