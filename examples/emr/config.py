@@ -18,14 +18,18 @@ lbps = {
             graph,
             loss=MacroAverageTracker(BCEWithLogitsLoss()),
             metric=BinaryPRF1Tracker(),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver),
+            train_inference=False,
+            test_inference=True)},
     'iml': {
         'type': LearningBasedProgram,
         'model': lambda graph: IMLModel(
             graph,
             loss=MacroAverageTracker(BCEWithLogitsIMLoss(0)),
             metric=BinaryPRF1Tracker(),
-            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver))},
+            Solver=lambda graph: ilpOntSolverFactory.getOntSolverInstance(graph, Solver),
+            train_inference=True,
+            test_inference=True)},
     'primal-dual': {
         'type': PrimalDualLearningBasedProgram,
         'model': lambda graph: SolverModel(
@@ -79,8 +83,6 @@ config = {
         'Optim': torch.optim.Adam,
         # 'COptim': torch.optim.Adam,
         'train_epoch_num': 100,
-        # 'train_inference': False,
-        # 'valid_inference': True
     },
     'Source': {
         'emr': caller_source(),

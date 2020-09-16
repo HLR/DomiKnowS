@@ -30,8 +30,14 @@ class BaseModel(torch.nn.Module):
         self.metric = metric
         self.mode_ = Mode.TRAIN
 
-    def mode(self, mode):
-        self.mode_ = mode
+    def mode(self, mode=None):
+        if mode is None:
+            return self._mode
+        if mode in (Mode.TEST, Mode.POPULATE):
+            self.eval()
+        if mode == Mode.TRAIN:
+            self.train()
+        self._mode = mode
 
     def reset(self):
         if self.loss is not None:
@@ -137,8 +143,10 @@ class PoiModel(TorchModel):
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, loss=None, metric=None, Solver=None):
+    def __init__(self, graph, loss=None, metric=None, train_inference=False, test_inference=True, Solver=None):
         super().__init__(graph, loss, metric)
+        self.train_inference = train_inference
+        self.test_inference = test_inference
         if Solver:
             self.solver = Solver(self.graph)
         else:
@@ -148,8 +156,12 @@ class SolverModel(PoiModel):
         data_item = self.solver.inferSelection(data_item, list(self.poi))
         return data_item
 
-    def forward(self, data_item, inference=False):
+    def forward(self, data_item, inference=None):
         data_item = self.move(data_item)
+        if inference is None:
+            inference = (
+                (self.mode() is Mode.TRAIN and self.train_inference) or
+                (self.mode() is Mode.TEST or self.mode() is Mode.POPULATE and self.test_inference))
         if inference:
             data_item = self.inference(data_item)
         return super().forward(data_item)
