@@ -93,7 +93,7 @@ The `Program` is created from a `Graph` with `Sensor`s and `Learner`s attached.
 
 ### 2.2. Example
 
-#### 2.2.1. `Reader` Example
+#### 2.2.1. `Reader` Examples
 
 An example of `Reader` as `list` of `dict`:
 
@@ -105,7 +105,7 @@ with open('data.txt', 'r') as fin:
     reader.append(item)
 ```
 
-In this example, reader is simple a `list` of items. Each item is a `dict` containing a single line loaded from `'data.txt'` as JSON object.
+In this example, reader is simply a `list` of items. Each item is a `dict` containing a single line loaded from `'data.txt'` as JSON object.
 
 An example of `Reader` as `Iterable`:
 
@@ -133,41 +133,53 @@ for item in reader:
   pass
 ```
 
-Also, `torch.utils.data.DataLoader` is a good choice when working with PyTorch.
-The framework also has a simple reader `RegrReader`.
+Also, `torch.utils.data.DataLoader` is a good choice when working with PyTorch. Just remember to provide a `dict` at a time in the `dataset` to the `DataLoader`. `DataLoader` handles batch automatically with `collate_fn`, please consult [this section](https://pytorch.org/docs/stable/data.html#working-with-collate-fn) for more information if you run into issue with batching in `DataLoader`.
+
+```python
+dataset = []
+with open('data.txt', 'r') as fin:
+  for line in fin:
+    item = json.loads(line)
+    dataset.append(item)
+  
+reader = DataLoader(dataset)
+```
+
+The framework also has a simple reader `regr.data.reader.RegrReader`.
 
 #### 2.2.2. `Program` Example
 
 To create a program, user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
+There are different [pre-defined sensors](./apis/sensor/PYTORCH.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./apis/SENSORS.md) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
+
 ```python
 sentence['index'] = ReaderSensor(keyword='sentence')
 
-rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', to='index')
-word['emb'] = GloveSensor('index', edges=[rel_sentence_contains_word['forward'],])
+rel_sentence_contains_word['forward'] = TokenizerEdgeSensor('index', mode='forward', to=('index', 'ids', 'offset'), tokenizer=Tokenizer())
 
-word[people] = LabelReaderSensor(keyword='people')
-word[organization] = LabelReaderSensor(keyword='organization')
-pair[work_for] = LabelReaderSensor(keyword='work_for')
+word[people] = ReaderSensor(keyword='people', label=True)
+word[organization] = ReaderSensor(keyword='organization', label=True)
+pair[work_for] = ReaderSensor(keyword='work_for', label=True)
 ```
 
-There are different pre-defined sensors for basic data operation. Users can also extend base `Sensor` to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
-In the example above, a `ReaderSensor` is assigned to a special property `'index'`, which indicate an candiate generator.
-`ReaderSensor` will simple read the key `'sentence'` from an sample, which is expected to be a `dict`, retrieved by enumerating through the reader.
-As the candiate generator for sentence, sentence `Datanode` will be created based on the output of this sensor when being populated.
-Next, a `TokenizorSensor` is assigned to `'forward'` property of the edge `rel_sentence_contains_word`. As the first argument `'index'` suggest, this sensor will take the property of `sentence` keyed by `'index'` as input, and output the tokenized result to a property of `word` indicated by `keyword='index'`.
-Now `word` has its candidate generator.
-We assign `GloveSensor` to `'emb'` property of `word` as its vectorized representation taking `'index'` as input, which requires `rel_sentence_contains_word['forward']` as preceding calculation.
-The last three lines of the example shows `LabelReaderSensor`s assigned to property of `word` and `pair`. The inherit concepts `people`, `organization`, and `work_for` are used as property name to indicate a classification property. `LabelReaderSensor`s, like `ReaderSensor`, read from the `dict` retrieved from `reader`.
-The only different is that `LabelReaderSensor`s has a option `label=True` (while most other `Sensor`s are defaulted to `False`).
-This indicates that this `Sensor` is only used for testing. It should not be taked into accont the process of forward computing.
+In the example above, the first `ReaderSensor` is assigned to a special property `'index'`.
+This `ReaderSensor` will simply read the key `'sentence'` from an sample, which is expected to be a `dict`, retrieved by enumerating through [the reader](#221-reader-example).
+`Datanode` instance of concept `sentence` will be created based on the output of this sensor when being populated.
+Next, a `TokenizerEdgeSensor` is assigned to `'forward'` property of the edge `rel_sentence_contains_word`. As the first argument `'index'` suggest, this sensor will take the property of `sentence` keyed by `'index'` as input.
+`Tokenizer()` is an external tokenizor from the [`transformers` package](https://huggingface.co/transformers/), which returns a bunch of informative values, and converted to an identity indicator `index`, token index in vocabulary `ids`, and tuple of starting and ending charactor in sentence `offset`.
+Indicated by `to=('index', 'ids', 'offset')`, the tokenized result goes to the three properties, `'index'`, `'ids'`, and `'offset'`, of concept `word`,.
+The last three lines of the example shows `ReaderSensor`s assigned to property of `word` and `pair`. The inherit concepts `people`, `organization`, and `work_for` are used as property name to indicate a classification property.
+The extra argument `label=True` indicates it is the ground-true value that this `Sensor` should not be taked into accont the process of forward computing.
 
 `Learner`s, are similar to `Sensor`s. The only difference is that `Learner`s have trainable parameters. The `Program` will update the parameters in `Learner`s based on model performance.
 
 ```python
-word[people] = LogisticRegressionLearner('emb')
-word[organization] = LogisticRegressionLearner('emb')
-pair[wor_for] = LogisticRegressionLearner('emb')
+token['emb'] = ModuleLearner('ids', module=BERT())
+
+word[people] = ModuleLearner('emb', module=Classifier())
+word[organization] = ModuleLearner('emb', module=Classifier())
+pair[wor_for] = ModuleLearner('emb', module=Classifier())
 ```
 
 The above snippet shows we can assign `Learner`s to `Property`s of `Concept`s.
