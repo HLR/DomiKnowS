@@ -177,28 +177,30 @@ The extra argument `label=True` indicates it is the ground-true value that this 
 ```python
 token['emb'] = ModuleLearner('ids', module=BERT())
 
-word[people] = ModuleLearner('emb', module=Classifier())
-word[organization] = ModuleLearner('emb', module=Classifier())
-pair[wor_for] = ModuleLearner('emb', module=Classifier())
+word[people] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
+word[organization] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
+pair[wor_for] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
 ```
 
 The above snippet shows we can assign `Learner`s to `Property`s of `Concept`s.
-Specificly, `LogisticRegressionLearner` will take `'emb'` `Property` of `word` and `pair` respectively. They are assigned to `Property`s named by `people`, `organization`, and `workd_for`, which are sub-types of `word` and `pair`.
-This indicates they are sub-type classifiers.
+`ModuleLearner` is specifically useful to plug in PyTorch modules.
+Specificly, `token['emb']` is instanciated as a `BERT()` module (implemented using the [`transformers` package](https://huggingface.co/transformers/)) which takes `'ids'` of `word` as input.
+Three other `ModuleLearner`s are assigned to `Property`s named by `people`, `organization`, and `workd_for`, which are sub-types of `word` and `pair`, implemented by PyTorch linear module `torch.nn.Linear`.
+These indicates they are type classifiers of the concept.
 
-It should be noticed that we have assigned `LabelReaderSensor`s to the same `Property`s of `word` and `pair`.
+It should be noticed that we have assigned `ReaderSensor`s to the same `Property`s of `word` and `pair`.
 This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
 Instead of overwriting the assignment, "Multiple Assignment" indicates consistency of the `Sensor`s and `Learner`s assigned.
-For the aboce example, the framework will generate loss to impose consistency between corresponding `LabelReaderSensor` and `LogisticRegressionLearner`.
+For the aboce example, the framework will generate loss to impose consistency between corresponding `ReaderSensor` and `ModuleLearner`.
 
 Now in the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s.
 We can create a `Program` from the `graph`.
 
 ```python
-program = LearningBasedProgram(graph)
+program = POIProgram(graph, loss=..., metrics=...)
 ```
 
-`program` is a "full program" with data and modeling behavior attached.
+`POIProgram` is a wrapper of training and testing behavior using specific properties in the graph. [Here](./apis/PROGRAMS.md) is a list of different programs avaliable for the uses. Now, `program` is a "full program" with data and modeling behavior attached.
 It can be used for training, testing, etc. with `Reader`s as input.
 
 ## 3. Training and Testing
