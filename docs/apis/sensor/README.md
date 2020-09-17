@@ -1,8 +1,11 @@
 # `regr.sensor`
 
-<!-- TOC depthto:2 withlinks:true -->
+<!-- TOC depthto:3 withlinks:true -->
 
 - [1. Base Classes `regr.sensor`](#1-base-classes-regrsensor)
+    - [1.1. `regr.sensor.Sensor`](#11-regrsensorsensor)
+    - [1.2. `regr.sensor.Learner`](#12-regrsensorlearner)
+    - [1.3. Customized Sensors](#13-customized-sensors)
 - [2. PyTorch Sensors `regr.sensor.pytorch`](#2-pytorch-sensors-regrsensorpytorch)
 - [3. Torch Sensors `regr.sensor.torch` (*Deprecated*)](#3-torch-sensors-regrsensortorch-deprecated)
 - [4. AllenNLP Sensors `regr.sensor.allennlp` (*Deprecated*)](#4-allennlp-sensors-regrsensorallennlp-deprecated)
@@ -10,6 +13,8 @@
 <!-- /TOC -->
 
 ## 1. Base Classes `regr.sensor`
+
+This package contains the base class of all the sensors and learners: `regr.sensor.Sensor` and `regr.sensor.Learner`.
 
 ### 1.1. `regr.sensor.Sensor`
 
@@ -80,13 +85,15 @@ Inheriting attributes from `regr.sensor.Sensor` except an additional `paramters`
 
 Inheriting from `regr.sensor.Sensor`
 
-## 2. PyTorch Sensors `regr.sensor.pytorch`
-
-This package contains the sensors implemented specific to work with PyTorch.
-
-[Here](./sensor/PYTORCH.md) is a list of avalible sensors.
+### 1.3. Customized Sensors
 
 [Here](../developer/MODEL.md#sensor) for more information about customizing your own sensor.
+
+## 2. [PyTorch Sensors `regr.sensor.pytorch`](./pytorch)
+
+This package contains the sensors and learners implemented specific to work with PyTorch.
+
+See more of [the package](./pytorch).
 
 ## 3. Torch Sensors `regr.sensor.torch` (*Deprecated*)
 

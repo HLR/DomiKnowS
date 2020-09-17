@@ -78,13 +78,55 @@ This method retrieves the value of a pre-required property that is indicated by 
 
 ##### 1.1.2.6. `define_inputs(self)`
 
-This method instantiate the `inputs` attribute of the sensor based on current `context_helper`, which refers to current `data_item`.
+This method fills the `inputs` attribute of the sensor based on current `context_helper`, which refers to the current `data_item`.
 
 ### 1.2. `regr.sensor.pytorch.TorchLearner`
 
+Inheriting from `regr.sensor.Learner` and `regr.sensor.pytorch.TorchSensor`. The base class of all the learners designed to support interacting with PyTorch.
+
 #### 1.2.1. `TorchLearner` Attributes
 
+Inheriting attributes from `regr.sensor.Learner` and `regr.sensor.pytorch.TorchSensor`. A few additional attribute related to learning are added and `parameters` is overrode to be retrieve from `model`. There are the following additional attributes for `TorchSensor`.
+
+- `model`: The PyTorch model in this sensor.
+- `updated`: Whether the learners in `pres` are added as submodule in `model`.
+- `parameters`: Overrode to return parameters in `model`.
+- `device`: Overrode to update the parameters in `model` when `device` is updated.
+- `sanitized_name`: A distinguish name (based on `fullname`) that is acceptable for the file system. This name is used when saving the `parameters` to the file system.
+
 #### 1.2.2. `TorchLearner` Methods
+
+Inheriting attributes from `regr.sensor.Learner` and `regr.sensor.pytorch.TorchSensor`. A few additional methods for working with `model`.
+
+##### 1.2.2.1.  `__init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto')`
+
+Overrode to initiate additional attributes and two additional argument `loss` and `metric`.
+
+- Parameters:
+  - `loss`: (WIP)
+  - `metric`: (WIP)
+
+##### 1.2.2.2. `update_parameters(self)`
+
+If the sensor haven been `updated`, find all the pre-required learners in `pres` and add their `model` as submodule of the `model` of this sensor. Set the current sensor to be `updated`.
+
+##### 1.2.2.3. `save(self, filepath)`
+
+Save the `parameters` to the file `sanitized_name` under the folder `filepath`.
+
+- Parameters:
+  - `filepath`: The path to the folder to store the `parameters`.
+
+##### 1.2.2.4. `load(self, filepath)`
+
+Load the `parameters` from the file `sanitized_name` under the folder `filepath`. If the file is not found, a warning is raised and the program continue without the parameters being load. (The `model` should be initialized when it is constructed.)
+
+- Parameters:
+  - `filepath`: The path to the folder to load the `parameters` from.
+
+##### 1.2.2.5. `loss(self, data_item, target)` (*WIP*)
+
+##### 1.2.2.6. `metric(self, data_item, target)` (*WIP*)
 
 ### 1.3. `regr.sensor.pytorch.FunctionalSensor`
 
