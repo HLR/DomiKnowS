@@ -315,9 +315,10 @@ Override [`ConstantSensor.forward()`]() to return `data` variable using the pare
 #### 2.3.2. `CandidateReaderSensor` Methods
 
 ### 2.4. `regr.sensor.pytorch.TorchEdgeReaderSensor`
-
+Inheriting from both `regr.sensor.pytorch.ReaderSensor` and `regr.sensor.pytorch.TorchEdgeSensor`.
+This class is used when the user tries reading from dictionary and establish an edge simultaneously.
 #### 2.4.1. `TorchEdgeReaderSensor` Attributes
-
+All the attributes are derived from both `regr.sensor.pytorch.ReaderSensor` and `regr.sensor.pytorch.TorchEdgeSensor`.
 #### 2.4.2. `TorchEdgeReaderSensor` Methods
-
+The `fill_data()` and `forward()` functions are inherited from `regr.sensor.pytorch.ReaderSensor` and the rest of the methods from `regr.sensor.pytorch.TorchEdgeSensor`.
 ## 3. `regr.sensor.pytorch.learners`
