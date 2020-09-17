@@ -93,10 +93,23 @@ Override [`Sensor.update_context()`](../SENSORS.md#1123-updatecontextself-datait
 #### 1.5.2. `ModuleLearner` Methods
 
 ### 1.6. `regr.sensor.pytorch.TorchEdgeSensor`
-
+Inheriting from `regr.sensor.pytorch.FunctionalSensor`.
+This class is the base sensor for all edge sensors.
 #### 1.6.1. `TorchEdgeSensor` Attributes
+Inheriting attributes from `regr.sensor.pytorch.FunctionalSensor`. There are the following additional attributes for `TorchEdgeSensor`.
 
+- `mode`: this attribute can take the values of `forward` or `backward` and helps detecting the source and the destination concept to specify where the inputs should be looked up from and where the output should be stored. 
+- `to`: this specifies the target property that this edge is supposed to store the results in.
+- `src`: this stores the source concept assigned to this edge based on the `mode` parameter.
+- `dst`: this stores the target concept assigned to this edge based on the `mode` parameter.
 #### 1.6.2. `TorchEdgeSensor` Methods
+##### 1.6.2.1. `__attached__(self, sup)`
+
+This function assigns proper values to `src` and `dst` variables and adds a dummy sensor to the `dst[to]` property to enable triggering in the model execution.
+
+##### 1.6.2.2. `update_context(self, data_item: Dict[str, Any], force=False)`
+
+Override [`FnctionalSensor.update_context()`]() to change the storing property to match `dst[to]`.
 
 ### 1.7. `regr.sensor.pytorch.QuerySensor`
 
