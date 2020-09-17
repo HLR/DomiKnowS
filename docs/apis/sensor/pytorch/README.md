@@ -184,15 +184,52 @@ Accept inputs as arguments (unlike `foward()` in `TorchSensor()` that need to us
 
 ### 1.4. `regr.sensor.pytorch.ModuleSensor`
 
+Inheriting from `regr.sensor.pytorch.FunctionalSensor`. Overrode to use a PyTorch module `module` instead of the `forward_`.
+
 #### 1.4.1. `ModuleSensor` Attributes
+
+Inheriting attributes from `regr.sensor.pytorch.FunctionalSensor`. An additional attribute `module` is used for `ModuleSensor` to calculate the output value and `model` is redirected to `module`. `updated` is set to `True` and submodule is added in `Program` instead.
+
+- `module`: A PyTorch module instance to be used for this sensor.
+- `model`: (*Deprecated*).
+- `updated`: (*Deprecated*).
 
 #### 1.4.2. `ModuleSensor` Methods
 
+Inheriting methods from `regr.sensor.pytorch.TorchSensor`. Methods are overrode to use `module`.
+
+##### 1.4.2.1. `__init__(self, *pres, module, edges=None, label=False, device='auto')`
+
+Overrode to use add `module`.
+
+- Parameters:
+  - `module`: A PyTorch module to be used in this sensor.
+
+##### 1.4.2.2. `update_parameters(self)`
+
+Overrode and just bypass.
+
+##### 1.4.2.3. `forward(self, *inputs)`
+
+Overrode to use `module`.
+
+- Parameters:
+  - `*inputs`: `inputs` filled by `pres`.
+
+- Return value:
+  - Returns the output from the `module`.
+
 ### 1.5. `regr.sensor.pytorch.ModuleLearner`
+
+Inheriting from `regr.sensor.pytorch.ModuleSensor` and `regr.sensor.pytorch.TorchLearner`. Just a mix of both interfaces.
 
 #### 1.5.1. `ModuleLearner` Attributes
 
+Inheriting attributes from `regr.sensor.pytorch.ModuleSensor` and `regr.sensor.pytorch.TorchLearner`.
+
 #### 1.5.2. `ModuleLearner` Methods
+
+Inheriting methods from `regr.sensor.pytorch.ModuleSensor` and `regr.sensor.pytorch.TorchLearner`.
 
 ### 1.6. `regr.sensor.pytorch.TorchEdgeSensor`
 
