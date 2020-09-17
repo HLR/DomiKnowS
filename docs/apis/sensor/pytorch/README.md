@@ -218,6 +218,14 @@ This function assigns proper values to `src` and `dst` variables and adds a dumm
 
 Override to change the storing property to match `dst[to]`.
 
+##### 1.6.2.3. `update_pre_context(self, data_item: Dict[str, Any], force=False)`
+
+Override [`FnctionalSensor.update_pre_context()`]() to change the check on required properties on the source concept with `src[*pres]`.
+
+##### 1.6.2.3. `fetch_value(self, pre, selector=None)`
+
+Override [`FnctionalSensor.fetch_value()`]() to change the fetching to occur from the properties stored on the source concept `src[pre]`.
+
 ### 1.7. `regr.sensor.pytorch.QuerySensor`
 
 #### 1.7.1. `QuerySensor` Attributes
@@ -245,10 +253,23 @@ Override to change the storing property to match `dst[to]`.
 #### 2.1.2. `ConstantSensor` Methods
 
 ### 2.2. `regr.sensor.pytorch.ReaderSensor`
-
+Inheriting from `regr.sensor.pytorch.ConstantSensor`.
+This class is the base sensor used for Reading from the dictionary structured input.
 #### 2.2.1. `ReaderSensor` Attributes
+Inheriting attributes from `regr.sensor.pytorch.ConstantSensor`. There are the following additional attributes for `ReaderSensor`.
+
+- `keyword`: This variable defines the `keyword` that the reader is supposed to read from the dictionary. This should be accessible in from the root node and can take form of a single string or tuples of string.
+- `data`: this variable is filled with one of the internal functions called during execution which holds the current instance data with respect to the keywords of the input.
 
 #### 2.2.2. `ReaderSensor` Methods
+##### 2.2.2.1. `fill_data(self, data_item)`
+
+This function is used to fill the `data` variable of the class by fetching relevant `keyword` from the `data_item`
+- Parameters:
+  - `data_item`: The data instance passed from the Reader Class to the model execution
+
+##### 2.2.2.2. `forward(self, _*)`
+Override [`ConstantSensor.forward()`]() to return `data` variable using the parent `forward` function.
 
 ### 2.3. `regr.sensor.pytorch.CandidateReaderSensor`
 
