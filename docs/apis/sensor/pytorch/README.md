@@ -130,9 +130,57 @@ Load the `parameters` from the file `sanitized_name` under the folder `filepath`
 
 ### 1.3. `regr.sensor.pytorch.FunctionalSensor`
 
+Inheriting from `regr.sensor.pytorch.TorchSensor`. Overrode to allow functional way to write `forward()` and more flexible `pres` definition.
+
 #### 1.3.1. `FunctionalSensor` Attributes
 
+Inheriting attributes from `regr.sensor.pytorch.TorchSensor`. Additional attribute `forward_` that define the customized caluclation in this sensor, such that the user do not have to override `forward()`.
+
+- `forward_`: A function taking all resulting values of `pres` as input, and the return value is used as the output for this sensor.
+
 #### 1.3.2. `FunctionalSensor` Methods
+
+Inheriting methods from `regr.sensor.pytorch.TorchSensor`. Methods are overrode to support different type of `pres`, including `str` meaning the property of the current concept or `Property` meaning the property of any concept. A few additional changes to support functional style `forward()` or external `forward_`.
+
+##### 1.3.2.1. `__init__(self, *pres, edges=None, forward=None, label=False, device='auto')`
+
+Overrode to accept an additional argument `forward` as customized function. If `forward()` is overrode, this argument would have no effect.
+
+- Parameters:
+  - `forward`: The `forward_` attribute of the sensor. It is a function taking all resulting values of `pres` as input, and the return value is used as the output for this sensor. It works only with the defualt `forward()`.
+
+##### 1.3.2.2. `update_pre_context(self, data_item: Dict[str, Any])`
+
+Overrode to support `Property` instance as `pres`.
+
+##### 1.3.2.3. `update_context(self, data_item: Dict[str, Any], force=False,override=True)`
+
+Overrode to support `Property` instance as `pres` and add `override` to determine whether this value will override the value in the `data_item` under the associated property.
+
+- Parameters:
+  - `override`: If it is `True`, the value in the `data_item` under the associated property is also updated to be the same value of this sensor. Default: `True`.
+
+##### 1.3.2.4. `fetch_value(self, pre, selector=None)`
+
+Overrode to support `Property` instance as `pres`.
+
+##### 1.3.2.5. `forward_wrap(self)`
+
+Invoke `forward()` with values filled in `inputs` (as positional argument).
+
+- Return value:
+  - Returns what ever returned from `forward()`.
+
+##### 1.3.2.6. `forward(self, *inputs, **kwinputs)`
+
+Accept inputs as arguments (unlike `foward()` in `TorchSensor()` that need to use `inputs`) and bypass to `forward_` if it is defined. Otherwise invoke `foward()` from Method Resolution Order (MRO).
+
+- Parameters:
+  - `*inputs`: positional inputs bypass to `forward_`.
+  - `**kwinputs`: (WIP)
+
+- Return value:
+  - Returns what ever returned from customized `forward_` or `forward()` from MRO.
 
 ### 1.4. `regr.sensor.pytorch.ModuleSensor`
 
