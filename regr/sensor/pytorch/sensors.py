@@ -30,7 +30,7 @@ class TorchSensor(Sensor):
     ) -> Any:
         self.context_helper = data_item
         try:
-            data_item = self.update_context(data_item)
+            self.update_context(data_item)
         except:
             print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
@@ -39,8 +39,7 @@ class TorchSensor(Sensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
+        force=False):
         if not force and self.fullname in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]
@@ -57,8 +56,6 @@ class TorchSensor(Sensor):
             data_item[self.fullname] = None
             if not self.label:
                 data_item[self.prop.fullname] = None
-
-        return data_item
 
     def update_pre_context(
         self,
@@ -126,7 +123,7 @@ class FunctionalSensor(TorchSensor):
     def update_pre_context(
         self,
         data_item: Dict[str, Any]
-    ) -> Any:
+    ):
         for edge in self.edges:
             for sensor in edge.find(non_label_sensor):
                 sensor(data_item)
@@ -144,8 +141,7 @@ class FunctionalSensor(TorchSensor):
         self,
         data_item: Dict[str, Any],
         force=False,
-        override=True
-    ) -> Dict[str, Any]:
+        override=True):
         if not force and self.fullname in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]
@@ -157,8 +153,6 @@ class FunctionalSensor(TorchSensor):
         data_item[self.fullname] = val
         if override and not self.label:
             data_item[self.prop.fullname] = val  # override state under property name
-
-        return data_item
 
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
@@ -270,8 +264,7 @@ class NominalSensor(TorchSensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
+        force=False):
         if not force and self.fullname in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]
@@ -289,8 +282,6 @@ class NominalSensor(TorchSensor):
             data_item[self.fullname] = None
             if not self.label:
                 data_item[self.prop.fullname] = None
-
-        return data_item
 
 
 class ModuleSensor(FunctionalSensor):
@@ -330,8 +321,7 @@ class TorchEdgeSensor(FunctionalSensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
+        force=False):
         super().update_context(data_item, force=force)
         data_item[self.dst[self.to].fullname] = data_item[self.fullname]
         return data_item
@@ -431,9 +421,7 @@ class AggregationSensor(TorchSensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
-
+        force=False):
         if not force and self.fullname in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]
@@ -528,7 +516,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
             raise
         self.context_helper = data_item
         try:
-            data_item = self.update_context(data_item)
+            self.update_context(data_item)
         except:
             print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
@@ -547,9 +535,7 @@ class SelectionEdgeSensor(TorchEdgeSensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False
-    ) -> Dict[str, Any]:
-
+        force=False):
         if not force and self.fullname in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]
@@ -560,7 +546,6 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         if val is not None:
             data_item[self.fullname] = val
             data_item[self.prop.fullname] = val  # override state under property name
-        return data_item
 
 
 class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):
