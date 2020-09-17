@@ -59,7 +59,7 @@ This means that the candidates of a `pair` concept are generated based on a `wor
 the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
 ```python
 word = Concept("word")
-word1 = Concept("word")
+word1 = Concept("word1")
 word.equal(word1)
 ```
 This edge enables us to transfer properties of concepts between instances that are marked as equal.
@@ -189,7 +189,7 @@ This above example logical constrain specify that: *if two object are linked by 
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
-Backus�Naur form of the Logical Constrain:
+Backus-Naur form of the Logical Constrain:
 
 	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain> | <existsConstrain>
 
