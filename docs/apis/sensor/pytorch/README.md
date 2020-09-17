@@ -1,4 +1,4 @@
-# [↑ `regr.sensor`](../SENSORS.md)
+# [↑ `regr.sensor`](..)
 
 <!-- TOC depthto:3 withlinks:true -->
 
@@ -56,17 +56,29 @@ Instantiate the sensor with attribute specified. Determine device if needed.
 
 ##### 1.1.2.2. `__call__(self, data_item: Dict[str, Any]) -> Any`
 
-Override [`Sensor.__call__()`](../SENSORS.md#1121-callself-dataitem-dictstr-any-forcefalse---any) to initiate `context_helper` with current `data_item` before invoking `update_context()`.
+Override [`Sensor.__call__()`](../README.md#1121-callself-dataitem-dictstr-any-forcefalse---any) to initiate `context_helper` with current `data_item` before invoking `update_context()`.
 
 ##### 1.1.2.3. `update_context(self, data_item: Dict[str, Any], force=False)`
 
-Override [`Sensor.update_context()`](../SENSORS.md#1123-updatecontextself-dataitem-dictstr-any-forcefalse) to update `pres` before current sensor via [`update_pre_context()`](#1124-updateprecontextself-dataitem-dictstr-any) and limit the propagation to only `Property` level.
+Override [`Sensor.update_context()`](../README.md#1123-updatecontextself-dataitem-dictstr-any-forcefalse) to update `pres` before current sensor via [`update_pre_context()`](#1124-updateprecontextself-dataitem-dictstr-any) and limit the propagation to only `Property` level.
 
 ##### 1.1.2.4. `update_pre_context(self, data_item: Dict[str, Any])`
 
+This method collect `pres` and `edges` that are required for the current sensor, execute them with the current `data_item`, and avoid sensors with `label=True`.
+
+- Parameters:
+  - `data_item: Dict[str, Any]`: A data item retrieved from the data reader, passed from the call to the sensor.
+
 ##### 1.1.2.5. `fetch_value(self, pre, selector=None)`
 
+This method retrieves the value of a pre-required property that is indicated by `pre` from the `context_helper`. There could be multiple sensors assigning to one property. User can pass a `selector` function to filter the sensor. The value of the first sensor will be return.
+
+- Parameters:
+  - `selector`: A function that returns `True` for any expected sensor and `False` otherwise. Default: `None`.
+
 ##### 1.1.2.6. `define_inputs(self)`
+
+This method instantiate the `inputs` attribute of the sensor based on current `context_helper`, which refers to current `data_item`.
 
 ### 1.2. `regr.sensor.pytorch.TorchLearner`
 
