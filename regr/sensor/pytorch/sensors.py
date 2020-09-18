@@ -171,8 +171,8 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(FunctionalSensor):
-    def __init__(self, *pres, data, edges=None, label=False, as_tensor=True, device='auto'):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+    def __init__(self, *pres, data, edges=None, forward=None, label=False, as_tensor=True, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.data = data
         self.as_tensor = as_tensor
 
@@ -202,8 +202,8 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 
 class ReaderSensor(ConstantSensor):
-    def __init__(self, *pres, keyword=None, edges=None, label=False, device='auto'):
-        super().__init__(*pres, data=None, edges=edges, label=label, device=device)
+    def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, as_tensor=True, device='auto'):
+        super().__init__(*pres, data=None, edges=edges, forward=forward, label=label, as_tensor=as_tensor, device=device)
         self.keyword = keyword
 
     def fill_data(self, data_item):
@@ -223,17 +223,13 @@ class ReaderSensor(ConstantSensor):
 
 
 class FunctionalReaderSensor(ReaderSensor):
-    def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, keyword=keyword, edges=edges, label=label, device=device)
-        self.forward_ = forward
-
     def forward(self, *args) -> Any:
         return super(ConstantSensor, self).forward(*args, data=self.data)  # skip ConstantSensor
 
 
 class LabelReaderSensor(ReaderSensor):
-    def __init__(self, *pres, keyword=None, edges=None):
-        super().__init__(*pres, keyword=keyword, edges=edges, label=True)
+    def __init__(self, *pres, keyword=None, edges=None, forward=None, as_tensor=True, device='auto'):
+        super().__init__(*pres, keyword=keyword, edges=edges, forward=forward, label=True, as_tensor=as_tensor, device=device)
 
 
 class NominalSensor(TorchSensor):

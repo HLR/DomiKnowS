@@ -14,11 +14,14 @@ class TorchLearner(Learner, TorchSensor):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto'):
-        self.model = None
         self.updated = False
         super(TorchLearner, self).__init__(*pre, edges=edges, label=label, device=device)
         self._loss = loss
         self._metric = metric
+
+    @property
+    def model(self):
+        return None
 
     @property
     @abc.abstractmethod
@@ -78,10 +81,13 @@ class TorchLearner(Learner, TorchSensor):
 class ModuleLearner(ModuleSensor, TorchLearner):
     def __init__(self, *pres, module, edges=None, loss=None, metric=None, label=False, **kwargs):
         super().__init__(*pres, module=module, edges=edges, label=label, **kwargs)
-        self.model = self.module
-        self.updated = True  # no need to update
         self._loss = loss
         self._metric = metric
+        self.updated = True  # no need to update
+
+    @property
+    def model(self):
+        return self.module
 
     @property
     def device(self):

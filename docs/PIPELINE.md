@@ -173,7 +173,7 @@ Next, a `TokenizerEdgeSensor` is assigned to `'forward'` property of the edge `r
 `Tokenizer()` is an external tokenizor from the [`transformers` package](https://huggingface.co/transformers/), which returns a bunch of informative values, and converted to an identity indicator `index`, token index in vocabulary `ids`, and tuple of starting and ending charactor in sentence `offset`.
 Indicated by `to=('index', 'ids', 'offset')`, the tokenized result goes to the three properties, `'index'`, `'ids'`, and `'offset'`, of concept `word`,.
 
-`FunctionalSensor` is a useful tool to plug in a python snippest to transform the values. For example, here the `FunctionalSensor` is instantiate with function `offset_len()` that transform offset to length of a token and it is assigned to `'len'` property of `word`.
+`FunctionalSensor` is a useful tool to plug in a python snippet to transform the values. For example, here the `FunctionalSensor` is instantiate with function `offset_len()` that transform offset to length of a token and it is assigned to `'len'` property of `word`.
 
 The last three lines of the example shows `ReaderSensor`s assigned to property of `word` and `pair`. The inherit concepts `people`, `organization`, and `work_for` are used as property name to indicate a classification property.
 The extra argument `label=True` indicates it is the ground-true value that this `Sensor` should not be taked into accont the process of forward computing.
