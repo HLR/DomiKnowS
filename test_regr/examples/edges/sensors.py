@@ -7,9 +7,8 @@ from typing import Any, Dict
 class TorchEdgeSensor(FunctionalSensor):
     modes = ("forward", "backward")
 
-    def __init__(self, *pres, to, relation, mode="forward", edges=None, forward=None, label=False, device='auto'):
+    def __init__(self, *pres, relation, mode="forward", edges=None, forward=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
-        self.to = to
         self.relation = relation
         self.mode = mode
         if self.mode not in self.modes:
@@ -20,16 +19,18 @@ class TorchEdgeSensor(FunctionalSensor):
         elif self.mode == "backward":
             self.src = self.relation.dst
             self.dst = self.relation.src
-        if self.dst != self.concept:
-            raise ValueError('the assignment of Edge sensor is not correct!')
 
     def attached(self, sup):
-        super().attached(sup)  # skip TorchEdgeSensor
+        super().attached(sup)
+        print("in attached")
+        if self.dst != self.concept:
+            raise ValueError('the assignment of Edge sensor is not correct!')
         if isinstance(self.prop, tuple):
             for to_ in self.prop:
                 self.dst[to_] = TriggerPrefilledSensor(callback_sensor=self)
         else:
             self.dst[self.prop] = TriggerPrefilledSensor(callback_sensor=self)
+            
 
     def update_context(
         self,
@@ -95,11 +96,6 @@ class TorchEdgeSensor(FunctionalSensor):
         elif isinstance(pre, (Property, Sensor)):
             return self.context_helper[pre.fullname]
         return pre
-
-
-    @property
-    def concept(self):
-        raise TypeError('{} is not to be associated with a concept.'.format(type(self)))
 
 
 class TokenizerEdgeSensor(TorchEdgeSensor):
