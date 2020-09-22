@@ -21,23 +21,24 @@ def test_edge_main():
     from regr.graph import DataNodeBuilder
 
 
-    class SampleEdge(TorchEdgeSensor):
+    class SampleEdge(TorchEdgeSensor, JointSensor):
         def forward(self, ) -> Any:
-            return self.inputs[0].split(" "), [1,2,3,4]
+            out = self.inputs[0].split(" ")
+            return out, ['test'] * len(out)
     sensor1 = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
     sentence['index'] = sensor1
     sentence['joint1', 'joint2'] = JointSensor(forward=lambda : ((1,2,3), ('a', 'b', 'c')))
-    # word['index', 'ids'] = SampleEdge('index', relation=sentence_con_word, mode="forward")
-    # word1['index'] = ConstantSensor(data=['words', 'case', 'quality', 'is'])
+    word['index', 'ids'] = SampleEdge('index', relation=sentence_con_word, mode="forward")
+    word1['index'] = ConstantSensor(data=['words', 'case', 'quality', 'is'])
 
     data_item = DataNodeBuilder({"graph": graph})
     assert sensor1(data_item) == 'This is a sample sentence to check the phrase equality or in this case the words.'
     assert sentence['joint1'](data_item) == (1,2,3)
     assert sentence['joint2'](data_item) == ('a', 'b', 'c')
-    # for sensor in word['index'].find(Sensor):
-    #     sensor(data_item)
-    # for sensor in word1['index'].find(Sensor):
-    #     sensor(data_item)
+    for sensor in word['index'].find(Sensor):
+        sensor(data_item)
+    for sensor in word1['index'].find(Sensor):
+        sensor(data_item)
     print(data_item)
 
 if __name__ == '__main__':
