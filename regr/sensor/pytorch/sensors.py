@@ -136,7 +136,9 @@ class FunctionalSensor(TorchSensor):
                     pre = self.concept[pre]
                 except KeyError:
                     pass
-            if isinstance(pre, (Property, Sensor)):
+            if isinstance(pre, Sensor):
+                pre(data_item)
+            elif isinstance(pre, Property):
                 for sensor in pre.find(non_label_sensor):
                     sensor(data_item)
 
@@ -192,19 +194,36 @@ class ConstantSensor(FunctionalSensor):
             return self.data
 
 
-class PrefilledSensor(TorchSensor):
-    def forward(self,) -> Any:
+class PrefilledSensor(FunctionalSensor):
+    def forward(self, *args, **kwargs) -> Any:
         return self.context_helper[self.prop.fullname]
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
-    def __init__(self, *pres, callback_sensor=None, edges=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+    def __init__(self, *pres, callback_sensor=None, edges=None, forward=None, label=False, device='auto'):
+        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.callback_sensor = callback_sensor
 
-    def forward(self,) -> Any:
+    def forward(self, *args, **kwargs) -> Any:
         self.callback_sensor(self.context_helper)
-        return super().forward()
+        return super().forward(*args, **kwargs)
+
+
+class JointSensor(FunctionalSensor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._components = None
+
+    def __iter__(self):
+        if self._components is None:
+            self._components = []
+            while(True):
+                index = len(self._components)
+                sensor = FunctionalSensor(self, forward=lambda x, index=index: x[index])
+                self._components.append(sensor)
+                yield sensor
+        else:
+            yield from self._components
 
 
 class ReaderSensor(ConstantSensor):
