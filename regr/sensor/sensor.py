@@ -8,7 +8,7 @@ class Sensor(BaseGraphTreeNode):
         self,
         data_item: Dict[str, Any],
         force=False
-    ) -> Dict[str, Any]:
+    ) -> Any:
         try:
             self.update_context(data_item, force)
         except:
@@ -20,7 +20,7 @@ class Sensor(BaseGraphTreeNode):
         self,
         data_item: Dict[str, Any],
         force=False
-    ) -> Dict[str, Any]:
+    ):
         if not force and (self.fullname in data_item):
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self.fullname]

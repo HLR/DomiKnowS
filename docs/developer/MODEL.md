@@ -239,7 +239,9 @@ assert context[sensor.fullname] == output
 
 output = sensor(context, force=True)
 ```
-### Influence of the sensor call on the 
+
+### Influence of the sensor call on the cache
+
 The cache effect will be propagate to upper level object if there isn't a value yet.
 For example, if the sensor is assigned to a property of a concept in a graph, the output of the sensor will be propagate to the property `sensor.sup` with key `sensor.sup.fullname`, further to the concept `sensor.sup.sup` with key `sensor.sup.sup`, etc.
 
