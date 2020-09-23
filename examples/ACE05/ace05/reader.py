@@ -133,3 +133,34 @@ class DictReader(Reader):
 
     def __iter__(self):
         yield from map(self._make_dict, super().__iter__())
+
+
+class ParagraphReader(Reader):
+    def _filter_span(self, spans, start, end):
+        from copy import copy
+        new_spans = []
+        for span in spans:
+            span = copy(span)
+            for key, mention in span.mentions.items():
+                if not (start < mention.extend.start and mention.extend.start < end and
+                    start < mention.extend.end and mention.extend.end < end):
+                    del span.mentions[key]
+            if span.mentions: # if there is any left
+                new_spans.append(span)
+        return new_spans
+
+    def __iter__(self):
+        for doc_sample in super().__iter__():
+            # {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+            doc_text = doc_sample['text']
+            paragraphs = doc_text.split('\n\n')
+            offset = 0
+            for text in paragraphs:
+                start = offset
+                end = offset + len(paragraph)
+                assert doc_text[start:end] == text
+                spans = self._filter_span(doc_sample['spans'], start=start, end=end)
+                relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
+                events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
+                yield {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+                offset = end + 2
