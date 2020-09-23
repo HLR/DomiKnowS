@@ -1,4 +1,5 @@
 *.log
+*.log.[0-9]
 
 # Created by https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
 # Edit at https://www.gitignore.io/?templates=code,python,pycharm,jupyternotebooks

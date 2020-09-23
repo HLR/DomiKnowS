@@ -10,7 +10,7 @@ from regr.solver.constructor.constructor import ProbConstructor
 from regr.program.model.torch import BaseModel, TorchModel
 from regr.sensor.torch.sensor import DataSensor
 
-from ...solver.primal_dual_session import PrimalDualSession
+from ....solver.session.primal_dual_session import PrimalDualSession
 
 
 class PrimalDualModel(TorchModel):

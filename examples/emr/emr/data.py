@@ -1,5 +1,6 @@
 from collections import OrderedDict, Counter
 from itertools import chain
+import re
 
 import torch
 from torch.utils.data import DataLoader
@@ -7,6 +8,7 @@ from spacy.lang.en import English
 
 from .conll import Conll04CorpusReader
 from .data_spacy import reprocess
+from .utils import KnuthMorrisPratt
 
 
 class ConllDataLoader(DataLoader):
@@ -143,26 +145,90 @@ class ConllDataLoader(DataLoader):
         super().__init__(samples, collate_fn=self._collate_fn, **kwargs)
 
 
-def collate(batch):
-    sentences, relations = zip(*batch)
-    # (tokens, pos, label)
-    # (relation_type, (src_index, src_token), (dst_index, dst_token))
-    tokens, postags, labels = zip(*sentences)
-    data_item = {
-        'sentence': [' '.join(token_list) for token_list in tokens],
-        'tokens': list(tokens),
-        'postag': list(postags),
-        'label': list(labels),
-        'relation': list(relations),
-    }
-    #import pdb; pdb.set_trace()
-    return data_item
+DELIM = '/'
+REPL = {'COMMA': ',',
+        '-LRB-': '(',
+        '-RRB-': ')',
+        }
+def conll_senitize_token(token):
+    if token in REPL:
+        return REPL[token]
+    if DELIM in token:
+        return token.replace(DELIM, ' ')
+    return token
+
+
+class FuzzyKMP(KnuthMorrisPratt):
+    @staticmethod
+    def ele_ne(pattern_elm, other_elm):
+        if re.match(pattern_elm[0], other_elm[0]):
+            return False
+        else:
+            return True
+
+
+MERGE = {KnuthMorrisPratt([('`', '``', 'O'), ('`', '``', 'O')]): [('``', '``', 'O')],
+         KnuthMorrisPratt([('\'', '\'\'', 'O'), ('\'', '\'\'', 'O')]): [('\'\'', '\'\'', 'O')]}
+# fkmp = FuzzyKMP([(r'(.+)\.', None, None)],)
+def conll_senitize_sentences(sentences):
+    sentences = list(zip(*sentences))
+    for kmp, rep in MERGE.items():
+        tokens_pieces = []
+        last = 0
+        for start, end in kmp(sentences):
+            # last:start
+            tokens_pieces.append(sentences[last:start])
+            # start:end
+            tokens_pieces.append(rep)
+            # end:
+            last = end
+        tokens_pieces.append(sentences[last:])
+        sentences = list(chain(*tokens_pieces))
+
+    # tokens_pieces = []
+    # last = 0
+    # for start, end in fkmp(sentences):
+    #     # last:start
+    #     tokens_pieces.append(sentences[last:start])
+    #     # start:end
+    #     elm = list(sentences[start])
+    #     elm[0] = elm[0][:-1]
+    #     elm = tuple(elm)
+    #     tokens_pieces.append([elm, ('.', '.', 'O')])
+    #     # end:
+    #     last = end
+    # tokens_pieces.append(sentences[last:])
+    # sentences = list(chain(*tokens_pieces))
+
+    sentences = list(zip(*sentences))
+    return sentences
 
 
 class NaiveDataLoader(DataLoader):
-    def __init__(self, path, reader=None, **kwargs):
+    def collate(self, batch):
+        sentences, relations = zip(*batch)
+        if self.senitize_sentences:
+            sentences = list(map(conll_senitize_sentences, sentences))
+        # (tokens, pos, label)
+        # (relation_type, (src_index, src_token), (dst_index, dst_token))
+        tokens, postags, labels = zip(*sentences)
+        if self.senitize_token:
+            tokens = [list(map(conll_senitize_token, token)) for token in tokens]
+        data_item = {
+            'sentence': [' '.join(token_list) for token_list in tokens],
+            'tokens': list(tokens),
+            'postag': list(postags),
+            'label': list(labels),
+            'relation': list(relations),
+        }
+        #import pdb; pdb.set_trace()
+        return data_item
+
+    def __init__(self, path, reader=None, senitize_sentences=True, senitize_token=True, **kwargs):
         self.path = path
         self.reader = reader or Conll04CorpusReader()
+        self.senitize_sentences = senitize_sentences
+        self.senitize_token = senitize_token
         sentences_list, relations_list = self.reader(path)
         samples = list(zip(sentences_list, relations_list))
-        super().__init__(samples, collate_fn=collate, **kwargs)
+        super().__init__(samples, collate_fn=self.collate, **kwargs)

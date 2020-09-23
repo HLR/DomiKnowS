@@ -1,10 +1,9 @@
 import logging
 import torch
 
-from regr.program import LearningBasedProgram
-
-from .model.primal_dual_model import PrimalDualModel
-from .model.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
+from .program import LearningBasedProgram
+from .model.torch.primal_dual_model import PrimalDualModel
+from .model.torch.batch_primal_dual_model import BatchPrimalDualModel, BigBatchPrimalDualModel
 
 
 # Primal-dual need multiple backward through constraint loss.
@@ -31,9 +30,11 @@ def reverse_sign_grad(parameters, factor=-1.):
 class PrimalDualLearningBasedProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, **kwargs):
+    def __init__(self, graph, Model, CModel=None, **kwargs):
         super().__init__(graph, Model, **kwargs)
-        self.cmodel = BigBatchPrimalDualModel(graph)
+        if CModel is None:
+            CModel = BigBatchPrimalDualModel
+        self.cmodel = CModel(graph)
         self.copt = None
 
     def train(
@@ -41,8 +42,6 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
         training_set,
         valid_set=None,
         test_set=None,
-        train_inference=False,
-        valid_inference=False,
         device=None,
         train_epoch_num=1,
         Optim=None,
@@ -57,17 +56,15 @@ class PrimalDualLearningBasedProgram(LearningBasedProgram):
             training_set,
             valid_set=valid_set,
             test_set=test_set,
-            train_inference=train_inference,
-            valid_inference=valid_inference,
             device=device,
             train_epoch_num=train_epoch_num,
             Optim=Optim)
 
-    def train_epoch(self, dataset, inference=False):
+    def train_epoch(self, dataset):
         self.model.train()
         self.cmodel.train()
         for data in dataset:
-            mloss, metric, output = self.model(data, inference=inference)
+            mloss, metric, output = self.model(data)
             closs, coutput = self.cmodel(output)
             loss = mloss + closs
             if self.opt is not None:

@@ -4,14 +4,15 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from ..utils import wrap_batch, value, FormatPrinter
 from ..base import AutoNamed
-from ..utils import wrap_batch
 
 
 class BinaryCMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, weight=None, dim=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
+        weight = weight.long()
         preds = (input > 0).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
         assert (0 <= labels).all() and (labels <= 1).all()
@@ -44,7 +45,7 @@ class PRF1WithLogitsMetric(CMWithLogitsMetric):
             p = torch.zeros_like(tp)
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+        return {'P': value(p), 'R': value(r), 'F1': value(f1)}
 
 
 class MetricTracker(torch.nn.Module):
@@ -98,21 +99,23 @@ class MetricTracker(torch.nn.Module):
             self.reset()
         return value
 
+    printer = FormatPrinter({float: "%.4f"})
+
     def __str__(self):
-        return str(self.value())
+        return self.printer.pformat(self.value())
 
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):
-        def func(value):
-            return value.clone().detach().mean()
-        def apply(value):
-            if isinstance(value, dict):
-                return {k: apply(v) for k, v in value.items()}
-            elif isinstance(value, torch.Tensor):
-                return func(value)
+        def func(x):
+            return value(x.clone().detach().mean())
+        def apply(x):
+            if isinstance(x, dict):
+                return {k: apply(v) for k, v in x.items()}
+            elif isinstance(x, torch.Tensor):
+                return func(x)
             else:
-                return apply(torch.tensor(value))
+                return apply(torch.tensor(x))
         retval = apply(values)
         return retval
 
@@ -122,9 +125,9 @@ class ValueTracker(MetricTracker):
         return values
 
 
-class PRF1Tracker(MetricTracker):
+class BinaryPRF1Tracker(MetricTracker):
     def __init__(self):
-        super().__init__(CMWithLogitsMetric())
+        super().__init__(BinaryCMWithLogitsMetric())
 
     def forward(self, values):
         CM = wrap_batch(values)
@@ -139,4 +142,27 @@ class PRF1Tracker(MetricTracker):
             p = torch.zeros_like(tp)
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+        return {'P': value(p), 'R': value(r), 'F1': value(f1)}
+
+
+class PRF1Tracker(BinaryPRF1Tracker):
+    def __init__(self):
+        super(BinaryPRF1Tracker, self).__init__(CMWithLogitsMetric())
+
+
+class MetricKey():
+    def __init__(self, pred, target):
+        self.pred = pred
+        self.target = target
+
+    def __eq__(self, other):
+        return self.pred == other.pred and self.target == other.target
+
+    def __hash__(self):
+        return hash((self.pred, self.target))
+
+    def __str__(self):
+        return '{}:{}'.format(self.pred, self.target)
+
+    def __repr__(self):
+        return str(self)

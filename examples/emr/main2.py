@@ -1,6 +1,6 @@
-from emr.data import ConllDataLoader, NaiveDataLoader
-from regr.sensor.torch.sensor import DataSensor, LabelSensor, CartesianSensor, SpacyTokenizorSensor
-from regr.sensor.torch.learner import EmbedderLearner, RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
+from emr.data import NaiveDataLoader
+from regr.sensor.torch.sensor import ReaderSensor, CartesianSensor, CartesianCandidateSensor, SpacyTokenizorSensor, LabelAssociateSensor, LabelRelationAssociateSensor, Key
+from regr.sensor.torch.learner import RNNLearner, MLPLearner, LRLearner, NorminalEmbedderLearner
 from emr.utils import seed
 
 
@@ -29,21 +29,22 @@ def model_declaration(graph, config):
     kill = graph['application/kill']
 
     # feature
-    sentence['raw'] = DataSensor('sentence')
-    word['idx'] = SpacyTokenizorSensor(sentence['raw'])
-    word['emb'] = NorminalEmbedderLearner(word['idx'], **config.word.emb)
+    sentence['index'] = ReaderSensor(Key('sentence'))
+    word['index'] = SpacyTokenizorSensor(sentence['index'])
+    word['emb'] = NorminalEmbedderLearner(word['index'], **config.word.emb)
     word['ctx_emb'] = RNNLearner(word['emb'], **config.word.ctx_emb)
     word['feature'] = MLPLearner(word['ctx_emb'], **config.word.feature)
 
+    pair['index'] = CartesianCandidateSensor(word['index'], word['index'])
     pair['emb'] = CartesianSensor(word['ctx_emb'], word['ctx_emb'])
     pair['feature'] = MLPLearner(pair['emb'], **config.pair.feature)
 
     # label
-    word[people] = LabelSensor('Peop')
-    word[organization] = LabelSensor('Org')
-    word[location] = LabelSensor('Loc')
-    word[other] = LabelSensor('Other')
-    word[o] = LabelSensor('O')
+    word[people] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Peop')
+    word[organization] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Org')
+    word[location] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Loc')
+    word[other] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'Other')
+    word[o] = LabelAssociateSensor(word['index'], Key('tokens'), Key('label'), 'O')
 
     word[people] = LRLearner(word['feature'], **config.word.lr)
     word[organization] = LRLearner(word['feature'], **config.word.lr)
@@ -52,11 +53,11 @@ def model_declaration(graph, config):
     word[o] = LRLearner(word['feature'], **config.word.lr)
 
     # relation
-    pair[work_for] = LabelSensor('Work_For')
-    pair[live_in] = LabelSensor('Live_In')
-    pair[located_in] = LabelSensor('Located_In')
-    pair[orgbase_on] = LabelSensor('OrgBased_In')
-    pair[kill] = LabelSensor('Kill')
+    pair[work_for] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Work_For')
+    pair[live_in] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Live_In')
+    pair[located_in] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Located_In')
+    pair[orgbase_on] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'OrgBased_In')
+    pair[kill] = LabelRelationAssociateSensor(pair['index'], Key('tokens'), Key('relation'), 'Kill')
 
     pair[work_for] = LRLearner(pair['feature'], **config.pair.lr)
     pair[live_in] = LRLearner(pair['feature'], **config.pair.lr)
@@ -71,14 +72,14 @@ def model_declaration(graph, config):
 
 import os
 os.environ['REGR_SOLVER'] = 'mini_prob_debug'
-os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 import logging
 logging.basicConfig(level=logging.INFO)
 
 
 def main():
-    from config import CONFIG
+    from config2 import CONFIG
 
     if CONFIG.seed is not None:
         seed(CONFIG.seed)
@@ -86,10 +87,12 @@ def main():
     graph = ontology_declaration()
 
     training_set = NaiveDataLoader(CONFIG.Data.train_path,
+                                   senitize_sentences=False,
                                    batch_size=CONFIG.Data.batch_size,
                                    shuffle=True)
 
     valid_set = NaiveDataLoader(CONFIG.Data.valid_path,
+                                senitize_sentences=False,
                                 batch_size=CONFIG.Data.batch_size,
                                 shuffle=False)
 
