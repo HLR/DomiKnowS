@@ -139,15 +139,41 @@ class ParagraphReader(Reader):
     def _filter_span(self, spans, start, end):
         from copy import copy
         new_spans = []
-        for span in spans:
+        for _, span in spans.items():
             span = copy(span)
-            for key, mention in span.mentions.items():
-                if not (start < mention.extend.start and mention.extend.start < end and
-                    start < mention.extend.end and mention.extend.end < end):
+            for key, mention in list(span.mentions.items()):
+                if not (start < mention.extent.start and mention.extent.start < end and
+                    start < mention.extent.end and mention.extent.end < end):
                     del span.mentions[key]
             if span.mentions: # if there is any left
                 new_spans.append(span)
         return new_spans
+
+    def _filter_relation(self, relations, spans, start, end):
+        from copy import copy
+        new_relations = []
+        for _, relation in relations.items():
+            relation = copy(relation)
+            for key, mention in list(relation.mentions.items()):
+                if not (start < mention.extent.start and mention.extent.start < end and
+                    start < mention.extent.end and mention.extent.end < end):
+                    del relation.mentions[key]
+            if relation.mentions: # if there is any left
+                new_relations.append(relation)
+        return new_relations
+
+    def _filter_event(self, events, spans, start, end):
+        from copy import copy
+        new_events = []
+        for _, event in events.items():
+            event = copy(event)
+            for key, mention in list(event.mentions.items()):
+                if not (start < mention.extent.start and mention.extent.start < end and
+                    start < mention.extent.end and mention.extent.end < end):
+                    del event.mentions[key]
+            if event.mentions: # if there is any left
+                new_events.append(event)
+        return new_events
 
     def __iter__(self):
         for doc_sample in super().__iter__():
@@ -157,10 +183,14 @@ class ParagraphReader(Reader):
             offset = 0
             for text in paragraphs:
                 start = offset
-                end = offset + len(paragraph)
+                end = offset + len(text)
                 assert doc_text[start:end] == text
                 spans = self._filter_span(doc_sample['spans'], start=start, end=end)
                 relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
                 events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
                 yield {'text': text, 'spans': spans, 'relations': relations, 'events': events}
                 offset = end + 2
+
+
+class DictParagraphReader(DictReader, ParagraphReader):
+    pass
