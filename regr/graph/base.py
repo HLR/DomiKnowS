@@ -12,6 +12,10 @@ class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
         super().__init__(name)  # name may be update
         super(AutoNamed, self).__init__(self.name)
 
+    def __repr__(self):
+        repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
+        return repr_str
+
     @classmethod
     def clear(cls):
         #AutoNamed.clear() # this call may clear wrong context
@@ -26,6 +30,10 @@ class BaseGraphTree(AutoNamed, NamedTree):
     def __init__(self, name=None):
         super().__init__(name)  # name may be update
         super(AutoNamed, self).__init__(self.name)
+
+    def __repr__(self):
+        repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
+        return repr_str
 
     @classmethod
     def clear(cls):

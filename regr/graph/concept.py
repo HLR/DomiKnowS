@@ -87,14 +87,18 @@ class Concept(BaseGraphTree):
                 retval.append(rel)
         return retval
 
+    def __setitem__(self, name, obj):
+        if isinstance(name, tuple):
+            for name_, obj_ in zip(name, obj):
+                self[name_] = obj_
+            return self.__setitem__('joint_'+'+'.join(name), obj)
+        else:
+            return super().__setitem__(name, obj)
+
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property
-        if isinstance(name, tuple) and sub.hasattr('components'):
-            for name_, component in zip(name, sub.components):
-                self.set_apply(name_, component)
-            self.set_apply(str(name), sub)
-        elif isinstance(sub, Property):
+        if isinstance(sub, Property):
             # call usually come from attach, further from constructor of property
             BaseGraphTree.set_apply(self, name, sub)
         elif isinstance(sub, Sensor):
