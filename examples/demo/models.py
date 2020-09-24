@@ -1,6 +1,10 @@
 import torch
 
 
+def tokenize(text):
+    return text.split(' ')
+
+
 class WordEmbedding(torch.nn.Module):
     i2w = ['__UNK__', 'John', 'works', 'for', 'IBM']
     w2i = dict((w,i) for i, w in enumerate(i2w))
@@ -17,6 +21,7 @@ class WordEmbedding(torch.nn.Module):
     def forward(self, words):
         ids = self.ws2i(words)
         return self.embeds(ids)
+
 
 class Classifier(torch.nn.Linear):
     def __init__(self):

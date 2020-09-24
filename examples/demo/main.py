@@ -10,7 +10,7 @@ from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss
 
-from models import WordEmbedding, Classifier
+from models import tokenize, WordEmbedding, Classifier
 
 
 Graph.clear()
@@ -67,8 +67,6 @@ reader = Reader()
 sentence['index'] = ReaderSensor(keyword='text')
 
 scw = sentence.relate_to(word)[0]
-def tokenize(text):
-    return text.split(' ')
 scw['forward'] = TorchEdgeSensor('index', to='index', forward=tokenize)
 # word['index'] = ContainEdgeSensor('index', forward=tokenize)
 
