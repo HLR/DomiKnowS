@@ -206,7 +206,7 @@ We can create a `Program` from the `graph`.
 program = POIProgram(graph, loss=..., metrics=...)
 ```
 
-`POIProgram` is a wrapper of training and testing behavior using specific properties in the graph. [Here](./apis/PROGRAMS.md) is a list of different programs avaliable for the uses. Now, `program` is a "full program" with data and modeling behavior attached.
+`POIProgram` is a wrapper of training and testing behavior using specific properties in the graph. [Here](./apis/program) is a list of different programs avaliable for the uses. Now, `program` is a "full program" with data and modeling behavior attached.
 It can be used for training, testing, etc. with `Reader`s as input.
 
 ## 3. Training and Testing
