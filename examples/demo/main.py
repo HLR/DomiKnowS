@@ -1,5 +1,7 @@
 import logging
 
+import torch
+
 from regr.graph import Graph, Concept, Relation
 from regr.graph import ifL, notL, andL, orL, nandL
 from regr.program import POIProgram
@@ -75,8 +77,8 @@ word[organization] = ReaderSensor(keyword='org', label=True)
 
 
 word['emb'] = ModuleLearner('index', module=WordEmbedding())
-word[people] = ModuleLearner('emb', module=torch.nn.Linear(100, 2))
-word[organization] = ModuleLearner('emb', module=torch.nn.Linear(100, 2))
+word[people] = ModuleLearner('emb', module=Classifier())
+word[organization] = ModuleLearner('emb', module=Classifier())
 
 #
 # Program

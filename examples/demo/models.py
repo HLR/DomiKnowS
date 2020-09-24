@@ -19,4 +19,5 @@ class WordEmbedding(torch.nn.Module):
         return self.embeds(ids)
 
 class Classifier(torch.nn.Linear):
-    pass
+    def __init__(self):
+        super().__init__(100, 2)
