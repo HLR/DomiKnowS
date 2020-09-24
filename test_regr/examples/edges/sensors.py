@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, non_label_sensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, non_label_sensor, JointSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from typing import Any, Dict
@@ -98,29 +98,18 @@ class TorchEdgeSensor(FunctionalSensor):
         return pre
 
 
-class TokenizerEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False, device='auto', tokenizer=None):
-        super().__init__(*pres, to=to, mode=mode, edges=edges, label=label, device=device)
+class TokenizerEdgeSensor(TorchEdgeSensor, JointSensor):
+    def __init__(self, *pres, relation, mode="forward", edges=None, label=False, device='auto', tokenizer=None):
+        super().__init__(*pres, relation=relation, mode=mode, edges=edges, label=label, device=device)
         if not tokenizer:
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer
 
-    def forward(self, text) -> Any:
-        tokenized = self.tokenizer.encode_plus(text, return_tensors="pt", return_offsets_mapping=True)
+    def forward(self) -> Any:
+        tokenized = self.tokenizer.encode_plus(self.inputs[0], return_tensors="pt", return_offsets_mapping=True)
         tokens = tokenized['input_ids'].view(-1).to(device=self.device)
         offset = tokenized['offset_mapping'].to(device=self.device)
-        index = list(range(len(tokens)))
-        return index, tokens, offset
-
-
-    def update_context(self, data_item, force=False):
-        super(TorchEdgeSensor, self).update_context(data_item, force=force)  # skip TorchEdgeSensor
-        if isinstance(self.to, tuple):
-            for to_, value in zip(self.to, data_item[self.fullname]):
-                data_item[self.dst[to_].fullname] = value
-        else:
-            data_item[self.dst[self.to].fullname] = data_item[self.fullname]
-        return data_item
+        return tokens, offset
 
 
 class TokenizerSpan(TorchSensor):
