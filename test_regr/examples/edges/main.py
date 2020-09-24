@@ -13,15 +13,15 @@ sys.path.append('../../../examples/ACE05')
 
 
 def test_edge_main():
-    from sensors import TorchEdgeSensor
+    from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.sensors import ConstantSensor, JointSensor
-    from regr.sensor.pytorch.query_sensor import CandidateEqualSensor, CandidateRelationSensor
+    from regr.sensor.pytorch.relation_sensors import CandidateEqualSensor, CandidateRelationSensor
     from graph import sentence, word, sentence_con_word, word1, word_equal_word1, graph, pair_word1, pair_word2, pair
     from regr.sensor.sensor import Sensor
     from regr.graph import DataNodeBuilder
 
 
-    class SampleEdge(TorchEdgeSensor, JointSensor):
+    class SampleEdge(EdgeSensor, JointSensor):
         def forward(self, ) -> Any:
             out = self.inputs[0].split(" ")
             return out, ['test'] * len(out)
