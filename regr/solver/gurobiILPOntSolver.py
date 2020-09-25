@@ -1,9 +1,12 @@
-from itertools import permutations
+from itertools import product
 from datetime import datetime
 from collections import OrderedDict
 
 # numpy
 import numpy as np
+
+# pytorch
+import torch
 
 # ontology
 from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
@@ -401,9 +404,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                
             for token1Index, token1 in enumerate(tokens): 
                 for token2Index, token2 in enumerate(tokens):
-                    if token1 == token2:
-                        continue
-    
                     # Check if probability is NaN or if and has to be skipped
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     if self.valueToBeSkipped(currentProbability[1]):
@@ -486,9 +486,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                         for token1Index, token1 in enumerate(tokens): 
                             for token2Index, token2 in enumerate(tokens):
-                                if token1 == token2:
-                                    continue
-    
                                 if (domain.name, token1) not in x:
                                     continue
                                  
@@ -516,9 +513,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (superProperty.name, token1, token2) not in y:
                                 continue
                             
@@ -546,9 +540,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -580,9 +571,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if currentRelationInverse is not None:
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-     
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -603,9 +591,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if FunctionalProperty in currentRelation.is_a:
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -625,9 +610,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if InverseFunctionalProperty in currentRelation.is_a:
                     for token1 in tokens: 
                         for token2 in tokens:
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -679,9 +661,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if SymmetricProperty in currentRelation.is_a:
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -698,9 +677,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if AsymmetricProperty in currentRelation.is_a:
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -717,9 +693,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if TransitiveProperty in currentRelation.is_a:
                     for token1Index, token1 in enumerate(tokens): 
                         for token2Index, token2 in enumerate(tokens):
-                            if token1 == token2:
-                                continue
-        
                             if (relationName, token1, token2) not in y:
                                 continue
                             
@@ -781,28 +754,25 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     for token1 in tokens: 
                         for token2 in tokens:
-                            if token1 == token2:
+                            if (relationName, token1, token2) not in y: 
                                 continue
-                            else:
-                                if (relationName, token1, token2) not in y: 
+                            
+                            if arg_id == 0: # Domain
+                                if (conceptName, token1) not in x: 
                                     continue
                                 
-                                if arg_id == 0: # Domain
-                                    if (conceptName, token1) not in x: 
-                                        continue
-                                    
-                                    self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token1], onlyConstrains = True)
-                                    #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token1].VarName))
-                                    
-                                elif arg_id == 1: # Range
-                                    if (conceptName, token2) not in x: 
-                                        continue
+                                self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token1], onlyConstrains = True)
+                                #self.myLogger.info("Created - domain - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token1].VarName))
                                 
-                                    self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token2], onlyConstrains = True)
-                                    #self.myLogger.info("Created - range - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token2].VarName))
-                                    
-                                else:
-                                    self.myLogger.warn("When creating domain-range constrains for relation \"%s\" for concept \"%s\" received more then two concepts"%(relationName,conceptName))
+                            elif arg_id == 1: # Range
+                                if (conceptName, token2) not in x: 
+                                    continue
+                            
+                                self.myIlpBooleanProcessor.ifVar(m, y[relationName, token1, token2], x[conceptName, token2], onlyConstrains = True)
+                                #self.myLogger.info("Created - range - constrains for relation \"%s\" and \"%s\""%(y[relationName, token1, token2].VarName,x[conceptName, token2].VarName))
+                                
+                            else:
+                                self.myLogger.warn("When creating domain-range constrains for relation \"%s\" for concept \"%s\" received more then two concepts"%(relationName,conceptName))
 
         m.update()
     
@@ -1140,7 +1110,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.warn("When creating triple relation constrains for relation \"%s\" for concept \"%s\" received more then three concepts"%(tripleRelationName,conceptName))
                         continue
                     
-                    for triple in permutations(tokens, r=3):
+                    for triple in product(tokens, repeat=3):
                         if  (tripleRelationName, triple[0], triple[1], triple[2]) not in z:
                             continue
                         
@@ -1244,7 +1214,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             
                         conceptVariables = {}
                         foundConceptInY = False
-                        for tokensPermutation in permutations(tokens, r=2):
+                        for tokensPermutation in product(tokens, repeat=2):
                             if (conceptName, *tokensPermutation) in y:
                                 conceptVariables[tokensPermutation] = y[(conceptName, *tokensPermutation)]
                                 foundConceptInY = True
@@ -1275,7 +1245,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                         conceptVariables = {}
                         foundConceptInZ = False
-                        for tokensPermutation in permutations(tokens, r=3):                            
+                        for tokensPermutation in product(tokens, repeat=3):                            
                             if (conceptName, *tokensPermutation) in z:
                                 conceptVariables[tokensPermutation] = z[(conceptName, *tokensPermutation)]
                                 foundConceptInZ = True
@@ -1307,7 +1277,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     eqlVariables = {}       
 
                     if r:
-                        for tokensPermutation in permutations(tokens, r=r):
+                        for tokensPermutation in product(tokens, repeat=r):
                             if isinstance(e.e[2], set):
                                 eqlVariables[tokensPermutation] = 0
                                 for e2 in e.e[2]:
@@ -1533,16 +1503,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                         for token1Index, token1 in enumerate(tokens):
                             for token2Index, token2 in enumerate(tokens):
-                                if token1 == token2:
-                                    continue
-                                
                                 for token3Index, token3 in enumerate(tokens):
-                                    if token3 == token2:
-                                        continue
-                                    
-                                    if token3 == token1:
-                                        continue
-                                
                                     if ((tripleRelationName, token1, token2, token3) in solution) and (solution[tripleRelationName, token1, token2, token3] == 1):
                                         tripleRelationResult[tripleRelationName][token1Index, token2Index, token3Index] = 1
                                     
@@ -1847,9 +1808,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                
             for token1Index, token1 in enumerate(tokens): 
                 for token2Index, token2 in enumerate(tokens):
-                    if token1 == token2:
-                        continue
-    
                     # Check if probability is NaN or if and has to be skipped
                     currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
                     if self.valueToBeSkipped(currentProbability[1]):
@@ -1869,6 +1827,31 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
-                lcLosses[lc.lcName] = lcLoss
+                lossDict = next(iter(lcLoss.values()))
+                
+                if not lossDict:
+                    continue
+                
+                lossDictFirstKey = next(iter(lossDict.keys()))
+                lossDictFirstKeyLen = len(lossDictFirstKey)
+                
+                lossTensor = None
+                if lossDictFirstKeyLen == 1:
+                    lossTensor = torch.zeros(len(tokens))
+                elif lossDictFirstKeyLen == 2:
+                    lossTensor = torch.zeros(len(tokens),len(tokens))
+
+                if lossTensor is None:
+                    continue
+                
+                for i, v in lossDict.items():
+                    if v:
+                        lossTensor[i] = v
+                    else:
+                        lossTensor[i] = float("nan")
+               
+                lcLosses[lc.lcName] = {}
+                
+                lcLosses[lc.lcName]['lossTensor'] = lossTensor
                 
         return lcLosses

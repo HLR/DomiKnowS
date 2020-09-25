@@ -157,15 +157,24 @@ class LogicalConstrain:
                             v1Var = v[0][vKeys[0]][v1]
                             v2Var = v[1][vKeys[1]][v1]
                                 
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                            if v1Var is None or v2Var is None:
+                                zVars[v1] = None
+                            else:
+                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                     else: # Different variables names
                         ilpKey = (vKeys[0][0], vKeys[1][0])
+                        
                         for v1 in v[0][vKeys[0]]:
                             for v2 in v[1][vKeys[1]]:
                                 v1Var = v[0][vKeys[0]][v1]
                                 v2Var = v[1][vKeys[1]][v2]
                                     
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                                index = (v1[0], v2[0])
+                                
+                                if v1Var is None or v2Var is None:
+                                    zVars[index] = None
+                                else:
+                                    zVars[index] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                 elif len(vKeys[1]) == 2: # Second variables names has two elements
                     if vKeys[0][0] in vKeys[1]:
                         ilpKey = vKeys[1]
@@ -175,13 +184,16 @@ class LogicalConstrain:
                             v1Var = v[0][vKeys[0]][(v1[0],)] 
                             v2Var = v[1][vKeys[1]][v1]
                                 
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                            if v1Var is None or v2Var is None:
+                                zVars[v1] = None
+                            else:
+                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                     else:
                         pass
                 else:
                     pass # Support only 2 elements now !
-            elif len(vKeys[0]) == 2:
-                if len(vKeys[1]) == 1: 
+            elif len(vKeys[0]) == 2:  # First variables names has two elements
+                if len(vKeys[1]) == 1:  # Second variables names has one elements
                     if vKeys[0][0] == vKeys[1][0]: # First name match
                         ilpKey = vKeys[0]
                         
@@ -189,8 +201,11 @@ class LogicalConstrain:
                            
                             v1Var = v[0][vKeys[0]][v1]
                             v2Var = v[1][vKeys[1]][(v1[0],)]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                             
+                            if v1Var is None or v2Var is None:
+                                zVars[v1] = None
+                            else:  
+                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                     elif vKeys[0][1] == vKeys[1][0]: # Second name match
                         ilpKey = vKeys[0]
                         
@@ -198,13 +213,26 @@ class LogicalConstrain:
                            
                             v1Var = v[0][vKeys[0]][v1]
                             v2Var = v[1][vKeys[1]][(v1[1],)]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                            
+                            if v1Var is None or v2Var is None:
+                                zVars[v1] = None
+                            else:  
+                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                     else:  # Different variables names
                         pass
-                elif len(vKeys[1]) == 2:
-                    if (vKeys[0] == vKeys[1]):
+                elif len(vKeys[1]) == 2:  # Second variables names has two elements
+                    if (vKeys[0] == vKeys[1]): # The same sets of variables
                         ilpKey = vKeys[0]
+                        
+                        for v1 in v[0][vKeys[0]]:
+                            
+                            v1Var = v[0][vKeys[0]][v1]
+                            v2Var = v[1][vKeys[1]][v1]
+                                
+                            if v1Var is None or v2Var is None:
+                                zVars[v1] = None
+                            else:
+                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
                     else:
                         pass
                 else:
@@ -227,7 +255,10 @@ class LogicalConstrain:
                         for i, _ in enumerate(vKeys):
                             _vars.append(v[i][vKeys[0]][v1])
                          
-                        zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
+                        if None in _vars:
+                            zVars[v1] = None
+                        else:
+                            zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
 
         # Output
         ilpV[ilpKey] = zVars
