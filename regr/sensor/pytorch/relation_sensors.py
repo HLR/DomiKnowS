@@ -25,7 +25,6 @@ class EdgeSensor(FunctionalSensor):
 
     def attached(self, sup):
         super().attached(sup)
-        print("in attached")
         if self.dst != self.concept:
             raise ValueError('the assignment of Edge sensor is not correct!')
         if isinstance(self.prop, tuple):
