@@ -1,10 +1,9 @@
 import os
-print(os.getcwd())
+import sys
 # Please change the root to an absolute or relative path to DomiKnowS root.
 # In case relative path is used, consider the printed `CWD` as current working directory.
-root = '/home/hfaghihi/Framework/DomiKnowS'
-import sys
-sys.path.append(root)
+sys.path.append('.')
+sys.path.append('../..')
 from typing import Any
 from tweet_reader import SentimentReader
 from regr.sensor.pytorch.sensors import TorchSensor
