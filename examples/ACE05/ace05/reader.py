@@ -138,41 +138,41 @@ class DictReader(Reader):
 class ParagraphReader(Reader):
     def _filter_span(self, spans, start, end):
         from copy import deepcopy
-        new_spans = []
-        for _, span_ in spans.items():
+        new_spans = {}
+        for span_id, span_ in spans.items():
             span = deepcopy(span_)
             for key, mention in list(span.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del span.mentions[key]
             if span.mentions: # if there is any left
-                new_spans.append(span)
+                new_spans[span_id] = span
         return new_spans
 
     def _filter_relation(self, relations, spans, start, end):
         from copy import deepcopy
-        new_relations = []
-        for _, relation in relations.items():
+        new_relations = {}
+        for relation_id, relation in relations.items():
             relation = deepcopy(relation)
             for key, mention in list(relation.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del relation.mentions[key]
             if relation.mentions: # if there is any left
-                new_relations.append(relation)
+                new_relations[relation_id] = relation
         return new_relations
 
     def _filter_event(self, events, spans, start, end):
         from copy import deepcopy
-        new_events = []
-        for _, event in events.items():
+        new_events = {}
+        for event_id, event in events.items():
             event = deepcopy(event)
             for key, mention in list(event.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del event.mentions[key]
             if event.mentions: # if there is any left
-                new_events.append(event)
+                new_events[event_id] = event
         return new_events
 
     def __iter__(self):

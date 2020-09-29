@@ -6,6 +6,7 @@ from regr.graph import Concept
 from regr.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
 
 from ace05.reader import Reader, DictReader
+from ace05.reader import ParagraphReader as Reader, DictParagraphReader as DictReader
 from ace05.annotation import Entity, Timex2, Value
 from ace05.graph import relations_graph, events_graph, participant_argument, attribute_argument, timex2, value
 import config
