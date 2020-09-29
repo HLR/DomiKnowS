@@ -8,6 +8,7 @@ We provide a graph language based on python for knowledge declaration with notat
     - [Graph classes](#graph-classes)
     - [Constraints classes](#constraints-classes)
   - [Graph](#graph)
+    - [Graph Relationships](#relation-types)
     - [Example](#example)
       - [Graph declaration and `with` statement](#graph-declaration-and-with-statement)
       - [Concept declaration](#concept-declaration)
@@ -45,6 +46,50 @@ You can either write an owl file initializing your concepts and relations or to 
 Each `Graph` object can contain `Concept`s.
 
 The graph is a partial program, and there is no sensor or learner, which are data processing units, connected. There is no behavior associated. It is only a data structure to express domain knowledge.
+
+### Relation Types
+
+We have three defined relationship between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
+`contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
+Whgen ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
+```python
+sentence = Concept('sentence')
+word = Concept('word')
+phrase = Concept('phrase')
+
+sentence.contains(word)
+phrase.contains(word)
+```
+we use the relationship `has_a` only to define relations between concepts and to produce candidates of a relationship. For instance, a relationship between `word` and `word` can be defined using an intermediate concept `pair` and two `has_a` relation links.
+```python
+pair = Concept("pair")
+pair.has_a(arg1=word, arg2=word)
+```
+This means that the candidates of a `pair` concept are generated based on a `word_{i}` and a `word_{j}`.
+Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` we have to define the following code.
+```python
+semanic_frame = Concept('semantic-frame')
+semantic_frame.has_a(verb=word, subject=word, object=word)
+```
+As we only support relationships between three concepts, in case of a relation with more arguments, you have to break it to relationships between a main concept and one other concept each time.
+```python
+semanic_frame = Concept('semantic-frame')
+verb_semantic = Concept('verb-semantic')
+subject_semantic = Concept('subject-semantic')
+object_semantic = Concept('object-semantic')
+verb_semantic.has_a(semantic=semanic_frame, verb=word)
+subject_semantic.has_a(semantic=semanic_frame, subject=word)
+object_semantic.has_a(semantic=semanic_frame, object=word)
+```
+the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
+```python
+word = Concept("word")
+word1 = Concept("word1")
+word.equal(word1)
+```
+This edge enables us to transfer properties of concepts between instances that are marked as equal.
+
+Using each of these relation edges requires us to assign a sensor to them in the model execution. The sensors input is selected properties from the source concept and the output will be stored as selected properties in the destination node.
 
 ### Example
 
@@ -169,7 +214,7 @@ This above example logical constrain specify that: *if two object are linked by 
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
-Backus–Naur form of the Logical Constrain:
+Backus-Naur form of the Logical Constrain:
 
 	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain> | <existsConstrain>
 

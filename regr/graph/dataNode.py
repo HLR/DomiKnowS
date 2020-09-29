@@ -1011,9 +1011,22 @@ class DataNode:
         if not myilpOntSolver:
             return False
         
-        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations)
+        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
         
         return verifyResult
+    
+    def calculateLcLoss(self):
+        _conceptsRelations = ()
+            
+        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
+            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getProbability)
+            
+        if not myilpOntSolver:
+            return False
+        
+        lcResult = myilpOntSolver.calculateLcLoss(graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
+        
+        return lcResult
 
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):

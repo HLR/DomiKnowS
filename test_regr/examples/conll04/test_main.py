@@ -1,4 +1,5 @@
 import sys
+from itertools import product
 sys.path.append('../..')
 
 import pytest
@@ -40,8 +41,9 @@ def test_case():
         'pair': {
             'emb': torch.randn(4, 4, 2048, device=device),
             'work_for': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-            
-            'work_for': torch.tensor([[[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [0.37, 0.63]],      # John
+                    
+            #                           John                 works                 for           IBM
+            'work_for': torch.tensor([[[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [0.37, 0.63]],  # John
                                       [[1.00, float("nan")], [1.00, float("nan")], [0.60, 0.40], [0.70, 0.30]],  # works
                                       [[0.98, 0.02],         [0.70, 0.03],         [0.95, 0.05], [0.90, 0.10]],  # for
                                       [[0.35, 0.65],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30]],  # IBM
@@ -51,7 +53,15 @@ def test_case():
             'located_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
             'orgbase_on': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
             'kill': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
-        }
+        }, 
+        
+        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        #                                 John           works          for      IBM
+        'lc1LossTensor' : torch.tensor([[-0.4000,       -0.9000,       -1.0700,  0.2400],  # John
+                                        [ float("nan"),  float("nan"), -1.4700, -0.6900],  # works
+                                        [-1.4600,       -1.7500,       -1.9000, -0.9700],  # for
+                                        [-0.2500,       -1.0000,       -1.2700, -0.1900]]) # IBM
+    
     }
     case = Namespace(case)
     return case
@@ -294,6 +304,18 @@ def test_main_conll04(case):
     
     for conceptsRelations in conceptsRelationsVariants:
         
+        lcResult = datanode.calculateLcLoss()
+        
+        import torch
+        for i in product(range(3), repeat = 2):  
+            if lcResult['LC1']['lossTensor'][i] != lcResult['LC1']['lossTensor'][i] or case.lc1LossTensor[i] != case.lc1LossTensor[i]:
+                if lcResult['LC1']['lossTensor'][i] != lcResult['LC1']['lossTensor'][i] and case.lc1LossTensor[i] != case.lc1LossTensor[i]:
+                    assert True
+                else:
+                    assert False
+            else:
+                assert lcResult['LC1']['lossTensor'][i] == case.lc1LossTensor[i]
+
         # ------------ Call the ILP Solver
         datanode.inferILPConstrains(*conceptsRelations, fun=None)
         

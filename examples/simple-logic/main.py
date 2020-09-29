@@ -52,7 +52,7 @@ def main():
         'y0': [1.,0.],
         'y1': [0.,1.]
         }]
-    program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
+    program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
     print('Train loss:', program.model.loss)
 
     program.test(data)

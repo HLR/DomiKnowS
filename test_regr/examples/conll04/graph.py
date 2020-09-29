@@ -32,8 +32,9 @@ with Graph('global') as graph:
 
         disjoint(people, organization, location, other, o)
 
-        for c1, c2 in permutations((people, organization, location, other, o), r=2):
-            nandL(c1, c2)
+        #nandL(people,organization)
+        #for c1, c2 in permutations((people, organization, location, other, o), r=2):
+        #   nandL(c1, c2)
 
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
@@ -47,7 +48,9 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
-        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        # LC1
+        ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        
         #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
         #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
         #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))

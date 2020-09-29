@@ -1,27 +1,29 @@
 # [DomiKnowS](..)
 
-## 1. User Perspective
+## 1. [Install](INSTALL.md)
 
-### 1.1. [Get Started](GET_STARTED.md)
+## 2. [Overview](OVERVIEW_USER.md)
 
-### 1.2. [Overview](OVERVIEW_USER.md)
+## 3. User Perspective
 
-### 1.3. [Pipeline](PIPELINE.md)
+### 3.1. [Pipeline](PIPELINE.md)
 
-### 1.4. Tutorials
+### 3.2. [Tutorials](../tutorials)
 
-## 2. [Developer Perspective](OVERVIEW_DEVEL.md)
+### 3.3. [Examples](../examples)
 
-### 2.1. [Knowledge Declaration](KNOWLEDGE.md)
+## 4. [Developer Perspective](developer/OVERVIEW_DEVEL.md)
 
-### 2.2. [Model Declaration](MODEL.md)
+### 4.1. [Knowledge Declaration](developer/KNOWLEDGE.md)
 
-### 2.3. [Workflow](WORKFLOW.md)
+### 4.2. [Model Declaration](developer/MODEL.md)
 
-### 2.4. [Query and Access](QUERY.md)
+### 4.3. [Workflow](developer/WORKFLOW.md)
 
-### 2.5. [Inference](INFERENCE.md)
+### 4.4. [Query and Access](developer/QUERY.md)
 
-## 3. API
+### 4.5. [Inference](developer/INFERENCE.md)
 
-## 4. [Legacy Wiki](old_wiki)
+## 5. [APIs](apis)
+
+## 6. [Legacy Wiki](old_wiki)
