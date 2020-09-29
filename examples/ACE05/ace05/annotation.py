@@ -1,6 +1,8 @@
 import itertools
 import difflib
 import warnings
+from copy import deepcopy
+from typing import overload
 from xml.sax.saxutils import unescape
 
 from .graph import ace05
@@ -9,53 +11,116 @@ from .graph import ace05
 class APFObject():
     tag = None
 
-    def __init__(self, node, text):
-        assert node.tag == self.tag, '{} must be created from "{}" node, "{}" is given.'.format(type(self), self.tag, node.tag)
+    @classmethod
+    def from_node(cls, node, *args, **kwargs):
+        assert node.tag == cls.tag, f'{cls} must be created from "{cls.tag}" node, "{node.tag}" is given.'
+        node_args = cls.parse_node(node, *args, **kwargs)
+        obj = cls(**node_args)
+        return obj
+
+    @classmethod
+    def parse_node(cls, node):
+        return {}
 
 
 class Charseq(APFObject):
     tag = 'charseq'
     differ = difflib.Differ()
 
-    def __init__(self, node, text):
-        super().__init__(node, text)
-        self.start = int(node.attrib['START'])
-        self.end = int(node.attrib['END']) + 1  # pythonic upper bound exclusion
-        self.text = node.text
-        a = unescape(text[self.start:self.end]) + '\n'
-        b = unescape(self.text) + '\n'
+    @classmethod
+    def parse_node(cls, node, text):
+        node_args = super().parse_node(node)
+        start = int(node.attrib['START'])
+        node_args['start'] = start
+        end = int(node.attrib['END']) + 1  # pythonic upper bound exclusion
+        node_args['end'] = end
+        node_args['text'] = node.text
+        a = unescape(text[start:end]) + '\n'
+        b = unescape(node.text) + '\n'
         if a != b:
             warnings.warn(
                 '<charseq> mismatch:\n %s' %
-                ''.join(self.differ.compare(
+                ''.join(cls.differ.compare(
                     a.splitlines(keepends=True),
                     b.splitlines(keepends=True))))
+        return node_args
+
+    def __init__(self, start, end, text):
+        super().__init__()
+        self.start = start
+        self.end = end
+        self.text = text
 
 
 class Span(APFObject):
     class Mention(APFObject):
-        def __init__(self, span, node, text):
-            super().__init__(node, text)
-            self.id = node.attrib['ID']
-            self.extent = Charseq(node.find('extent/charseq'), text)
-            self.head = self.extent
-            self.span_basetype = span.basetype
-            self.span_type = span.type
-            self.span_subtype = span.subtype
+        @classmethod
+        def parse_node(cls, node, text, span):
+            node_args = super().parse_node(node)
+            node_args['id'] = node.attrib['ID']
+            extent = Charseq.from_node(node.find('extent/charseq'), text)
+            node_args['extent'] = extent
+            node_args['head'] = extent
+            node_args['span_basetype'] = span.basetype
+            node_args['span_type'] = span.type
+            node_args['span_subtype'] = span.subtype
+            return node_args
 
-    def __init__(self, node, text):
-        super().__init__(node, text)
-        self.id = node.attrib['ID']
-        self.init_types(node, text)
-        self.mentions = {}
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(self, mention_node, text)
+        def __init__(self, id, extent, head, span_basetype, span_type, span_subtype):
+            super().__init__()
+            self.id = id
+            self.extent = extent
+            self.head = head
+            self.span_basetype = span_basetype
+            self.span_type = span_type
+            self.span_subtype = span_subtype
 
-    def init_types(self, node, text):
-        self.basetype = type(self).__name__.lower()
+    @classmethod
+    def from_node(cls, node, *args, **kwargs):
+        obj = super().from_node(node, *args, **kwargs)
+        obj = cls.parse_node_post(obj, node, *args, **kwargs)
+        return obj
+
+    @classmethod
+    def parse_node(cls, node, text):
+        node_args = super().parse_node(node)
+        node_args['id'] = node.attrib['ID']
+        basetype, type, subtype = cls.init_types(node, text)
+        node_args['basetype'] = basetype
+        node_args['type'] = type
+        node_args['subtype'] = subtype
+        node_args['mentions'] = {}
+        return node_args
+
+    @classmethod
+    def parse_node_post(cls, obj, node, text):
+        mentions = obj.mentions
+        for mention_node in node.findall(cls.Mention.tag):
+            mentions[mention_node.attrib['ID']] = cls.Mention.from_node(mention_node, text, obj)
+        return obj
+
+    @classmethod
+    def init_types(cls, node, text):
+        basetype = cls.__name__.lower()
         type_str = node.attrib.get('TYPE', None)
-        self.type = type_str and ace05['Entities'][type_str]
-        self.subtype = None
+        type = type_str and ace05['Entities'][type_str]
+        subtype = None
+        return basetype, type, subtype
+
+    def __init__(self, id, basetype, type, subtype, mentions):
+        super().__init__()
+        self.id = id
+        self.basetype = basetype
+        self.type = type
+        self.subtype = subtype
+        self.mentions = mentions
+
+    def __copy__(self):
+        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions)
+
+    def __deepcopy__(self, memo):
+        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions))
+
 
 class Entity(Span):
     tag = 'entity'
@@ -63,31 +128,59 @@ class Entity(Span):
     class Mention(Span.Mention):
         tag = 'entity_mention'
 
-        def __init__(self, span, node, text):
-            super().__init__(span, node, text)
-            self.type = node.attrib['TYPE']
-            self.head = Charseq(node.find('head/charseq'), text)
+        @classmethod
+        def parse_node(cls, node, text, span):
+            node_args = super().parse_node(node, text, span)
+            node_args['type'] = node.attrib['TYPE']
+            node_args['head'] = Charseq.from_node(node.find('head/charseq'), text)
+            return node_args
+
+        def __init__(self, id, extent, head, span_basetype, span_type, span_subtype, type):
+            super().__init__(id, extent, head, span_basetype, span_type, span_subtype)
+            self.type = type
 
     class Attribute(APFObject):
         tag = 'name'
 
-        def __init__(self, node, text):
-            super().__init__(node, text)
-            self.name = node.attrib['NAME']
-            self.text = Charseq(node.find('charseq'), text)
+        @classmethod
+        def parse_node(cls, node, text):
+            node_args = super().parse_node(node)
+            node_args['name'] = node.attrib['NAME']
+            node_args['text'] = Charseq.from_node(node.find('charseq'), text)
+            return node_args
 
-    def __init__(self, node, text):
-        super().__init__(node, text)
-        self.entity_class = node.attrib['CLASS']
-        self.attributes = []
+        def __init__(self, name, text):
+            super().__init__()
+            self.name = name
+            self.text = text
+
+    def __init__(self, id, basetype, type, subtype, mentions, entity_class, attributes):
+        super().__init__(id, basetype, type, subtype, mentions)
+        self.entity_class = entity_class
+        self.attributes = attributes
+
+    @classmethod
+    def parse_node(cls, node, text):
+        node_args = super().parse_node(node, text)
+        node_args['entity_class'] = node.attrib['CLASS']
+        node_args['attributes'] = []
         attributes_node = node.find('entity_attributes')
         if attributes_node:
             for name_node in attributes_node.findall('name'):
-                self.attributes.append(self.Attribute(name_node, text))
+                node_args['attributes'].append(cls.Attribute.from_node(name_node, text))
+        return node_args
 
-    def init_types(self, node, text):
-        super().init_types(node, text)
-        self.subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
+    @classmethod
+    def init_types(cls, node, text):
+        basetype, type, subtype = super().init_types(node, text)
+        subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
+        return basetype, type, subtype
+
+    def __copy__(self):
+        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions, entity_class=self.entity_class, attributes=self.attributes)
+
+    def __deepcopy__(self, memo):
+        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions), entity_class=self.entity_class, attributes=list(self.attributes))
 
 
 class Timex2(Span):
@@ -96,9 +189,11 @@ class Timex2(Span):
     class Mention(Span.Mention):
         tag = 'timex2_mention'
 
-    def init_types(self, node, text):
-        super().init_types(node, text)
-        self.type = ace05['Entities']['Timex2']
+    @classmethod
+    def init_types(cls, node, text):
+        basetype, type, subtype = super().init_types(node, text)
+        type = ace05['Entities']['Timex2']
+        return basetype, type, subtype
 
 
 class Value(Span):
@@ -107,10 +202,12 @@ class Value(Span):
     class Mention(Span.Mention):
         tag = 'value_mention'
 
-    def init_types(self, node, text):
-        super().init_types(node, text)
+    @classmethod
+    def init_types(cls, node, text):
+        basetype, type, subtype = super().init_types(node, text)
         subtype_str = node.attrib.get('SUBTYPE', None)
-        self.subtype = subtype_str and ace05['Entities'][subtype_str]
+        subtype = subtype_str and ace05['Entities'][subtype_str]
+        return basetype, type, subtype
 
 
 class Trigger(Span):
@@ -124,78 +221,115 @@ class Trigger(Span):
     class Mention(Span.Mention):
         tag = 'event_mention'
 
-        def __init__(self, span, node, text):
-            super().__init__(span, node, text)
-            self.head = Charseq(node.find('anchor/charseq'), text)
+        @classmethod
+        def parse_node(cls, node, text, span):
+            node_args = super().parse_node(node, text, span)
+            node_args['head'] = Charseq.from_node(node.find('anchor/charseq'), text)
+            return node_args
 
-    def init_types(self, node, text):
-        self.basetype = type(self).__name__.lower()
+    @classmethod
+    def init_types(cls, node, text):
+        basetype = cls.__name__.lower()
         type_str = node.attrib.get('TYPE', None)
-        type_str = self.type_map.get(type_str, type_str)
-        self.type = type_str and ace05['Events'][type_str]
+        type_str = cls.type_map.get(type_str, type_str)
+        type = type_str and ace05['Events'][type_str]
         subtype_str = node.attrib.get('SUBTYPE', None)
-        subtype_str = self.type_map.get(subtype_str, subtype_str)
-        self.subtype = subtype_str and ace05['Events'][subtype_str]
+        subtype_str = cls.type_map.get(subtype_str, subtype_str)
+        subtype = subtype_str and ace05['Events'][subtype_str]
+        return basetype, type, subtype
+
+
+class BaseArgument(APFObject):
+    @classmethod
+    def parse_node(cls, node, text, spans):
+        node_args = super().parse_node(node)
+        refid = node.attrib['REFID']
+        node_args['refid'] = refid
+        node_args['ref'] = spans[refid]
+        node_args['role'] = node.attrib['ROLE']
+        return node_args
+
+    def __init__(self, refid, ref, role):
+        super().__init__()
+        self.refid = refid
+        self.ref = ref
+        self.role = role
 
 
 class Relation(APFObject):
     tag = 'relation'
 
-    class Argument(APFObject):
+    class Argument(BaseArgument):
         tag = 'relation_argument'
-
-        def __init__(self, node, spans, text):
-            super().__init__(node, text)
-            self.refid = node.attrib['REFID']
-            self.ref = spans[self.refid]
-            self.role = node.attrib['ROLE']
 
     class Mention(APFObject):
         tag = 'relation_mention'
 
-        class Argument(APFObject):
+        class Argument(BaseArgument):
             tag = 'relation_mention_argument'
 
-            def __init__(self, node, spans, text):
-                super().__init__(node, text)
-                self.refid = node.attrib['REFID']
-                self.ref = spans[self.refid]
-                self.role = node.attrib['ROLE']
-
-        def __init__(self, node, spans, text):
-            super().__init__(node, text)
-            self.id = node.attrib['ID']
-            self.lexical_condition = node.attrib['LEXICALCONDITION']
-            self.extent = Charseq(node.find('extent/charseq'), text)
-            self.arguments = [None, None]
-            self.additional_arguments = []
-            for argument_node in node.findall(self.Argument.tag):
+        @classmethod
+        def parse_node(cls, node, text, spans):
+            node_args = super().parse_node(node)
+            node_args['id'] = node.attrib['ID']
+            node_args['lexical_condition'] = node.attrib['LEXICALCONDITION']
+            node_args['extent'] = Charseq.from_node(node.find('extent/charseq'), text)
+            node_args['arguments'] = [None, None]
+            node_args['additional_arguments'] = []
+            for argument_node in node.findall(cls.Argument.tag):
                 span = spans[argument_node.attrib['REFID'].rsplit('-',1)[0]]
-                argument = self.Argument(argument_node, span.mentions, text)
+                argument = cls.Argument.from_node(argument_node, text, span.mentions)
                 if argument.role.startswith('Arg-'):
-                    self.arguments[int(argument.role[-1])-1] = argument
+                    node_args['arguments'][int(argument.role[-1])-1] = argument
                 else:
-                    self.additional_arguments.append(argument)
+                    node_args['additional_arguments'].append(argument)
+            return node_args
 
-    def __init__(self, node, spans, text):
-        super().__init__(node, text)
-        self.id = node.attrib['ID']
-        self.type = ace05['Relations'][node.attrib['TYPE']]
-        subtype = node.attrib.get('SUBTYPE', None)
-        self.subtype = ace05['Relations'][subtype] if subtype else None
-        self.tense = node.attrib.get('TENSE')
-        self.modality = node.attrib.get('MODALITY')
-        self.arguments = [None, None]
-        self.additional_arguments = []
-        self.mentions = {}
-        for argument_node in node.findall(self.Argument.tag):
-            argument = self.Argument(argument_node, spans, text)
+        def __init__(self, id, lexical_condition, extent, arguments, additional_arguments):
+            super().__init__()
+            self.id = id
+            self.lexical_condition = lexical_condition
+            self.extent = extent
+            self.arguments = arguments
+            self.additional_arguments = additional_arguments
+
+    @classmethod
+    def parse_node(cls, node, text, spans):
+        node_args = super().parse_node(node)
+        node_args['id'] = node.attrib['ID']
+        node_args['type'] = ace05['Relations'][node.attrib['TYPE']]
+        subtype_str = node.attrib.get('SUBTYPE', None)
+        node_args['subtype'] = subtype_str and ace05['Relations'][subtype_str]
+        node_args['tense'] = node.attrib.get('TENSE')
+        node_args['modality'] = node.attrib.get('MODALITY')
+        node_args['arguments'] = [None, None]
+        node_args['additional_arguments'] = []
+        node_args['mentions'] = {}
+        for argument_node in node.findall(cls.Argument.tag):
+            argument = cls.Argument.from_node(argument_node, text, spans)
             if argument.role.startswith('Arg-'):
-                self.arguments[int(argument.role[-1])-1] = argument
+                node_args['arguments'][int(argument.role[-1])-1] = argument
             else:
-                self.additional_arguments.append(argument)
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, spans, text)
+                node_args['additional_arguments'].append(argument)
+        for mention_node in node.findall(cls.Mention.tag):
+            node_args['mentions'][mention_node.attrib['ID']] = cls.Mention.from_node(mention_node, text, spans)
+        return node_args
+
+    def __init__(self, id, type, subtype, tense, modality, arguments, additional_arguments, mentions):
+        self.id = id
+        self.type = type
+        self.subtype = subtype
+        self.tense = tense
+        self.modality = modality
+        self.arguments = arguments
+        self.additional_arguments = additional_arguments
+        self.mentions = mentions
+
+    def __copy__(self):
+        return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=self.arguments, additional_arguments=self.additional_arguments, mentions=self.mentions)
+
+    def __deepcopy__(self, memo):
+        return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=list(self.arguments), additional_arguments=list(self.additional_arguments), mentions=dict(self.mentions))
 
 
 class Event(APFObject):
@@ -206,59 +340,80 @@ class Event(APFObject):
         'Sentence': 'Sentence-Event'
     }
 
-    class Argument(APFObject):
+    class Argument(BaseArgument):
         tag = 'event_argument'
-
-        def __init__(self, node, spans, text):
-            super().__init__(node, text)
-            self.refid = node.attrib['REFID']
-            self.ref = spans[self.refid]
-            self.role = node.attrib['ROLE']
 
     class Mention(APFObject):
         tag = 'event_mention'
 
-        class Argument(APFObject):
+        class Argument(BaseArgument):
             tag = 'event_mention_argument'
 
-            def __init__(self, node, spans, text):
-                super().__init__(node, text)
-                self.refid = node.attrib['REFID']
-                self.ref = spans[self.refid]
-                self.role = node.attrib['ROLE']
-
-        def __init__(self, node, spans, text):
-            super().__init__(node, text)
-            self.id = node.attrib['ID']
-            self.extent = Charseq(node.find('extent/charseq'), text)
-            self.ldc_scope = Charseq(node.find('ldc_scope/charseq'), text)
-            self.anchor = Charseq(node.find('anchor/charseq'), text)
-            span = spans[self.id.rsplit('-',1)[0]]
-            self.trigger = span.mentions[self.id]
-            self.arguments = []
-            for argument_node in node.findall(self.Argument.tag):
+        @classmethod
+        def parse_node(cls, node, text, spans):
+            node_args = super().parse_node(node)
+            id = node.attrib['ID']
+            node_args['id'] = id
+            node_args['extent'] = Charseq.from_node(node.find('extent/charseq'), text)
+            node_args['ldc_scope'] = Charseq.from_node(node.find('ldc_scope/charseq'), text)
+            node_args['anchor'] = Charseq.from_node(node.find('anchor/charseq'), text)
+            span = spans[id.rsplit('-', 1)[0]]
+            node_args['trigger'] = span.mentions[id]
+            node_args['arguments'] = []
+            for argument_node in node.findall(cls.Argument.tag):
                 span = spans[argument_node.attrib['REFID'].rsplit('-',1)[0]]
-                argument = self.Argument(argument_node, span.mentions, text)
-                self.arguments.append(argument)
+                argument = cls.Argument.from_node(argument_node, text, span.mentions)
+                node_args['arguments'].append(argument)
+            return node_args
 
-    def __init__(self, node, spans, text):
-        super().__init__(node, text)
-        self.id = node.attrib['ID']
+        def __init__(self, id, extent, ldc_scope, anchor, trigger, arguments):
+            super().__init__()
+            self.id = id
+            self.extent = extent
+            self.ldc_scope = ldc_scope
+            self.anchor = anchor
+            self.trigger = trigger
+            self.arguments = arguments
+
+    @classmethod
+    def parse_node(cls, node, text, spans):
+        node_args = super().parse_node(node)
+        id = node.attrib['ID']
+        node_args['id'] = id
         type_str = node.attrib['TYPE']
-        type_str = self.type_map.get(type_str, type_str)
-        self.type = ace05['Events'][type_str]
+        type_str = cls.type_map.get(type_str, type_str)
+        node_args['type'] = ace05['Events'][type_str]
         subtype_str = node.attrib.get('SUBTYPE', None)
-        subtype_str = self.type_map.get(subtype_str, subtype_str)
-        self.subtype = ace05['Events'][subtype_str] if subtype_str else None
-        self.trigger = spans[self.id]
-        self.modality = node.attrib['MODALITY']
-        self.polarity = node.attrib['POLARITY']
-        self.genericity = node.attrib['GENERICITY']
-        self.tense = node.attrib['TENSE']
-        self.arguments = []
-        self.mentions = {}
-        for argument_node in node.findall(self.Argument.tag):
-            argument = self.Argument(argument_node, spans, text)
-            self.arguments.append(argument)
-        for mention_node in node.findall(self.Mention.tag):
-            self.mentions[mention_node.attrib['ID']] = self.Mention(mention_node, spans, text)
+        subtype_str = cls.type_map.get(subtype_str, subtype_str)
+        node_args['subtype'] = subtype_str and ace05['Events'][subtype_str]
+        node_args['trigger'] = spans[id]
+        node_args['modality'] = node.attrib['MODALITY']
+        node_args['polarity'] = node.attrib['POLARITY']
+        node_args['genericity'] = node.attrib['GENERICITY']
+        node_args['tense'] = node.attrib['TENSE']
+        node_args['arguments'] = []
+        node_args['mentions'] = {}
+        for argument_node in node.findall(cls.Argument.tag):
+            argument = cls.Argument.from_node(argument_node, text, spans)
+            node_args['arguments'].append(argument)
+        for mention_node in node.findall(cls.Mention.tag):
+            node_args['mentions'][mention_node.attrib['ID']] = cls.Mention.from_node(mention_node, text, spans)
+        return node_args
+
+    def __init__(self, id, type, subtype, trigger, modality, polarity, genericity, tense, arguments, mentions):
+        self.id = id
+        self.type = type
+        self.subtype = subtype
+        self.trigger = trigger
+        self.modality = modality
+        self.polarity = polarity
+        self.genericity = genericity
+        self.tense = tense
+        self.arguments = arguments
+        self.mentions = mentions
+
+    def __copy__(self):
+        return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=self.trigger, modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=self.arguments, mentions=self.mentions)
+
+    def __deepcopy__(self, memo):
+        return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=deepcopy(self.trigger, memo), modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=list(self.arguments), mentions=dict(self.mentions))

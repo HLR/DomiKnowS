@@ -16,6 +16,12 @@ class BaseGraphTreeNode(AutoNamed, NamedTreeNode):
         repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
         return repr_str
 
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
     @classmethod
     def clear(cls):
         #AutoNamed.clear() # this call may clear wrong context
@@ -34,6 +40,12 @@ class BaseGraphTree(AutoNamed, NamedTree):
     def __repr__(self):
         repr_str = f'{type(self).__name__}(name=\'{self.name}\', fullname=\'{self.fullname}\')'
         return repr_str
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     @classmethod
     def clear(cls):

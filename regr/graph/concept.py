@@ -118,10 +118,14 @@ class Concept(BaseGraphTree):
         '''
         cls = type(self)  # bind to the real class
 
+        try:
+            Rel = cls._rels[rel]
+        except KeyError as e:
+            raise AttributeError(*e.args)
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])
-            return cls._rels[rel](self, *args, **kwargs)
+            return Rel(self, *args, **kwargs)
         return handle
 
     def get_multiassign(self):

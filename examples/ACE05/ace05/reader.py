@@ -53,15 +53,15 @@ class RawReader():
         base_types = [Entity, Timex2, Value, Trigger]
         for BaseType in base_types:
             for node in document.findall(BaseType.tag):
-                span = BaseType(node, text)
+                span = BaseType.from_node(node, text)
                 spans[span.id] = span
 
         for node in document.findall(Relation.tag):
-            relation = Relation(node, spans, text)
+            relation = Relation.from_node(node, text, spans)
             relations[relation.id] = relation
 
         for node in document.findall(Event.tag):
-            event = Event(node, spans, text)
+            event = Event.from_node(node, text, spans)
             events[event.id] = event
 
         return spans, relations, events
@@ -137,10 +137,10 @@ class DictReader(Reader):
 
 class ParagraphReader(Reader):
     def _filter_span(self, spans, start, end):
-        from copy import copy
+        from copy import deepcopy
         new_spans = []
-        for _, span in spans.items():
-            span = copy(span)
+        for _, span_ in spans.items():
+            span = deepcopy(span_)
             for key, mention in list(span.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
@@ -150,10 +150,10 @@ class ParagraphReader(Reader):
         return new_spans
 
     def _filter_relation(self, relations, spans, start, end):
-        from copy import copy
+        from copy import deepcopy
         new_relations = []
         for _, relation in relations.items():
-            relation = copy(relation)
+            relation = deepcopy(relation)
             for key, mention in list(relation.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
@@ -163,10 +163,10 @@ class ParagraphReader(Reader):
         return new_relations
 
     def _filter_event(self, events, spans, start, end):
-        from copy import copy
+        from copy import deepcopy
         new_events = []
         for _, event in events.items():
-            event = copy(event)
+            event = deepcopy(event)
             for key, mention in list(event.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
@@ -188,7 +188,8 @@ class ParagraphReader(Reader):
                 spans = self._filter_span(doc_sample['spans'], start=start, end=end)
                 relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
                 events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
-                yield {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+                if text:
+                    yield {'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
                 offset = end + 2
 
 
