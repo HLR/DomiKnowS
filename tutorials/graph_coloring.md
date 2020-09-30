@@ -70,7 +70,7 @@ We should define an Edge sensor connecting the world instances to the cities rea
 ```python
 class DummyCityEdgeSensor(TorchEdgeSensor): # Get world to city edge  
   def forward(self,) -> Any:  
-        self.inputs.append(self.context_helper[self.edges[0].fullname])  
+        self.inputs.append(self.context_helper[self.edges[0]])  
         return self.inputs[0]
 ```
 This sensor  maps a world instance to a set of cities. 

@@ -39,31 +39,31 @@ class EdgeSensor(FunctionalSensor):
             force=False
     ) -> Dict[str, Any]:
 
-        if not force and self.fullname in data_item:
-            val = data_item[self.fullname]
+        if not force and self in data_item:
+            val = data_item[self]
         else:
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward()
 
         if val is not None:
-            data_item[self.fullname] = val
+            data_item[self] = val
             if not self.label:
                 if isinstance(self.prop, tuple):
                     index = 0
                     for to_ in self.prop:
-                        data_item[to_.fullname] = val[index]
+                        data_item[to_] = val[index]
                         index += 1
                 else:
-                    data_item[self.prop.fullname] = val
+                    data_item[self.prop] = val
         else:
-            data_item[self.fullname] = None
+            data_item[self] = None
             if not self.label:
                 if isinstance(self.prop, tuple):
                     for to_ in self.prop:
-                        data_item[to_.fullname] = None
+                        data_item[to_] = None
                 else:
-                    data_item[self.prop.fullname] = None
+                    data_item[self.prop] = None
 
         return data_item
 
@@ -88,14 +88,14 @@ class EdgeSensor(FunctionalSensor):
         if isinstance(pre, str):
             if selector:
                 try:
-                    return self.context_helper[next(self.src[pre].find(selector)).fullname]
+                    return self.context_helper[next(self.src[pre].find(selector))]
                 except:
                     print("The key you are trying to access to with a selector doesn't exist")
                     raise
             else:
-                return self.context_helper[self.src[pre].fullname]
+                return self.context_helper[self.src[pre]]
         elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre.fullname]
+            return self.context_helper[pre]
         return pre
 
 

@@ -32,30 +32,30 @@ class TorchSensor(Sensor):
         try:
             self.update_context(data_item)
         except:
-            print('Error during updating data item with sensor {}'.format(self.fullname))
+            print('Error during updating data item with sensor {}'.format(self))
             raise
-        return data_item[self.fullname]
+        return data_item[self]
 
     def update_context(
         self,
         data_item: Dict[str, Any],
         force=False):
-        if not force and self.fullname in data_item:
+        if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
+            val = data_item[self]
         else:
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward()
 
         if val is not None:
-            data_item[self.fullname] = val
+            data_item[self] = val
             if not self.label:
-                data_item[self.prop.fullname] = val  # override state under property name
+                data_item[self.prop] = val  # override state under property name
         else:
-            data_item[self.fullname] = None
+            data_item[self] = None
             if not self.label:
-                data_item[self.prop.fullname] = None
+                data_item[self.prop] = None
 
     def update_pre_context(
         self,
@@ -78,12 +78,12 @@ class TorchSensor(Sensor):
     def fetch_value(self, pre, selector=None):
         if selector:
             try:
-                return self.context_helper[next(self.concept[pre].find(selector)).fullname]
+                return self.context_helper[next(self.concept[pre].find(selector))]
             except:
                 print("The key you are trying to access to with a selector doesn't exist")
                 raise
         else:
-            return self.context_helper[self.concept[pre].fullname]
+            return self.context_helper[self.concept[pre]]
 
     def define_inputs(self):
         self.inputs = []
@@ -144,23 +144,23 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         force=False,
         override=True):
-        if not force and self.fullname in data_item:
+        if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
+            val = data_item[self]
         else:
             self.update_pre_context(data_item)
             self.define_inputs()
             val = self.forward_wrap()
 
-        data_item[self.fullname] = val
+        data_item[self] = val
         if override and not self.label:
-            data_item[self.prop.fullname] = val  # override state under property name
+            data_item[self.prop] = val  # override state under property name
 
     def fetch_value(self, pre, selector=None):
         if isinstance(pre, str):
             return super().fetch_value(pre, selector)
         elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre.fullname]
+            return self.context_helper[pre]
         return pre
 
     def forward_wrap(self):
@@ -190,7 +190,7 @@ class ConstantSensor(FunctionalSensor):
 
 class PrefilledSensor(FunctionalSensor):
     def forward(self, *args, **kwargs) -> Any:
-        return self.context_helper[self.prop.fullname]
+        return self.context_helper[self.prop]
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
@@ -280,9 +280,9 @@ class NominalSensor(TorchSensor):
         self,
         data_item: Dict[str, Any],
         force=False):
-        if not force and self.fullname in data_item:
+        if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
+            val = data_item[self]
         else:
             self.update_pre_context(data_item)
             self.define_inputs()
@@ -290,13 +290,13 @@ class NominalSensor(TorchSensor):
             val = self.one_hot_encoder(val)
 
         if val is not None:
-            data_item[self.fullname] = val
+            data_item[self] = val
             if not self.label:
-                data_item[self.prop.fullname] = val  # override state under property name
+                data_item[self.prop] = val  # override state under property name
         else:
-            data_item[self.fullname] = None
+            data_item[self] = None
             if not self.label:
-                data_item[self.prop.fullname] = None
+                data_item[self.prop] = None
 
 
 class ModuleSensor(FunctionalSensor):
@@ -338,7 +338,7 @@ class TorchEdgeSensor(FunctionalSensor):
         data_item: Dict[str, Any],
         force=False):
         super().update_context(data_item, force=force)
-        data_item[self.dst[self.to].fullname] = data_item[self.fullname]
+        data_item[self.dst[self.to]] = data_item[self]
         return data_item
 
     def update_pre_context(
@@ -362,14 +362,14 @@ class TorchEdgeSensor(FunctionalSensor):
         if isinstance(pre, str):
             if selector:
                 try:
-                    return self.context_helper[next(self.src[pre].find(selector)).fullname]
+                    return self.context_helper[next(self.src[pre].find(selector))]
                 except:
                     print("The key you are trying to access to with a selector doesn't exist")
                     raise
             else:
-                return self.context_helper[self.src[pre].fullname]
+                return self.context_helper[self.src[pre]]
         elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre.fullname]
+            return self.context_helper[pre]
         return pre
 
 
@@ -431,23 +431,23 @@ class AggregationSensor(TorchSensor):
             raise Exception('not valid')
 
     def get_map_value(self, ):
-        self.map_value = self.context_helper[self.src[self.map_key].fullname]
+        self.map_value = self.context_helper[self.src[self.map_key]]
 
     def update_context(
         self,
         data_item: Dict[str, Any],
         force=False):
-        if not force and self.fullname in data_item:
+        if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
+            val = data_item[self]
         else:
             self.define_inputs()
             self.get_map_value()
             self.get_data()
             val = self.forward()
         if val is not None:
-            data_item[self.fullname] = val
-            data_item[self.prop.fullname] = val # override state under property name
+            data_item[self] = val
+            data_item[self.prop] = val # override state under property name
         return data_item
 
     def get_data(self):
@@ -527,18 +527,18 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         try:
             self.update_pre_context(data_item)
         except:
-            print('Error during updating pre data item with sensor {}'.format(self.fullname))
+            print('Error during updating pre data item with sensor {}'.format(self))
             raise
         self.context_helper = data_item
         try:
             self.update_context(data_item)
         except:
-            print('Error during updating data item with sensor {}'.format(self.fullname))
+            print('Error during updating data item with sensor {}'.format(self))
             raise
-        return data_item[self.src[self.dst].fullname]
+        return data_item[self.src[self.dst]]
 
     def get_selection_helper(self):
-        self.selection_helper = self.context_helper[self.src[self.dst].fullname]
+        self.selection_helper = self.context_helper[self.src[self.dst]]
 
     def update_pre_context(
         self,
@@ -551,16 +551,16 @@ class SelectionEdgeSensor(TorchEdgeSensor):
         self,
         data_item: Dict[str, Any],
         force=False):
-        if not force and self.fullname in data_item:
+        if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
-            val = data_item[self.fullname]
+            val = data_item[self]
         else:
             self.define_inputs()
             self.get_selection_helper()
             val = self.forward()
         if val is not None:
-            data_item[self.fullname] = val
-            data_item[self.prop.fullname] = val  # override state under property name
+            data_item[self] = val
+            data_item[self.prop] = val  # override state under property name
 
 
 class ProbabilitySelectionEdgeSensor(SelectionEdgeSensor):

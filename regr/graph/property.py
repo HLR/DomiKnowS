@@ -54,4 +54,4 @@ class Property(BaseGraphShallowTree):
         for _, sensor in self.items():
             sensor(data_item)
         # and see what is lefted
-        return data_item[self.fullname]
+        return data_item[self]

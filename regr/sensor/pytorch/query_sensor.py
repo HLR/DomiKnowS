@@ -46,10 +46,10 @@ class InstantiateSensor(TorchSensor):
         try:
             self.update_pre_context(data_item)
         except:
-            print('Error during updating pre with sensor {}'.format(self.fullname))
+            print('Error during updating pre with sensor {}'.format(self))
             raise
         try:
-            return data_item[self.fullname]
+            return data_item[self]
         except KeyError:
-            return data_item[self.sup.sup['index'].fullname]
+            return data_item[self.sup.sup['index']]
 

@@ -36,10 +36,10 @@ class TokenizerEdgeSensor(TorchEdgeSensor):
     def update_context(self, data_item, force=False):
         super(TorchEdgeSensor, self).update_context(data_item, force=force)  # skip TorchEdgeSensor
         if isinstance(self.to, tuple):
-            for to_, value in zip(self.to, data_item[self.fullname]):
-                data_item[self.dst[to_].fullname] = value
+            for to_, value in zip(self.to, data_item[self]):
+                data_item[self.dst[to_]] = value
         else:
-            data_item[self.dst[self.to].fullname] = data_item[self.fullname]
+            data_item[self.dst[self.to]] = data_item[self]
         return data_item
 
 class TokenizerSpanEdgeSensor(TorchSensor):
