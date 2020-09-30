@@ -55,12 +55,16 @@ def test_case():
             'kill': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
         }, 
         
+        # nandL(people,organization)
+        #                               John    works   for     IBM
+        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.0000, 0.5100]),
+        
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
-        'lc1LossTensor' : torch.tensor([[-0.4000,       -0.9000,       -1.0700,  0.2400],  # John
-                                        [ float("nan"),  float("nan"), -1.4700, -0.6900],  # works
-                                        [-1.4600,       -1.7500,       -1.9000, -0.9700],  # for
-                                        [-0.2500,       -1.0000,       -1.2700, -0.1900]]) # IBM
+        'lc2LossTensor' : torch.tensor([[0.2000,         0.2000,        0.2000,  0.0200],  # John
+                                        [ float("nan"),  float("nan"),  0.4000,  0.2900],  # works
+                                        [0.0200,         0.0300,        0.0500,  0.1000],  # for
+                                        [0.5500,         0.2000,        0.1000,  0.0000]]) # IBM
     
     }
     case = Namespace(case)
@@ -304,17 +308,20 @@ def test_main_conll04(case):
     
     for conceptsRelations in conceptsRelationsVariants:
         
+        # ------------ Calculate logical constraints losses 
         lcResult = datanode.calculateLcLoss()
-        
-        import torch
+                
+        for i in range(3):
+            assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
+
         for i in product(range(3), repeat = 2):  
-            if lcResult['LC1']['lossTensor'][i] != lcResult['LC1']['lossTensor'][i] or case.lc1LossTensor[i] != case.lc1LossTensor[i]:
-                if lcResult['LC1']['lossTensor'][i] != lcResult['LC1']['lossTensor'][i] and case.lc1LossTensor[i] != case.lc1LossTensor[i]:
+            if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+                if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
                     assert True
                 else:
                     assert False
             else:
-                assert lcResult['LC1']['lossTensor'][i] == case.lc1LossTensor[i]
+                assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
 
         # ------------ Call the ILP Solver
         datanode.inferILPConstrains(*conceptsRelations, fun=None)

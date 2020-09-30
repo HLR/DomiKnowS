@@ -1589,11 +1589,11 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = 1, value = value, dim=0)
         
         if isinstance(value, list): 
-            if not isinstance(value[0], (Tensor, list)):
+            if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=1)
-            elif not isinstance(value[0][0], (Tensor, list)):
+            elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=2)
-            elif not isinstance(value[0][0][0], (Tensor, list)):
+            elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))

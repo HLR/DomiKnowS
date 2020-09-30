@@ -13,26 +13,26 @@
 
 ## DataNode and Data Graph
 
-Every example in the learning process has its Data Graph built based on sensors included in the model.
-The example is partitioned by sensors into a different types of tokens corresponding to different linguistic concepts from the [knowledge graph](KNOWLEDGE.md).
+Example in the learning process has its Data Graph built based on sensors included in the model.
+The example is usually partitioned by sensors into a different types of elements corresponding to different concepts from the [knowledge graph](KNOWLEDGE.md).
 
-Each example token has its own DataNode build which is linked to other Data Nodes in the Data Graph corresponding to other tokens from the example through relation links. The Data Node stores the following information about the token:
+Each example element has its own DataNode build which is linked to other Data Nodes in the Data Graph corresponding to other elements from the example through relation links. The Data Node stores the following information about the token:
 
-- **ontology concepts**  - from the associated [knowledge graph](KNOWLEDGE.md),
+- **ontology concepts**  - of the element from the associated [knowledge graph](KNOWLEDGE.md),
 
-- **id** - unique in the scope of all tokens of the given knowledge concept type,
+- **id** - of the element, unique in the scope of all elements of the given knowledge concept type,
 
-- **relation links**  - dictionary with names of relations and related DataNodes,
+- **relation links**  - for this element, it is a dictionary with names of relations and references to related DataNodes,
 
-- **impact links** - dictionary with DataNodes impacting this DataNode by having it as a subject of its relation,
+- **impact links** - for the element, it is a dictionary with references of DataNodes impacting this DataNode by having it as a subject of their relations,
 
-- **attributes** dictionary - with key corresponding to the sensor which produced the given attribute and its value for the given token.
+- **attributes** - of the element, it is a dictionary with key corresponding to the sensor which produced the given attribute and the output value of the given sensor.
 
 DataNode methods facilitate access to its content:
 
 - **children**: `getChildDataNodes(conceptName=None)`
 
-The method returns a list of DataNode children DataNode. If *conceptName* is provided only DataNodes of the given knowledge type are returned. The example:
+The method returns a list of DataNode children DataNode (related to the DataNode though contains relation). If *conceptName* parameter is provided then only DataNodes of the given type are returned. The example:
 
 ```python
 getChildDataNodes(conceptName=char) # get all children DataNode with *char* type
@@ -45,10 +45,10 @@ The method returns a list of related DataNode. If *relationName* is provided onl
 ```python
 getRelationLinks(relationName=pair) # get list of related DataNodes through *pair* relation
 ```
-
+ 
 - **attributes**: `getAttribute(*keys)`
 
-The method returns the value of the attribute. The *keys* are connected into a single key used to access the attribute in the DataNode. The example:
+The method returns the value of the attribute. The *keys* are concatenated into a single key string used to access the attribute in the DataNode. The example:
 
 ```python
 getAttribute(work_for, 'ILP')* - get value of the attribute storing the result of the ILP solver solution for the concept *work_for*
@@ -56,7 +56,7 @@ getAttribute(work_for, 'ILP')* - get value of the attribute storing the result o
 
 ### Data Graph Query
 
-The Data Graph can be queried for specific DataNodes using the method called on any DataNode:
+The Data Graph can be queried for specific DataNodes using the method called on any DataNode in the graph:
 
 ```python
 findDatanodes(dns = None, select = None, indexes = None)
@@ -104,45 +104,83 @@ the examples of key:
 
 - *tweet/tweet/<PositiveLabel>/readersensor-1* - where first *tweet* is the graph path, the next *tweet* is the concept name and *<PositiveLabel>/readersensor-1* is an attribute key.
 
-The key needs all these **three** elements otherwise the *set* method logs an error and returns.
+The *key* needs all these **three** elements otherwise the *set* method logs an error and returns.
 
 The *conceptOrRelationName* part is used to **create** the new DataNode when first provided in the key to the *DataNodeBuilder*. The next time it will be used to create or update **attribute** in existing DataNodes of this *conceptOrRelationName* type.
 
 # DataNode creation
 
-The value determine how many new DataNodes are created. 
+The *value* determine how many new DataNodes are created. 
 
-The value cannot be **None** otherwise the *set* method logs an error and returns.
+The *value* cannot be **None** otherwise the *set* method logs an error and returns.
 
-The value is assumed to provide **single element** (contribute to single DataNode) if the value is:
-- not Tensor or List,
-- Tensor but of the dimension 0,
+**DataNode(s) for concept**
+
+If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analyses the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
+The *value* is assumed to provide **single element** (contribute to single DataNode) if the value is:
+- not Tensor or List, e.g. string,
+- Tensor but of the dimension equals 0,
 - Tensor or List of length 1 and with dimension 1.
-- Tensor of length 2 but its key *attributeKey* part has first word embedded in '<'.
+- Tensor of length 2 but its key *attributeKey* part has first word embedded in '<' - such a tensor represent a single set of two probabilities (negative and positive).
 
-In this case a single new DataNode is created. If the single DataNode is determined to be for created for the root concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
+In this case a single new DataNode is created or updated (if the DataNode already exists). 
+If the single DataNode is determined to be for created for the *root* concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
 
-If the value is Tensor or List and not assumed to represent single value then its dimension is determine - for Tensor it is based on *dim()* method, for List based on nest level of the first list element.
-The value with dimension equal 1 is assumed to represent single set of DataNodes. 
+If the *value* is Tensor or List and not assumed to represent single value then its dimension is determine - for Tensor it is based on *dim()* method, for List based on nest level of the first list element.
+- The *value* with dimension equal 1 is assumed to represent single set of DataNodes. 
 
-The value with dimension 2 represent **multiply** sets of DataNodes to be created. Each set of new DataNodes to be assigned to a subsequent **parent** DataNode, e.g.:
+- The value with dimension 2 represent **multiply** sets of DataNodes to be created. Each set of new DataNodes to be assigned to a subsequent **parent** DataNode, e.g.:
 
 	 [['J', 'o', 'h', 'n'], ['w', 'o', 'r', 'k', 's'], ['f', 'o', 'r'], ['I', 'B', 'M']]
 
-This represent 4 sets of characters each assigned to the word with the index equal to the index of the specific set in the list (or tensor).
+This example above represents 4 sets of *characters* each assigned to the *word* with the index equal to the index of the specific set in the list (or tensor).
 
-The sets of newly created dataNode are matched with dataNodes created for the parent concept. So for instance Tensor with shape[1,5] will result with creation of 5 dataNodes and their assignment as children to a single parent dataNode.
-Tensor with shape[3,4] will result with creation of 4 dataNodes sets of 4 dataNodes and their assignment as children to a 3 parent dataNodes.
+The sets of newly created dataNode are matched with dataNodes created for the parent concept. So for instance Tensor with *shape[1,5]* will result with creation of 5 dataNodes and their assignment as children to a single parent dataNode.
+Tensor with *shape[3,4]* will result with creation of 4 dataNodes sets of 4 dataNodes and their assignment as children to a 3 parent dataNodes.
 
-Additionally the value can carry information about **child connection** between newly created DataNodes and exiting DataNodes, e.g.:
+Additionally the *value* can carry information about **child connection** between newly created DataNodes and exiting DataNodes, if tuples are used e.g.:
 
 	[[(0, 0), (1, 2), (3, 3, 0)]]
 
-This represent a single set of values (connected to a single parent DataNode as described above) which each element tuple specifies range if indexes of children DataNode to be connected with a given new DataNode.
+This represent a single set of values (connected to a single parent DataNode as described above) which each element tuple specifies range in indexes of children DataNode to be connected with a given new DataNode.
+
+** DataNode for Relation **
+
+If the *<conceptOrRelationName>* part of the *key* is a *concept* from the [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder* collected from the Data Graph DataNotes related by the given relation based on the relation definition which specify types of DataNotes linked by the relation.
+The *value* dimension has to be the larger or equal to the number of elements linked by the given relation.
+The length of each dimension  has to be equal to the number of DataNoded found for the given concept linked by the relation.
+
+If the dimension and lengths matches the [knowledge graph](KNOWLEDGE.md) definition and the number of existing DataNodes for the given in the concepts then the DataNodes representing the relation are created (or updated if already exists).
+
+For instance:
+
+- key *global/linguistic/pair/<work_for>/testsensor-19* indicates that this is infromation about *work_for* relation.
+- value:
+
+	tensor([[[0.6000, 0.4000],
+			 [0.8000, 0.2000],
+         	 [0.8000, 0.2000],
+         	 [0.3700, 0.6300]],
+         	[[1.0000,    nan],
+         	 [1.0000,    nan],
+         	 [0.6000, 0.4000],
+         	 [0.7000, 0.3000]],
+         	[[0.9800, 0.0200],
+         	 [0.7000, 0.0300],
+         	 [0.9500, 0.0500],
+         	 [0.9000, 0.1000]],
+         	[[0.3500, 0.6500],
+         	 [0.8000, 0.2000],
+         	 [0.9000, 0.1000],
+         	 [0.7000, 0.3000]]])
+
+is a tensor of *torch.Size([4, 4, 2])* the relation *work_for* relates two elements thus the first dimensions of the tensor will be used to create DataNode for relation. The last dimension of the tensor will be as attribute value to the newly created DataNodes.
+
+Additionally if the *<conceptOrRelationName>* part of the *key* contain has "_Candidate_" string attached then this indicate that the *value* has information (in the form of 0 or 1) if the given DataNode for relation are to be created.
 
 **DataNode Attribute Update**
 
-The subsequent submission values length need to match the number of DataNodes created for the given concept or relation. 
+The subsequent submission *values* length need to match the number of DataNodes created for the given concept or relation. 
 
 So for instance: Tensor with shape[3,7,4] will update 3 dataNodes each with Tensor of shape[7,4].
 
@@ -163,4 +201,45 @@ getDataNode(self)
 ```python
 getBatchDataNodes(self)
 ```
-    
+ 
+ ** DataNode logging  **
+ 
+ *DataNode* and *DataNodeBuilde*r log their activities, warning and errors to a log file. 
+ The *path* to the log file is printed to the program standard output.
+ 
+ The example of log from the DataNodeBuilder activity is provided below:
+ 
+	2020-09-29 17:32:51,441 - INFO - dataNodeBuilder:__init__ - 
+	2020-09-29 17:32:51,441 - INFO - dataNodeBuilder:__init__ - Called
+	2020-09-29 17:32:51,442 - INFO - dataNodeBuilder:__setitem__ - key - global/sentence/index/constantsensor,  value - <class 'str'>
+	2020-09-29 17:32:51,442 - INFO - dataNodeBuilder:__createInitialdDataNode - Creating initial dataNode - provided value has length 1
+	2020-09-29 17:32:51,443 - INFO - dataNodeBuilder:__createInitialdDataNode - Created single dataNode with id 0 of type sentence
+	2020-09-29 17:32:51,443 - INFO - dataNodeBuilder:__updateRootDataNodeList - Updated elements in the root dataNodes list - [sentence 0]
+	2020-09-29 17:32:51,443 - INFO - dataNodeBuilder:__setitem__ - key - global/sentence/index,  value - <class 'str'>
+	2020-09-29 17:32:51,444 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute index in existing dataNodes - found 1 dataNodes of type sentence
+	2020-09-29 17:32:51,456 - INFO - dataNodeBuilder:__setitem__ - key - global/word/spacy/spacygloverep,  value - <class 'torch.Tensor'>, shape torch.Size([17, 300])
+	2020-09-29 17:32:51,457 - INFO - dataNodeBuilder:__createMultiplyDataNode - Adding 17 sets of dataNodes of type word
+	2020-09-29 17:32:51,458 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 0, ...... word 299]
+	2020-09-29 17:32:51,513 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 300, .... word 599]
+	2020-09-29 17:32:51,515 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 600, .... word 899]
+	2020-09-29 17:32:51,516 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 900, .... word 1199]
+	2020-09-29 17:32:51,518 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 1200, ... word 1499]
+	2020-09-29 17:32:51,520 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 1500, ... word 1799]
+	2020-09-29 17:32:51,522 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 1800, ... word 2099]
+	2020-09-29 17:32:51,523 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 2100, ... word 2399]
+	2020-09-29 17:32:51,525 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 2400, ... word 2699]
+	2020-09-29 17:32:51,527 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 2700, ... word 2999]
+	2020-09-29 17:32:51,528 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 3000, ... word 3299]
+	2020-09-29 17:32:51,530 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 3300, ... word 3599]
+	2020-09-29 17:32:51,532 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 3600, ... word 3899]
+	2020-09-29 17:32:51,533 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 3900, ... word 4199]
+	2020-09-29 17:32:51,535 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 4200, ... word 4499]
+	2020-09-29 17:32:51,536 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 4500, ... word 4799]
+	2020-09-29 17:32:51,538 - INFO - dataNodeBuilder:__createMultiplyDataNode - Added 300 new dataNodes [word 4800, ... word 5099]
+	2020-09-29 17:32:51,538 - ERROR - dataNodeBuilder:__createMultiplyDataNode - Number of dataNode sets 17 is different then the number of 1 dataNodes of type sentence - abandon the update
+	2020-09-29 17:32:51,541 - INFO - dataNodeBuilder:__updateRootDataNodeList - Updated elements in the root dataNodes list - [sentence 0, word 0, ... word 5099]
+	2020-09-29 17:32:51,542 - INFO - dataNodeBuilder:__setitem__ - key - global/word/spacy,  value - <class 'torch.Tensor'>, shape torch.Size([17, 300])
+	2020-09-29 17:32:51,824 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute spacy in existing dataNodes - found 5100 dataNodes of type word
+	2020-09-29 17:32:51,824 - WARNING - dataNodeBuilder:__updateDataNodes - Provided value has length 17 but found 5100 existing dataNode - abandon the update
+
+ 

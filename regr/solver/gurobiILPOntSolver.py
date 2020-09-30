@@ -1845,7 +1845,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                 
                 for i, v in lossDict.items():
-                    if v:
+                    if v is not None:
                         lossTensor[i] = v
                     else:
                         lossTensor[i] = float("nan")
