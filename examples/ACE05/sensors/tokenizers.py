@@ -43,7 +43,7 @@ class TorchEdgeSensor(FunctionalSensor):
         else:
             self.update_pre_context(data_item)
             self.define_inputs()
-            val = self.forward()
+            val = self.forward_wrap()
 
         if val is not None:
             data_item[self.fullname] = val
@@ -105,7 +105,7 @@ class TokenizerEdgeSensor(TorchEdgeSensor, JointSensor):
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer
 
-    def forward(self) -> Any:
+    def forward(self, *inputs, **kwinputs) -> Any:
         tokenized = self.tokenizer.encode_plus(self.inputs[0], return_tensors="pt", return_offsets_mapping=True)
         tokens = tokenized['input_ids'].view(-1).to(device=self.device)
         offset = tokenized['offset_mapping'].to(device=self.device)

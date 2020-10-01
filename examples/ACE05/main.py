@@ -9,8 +9,8 @@ from dummy import DummyReader, DummyDictReader
 def main():
     program = model(graph)
     traint_reader = DictParagraphReader(config.path, list_path=config.list_path, type='train', status=config.status)
-    for item in traint_reader:
-        print(item)
+    # for item in traint_reader:
+    #     print(item)
     for node in program.populate(traint_reader, device='auto'):
         print(node)
         tokens = node.findDatanodes(select=graph['linguistic/token'])

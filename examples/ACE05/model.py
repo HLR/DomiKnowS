@@ -1,11 +1,11 @@
 import torch
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, TorchEdgeSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor #, TorchEdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
-from sensors.tokenizers import TokenizerEdgeSensor
+from sensors.tokenizers import TokenizerEdgeSensor, TorchEdgeSensor
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
 from models import Tokenizer, BERT, SpanClassifier, token_to_span_candidate_emb, span_to_pair_emb, find_is_a, find_event_arg, token_to_span_label, makeSpanPairs, makeSpanAnchorPairs
 
@@ -28,8 +28,12 @@ def model(graph):
     span_candidate['label'] = ModuleLearner('emb', module=SpanClassifier(token_emb_dim=768))
 
     span_contains_token = span.relate_to(token)[0]
-    span_contains_token['backward'] = TorchEdgeSensor(
-        span_candidate['label'], to='index', forward=token_to_span_label, mode='backward',)
+    # span_contains_token['backward'] = TorchEdgeSensor(
+    #     span_candidate['label'], to='index', forward=token_to_span_label, mode='backward',)
+    def token_to_span_fn(token_index):
+        token_index
+        pass
+    span['index'] = TorchEdgeSensor('index', mode='backward', relation=span_contains_token, forward=token_to_span_fn)
 
     span['emb'] = FunctionalSensor(span_candidate['emb'], forward=lambda x: x)
 
