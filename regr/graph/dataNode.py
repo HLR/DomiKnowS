@@ -11,6 +11,8 @@ from regr.solver import ilpOntSolverFactory
 
 import logging
 from logging.handlers import RotatingFileHandler
+from regr.sensor import Sensor
+import string
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -1603,10 +1605,18 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = len(value), value = value, dim=value.dim())
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
-    def __setitem__(self, key, value):
+    def __setitem__(self, _key, value):
         start = time.time()
         self.__addSetitemCounter()
-          
+        
+        if isinstance(_key, Sensor):
+            key = _key.fullname
+        elif isinstance(_key, str):
+            key = _key
+        else:
+            _DataNodeBulder__Logger.error('key - %s, type %s is not supported'%(_key,type(_key)))
+            return
+        
         skey = key.split('/')
         
         # Check if the key with this value has been set recently
@@ -1624,11 +1634,11 @@ class DataNodeBuilder(dict):
 
         if value is None:
             _DataNodeBulder__Logger.error('The value for the key %s is None - abandon the update'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
                 
         if len(skey) < 2:            
             _DataNodeBulder__Logger.error('The key %s has only two elements, needs at least three - abandon the update'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
         
         usedGraph = dict.__getitem__(self, "graph")
 
@@ -1639,7 +1649,7 @@ class DataNodeBuilder(dict):
         # Check if found concept in the key
         if not keyWithoutGraphName:
             _DataNodeBulder__Logger.warning('key - %s has not concept part - returning'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
  
         # Find description of the concept in the graph
         _conceptName = keyWithoutGraphName[0]
@@ -1647,7 +1657,7 @@ class DataNodeBuilder(dict):
         
         if not concept:
             _DataNodeBulder__Logger.warning('_conceptName - %s has not been found in the used graph %s - returning'%(_conceptName,usedGraph.fullname))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
         
@@ -1669,7 +1679,7 @@ class DataNodeBuilder(dict):
             self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
             
         # Add value to the underling dictionary
-        r = dict.__setitem__(self, key, value)
+        r = dict.__setitem__(self, _key, value)
         
         # ------------------- Collect time used for __setitem__
         end = time.time()

@@ -11,7 +11,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
 
-    def notVar(self, m, var, onlyConstrains = False):
+    def notVar(self, _, var, onlyConstrains = False):
         methodName = "notVar"
         logicMethodName = "NOT"
                 
@@ -20,13 +20,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         notSuccess = 1 - var
 
         if onlyConstrains:
-            notLoss = 1 - notSuccess # var   
+            notLoss = 1 - notSuccess
             
             return notLoss
         else:            
             return notSuccess
     
-    def and2Var(self, m, var1, var2, onlyConstrains = False):
+    def and2Var(self, _, var1, var2, onlyConstrains = False):
         methodName = "and2Var"
         logicMethodName = "AND"
             
@@ -35,13 +35,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         and2Success = max(var1 + var2 - 1, 0)
          
         if onlyConstrains:
-            and2Loss = 1 - and2Success # min(2 - var1 - var2, 1)
+            and2Loss = 1 - and2Success
             
             return and2Loss
         else:
             return and2Success
         
-    def andVar(self, m, *var, onlyConstrains = False):
+    def andVar(self, _, *var, onlyConstrains = False):
         methodName = "andVar"
         logicMethodName = "AND"
             
@@ -56,13 +56,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         andSuccess = max(varSum - N + 1, 0)
 
         if onlyConstrains:
-            andLoss = 1 - andSuccess # min(N - varSum, 1)
+            andLoss = 1 - andSuccess
         
             return andLoss       
         else:
             return andSuccess
     
-    def or2Var(self, m, var1, var2, onlyConstrains = False):
+    def or2Var(self, _, var1, var2, onlyConstrains = False):
         methodName = "or2Var"
         logicMethodName = "OR"
        
@@ -71,13 +71,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         or2Success = min(var1 + var2, 1)
 
         if onlyConstrains:
-            or2Loss = 1 - or2Success # max(1 - var1 - var2, 0)
+            or2Loss = 1 - or2Success
            
             return or2Loss
         else:
             return or2Success
     
-    def orVar(self, m, *var, onlyConstrains = False):
+    def orVar(self, _, *var, onlyConstrains = False):
         methodName = "orVar"
         logicMethodName = "OR"
         
@@ -92,29 +92,29 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         orSuccess = min(varSum, 1)
 
         if onlyConstrains:
-            orLoss = 1 - orSuccess # max(N - varSum, 0)
+            orLoss = 1 - orSuccess
                 
             return orLoss
         else:            
             return orSuccess
             
-    def nand2Var(self, m, var1, var2, onlyConstrains = False):
+    def nand2Var(self, _, var1, var2, onlyConstrains = False):
         methodName = "nand2Var"
         logicMethodName = "NAND"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
         
         # nand(var1, var2) = not(and(var1, var2))
-        nand2Success = self.notVar(m, self.and2Var(m, var1, var2)) #  1 - max(var1 + var2 - 1, 0)
+        nand2Success = self.notVar(_, self.and2Var(_, var1, var2))
 
         if onlyConstrains:
-            nand2Loss = 1 - nand2Success # max(var1 + var2 - 1, 0)
+            nand2Loss = 1 - nand2Success
                         
             return nand2Loss
         else:
             return nand2Success
     
-    def nandVar(self, m, *var, onlyConstrains = False):
+    def nandVar(self, _, *var, onlyConstrains = False):
         methodName = "nandVar"
         logicMethodName = "NAND"
        
@@ -129,32 +129,32 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             varSum += currentVar
         
         # nand(var) = not(and(var))
-        nandSuccess = self.notVar(m, self.andVar(m, *var)) # 1 - max(varSum - N + 1, 0)
+        nandSuccess = self.notVar(_, self.andVar(_, *var))
 
         if onlyConstrains:
-            nandLoss = 1 - nandSuccess # max(varSum - N + 1, 0)
+            nandLoss = 1 - nandSuccess
                         
             return nandLoss
         else:            
             return nandSuccess
             
-    def ifVar(self, m, var1, var2, onlyConstrains = False):
+    def ifVar(self, _, var1, var2, onlyConstrains = False):
         methodName = "ifVar"
         logicMethodName = "IF"
 
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
      
         # if(var1, var2) = or(not(var1), var2)
-        ifSuccess = self.or2Var(m, self.notVar(m, var1), var2)  # min(1 - var1 + var2, 1)
+        ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
 
         if onlyConstrains:
-            ifLoss = 1 - ifSuccess # min(1 - var1 + var2, 1)
+            ifLoss = 1 - ifSuccess
             
             return ifLoss
         else:            
             return ifSuccess
                
-    def norVar(self, m, *var, onlyConstrains = False):
+    def norVar(self, _, *var, onlyConstrains = False):
         methodName = "norVar"
         logicMethodName = "NOR"
         
@@ -162,52 +162,51 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         varSum = 0
         for currentVar in var:
-            if currentVar > 0.55:
-                varSum += currentVar
+            varSum += currentVar
     
         # nor(var) = not(or(var)
-        norSucess = self.notVar(m, self.orVar(m, *var))
+        norSucess = self.notVar(_, self.orVar(_, *var))
         
         if onlyConstrains:
-            norLoss = 1- norSucess # max(varSum, 1)
+            norLoss = 1 - norSucess
             
             return norLoss
         else:
             return norSucess
         
-    def xorVar(self, m, var1, var2, onlyConstrains = False):
+    def xorVar(self, _, var1, var2, onlyConstrains = False):
         methodName = "xorVar"
         logicMethodName = "XOR"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
         # xor(var1, var2) = or(and(var1, not(var2)), and(not(var1), var2))
-        xorSuccess = self.or2Var(m, self.and2Var(m, var1, self.notVar(m, var2)), self.and2Var(m, self.notVar(m, var1), var2))
+        xorSuccess = self.or2Var(_, self.and2Var(_, var1, self.notVar(_, var2)), self.and2Var(_, self.notVar(_, var1), var2))
         
         if onlyConstrains:
-            xorLoss = 1- xorSuccess # 1 - abs(var1 - var2)
+            xorLoss = 1 - xorSuccess
             
             return xorLoss
         else:
             return xorSuccess
     
-    def epqVar(self, m, var1, var2, onlyConstrains = False):
+    def epqVar(self, _, var1, var2, onlyConstrains = False):
         methodName = "epqVar"
         logicMethodName = "EPQ"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
         # epq(var1, var2) = and(or(var1, not(var2)), or(not(var1), var2)))
-        epqSuccess = self.and2Var(m, self.or2Var(m, var1, self.notVar(m, var2)), self.or2Var(m, self.notVar(m, var1), var2))
+        epqSuccess = self.and2Var(_, self.or2Var(_, var1, self.notVar(_, var2)), self.or2Var(_, self.notVar(_, var1), var2))
         
         if onlyConstrains:
-            epqLoss = 1 - epqSuccess # abs(var1 - var2)
+            epqLoss = 1 - epqSuccess
             
             return epqLoss
         else:
             return epqSuccess
      
-    def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '=', limit = 1):
         methodName = "countVar"
         logicMethodName = "COUNT"
         
@@ -219,13 +218,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         countSuccess = 0
             
-        if limitOp == '>':     
+        if limitOp == '>': # > limit
             countSuccess = min(max(varSum - limit, 0), 1)
             
-        elif limitOp == '<':
+        elif limitOp == '<': # < limit
             countSuccess = min(max(limit - varSum, 0), 1)
 
-        elif limitOp == '=':
+        elif limitOp == '=': # == limit
             countSuccess = min(max(abs(varSum - limit), 0), 1)
                 
         if onlyConstrains:
