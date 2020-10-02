@@ -64,7 +64,7 @@ def graph(case):
 @pytest.fixture()
 def sensor(case, graph):
     from regr.graph import DataNode
-    from regr.sensor.pytorch.query_sensor import CandidateSensor
+    from regr.sensor.pytorch.relation_sensors import CandidateSensor
 
     concept = graph['sub/concept']
     edge = graph['sub/edge']
@@ -97,7 +97,7 @@ def sensor(case, graph):
 @pytest.fixture()
 def context(case, graph):
     from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    from regr.sensor.pytorch.relation_sensors import CandidateReaderSensor
     from regr.graph import Property, DataNodeBuilder
 
     context = {

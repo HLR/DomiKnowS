@@ -11,7 +11,9 @@ from regr.solver import ilpOntSolverFactory
 
 import logging
 from logging.handlers import RotatingFileHandler
-from regr.sensor import Sensor
+from ..sensor import Sensor
+from .property import Property
+from .concept import Concept
 import string
 
 logName = __name__
@@ -1609,7 +1611,7 @@ class DataNodeBuilder(dict):
         start = time.time()
         self.__addSetitemCounter()
         
-        if isinstance(_key, Sensor):
+        if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
         elif isinstance(_key, str):
             key = _key

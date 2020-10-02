@@ -6,7 +6,6 @@ from .base import Scoped, BaseGraphTree
 from .trial import Trial
 from ..utils import enum
 
-from .dataNode import DataNode
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -248,6 +247,7 @@ class Concept(BaseGraphTree):
         assert len(set(base)) == 1  # homogenous base type
 
         def get_base_data(root_data, single_base):
+            from .dataNode import DataNode
             assert isinstance(root_data, DataNode)
             base_data = root_data.findDatanodes(select = single_base.name)
                 
