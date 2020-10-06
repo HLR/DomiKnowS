@@ -7,7 +7,7 @@ sys.path.append('../..')
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
-    from regr.sensor.pytorch.query_sensor import CandidateSensor, CandidateReaderSensor
+    from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
