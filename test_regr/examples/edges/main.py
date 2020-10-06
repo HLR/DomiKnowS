@@ -22,8 +22,8 @@ def test_edge_main():
 
 
     class SampleEdge(EdgeSensor, JointSensor):
-        def forward(self, ) -> Any:
-            out = self.inputs[0].split(" ")
+        def forward(self, text) -> Any:
+            out = text.split(" ")
             return out, ['test'] * len(out)
     sensor1 = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
     sentence['index'] = sensor1

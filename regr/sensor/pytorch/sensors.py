@@ -57,33 +57,37 @@ class TorchSensor(Sensor):
             if not self.label:
                 data_item[self.prop.fullname] = None
 
+    @staticmethod
+    def non_label_sensor(sensor):
+        if not isinstance(sensor, Sensor):
+            return False
+        elif isinstance(sensor, TorchSensor):
+            return not sensor.label
+        else:
+            return True
+
     def update_pre_context(
         self,
-        data_item: Dict[str, Any]
+        data_item: Dict[str, Any],
+        concept=None
     ) -> Any:
-        def non_label_sensor(sensor):
-            if not isinstance(sensor, Sensor):
-                return False
-            elif isinstance(sensor, TorchSensor):
-                return not sensor.label
-            else:
-                return True
+        concept = concept or self.concept
         for edge in self.edges:
-            for sensor in edge.find(non_label_sensor):
+            for sensor in edge.find(self.non_label_sensor):
                 sensor(data_item=data_item)
         for pre in self.pres:
-            for sensor in self.concept[pre].find(non_label_sensor):
+            for sensor in concept[pre].find(self.non_label_sensor):
                 sensor(data_item=data_item)
 
-    def fetch_value(self, pre, selector=None):
+    def fetch_value(self, pre, selector=None, concept=None):
+        concept = concept or self.concept
         if selector:
             try:
-                return self.context_helper[next(self.concept[pre].find(selector)).fullname]
-            except:
-                print("The key you are trying to access to with a selector doesn't exist")
-                raise
+                return self.context_helper[next(concept[pre].find(selector)).fullname]
+            except KeyError as e:
+                raise type(e)(e.message + "The key you are trying to access to with a selector doesn't exist")
         else:
-            return self.context_helper[self.concept[pre].fullname]
+            return self.context_helper[concept[pre].fullname]
 
     def define_inputs(self):
         self.inputs = []
@@ -106,15 +110,6 @@ class TorchSensor(Sensor):
         return self.prop.sup
 
 
-def non_label_sensor(sensor):
-    if not isinstance(sensor, Sensor):
-        return False
-    elif isinstance(sensor, TorchSensor):
-        return not sensor.label
-    else:
-        return True
-
-
 class FunctionalSensor(TorchSensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, label=label, device=device)
@@ -122,21 +117,23 @@ class FunctionalSensor(TorchSensor):
 
     def update_pre_context(
         self,
-        data_item: Dict[str, Any]
+        data_item: Dict[str, Any],
+        concept=None
     ):
+        concept = concept or self.concept
         for edge in self.edges:
-            for sensor in edge.find(non_label_sensor):
+            for sensor in edge.find(self.non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
             if isinstance(pre, str):
                 try:
-                    pre = self.concept[pre]
+                    pre = concept[pre]
                 except KeyError:
                     pass
             if isinstance(pre, Sensor):
                 pre(data_item)
             elif isinstance(pre, Property):
-                for sensor in pre.find(non_label_sensor):
+                for sensor in pre.find(self.non_label_sensor):
                     sensor(data_item)
 
     def update_context(
@@ -156,9 +153,10 @@ class FunctionalSensor(TorchSensor):
         if override and not self.label:
             data_item[self.prop.fullname] = val  # override state under property name
 
-    def fetch_value(self, pre, selector=None):
+    def fetch_value(self, pre, selector=None, concept=None):
+        concept = concept or self.concept
         if isinstance(pre, str):
-            return super().fetch_value(pre, selector)
+            return super().fetch_value(pre, selector, concept)
         elif isinstance(pre, (Property, Sensor)):
             return self.context_helper[pre.fullname]
         return pre
@@ -218,6 +216,11 @@ class JointSensor(FunctionalSensor):
                 yield sensor
         else:
             yield from self._components
+
+
+def joint(SensorClass):
+    class JointSensorImpl(SensorClass, JointSensor):
+        pass
 
 
 class ReaderSensor(ConstantSensor):
@@ -343,34 +346,15 @@ class TorchEdgeSensor(FunctionalSensor):
 
     def update_pre_context(
         self,
-        data_item: Dict[str, Any]
+        data_item: Dict[str, Any],
+        concept=None
     ) -> Any:
-        for edge in self.edges:
-            for sensor in edge.find(non_label_sensor):
-                sensor(data_item)
-        for pre in self.pres:
-            if isinstance(pre, str):
-                for sensor in self.src[pre].find(non_label_sensor):
-                    sensor(data_item)
-            elif isinstance(pre, (Property, Sensor)):
-                for sensor in pre.find(non_label_sensor):
-                    sensor(data_item)
-        # besides, make sure src exist
-        self.src['index'](data_item=data_item)
+        concept = concept or self.src
+        super().update_pre_context(data_item, concept)
 
-    def fetch_value(self, pre, selector=None):
-        if isinstance(pre, str):
-            if selector:
-                try:
-                    return self.context_helper[next(self.src[pre].find(selector)).fullname]
-                except:
-                    print("The key you are trying to access to with a selector doesn't exist")
-                    raise
-            else:
-                return self.context_helper[self.src[pre].fullname]
-        elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre.fullname]
-        return pre
+    def fetch_value(self, pre, selector=None, concept=None):
+        concept = concept or self.src
+        return super().fetch_value(pre, selector, concept)
 
 
     @property
@@ -539,13 +523,6 @@ class SelectionEdgeSensor(TorchEdgeSensor):
 
     def get_selection_helper(self):
         self.selection_helper = self.context_helper[self.src[self.dst].fullname]
-
-    def update_pre_context(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Any:
-        for sensor in self.src[self.dst].find(Sensor):
-            sensor(data_item)
 
     def update_context(
         self,

@@ -1,7 +1,9 @@
 import torch
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor #, TorchEdgeSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor
+from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
@@ -33,7 +35,7 @@ def model(graph):
     def token_to_span_fn(token_index):
         token_index
         pass
-    span['index'] = TorchEdgeSensor('index', mode='backward', relation=span_contains_token, forward=token_to_span_fn)
+    span['index'] = EdgeSensor('index', mode='backward', relation=span_contains_token, forward=token_to_span_fn)
 
     span['emb'] = FunctionalSensor(span_candidate['emb'], forward=lambda x: x)
 
