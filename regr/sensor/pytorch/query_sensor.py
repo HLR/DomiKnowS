@@ -34,8 +34,22 @@ class QuerySensor(FunctionalSensor):
 class DataNodeSensor(QuerySensor):
     def forward_wrap(self):
         datanodes = self.inputs[0]
+        assert len(self.inputs[1:]) == len(self.pres)
+        inputs = []
+        for input, pre in zip(self.inputs[1:], self.pres):
+            if isinstance(pre, str):
+                try:
+                    pre = self.concept[pre]
+                except KeyError:
+                    pass
+            if isinstance(pre, Property) and pre.sup == self.concept:
+                assert len(input) == len(datanodes)
+                inputs.append(input)
+            else:
+                # otherwise, repeat the input
+                inputs.append([input] * len(datanodes))
 
-        return [self.forward(datanode, *self.inputs[1:]) for datanode in datanodes]
+        return [self.forward(datanode, *input) for datanode, *input in zip(datanodes, *inputs)]
 
 
 class InstantiateSensor(TorchSensor):
