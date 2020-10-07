@@ -413,13 +413,19 @@ class NamedTree(NamedTreeNode, OrderedDict):
         return self.parse_query_apply(lambda s, name: s.del_apply(name), *names, delim=delim, trim=trim)
 
     def __getitem__(self, name):
-        return self.get_sub(*entuple(name))
+        try:
+            return self.get_sub(*entuple(name))
+        except KeyError as e:
+            raise type(e)(name)
 
     def __setitem__(self, name, obj):
         return self.set_sub(*entuple(name), sub=obj)
 
     def __delitem__(self, name):
-        return self.del_sub(*entuple(name))
+        try:
+            return self.del_sub(*entuple(name))
+        except KeyError as e:
+            raise type(e)(name)
 
     def what(self):
         wht = NamedTreeNode.what(self)

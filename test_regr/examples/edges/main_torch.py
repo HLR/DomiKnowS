@@ -29,8 +29,8 @@ def test_edge_main():
                 raise ValueError('You should select a default Tokenizer')
             self.spacy = spacy
 
-        def forward(self,) -> Any:
-            text = self.spacy(self.inputs[0])
+        def forward(self, text) -> Any:
+            text = self.spacy(text)
             return torch.tensor([token.vector for token in text]).to(device=self.device)
 #             return [token.vector for token in text]
         
