@@ -223,6 +223,30 @@ def joint(SensorClass):
         pass
 
 
+class CacheSensor(FunctionalSensor):
+    def __init__(self, *args, cache=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cache = cache
+        self._hash = None
+        self._cache = {}
+
+    def fill_cache(self, hash):
+        self._hash = hash
+
+    def forward_wrap(self):
+        if self.cache:
+            if self._hash not in self._cache:
+                self._cache[self._hash] = super().forward_wrap()
+            return self._cache[self._hash]
+        else:
+            return super().forward_wrap()
+
+
+def cache(SensorClass):
+    class CacheSensorImpl(CacheSensor, SensorClass):
+        pass
+
+
 class ReaderSensor(ConstantSensor):
     def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, as_tensor=True, device='auto'):
         super().__init__(*pres, data=None, edges=edges, forward=forward, label=label, as_tensor=as_tensor, device=device)
