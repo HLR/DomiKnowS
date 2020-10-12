@@ -61,13 +61,14 @@ class TorchModel(torch.nn.Module):
             return data_item['id']
         except KeyError as ke:
             ke_args = ke.args
-            raise ValueError('Data item must either contain a identifier key "id" or implement "__hass__" interface: \n{}'.format("\n".join(ke_args + te_args)))
+            raise ValueError('To enable cache, data item must either contain a identifier key "id" or implement "__hass__" interface: \n{}'.format("\n".join(ke_args + te_args)))
 
     def forward(self, data_item):
-        data_hash = self.data_hash(data_item)
+        data_hash = None
         data_item = self.move(data_item)
 
         for sensor in self.graph.get_sensors(CacheSensor):
+            data_hash = data_hash or self.data_hash(data_item)
             sensor.fill_hash(data_hash)
         for sensor in self.graph.get_sensors(ReaderSensor):
             sensor.fill_data(data_item)
