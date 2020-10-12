@@ -1,13 +1,14 @@
 import torch
 
 from regr.program import POIProgram
+from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.model.pytorch import PoiModel
 from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, cache
 from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
-from sensors.tokenizers import TokenizerEdgeSensor, TorchEdgeSensor
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
 from models import Tokenizer, BERT, SpanClassifier, token_to_span_candidate_emb, span_to_pair_emb, find_is_a, find_event_arg, token_to_span_label, makeSpanPairs, makeSpanAnchorPairs
 
@@ -21,7 +22,7 @@ def model(graph):
 
     # document -> token
     document_contains_token = document.relate_to(token)[0]
-    token['index', 'offset'] = cache(TokenizerEdgeSensor)('index', mode='forward', relation=document_contains_token, tokenizer=Tokenizer(), cache=True)
+    token['index', 'offset'] = cache(TokenizerEdgeSensor)('index', mode='forward', relation=document_contains_token, tokenizer=Tokenizer())
     token['emb'] = ModuleLearner('index', module=BERT())
 
     # token -> span
@@ -124,6 +125,7 @@ def model(graph):
                 pair[event_arg] = ModuleLearner('emb', module=torch.nn.Linear(768*4, 2))
                 # pair[event_arg] = ?
 
-    program = POIProgram(graph, poi=(span, pair))
+    # program = POIProgram(graph, poi=(span, pair))
+    program = PrimalDualProgram(graph, PoiModel, poi=(span, pair))
 
     return program

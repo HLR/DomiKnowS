@@ -225,7 +225,7 @@ def joint(SensorClass):
 
 
 class CacheSensor(FunctionalSensor):
-    def __init__(self, *args, cache=False, **kwargs):
+    def __init__(self, *args, cache=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.cache = cache
         self._hash = None
