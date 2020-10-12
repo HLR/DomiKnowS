@@ -31,7 +31,7 @@ class RawReader():
     def load(self, doc_id, sgm_path, apf_path):
         text = self.load_text(doc_id, sgm_path)
         spans, relations, events = self.load_anno(doc_id, apf_path, text)
-        return {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+        return {'id': doc_id, 'text': text, 'spans': spans, 'relations': relations, 'events': events}
 
     def load_text(self, doc_id, path):
         # tree = ET.parse(path)
@@ -178,6 +178,7 @@ class ParagraphReader(Reader):
     def __iter__(self):
         for doc_sample in super().__iter__():
             # {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+            doc_id = doc_sample['id']
             doc_text = doc_sample['text']
             paragraphs = doc_text.split('\n\n')
             offset = 0
@@ -189,7 +190,7 @@ class ParagraphReader(Reader):
                 relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
                 events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
                 if text:
-                    yield {'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
+                    yield {'id': f'{doc_id}_offset', 'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
                 offset = end + 2
 
 
