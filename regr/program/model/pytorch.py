@@ -67,7 +67,7 @@ class TorchModel(torch.nn.Module):
         data_hash = None
         data_item = self.move(data_item)
 
-        for sensor in self.graph.get_sensors(CacheSensor):
+        for sensor in self.graph.get_sensors(CacheSensor, lambda s: s.cache):
             data_hash = data_hash or self.data_hash(data_item)
             sensor.fill_hash(data_hash)
         for sensor in self.graph.get_sensors(ReaderSensor):
