@@ -190,7 +190,7 @@ class ParagraphReader(Reader):
                 relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
                 events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
                 if text:
-                    yield {'id': f'{doc_id}_offset', 'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
+                    yield {'id': f'{doc_id}_{offset}', 'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
                 offset = end + 2
 
 

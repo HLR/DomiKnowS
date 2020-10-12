@@ -221,6 +221,7 @@ class JointSensor(FunctionalSensor):
 def joint(SensorClass):
     class JointSensorImpl(SensorClass, JointSensor):
         pass
+    return JointSensorImpl
 
 
 class CacheSensor(FunctionalSensor):
@@ -230,7 +231,7 @@ class CacheSensor(FunctionalSensor):
         self._hash = None
         self._cache = {}
 
-    def fill_cache(self, hash):
+    def fill_hash(self, hash):
         self._hash = hash
 
     def forward_wrap(self):
@@ -245,6 +246,7 @@ class CacheSensor(FunctionalSensor):
 def cache(SensorClass):
     class CacheSensorImpl(CacheSensor, SensorClass):
         pass
+    return CacheSensorImpl
 
 
 class ReaderSensor(ConstantSensor):

@@ -1,7 +1,7 @@
 import torch
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, cache
 from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -21,7 +21,7 @@ def model(graph):
 
     # document -> token
     document_contains_token = document.relate_to(token)[0]
-    token['index', 'offset'] = TokenizerEdgeSensor('index', mode='forward', relation=document_contains_token, tokenizer=Tokenizer())
+    token['index', 'offset'] = cache(TokenizerEdgeSensor)('index', mode='forward', relation=document_contains_token, tokenizer=Tokenizer(), cache=True)
     token['emb'] = ModuleLearner('index', module=BERT())
 
     # token -> span
