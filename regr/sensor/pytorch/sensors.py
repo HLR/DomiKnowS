@@ -1,4 +1,5 @@
 from typing import Dict, Any
+import os
 import torch
 
 from .. import Sensor
@@ -218,35 +219,77 @@ class JointSensor(FunctionalSensor):
             yield from self._components
 
 
-def joint(SensorClass):
-    class JointSensorImpl(SensorClass, JointSensor):
-        pass
-    return JointSensorImpl
+def joint(SensorClass, JointSensorClass=JointSensor):
+    if not issubclass(JointSensorClass, JointSensor):
+        raise ValueError(f'JointSensorClass ({JointSensorClass}) must be a sub class of JointSensor.')
+    return type(f"Joint{SensorClass.__name__}", (SensorClass, JointSensorClass), {})
+
+
+class Cache:
+    def __setitem__(self, name, value):
+        raise NotImplementedError
+
+    def __getitem__(self, name):
+        raise NotImplementedError
+
+
+class TorchCache(Cache):
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    @property
+    def path(self):
+        return self._path
+
+    @path.setter
+    def path(self, path):
+        os.makedirs(path, exist_ok=True)
+        self._path = path
+
+    def sanitize(self, name):
+        return name.replace('/', '_').replace("<","").replace(">","")
+
+    def file_path(self, name):
+        return os.path.join(self.path, self.sanitize(name) + '.pt')
+
+    def __setitem__(self, name, value):
+        file_path = self.file_path(name)
+        torch.save(value, file_path)
+
+    def __getitem__(self, name):
+        file_path = self.file_path(name)
+        try:
+            return torch.load(file_path)
+        except FileNotFoundError as e:
+            raise KeyError(f'{name} (e.message)')
 
 
 class CacheSensor(FunctionalSensor):
-    def __init__(self, *args, cache=True, **kwargs):
+    def __init__(self, *args, cache=dict(), **kwargs):
         super().__init__(*args, **kwargs)
         self.cache = cache
         self._hash = None
-        self._cache = {}
 
     def fill_hash(self, hash):
         self._hash = hash
 
     def forward_wrap(self):
-        if self.cache:
-            if self._hash not in self._cache:
-                self._cache[self._hash] = super().forward_wrap()
-            return self._cache[self._hash]
+        if self.cache is not None:
+            try:
+                return self.cache[self._hash]
+            except KeyError:
+                value = super().forward_wrap()
+                self.cache[self._hash] = value
+                return value
         else:
             return super().forward_wrap()
 
 
-def cache(SensorClass):
-    class CacheSensorImpl(CacheSensor, SensorClass):
-        pass
-    return CacheSensorImpl
+def cache(SensorClass, CacheSensorClass=CacheSensor):
+    if not issubclass(CacheSensorClass, CacheSensor):
+        raise ValueError(f'CacheSensorClass ({CacheSensorClass}) must be a sub class of CacheSensor.')
+    return type(f"Cached{SensorClass.__name__}", (CacheSensorClass, SensorClass), {})
 
 
 class ReaderSensor(ConstantSensor):
