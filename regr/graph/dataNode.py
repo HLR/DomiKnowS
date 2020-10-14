@@ -14,7 +14,7 @@ from logging.handlers import RotatingFileHandler
 from ..sensor import Sensor
 from .property import Property
 from .concept import Concept
-import string
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -1162,6 +1162,32 @@ class DataNodeBuilder(dict):
         
         return conceptInfo
             
+    def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
+        if (isinstance(sensor, EdgeSensor)):
+            relationType = None
+            
+            if "contains" in sensor.relation.name:
+                relationType = "contains"
+            elif "is_a" in sensor.relation.name:
+                relationType  = "is_a"
+            elif "has_a" in sensor.relation.name:
+                relationType = "has_a"
+            elif "equal" in sensor.relation.name:
+                relationType = "equal"
+        
+            conceptInfo['relationType'] = relationType
+            
+            conceptInfo['relation'] = True
+
+            if 'relationAttrs' in conceptInfo:
+                conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
+                
+            conceptInfo['relationAttrs'] = {}
+            
+            conceptInfo['relationMode'] = sensor.mode
+            conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
+            conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
+
     def __updateRootDataNodeList(self, *dns):
         if not dns:
             return
@@ -1332,11 +1358,9 @@ class DataNodeBuilder(dict):
                     
         self.__updateRootDataNodeList(dns)
         
-        return 
+        return dns
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
-        existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
-
         # -- Create the new dataNode 
         instanceValue = ""
         instanceID = 0
@@ -1389,6 +1413,8 @@ class DataNodeBuilder(dict):
                 _DataNodeBulder__Logger.debug('Setting id for the dataNode to 0')
 
         self.__updateRootDataNodeList(_dn)
+                
+        return [_dn]
         
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1490,7 +1516,8 @@ class DataNodeBuilder(dict):
                 _dnLinked = True # New dataNodes are linked with existing dataNodes
                  
         self.__updateRootDataNodeList(dns)   
-        return 
+        
+        return dns
                     
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1522,8 +1549,7 @@ class DataNodeBuilder(dict):
         conceptName = conceptInfo['concept'].name
        
         if not dict.__contains__(self, 'dataNode'):   # ------ No DataNode yet
-            self.__createInitialdDataNode(vInfo, conceptInfo, keyDataName)
-            return # Done - End the method
+            return self.__createInitialdDataNode(vInfo, conceptInfo, keyDataName) # Done - End the method
         else:
             # ---------- DataNodes already created
             existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
@@ -1533,9 +1559,9 @@ class DataNodeBuilder(dict):
     
                 # If attribute value is a single element - will create a single new dataNode
                 if vInfo.len == 1 and vInfo.dim < 2: 
-                    self.__createSingleDataNode(vInfo, conceptInfo, keyDataName)
+                    return self.__createSingleDataNode(vInfo, conceptInfo, keyDataName)
                 else: # -- Value is multiple elements
-                    self.__createMultiplyDataNode(vInfo, conceptInfo, keyDataName)
+                    return self.__createMultiplyDataNode(vInfo, conceptInfo, keyDataName)
             else: # DataNode with this concept already created - update it
                 self.__updateDataNodes(vInfo, conceptInfo, keyDataName)
                 
@@ -1646,7 +1672,9 @@ class DataNodeBuilder(dict):
 
         # Find if the key include concept from graph
         
-        keyWithoutGraphName = usedGraph.cutGraphName(skey)
+        graphPathIndex = usedGraph.cutGraphName(skey)
+        keyWithoutGraphName = skey[graphPathIndex:]
+        graphPath =  ''.join(map(str, skey[:graphPathIndex])) 
        
         # Check if found concept in the key
         if not keyWithoutGraphName:
@@ -1654,31 +1682,46 @@ class DataNodeBuilder(dict):
             return dict.__setitem__(self, _key, value)
  
         # Find description of the concept in the graph
-        _conceptName = keyWithoutGraphName[0]
+        if isinstance(_key, Sensor):
+            try:
+                _conceptName = _key.concept.name 
+            except TypeError as _:
+                _conceptName = keyWithoutGraphName[0]
+        else:
+            _conceptName = keyWithoutGraphName[0]
         concept = self.__findConcept(_conceptName, usedGraph)
-        
+                
         if not concept:
             _DataNodeBulder__Logger.warning('_conceptName - %s has not been found in the used graph %s - returning'%(_conceptName,usedGraph.fullname))
             return dict.__setitem__(self, _key, value)
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
         
+        if isinstance(_key, Sensor):
+            self.__updateConceptInfo(usedGraph, conceptInfo, _key)
+
         # Create key for dataNonde construction
         keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
         vInfo = self.__processAttributeValue(value, keyDataName)
         
+        # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
         if keyDataName.find("_Equality_") > 0:
             equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
             self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
-        # Decide if this is dataNode for concept or relation link
+        
         elif conceptInfo['relation']:
             _DataNodeBulder__Logger.debug('%s found in the graph; it is a relation'%(_conceptName))
             self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
+            
         else:                       
             _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
-            self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+            index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+            
+            if index:
+                indexKey = graphPath  + '/' +_conceptName + '/index'
+                dict.__setitem__(self, indexKey, index)
             
         # Add value to the underling dictionary
         r = dict.__setitem__(self, _key, value)

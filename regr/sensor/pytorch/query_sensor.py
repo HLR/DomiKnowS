@@ -1,15 +1,14 @@
 from typing import Dict, Any
-from itertools import product
-import torch
 
-from ...graph import DataNode, DataNodeBuilder, Concept, Property
-from .sensors import TorchSensor, FunctionalSensor, Sensor
+from .sensors import TorchSensor, FunctionalSensor
 
 
 class QuerySensor(FunctionalSensor):
     @property
     def builder(self):
         builder = self.context_helper
+        from ...graph import DataNodeBuilder
+
         if not isinstance(builder, DataNodeBuilder):
             raise TypeError('{} should work with DataNodeBuilder.'.format(type(self)))
         return builder

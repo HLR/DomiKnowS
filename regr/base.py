@@ -385,7 +385,7 @@ class NamedTree(NamedTreeNode, OrderedDict):
             else:
                 break
             
-        return names[index:]
+        return index# names[index:]
         
     def parse_query_apply(self, func, *names, delim='/', trim=True):
         name, names = self.extract_name(*names, delim=delim, trim=trim)
