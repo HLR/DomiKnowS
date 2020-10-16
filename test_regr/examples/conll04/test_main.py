@@ -10,16 +10,31 @@ def test_case():
     from regr.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    word_emb = torch.randn(4, 2048, device=device)
+    # pcw = torch.tensor([[1, 0, 0, 0],
+    #                     [0, 1, 1, 0],
+    #                     [0, 0, 0, 1,]], device=device)
+    # pairs_link = torch.randn(4, 4, device=device)
+    # pairs_link *= 1 - torch.eye(4, 4, device=device)
+    # pairs_link[3, 0] = 1  # make sure John - IBM
+    # pairs_link = pairs_link > 0
+    # arg1, arg2 = pairs_link.nonzero(as_tuple=True)
+    # pa1 = torch.zeros(arg1.shape[0], 4, device=device)
+    # pa1.scatter_(1, arg1.unsqueeze(-1), 1)
+    # pa2 = torch.zeros(arg2.shape[0], 4, device=device)
+    # pa2.scatter_(1, arg2.unsqueeze(-1), 1)
+    # pa1_emb = pa1.matmul(word_emb)
+    # pa2_emb = pa2.matmul(word_emb)
+    # pair_emb = torch.cat((pa1_emb, pa2_emb), dim=-1)
+
     case = {
         'sentence': {
             'raw': 'John works for IBM'
         },
-        'char': {
-            'raw': [['J', 'o', 'h', 'n'], ['w', 'o', 'r', 'k', 's'], ['f', 'o', 'r'], ['I', 'B', 'M']]
-        },
         'word': {
+            'scw': [1, 1, 1, 1],
             'raw': ['John', 'works', 'for', 'IBM'],
-            'emb': torch.randn(4, 2048, device=device),
+            'emb': word_emb,
             #                             John        works       for           IBM
             'people':       torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.98, 0.02], [0.40, 0.6]], device=device),
             'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
@@ -27,32 +42,37 @@ def test_case():
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
             'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
         },
+        'char': {
+            'wcc': [[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], 
+                    [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],
+                    [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],
+                    [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]],
+            'raw': ['J', 'o', 'h', 'n', 'w', 'o', 'r', 'k', 's', 'f', 'o', 'r', 'I', 'B', 'M']
+        },
         'phrase': {
-            'raw': [[(0, 0), (1, 2), (3, 3, 0)]],  # ['John', 'works for', 'IBM'],
-            # expected new format
-            # 'raw': [[1, 0, 0, 0],
-            #         [0, 1, 1, 0],
-            #         [0, 0, 0, 1,]],  # ['John', 'works for', 'IBM'],
-            #
-            'emb': torch.randn(3, 2048, device=device),
+            # ['John', 'works for', 'IBM'],
+            'pcw_backward': [[1, 0, 0, 0],
+                             [0, 1, 1, 0],
+                             [0, 0, 0, 1,]],
+            'emb': torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0),
             'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
-
         },
         'pair': {
-            'emb': torch.randn(4, 4, 2048, device=device),
-            'work_for': torch.rand(4, 4, 2, device=device), # TODO: add examable values
-                    
-            #                           John                 works                 for           IBM
-            'work_for': torch.tensor([[[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [0.37, 0.63]],  # John
-                                      [[1.00, float("nan")], [1.00, float("nan")], [0.60, 0.40], [0.70, 0.30]],  # works
-                                      [[0.98, 0.02],         [0.70, 0.03],         [0.95, 0.05], [0.90, 0.10]],  # for
-                                      [[0.35, 0.65],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30]],  # IBM
-                                     ], device=device),
-            
-            'live_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
-            'located_in': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
-            'orgbase_on': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
-            'kill': torch.mul(torch.rand(4, 4, 2, device=device), 0.5), # TODO: add examable values
+            #                John-works    John-IBM      for-works     IBM-John      IBM-for
+            'pa1_backward': [[1, 0, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0, 0, 0, 1]],
+            'pa2_backward': [[0, 1, 0, 0], [0, 0, 0, 1], [0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0]],
+            'emb': torch.stack([
+                torch.cat((word_emb[0], word_emb[1]), dim=0),
+                torch.cat((word_emb[0], word_emb[3]), dim=0),
+                torch.cat((word_emb[2], word_emb[1]), dim=0),
+                torch.cat((word_emb[3], word_emb[0]), dim=0),
+                torch.cat((word_emb[3], word_emb[2]), dim=0),
+            ]),
+            'work_for': [[1.00, float("nan")], [0.35, 0.65], [0.70, 0.03], [0.37, 0.63]],
+            'live_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
+            'located_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
+            'orgbase_on': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
+            'kill': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
         }, 
         
         # nandL(people,organization)
@@ -82,56 +102,38 @@ def model_declaration(config, case):
 
     graph.detach()
 
-    sentence['index'] = TestSensor(expected_outputs=case.sentence.raw)
+    sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word forward
-    rel_sentence_contains_word['forward'] = TestEdgeSensor(
-        'index', mode='forward', to='index',
-        expected_outputs=case.word.raw)
+    word[rel_sentence_contains_word, 'raw'] = TestSensor(
+        sentence['raw'],
+        expected_inputs=(case.sentence.raw,),
+        expected_outputs=(case.word.scw, case.word.raw))
     word['emb'] = TestSensor(
-        'index', edges=[rel_sentence_contains_word['forward']],
+        'raw',
         expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
-    rel_word_contains_char['forward'] = TestEdgeSensor(
-        'index', mode='forward', to='index',
-        edges=[rel_sentence_contains_word['forward']],
+    char[rel_word_contains_char, 'raw'] = TestSensor(
+        'raw',
         expected_inputs=(case.word.raw,),
-        expected_outputs=case.char.raw)
-    char['emb'] = TestSensor(
-        'index', edges=[rel_word_contains_char['forward']],
-        expected_inputs=(case.char.raw,),
-        expected_outputs=case.word.emb)
-    char['emb'] = TestSensor(label=True)  # just to trigger calculation
+        expected_outputs=(case.char.wcc, case.char.raw))
 
     # Edge: word to phrase backward
-    rel_phrase_contains_word['backward'] = TestEdgeSensor(
-        'index', mode='backward', to='index',
-        edges=[rel_sentence_contains_word['forward']],
-        expected_inputs=(case.word.raw,),
-        expected_outputs=case.phrase.raw)
+    phrase[rel_phrase_contains_word.backward, 'raw'] = TestSensor(
+        word['emb'],
+        expected_inputs=(case.word.emb,),
+        expected_outputs=(case.phrase.pcw_backward, case.phrase.raw))
     phrase['emb'] = TestSensor(
-        'index', edges=[rel_phrase_contains_word['backward']],
+        'raw',
         expected_inputs=(case.phrase.raw,),
         expected_outputs=case.phrase.emb)
-    phrase['emb'] = TestSensor(label=True)  # just to trigger calculation
 
-    # Edge: pair backward
-    rel_pair_word1['backward'] = TestEdgeSensor(
-        'emb', mode='backward', to='word1_emb',
+    pair[rel_pair_word1.backward, rel_pair_word2.backward] = TestSensor(
+        word['emb'],
         expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.emb)
-    rel_pair_word2['backward'] = TestEdgeSensor(
-        'emb', mode='backward', to='word2_emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.emb)
-
-    pair['emb'] = TestSensor(
-        'word1_emb', 'word2_emb',
-        edges=[rel_pair_word1['backward'], rel_pair_word2['backward']],
-        expected_inputs=(case.word.emb, case.word.emb),
-        expected_outputs=case.pair.emb)
+        expected_outputs=(case.pair.pa1_backward, case.pair.pa2_backward))
 
     word[people] = TestSensor(
         label=True,

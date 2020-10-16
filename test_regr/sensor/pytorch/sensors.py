@@ -1,7 +1,7 @@
 from typing import Any
 import torch
 
-from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, ConstantEdgeSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, ConstantEdgeSensor, JointSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 
@@ -30,9 +30,9 @@ class BaseTestSensor(TorchSensor):
         return super().forward(*inputs)
 
 
-class TestSensor(BaseTestSensor, ConstantSensor):
-    def __init__(self, *pres, edges=None, label=False, expected_inputs=None, expected_outputs=None, device='auto'):
-        super().__init__(*pres, data=expected_outputs, edges=edges, label=label, device=device)
+class TestSensor(JointSensor, BaseTestSensor, ConstantSensor):
+    def __init__(self, *pres, edges=None, label=False, expected_inputs=None, expected_outputs=None, as_tensor=True, device='auto'):
+        super().__init__(*pres, data=expected_outputs, edges=edges, label=label, as_tensor=True, device=device)
         self._expected_inputs = expected_inputs
 
 

@@ -90,7 +90,7 @@ class Concept(BaseGraphTree):
         if isinstance(name, tuple):
             for name_, obj_ in zip(name, obj):
                 self[name_] = obj_
-            return self.__setitem__('joint_'+'+'.join(name), obj)
+            return self.__setitem__('joint_'+'+'.join(map(str, name)), obj)
         else:
             return super().__setitem__(name, obj)
 
