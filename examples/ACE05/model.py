@@ -1,11 +1,14 @@
 import torch
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, TorchEdgeSensor
+from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.model.pytorch import PoiModel
+from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor, FunctionalReaderSensor, cache, TorchCache
+from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateRelationSensor, CandidateEqualSensor
 
-from sensors.tokenizers import TokenizerEdgeSensor
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
 from models import Tokenizer, BERT, SpanClassifier, token_to_span_candidate_emb, span_to_pair_emb, find_is_a, find_event_arg, token_to_span_label, makeSpanPairs, makeSpanAnchorPairs
 
@@ -19,8 +22,8 @@ def model(graph):
 
     # document -> token
     document_contains_token = document.relate_to(token)[0]
-    document_contains_token['forward'] = TokenizerEdgeSensor('index', mode='forward', to=('index', 'ids', 'offset'), tokenizer=Tokenizer())
-    token['emb'] = ModuleLearner('ids', module=BERT())
+    token['index', 'offset'] = cache(TokenizerEdgeSensor)('index', mode='forward', relation=document_contains_token, tokenizer=Tokenizer(), cache=TorchCache(path="./cache/tokenizer"))
+    token['emb'] = ModuleLearner('index', module=BERT())
 
     # token -> span
     span_candidate['index'] = CandidateSensor(token['index'], forward=lambda *_: True)
@@ -28,8 +31,12 @@ def model(graph):
     span_candidate['label'] = ModuleLearner('emb', module=SpanClassifier(token_emb_dim=768))
 
     span_contains_token = span.relate_to(token)[0]
-    span_contains_token['backward'] = TorchEdgeSensor(
-        span_candidate['label'], to='index', forward=token_to_span_label, mode='backward',)
+    # span_contains_token['backward'] = TorchEdgeSensor(
+    #     span_candidate['label'], to='index', forward=token_to_span_label, mode='backward',)
+    def token_to_span_fn(token_index):
+        token_index
+        pass
+    span['index'] = EdgeSensor('index', mode='backward', relation=span_contains_token, forward=token_to_span_fn)
 
     span['emb'] = FunctionalSensor(span_candidate['emb'], forward=lambda x: x)
 
@@ -118,6 +125,7 @@ def model(graph):
                 pair[event_arg] = ModuleLearner('emb', module=torch.nn.Linear(768*4, 2))
                 # pair[event_arg] = ?
 
-    program = POIProgram(graph, poi=(span, pair))
+    # program = POIProgram(graph, poi=(span, pair))
+    program = PrimalDualProgram(graph, PoiModel, poi=(span, pair))
 
     return program

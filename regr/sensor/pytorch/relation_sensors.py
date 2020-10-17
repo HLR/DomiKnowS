@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, non_label_sensor, JointSensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
@@ -14,8 +14,29 @@ class EdgeSensor(FunctionalSensor):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
         self.relation = relation
         self.mode = mode
-        if self.mode not in self.modes:
+
+    @property
+    def relation(self):
+        return self._relation
+
+    @relation.setter
+    def relation(self, relation):
+        self._relation = relation
+        # try to update
+        try:
+            self.mode = self.mode
+        except:
+            pass
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, mode):
+        if mode not in self.modes:
             raise ValueError('The mode passed to the edge sensor must be one of %s' % self.modes)
+        self._mode = mode
         if self.mode == "forward":
             self.src = self.relation.src
             self.dst = self.relation.dst
@@ -23,80 +44,17 @@ class EdgeSensor(FunctionalSensor):
             self.src = self.relation.dst
             self.dst = self.relation.src
 
-    def attached(self, sup):
-        super().attached(sup)
-        if self.dst != self.concept:
-            raise ValueError('the assignment of Edge sensor is not correct!')
-        if isinstance(self.prop, tuple):
-            for to_ in self.prop:
-                self.dst[to_] = TriggerPrefilledSensor(callback_sensor=self)
-        else:
-            self.dst[self.prop] = TriggerPrefilledSensor(callback_sensor=self)
-
-    def update_context(
-            self,
-            data_item: Dict[str, Any],
-            force=False
-    ) -> Dict[str, Any]:
-
-        if not force and self in data_item:
-            val = data_item[self]
-        else:
-            self.update_pre_context(data_item)
-            self.define_inputs()
-            val = self.forward()
-
-        if val is not None:
-            data_item[self] = val
-            if not self.label:
-                if isinstance(self.prop, tuple):
-                    index = 0
-                    for to_ in self.prop:
-                        data_item[to_] = val[index]
-                        index += 1
-                else:
-                    data_item[self.prop] = val
-        else:
-            data_item[self] = None
-            if not self.label:
-                if isinstance(self.prop, tuple):
-                    for to_ in self.prop:
-                        data_item[to_] = None
-                else:
-                    data_item[self.prop] = None
-
-        return data_item
-
     def update_pre_context(
-            self,
-            data_item: Dict[str, Any]
+        self,
+        data_item: Dict[str, Any],
+        concept=None
     ) -> Any:
-        for edge in self.edges:
-            for sensor in edge.find(non_label_sensor):
-                sensor(data_item)
-        for pre in self.pres:
-            if isinstance(pre, str):
-                for sensor in self.src[pre].find(non_label_sensor):
-                    sensor(data_item)
-            elif isinstance(pre, (Property, Sensor)):
-                for sensor in pre.find(non_label_sensor):
-                    sensor(data_item)
-        # besides, make sure src exist
-        self.src['index'](data_item=data_item)
+        concept = concept or self.src
+        super().update_pre_context(data_item, concept)
 
-    def fetch_value(self, pre, selector=None):
-        if isinstance(pre, str):
-            if selector:
-                try:
-                    return self.context_helper[next(self.src[pre].find(selector))]
-                except:
-                    print("The key you are trying to access to with a selector doesn't exist")
-                    raise
-            else:
-                return self.context_helper[self.src[pre]]
-        elif isinstance(pre, (Property, Sensor)):
-            return self.context_helper[pre]
-        return pre
+    def fetch_value(self, pre, selector=None, concept=None):
+        concept = concept or self.src
+        return super().fetch_value(pre, selector, concept)
 
 
 class CandidateSensor(QuerySensor):

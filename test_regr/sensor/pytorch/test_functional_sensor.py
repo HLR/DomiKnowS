@@ -33,7 +33,7 @@ def concept(case):
 
 @pytest.fixture()
 def sensor(case, concept):
-    from regr.sensor.pytorch.query_sensor import FunctionalSensor
+    from regr.sensor.pytorch import FunctionalSensor
     def forward(reader1, reader2, constant):
         assert reader1 == case.reader1
         assert reader2 == case.reader2

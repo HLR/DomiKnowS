@@ -10,8 +10,8 @@ class TokenizerEdgeSensor(EdgeSensor, JointSensor):
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer
 
-    def forward(self) -> Any:
-        tokenized = self.tokenizer.encode_plus(self.inputs[0], return_tensors="pt", return_offsets_mapping=True)
+    def forward(self, text) -> Any:
+        tokenized = self.tokenizer.encode_plus(text, return_tensors="pt", return_offsets_mapping=True)
         tokens = tokenized['input_ids'].view(-1).to(device=self.device)
         offset = tokenized['offset_mapping'].to(device=self.device)
         return tokens, offset

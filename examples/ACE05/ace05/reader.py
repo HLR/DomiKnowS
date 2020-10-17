@@ -31,7 +31,7 @@ class RawReader():
     def load(self, doc_id, sgm_path, apf_path):
         text = self.load_text(doc_id, sgm_path)
         spans, relations, events = self.load_anno(doc_id, apf_path, text)
-        return {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+        return {'id': doc_id, 'text': text, 'spans': spans, 'relations': relations, 'events': events}
 
     def load_text(self, doc_id, path):
         # tree = ET.parse(path)
@@ -53,15 +53,15 @@ class RawReader():
         base_types = [Entity, Timex2, Value, Trigger]
         for BaseType in base_types:
             for node in document.findall(BaseType.tag):
-                span = BaseType(node, text)
+                span = BaseType.from_node(node, text)
                 spans[span.id] = span
 
         for node in document.findall(Relation.tag):
-            relation = Relation(node, spans, text)
+            relation = Relation.from_node(node, text, spans)
             relations[relation.id] = relation
 
         for node in document.findall(Event.tag):
-            event = Event(node, spans, text)
+            event = Event.from_node(node, text, spans)
             events[event.id] = event
 
         return spans, relations, events
@@ -137,47 +137,48 @@ class DictReader(Reader):
 
 class ParagraphReader(Reader):
     def _filter_span(self, spans, start, end):
-        from copy import copy
-        new_spans = []
-        for _, span in spans.items():
-            span = copy(span)
+        from copy import deepcopy
+        new_spans = {}
+        for span_id, span_ in spans.items():
+            span = deepcopy(span_)
             for key, mention in list(span.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del span.mentions[key]
             if span.mentions: # if there is any left
-                new_spans.append(span)
+                new_spans[span_id] = span
         return new_spans
 
     def _filter_relation(self, relations, spans, start, end):
-        from copy import copy
-        new_relations = []
-        for _, relation in relations.items():
-            relation = copy(relation)
+        from copy import deepcopy
+        new_relations = {}
+        for relation_id, relation in relations.items():
+            relation = deepcopy(relation)
             for key, mention in list(relation.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del relation.mentions[key]
             if relation.mentions: # if there is any left
-                new_relations.append(relation)
+                new_relations[relation_id] = relation
         return new_relations
 
     def _filter_event(self, events, spans, start, end):
-        from copy import copy
-        new_events = []
-        for _, event in events.items():
-            event = copy(event)
+        from copy import deepcopy
+        new_events = {}
+        for event_id, event in events.items():
+            event = deepcopy(event)
             for key, mention in list(event.mentions.items()):
                 if not (start < mention.extent.start and mention.extent.start < end and
                     start < mention.extent.end and mention.extent.end < end):
                     del event.mentions[key]
             if event.mentions: # if there is any left
-                new_events.append(event)
+                new_events[event_id] = event
         return new_events
 
     def __iter__(self):
         for doc_sample in super().__iter__():
             # {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+            doc_id = doc_sample['id']
             doc_text = doc_sample['text']
             paragraphs = doc_text.split('\n\n')
             offset = 0
@@ -188,7 +189,8 @@ class ParagraphReader(Reader):
                 spans = self._filter_span(doc_sample['spans'], start=start, end=end)
                 relations = self._filter_relation(doc_sample['relations'], spans, start=start, end=end)
                 events = self._filter_event(doc_sample['events'], spans, start=start, end=end)
-                yield {'text': text, 'spans': spans, 'relations': relations, 'events': events}
+                if text:
+                    yield {'id': f'{doc_id}_{offset}', 'text': text, 'offset': offset, 'spans': spans, 'relations': relations, 'events': events}
                 offset = end + 2
 
 

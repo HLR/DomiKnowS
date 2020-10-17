@@ -77,8 +77,8 @@ def sensor(case, graph):
         assert datanode.getAttributes().get('reader1') == case.reader1[idx]
         assert datanode.getAttributes().get('reader2') == case.reader2[idx]
         # other arguments are like functional sensor
-        assert reader1 == case.reader1
-        assert reader2 == case.reader2
+        assert reader1 == case.reader1[idx]
+        assert reader2 == case.reader2[idx]
         assert constant == case.constant
         return case.output[idx]
     sensor = DataNodeSensor('reader1', concept['reader2'], case.constant, forward=forward)
