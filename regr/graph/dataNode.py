@@ -11,10 +11,8 @@ from regr.solver import ilpOntSolverFactory
 
 import logging
 from logging.handlers import RotatingFileHandler
-from ..sensor import Sensor
 from .property import Property
 from .concept import Concept
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -1163,6 +1161,7 @@ class DataNodeBuilder(dict):
         return conceptInfo
             
     def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
+        from regr.sensor.pytorch.relation_sensors import EdgeSensor
         if (isinstance(sensor, EdgeSensor)):
             relationType = None
             
@@ -1634,6 +1633,8 @@ class DataNodeBuilder(dict):
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):
+        from ..sensor import Sensor
+
         start = time.time()
         self.__addSetitemCounter()
         

@@ -32,6 +32,7 @@ class QuerySensor(FunctionalSensor):
 
 class DataNodeSensor(QuerySensor):
     def forward_wrap(self):
+        from ...graph import Property
         datanodes = self.inputs[0]
         assert len(self.inputs[1:]) == len(self.pres)
         inputs = []
