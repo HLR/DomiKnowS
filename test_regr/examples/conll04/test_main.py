@@ -105,7 +105,7 @@ def model_declaration(config, case):
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word forward
-    word[rel_sentence_contains_word, 'raw'] = TestSensor(
+    word[rel_sentence_contains_word.forward, 'raw'] = TestSensor(
         sentence['raw'],
         expected_inputs=(case.sentence.raw,),
         expected_outputs=(case.word.scw, case.word.raw))
@@ -115,7 +115,7 @@ def model_declaration(config, case):
         expected_outputs=case.word.emb)
 
     # Edge: word to char forward
-    char[rel_word_contains_char, 'raw'] = TestSensor(
+    char[rel_word_contains_char.forward, 'raw'] = TestSensor(
         'raw',
         expected_inputs=(case.word.raw,),
         expected_outputs=(case.char.wcc, case.char.raw))
@@ -134,6 +134,10 @@ def model_declaration(config, case):
         word['emb'],
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.pair.pa1_backward, case.pair.pa2_backward))
+    pair['emb'] = TestSensor(
+        word['emb'],
+        expected_inputs=(case.word.emb,),
+        expected_outputs=case.pair.emb)
 
     word[people] = TestSensor(
         label=True,
@@ -273,8 +277,8 @@ def test_main_conll04(case):
     _, _, datanode = lbp.model(data)
 
     for child_node in datanode.getChildDataNodes():
-        if child_node.ontologyNode.name == 'word': 
-            assert child_node.getAttribute('index') == case.word.raw[child_node.instanceID]
+        if child_node.ontologyNode.name == 'word':
+            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
                 if child_node1.ontologyNode.name == 'char':
@@ -334,15 +338,15 @@ def test_main_conll04(case):
         #assert tokenResult['people'][0] == 1
         assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
         
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'J')})[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'h')})[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'index', 'I')})[0].getAttribute(people, 'ILP').item() == 0
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'h')})[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'I')})[0].getAttribute(people, 'ILP').item() == 0
         
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
-        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'index', 'o'), (char, 'index', 'h'), (char, 'index', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h')) })[0].getAttribute(people, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'), (char, 'raw', 'n')) })[0].getAttribute(people, 'ILP').item() == 1
 
-        assert len(datanode.findDatanodes(select = (char, 'index', 'J'))) == 1
-        assert datanode.findDatanodes(select = (char, 'index', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
+        assert len(datanode.findDatanodes(select = (char, 'raw', 'J'))) == 1
+        assert datanode.findDatanodes(select = (char, 'raw', 'J'))[0].getRootDataNode() == datanode.findDatanodes(select = sentence)[0]
         
         # Sum value of attribute people/ILP for all words
         #assert sum(tokenResult['people']) == 1
@@ -392,12 +396,12 @@ def test_main_conll04(case):
         #assert pairResult['work_for'][0][3] == 1
         assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
         
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'index', 'John'), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
 
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
          
-        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'index', 'John')), "arg2": (word, 'index', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][0]) == 1

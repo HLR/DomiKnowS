@@ -9,6 +9,40 @@ else:
     from .concept import Concept
 
 
+class RelationFunction():
+    def __init__(self, relation):
+        self.relation = relation
+
+    @property
+    def src(self):
+        return self.relation.src
+
+    @property
+    def dst(self):
+        return self.relation.dst
+
+    def __call__(self, *props):
+        for prop in props:
+            assert prop.sup == self.src
+            yield self.relation, prop
+
+    def __str__(self):
+        return f'[{self.relation}.forward]'
+
+
+class RelationBackwardFunction(RelationFunction):
+    @property
+    def src(self):
+        return self.relation.dst
+
+    @property
+    def dst(self):
+        return self.relation.src
+
+    def __str__(self):
+        return f'[{self.relation}.backward]'
+
+
 @BaseGraphTree.localize_namespace
 class Relation(BaseGraphTree):
     @classmethod
@@ -26,6 +60,8 @@ class Relation(BaseGraphTree):
         self.dst = dst
         src._out.setdefault(cls.name(), []).append(self)
         dst._in.setdefault(cls.name(), []).append(self)
+        self.forward = RelationFunction(self)
+        self.backward = RelationBackwardFunction(self)
 
     @property
     def src(self):
@@ -51,12 +87,6 @@ class Relation(BaseGraphTree):
         return {'src': self.src, 'dst': self.dst}
 
     __metaclass__ = abc.ABCMeta
-
-    @abc.abstractmethod
-    def forward(self, src_value): pass
-
-    @abc.abstractmethod
-    def backward(self, dst_value): pass
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor
