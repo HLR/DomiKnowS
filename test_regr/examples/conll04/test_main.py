@@ -32,7 +32,7 @@ def test_case():
             'raw': 'John works for IBM'
         },
         'word': {
-            'scw': [1, 1, 1, 1],
+            'scw': [[1], [1], [1], [1]],
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
             #                             John        works       for           IBM
