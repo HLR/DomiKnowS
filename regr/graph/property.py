@@ -21,7 +21,7 @@ class Property(BaseGraphShallowTree):
             prop_name = '<{}>'.format(self.prop_name.name)
         else:
             prop_name = self.prop_name
-        return self.sup.get_fullname(delim) + delim + prop_name
+        return self.sup.get_fullname(delim) + delim + str(prop_name)
 
     def attach(self, sub):
         from ..sensor import Sensor

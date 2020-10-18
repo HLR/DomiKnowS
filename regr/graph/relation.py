@@ -12,6 +12,7 @@ else:
 class RelationFunction():
     def __init__(self, relation):
         self.relation = relation
+        self.mode = "forward"
 
     @property
     def src(self):
@@ -27,10 +28,17 @@ class RelationFunction():
             yield self.relation, prop
 
     def __str__(self):
-        return f'[{self.relation}.forward]'
+        return f'{str(self.relation)}.{self.mode}'
+
+    def __repr__(self):
+        return f'{repr(self.relation)}.{self.mode}'
 
 
 class RelationBackwardFunction(RelationFunction):
+    def __init__(self, relation):
+        super().__init__(relation)
+        self.mode = "backward"
+
     @property
     def src(self):
         return self.relation.dst
@@ -38,9 +46,6 @@ class RelationBackwardFunction(RelationFunction):
     @property
     def dst(self):
         return self.relation.src
-
-    def __str__(self):
-        return f'[{self.relation}.backward]'
 
 
 @BaseGraphTree.localize_namespace

@@ -86,13 +86,19 @@ class Concept(BaseGraphTree):
                 retval.append(rel)
         return retval
 
+    def __getitem__(self, name):
+        try:
+            return self.get_sub(name)
+        except KeyError as e:
+            raise type(e)(name)
+
     def __setitem__(self, name, obj):
         if isinstance(name, tuple):
-            for name_, obj_ in zip(name, obj):
-                self[name_] = obj_
-            return self.__setitem__('joint_'+'+'.join(map(str, name)), obj)
-        else:
-            return super().__setitem__(name, obj)
+            # for name_, obj_ in zip(name, obj):
+            #     self[name_] = obj_
+            # return self.__setitem__('joint_'+'_'.join(map(str, name)), obj)
+            return self.set_apply(name, obj)
+        return super().__setitem__(name, obj)
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor

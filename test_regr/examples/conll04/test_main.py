@@ -116,7 +116,7 @@ def model_declaration(config, case):
 
     # Edge: word to char forward
     char[rel_word_contains_char.forward, 'raw'] = TestSensor(
-        'raw',
+        word['raw'],
         expected_inputs=(case.word.raw,),
         expected_outputs=(case.char.wcc, case.char.raw))
 

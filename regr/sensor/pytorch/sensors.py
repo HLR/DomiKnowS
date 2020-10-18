@@ -112,9 +112,10 @@ class TorchSensor(Sensor):
 
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
+    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', build=True):
         super().__init__(*pres, edges=edges, label=label, device=device)
         self.forward_ = forward
+        self.build = build
 
     def update_pre_context(
         self,
@@ -203,20 +204,48 @@ class TriggerPrefilledSensor(PrefilledSensor):
 
 
 class JointSensor(FunctionalSensor):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, bundle_call=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._components = None
+        self.bundle_call = bundle_call
+
+    @property
+    def components(self):
+        return self._components
+
+    def attached(self, sup):
+        from ...graph.relation import RelationFunction
+        from .relation_sensors import EdgeSensor
+        super().attached(sup)
+        if isinstance(self.prop.name, tuple):
+            self.build = False
+            self._components = []
+            for name in self.prop.name:
+                index = len(self.components)
+                if isinstance(name, RelationFunction):
+                    sensor = EdgeSensor(self, forward=lambda x, index=index: x[index], relation=name.relation, mode=name.mode)
+                else:
+                    sensor = FunctionalSensor(self, forward=lambda x, index=index: x[index])
+                self.concept[name] = sensor
+                self.components.append(sensor)
 
     def __iter__(self):
-        if self._components is None:
+        self.build = False
+        if self.components is None:
             self._components = []
             while(True):
-                index = len(self._components)
+                index = len(self.components)
                 sensor = FunctionalSensor(self, forward=lambda x, index=index: x[index])
-                self._components.append(sensor)
+                self.components.append(sensor)
                 yield sensor
         else:
-            yield from self._components
+            yield from self.components
+
+    def __call__(self, *args, **kwargs):
+        super().__call__(*args, **kwargs)
+        if self.bundle_call and self.components is not None:
+            for sensor in self.components:
+                sensor(*args, **kwargs)
 
 
 def joint(SensorClass, JointSensorClass=JointSensor):
