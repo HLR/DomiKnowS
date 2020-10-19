@@ -32,7 +32,7 @@ def test_case():
             'raw': 'John works for IBM'
         },
         'word': {
-            'scw': [[1], [1], [1], [1]],
+            'scw': torch.tensor([[1], [1], [1], [1]], device=device),
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
             #                             John        works       for           IBM
@@ -43,24 +43,24 @@ def test_case():
             'O':            torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.10, 0.90], [0.90, 0.10]], device=device),
         },
         'char': {
-            'wcc': [[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], 
+            'wcc': torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], 
                     [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],
                     [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],
-                    [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]],
+                    [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]], device=device),
             'raw': ['J', 'o', 'h', 'n', 'w', 'o', 'r', 'k', 's', 'f', 'o', 'r', 'I', 'B', 'M']
         },
         'phrase': {
             # ['John', 'works for', 'IBM'],
-            'pcw_backward': [[1, 0, 0, 0],
+            'pcw_backward': torch.tensor([[1, 0, 0, 0],
                              [0, 1, 1, 0],
-                             [0, 0, 0, 1,]],
+                             [0, 0, 0, 1,]], device=device),
             'emb': torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0),
             'people': torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.40, 0.6]], device=device),
         },
         'pair': {
             #                John-works    John-IBM      for-works     IBM-John      IBM-for
-            'pa1_backward': [[1, 0, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0, 0, 0, 1]],
-            'pa2_backward': [[0, 1, 0, 0], [0, 0, 0, 1], [0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0]],
+            'pa1_backward': torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0, 0, 0, 1]], device=device),
+            'pa2_backward': torch.tensor([[0, 1, 0, 0], [0, 0, 0, 1], [0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0]], device=device),
             'emb': torch.stack([
                 torch.cat((word_emb[0], word_emb[1]), dim=0),
                 torch.cat((word_emb[0], word_emb[3]), dim=0),
@@ -68,7 +68,7 @@ def test_case():
                 torch.cat((word_emb[3], word_emb[0]), dim=0),
                 torch.cat((word_emb[3], word_emb[2]), dim=0),
             ]),
-            'work_for': [[1.00, float("nan")], [0.35, 0.65], [0.70, 0.03], [0.37, 0.63]],
+            'work_for': torch.tensor([[1.00, float("nan")], [0.35, 0.65], [0.70, 0.03], [0.37, 0.63]], device=device),
             'live_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
             'located_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
             'orgbase_on': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
@@ -77,14 +77,15 @@ def test_case():
         
         # nandL(people,organization)
         #                               John    works   for     IBM
-        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.0000, 0.5100]),
+        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
         'lc2LossTensor' : torch.tensor([[0.2000,         0.2000,        0.2000,  0.0200],  # John
                                         [ float("nan"),  float("nan"),  0.4000,  0.2900],  # works
                                         [0.0200,         0.0300,        0.0500,  0.1000],  # for
-                                        [0.5500,         0.2000,        0.1000,  0.0000]]) # IBM
+                                        [0.5500,         0.2000,        0.1000,  0.0000]], # IBM
+                                        device=device)
     
     }
     case = Namespace(case)
@@ -126,8 +127,8 @@ def model_declaration(config, case):
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.phrase.pcw_backward, case.phrase.raw))
     phrase['emb'] = TestSensor(
-        'raw',
-        expected_inputs=(case.phrase.raw,),
+        rel_phrase_contains_word.backward('emb'),
+        expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.emb)
 
     pair[rel_pair_word1.backward, rel_pair_word2.backward] = TestSensor(
@@ -135,8 +136,8 @@ def model_declaration(config, case):
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.pair.pa1_backward, case.pair.pa2_backward))
     pair['emb'] = TestSensor(
-        word['emb'],
-        expected_inputs=(case.word.emb,),
+        rel_pair_word1.backward('emb'), rel_pair_word2.backward('emb'),
+        expected_inputs=(case.pair.emb[:,:2048],case.pair.emb[:,2048:]),
         expected_outputs=case.pair.emb)
 
     word[people] = TestSensor(

@@ -9,6 +9,30 @@ else:
     from .concept import Concept
 
 
+class Transformed():
+    def __init__(self, relationfunction, property, fn=None):
+        self.relationfunction = relationfunction
+        if isinstance(property, str):
+            property = self.relationfunction.src[property]
+        self.property = property
+        self.fn = fn
+
+    def __call__(self, data_item):
+        value = self.property(data_item)
+        try:
+            mapping = self.relationfunction.dst[self.relationfunction](data_item)
+        except KeyError:
+            mapping = self.relationfunction.src[self.relationfunction.T](data_item).T
+        mapping = mapping.float()
+        if self.fn is None:
+            return mapping.matmul(value)
+        # mapping (N,M)
+        # value (M,...)
+        mapping = mapping.view(*mapping.shape, (1,)*(len(value.shape)-1) )  # (N,M,...)
+        value = value.unsqueeze(dim=0)  # (1,M,...)
+        return self.fn(mapping * value)
+
+
 class RelationFunction():
     def __init__(self, relation):
         self.relation = relation
@@ -22,10 +46,16 @@ class RelationFunction():
     def dst(self):
         return self.relation.dst
 
-    def __call__(self, *props):
-        for prop in props:
-            assert prop.sup == self.src
-            yield self.relation, prop
+    @property
+    def T(self):
+        return self.relation.bacward
+
+    def __call__(self, *props, fn=None):
+        return Transformed(self, props[0], fn=fn)
+        # TODO: support mapping multiple props together?
+        # for prop in props:
+        #     assert prop.sup == self.src
+        #     yield Transformed(self.relation, prop, fn=fn)
 
     def __str__(self):
         return f'{str(self.relation)}.{self.mode}'
@@ -47,6 +77,9 @@ class RelationBackwardFunction(RelationFunction):
     def dst(self):
         return self.relation.src
 
+    @property
+    def T(self):
+        return self.relation.forward
 
 @BaseGraphTree.localize_namespace
 class Relation(BaseGraphTree):

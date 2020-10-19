@@ -122,6 +122,7 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         concept=None
     ):
+        from ...graph.relation import Transformed
         concept = concept or self.concept
         for edge in self.edges:
             for sensor in edge.find(self.non_label_sensor):
@@ -137,6 +138,11 @@ class FunctionalSensor(TorchSensor):
             elif isinstance(pre, Property):
                 for sensor in pre.find(self.non_label_sensor):
                     sensor(data_item)
+            elif isinstance(pre, Transformed):
+                self.concept[pre.relationfunction](data_item)
+                for sensor in pre.property.find(self.non_label_sensor):
+                    sensor(data_item)
+
 
     def update_context(
         self,
@@ -156,11 +162,14 @@ class FunctionalSensor(TorchSensor):
             data_item[self.prop] = val  # override state under property name
 
     def fetch_value(self, pre, selector=None, concept=None):
+        from ...graph.relation import Transformed
         concept = concept or self.concept
         if isinstance(pre, str):
             return super().fetch_value(pre, selector, concept)
         elif isinstance(pre, (Property, Sensor)):
             return self.context_helper[pre]
+        elif isinstance(pre, Transformed):
+            return pre(self.context_helper)
         return pre
 
     def forward_wrap(self):
