@@ -81,9 +81,10 @@ The examples:
 
 ### Data Graph construction
 
-Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update. 
+Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update.
+The datanodes a populated based on the concepts in the graph and each datanodes atttributes are also update from the value associated to the corresponding concepts' property.
 
-Each sensor has its context dictionary implemented with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods. 
+Each sensor has its context dictionary implemented with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods.
 It creates Data Graph based on sensors' context update.
 
 The overloaded method:
@@ -165,7 +166,7 @@ If the value is a list, then datanodes are created based on the length of the li
 
 The *value* cannot be **None** otherwise the *set* method logs an error and returns.
 
-**DataNode(s) for concept**
+#### DataNode(s) for concept
 
 If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analyses the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
 The *value* is assumed to provide **single element** (contribute to single DataNode) if the value is:
@@ -174,28 +175,18 @@ The *value* is assumed to provide **single element** (contribute to single DataN
 - Tensor or List of length 1 and with dimension 1.
 - Tensor of length 2 but its key *attributeKey* part has first word embedded in '<' - such a tensor represent a single set of two probabilities (negative and positive).
 
-In this case a single new DataNode is created or updated (if the DataNode already exists). 
+In this case a single new DataNode is created or updated (if the DataNode already exists).
 If the single DataNode is determined to be for created for the *root* concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
 
-If the *value* is Tensor or List and not assumed to represent single value then its dimension is determine - for Tensor it is based on *dim()* method, for List based on nest level of the first list element.
-- The *value* with dimension equal 1 is assumed to represent single set of DataNodes. 
+#### DataNode Attribute Update
 
-- The value with dimension 2 represent **multiply** sets of DataNodes to be created. Each set of new DataNodes to be assigned to a subsequent **parent** DataNode, e.g.:
+The subsequent submission *values* length need to match the number of DataNodes created for the given concept or relation.
 
-	 [['J', 'o', 'h', 'n'], ['w', 'o', 'r', 'k', 's'], ['f', 'o', 'r'], ['I', 'B', 'M']]
+So for instance: Tensor with shape[3,7,4] will update 3 dataNodes each with Tensor of shape[7,4].
 
-This example above represents 4 sets of *characters* each assigned to the *word* with the index equal to the index of the specific set in the list (or tensor).
+In order to assign attribute value to dataNode created with Tensor with shape[3,4] the tensor will need to have it first shape element equal 12.
 
-The sets of newly created dataNode are matched with dataNodes created for the parent concept. So for instance Tensor with *shape[1,5]* will result with creation of 5 dataNodes and their assignment as children to a single parent dataNode.
-Tensor with *shape[3,4]* will result with creation of 4 dataNodes sets of 4 dataNodes and their assignment as children to a 3 parent dataNodes.
-
-Additionally the *value* can carry information about **child connection** between newly created DataNodes and exiting DataNodes, if tuples are used e.g.:
-
-	[[(0, 0), (1, 2), (3, 3, 0)]]
-
-This represent a single set of values (connected to a single parent DataNode as described above) which each element tuple specifies range in indexes of children DataNode to be connected with a given new DataNode.
-
-** DataNode for Relation **
+#### DataNode for Relation (TO BE UPDATED)
 
 If the *<conceptOrRelationName>* part of the *key* is a *concept* from the [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder* collected from the Data Graph DataNotes related by the given relation based on the relation definition which specify types of DataNotes linked by the relation.
 The *value* dimension has to be the larger or equal to the number of elements linked by the given relation.
@@ -207,37 +198,30 @@ For instance:
 
 - key *global/linguistic/pair/<work_for>/testsensor-19* indicates that this is infromation about *work_for* relation.
 - value:
-
-	tensor([[[0.6000, 0.4000],
-			 [0.8000, 0.2000],
-         	 [0.8000, 0.2000],
-         	 [0.3700, 0.6300]],
-         	[[1.0000,    nan],
-         	 [1.0000,    nan],
-         	 [0.6000, 0.4000],
-         	 [0.7000, 0.3000]],
-         	[[0.9800, 0.0200],
-         	 [0.7000, 0.0300],
-         	 [0.9500, 0.0500],
-         	 [0.9000, 0.1000]],
-         	[[0.3500, 0.6500],
-         	 [0.8000, 0.2000],
-         	 [0.9000, 0.1000],
-         	 [0.7000, 0.3000]]])
+```python
+    tensor([[[0.6000, 0.4000],
+             [0.8000, 0.2000],
+             [0.8000, 0.2000],
+             [0.3700, 0.6300]],
+             [[1.0000,    nan],
+             [1.0000,    nan],
+             [0.6000, 0.4000],
+             [0.7000, 0.3000]],
+             [[0.9800, 0.0200],
+             [0.7000, 0.0300],
+             [0.9500, 0.0500],
+             [0.9000, 0.1000]],
+             [[0.3500, 0.6500],
+             [0.8000, 0.2000],
+             [0.9000, 0.1000],
+             [0.7000, 0.3000]]])
+```
 
 is a tensor of *torch.Size([4, 4, 2])* the relation *work_for* relates two elements thus the first dimensions of the tensor will be used to create DataNode for relation. The last dimension of the tensor will be as attribute value to the newly created DataNodes.
 
 Additionally if the *<conceptOrRelationName>* part of the *key* contain has "_Candidate_" string attached then this indicate that the *value* has information (in the form of 0 or 1) if the given DataNode for relation are to be created.
 
-**DataNode Attribute Update**
-
-The subsequent submission *values* length need to match the number of DataNodes created for the given concept or relation. 
-
-So for instance: Tensor with shape[3,7,4] will update 3 dataNodes each with Tensor of shape[7,4].
-
-In order to assign attribute value to dataNode created with Tensor with shape[3,4] the tensor will need to have it first shape element equal 12.
-
-**Returning Constructed DataNodes**
+#### Returning Constructed DataNodes
 
 There are two methods returning constructed dataNodes.
 
@@ -252,14 +236,15 @@ getDataNode(self)
 ```python
 getBatchDataNodes(self)
 ```
- 
- ** DataNode logging  **
- 
- *DataNode* and *DataNodeBuilde*r log their activities, warning and errors to a log file. 
- The *path* to the log file is printed to the program standard output.
- 
- The example of log from the DataNodeBuilder activity is provided below:
- 
+
+#### DataNode logging
+
+*DataNode* and *DataNodeBuilde*r log their activities, warning and errors to a log file.
+The *path* to the log file is printed to the program standard output.
+
+The example of log from the DataNodeBuilder activity is provided below:
+
+```log
 	2020-09-29 17:32:51,441 - INFO - dataNodeBuilder:__init__ - 
 	2020-09-29 17:32:51,441 - INFO - dataNodeBuilder:__init__ - Called
 	2020-09-29 17:32:51,442 - INFO - dataNodeBuilder:__setitem__ - key - global/sentence/index/constantsensor,  value - <class 'str'>
@@ -292,5 +277,4 @@ getBatchDataNodes(self)
 	2020-09-29 17:32:51,542 - INFO - dataNodeBuilder:__setitem__ - key - global/word/spacy,  value - <class 'torch.Tensor'>, shape torch.Size([17, 300])
 	2020-09-29 17:32:51,824 - INFO - dataNodeBuilder:__updateDataNodes - Adding attribute spacy in existing dataNodes - found 5100 dataNodes of type word
 	2020-09-29 17:32:51,824 - WARNING - dataNodeBuilder:__updateDataNodes - Provided value has length 17 but found 5100 existing dataNode - abandon the update
-
- 
+```
