@@ -147,6 +147,14 @@ class OTMRelation(Relation):
     pass
 
 
+class MTORelation(Relation):
+    pass
+
+
+class MTMRelation(Relation):
+    pass
+
+
 @Concept.relation_type('is_a')
 class IsA(OTORelation):
     pass
@@ -165,7 +173,7 @@ def disjoint(*concepts):
 
 
 @Concept.relation_type('has_a')
-class HasA(OTORelation):
+class HasA(MTORelation):
     pass
 
 
