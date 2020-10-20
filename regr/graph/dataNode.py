@@ -1640,6 +1640,15 @@ class DataNodeBuilder(dict):
         
         if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
+            if  isinstance(_key, Sensor) and not _key.build:
+                if isinstance(value, Tensor):
+                    _DataNodeBulder__Logger.info('No processing (because build is set to False) - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
+                elif isinstance(value, list):
+                    _DataNodeBulder__Logger.info('No processing (because build is set to False) - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
+                else:
+                    _DataNodeBulder__Logger.info('No processing (because build is set to False) - key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
+
+                return dict.__setitem__(self, _key, value)
         elif isinstance(_key, str):
             key = _key
         else:
@@ -1655,11 +1664,11 @@ class DataNodeBuilder(dict):
             return # Stop __setitem__ for repeated key value combination
         
         if isinstance(value, Tensor):
-            _DataNodeBulder__Logger.info('key - %s,  value - %s, shape %s'%(key,type(value),value.shape))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
         elif isinstance(value, list):
-            _DataNodeBulder__Logger.info('key - %s,  value - %s, length %s'%(key,type(value),len(value)))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
         else:
-            _DataNodeBulder__Logger.info('key - %s,  value - %s'%(key,type(value)))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
 
         if value is None:
             _DataNodeBulder__Logger.error('The value for the key %s is None - abandon the update'%(key))
