@@ -94,19 +94,21 @@ __setitem__(self, key, value)
 
 updates the created DataNode with information submitted to the dictionary by the sensors.
 
-The *key* is assumed to consists of three parts: *<graphPath> <conceptOrRelationName> <attributeKey>*.
+The *key* is assumed to be a `str`, `Sensor`, or `Property`.
 
-The *grapthPath* and *attrubteKey* can be built of multiple names separated by /. The *conceptOrRelationName* is assumed to be a single word.
+#### `str` key
 
-the examples of key:
-- *global/application/neighbor/city2* - where *global/application* is the graph path, *neighbor* is the concept name and *city2* is an attribute key.
+For `str` key, it is used for general purpose data storage, for example, the result of data reader. The `DataNodeBuilder` instance is initialized by a `data_item` from data reader, and all the keys (and corresponding values) in `data_item` are stored it.
+It can be used to store other resources by string keys.
 
+#### `Sensor` key
 
-- *tweet/tweet/<PositiveLabel>/readersensor-1* - where first *tweet* is the graph path, the next *tweet* is the concept name and *<PositiveLabel>/readersensor-1* is an attribute key.
+When a `Sensor` is used as a key, it will trigger an creation/update to datanodes.
+If there is no datanode of this sensor's concept, datanodes will be created first.
+The value of the sensor will be used to update the datanodes' attributes.
+The attributes will has the same name as the sensor's property.
 
-The *key* needs all these **three** elements otherwise the *set* method logs an error and returns.
-
-The *conceptOrRelationName* part is used to **create** the new DataNode when first provided in the key to the *DataNodeBuilder*. The next time it will be used to create or update **attribute** in existing DataNodes of this *conceptOrRelationName* type.
+If the sensor is an `EdgeSensor`, relation link will be updated based on the source and destination of the `EdgeSensor`.
 
 # DataNode creation
 
