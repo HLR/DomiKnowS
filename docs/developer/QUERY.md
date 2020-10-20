@@ -158,9 +158,10 @@ For instance, the second datanode of word have `'text'` attribute as string `'wo
 
 #### DataNode creation
 
-When the builder recieve an update to 
+When the builder recieve an update to a sensor whose concept's datanode are not yet initiated, the builder will create them first.
 
-The *value* determine how many new DataNodes are created. 
+The *value* determine how many new DataNodes are created.
+If the value is a list, then datanodes are created based on the length of the list. If the value is a tensor, then datanodes are created based on the first dimension of the tensor. Each datanode will be initiated with an index which indicated its matching with elements in the list or "row" in the tensor.
 
 The *value* cannot be **None** otherwise the *set* method logs an error and returns.
 
