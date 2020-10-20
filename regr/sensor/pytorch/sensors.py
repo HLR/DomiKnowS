@@ -157,7 +157,7 @@ class FunctionalSensor(TorchSensor):
             self.define_inputs()
             val = self.forward_wrap()
 
-        data_item[self] = val
+            data_item[self] = val
         if override and not self.label:
             data_item[self.prop] = val  # override state under property name
 
@@ -255,6 +255,13 @@ class JointSensor(FunctionalSensor):
         if self.bundle_call and self.components is not None:
             for sensor in self.components:
                 sensor(*args, **kwargs)
+
+    def update_context(
+        self,
+        data_item: Dict[str, Any],
+        force=False,
+        override=True):
+        super().update_context(data_item, force=force, override=override and self.components is None)
 
 
 def joint(SensorClass, JointSensorClass=JointSensor):
