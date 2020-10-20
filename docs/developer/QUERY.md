@@ -157,15 +157,6 @@ Here `DummySensor02` returns a list of 5 `str`s. Each of them will be associated
 `DummySensor03`, similarly, returns a tensor of whose first dimension if 5. Each raw of the 100-dim vector will be associated with a word datanode in `emb` attribute.
 For instance, the second datanode of word have `'text'` attribute as string `'work'` and `'emb'` attribute as tensor `tensor([0.05, -0.94, ..., 2.72])`.
 
-#### DataNode creation
-
-When the builder recieve an update to a sensor whose concept's datanode are not yet initiated, the builder will create them first.
-
-The *value* determine how many new DataNodes are created.
-If the value is a list, then datanodes are created based on the length of the list. If the value is a tensor, then datanodes are created based on the first dimension of the tensor. Each datanode will be initiated with an index which indicated its matching with elements in the list or "row" in the tensor.
-
-The *value* cannot be **None** otherwise the *set* method logs an error and returns.
-
 #### DataNode(s) for concept
 
 If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analyses the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
@@ -178,6 +169,15 @@ The *value* is assumed to provide **single element** (contribute to single DataN
 In this case a single new DataNode is created or updated (if the DataNode already exists).
 If the single DataNode is determined to be for created for the *root* concept then the *READER* key is used as the new DataNode id, if the key is not set then the id is set to 0.
 
+#### DataNode creation
+
+When the builder recieve an update to a sensor whose concept's datanode are not yet initiated, the builder will create them first.
+
+The *value* determine how many new DataNodes are created.
+If the value is a list, then datanodes are created based on the length of the list. If the value is a tensor, then datanodes are created based on the first dimension of the tensor. Each datanode will be initiated with an index which indicated its matching with elements in the list or "row" in the tensor.
+
+The *value* cannot be **None** otherwise the *set* method logs an error and returns.
+
 #### DataNode Attribute Update
 
 The subsequent submission *values* length need to match the number of DataNodes created for the given concept or relation.
@@ -185,6 +185,79 @@ The subsequent submission *values* length need to match the number of DataNodes 
 So for instance: Tensor with shape[3,7,4] will update 3 dataNodes each with Tensor of shape[7,4].
 
 In order to assign attribute value to dataNode created with Tensor with shape[3,4] the tensor will need to have it first shape element equal 12.
+
+#### Relation link Update
+
+Datanodes-wise relation links are also build based on the value passed to builder with `Sensor` keys.
+The the key is an `EdgeSensor`, the relation link will be create/update.
+A relation (between concepts in the graph) will be associated to the edge sensor, with another argument `mode='forward'|'backward'` which indicates the direction for the sensor.
+The `dst` of the sensor is always the sensor's concept and the `src` of the sensor indicates the other end of the relation. `relation` of sensor is used to indicates which relation link to be udpated.
+The relation is represented as a matrix tensor, whose first dimension represents the number of datanodes of `dst` concept and the second dimension matches the number of `src` concept's datanodes.
+
+Example:
+
+```oython
+word[phrace_contains_word.forward] = DummyEdgeSensor10()
+# sensor return:
+tensor([[1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]])  # shape = (5, 4)
+```
+
+Here `phrace_contains_word.forward` helps `DummyEdgeSensor10` to identify the relation and the forward/backward mode to be used. In this example, the sensor's `src` is the concept `phrase` and `dst` is the concept `word`, which matches the concept we are assign property to.
+
+The return value of the sensor is a 5 by 4 matrix which inidicates the existence of relation link between datanotes by ones, and the rest are zeros.
+The first dimension 5 indicates there should be 5 words. And the second dimension 4 matches the number of phrase datanodes.
+In this example, the matrix is indicating that, word with index 0 is connected to phrase 0, the word 1 and 2 is connected to phrase 1, word 3 is connected to phrase 2, and word 4 is connecting to phrase 3.
+This format is used consistently for 1-to-1, 1-to-many, many-to-1, and many-to-many relation.
+
+If this is the first property that is populated by the data for the concept, it will also trigger the creation of datanodes. Otherwise, the dimensions must be matching, as mention above.
+
+Multiple relations can be used at the same time.
+
+```python
+pair[pair_arg1.backward, pair_arg2.backward] = DummyEdgeSensor11()
+# for example, the sensor will filter out self-connected pair of word
+# sensor return first element:
+tensor([[1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        ...,
+        [0, 0, 1, 0, 0],
+        ...,
+        [0, 0, 0, 1, 0],
+        ...,
+        [0, 0, 0, 0, 1],
+        ...])  # shape = (20,5)
+# sensor return second element:
+tensor([[0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        ...])  # shape = (20,5)
+```
+
+Where the matrix dimension implies there are 20 datanode instances of `pair`, and each is to be connected with word datanodes seperately.
+
+In this example, the 7th pair's arguments it is as simple as to get the 7th row from `pair[pair_arg1.backward]`
+
+```python
+        [0, 1, 0, 0, 0]  #  indicating the second word
+```
+
+and 7th from `pair[pair_arg2.backward]`
+
+```python
+        [0, 0, 0, 1, 0]  #  indicating the fourth word
+```
 
 #### DataNode for Relation (TO BE UPDATED)
 
