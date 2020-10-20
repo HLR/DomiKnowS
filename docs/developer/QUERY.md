@@ -103,14 +103,62 @@ It can be used to store other resources by string keys.
 
 #### `Sensor` key
 
-When a `Sensor` is used as a key, it will trigger an creation/update to datanodes.
+When a `Sensor` instance is used as a key, it will trigger an creation/update to datanodes.
 If there is no datanode of this sensor's concept, datanodes will be created first.
 The value of the sensor will be used to update the datanodes' attributes.
 The attributes will has the same name as the sensor's property.
 
 If the sensor is an `EdgeSensor`, relation link will be updated based on the source and destination of the `EdgeSensor`.
 
-# DataNode creation
+#### `Property` key
+
+When a `Property` instance is used as a key, it is just to serve the retrieval shortcut based on `property`.
+Our design is update value by sensors and retrieve value by properties. Every time a sensor update its value, it will pass the value to the builder with itself as key and also its property as key. So other sensor can retrieve this value by just query the propery.
+However, the datanode builder will just store the value for properties and won't trigger updating to datanodes based on property key, because updates of sensor key already include all creation and updating activity.
+
+#### Values
+
+The values provided to the builder is interprete as a ordered collection of attributes values that are to be distributed to each datanode of the associated concept.
+Basically, it should be a python `list` or a`torch.Tensor`.
+If a list is assigned, the length of the list must match the number of datanodes of this concept and each element in this list, whatever type it is, should be associated to the attribute of a datanode in the same order as the datanode index order.
+If a tensor is provided, the first dimension of the sensor must match the number of datanodes of this concept and each "row" containing the rest of dimension should be associated to the attribute of a datanode in the same order as the datanode index order.
+
+Examples:
+
+```python
+sentence['text'] = DummySensor00()
+# sensor return:
+['John works for IBM .']
+
+sentence['ids'] = DummySensor01()
+# sensor return:
+tensor([[48, 97, 72, 9, 83]])  # shape = (1,5)
+```
+
+Where `DummySensor00` returns a list of only one `str`, indicating there is only one sentence datanode. The sentence datanode has a `'text'` attribute with `'John works for IBM .'`.
+`DummySensor01` returns a tensor where the first dimension is 1, which also match the only one sentence. Then the vector `tensor([48, 97, 72, 9, 83])` should be associated with the sentence.
+
+```python
+word['text'] = DummySensor02()
+# sensor return:
+['John', 'works', 'for', 'IBM', '.']
+
+word['emb'] = DummySensor03()
+# sensor return:
+tensor([[0.63, 1.12, ..., -0.83],
+        [0.05, -0.94, ..., 2.72],
+        [0.91, 0.24, ..., 0.12],
+        [0.84, -0.22, ..., -0.72],
+        [0.08, 1.10, ..., 0.01]])  # shape = (5,100)
+```
+
+Here `DummySensor02` returns a list of 5 `str`s. Each of them will be associated with a corresponding word datanode in `'text'` attribute.
+`DummySensor03`, similarly, returns a tensor of whose first dimension if 5. Each raw of the 100-dim vector will be associated with a word datanode in `emb` attribute.
+For instance, the second datanode of word have `'text'` attribute as string `'work'` and `'emb'` attribute as tensor `tensor([0.05, -0.94, ..., 2.72])`.
+
+#### DataNode creation
+
+When the builder recieve an update to 
 
 The *value* determine how many new DataNodes are created. 
 
