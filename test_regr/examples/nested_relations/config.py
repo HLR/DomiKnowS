@@ -4,13 +4,13 @@ from regr.utils import Namespace, caller_source
 from regr.program.model.pytorch import PoiModel
 
 
-from graph import sentence, word, char, phrase, pair
+from graph import sentence, word, phrase, pair
 
 
 config = {
     'Model': {
         'Model': PoiModel,
-        'poi': (sentence, word, char, phrase, pair),
+        'poi': (sentence, word, phrase, pair),
         'loss': None,
         'metric': None,
     },
