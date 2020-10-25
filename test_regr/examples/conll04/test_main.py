@@ -279,7 +279,7 @@ def test_main_conll04(case):
 
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw/functionalsensor') == case.word.raw[child_node.instanceID]
+            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
                 if child_node1.ontologyNode.name == 'char':

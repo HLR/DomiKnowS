@@ -1313,38 +1313,26 @@ class DataNodeBuilder(dict):
                 
                 for aIndex, a in enumerate(attributeNames):
                       
-                    aValue = relationAttrsCache[a]
+                    aValue = relationAttrsCache[a][i]
                     for j, av in enumerate(aValue):
-                        for k, currentAV in enumerate(av):
+                        isInRelation = av.item()
+                        if isInRelation == 0:
+                            continue
                         
-                            if currentAV.item() == 0:
-                                continue
-                            
-                            dn = existingDnsForAttr[a][k]
-                            
-                            if aIndex == 0:
-                                dn.addRelationLink(relationName, rDn) # First dataNode has relation link dataNode
-                            else:
-                                # Impact
-                                if relationName not in dn.impactLinks: # Next dataNode has relation link dataNode in impact
-                                    dn.impactLinks[relationName] = []
-                                    
-                                if rDn not in dn.impactLinks[relationName]:
-                                    dn.impactLinks[relationName].append(rDn)
-                                
-                            rDn.addRelationLink(a, dn) # Add this dataNode as value for the attribute in the relation link dataNode
+                        dn = existingDnsForAttr[a][j]
+                        
+                        dn.addRelationLink(relationName, currentRdn)
+                        currentRdn.addRelationLink(a, dn)                  
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
             _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes'%(keyDataName))
 
-            for rDn in existingDnsForRelation: # Loop through all relation links dataNodes
-                # Collect ids of dataNodes linked by this relation link dataNode
-                p = []
-                for dn in rDn.getRelationLinks().values():
-                    p.append(dn[0].instanceID)
-                   
-                _p = tuple(p) # Create tuple from ids to access value for this combination of dataNodes
-                rDn.attributes[keyDataName] = vInfo.value[_p] # Add / /Update value of the attribute
+            if len(existingDnsForRelation) != vInfo.len:
+                _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                return
+
+            for i, rDn in enumerate(existingDnsForRelation): # Loop through all relation links dataNodes
+                rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1776,7 +1764,7 @@ class DataNodeBuilder(dict):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
         # Create key for dataNonde construction
-        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:]))
+        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
         vInfo = self.__processAttributeValue(value, keyDataName)
