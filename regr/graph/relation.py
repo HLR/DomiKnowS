@@ -25,10 +25,10 @@ class Transformed():
             mapping = self.relationfunction.src[self.relationfunction.T](data_item).T
         mapping = mapping.float()
         if self.fn is None:
-            return mapping.matmul(value)
+            return mapping.matmul(value.float())
         # mapping (N,M)
         # value (M,...)
-        mapping = mapping.view(*mapping.shape, (1,)*(len(value.shape)-1) )  # (N,M,...)
+        mapping = mapping.view(*(mapping.shape + (1,)*(len(value.shape)-1)))  # (N,M,...)
         value = value.unsqueeze(dim=0)  # (1,M,...)
         return self.fn(mapping * value)
 
