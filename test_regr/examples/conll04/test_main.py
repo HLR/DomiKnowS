@@ -1,6 +1,6 @@
 import sys
 from itertools import product
-sys.path.append('../..')
+#sys.path.append('../..')
 
 import pytest
 
@@ -121,10 +121,10 @@ def test_case():
 def model_declaration(config, case):
     from regr.program.program import LearningBasedProgram
 
-    from graph import graph, sentence, word, char, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2, rel_sentence_contains_phrase
+    from .graph import graph, sentence, word, char, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
+    from .graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2, rel_sentence_contains_phrase
     from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
     graph.detach()
@@ -259,10 +259,10 @@ def model_declaration(config, case):
     return lbp
 
 def test_graph_naming():
-    from graph import graph, sentence, word, char, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
+    from .graph import graph, sentence, word, char, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
+    from .graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_word_contains_char, rel_pair_word1, rel_pair_word2
 
     # graph
     assert graph.name == 'global'
@@ -300,10 +300,10 @@ def test_graph_naming():
 @pytest.mark.gurobi
 def test_main_conll04(case):
     import torch
-    from config import CONFIG
-    from graph import graph, sentence, word, char, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
+    from .config import CONFIG
+    from .graph import graph, sentence, word, char, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
 
     lbp = model_declaration(CONFIG.Model, case)
     data = {}

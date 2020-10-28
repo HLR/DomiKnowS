@@ -4,7 +4,7 @@ from regr.utils import Namespace, caller_source
 from regr.program.model.pytorch import PoiModel
 
 
-from graph import sentence, word, phrase, pair
+from .graph import sentence, word, phrase, pair
 
 
 config = {
