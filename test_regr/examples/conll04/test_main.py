@@ -380,7 +380,7 @@ def test_main_conll04(case):
         
         # Get value of attribute organization/ILP for word 3
         #assert tokenResult['organization'][3] == 1
-        datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
         
         # Sum value of attribute organization/ILP for all words
         #assert sum(tokenResult['organization']) == 1
@@ -420,11 +420,11 @@ def test_main_conll04(case):
         
         # Get value of attribute work_for/ILP for pair between 0 and 3
         #assert pairResult['work_for'][0][3] == 1
-        #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})[0].getAttribute(work_for, 'ILP').item() == 1
         
-        #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
 
-        #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
+        assert datanode.findDatanodes(select = pair, indexes = {"arg1" : ((word,), (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
         #assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
          
         assert datanode.findDatanodes(select = pair, indexes = {"arg1" : (0, (word, 'raw', 'John')), "arg2": (word, 'raw', "IBM")})[0].getAttribute(work_for, 'ILP') == 1
