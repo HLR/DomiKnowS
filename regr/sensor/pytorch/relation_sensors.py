@@ -10,8 +10,8 @@ from itertools import product
 class EdgeSensor(FunctionalSensor):
     modes = ("forward", "backward")
 
-    def __init__(self, *pres, relation, mode="forward", edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+    def __init__(self, *pres, relation, mode="forward", **kwargs):
+        super().__init__(*pres, **kwargs)
         self.relation = relation
         self.mode = mode
 

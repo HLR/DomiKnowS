@@ -2,6 +2,7 @@ from typing import Any
 import torch
 
 from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, ConstantEdgeSensor, JointSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 
@@ -40,7 +41,7 @@ class TestLearner(TestSensor, TorchLearner):
     pass
 
 
-class TestEdgeSensor(BaseTestSensor, ConstantEdgeSensor):
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False, expected_inputs=None, expected_outputs=None, device='auto'):
-        super().__init__(*pres, data=expected_outputs, to=to, mode=mode, edges=edges, label=label, device=device)
+class TestEdgeSensor(BaseTestSensor, EdgeSensor, ConstantSensor):
+    def __init__(self, *pres, relation, mode='forward', expected_inputs=None, expected_outputs=None, **kwargs):
+        super().__init__(*pres, relation=relation, mode=mode, data=expected_outputs, **kwargs)
         self._expected_inputs = expected_inputs

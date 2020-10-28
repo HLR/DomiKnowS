@@ -69,7 +69,7 @@ def test_case():
                 torch.cat((word_emb[3], word_emb[0]), dim=0),
                 torch.cat((word_emb[3], word_emb[2]), dim=0),
             ]),
-            'work_for': torch.tensor([[1.00, float("nan")], [0.35, 0.65], [0.70, 0.03], [0.37, 0.63]], device=device),
+            'work_for': torch.tensor([[1.00, float("nan")], [0.35, 0.65], [0.70, 0.30], [0.37, 0.63], [0.70, 0.30]], device=device),
             'live_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
             'located_in': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
             'orgbase_on': torch.mul(torch.rand(5, 2, device=device), 0.5), # TODO: add examable values
@@ -131,8 +131,10 @@ def model_declaration(config, case):
         rel_phrase_contains_word.backward('emb'),
         expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.emb)
-    phrase[rel_sentence_contains_phrase.forward] = TestSensor(
+    phrase[rel_sentence_contains_phrase.forward] = TestEdgeSensor(
         rel_phrase_contains_word.backward(word[rel_sentence_contains_word.forward], fn=lambda x: x.max(1)[0]),
+        relation=rel_sentence_contains_phrase,
+        mode='forward',
         expected_inputs=(case.phrase.scp,),
         expected_outputs=case.phrase.scp)
 
