@@ -609,7 +609,13 @@ class DataNode:
                 return [float("nan"), float("nan")]
             
             if len(dataNode) == 2:
-                value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+                attrNames = []
+                for _, rel in enumerate(rootRelation.has_a()): 
+                    attrNames.append(rel.name)
+                        
+                rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})[0]   
+                value = rDN.getAttribute(key)
+                #value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             else:
@@ -1322,16 +1328,23 @@ class DataNodeBuilder(dict):
                         dn = existingDnsForAttr[a][j]
                         
                         dn.addRelationLink(relationName, currentRdn)
-                        currentRdn.addRelationLink(a, dn)                  
+                        currentRdn.addRelationLink(a, dn)   
+            return rDns
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
             _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes'%(keyDataName))
 
+            existingDnsForRelationNotSorted = OrderedDict()
+            for dn in existingDnsForRelation:
+                existingDnsForRelationNotSorted[dn.getInstanceID()] = dn
+                
+            existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
+            
             if len(existingDnsForRelation) != vInfo.len:
                 _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 return
-
-            for i, rDn in enumerate(existingDnsForRelation): # Loop through all relation links dataNodes
+ 
+            for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
                 rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
