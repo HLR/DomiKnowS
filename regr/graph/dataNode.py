@@ -366,7 +366,7 @@ class DataNode:
             self.findConceptsNamesInDatanodes(dns=dn.getChildDataNodes(), conceptNames = conceptNames, relationNames = relationNames)
             
         return conceptNames, relationNames
-        
+    
     # Find dataNodes in data graph of the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
         if dns is None:
@@ -451,7 +451,16 @@ class DataNode:
     
         if depth == 0 and not returnDns:
             _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
-
+    
+        if returnDns:
+            returnDnsNotSorted = OrderedDict()
+            for dn in returnDns:
+                returnDnsNotSorted[dn.getInstanceID()] = dn
+                    
+            returnDnsSorted = OrderedDict(sorted(returnDnsNotSorted.items()))
+        
+            returnDns = [*returnDnsSorted.values()]
+        
         return returnDns
           
     # Get root of the dataNode
@@ -613,13 +622,17 @@ class DataNode:
                 for _, rel in enumerate(rootRelation.has_a()): 
                     attrNames.append(rel.name)
                         
-                rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})[0]   
-                value = rDN.getAttribute(key)
+                _rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})
+                
+                if _rDN:
+                    value = _rDN[0].getAttribute(key)
+                else:
+                    return [1, float("nan")] # ?
                 #value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             else:
-                return [float("nan"), float("nan")] # ?
+                return [1, float("nan")] # ?
         
         if value is None: # No probability value - return negative probability 
             return [float("nan"), float("nan")]
@@ -985,13 +998,18 @@ class DataNode:
                 continue
             
             rootRelation = self.__findRootConceptOrRelation(concept_name)
-            currentCandidates = candidates_currentConceptOrRelation[concept_name]
+            attrNames = []
+            for _, rel in enumerate(rootRelation.has_a()): 
+                attrNames.append(rel.name)
+                
+            currentCandidates  = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
             
-            for infer_candidate in currentCandidates:
-                infer_candidate[0].relationLinks[rootRelation.name][infer_candidate[1].getInstanceID()].attributes[key] = \
-                    torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
+            for infer_candidate in currentCandidates:  
+                rDN = infer_candidate[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : infer_candidate[0].getInstanceID(), attrNames[1]: infer_candidate[1].getInstanceID()})[0]
+
+                rDN.attributes[key] = torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
                         
         return #tokenResult, pairResult, tripleResult
     
