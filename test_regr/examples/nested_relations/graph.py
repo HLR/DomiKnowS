@@ -22,6 +22,10 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application') as app_graph:
+        Oword = Word(name="o")
+        Bword = Word(name="b")
+        Iword = Word(name="i")
+        Eword = Word(name="e")
         people = phrase(name='people')
         organization = phrase(name='organization')
         location = phrase(name='location')
