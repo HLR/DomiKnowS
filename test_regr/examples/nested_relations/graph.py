@@ -26,7 +26,7 @@ with Graph('global') as graph:
         Bword = word(name="b")
         Iword = word(name="i")
         Eword = word(name="e")
-        RealPhrase = Phrase(name="real_phrase")
+        RealPhrase = phrase(name="real_phrase")
         people = phrase(name='people')
         organization = phrase(name='organization')
         location = phrase(name='location')
