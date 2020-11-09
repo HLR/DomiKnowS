@@ -366,7 +366,7 @@ class DataNode:
             self.findConceptsNamesInDatanodes(dns=dn.getChildDataNodes(), conceptNames = conceptNames, relationNames = relationNames)
             
         return conceptNames, relationNames
-        
+    
     # Find dataNodes in data graph of the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
         if dns is None:
@@ -451,7 +451,16 @@ class DataNode:
     
         if depth == 0 and not returnDns:
             _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
-
+    
+        if returnDns:
+            returnDnsNotSorted = OrderedDict()
+            for dn in returnDns:
+                returnDnsNotSorted[dn.getInstanceID()] = dn
+                    
+            returnDnsSorted = OrderedDict(sorted(returnDnsNotSorted.items()))
+        
+            returnDns = [*returnDnsSorted.values()]
+        
         return returnDns
           
     # Get root of the dataNode
@@ -609,11 +618,21 @@ class DataNode:
                 return [float("nan"), float("nan")]
             
             if len(dataNode) == 2:
-                value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+                attrNames = []
+                for _, rel in enumerate(rootRelation.has_a()): 
+                    attrNames.append(rel.name)
+                        
+                _rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})
+                
+                if _rDN:
+                    value = _rDN[0].getAttribute(key)
+                else:
+                    return [1, float("nan")] # ?
+                #value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             else:
-                return [float("nan"), float("nan")] # ?
+                return [1, float("nan")] # ?
         
         if value is None: # No probability value - return negative probability 
             return [float("nan"), float("nan")]
@@ -979,13 +998,18 @@ class DataNode:
                 continue
             
             rootRelation = self.__findRootConceptOrRelation(concept_name)
-            currentCandidates = candidates_currentConceptOrRelation[concept_name]
+            attrNames = []
+            for _, rel in enumerate(rootRelation.has_a()): 
+                attrNames.append(rel.name)
+                
+            currentCandidates  = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
             
-            for infer_candidate in currentCandidates:
-                infer_candidate[0].relationLinks[rootRelation.name][infer_candidate[1].getInstanceID()].attributes[key] = \
-                    torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
+            for infer_candidate in currentCandidates:  
+                rDN = infer_candidate[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : infer_candidate[0].getInstanceID(), attrNames[1]: infer_candidate[1].getInstanceID()})[0]
+
+                rDN.attributes[key] = torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
                         
         return #tokenResult, pairResult, tripleResult
     
@@ -1313,38 +1337,33 @@ class DataNodeBuilder(dict):
                 
                 for aIndex, a in enumerate(attributeNames):
                       
-                    aValue = relationAttrsCache[a]
+                    aValue = relationAttrsCache[a][i]
                     for j, av in enumerate(aValue):
-                        for k, currentAV in enumerate(av):
+                        isInRelation = av.item()
+                        if isInRelation == 0:
+                            continue
                         
-                            if currentAV.item() == 0:
-                                continue
-                            
-                            dn = existingDnsForAttr[a][k]
-                            
-                            if aIndex == 0:
-                                dn.addRelationLink(relationName, rDn) # First dataNode has relation link dataNode
-                            else:
-                                # Impact
-                                if relationName not in dn.impactLinks: # Next dataNode has relation link dataNode in impact
-                                    dn.impactLinks[relationName] = []
-                                    
-                                if rDn not in dn.impactLinks[relationName]:
-                                    dn.impactLinks[relationName].append(rDn)
-                                
-                            rDn.addRelationLink(a, dn) # Add this dataNode as value for the attribute in the relation link dataNode
+                        dn = existingDnsForAttr[a][j]
+                        
+                        dn.addRelationLink(relationName, currentRdn)
+                        currentRdn.addRelationLink(a, dn)   
+            return rDns
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
             _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes'%(keyDataName))
 
-            for rDn in existingDnsForRelation: # Loop through all relation links dataNodes
-                # Collect ids of dataNodes linked by this relation link dataNode
-                p = []
-                for dn in rDn.getRelationLinks().values():
-                    p.append(dn[0].instanceID)
-                   
-                _p = tuple(p) # Create tuple from ids to access value for this combination of dataNodes
-                rDn.attributes[keyDataName] = vInfo.value[_p] # Add / /Update value of the attribute
+            existingDnsForRelationNotSorted = OrderedDict()
+            for dn in existingDnsForRelation:
+                existingDnsForRelationNotSorted[dn.getInstanceID()] = dn
+                
+            existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
+            
+            if len(existingDnsForRelation) != vInfo.len:
+                _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                return
+ 
+            for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1776,7 +1795,7 @@ class DataNodeBuilder(dict):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
         # Create key for dataNonde construction
-        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:]))
+        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
         vInfo = self.__processAttributeValue(value, keyDataName)

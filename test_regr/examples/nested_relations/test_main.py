@@ -5,6 +5,7 @@ sys.path.append('../../..')
 
 import pytest
 
+
 @pytest.fixture(name='case')
 def test_case():
     import torch
@@ -89,10 +90,10 @@ def test_case():
 def model_declaration(config, case):
     from regr.program.program import LearningBasedProgram
 
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-    from graph import rel_sentence_contains_word, rel_phrase_word1, rel_phrase_word2, rel_pair_phrase1, rel_pair_phrase2
+    from .graph import graph, sentence, word, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
+    from .graph import rel_sentence_contains_word, rel_phrase_word1, rel_phrase_word2, rel_pair_phrase1, rel_pair_phrase2
     from test_regr.sensor.pytorch.sensors import TestSensor, TestEdgeSensor
 
     graph.detach()
@@ -209,10 +210,10 @@ def model_declaration(config, case):
     return lbp
 
 def test_graph_naming():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-    from graph import rel_sentence_contains_word, rel_phrase_word1, rel_phrase_word2, rel_pair_phrase1, rel_pair_phrase2
+    from .graph import graph, sentence, word, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
+    from .graph import rel_sentence_contains_word, rel_phrase_word1, rel_phrase_word2, rel_pair_phrase1, rel_pair_phrase2
 
     # graph
     assert graph.name == 'global'
@@ -248,10 +249,10 @@ def test_graph_naming():
 
 @pytest.mark.gurobi
 def test_main_conll04(case):
-    from config import CONFIG
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
+    from .config import CONFIG
+    from .graph import graph, sentence, word, phrase, pair
+    from .graph import people, organization, location, other, o
+    from .graph import work_for, located_in, live_in, orgbase_on, kill
 
     lbp = model_declaration(CONFIG.Model, case)
     data = {}
@@ -372,6 +373,7 @@ def test_main_conll04(case):
         # # Sum all value of attribute work_for/ILP  for the pair relation from 3
         # #assert sum(pairResult['work_for'][3]) == 0
         # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
+
 
 if __name__ == '__main__':
     pytest.main([__file__])
