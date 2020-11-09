@@ -1,6 +1,7 @@
 import sys
 from itertools import product
-#sys.path.append('../../..')
+sys.path.append('.')
+sys.path.append('../../..')
 
 import pytest
 
