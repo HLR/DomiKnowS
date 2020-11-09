@@ -65,6 +65,7 @@ class LogicalConstrain:
                 
         # Check correctness of variable number for concept
         for e_itemNo, e_item in enumerate(e):
+            continue
             if isinstance(e_item, Concept):
                 if e_itemNo + 1 >= len(e):
                     break # No more elements after current
