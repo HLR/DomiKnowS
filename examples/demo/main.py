@@ -6,11 +6,12 @@ from regr.graph import Graph, Concept, Relation
 from regr.graph import ifL, notL, andL, orL, nandL
 from regr.program import POIProgram
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss
 
-from models import tokenize, WordEmbedding, Classifier
+from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
 
 
 Graph.clear()
@@ -27,56 +28,59 @@ with Graph('example') as graph:
     sentence.contains(word)
     people = word(name='people')
     organization = word(name='organization')
+    O = word(name='O')
+    pair = Concept(name='pair')
+    pair.has_a(arg1=word, arg2=word)
+    work_for = pair(name='work_for')
+
     nandL(people, organization)
-    # pair = Concept(name='pair')
-    # pair.has_a(arg1=word, arg2=word)
-    # work_for = pair(name='work_for')
-    # ifL(work_for, ('x', 'y'), andL(people, 'x', organization, 'y'))
+    ifL(work_for, ('x', 'y'), andL(people, 'x', organization, 'y'))
 
-#
-# Reader as a list
-#
-reader = [{
-    'text': 'John works for IBM',
-    'peop': [1, 0, 0, 0],
-    'org': [0, 0, 0, 1],
-    'wf': [(0,3)]
-    },]
-
-#
-# Reader as minimal required interface
-#
 SAMPLE = {
-    'text': 'John works for IBM',
+    'text': ['John works for IBM'],
     'peop': [1, 0, 0, 0],
     'org': [0, 0, 0, 1],
     'wf': [(0,3)]
 }
+
+#
+# Reader as a list
+#
+reader = [SAMPLE]
+
+#
+# Reader as minimal required interface
+#
 class Reader():
     def __iter__(self):
-        yield SAMPLE
+        yield # some sophisticated code to retrieve a sample
 
     def __len__(self):  # optional
-        return 1
+        return 0 # some magic number
 
-reader = Reader()
+# reader = Reader()
 
 #
 # Sesnor / Learner
 #
-sentence['index'] = ReaderSensor(keyword='text')
+sentence['text'] = ReaderSensor(keyword='text')
 
 scw = sentence.relate_to(word)[0]
-scw['forward'] = TorchEdgeSensor('index', to='index', forward=tokenize)
-# word['index'] = ContainEdgeSensor('index', forward=tokenize)
+word[scw.forward, 'text'] = JointSensor(sentence['text'], forward=tokenize)
+word['emb'] = ModuleLearner('text', module=WordEmbedding())
 
 word[people] = ReaderSensor(keyword='peop', label=True)
 word[organization] = ReaderSensor(keyword='org', label=True)
 
-
-word['emb'] = ModuleLearner('index', module=WordEmbedding())
 word[people] = ModuleLearner('emb', module=Classifier())
 word[organization] = ModuleLearner('emb', module=Classifier())
+
+arg1, arg2 = pair.relate_to(word)
+pair[arg1.backward, arg2.backward] = JointSensor(word['text'], forward=make_pair)
+pair['emb'] = FunctionalSensor(arg1.backward('emb'), arg2.backward('emb'), forward=concat)
+pair[work_for] = ModuleLearner('emb', module=Classifier(200))
+
+pair[work_for] = FunctionalReaderSensor(pair[arg1.backward], pair[arg2.backward], keyword='wf', forward=pair_label, label=True)
 
 #
 # Program
@@ -107,7 +111,10 @@ print(program.model.loss)
 print(program.model.metric)
 
 print('-'*40)
-
+linearsoftmax = torch.nn.Sequential(
+    torch.nn.Linear(100,4),
+    torch.nn.Softmax()
+)
 #
 # datanode
 #
