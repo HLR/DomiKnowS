@@ -155,7 +155,7 @@ def model_declaration(config, case):
     phrase[rel_phrase_word1.backward, rel_phrase_word2.backward] = TestSensor(
         word['emb'],
         expected_inputs=(case.word.emb,),
-        expected_outputs=(case.pair.pw1_backward, case.pair.pw2_backward))
+        expected_outputs=(case.phrase.pw1_backward, case.phrase.pw2_backward))
 
     phrase['emb'] = TestSensor(
         rel_phrase_word1.backward('emb'), rel_phrase_word2.backward('emb'),

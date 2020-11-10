@@ -10,7 +10,7 @@ from .graph import sentence, word, phrase, pair, work_for, located_in, live_in, 
 config = {
     'Model': {
         'Model': PoiModel,
-        'poi': (sentence, word, phrase, pair, work_for, located_in, live_in, orgbase_on, kill, Oword, Bword, Iword, Eword, location, other, people, organization),
+        'poi': (sentence, word, Oword, Bword, Iword, Eword, phrase, location, other, people, organization, pair, work_for, located_in, live_in, orgbase_on, kill ),
         'loss': None,
         'metric': None,
     },
