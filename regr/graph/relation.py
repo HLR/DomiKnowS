@@ -1,6 +1,9 @@
 import abc
 from collections import OrderedDict
 from itertools import chain, permutations
+
+import torch
+
 if __package__ is None or __package__ == '':
     from base import BaseGraphTree
     from concept import Concept
@@ -17,15 +20,16 @@ class Transformed():
         self.property = property
         self.fn = fn
 
-    def __call__(self, data_item):
+    def __call__(self, data_item, device=-1):
         value = self.property(data_item)
         try:
             mapping = self.relationfunction.dst[self.relationfunction](data_item)
         except KeyError:
             mapping = self.relationfunction.src[self.relationfunction.T](data_item).T
-        mapping = mapping.float()
+        mapping = mapping.to(dtype=torch.float, device=device)
+        value = value.to(dtype=torch.float, device=device)
         if self.fn is None:
-            return mapping.matmul(value.float())
+            return mapping.matmul(value)
         # mapping (N,M)
         # value (M,...)
         mapping = mapping.view(*(mapping.shape + (1,)*(len(value.shape)-1)))  # (N,M,...)

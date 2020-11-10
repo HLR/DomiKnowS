@@ -169,11 +169,14 @@ class FunctionalSensor(TorchSensor):
         elif isinstance(pre, (Property, Sensor)):
             return self.context_helper[pre]
         elif isinstance(pre, Transformed):
-            return pre(self.context_helper)
+            return pre(self.context_helper, device=self.device)
         return pre
 
     def forward_wrap(self):
-        return self.forward(*self.inputs)
+        value = self.forward(*self.inputs)
+        if isinstance(value, torch.Tensor) and value.device is not self.device:
+            value = value.to(device=self.device)
+        return value
 
     def forward(self, *inputs, **kwinputs):
         if self.forward_ is not None:
@@ -453,8 +456,9 @@ class TorchEdgeSensor(FunctionalSensor):
     def update_context(
         self,
         data_item: Dict[str, Any],
-        force=False):
-        super().update_context(data_item, force=force)
+        force=False,
+        override=True):
+        super().update_context(data_item, force=force, override=override)
         data_item[self.dst[self.to]] = data_item[self]
         return data_item
 
