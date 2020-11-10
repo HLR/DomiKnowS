@@ -22,6 +22,11 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application') as app_graph:
+        Oword = word(name="o")
+        Bword = word(name="b")
+        Iword = word(name="i")
+        Eword = word(name="e")
+        RealPhrase = phrase(name="real_phrase")
         people = phrase(name='people')
         organization = phrase(name='organization')
         location = phrase(name='location')
@@ -48,6 +53,10 @@ with Graph('global') as graph:
 
         # LC1
         ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        
+        #LC2 Each sentence should contain at least one person phrase
+        
+        #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
         
         #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
         #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
