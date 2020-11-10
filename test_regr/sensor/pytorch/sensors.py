@@ -1,12 +1,12 @@
 from typing import Any
 import torch
 
-from regr.sensor.pytorch.sensors import TorchSensor, ConstantSensor, ConstantEdgeSensor, JointSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, ConstantSensor, ConstantEdgeSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 
-class BaseTestSensor(JointSensor, TorchSensor):
+class BaseTestSensor(JointSensor, FunctionalSensor):
     @property
     def expected_inputs(self):
         return self._expected_inputs
