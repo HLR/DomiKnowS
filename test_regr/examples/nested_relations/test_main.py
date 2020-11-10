@@ -66,7 +66,10 @@ def test_case():
             'pw2_backward': torch.tensor([[1, 0, 0, 0],
                                           [0, 0, 1, 0],
                                           [0, 0, 0, 1]], device=device),
-            'emb': torch.stack([word_emb[0], word_emb[1]+word_emb[2], word_emb[3]], dim=0),
+            'emb': torch.stack([
+                torch.cat((word_emb[0], word_emb[0]), dim=0),
+                torch.cat((word_emb[1], word_emb[2]), dim=0),
+                torch.cat((word_emb[3], word_emb[3]), dim=0)], dim=0),
             #                             John        "works for"           IBM
             'people': torch.tensor([[0.3, 0.7], [0.98, 0.02], [0.40, 0.6]], device=device),
             'organization': torch.tensor([[0.5, 0.5],  [0.97, 0.03], [0.09, 0.91]], device=device),
@@ -79,10 +82,10 @@ def test_case():
             'pa1_backward': torch.tensor([[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 1]], device=device),
             'pa2_backward': torch.tensor([[0, 1, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]], device=device),
             'emb': torch.stack([
-                torch.cat((word_emb[0], word_emb[1] + word_emb[2]), dim=0),
-                torch.cat((word_emb[0], word_emb[3]), dim=0),
-                torch.cat((word_emb[3], word_emb[0]), dim=0),
-                torch.cat((word_emb[3], word_emb[1] + word_emb[2]), dim=0),
+                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
+                torch.cat((torch.cat((word_emb[0], word_emb[0]), dim=0), torch.cat((word_emb[3], word_emb[3]), dim=0)), dim=0),
+                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[0], word_emb[0]), dim=0)), dim=0),
+                torch.cat((torch.cat((word_emb[3], word_emb[3]), dim=0), torch.cat((word_emb[1], word_emb[2]), dim=0)), dim=0),
             ]),
             'work_for': torch.tensor([[1.00, float("nan")], [0.70, 0.03], [0.37, 0.63]], device=device),
             'live_in': torch.mul(torch.rand(4, 2, device=device), 0.5), # TODO: add examable values
@@ -133,6 +136,22 @@ def model_declaration(config, case):
         expected_outputs=case.word.emb)
 
     word[Eword] = TestSensor(
+        label=True,
+        expected_outputs=case.word.Eword)
+    
+    word[Iword] = TestSensor(
+        label=True,
+        expected_outputs=case.word.Iword)
+    
+    word[Oword] = TestSensor(
+        label=True,
+        expected_outputs=case.word.Oword)
+    
+    word[Bword] = TestSensor(
+        label=True,
+        expected_outputs=case.word.Bword)
+    
+    word[Eword] = TestSensor(
         'emb',
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.Eword)
@@ -169,45 +188,45 @@ def model_declaration(config, case):
 
     pair['emb'] = TestSensor(
         rel_pair_phrase1.backward('emb'), rel_pair_phrase2.backward('emb'),
-        expected_inputs=(case.pair.emb[:,:2048],case.pair.emb[:,2048:]),
+        expected_inputs=(case.pair.emb[:,:4096],case.pair.emb[:,4096:]),
         expected_outputs=case.pair.emb)
 
     phrase[people] = TestSensor(
         label=True,
-        expected_outputs=case.word.people)
+        expected_outputs=case.phrase.people)
     phrase[organization] = TestSensor(
         label=True,
-        expected_outputs=case.word.organization)
+        expected_outputs=case.phrase.organization)
     phrase[location] = TestSensor(
         label=True,
-        expected_outputs=case.word.location)
+        expected_outputs=case.phrase.location)
     phrase[other] = TestSensor(
         label=True,
-        expected_outputs=case.word.other)
+        expected_outputs=case.phrase.other)
     phrase[o] = TestSensor(
         label=True,
-        expected_outputs=case.word.O)
+        expected_outputs=case.phrase.O)
 
     phrase[people] = TestSensor(
         'emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.people)
+        expected_inputs=(case.phrase.emb,),
+        expected_outputs=case.phrase.people)
     phrase[organization] = TestSensor(
         'emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.organization)
+        expected_inputs=(case.phrase.emb,),
+        expected_outputs=case.phrase.organization)
     phrase[location] = TestSensor(
         'emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.location)
+        expected_inputs=(case.phrase.emb,),
+        expected_outputs=case.phrase.location)
     phrase[other] = TestSensor(
         'emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.other)
+        expected_inputs=(case.phrase.emb,),
+        expected_outputs=case.phrase.other)
     phrase[o] = TestSensor(
         'emb',
-        expected_inputs=(case.word.emb,),
-        expected_outputs=case.word.O)
+        expected_inputs=(case.phrase.emb,),
+        expected_outputs=case.phrase.O)
 
 
     pair[work_for] = TestSensor(
@@ -302,7 +321,7 @@ def test_main_conll04(case):
 
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw/functionalsensor') == case.word.raw[child_node.instanceID]
+            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
 
         elif child_node.ontologyNode.name == 'phrase':
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
