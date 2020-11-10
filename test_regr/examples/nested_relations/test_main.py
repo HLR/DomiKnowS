@@ -37,6 +37,26 @@ def test_case():
             'scw': torch.tensor([[1], [1], [1], [1]], device=device),
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
+            'Oword': torch.tensor([[0.6, 0.4],
+                                  [0.8, 0.2],
+                                  [0.55, 0.45],
+                                  [0.7, 0.3]],
+                                  device=device),
+            'Bword': torch.tensor([[0.3, 0.7],
+                                   [0.4, 0.6],
+                                   [0.45, 0.55],
+                                   [0.2, 0.8]],
+                                  device=device),
+            'Iword': torch.tensor([[0.1, 0.9],
+                                   [0.3, 0.7],
+                                   [0.2, 0.8],
+                                   [0.1, 0.9]],
+                                  device=device),
+            'Eword': torch.tensor([[0.6, 0.4],
+                                   [0.4, 0.6],
+                                   [0.1, 0.9],
+                                   [0.5, 0.5]],
+                                  device=device),
         },
         'phrase': {
             # ['John', 'works for', 'IBM'],
@@ -91,6 +111,7 @@ def model_declaration(config, case):
     from regr.program.program import LearningBasedProgram
 
     from .graph import graph, sentence, word, phrase, pair
+    from .graph import Eword, Iword, Bword, Oword
     from .graph import people, organization, location, other, o
     from .graph import work_for, located_in, live_in, orgbase_on, kill
     from .graph import rel_sentence_contains_word, rel_phrase_word1, rel_phrase_word2, rel_pair_phrase1, rel_pair_phrase2
@@ -110,6 +131,26 @@ def model_declaration(config, case):
         'raw',
         expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
+
+    word[Eword] = TestSensor(
+        'emb',
+        expected_inputs=(case.word.emb,),
+        expected_outputs=case.word.Eword)
+
+    word[Iword] = TestSensor(
+        'emb',
+        expected_inputs=(case.word.emb,),
+        expected_outputs=case.word.Iword)
+
+    word[Oword] = TestSensor(
+        'emb',
+        expected_inputs=(case.word.emb,),
+        expected_outputs=case.word.Oword)
+
+    word[Bword] = TestSensor(
+        'emb',
+        expected_inputs=(case.word.emb,),
+        expected_outputs=case.word.Bword)
 
     phrase[rel_phrase_word1.backward, rel_phrase_word2.backward] = TestSensor(
         word['emb'],
