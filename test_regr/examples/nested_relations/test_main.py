@@ -330,18 +330,24 @@ def test_main_conll04(case):
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
 
         elif child_node.ontologyNode.name == 'phrase':
-            assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
+            assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.phrase.people[child_node.instanceID]).all()
             assert (child_node.getAttribute('<organization>') == case.phrase.organization[child_node.instanceID]).all()
             assert (child_node.getAttribute('<location>') == case.phrase.location[child_node.instanceID]).all()
             assert (child_node.getAttribute('<other>') == case.phrase.other[child_node.instanceID]).all()
             assert (child_node.getAttribute('<O>') == case.phrase.O[child_node.instanceID]).all()
-            assert len(child_node.findDatanodes(select="pair")) == 1
+            if child_node.instanceID == 0:
+                assert len(child_node.findDatanodes(select="pair")) == 3
+            elif child_node.instanceID == 1:
+                assert len(child_node.findDatanodes(select="pair")) == 2
+            elif child_node.instanceID == 2:
+                assert len(child_node.findDatanodes(select="pair")) == 3
+                
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
     assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
-    #assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
+    assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]
