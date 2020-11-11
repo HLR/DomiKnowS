@@ -328,6 +328,7 @@ def test_main_conll04(case):
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            assert len(child_node.findDatanodes(select="phrase")) == 1
 
         elif child_node.ontologyNode.name == 'phrase':
             assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
