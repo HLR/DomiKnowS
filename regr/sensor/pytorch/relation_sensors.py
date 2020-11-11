@@ -57,51 +57,45 @@ class EdgeSensor(FunctionalSensor):
         return super().fetch_value(pre, selector, concept)
 
 
-class CandidateSensor(QuerySensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
-
-        # Add identification of candidate
-        self.name += "_Candidate_"
-
+class CandidateSensor(EdgeSensor, QuerySensor):
     @property
     def args(self):
-        return [rel.dst for rel in self.concept.has_a()]
+        return [self.dst, self.src]
 
     def update_pre_context(
             self,
             data_item: Dict[str, Any]
     ) -> Any:
         super().update_pre_context(data_item)
-        for concept in self.args:
-            if "index" in concept:
-                concept['index'](data_item)  # call index property to make sure it is constructed
+        # for concept in self.args:
+        #     if "index" in concept:
+        #         concept['index'](data_item)  # call index property to make sure it is constructed
 
     def define_inputs(self):
-        super().define_inputs()
+        super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
+        if self.inputs is None:
+            self.inputs = []
         args = []
         for concept in self.args:
             datanodes = self.builder.findDataNodesInBuilder(select=concept)
             args.append(datanodes)
-        self.inputs = self.inputs[:1] + args + self.inputs[1:]
+        self.inputs = args + self.inputs
 
     def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
         # args
-        args = self.inputs[1:len(self.args) + 1]
+        args = self.inputs[:len(self.args)]
         # functional inputs
-        inputs = self.inputs[len(self.args) + 1:]
+        inputs = self.inputs[len(self.args):]
 
         arg_lists = []
         dims = []
         for arg_list in args:
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
-        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
+        output = torch.zeros(dims, dtype=torch.long, device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
+            output[(*index,)] = self.forward(*arg_list, *inputs)
         return output
 
 
