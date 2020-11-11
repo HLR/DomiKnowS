@@ -254,10 +254,11 @@ class JointSensor(FunctionalSensor):
             yield from self.components
 
     def __call__(self, *args, **kwargs):
-        super().__call__(*args, **kwargs)
+        value = super().__call__(*args, **kwargs)
         if self.bundle_call and self.components is not None:
             for sensor in self.components:
                 sensor(*args, **kwargs)
+        return value
 
     def update_context(
         self,

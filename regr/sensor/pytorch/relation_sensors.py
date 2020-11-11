@@ -99,6 +99,55 @@ class CandidateSensor(EdgeSensor, QuerySensor):
         return output
 
 
+class CompositionCandidateSensor(JointSensor, QuerySensor):
+    @property
+    def args(self):
+        return [relation.src for relation in self.relations]
+
+    def __init__(self, *args, relations, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.relations = relations
+
+    def define_inputs(self):
+        super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
+        if self.inputs is None:
+            self.inputs = []
+        args = []
+        for concept in self.args:
+            datanodes = self.builder.findDataNodesInBuilder(select=concept)
+            args.append(datanodes)
+        self.inputs = args + self.inputs
+
+    def forward_wrap(self):
+        # args
+        args = self.inputs[:len(self.args)]
+        # functional inputs
+        inputs = self.inputs[len(self.args):]
+
+        arg_lists = []
+        indexes = []
+        dims = []
+        for arg_list in args:
+            arg_lists.append(enumerate(arg_list))
+            dims.append(len(arg_list))
+            indexes.append([])
+
+        for arg_enum in product(*arg_lists):
+            index, arg_list = zip(*arg_enum)
+            if self.forward(*arg_list, *inputs):
+                for i, index_ in enumerate(index):
+                    indexes[i].append(index_)
+
+        mappings = []
+        for index, dim in zip(indexes, dims):
+            index = torch.tensor(index).unsqueeze(-1)
+            mapping = torch.zeros(index.shape[0], dim)
+            mapping.scatter_(1, index, 1)
+            mappings.append(mapping)
+
+        return mappings
+
+
 class CandidateRelationSensor(CandidateSensor):
     @property
     def args(self):

@@ -11,7 +11,8 @@ def case():
         [random.random() > 0.5, random.random() > 0.5]]
     case = {
         'container': 'hello world',
-        'container_edge': ['hello', 'world'],
+        'container_edge': [[1], [1]],
+        'concept': ['hello', 'world'],
         'concept_feature': [
             'hello, {}'.format(random.random()),
             'world, {}'.format(random.random())],
@@ -51,12 +52,17 @@ def graph(case):
             edge['concept2'] = Property('concept2')
 
     # model
-    container['index'] = ReaderSensor(keyword='container_keyword')
-    container_contains_concept['forward'] = TestEdgeSensor(
-        'index', mode='forward', to='index',
-        expected_inputs=[case.container,],
+    container['raw'] = ReaderSensor(keyword='container_keyword')
+    concept[container_contains_concept.forward] = TestEdgeSensor(
+        container['raw'],
+        relation=container_contains_concept,
+        mode='forward',
+        expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
-    concept['index'] = InstantiateSensor(edges=[container_contains_concept['forward']])
+    concept['raw'] = TestSensor(
+        container['raw'],
+        expected_inputs=(case.container,),
+        expected_outputs=case.concept)
 
     return graph
 
@@ -64,20 +70,19 @@ def graph(case):
 @pytest.fixture()
 def sensor(case, graph):
     from regr.graph import DataNode
-    from regr.sensor.pytorch.relation_sensors import CandidateSensor
+    from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
     concept = graph['sub/concept']
     edge = graph['sub/edge']
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(datanodes, datanode_concept1, datanode_concept2, constant):
+    def forward(datanode_concept1, datanode_concept2, constant, *_):
         # update collector
         idx = len(collector)
         assert idx < 4
         collector.append((datanode_concept1, datanode_concept2))
         # current existing datanodes
-        assert len(datanodes) == 0
         # test concept 1
         assert isinstance(datanode_concept1, DataNode)
         assert datanode_concept1.getOntologyNode() == concept
@@ -86,11 +91,11 @@ def sensor(case, graph):
         assert datanode_concept2.getOntologyNode() == concept
         # other arguments are like functional sensor
         assert constant == case.constant
-        index1 = datanode_concept1.getAttributes().get('index')
-        index2 = datanode_concept2.getAttributes().get('index')
-        return case.edge[index1][index2]
-    sensor = CandidateSensor(case.constant, forward=forward)
-    edge['index'] = sensor
+        index1 = datanode_concept1.instanceID
+        index2 = datanode_concept2.instanceID
+        return case.edge_value[index1][index2]
+    sensor = CompositionCandidateSensor(case.constant, concept['raw'], relations=(edge_concept1.backward, edge_concept2.backward), forward=forward)
+    edge[edge_concept1.backward, edge_concept2.backward] = sensor
     return sensor
 
 
@@ -118,7 +123,11 @@ def context(case, graph):
 def test_functional_sensor(case, sensor, context):
     import torch
     output = sensor(context)
-    assert (output == torch.tensor(case.edge_value, device=output.device)).all()
+    n = torch.tensor(case.edge_value).sum()
+    assert len(output[0]) == n
+    assert len(output[1]) == n
+    for arg1, arg2 in zip(*output):
+        assert case.edge_value[arg1.argmax()][arg2.argmax()]
 
 
 if __name__ == '__main__':
