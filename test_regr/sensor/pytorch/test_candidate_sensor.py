@@ -82,7 +82,6 @@ def sensor(case, graph):
         idx = len(collector)
         assert idx < 4
         collector.append((datanode_concept1, datanode_concept2))
-        # current existing datanodes
         # test concept 1
         assert isinstance(datanode_concept1, DataNode)
         assert datanode_concept1.getOntologyNode() == concept
@@ -91,10 +90,14 @@ def sensor(case, graph):
         assert datanode_concept2.getOntologyNode() == concept
         # other arguments are like functional sensor
         assert constant == case.constant
-        index1 = datanode_concept1.instanceID
-        index2 = datanode_concept2.instanceID
-        return case.edge_value[index1][index2]
-    sensor = CompositionCandidateSensor(case.constant, concept['raw'], relations=(edge_concept1.backward, edge_concept2.backward), forward=forward)
+        index1 = datanode_concept1.getAttribute('raw')
+        index2 = datanode_concept2.getAttribute('raw')
+        return case.edge[index1][index2]
+    sensor = CompositionCandidateSensor(
+        case.constant,
+        concept['raw'],
+        relations=(edge_concept1.backward, edge_concept2.backward),
+        forward=forward)
     edge[edge_concept1.backward, edge_concept2.backward] = sensor
     return sensor
 
@@ -102,7 +105,6 @@ def sensor(case, graph):
 @pytest.fixture()
 def context(case, graph):
     from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.relation_sensors import CandidateReaderSensor
     from regr.graph import Property, DataNodeBuilder
 
     context = {

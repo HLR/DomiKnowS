@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor, FunctionalReaderSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
@@ -159,39 +159,8 @@ class CandidateRelationSensor(CandidateSensor):
         self.relations = relations
 
 
-class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
-        self.data = None
-        self.keyword = keyword
-        if keyword is None:
-            raise ValueError('{} "keyword" must be assign.'.format(type(self)))
-
-    def fill_data(self, data):
-        self.data = data[self.keyword]
-
-    def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
-        # args
-        args = self.inputs[1:len(self.args)+1]
-        # functional inputs
-        inputs = self.inputs[len(self.args)+1:]
-
-        arg_lists = []
-        dims = []
-        for arg_list in args:
-            arg_lists.append(enumerate(arg_list))
-            dims.append(len(arg_list))
-
-        if self.data is None and self.keyword in self.context_helper:
-            self.data = self.context_helper[self.keyword]
-        output = torch.zeros(tuple(dims), dtype=torch.uint8).to(device=self.device)
-        for arg_enum in product(*arg_lists):
-            index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
-        return output
-
+class CompositionCandidateReaderSensor(CompositionCandidateSensor, FunctionalReaderSensor):
+    pass
 
 class CandidateEqualSensor(CandidateSensor):
     def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', relations=None):

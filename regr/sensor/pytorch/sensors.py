@@ -190,7 +190,7 @@ class ConstantSensor(FunctionalSensor):
         self.data = data
         self.as_tensor = as_tensor
 
-    def forward(self, *_) -> Any:
+    def forward(self, *_, **__) -> Any:
         try:
             if self.as_tensor:
                 return torch.tensor(self.data, device=self.device)
@@ -355,7 +355,7 @@ class ReaderSensor(ConstantSensor):
         except KeyError as e:
             raise KeyError("The key you requested from the reader doesn't exist: %s" % str(e))
 
-    def forward(self, *_) -> Any:
+    def forward(self, *_, **__) -> Any:
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
             return (super().forward(data) for data in self.data)
         else:
@@ -363,8 +363,11 @@ class ReaderSensor(ConstantSensor):
 
 
 class FunctionalReaderSensor(ReaderSensor):
-    def forward(self, *args) -> Any:
-        return super(ConstantSensor, self).forward(*args, data=self.data)  # skip ConstantSensor
+    def forward(self, *args, **kwargs) -> Any:
+        if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
+            return (super(ConstantSensor, self).forward(*args, data=data, **kwargs) for data in self.data)
+        else:
+            return super(ConstantSensor, self).forward(*args, data=self.data, **kwargs) # skip ConstantSensor
 
 
 class LabelReaderSensor(ReaderSensor):
