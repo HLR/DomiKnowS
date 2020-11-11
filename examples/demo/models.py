@@ -8,8 +8,8 @@ def tokenize(text):
     mapping = torch.zeros(len(flatten), len(text))
     i = 0
     for j, words_ in enumerate(words):
-        mapping[i:i+len(words), j] = 1
-        i += len(words)
+        mapping[i:i+len(words_), j] = 1
+        i += len(words_)
     return mapping, flatten
 
 
