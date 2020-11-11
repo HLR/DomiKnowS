@@ -1601,6 +1601,32 @@ class DataNodeBuilder(dict):
         else:
             _DataNodeBulder__Logger.info('Adding attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
 
+        if "relationMode" in conceptInfo:
+            relatedDnsType = conceptInfo["relationAttrs"]['src']
+            relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
+
+            requiredLenOFReltedDns = len(vInfo.value[0])
+            
+            if requiredLenOFReltedDns != len(relatedDns):
+                _DataNodeBulder__Logger.error('Number of expected related dataNode %i is different then the number of %i dataNodes of type %s - abandon the update'%(requiredLenOFReltedDns,len(relatedDns),relatedDnsType))
+                return
+                
+            for i in range(0,vInfo.len):
+                _dn = existingDnsForConcept[i]
+                    
+                _dn.attributes[keyDataName] = vInfo.value[i]
+                
+                if conceptInfo["relationMode"] == "forward":
+                    for index, isRelated in enumerate(vInfo.value[i]):
+                        if isRelated == 1:
+                            relatedDns[index].addChildDataNode(_dn)                            
+                elif conceptInfo["relationMode"] == "backward":
+                    for index, isRelated in enumerate(vInfo.value[i]):
+                        if isRelated == 1:
+                            _dn.addChildDataNode(relatedDns[index])  
+                
+            self.__updateRootDataNodeList(existingDnsForConcept)   
+            
         if len(existingDnsForConcept) == 1: # Single dataNode
             existingDnsForConcept[0].attributes[keyDataName] = vInfo.value
             if vInfo.len > 1:
@@ -1805,10 +1831,6 @@ class DataNodeBuilder(dict):
             equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
             self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
         
-        elif conceptInfo['relation']:
-            _DataNodeBulder__Logger.debug('%s found in the graph; it is a relation'%(_conceptName))
-            self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
-            
         else:                       
             _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
             index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
@@ -1816,6 +1838,10 @@ class DataNodeBuilder(dict):
             if index:
                 indexKey = graphPath  + '/' +_conceptName + '/index'
                 dict.__setitem__(self, indexKey, index)
+            
+            if conceptInfo['relation']:
+                _DataNodeBulder__Logger.debug('%s is a relation'%(_conceptName))
+                self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
             
         # Add value to the underling dictionary
         r = dict.__setitem__(self, _key, value)
