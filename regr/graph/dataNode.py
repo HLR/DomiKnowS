@@ -1270,6 +1270,12 @@ class DataNodeBuilder(dict):
         # Find if DatnNodes for this relation have been created
         existingDnsForRelation = self.findDataNodesInBuilder(select = relationName)
         
+        existingDnsForRelationNotSorted = OrderedDict()
+        for dn in existingDnsForRelation:
+            existingDnsForRelationNotSorted[dn.getInstanceID()] = dn
+                
+        existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
+            
         if conceptInfo['relationAttrData']:
             index = keyDataName.index('.')
             attrName = keyDataName[0:index]
@@ -1301,41 +1307,20 @@ class DataNodeBuilder(dict):
             
         # -------- Create or update relation nodes
         
+        relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
+        relationAttrsCache = dict.__getitem__(self, relationAttrsCacheName)
+            
         # -- No DataNode of this relation created yet
-        if len(existingDnsForRelation) == 0: 
+        if relationAttrsCache: 
             attributeNames = [*existingDnsForAttr]
             
-            relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
-            relationAttrsCache = dict.__getitem__(self, relationAttrsCacheName)
-
-            rDns = []
-            for i in range(0, vInfo.len):
-            
-                #_p = tuple([__p.getInstanceID() for __p in p]) # tuple with ids of the dataNodes
-                #instanceID = ' -> '.join([n.ontologyNode.name + ' ' + str(n.getInstanceID()) for n in p])
-                
-                instanceID = i
-                
-                # Check if this relation link is excluded by the provided value (need to have 'Candidate' substring in the tensor column name
-                #if (keyDataName.find("_Candidate_") > 0) and (vInfo.value[_p] == 0):
-                #   _DataNodeBulder__Logger.warning('DataNode for relation link with id %s is not in the Candidate list - it is not added'%(instanceID))
-                #   continue
-                #else:
-                    
-
-                instanceValue = ""
-                
-                rDn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept']) # Create dataNode for relation link
-                rDn.attributes[keyDataName] = vInfo.value[i] 
-                                
-                rDns.append(rDn)
-                _DataNodeBulder__Logger.debug('DataNode for relation link with id %s created'%(instanceID))
-
-            for i in range(0, len(rDns)):
+            for i in range(0, len(existingDnsForRelationSorted)):
                   
-                currentRdn = rDns[i]  
+                currentRdn = existingDnsForRelationSorted[i]  
                 
-                for aIndex, a in enumerate(attributeNames):
+                currentRdn.attributes[keyDataName] = vInfo.value[i] 
+
+                for _, a in enumerate(attributeNames):
                       
                     aValue = relationAttrsCache[a][i]
                     for j, av in enumerate(aValue):
@@ -1347,17 +1332,12 @@ class DataNodeBuilder(dict):
                         
                         dn.addRelationLink(relationName, currentRdn)
                         currentRdn.addRelationLink(a, dn)   
-            return rDns
+                            
+            dict.__setitem__(self, relationAttrsCacheName, {})
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
             _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes'%(keyDataName))
-
-            existingDnsForRelationNotSorted = OrderedDict()
-            for dn in existingDnsForRelation:
-                existingDnsForRelationNotSorted[dn.getInstanceID()] = dn
-                
-            existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
-            
+ 
             if len(existingDnsForRelation) != vInfo.len:
                 _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 return
