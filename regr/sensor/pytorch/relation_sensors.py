@@ -62,15 +62,6 @@ class CandidateSensor(EdgeSensor, QuerySensor):
     def args(self):
         return [self.dst, self.src]
 
-    def update_pre_context(
-            self,
-            data_item: Dict[str, Any]
-    ) -> Any:
-        super().update_pre_context(data_item)
-        # for concept in self.args:
-        #     if "index" in concept:
-        #         concept['index'](data_item)  # call index property to make sure it is constructed
-
     def define_inputs(self):
         super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
         if self.inputs is None:
@@ -140,9 +131,10 @@ class CompositionCandidateSensor(JointSensor, QuerySensor):
 
         mappings = []
         for index, dim in zip(indexes, dims):
-            index = torch.tensor(index).unsqueeze(-1)
-            mapping = torch.zeros(index.shape[0], dim)
-            mapping.scatter_(1, index, 1)
+            mapping = torch.zeros(len(index), dim)
+            if len(index):
+                index = torch.tensor(index, dtype=torch.long).view(-1, 1)
+                mapping.scatter_(1, index, 1)
             mappings.append(mapping)
 
         return mappings
