@@ -185,8 +185,8 @@ class FunctionalSensor(TorchSensor):
 
 
 class ConstantSensor(FunctionalSensor):
-    def __init__(self, *pres, data, edges=None, forward=None, label=False, as_tensor=True, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+    def __init__(self, *args, data, as_tensor=True, **kwargs):
+        super().__init__(*args, **kwargs)
         self.data = data
         self.as_tensor = as_tensor
 
