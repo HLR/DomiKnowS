@@ -1007,8 +1007,12 @@ class DataNode:
             key = '<' + concept_name + '>/ILP'
             
             for infer_candidate in currentCandidates:  
-                rDN = infer_candidate[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : infer_candidate[0].getInstanceID(), attrNames[1]: infer_candidate[1].getInstanceID()})[0]
-
+                rDNs = infer_candidate[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : infer_candidate[0].getInstanceID(), attrNames[1]: infer_candidate[1].getInstanceID()})
+                
+                if not rDNs:
+                    continue
+                
+                rDN = rDNs[0]
                 rDN.attributes[key] = torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
                         
         return #tokenResult, pairResult, tripleResult
