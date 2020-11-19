@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL, nandL
+from regr.graph.logicalConstrain import ifL, andL, nandL, orL, atLeastL
 
 
 Graph.clear()
@@ -51,14 +51,12 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
-        # LC1
-        ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        # LC1 work_for has arg1 people and arg2 organization
+        ifL(work_for, ('x',), andL(people, ('x','arg1'), organization, ('x','arg2')))
         
-        #LC2 Each sentence should contain at least one person phrase
+        #LC2 Each sentence should contain at least one person phrase        
+        atLeastL(1, ('x', 'arg1'), andL(rel_sentence_contains_phrase, ('x',), phrase, ('x', 'arg1')))
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
+        ifL(phrase, ('x',), orL(andL(Iword ('x', 'arg1'), Iword ('x', 'arg2')), andL(Bword, ('x', 'arg1'), Eword, ('x', 'arg2'))))
         
-        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
