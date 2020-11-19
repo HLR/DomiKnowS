@@ -1292,7 +1292,7 @@ class DataNodeBuilder(dict):
             relationAttrsCache =  dict.__getitem__(self, relationAttrsCacheName)
             relationAttrsCache[attrName] = vInfo.value
                 
-            _DataNodeBulder__Logger.info('Received data for %s for relation link dataNode for %s cached, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
+            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
             return 
         
         _DataNodeBulder__Logger.info('Processing relation link dataNode for %s, found %i existing dataNode of this type - provided value has length %i'%(relationName,len(existingDnsForRelation),vInfo.len))
@@ -1304,16 +1304,21 @@ class DataNodeBuilder(dict):
              
             if _existingDnsForAttr:
                 existingDnsForAttr[relationAttributeName] = _existingDnsForAttr
-                _DataNodeBulder__Logger.info('Found %i dataNodes of the attribute %s concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
+                _DataNodeBulder__Logger.info('Found %i dataNodes of the attribute %s for concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
             else:
                 existingDnsForAttr[relationAttributeName] = []
-                _DataNodeBulder__Logger.warning('Not found dataNodes of the attribute %s concept %s'%(relationAttributeName,relationAttributeConcept.name))
+                _DataNodeBulder__Logger.warning('Not found dataNodes of the attribute %s for concept %s'%(relationAttributeName,relationAttributeConcept.name))
             
         # -------- Create or update relation nodes
         
         relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
-        relationAttrsCache = dict.__getitem__(self, relationAttrsCacheName)
-            
+
+        if dict.__contains__(self, relationAttrsCacheName):
+            relationAttrsCache = dict.__getitem__(self, relationAttrsCacheName)
+        else:
+            relationAttrsCache = None
+            _DataNodeBulder__Logger.warning('Not found cached data for relation %s'%(conceptInfo['concept'].name))
+
         # -- No DataNode of this relation created yet
         if relationAttrsCache: 
             attributeNames = [*existingDnsForAttr]
