@@ -112,8 +112,8 @@ class TorchSensor(Sensor):
 
 
 class FunctionalSensor(TorchSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto', build=True):
-        super().__init__(*pres, edges=edges, label=label, device=device)
+    def __init__(self, *pres, forward=None, build=True, **kwargs):
+        super().__init__(*pres, **kwargs)
         self.forward_ = forward
         self.build = build
 
@@ -206,8 +206,8 @@ class PrefilledSensor(FunctionalSensor):
 
 
 class TriggerPrefilledSensor(PrefilledSensor):
-    def __init__(self, *pres, callback_sensor=None, edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+    def __init__(self, *args, callback_sensor=None, **kwargs):
+        super().__init__(*args, **kwargs)
         self.callback_sensor = callback_sensor
 
     def forward(self, *args, **kwargs) -> Any:
@@ -342,8 +342,8 @@ def cache(SensorClass, CacheSensorClass=CacheSensor):
 
 
 class ReaderSensor(ConstantSensor):
-    def __init__(self, *pres, keyword=None, edges=None, forward=None, label=False, as_tensor=True, device='auto'):
-        super().__init__(*pres, data=None, edges=edges, forward=forward, label=label, as_tensor=as_tensor, device=device)
+    def __init__(self, *args, keyword=None, **kwargs):
+        super().__init__(*args, data=None, **kwargs)
         self.keyword = keyword
 
     def fill_data(self, data_item):
@@ -371,8 +371,9 @@ class FunctionalReaderSensor(ReaderSensor):
 
 
 class LabelReaderSensor(ReaderSensor):
-    def __init__(self, *pres, keyword=None, edges=None, forward=None, as_tensor=True, device='auto'):
-        super().__init__(*pres, keyword=keyword, edges=edges, forward=forward, label=True, as_tensor=as_tensor, device=device)
+    def __init__(self, *args, **kwargs):
+        kwargs['label'] = True
+        super().__init__(*args, **kwargs)
 
 
 class NominalSensor(TorchSensor):
@@ -424,9 +425,9 @@ class NominalSensor(TorchSensor):
 
 
 class ModuleSensor(FunctionalSensor):
-    def __init__(self, *pres, module, edges=None, label=False, device='auto'):
+    def __init__(self, *args, module, **kwargs):
         self.module = module
-        super().__init__(*pres, edges=edges, label=label, device=device)
+        super().__init__(*args, **kwargs)
 
     def forward(self, *inputs):
         return self.module(*inputs)
