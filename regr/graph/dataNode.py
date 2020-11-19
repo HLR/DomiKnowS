@@ -1497,90 +1497,41 @@ class DataNodeBuilder(dict):
                     _DataNodeBulder__Logger.error('Number of expected related dataNode %i is different then the number of %i dataNodes of type %s - abandon the update'%(requiredLenOFReltedDns,len(relatedDns),relatedDnsType))
                     return
 
-            for i in range(0,vInfo.len):
-                instanceValue = ""
-                instanceID = i
-                _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                for i in range(0,vInfo.len):
+                    instanceValue = ""
+                    instanceID = i
+                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                        
+                    _dn.attributes[keyDataName] = vInfo.value[i]
+                    dns.append(_dn)
                     
-                _dn.attributes[keyDataName] = vInfo.value[i]
-                dns.append(_dn)
-                
-                if conceptInfo["relationMode"] == "forward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            relatedDns[index].addChildDataNode(_dn)                            
-                elif conceptInfo["relationMode"] == "backward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            _dn.addChildDataNode(relatedDns[index])  
+                    if conceptInfo["relationMode"] == "forward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                relatedDns[index].addChildDataNode(_dn)                            
+                    elif conceptInfo["relationMode"] == "backward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                _dn.addChildDataNode(relatedDns[index])  
+            else:
+                for vIndex, v in enumerate(vInfo.value):
+                    dns1 = []
+                    for vIndex1, v1 in enumerate(v):
+                        instanceValue = ""
+                        instanceID = vIndex * len(v) + vIndex1
+                        _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                        
+                        _dn.attributes[keyDataName] = v1
+                        
+                        dns1.append(_dn)
+                                        
+                    _DataNodeBulder__Logger.info('Added %i new dataNodes %s'%(len(dns1),dns1))
+                    dns.append(dns1)
                 
             self.__updateRootDataNodeList(dns)   
 
             return dns
-        
-            for vIndex, v in enumerate(vInfo.value):
-                dns1 = []
-                for vIndex1, v1 in enumerate(v):
-                    instanceValue = ""
-                    instanceID = vIndex * len(v) + vIndex1
-                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-                    
-                    _dn.attributes[keyDataName] = v1
-                    
-                    dns1.append(_dn)
-                                    
-                _DataNodeBulder__Logger.info('Added %i new dataNodes %s'%(len(dns1),dns1))
-                dns.append(dns1)
-                
-            # Check if value has information about children - need to be tuples with two indexes - start index of children  - end index of children for the given new dataNode
-            if isinstance(vInfo.value[0][0], tuple): 
-                # Add it as parent to existing dataNodes - Backward information in the sensor data
-                _DataNodeBulder__Logger.info('The value is build of tuples - providing information about children of the new dataNodes')
-
-                if len(conceptInfo['contains']) > 0:
-                    childType = conceptInfo['contains'][0].name # Assume single contains for now
-                    childrenDns = self.findDataNodesInBuilder(select = childType)
-                    
-                    childOffset = 0
-                    if len(childrenDns) > 0:   
-                        for j, _v  in enumerate(vInfo.value):
-                            for i, v in enumerate(_v):
-                                _DataNodeBulder__Logger.info('Added dataNodes with indexes from %i to %i of type %s to dataNode %s'%(v[0],v[1],childType,dns[j][i]))
-    
-                                for _i in range(v[0],v[1]+1):
-                                    dns[j][i].addChildDataNode(childrenDns[_i + childOffset])
-                                    
-                            childOffset =+ _v[-1][1]
-        else: # vInfo.dim > 2
-            _DataNodeBulder__Logger.warning('Dimension of value %i is larger then 2 -  not supported'%(vInfo.dim))
-
-        _dnLinked = False
             
-        # Add them as children to existing dataNodes - Forward information in the sensor data
-        for currentParentConcept in conceptInfo['containedIn']:
-            currentParentConceptName = currentParentConcept.name
-            currentParentDns = self.findDataNodesInBuilder(select = currentParentConceptName)
-            
-            if currentParentDns:
-                if len(currentParentDns) == len(dns):
-                    _DataNodeBulder__Logger.info('Adding dataNodes as children to %i dataNodes of type %s'%(len(currentParentDns),currentParentConceptName))
-                else:
-                    _DataNodeBulder__Logger.error('Number of dataNode sets %i is different then the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
-                    continue
-            else:
-                _DataNodeBulder__Logger.info('Not found any dataNode of type %s - this type is a potential parent of the current concept'%(currentParentConceptName))
-            
-            for currentParentDnIndex, currentParentDn in enumerate(currentParentDns):
-                for curentChildDn in dns[currentParentDnIndex]: # Set of new dataNodes for the current parent dataNode
-                    currentParentDn.addChildDataNode(curentChildDn)    
-                                           
-                _DataNodeBulder__Logger.info('Added %i dataNodes %s as children to the dataNode with id %s'%(len(dns[currentParentDnIndex]),dns[currentParentDnIndex],currentParentDn.instanceID))
-                _dnLinked = True # New dataNodes are linked with existing dataNodes
-                 
-        self.__updateRootDataNodeList(dns)   
-        
-        return dns
-                    
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
