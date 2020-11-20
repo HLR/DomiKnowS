@@ -48,7 +48,8 @@ class ProparaReader(RegrReader):
     def getactionval(self, item):
         action1s = torch.diag(torch.ones(len(item['steps']) + 1) )[:-1]
         action2s = torch.diag(torch.ones(len(item['steps']) + 1) )[1:]
-        return action1s, action2s
+        raw = torch.zeros(len(item['steps']))
+        return action1s, action2s, raw
     
     def getcreateval(self, item):
         actions = []
@@ -140,6 +141,7 @@ class ProparaReader(RegrReader):
                 values[(step*num_steps)+step1] = 1
         return values
     
+    
 from regr.graph import Graph, Concept, Relation
 from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
 
@@ -152,7 +154,7 @@ with Graph('global') as graph:
     step = Concept("step")
     (procedure_contain_step, ) = procedure.contains(step)
 #     entity = Concept("entity")
-    non_existence = step("none_existence")
+    non_existence = step("non_existence")
     unknown_loc = step("unknown_location")
     known_loc = step("known_location")
     before = Concept("before")
@@ -160,8 +162,8 @@ with Graph('global') as graph:
     action = Concept("action")
     (action_arg1, action_arg2) = action.has_a(arg1=step, arg2=step)
     create = action("create")
-    destroy = action("create")
-    other = action("create")
+    destroy = action("destroy")
+    other = action("other")
 
     #LC1 : An action can not be create, destroy and other at the same time
     nandL(create, destroy, other)
@@ -216,8 +218,6 @@ import torch
 from torch import nn
 
 def model_declaration():
-    from graph import graph, procedure, step, entity, non_existence, unknown_loc, known_loc, action, create, destroy, other
-    from graph import procedure_contain_step, action_arg1, action_arg2, before_arg1, before_arg2
 
     graph.detach()
 
@@ -226,22 +226,30 @@ def model_declaration():
     step[procedure_contain_step.forward, 'text'] = JoinEdgeReaderSensor(procedure['id'], keyword='steps', relation=procedure_contain_step, mode="forward")
     # word[step_contains_word, 'raw'] = ReaderSensor(keyword='words')
 #     entity['raw'] = ReaderSensor(keyword='entities')
-    step[non_existence] = ReaderSensor('text', keyword='non_existence')
-    step[unknown_loc] = ReaderSensor('text', keyword='known')
-    step[known_loc] = ReaderSensor('text', keyword='unkown')
-    step[non_existence] = ReaderSensor('text', keyword='non_existence')
-    step[unknown_loc] = ReaderSensor('text', keyword='known')
-    step[known_loc] = ReaderSensor('text', keyword='unkown')
-    action[action_arg1.forward, action_arg2.forward] = JoinReaderSensor(step['text'], keyword='action')
-    action[create] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='create')
-    action[destroy] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='destroy')
-    action[other] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='other')
-    action[create] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='create')
-    action[destroy] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='destroy')
-    action[other] = ReaderSensor(action_arg1.forward, action_arg2.forward, keyword='other')
+
+    step[non_existence] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='non_existence')
+    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
+    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unkown')
+    
+    step[non_existence] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='non_existence')
+    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
+    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unkown')
+    
+    action[action_arg1.forward, action_arg2.forward, 'raw'] = JoinReaderSensor(step['text'], keyword='action')
+    
+    action[create] = ReaderSensor(action_arg1.forward, action_arg2.forward, 'raw', keyword='create')
+    action[destroy] = ReaderSensor(action_arg1.forward, action_arg2.forward, 'raw', keyword='destroy')
+    action[other] = ReaderSensor(action_arg1.forward, action_arg2.forward, 'raw', keyword='other')
+    
+    action[create] = ReaderSensor(keyword='create')
+    action[destroy] = ReaderSensor(keyword='destroy')
+    action[other] = ReaderSensor(keyword='other')
+    
     before[before_arg1.forward, before_arg2.forward] = JoinReaderSensor(step['text'], keyword="before")
+    
     before["check"] = ReaderSensor(before_arg1.forward, before_arg2.forward, keyword="before_true")
     before["check"] = ReaderSensor(before_arg1.forward, before_arg2.forward, keyword="before_true")
+    
     program = LearningBasedProgram(graph, **{
         'Model': PoiModel,
 #         'poi': (known_loc, unknown_loc, non_existence, other, destroy, create),
@@ -251,9 +259,6 @@ def model_declaration():
     return program
 
 def main():
-    from graph import graph, procedure, word, step, entity, entity_step, entity_step_word, location_start, location_end, non_existence, unknown_loc, known_loc, action, create, destroy, other
-    from graph import entity_of_step, entity_of_step_word, step_contains_word, step_of_entity, step_of_entity_word, word_of_entity_step, procedure_contain_step, action_arg1, action_arg2
-
     # set logger level to see training and testing logs
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -266,12 +271,14 @@ def main():
 
     for datanode in lbp.populate(dataset, device="cpu"):
         print('datanode:', datanode)
-#         print('Spam:', datanode.getAttribute(Spam).softmax(-1))
-#         print('Regular:', datanode.getAttribute(Regular).softmax(-1))
-        datanode.inferILPConstrains('create', 'destroy', 'other', 'non_existence', "known_location", 'unknown_location', fun=None)
-        print('datanode:', datanode)
-#         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
-#         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
+        data1 = datanode.findDatanodes(select = step)[0].getAttribute("text")
+        print(data1)
+        data1 = datanode.findDatanodes(select = step)[0].getAttribute(non_existence)
+        print(data1)
+        data1 = datanode.findDatanodes(select = action)[0].getAttribute("check")
+        print(data1)
+#         datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
+#         print('datanode:', datanode)
 
 main()
 
