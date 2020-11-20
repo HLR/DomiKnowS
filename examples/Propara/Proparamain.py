@@ -169,13 +169,13 @@ with Graph('global') as graph:
     nandL(create, destroy, other)
     
     #LC2 : An action should at least be one of the create, destroy or other
-    #Don't know how to write LC2
+    orL(create, destroy, other)
     
     #LC3 : A step can not be known_loc, unknown_loc and non_existence at the same time
     nandL(known_loc, unknown_loc, non_existence)
     
     #LC4 : A step should at least be one of known_loc, unknown_loc or non_existence
-    #Don't know how to write LC4
+    orL(known_loc, unknown_loc, non_existence)
     
     #LC5 : If action is create then the first step should be non_existence and the second step can be either known_loc or unknown_loc
     ifL(create, ("x", "y", ), andL(non_existence, ("x", ), orL(known_loc, ("y", ), unknown_loc, ("y", ))))
@@ -190,7 +190,8 @@ with Graph('global') as graph:
     atMostL(1, ("x", ), destroy, ("x", ))
     
     #LC9 : If (x1,x2) is create and (y1, y2) is destroy, then the pair(x2,y2) if before should have the property "check" equal to 1.
-    ifL(andL(create, ("x1", "x2", ), destroy, ("y1", "y2", )), eqL(before, "check", 1), ("x2", "y2", ))
+    # I will have to check if this eqL works if not will update it
+    ifL(andL(create, ("x1", "x2"), destroy, ("y1", "y2")), eqL(before, "check", 1), ("x2", "y2"))
     
     # No entity_step
 
