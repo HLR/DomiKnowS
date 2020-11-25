@@ -1827,7 +1827,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
-                lossDict = next(iter(lcLoss.values()))
+                if lcLoss:
+                    lossDict = next(iter(lcLoss.values()))
+                else:
+                    lossDict = None
                 
                 if not lossDict:
                     continue
