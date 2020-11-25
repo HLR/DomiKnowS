@@ -17,7 +17,7 @@ with Graph('global') as graph:
         (rel_sentence_contains_word,) = sentence.contains(word)
         
         phrase = Concept(name='phrase')
-        (rel_sentence_contains_phrase,) = sentence.contains(phrase)
+        (rel_sentence_contains_phrase,) = sentence.contains(arg=phrase)
         (rel_phrase_word1, rel_phrase_word2) = phrase.has_a(word, word)
 
         pair = Concept(name='pair')
@@ -58,10 +58,13 @@ with Graph('global') as graph:
         kill.has_a(people, people)
 
         # LC1 work_for has arg1 people and arg2 organization
-        ifL(work_for, V(name='x'), andL(people, V(v=('x','arg1')), organization, V(v=('x','arg2'))))
-        
+        ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name)))
+            
+        # LC1bis if x is people and y is organization then they are in work_for relation
+        ifL(andL(people, V(name='x'), organization, V(name='y'), work_for, V(name='z', v=(('x', rel_pair_phrase1.backward.name), ('y', rel_pair_phrase2.backward.name))
+
         #LC2 Each sentence should contain at least one person phrase        
-        atLeastL(1, 'y', andL(rel_sentence_contains_phrase, V(name='x'), people, V(name='y', v=('x', 'arg1'))))
+        atLeastL(andL(sentance, V(name='x'), people, V(name='y', v=('x', rel_sentence_contains_word.name))), 1, 'y')
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
         lg = orL( andL( Iword, V(v=('x', 'arg1')), Iword, V(v=('x', 'arg2')) ), andL( Bword, V(v=('x', 'arg1')), Eword, V(v=('x', 'arg2')) ) )
