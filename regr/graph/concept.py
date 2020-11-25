@@ -6,7 +6,6 @@ from .base import Scoped, BaseGraphTree
 from .trial import Trial
 from ..utils import enum
 
-from .dataNode import DataNode
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -87,13 +86,19 @@ class Concept(BaseGraphTree):
                 retval.append(rel)
         return retval
 
+    def __getitem__(self, name):
+        try:
+            return self.get_sub(name)
+        except KeyError as e:
+            raise type(e)(name)
+
     def __setitem__(self, name, obj):
         if isinstance(name, tuple):
-            for name_, obj_ in zip(name, obj):
-                self[name_] = obj_
-            return self.__setitem__('joint_'+'+'.join(name), obj)
-        else:
-            return super().__setitem__(name, obj)
+            # for name_, obj_ in zip(name, obj):
+            #     self[name_] = obj_
+            # return self.__setitem__('joint_'+'_'.join(map(str, name)), obj)
+            return self.set_apply(name, obj)
+        return super().__setitem__(name, obj)
 
     def set_apply(self, name, sub):
         from ..sensor import Sensor
@@ -252,6 +257,7 @@ class Concept(BaseGraphTree):
         assert len(set(base)) == 1  # homogenous base type
 
         def get_base_data(root_data, single_base):
+            from .dataNode import DataNode
             assert isinstance(root_data, DataNode)
             base_data = root_data.findDatanodes(select = single_base.name)
                 

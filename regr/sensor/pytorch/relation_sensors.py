@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor, FunctionalReaderSensor, ReaderSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
@@ -10,8 +10,8 @@ from itertools import product
 class EdgeSensor(FunctionalSensor):
     modes = ("forward", "backward")
 
-    def __init__(self, *pres, relation, mode="forward", edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
+    def __init__(self, *pres, relation, mode="forward", **kwargs):
+        super().__init__(*pres, **kwargs)
         self.relation = relation
         self.mode = mode
 
@@ -57,52 +57,87 @@ class EdgeSensor(FunctionalSensor):
         return super().fetch_value(pre, selector, concept)
 
 
-class CandidateSensor(QuerySensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
-
-        # Add identification of candidate
-        self.name += "_Candidate_"
-
+class CandidateSensor(EdgeSensor, QuerySensor):
     @property
     def args(self):
-        return [rel.dst for rel in self.concept.has_a()]
-
-    def update_pre_context(
-            self,
-            data_item: Dict[str, Any]
-    ) -> Any:
-        super().update_pre_context(data_item)
-        for concept in self.args:
-            if "index" in concept:
-                concept['index'](data_item)  # call index property to make sure it is constructed
+        return [self.dst, self.src]
 
     def define_inputs(self):
-        super().define_inputs()
+        super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
+        if self.inputs is None:
+            self.inputs = []
         args = []
         for concept in self.args:
             datanodes = self.builder.findDataNodesInBuilder(select=concept)
             args.append(datanodes)
-        self.inputs = self.inputs[:1] + args + self.inputs[1:]
+        self.inputs = args + self.inputs
 
     def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
         # args
-        args = self.inputs[1:len(self.args) + 1]
+        args = self.inputs[:len(self.args)]
         # functional inputs
-        inputs = self.inputs[len(self.args) + 1:]
+        inputs = self.inputs[len(self.args):]
 
         arg_lists = []
         dims = []
         for arg_list in args:
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
-        output = torch.zeros(dims, dtype=torch.uint8).to(device=self.device)
+        output = torch.zeros(dims, dtype=torch.long, device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
+            output[(*index,)] = self.forward(*arg_list, *inputs)
         return output
+
+
+class CompositionCandidateSensor(JointSensor, QuerySensor):
+    @property
+    def args(self):
+        return [relation.src for relation in self.relations]
+
+    def __init__(self, *args, relations, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.relations = relations
+
+    def define_inputs(self):
+        super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
+        if self.inputs is None:
+            self.inputs = []
+        args = []
+        for concept in self.args:
+            datanodes = self.builder.findDataNodesInBuilder(select=concept)
+            args.append(datanodes)
+        self.inputs = args + self.inputs
+
+    def forward_wrap(self):
+        # args
+        args = self.inputs[:len(self.args)]
+        # functional inputs
+        inputs = self.inputs[len(self.args):]
+
+        arg_lists = []
+        indexes = []
+        dims = []
+        for arg_list in args:
+            arg_lists.append(enumerate(arg_list))
+            dims.append(len(arg_list))
+            indexes.append([])
+
+        for arg_enum in product(*arg_lists):
+            index, arg_list = zip(*arg_enum)
+            if self.forward(*arg_list, *inputs):
+                for i, index_ in enumerate(index):
+                    indexes[i].append(index_)
+
+        mappings = []
+        for index, dim in zip(indexes, dims):
+            mapping = torch.zeros(len(index), dim)
+            if len(index):
+                index = torch.tensor(index, dtype=torch.long).view(-1, 1)
+                mapping.scatter_(1, index, 1)
+            mappings.append(mapping)
+
+        return mappings
 
 
 class CandidateRelationSensor(CandidateSensor):
@@ -116,38 +151,16 @@ class CandidateRelationSensor(CandidateSensor):
         self.relations = relations
 
 
-class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None, device='auto'):
-        super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)
-        self.data = None
-        self.keyword = keyword
-        if keyword is None:
-            raise ValueError('{} "keyword" must be assign.'.format(type(self)))
+class CompositionCandidateReaderSensor(CompositionCandidateSensor, FunctionalReaderSensor):
+    pass
 
-    def fill_data(self, data):
-        self.data = data[self.keyword]
 
-    def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
-        # args
-        args = self.inputs[1:len(self.args)+1]
-        # functional inputs
-        inputs = self.inputs[len(self.args)+1:]
+class JoinReaderSensor(JointSensor, ReaderSensor):
+    pass
 
-        arg_lists = []
-        dims = []
-        for arg_list in args:
-            arg_lists.append(enumerate(arg_list))
-            dims.append(len(arg_list))
 
-        if self.data is None and self.keyword in self.context_helper:
-            self.data = self.context_helper[self.keyword]
-        output = torch.zeros(tuple(dims), dtype=torch.uint8).to(device=self.device)
-        for arg_enum in product(*arg_lists):
-            index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
-        return output
+class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
+    pass
 
 
 class CandidateEqualSensor(CandidateSensor):

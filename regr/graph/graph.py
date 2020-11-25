@@ -81,6 +81,10 @@ class Graph(BaseGraphTree):
             pass
 
     @property
+    def subgraphs(self):
+        return OrderedDict(self)
+
+    @property
     def concepts(self):
         return self._concepts
     

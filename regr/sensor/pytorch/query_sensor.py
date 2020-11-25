@@ -1,15 +1,14 @@
 from typing import Dict, Any
-from itertools import product
-import torch
 
-from ...graph import DataNode, DataNodeBuilder, Concept, Property
-from .sensors import TorchSensor, FunctionalSensor, Sensor
+from .sensors import TorchSensor, FunctionalSensor
 
 
 class QuerySensor(FunctionalSensor):
     @property
     def builder(self):
         builder = self.context_helper
+        from ...graph import DataNodeBuilder
+
         if not isinstance(builder, DataNodeBuilder):
             raise TypeError('{} should work with DataNodeBuilder.'.format(type(self)))
         return builder
@@ -33,6 +32,7 @@ class QuerySensor(FunctionalSensor):
 
 class DataNodeSensor(QuerySensor):
     def forward_wrap(self):
+        from ...graph import Property
         datanodes = self.inputs[0]
         assert len(self.inputs[1:]) == len(self.pres)
         inputs = []
@@ -60,10 +60,10 @@ class InstantiateSensor(TorchSensor):
         try:
             self.update_pre_context(data_item)
         except:
-            print('Error during updating pre with sensor {}'.format(self.fullname))
+            print('Error during updating pre with sensor {}'.format(self))
             raise
         try:
-            return data_item[self.fullname]
+            return data_item[self]
         except KeyError:
-            return data_item[self.sup.sup['index'].fullname]
+            return data_item[self.sup.sup['index']]
 

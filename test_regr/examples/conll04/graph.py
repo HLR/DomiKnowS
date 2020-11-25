@@ -32,9 +32,9 @@ with Graph('global') as graph:
 
         disjoint(people, organization, location, other, o)
 
-        #nandL(people,organization)
+        nandL(people,organization)
         #for c1, c2 in permutations((people, organization, location, other, o), r=2):
-        #   nandL(c1, c2)
+        #nandL(c1, c2)
 
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')

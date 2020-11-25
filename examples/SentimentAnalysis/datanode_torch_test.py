@@ -68,8 +68,8 @@ class SentenceRepSensor(DataNodeSensor):
             raise ValueError("spacy should be instantiated")
     def forward(self, instance, *inputs) -> Any:
         text = self.nlp(instance.getAttribute(self.pres[0]))
-        return torch.from_numpy(text.vector).to(device=self.device)
-#         return text.vector
+        #return torch.from_numpy(text.vector).to(device=self.device)
+        return text.vector
 
 twit['but_presence'] = ButDetector()
 for sensor in twit['but_presence'].find(Sensor):

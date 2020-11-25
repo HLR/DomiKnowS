@@ -11,6 +11,8 @@ from regr.solver import ilpOntSolverFactory
 
 import logging
 from logging.handlers import RotatingFileHandler
+from .property import Property
+from .concept import Concept
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -364,7 +366,7 @@ class DataNode:
             self.findConceptsNamesInDatanodes(dns=dn.getChildDataNodes(), conceptNames = conceptNames, relationNames = relationNames)
             
         return conceptNames, relationNames
-        
+    
     # Find dataNodes in data graph of the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
         if dns is None:
@@ -449,7 +451,16 @@ class DataNode:
     
         if depth == 0 and not returnDns:
             _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
-
+    
+        if returnDns:
+            returnDnsNotSorted = OrderedDict()
+            for dn in returnDns:
+                returnDnsNotSorted[dn.getInstanceID()] = dn
+                    
+            returnDnsSorted = OrderedDict(sorted(returnDnsNotSorted.items()))
+        
+            returnDns = [*returnDnsSorted.values()]
+        
         return returnDns
           
     # Get root of the dataNode
@@ -607,11 +618,21 @@ class DataNode:
                 return [float("nan"), float("nan")]
             
             if len(dataNode) == 2:
-                value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
+                attrNames = []
+                for _, rel in enumerate(rootRelation.has_a()): 
+                    attrNames.append(rel.name)
+                        
+                _rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})
+                
+                if _rDN:
+                    value = _rDN[0].getAttribute(key)
+                else:
+                    return [1, float("nan")] # ?
+                #value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             elif len(dataNode) == 3:
                 value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
             else:
-                return [float("nan"), float("nan")] # ?
+                return [1, float("nan")] # ?
         
         if value is None: # No probability value - return negative probability 
             return [float("nan"), float("nan")]
@@ -977,13 +998,22 @@ class DataNode:
                 continue
             
             rootRelation = self.__findRootConceptOrRelation(concept_name)
-            currentCandidates = candidates_currentConceptOrRelation[concept_name]
+            attrNames = []
+            for _, rel in enumerate(rootRelation.has_a()): 
+                attrNames.append(rel.name)
+                
+            currentCandidates  = candidates_currentConceptOrRelation[concept_name]
             
             key = '<' + concept_name + '>/ILP'
             
-            for infer_candidate in currentCandidates:
-                infer_candidate[0].relationLinks[rootRelation.name][infer_candidate[1].getInstanceID()].attributes[key] = \
-                    torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
+            for infer_candidate in currentCandidates:  
+                rDNs = infer_candidate[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : infer_candidate[0].getInstanceID(), attrNames[1]: infer_candidate[1].getInstanceID()})
+                
+                if not rDNs:
+                    continue
+                
+                rDN = rDNs[0]
+                rDN.attributes[key] = torch.tensor(pairResult[concept_name][infer_candidate[0].getInstanceID()][infer_candidate[1].getInstanceID()], device=device)
                         
         return #tokenResult, pairResult, tripleResult
     
@@ -1104,13 +1134,8 @@ class DataNodeBuilder(dict):
                     return concept
         return None 
         
-    # Cache with found concept information    
-    __conceptInfoCache = {} 
     # Collect concept information defined in the graph
     def __findConceptInfo(self, usedGraph, concept):
-        if concept in self.__conceptInfoCache:
-            return self.__conceptInfoCache[concept]
-        
         conceptInfo = {}
         
         conceptInfo['concept'] = concept
@@ -1152,12 +1177,43 @@ class DataNodeBuilder(dict):
                 containedConcept = self.__findConcept(_containNameSplit[0], usedGraph)
                 
                 if containedConcept:
-                    conceptInfo['containedIn'].append(containedConcept)
-        
-        self.__conceptInfoCache[concept] = conceptInfo
-        
+                    conceptInfo['containedIn'].append(containedConcept) 
+                           
         return conceptInfo
             
+    def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
+        from regr.sensor.pytorch.relation_sensors import EdgeSensor
+        conceptInfo["relationAttrData"] = False
+
+        if (isinstance(sensor, EdgeSensor)):
+            relationType = None
+            
+            if "contains" in sensor.relation.name:
+                relationType = "contains"
+            elif "is_a" in sensor.relation.name:
+                relationType  = "is_a"
+            elif "has_a" in sensor.relation.name:
+                relationType = "has_a"
+            elif "equal" in sensor.relation.name:
+                relationType = "equal"
+            else:
+                relationType = "relation"
+
+            if relationType:
+                conceptInfo['relationType'] = relationType
+                    
+                if 'relationAttrs' in conceptInfo:
+                    conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
+                    
+                conceptInfo['relationAttrs'] = {}
+                
+                conceptInfo['relationMode'] = sensor.mode
+                conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
+                conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
+                
+                if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
+                    conceptInfo['relationAttrData'] = True
+
     def __updateRootDataNodeList(self, *dns):
         if not dns:
             return
@@ -1182,7 +1238,7 @@ class DataNodeBuilder(dict):
             for dList in dns:
                 flattenDns.extend(dList)
                 
-            if isinstance(flattenDns[0], list): 
+            if flattenDns and isinstance(flattenDns[0], list): 
                 _flattenDns = []
                 
                 for dList in flattenDns:
@@ -1200,7 +1256,6 @@ class DataNodeBuilder(dict):
         _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
         dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
     
-
     # Build or update relation dataNode in the data graph for a given key
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
         relationName = conceptInfo['concept'].name
@@ -1212,86 +1267,82 @@ class DataNodeBuilder(dict):
             _DataNodeBulder__Logger.error('No dataNode created yet - abandon processing relation link dataNode value for %s and attribute %s'%(relationName,keyDataName))
             return # No graph yet - information about relation should not be provided yet
         
-        # Find DataNodes connected by this relation based on graph definition
-        existingDnsForAttr = OrderedDict() # DataNodes for Attributes of the relation
-        for relationAttributeName, relationAttributeConcept in conceptInfo['relationAttrs'].items():
-            _existingDnsForAttr = self.findDataNodesInBuilder(select = relationAttributeConcept.name)
-             
-            if _existingDnsForAttr:
-                existingDnsForAttr[relationAttributeName] = _existingDnsForAttr
-                _DataNodeBulder__Logger.info('Found %i dataNodes of the attribute %s concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
-            else:
-                existingDnsForAttr[relationAttributeName] = []
-                _DataNodeBulder__Logger.warning('Not found dataNodes of the attribute %s concept %s'%(relationAttributeName,relationAttributeConcept.name))
-
-        # Check the shape of the value if it is a Tensor of shape equal to the number of relation attributes
-        if hasattr(vInfo.value, 'shape'):
-            for i, (_, a) in enumerate(existingDnsForAttr.items()):
-                if vInfo.dim <= i: # check if value tensor has enough dimensions
-                    _DataNodeBulder__Logger.error('Wrong dimension of value; it is %i which is less then %i relation attributes - abandon processing relation link dataNode value for %s'%(vInfo.dim,i,relationName))
-                    return # Wrong shape not matching relation attribute number
-                
-                if len(a) != vInfo.value.shape[i]: # check if the given dimension has a size equal to the number of dataNodes found for the given attribute
-                    _DataNodeBulder__Logger.\
-                        error('Wrong size of value for dimension %i; it is %i not equal to the number of relation attributes %i - abandon processing relation link dataNode value for %s'%(i,vInfo.value.shape[i],len(a),relationName))
-                    return # Wrong shape not matching relation attribute number
-        else:
-            _DataNodeBulder__Logger.error('The value is not Tensor, it is %s -  - abandon processing relation link dataNode value for %s'%(type(vInfo.value),relationName))
-            return # Not Tensor
-            
-        # --- Create or update relation nodes
-        
         # Find if DatnNodes for this relation have been created
         existingDnsForRelation = self.findDataNodesInBuilder(select = relationName)
         
-        _DataNodeBulder__Logger.info('Processing relation link dataNode for %s, found %i existing dataNode of this type - provided value has length %i'%(relationName,len(existingDnsForRelation),vInfo.len))
-
-        # -- No DataNode of this relation created yet
-        if len(existingDnsForRelation) == 0: 
-            attributeNames = [*existingDnsForAttr]
+        existingDnsForRelationNotSorted = OrderedDict()
+        for dn in existingDnsForRelation:
+            existingDnsForRelationNotSorted[dn.getInstanceID()] = dn
+                
+        existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
             
-            for p in product(*existingDnsForAttr.values()): # Candidates
-                _p = tuple([__p.getInstanceID() for __p in p]) # tuple with ids of the hdataNodes
-                  
-                instanceID = ' -> '.join([n.ontologyNode.name + ' ' + str(n.getInstanceID()) for n in p])
+        # This is an infromation about relation attributes
+        if conceptInfo['relationAttrData']:
+            index = keyDataName.index('.')
+            attrName = keyDataName[0:index]
+            
+            relationAttrsCacheName = conceptInfo['concept'].name + "RelationAttrsCache"
+            
+            if not dict.__contains__(self, relationAttrsCacheName):
+                dict.__setitem__(self, relationAttrsCacheName, {})
+        
+            relationAttrsCache =  dict.__getitem__(self, relationAttrsCacheName)
+            relationAttrsCache[attrName] = vInfo.value
                 
-                # Check if this relation link is excluded by the provided value (need to have 'Candidate' substring in the tensor column name
-                if (keyDataName.find("_Candidate_") > 0) and (vInfo.value[_p] == 0):
-                    _DataNodeBulder__Logger.warning('DataNode for relation link with id %s is not in the Candidate list - it is not added'%(instanceID))
-                    continue
-                else:
-                    _DataNodeBulder__Logger.debug('DataNode for relation link with id %s created'%(instanceID))
-
-                instanceValue = ""
-                
-                rDn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept']) # Create dataNode for relation link
-                rDn.attributes[keyDataName] = vInfo.value[_p] # Add value of the attribute to this relation link dataNode
-                
-                # Add this relation link dataNode to all the dataNodes linked by it
-                for i, dn in enumerate(p):
-                    if i == 0:
-                        dn.addRelationLink(relationName, rDn) # First dataNode has relation link dataNode
+            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
+            
+            # Find if all the needed attribute were initilized
+            
+            allAttrInit = True
+            for relationAttributeName, _ in conceptInfo['relationAttrsGraph'].items():
+                if relationAttributeName not in relationAttrsCache:
+                    allAttrInit = False
+                    break
+            
+            if allAttrInit: #Create links for the ralation DataNode
+                # Find DataNodes connected by this relation based on graph definition
+                existingDnsForAttr = OrderedDict() # DataNodes for Attributes of the relation
+                for relationAttributeName, relationAttributeConcept in conceptInfo['relationAttrsGraph'].items():
+                    _existingDnsForAttr = self.findDataNodesInBuilder(select = relationAttributeConcept.name)
+                     
+                    if _existingDnsForAttr:
+                        existingDnsForAttr[relationAttributeName] = _existingDnsForAttr
+                        _DataNodeBulder__Logger.info('Found %i dataNodes of the attribute %s for concept %s'%(len(_existingDnsForAttr),relationAttributeName,relationAttributeConcept.name))
                     else:
-                        # Impact
-                        if relationName not in dn.impactLinks: # Next dataNode has relation link dataNode in impact
-                            dn.impactLinks[relationName] = []
-                            
-                        if rDn not in dn.impactLinks[relationName]:
-                            dn.impactLinks[relationName].append(rDn)
+                        existingDnsForAttr[relationAttributeName] = []
+                        _DataNodeBulder__Logger.warning('Not found dataNodes of the attribute %s for concept %s'%(relationAttributeName,relationAttributeConcept.name))
+                                    
+                attributeNames = [*existingDnsForAttr]
+                
+                for i in range(0, len(existingDnsForRelationSorted)):
+                      
+                    currentRdn = existingDnsForRelationSorted[i]  
                         
-                    rDn.addRelationLink(attributeNames[i], dn) # Add this dataNode as value for the attribute in the relation link dataNode
+                    for _, a in enumerate(attributeNames):
+                          
+                        aValue = relationAttrsCache[a][i]
+                        
+                        for j, av in enumerate(aValue):
+                            isInRelation = av.item()
+                            if isInRelation == 0:
+                                continue
+                            
+                            dn = existingDnsForAttr[a][j]
+                            
+                            dn.addRelationLink(relationName, currentRdn)
+                            currentRdn.addRelationLink(a, dn)   
+                            
+            self.__updateRootDataNodeList(list(existingDnsForRelationSorted.values()))
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
-            _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes'%(keyDataName))
-
-            for rDn in existingDnsForRelation: # Loop through all relation links dataNodes
-                # Collect ids of dataNodes linked by this relation link dataNode
-                p = []
-                for dn in rDn.getRelationLinks().values():
-                    p.append(dn[0].instanceID)
-                   
-                _p = tuple(p) # Create tuple from ids to access value for this combination of dataNodes
-                rDn.attributes[keyDataName] = vInfo.value[_p] # Add / /Update value of the attribute
+            _DataNodeBulder__Logger.info('Updating attribute %s in relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
+ 
+            if len(existingDnsForRelation) != vInfo.len:
+                _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                return
+ 
+            for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1300,7 +1351,7 @@ class DataNodeBuilder(dict):
                    
         _DataNodeBulder__Logger.info('Creating initial dataNode - provided value has length %i'%(vInfo.len))
 
-        if vInfo.len == 1:
+        if vInfo.len == 1: # Will use "READER" key as an id of the root dataNode
             instanceValue = ""
             
             if "READER" in self:
@@ -1328,12 +1379,10 @@ class DataNodeBuilder(dict):
                     
         self.__updateRootDataNodeList(dns)
         
-        return 
+        return dns
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
-        existingRootDns = dict.__getitem__(self, 'dataNode') # Get DataNodes roots
-
-        # -- Create the new dataNode 
+        # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
         _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
@@ -1341,50 +1390,9 @@ class DataNodeBuilder(dict):
                 
         _DataNodeBulder__Logger.info('Single new dataNode %s created'%(_dn))
 
-        # Add it as parent to existing dataNodes
-        if len(conceptInfo['contains']) > 0:
-            for _contains in conceptInfo['contains']:
-                _existingDnsForConcept = self.findDataNodesInBuilder(select = _contains.name)
-                
-                if _existingDnsForConcept:
-                    _DataNodeBulder__Logger.info('Adding this dataNode as a parent to %i dataNodes of type %s'%(len(_existingDnsForConcept),_contains.name))
-                else:
-                    pass
-                    
-                # Adding the new dataNode as parent to the dataNodes of type _contains
-                for eDN in _existingDnsForConcept:
-                    _dn.addChildDataNode(eDN)
-
-        # Add it as child to existing datanodes
-        if len(conceptInfo['containedIn']) > 0:                
-            for _containedIn in conceptInfo['containedIn']:
-                myContainedInDns = self.findDataNodesInBuilder(select = _containedIn.name)
-                   
-                if myContainedInDns:
-                    if len(myContainedInDns) == 1:
-                        _DataNodeBulder__Logger.info('Adding this dataNode as a child to single existing dataNode of type %s'%(_containedIn.name))
-                    else:
-                        _DataNodeBulder__Logger.warning('Adding the new dataNode as child to %i dataNodes of type %s'%(len(myContainedInDns),_containedIn.name))
-                else:
-                    _DataNodeBulder__Logger.info('Not found any dataNode of type %s to use as parent for the new dataNode'%(_containedIn.name))
-                
-                for myContainedIn in myContainedInDns:
-                    myContainedIn.addChildDataNode(_dn)   
-                    _dnLinked = True
-    
-        # Checking if is root
-        if conceptInfo['root']:  # Root concept
-            _DataNodeBulder__Logger.info('This dataNode is a root dataNode')
-
-            # Needs to update this to support batches
-            if "READER" in self:
-                _dn.instanceID = dict.__getitem__(self, "READER")
-                _DataNodeBulder__Logger.debug('Using key \"READER\"  - %s, as a id for the dataNode'%(_dn.instanceID))
-            else:
-                _dn.instanceID = 0
-                _DataNodeBulder__Logger.debug('Setting id for the dataNode to 0')
-
         self.__updateRootDataNodeList(_dn)
+                
+        return [_dn]
         
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1392,7 +1400,7 @@ class DataNodeBuilder(dict):
         dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
                 
         if vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
-            _DataNodeBulder__Logger.info('Adding single set of dataNodes (linked to single parent concept) of type %s'%(conceptName))
+            _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
             for vIndex, v in enumerate(vInfo.value):
@@ -1404,122 +1412,114 @@ class DataNodeBuilder(dict):
                 
                 dns1.append(_dn)
                                     
-            _DataNodeBulder__Logger.info('Added %i new dataNodes - %s'%(len(dns1),dns1))
-            dns.append(dns1)
-
-            # Check if value has information about children - need to be tuples with two indexes - start index of children  - end index of children for the given new dataNode
-            if isinstance(vInfo.value[0], tuple): 
-                # Add it as parent to existing dataNodes - Backward information in the sensor data
-                _DataNodeBulder__Logger.info('The value is build of tuples - providing information about children of the new dataNodes ')
-
-                if len(conceptInfo['contains']) > 0:
-                    childType = conceptInfo['contains'][0].name # Assume single contains for now
-                    childrenDns = self.findDataNodesInBuilder(select = childType)
-                    
-                    if len(childrenDns) > 0:       
-                        for i, v in enumerate(vInfo.value):
-                            _DataNodeBulder__Logger.info('Added dataNodes with indexes from %i to %i of type %s to dataNode %s'%(v[0],v[1],childType,dns1[i]))
-
-                            for _i in range(v[0],v[1]+1):
-                                dns1[i].addChildDataNode(childrenDns[_i])
-                                           
+            dns.append(dns1)              
         elif vInfo.dim == 2:
-            _DataNodeBulder__Logger.info('Adding %i sets of dataNodes of type %s'%(vInfo.len,conceptName))
-
-            for vIndex, v in enumerate(vInfo.value):
-                dns1 = []
-                for vIndex1, v1 in enumerate(v):
-                    instanceValue = ""
-                    instanceID = vIndex * len(v) + vIndex1
-                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
-                    
-                    _dn.attributes[keyDataName] = v1
-                    
-                    dns1.append(_dn)
-                                    
-                _DataNodeBulder__Logger.info('Added %i new dataNodes %s'%(len(dns1),dns1))
-                dns.append(dns1)
+            _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+            
+            if "relationMode" in conceptInfo:
+                relatedDnsType = conceptInfo["relationAttrs"]['src']
+                relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
-            # Check if value has information about children - need to be tuples with two indexes - start index of children  - end index of children for the given new dataNode
-            if isinstance(vInfo.value[0][0], tuple): 
-                # Add it as parent to existing dataNodes - Backward information in the sensor data
-                _DataNodeBulder__Logger.info('The value is build of tuples - providing information about children of the new dataNodes ')
+                requiredLenOFReltedDns = len(vInfo.value[0])
+                
+                if requiredLenOFReltedDns != len(relatedDns):
+                    _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    return
+           
+                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
 
-                if len(conceptInfo['contains']) > 0:
-                    childType = conceptInfo['contains'][0].name # Assume single contains for now
-                    childrenDns = self.findDataNodesInBuilder(select = childType)
+                for i in range(0,vInfo.len):
+                    instanceValue = ""
+                    instanceID = i
+                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                        
+                    _dn.attributes[keyDataName] = vInfo.value[i]
+                    dns.append(_dn)
                     
-                    childOffset = 0
-                    if len(childrenDns) > 0:   
-                        for j, _v  in enumerate(vInfo.value):
-                            for i, v in enumerate(_v):
-                                _DataNodeBulder__Logger.info('Added dataNodes with indexes from %i to %i of type %s to dataNode %s'%(v[0],v[1],childType,dns[j][i]))
-    
-                                for _i in range(v[0],v[1]+1):
-                                    dns[j][i].addChildDataNode(childrenDns[_i + childOffset])
-                                    
-                            childOffset =+ _v[-1][1]
-        else: # vInfo.dim > 2
-            _DataNodeBulder__Logger.warning('Dimension of value %i is larger then 2 -  not supported'%(vInfo.dim))
-
-        _dnLinked = False
-            
-        # Add them as children to existing dataNodes - Forward information in the sensor data
-        for currentParentConcept in conceptInfo['containedIn']:
-            currentParentConceptName = currentParentConcept.name
-            currentParentDns = self.findDataNodesInBuilder(select = currentParentConceptName)
-            
-            if currentParentDns:
-                if len(currentParentDns) == len(dns):
-                    _DataNodeBulder__Logger.info('Adding dataNodes as children to %i dataNodes of type %s'%(len(currentParentDns),currentParentConceptName))
-                else:
-                    _DataNodeBulder__Logger.error('Number of dataNode sets %i is different then the number of %i dataNodes of type %s - abandon the update'%(len(dns),len(currentParentDns),currentParentConceptName))
-                    continue
+                    # Create contain relation between the new datanode and existing datanodes
+                    if conceptInfo["relationMode"] == "forward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                relatedDns[index].addChildDataNode(_dn)                            
+                    elif conceptInfo["relationMode"] == "backward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                _dn.addChildDataNode(relatedDns[index])  
             else:
-                _DataNodeBulder__Logger.info('Not found any dataNode of type %s - this type is a potential parent of the current concept'%(currentParentConceptName))
-            
-            for currentParentDnIndex, currentParentDn in enumerate(currentParentDns):
-                for curentChildDn in dns[currentParentDnIndex]: # Set of new dataNodes for the current parent dataNode
-                    currentParentDn.addChildDataNode(curentChildDn)    
-                                           
-                _DataNodeBulder__Logger.info('Added %i dataNodes %s as children to the dataNode with id %s'%(len(dns[currentParentDnIndex]),dns[currentParentDnIndex],currentParentDn.instanceID))
-                _dnLinked = True # New dataNodes are linked with existing dataNodes
-                 
+                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
+                for i in range(0,vInfo.len):
+                    instanceValue = ""
+                    instanceID = i
+                    _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
+                        
+                    dns.append(_dn)
+        else:
+            _DataNodeBulder__Logger.error('It is a unsupported sensor ipnut')
+                
         self.__updateRootDataNodeList(dns)   
-        return 
-                    
+        return dns
+            
     def __updateDataNodes(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
-            
-        if keyDataName in existingDnsForConcept[0].attributes:
-            _DataNodeBulder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
-        else:
-            _DataNodeBulder__Logger.info('Adding attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
 
-        if len(existingDnsForConcept) == 1: # Single dataNode
-            existingDnsForConcept[0].attributes[keyDataName] = vInfo.value
-            if vInfo.len > 1:
-                _DataNodeBulder__Logger.warning('Provided value has length %i but found only a single existing dataNode - the value  as whole is a new value of the attribute %s'%(vInfo.len,keyDataName))
-        else: # Multiple dataNodes
-            if len(existingDnsForConcept) > vInfo.len: # Not enough elements in the value 
-                _DataNodeBulder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
-            elif len(existingDnsForConcept) == vInfo.len: # Number of  value elements matches the number of found dataNodes
-                for vIndex, v in enumerate(vInfo.value):
-                    if isinstance(existingDnsForConcept[vIndex], DataNode): # Check if dataNode
-                        existingDnsForConcept[vIndex].attributes[keyDataName] = v
-                    else:
-                        _DataNodeBulder__Logger.error('Element %i in the list is not a dataNode - skipping it'%(vIndex))
-            elif len(existingDnsForConcept) < vInfo.len: # Too many elements in the value
-                _DataNodeBulder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
-                        
+        # Check if this is the contain relation update or attribute update
+        if "relationMode" in conceptInfo:
+            _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+
+            relatedDnsType = conceptInfo["relationAttrs"]['src']
+            relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
+
+            requiredLenOFReltedDns = len(vInfo.value[0])
+            
+            if requiredLenOFReltedDns != len(relatedDns):
+                _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                return
+                
+            for i in range(0,vInfo.len):
+                _dn = existingDnsForConcept[i]
+                    
+                _dn.attributes[keyDataName] = vInfo.value[i]
+                
+                # Create contain relation between existings datanodes
+                if conceptInfo["relationMode"] == "forward":
+                    for index, isRelated in enumerate(vInfo.value[i]):
+                        if isRelated == 1:
+                            relatedDns[index].addChildDataNode(_dn)                            
+                elif conceptInfo["relationMode"] == "backward":
+                    for index, isRelated in enumerate(vInfo.value[i]):
+                        if isRelated == 1:
+                            _dn.addChildDataNode(relatedDns[index])  
+                
+            self.__updateRootDataNodeList(existingDnsForConcept)   
+        else: # Attribute update
+            if keyDataName in existingDnsForConcept[0].attributes:
+                _DataNodeBulder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
+            else:
+                _DataNodeBulder__Logger.info('Adding attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
+            
+            if len(existingDnsForConcept) == 1: # Single dataNode
+                existingDnsForConcept[0].attributes[keyDataName] = vInfo.value
+                if vInfo.len > 1:
+                    _DataNodeBulder__Logger.warning('Provided value has length %i but found only a single existing dataNode - the value  as whole is a new value of the attribute %s'%(vInfo.len,keyDataName))
+            else: # Multiple dataNodes  -check if number of existing datanodes and provided value  matches
+                if len(existingDnsForConcept) > vInfo.len: # Not enough elements in the value 
+                    _DataNodeBulder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
+                elif len(existingDnsForConcept) == vInfo.len: # Number of  value elements matches the number of found dataNodes
+                    for vIndex, v in enumerate(vInfo.value):
+                        if isinstance(existingDnsForConcept[vIndex], DataNode): # Check if dataNode
+                            existingDnsForConcept[vIndex].attributes[keyDataName] = v
+                        else:
+                            _DataNodeBulder__Logger.error('Element %i in the list is not a dataNode - skipping it'%(vIndex))
+                elif len(existingDnsForConcept) < vInfo.len: # Too many elements in the value
+                    _DataNodeBulder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
+                            
     # Build or update dataNode in the data graph for a given relationAttributeConcept
     def __buildDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
        
         if not dict.__contains__(self, 'dataNode'):   # ------ No DataNode yet
-            self.__createInitialdDataNode(vInfo, conceptInfo, keyDataName)
-            return # Done - End the method
+            return self.__createInitialdDataNode(vInfo, conceptInfo, keyDataName) # Done - End the method
         else:
             # ---------- DataNodes already created
             existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
@@ -1529,9 +1529,9 @@ class DataNodeBuilder(dict):
     
                 # If attribute value is a single element - will create a single new dataNode
                 if vInfo.len == 1 and vInfo.dim < 2: 
-                    self.__createSingleDataNode(vInfo, conceptInfo, keyDataName)
+                    return self.__createSingleDataNode(vInfo, conceptInfo, keyDataName)
                 else: # -- Value is multiple elements
-                    self.__createMultiplyDataNode(vInfo, conceptInfo, keyDataName)
+                    return self.__createMultiplyDataNode(vInfo, conceptInfo, keyDataName)
             else: # DataNode with this concept already created - update it
                 self.__updateDataNodes(vInfo, conceptInfo, keyDataName)
                 
@@ -1589,11 +1589,11 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = 1, value = value, dim=0)
         
         if isinstance(value, list): 
-            if not isinstance(value[0], (Tensor, list)):
+            if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=1)
-            elif not isinstance(value[0][0], (Tensor, list)):
+            elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=2)
-            elif not isinstance(value[0][0][0], (Tensor, list)):
+            elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
                 return ValueInfo(len = len(value), value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))
@@ -1603,10 +1603,39 @@ class DataNodeBuilder(dict):
             return ValueInfo(len = len(value), value = value, dim=value.dim())
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
-    def __setitem__(self, key, value):
+    def __setitem__(self, _key, value):
+        from ..sensor import Sensor
+
         start = time.time()
         self.__addSetitemCounter()
-          
+        
+        if isinstance(_key, (Sensor, Property, Concept)):
+            key = _key.fullname
+            if  isinstance(_key, Sensor) and not _key.build:
+                if isinstance(value, Tensor):
+                    _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
+                elif isinstance(value, list):
+                    _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
+                else:
+                    _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
+
+                return dict.__setitem__(self, _key, value)
+            
+            if  isinstance(_key, Property):
+                if isinstance(value, Tensor):
+                    _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
+                elif isinstance(value, list):
+                    _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
+                else:
+                    _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
+
+                return dict.__setitem__(self, _key, value)
+        elif isinstance(_key, str):
+            key = _key
+        else:
+            _DataNodeBulder__Logger.error('key - %s, type %s is not supported'%(_key,type(_key)))
+            return
+        
         skey = key.split('/')
         
         # Check if the key with this value has been set recently
@@ -1616,60 +1645,77 @@ class DataNodeBuilder(dict):
             return # Stop __setitem__ for repeated key value combination
         
         if isinstance(value, Tensor):
-            _DataNodeBulder__Logger.info('key - %s,  value - %s, shape %s'%(key,type(value),value.shape))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
         elif isinstance(value, list):
-            _DataNodeBulder__Logger.info('key - %s,  value - %s, length %s'%(key,type(value),len(value)))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
         else:
-            _DataNodeBulder__Logger.info('key - %s,  value - %s'%(key,type(value)))
+            _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
 
         if value is None:
             _DataNodeBulder__Logger.error('The value for the key %s is None - abandon the update'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
                 
         if len(skey) < 2:            
             _DataNodeBulder__Logger.error('The key %s has only two elements, needs at least three - abandon the update'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
         
         usedGraph = dict.__getitem__(self, "graph")
 
         # Find if the key include concept from graph
         
-        keyWithoutGraphName = usedGraph.cutGraphName(skey)
+        graphPathIndex = usedGraph.cutGraphName(skey)
+        keyWithoutGraphName = skey[graphPathIndex:]
+        graphPath =  ''.join(map(str, skey[:graphPathIndex])) 
        
         # Check if found concept in the key
         if not keyWithoutGraphName:
             _DataNodeBulder__Logger.warning('key - %s has not concept part - returning'%(key))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
  
         # Find description of the concept in the graph
-        _conceptName = keyWithoutGraphName[0]
+        if isinstance(_key, Sensor):
+            try:
+                _conceptName = _key.concept.name 
+            except TypeError as _:
+                _conceptName = keyWithoutGraphName[0]
+        else:
+            _conceptName = keyWithoutGraphName[0]
         concept = self.__findConcept(_conceptName, usedGraph)
-        
+                
         if not concept:
             _DataNodeBulder__Logger.warning('_conceptName - %s has not been found in the used graph %s - returning'%(_conceptName,usedGraph.fullname))
-            return dict.__setitem__(self, key, value)
+            return dict.__setitem__(self, _key, value)
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
         
+        if isinstance(_key, Sensor):
+            self.__updateConceptInfo(usedGraph, conceptInfo, _key)
+
         # Create key for dataNonde construction
-        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:]))
+        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
         vInfo = self.__processAttributeValue(value, keyDataName)
         
+        # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
         if keyDataName.find("_Equality_") > 0:
             equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
             self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
-        # Decide if this is dataNode for concept or relation link
-        elif conceptInfo['relation']:
-            _DataNodeBulder__Logger.debug('%s found in the graph; it is a relation'%(_conceptName))
-            self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
+        
         else:                       
             _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
-            self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+            index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+            
+            if index:
+                indexKey = graphPath  + '/' +_conceptName + '/index'
+                dict.__setitem__(self, indexKey, index)
+            
+            if conceptInfo['relation']:
+                _DataNodeBulder__Logger.debug('%s is a relation'%(_conceptName))
+                self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
             
         # Add value to the underling dictionary
-        r = dict.__setitem__(self, key, value)
+        r = dict.__setitem__(self, _key, value)
         
         # ------------------- Collect time used for __setitem__
         end = time.time()

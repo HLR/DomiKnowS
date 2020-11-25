@@ -45,7 +45,7 @@ class TorchModel(torch.nn.Module):
         elif isinstance(value, list):
             return [self.move(v, device) for v in value]
         elif isinstance(value, tuple):
-            return (self.move(v, device) for v in value)
+            return tuple(self.move(v, device) for v in value)
         elif isinstance(value, dict):
             return {k: self.move(v, device) for k, v in value.items()}
         else:

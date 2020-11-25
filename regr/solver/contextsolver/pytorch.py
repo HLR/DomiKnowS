@@ -25,4 +25,4 @@ class Solver(ContextSolver):
         return logit, None
 
     def set_prop_result(self, data_item, prop, value):
-        data_item[prop.fullname] = value
+        data_item[prop] = value
