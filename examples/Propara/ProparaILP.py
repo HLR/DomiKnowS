@@ -133,8 +133,6 @@ class ProparaReader(RegrReader):
                 values[(step*num_steps)+step1] = 1
         return values
     
-    
-    
 from regr.graph import Graph, Concept, Relation
 from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
 
@@ -187,10 +185,6 @@ with Graph('global') as graph:
     ifL(andL(create, ("x1", "x2"), destroy, ("y1", "y2")), eqL(before, "check", 1), ("x2", "y2"))
     
 
-
-
-
-
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 
@@ -200,10 +194,16 @@ class EdgeReaderSensor(EdgeSensor, ReaderSensor):
         self.keyword = keyword
         self.data = None
         
+# class JoinReaderSensor(JointSensor, ReaderSensor):
+#     pass
+            
+# class JoinEdgeReaderSensor(JointSensor, EdgeReaderSensor):
+#     pass
+
 class JoinReaderSensor(JointSensor, ReaderSensor):
     pass
-            
-class JoinEdgeReaderSensor(JointSensor, EdgeReaderSensor):
+
+class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
     pass
 
 
@@ -254,27 +254,51 @@ def model_declaration():
     })
     return program
 
-def main():
-    # set logger level to see training and testing logs
-    import logging
-    logging.basicConfig(level=logging.INFO)
+from regr.graph import DataNodeBuilder
+from regr.sensor.sensor import Sensor
+import logging
+logging.basicConfig(level=logging.INFO)
 
-    lbp = model_declaration()
+lbp = model_declaration()
+dataset = ProparaReader(file='updated_test_data.json')
+for datanode in lbp.populate(list(dataset)[0:1], device="cpu"):
+    pass
+dataset = ProparaReader(file='updated_test_data.json')
+context = {"graph": graph}
+context.update(next(iter(dataset)))
+data_item = DataNodeBuilder(context)
+# data_item
+for sensor in procedure['id'].find(Sensor):
+    sensor(data_item)
+for sensor in step['text'].find(Sensor):
+    sensor(data_item)
+for sensor in step[procedure_contain_step.forward].find(Sensor):
+    sensor(data_item)
+for sensor in step[known_loc].find(Sensor):
+    sensor(data_item)
+for sensor in step[unknown_loc].find(Sensor):
+    sensor(data_item)
+for sensor in step[non_existence].find(Sensor):
+    sensor(data_item)
+for sensor in action[action_arg1.backward].find(Sensor):
+    sensor(data_item)
+for sensor in action[action_arg2.backward].find(Sensor):
+    sensor(data_item)
+for sensor in action[destroy].find(Sensor):
+    sensor(data_item)
+for sensor in action[create].find(Sensor):
+    sensor(data_item)
+for sensor in action[other].find(Sensor):
+    sensor(data_item)
+    
+datanode = data_item.getDataNode()
+# data1 = len(datanode.findDatanodes(select = action))
+# print(data1)
+# data1 = datanode.findDatanodes(select = action)[0].getAttribute(create)
+# print(data1)
+# data1 = datanode.findDatanodes(select = action)[0].getAttribute(destroy)
+# print(data1)
+# data1 = datanode.findDatanodes(select = action)[0].getAttribute(other)
+# print(data1)
 
-    dataset = ProparaReader(file='updated_test_data.json')  # Adding the info on the reader
-
-#     lbp.test(dataset, device='auto')
-
-    for datanode in lbp.populate(dataset, device="cpu"):
-        print('datanode:', datanode)
-        data1 = datanode.findDatanodes(select = step)[0].getAttribute("text")
-        print(data1)
-        data1 = datanode.findDatanodes(select = step)[0].getAttribute(non_existence)
-        print(data1)
-        data1 = datanode.findDatanodes(select = action)[0].getAttribute("check")
-        print(data1)
-#         datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
-#         print('datanode:', datanode)
-
-main()
-
+datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
