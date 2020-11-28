@@ -1186,33 +1186,29 @@ class DataNodeBuilder(dict):
         conceptInfo["relationAttrData"] = False
 
         if (isinstance(sensor, EdgeSensor)):
-            relationType = None
             
             if "contains" in sensor.relation.name:
-                relationType = "contains"
+                conceptInfo['relationType'] = "contains"
             elif "is_a" in sensor.relation.name:
-                relationType  = "is_a"
+                conceptInfo['relationType']  = "is_a"
             elif "has_a" in sensor.relation.name:
-                relationType = "has_a"
+                conceptInfo['relationType'] = "has_a"
             elif "equal" in sensor.relation.name:
-                relationType = "equal"
+                conceptInfo['relationType'] = "equal"
             else:
-                relationType = "relation"
-
-            if relationType:
-                conceptInfo['relationType'] = relationType
+                conceptInfo['relationType'] = "relation"
                     
-                if 'relationAttrs' in conceptInfo:
-                    conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
-                    
-                conceptInfo['relationAttrs'] = {}
+            if 'relationAttrs' in conceptInfo:
+                conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
                 
-                conceptInfo['relationMode'] = sensor.mode
-                conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
-                conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
-                
-                if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
-                    conceptInfo['relationAttrData'] = True
+            conceptInfo['relationAttrs'] = {}
+            
+            conceptInfo['relationMode'] = sensor.mode
+            conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
+            conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
+            
+            if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
+                conceptInfo['relationAttrData'] = True
 
     def __updateRootDataNodeList(self, *dns):
         if not dns:
@@ -1230,7 +1226,8 @@ class DataNodeBuilder(dict):
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
             if 'contains' not in dnE.impactLinks: 
-                newDnsRoots.append(dnE)    
+                if dnE not in newDnsRoots:
+                    newDnsRoots.append(dnE)    
 
         # Add new dataNodes which are not connected to other dataNodes to the root list
         flattenDns = [] # first flatten the list of new dataNodes
@@ -1250,7 +1247,8 @@ class DataNodeBuilder(dict):
             
         for dnE in flattenDns: # review them if they got connected
             if 'contains' not in dnE.impactLinks: 
-                newDnsRoots.append(dnE)   
+                if dnE not in newDnsRoots:
+                    newDnsRoots.append(dnE)   
                          
         # Set the updated root list 
         _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
@@ -1416,7 +1414,7 @@ class DataNodeBuilder(dict):
         elif vInfo.dim == 2:
             _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
             
-            if "relationMode" in conceptInfo:
+            if "relationType" in conceptInfo and conceptInfo['relationType'] =='contains' and "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
@@ -1464,7 +1462,7 @@ class DataNodeBuilder(dict):
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
         # Check if this is the contain relation update or attribute update
-        if "relationMode" in conceptInfo:
+        if "relationType" in conceptInfo and conceptInfo['relationType'] =='contains' and "relationMode" in conceptInfo:
             _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
 
             relatedDnsType = conceptInfo["relationAttrs"]['src']
