@@ -13,6 +13,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
+from .relation import Contains
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -957,6 +958,65 @@ class DataNode:
         return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
     
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
+    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
+        if len(_conceptsRelations) == 0:
+            _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
+        else:
+            from regr.graph import Concept
+            _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
+            
+        if not _conceptsRelations:
+            _conceptsRelations = ()
+            
+        # Check if concepts and/or relations have been provided for inference
+        if not _conceptsRelations:
+            _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
+
+            if len(_conceptsRelations) == 0:
+                _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+                raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+            else:        
+                _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
+        else:
+            pass
+
+        conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
+        _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
+        # Collect all the candidates for concepts and relations in conceptsRelations
+        for _currentConceptOrRelation in _conceptsRelations:
+            # Convert string to concept if provided as string
+            if isinstance(_currentConceptOrRelation, str):
+                currentConceptOrRelation = self.__findConcept(_currentConceptOrRelation)
+                
+                if currentConceptOrRelation is None:
+                    _DataNode__Logger.warning('Concept or relation name %s not found in the graph'%(currentConceptOrRelation))
+                    continue # String is not a name of concept or relation
+            else:
+                currentConceptOrRelation = _currentConceptOrRelation
+                
+            conceptsRelations.append(currentConceptOrRelation)
+                
+        # Get ontology graphs and then ilpOntsolver
+        myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
+        
+        for currentConceptOrRelation in conceptsRelations:
+            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
+            
+            if currentOntologyGraph is not None:
+                myOntologyGraphs.add(currentOntologyGraph)
+                
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
+        
+        if not myilpOntSolver:
+            _DataNode__Logger.error("ILPSolver not initialized")
+            raise DataNode.DataNodeError("ILPSolver not initialized")
+        
+        # Call ilpOntsolver with the collected probabilities for chosen candidates
+        _DataNode__Logger.info("Calling ILP solver")
+
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)
+    
+    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
@@ -1159,25 +1219,13 @@ class DataNodeBuilder(dict):
         # Check if concept contains other concepts
         if ('contains' in concept._out):
             for _contain in concept._out['contains']:
-                _containName = _contain.name
-                _containNameSplit = _containName.split('-')
-                
-                containsConcept = self.__findConcept(_containNameSplit[3], usedGraph)
-                
-                if containsConcept:
-                    conceptInfo['contains'].append(containsConcept)
+                conceptInfo['contains'].append(_contain.dst)
                 
         conceptInfo['containedIn'] = []  
-        # Check if concept is contained other concepts
+        # Check if concept is contained in other concepts
         if ('contains' in concept._in):
             for _contain in concept._in['contains']:
-                _containName = _contain.name
-                _containNameSplit = _containName.split('-')
-                
-                containedConcept = self.__findConcept(_containNameSplit[0], usedGraph)
-                
-                if containedConcept:
-                    conceptInfo['containedIn'].append(containedConcept) 
+                conceptInfo['containedIn'].append(_contain.src)
                            
         return conceptInfo
             
@@ -1187,16 +1235,7 @@ class DataNodeBuilder(dict):
 
         if (isinstance(sensor, EdgeSensor)):
             
-            if "contains" in sensor.relation.name:
-                conceptInfo['relationType'] = "contains"
-            elif "is_a" in sensor.relation.name:
-                conceptInfo['relationType']  = "is_a"
-            elif "has_a" in sensor.relation.name:
-                conceptInfo['relationType'] = "has_a"
-            elif "equal" in sensor.relation.name:
-                conceptInfo['relationType'] = "equal"
-            else:
-                conceptInfo['relationType'] = "relation"
+            conceptInfo['relationType'] = type(sensor.relation)
                     
             if 'relationAttrs' in conceptInfo:
                 conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
@@ -1289,8 +1328,7 @@ class DataNodeBuilder(dict):
                 
             _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
             
-            # Find if all the needed attribute were initilized
-            
+            # Find if all the needed attribute were initialized
             allAttrInit = True
             for relationAttributeName, _ in conceptInfo['relationAttrsGraph'].items():
                 if relationAttributeName not in relationAttrsCache:
@@ -1328,8 +1366,12 @@ class DataNodeBuilder(dict):
                             dn = existingDnsForAttr[a][j]
                             
                             dn.addRelationLink(relationName, currentRdn)
-                            currentRdn.addRelationLink(a, dn)   
-                            
+                            currentRdn.addRelationLink(a, dn)  
+                            currentRdn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+            else:
+                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                    rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+
             self.__updateRootDataNodeList(list(existingDnsForRelationSorted.values()))
         else:    
             # -- DataNode with this relation already created  - update it with new attribute value
@@ -1414,7 +1456,7 @@ class DataNodeBuilder(dict):
         elif vInfo.dim == 2:
             _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
             
-            if "relationType" in conceptInfo and conceptInfo['relationType'] =='contains' and "relationMode" in conceptInfo:
+            if "relationType" in conceptInfo and conceptInfo['relationType'] == Contains and "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
@@ -1462,7 +1504,7 @@ class DataNodeBuilder(dict):
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
         # Check if this is the contain relation update or attribute update
-        if "relationType" in conceptInfo and conceptInfo['relationType'] =='contains' and "relationMode" in conceptInfo:
+        if "relationType" in conceptInfo and conceptInfo['relationType'] == Contains and "relationMode" in conceptInfo:
             _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
 
             relatedDnsType = conceptInfo["relationAttrs"]['src']
