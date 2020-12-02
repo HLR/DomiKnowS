@@ -122,13 +122,13 @@ class FunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         concept=None
     ):
-        from ...graph.relation import Transformed
+        from ...graph.relation import Transformed, RelationFunction
         concept = concept or self.concept
         for edge in self.edges:
             for sensor in edge.find(self.non_label_sensor):
                 sensor(data_item)
         for pre in self.pres:
-            if isinstance(pre, str):
+            if isinstance(pre, (str, RelationFunction)):
                 try:
                     pre = concept[pre]
                 except KeyError:
