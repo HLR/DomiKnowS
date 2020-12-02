@@ -529,7 +529,7 @@ class DataNode:
         return None 
     
     # Find the root parent of relation of the given relation
-    def __findRootConceptOrRelation(self, relationConcept, usedGraph = None):
+    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
@@ -540,7 +540,7 @@ class DataNode:
         for _isA in relationConcept.is_a():
             _relationConcept = _isA.dst
             
-            return  self.__findRootConceptOrRelation(_relationConcept, usedGraph)
+            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
         
         # If the provided concept or relation is root (has not parents)
         return relationConcept 
@@ -552,7 +552,7 @@ class DataNode:
             return True
         
         # Find the root parent  of the given concept or relation
-        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+        rootRelation = self.findRootConceptOrRelation(conceptRelation)
         
         if bool(rootRelation):
             # Find dedicated DataNodes for this rootRelation
@@ -570,7 +570,7 @@ class DataNode:
             
     def __getHardConstrains(self, conceptRelation, reltationAttrs, currentCandidate):
         key = conceptRelation.name  
-        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+        rootRelation = self.findRootConceptOrRelation(conceptRelation)
         
         if rootRelation == conceptRelation:
             if bool(reltationAttrs):
@@ -612,7 +612,7 @@ class DataNode:
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
         else:
-            rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+            rootRelation = self.findRootConceptOrRelation(conceptRelation)
             rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
             
             if not rl:
@@ -1057,7 +1057,7 @@ class DataNode:
             if concept_name in hardConstrains:
                 continue
             
-            rootRelation = self.__findRootConceptOrRelation(concept_name)
+            rootRelation = self.findRootConceptOrRelation(concept_name)
             attrNames = []
             for _, rel in enumerate(rootRelation.has_a()): 
                 attrNames.append(rel.name)
@@ -1236,6 +1236,7 @@ class DataNodeBuilder(dict):
         if (isinstance(sensor, EdgeSensor)):
             
             conceptInfo['relationType'] = type(sensor.relation)
+            conceptInfo['relationName'] = sensor.relation.name
                     
             if 'relationAttrs' in conceptInfo:
                 conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
@@ -1243,8 +1244,8 @@ class DataNodeBuilder(dict):
             conceptInfo['relationAttrs'] = {}
             
             conceptInfo['relationMode'] = sensor.mode
-            conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
-            conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
+            conceptInfo['relationAttrs']["src"] = sensor.src 
+            conceptInfo['relationAttrs']["dst"] = sensor.dst
             
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True

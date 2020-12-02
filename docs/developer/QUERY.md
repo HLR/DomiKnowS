@@ -79,6 +79,11 @@ The examples:
 
 - **datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})** - find dataNode of type *pair* linking dataNode of type *word* with *raw* attribute equal *John* and dataNode of type *word* with *raw* attribute equal *IBM*
 
+- **dn.findDatanodes(select = ((word,), (1,)))** - find dataNode of type *word* with id *1*
+
+- **dn.findDatanodes(select = ((word,), ("instanceID", 1)))** - find dataNode of type *word* with id *1*
+
+
 ### Data Graph construction
 
 Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update.

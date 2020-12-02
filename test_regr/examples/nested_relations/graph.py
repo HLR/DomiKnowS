@@ -40,7 +40,9 @@ with Graph('global') as graph:
 
         # phrase constrains
         disjoint(people, organization, location, other, o)
-        nandL(people,organization) # ?? 
+        
+        nandL(people,  V(name='x'), organization, V(name='x'),)
+
         #for c1, c2 in permutations((people, organization, location, other, o), r=2):
         #nandL(c1, c2)
 
@@ -57,6 +59,7 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
+        
         # LC1 work_for has arg1 people and arg2 organization
         ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
             

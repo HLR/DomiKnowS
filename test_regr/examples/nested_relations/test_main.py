@@ -71,7 +71,7 @@ def test_case():
                 torch.cat((word_emb[0], word_emb[0]), dim=0),
                 torch.cat((word_emb[1], word_emb[2]), dim=0),
                 torch.cat((word_emb[3], word_emb[3]), dim=0)], dim=0),
-            #                             John        "works for"           IBM
+            #                         John        "works for"     IBM
             'people': torch.tensor([[0.3, 0.7], [0.98, 0.02], [0.40, 0.6]], device=device),
             'organization': torch.tensor([[0.5, 0.5],  [0.97, 0.03], [0.09, 0.91]], device=device),
             'location': torch.tensor([[0.7, 0.3], [0.95, 0.05], [0.50, 0.50]], device=device),
@@ -359,23 +359,8 @@ def test_main_conll04(case):
     
     for conceptsRelations in conceptsRelationsVariants:
         
-        # ------------ Calculate logical constraints losses 
-        lcResult = datanode.calculateLcLoss()
-                
-        for i in range(3):
-            assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
-
-        for i in product(range(3), repeat = 2):  
-            if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                    assert True
-                else:
-                    assert False
-            else:
-                assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
-
         # ------------ Call the ILP Solver
-        datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        datanode.inferILPResults(*conceptsRelations, fun=None)
         
         # ------------ Concepts Results
         
@@ -446,6 +431,21 @@ def test_main_conll04(case):
         # # Sum all value of attribute work_for/ILP  for the pair relation from 3
         # #assert sum(pairResult['work_for'][3]) == 0
         # assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
+        
+        # ------------ Calculate logical constraints losses 
+        lcResult = datanode.calculateLcLoss()
+                
+        for i in range(3):
+            assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
+
+        for i in product(range(3), repeat = 2):  
+            if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+                if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+                    assert True
+                else:
+                    assert False
+            else:
+                assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
 
 
 if __name__ == '__main__':
