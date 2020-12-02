@@ -67,7 +67,7 @@ sentence['text'] = ReaderSensor(keyword='text')
 
 scw = sentence.relate_to(word)[0]
 word[scw.forward, 'text'] = JointSensor(sentence['text'], forward=tokenize)
-word['emb'] = ModuleLearner('text', module=WordEmbedding())
+word['emb'] = ModuleLearner('text', scw.forward, module=WordEmbedding())
 
 word[people] = ReaderSensor(keyword='peop', label=True)
 word[organization] = ReaderSensor(keyword='org', label=True)

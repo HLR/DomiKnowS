@@ -26,7 +26,7 @@ class WordEmbedding(torch.nn.Module):
         device = next(self.embeds.parameters()).device
         return torch.tensor(ids, device=device)
 
-    def forward(self, words):
+    def forward(self, words, _):
         ids = self.ws2i(words)
         return self.embeds(ids)
 
