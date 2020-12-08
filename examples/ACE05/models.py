@@ -22,8 +22,28 @@ def cartesian_concat(*inputs):
 TRANSFORMER_MODEL = 'bert-base-uncased'
 
 
-def Tokenizer():
-    return BertTokenizerFast.from_pretrained(TRANSFORMER_MODEL)
+class Tokenizer():
+    def __init__(self) -> None:
+        self.tokenizer = BertTokenizerFast.from_pretrained(TRANSFORMER_MODEL)
+
+    def __call__(self, text):
+        if isinstance(text, str):
+            text = [text, text[:10]]
+        tokens = self.tokenizer(text, padding=True, return_tensors='pt', return_offsets_mapping=True)
+
+        ids = tokens['input_ids']
+        mask = tokens['attention_mask']
+        offset = tokens['offset_mapping']
+
+        idx = mask.nonzero()[:, 0].unsqueeze(-1)
+        mapping = torch.zeros(idx.shape[0], idx.max()+1)
+        mapping.scatter_(1, idx, 1)
+
+        mask = mask.bool()
+        ids = ids.masked_select(mask)
+        offset = torch.stack((offset[:,:,0].masked_select(mask), offset[:,:,1].masked_select(mask)), dim=-1)
+
+        return mapping, ids, offset 
 
 
 # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
