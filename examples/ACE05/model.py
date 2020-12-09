@@ -157,6 +157,6 @@ def model(graph):
                 # pair[event_arg] = ?
 
     # program = POIProgram(graph, poi=(span, pair))
-    program = PrimalDualProgram(graph, PoiModel, poi=(span, pair))
+    program = PrimalDualProgram(graph, PoiModel, poi=(document, token, span, pair))
 
     return program

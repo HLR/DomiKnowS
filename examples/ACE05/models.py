@@ -28,7 +28,7 @@ class Tokenizer():
 
     def __call__(self, text):
         if isinstance(text, str):
-            text = [text, text[:10]]
+            text = [text]
         tokens = self.tokenizer(text, padding=True, return_tensors='pt', return_offsets_mapping=True)
 
         ids = tokens['input_ids']
