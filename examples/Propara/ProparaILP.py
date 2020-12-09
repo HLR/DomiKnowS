@@ -39,7 +39,7 @@ class ProparaReader(RegrReader):
             values.append([1 - item['entity_step'][step][0], item['entity_step'][step][0]])
         return torch.tensor(values)
     
-    def getunkownval(self, item):
+    def getunknownval(self, item):
         values = []
         for step in range(len(item['steps']) + 1):
             values.append([1 - item['entity_step'][step][1], item['entity_step'][step][1]])
@@ -134,7 +134,6 @@ class ProparaReader(RegrReader):
         return values
     
     
-    
 from regr.graph import Graph, Concept, Relation
 from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
 
@@ -187,10 +186,6 @@ with Graph('global') as graph:
     ifL(andL(create, ("x1", "x2"), destroy, ("y1", "y2")), eqL(before, "check", 1), ("x2", "y2"))
     
 
-
-
-
-
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 
@@ -200,10 +195,16 @@ class EdgeReaderSensor(EdgeSensor, ReaderSensor):
         self.keyword = keyword
         self.data = None
         
+# class JoinReaderSensor(JointSensor, ReaderSensor):
+#     pass
+            
+# class JoinEdgeReaderSensor(JointSensor, EdgeReaderSensor):
+#     pass
+
 class JoinReaderSensor(JointSensor, ReaderSensor):
     pass
-            
-class JoinEdgeReaderSensor(JointSensor, EdgeReaderSensor):
+
+class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
     pass
 
 
@@ -224,12 +225,12 @@ def model_declaration():
 #     entity['raw'] = ReaderSensor(keyword='entities')
 
     step[non_existence] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='non_existence')
-    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
-    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unkown')
+    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unknown')
+    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
     
     step[non_existence] = ReaderSensor(keyword='non_existence', label=True)
-    step[unknown_loc] = ReaderSensor(keyword='known', label=True)
-    step[known_loc] = ReaderSensor(keyword='unkown', label=True)
+    step[unknown_loc] = ReaderSensor(keyword='unknown', label=True)
+    step[known_loc] = ReaderSensor(keyword='known', label=True)
     
     action[action_arg1.backward, action_arg2.backward] = JoinReaderSensor(step['text'], keyword='action')
     
@@ -254,6 +255,7 @@ def model_declaration():
     })
     return program
 
+
 def main():
     # set logger level to see training and testing logs
     import logging
@@ -264,17 +266,19 @@ def main():
     dataset = ProparaReader(file='updated_test_data.json')  # Adding the info on the reader
 
 #     lbp.test(dataset, device='auto')
-
     for datanode in lbp.populate(dataset, device="cpu"):
-        print('datanode:', datanode)
-        data1 = datanode.findDatanodes(select = step)[0].getAttribute("text")
-        print(data1)
-        data1 = datanode.findDatanodes(select = step)[0].getAttribute(non_existence)
-        print(data1)
-        data1 = datanode.findDatanodes(select = action)[0].getAttribute("check")
-        print(data1)
-#         datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
 #         print('datanode:', datanode)
+        datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
+        final_output = {"id": datanode.getAttribute('id'), "steps":[], "actions":[], "steps_before": [], "actions_before": []}
+        for step_info in datanode.findDatanodes(select = step):
+            k = step_info.getAttribute(known_loc, "ILP").item()
+            u = step_info.getAttribute(unknown_loc, "ILP").item()
+            n = step_info.getAttribute(non_existence, "ILP").item()
+            assert k + u + n == 1
+        for action_info in datanode.findDatanodes(select = action):
+            c = action_info.getAttribute(create, "ILP").item()
+            d = action_info.getAttribute(destroy, "ILP").item()
+            o = action_info.getAttribute(other, "ILP").item()
+            assert c + d + o == 1
 
 main()
-

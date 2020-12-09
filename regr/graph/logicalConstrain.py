@@ -2,12 +2,14 @@ import logging
 
 import numpy
 import torch
-
+from  collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
    
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
+V = namedtuple("V", ['name', 'v'], defaults= [None, None])
+
 class LogicalConstrain:
     def __init__(self, *e, p=100):
         self.headLC = True # Indicate that it is head constrain and should be process individually
@@ -26,17 +28,9 @@ class LogicalConstrain:
         if isinstance(e[0], (Concept, LogicalConstrain)):
             conceptOrLc = e[0]
         elif len(e) > 1 and isinstance(e[1], (Concept, LogicalConstrain)): 
-            if isinstance(self, existsL):
-                conceptOrLc = e[1]
-            else:
-                myLogger.error("Logical Constrain is incorrect - its type is existsL but its second element is not concept but %s"%(e[1]))
-                raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect - its type is existsL but its second element is not concept but %s"%(e[1]))
+            conceptOrLc = e[1]
         elif len(e) > 2 and isinstance(e[2], (Concept, LogicalConstrain)):
-            if isinstance(self, (atLeastL, atMostL, exactL)):
-                conceptOrLc = e[2]
-            else:
-                myLogger.error("Logical Constrain is incorrect - its type is %s but its third element is not concept but %s"%(type(self),e[2]))
-                raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect - its type is %s but its third element is not concept but %s"%(type(self),e[2]))
+            conceptOrLc = e[2]
         else:
             myLogger.error("Logical Constrain is incorrect")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect")
@@ -62,23 +56,6 @@ class LogicalConstrain:
         for e_item in e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False
-                
-        # Check correctness of variable number for concept
-        for e_itemNo, e_item in enumerate(e):
-            continue
-            if isinstance(e_item, Concept):
-                if e_itemNo + 1 >= len(e):
-                    break # No more elements after current
-                
-                if not isinstance(e[e_itemNo + 1], tuple):
-                    continue # The next element is not tuple with variables - skip this concept 
-                    
-                variableNoProvided = len(e[e_itemNo + 1])
-                variableNoRequired, _ = self.__conceptVariableCount(e_item)
-                
-                if(variableNoProvided != variableNoRequired):
-                    myLogger.error("Logical Constrain concept %s is associated with %i variables %s - but requires %i"%(e_item,variableNoProvided,e[e_itemNo + 1],variableNoRequired))
-                    raise LogicalConstrain.LogicalConstrainError("Logical Constrain concept %s is associated with %i variables %s - but requires %i"%(e_item,variableNoProvided,e[e_itemNo + 1],variableNoRequired))
                 
         # Check soft constrain is activated though p - if certainty in the validity of the constrain or the user preference is provided by p
         if p < 0:
@@ -141,11 +118,15 @@ class LogicalConstrain:
             return None
         
         # input variable names
-        vKeys = [next(iter(v[i])) for i in range(len(v))]
+        try:
+            vKeys = [next(iter(v[i])) for i in range(len(v))]
+        except StopIteration:
+            pass
         
         # output variable names and variables
         ilpV = {} # output variable names 
         zVars = {} # output variables
+        ilpKey = None
         
         if len(v) == 2:
             # Depending on size of variable names tuples from input variables
@@ -244,7 +225,7 @@ class LogicalConstrain:
         if len(v) > 2: # Support more then 2 variables  if all are the same
             equals = True
             for k in vKeys:
-                if  len(k) > 1 or vKeys[0][0] != k[0]:
+                if  len(k) > 2 or vKeys[0][0] != k[0]:
                     equals = False
                     break
                 
@@ -262,7 +243,12 @@ class LogicalConstrain:
                             zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
 
         # Output
-        ilpV[ilpKey] = zVars
+        if ilpKey:
+            ilpV[ilpKey] = zVars
+        else:
+            if ifLog: myLogger.warning("%s Logical Constrain is not supported"%(self.lcName))
+            ilpV[()] = zVars
+
         if model: model.update()
 
         return ilpV

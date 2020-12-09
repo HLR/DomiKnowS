@@ -1153,7 +1153,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         for lc in lcs:   
             self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
             result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
-            if result != None:
+            if result != None and bool(list(result.values())[0]):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
             else:
                 self.myLogger.warning('Failed to add Logical Constrain %s'%(lc.lcName))
@@ -1282,12 +1282,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 eqlVariables[tokensPermutation] = 0
                                 for e2 in e.e[2]:
                                     key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e2)
-                                    if hardConstrains[key][tokensPermutation][1] == 1:
-                                        eqlVariables[tokensPermutation] = 1
-                                        break 
+                                    if key in hardConstrains:
+                                        if hardConstrains[key][tokensPermutation][1] == 1:
+                                            eqlVariables[tokensPermutation] = 1
+                                            break 
                             else:
                                 key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
-                                eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
+                                if key in hardConstrains:
+                                    eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
                     
                     if eqlVariables is not None: 
                         _lcVariables = {}
@@ -1827,7 +1829,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
-                lossDict = next(iter(lcLoss.values()))
+                if lcLoss:
+                    lossDict = next(iter(lcLoss.values()))
+                else:
+                    lossDict = None
                 
                 if not lossDict:
                     continue
