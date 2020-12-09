@@ -39,7 +39,7 @@ class ProparaReader(RegrReader):
             values.append([1 - item['entity_step'][step][0], item['entity_step'][step][0]])
         return torch.tensor(values)
     
-    def getunkownval(self, item):
+    def getunknownval(self, item):
         values = []
         for step in range(len(item['steps']) + 1):
             values.append([1 - item['entity_step'][step][1], item['entity_step'][step][1]])
@@ -133,6 +133,7 @@ class ProparaReader(RegrReader):
                 values[(step*num_steps)+step1] = 1
         return values
     
+    
 from regr.graph import Graph, Concept, Relation
 from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
 
@@ -224,12 +225,12 @@ def model_declaration():
 #     entity['raw'] = ReaderSensor(keyword='entities')
 
     step[non_existence] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='non_existence')
-    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
-    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unkown')
+    step[unknown_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='unknown')
+    step[known_loc] = ReaderSensor(procedure_contain_step.forward, 'text', keyword='known')
     
     step[non_existence] = ReaderSensor(keyword='non_existence', label=True)
-    step[unknown_loc] = ReaderSensor(keyword='known', label=True)
-    step[known_loc] = ReaderSensor(keyword='unkown', label=True)
+    step[unknown_loc] = ReaderSensor(keyword='unknown', label=True)
+    step[known_loc] = ReaderSensor(keyword='known', label=True)
     
     action[action_arg1.backward, action_arg2.backward] = JoinReaderSensor(step['text'], keyword='action')
     
@@ -254,51 +255,30 @@ def model_declaration():
     })
     return program
 
-from regr.graph import DataNodeBuilder
-from regr.sensor.sensor import Sensor
-import logging
-logging.basicConfig(level=logging.INFO)
 
-lbp = model_declaration()
-dataset = ProparaReader(file='updated_test_data.json')
-for datanode in lbp.populate(list(dataset)[0:1], device="cpu"):
-    pass
-dataset = ProparaReader(file='updated_test_data.json')
-context = {"graph": graph}
-context.update(next(iter(dataset)))
-data_item = DataNodeBuilder(context)
-# data_item
-for sensor in procedure['id'].find(Sensor):
-    sensor(data_item)
-for sensor in step['text'].find(Sensor):
-    sensor(data_item)
-for sensor in step[procedure_contain_step.forward].find(Sensor):
-    sensor(data_item)
-for sensor in step[known_loc].find(Sensor):
-    sensor(data_item)
-for sensor in step[unknown_loc].find(Sensor):
-    sensor(data_item)
-for sensor in step[non_existence].find(Sensor):
-    sensor(data_item)
-for sensor in action[action_arg1.backward].find(Sensor):
-    sensor(data_item)
-for sensor in action[action_arg2.backward].find(Sensor):
-    sensor(data_item)
-for sensor in action[destroy].find(Sensor):
-    sensor(data_item)
-for sensor in action[create].find(Sensor):
-    sensor(data_item)
-for sensor in action[other].find(Sensor):
-    sensor(data_item)
-    
-datanode = data_item.getDataNode()
-# data1 = len(datanode.findDatanodes(select = action))
-# print(data1)
-# data1 = datanode.findDatanodes(select = action)[0].getAttribute(create)
-# print(data1)
-# data1 = datanode.findDatanodes(select = action)[0].getAttribute(destroy)
-# print(data1)
-# data1 = datanode.findDatanodes(select = action)[0].getAttribute(other)
-# print(data1)
+def main():
+    # set logger level to see training and testing logs
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
-datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
+    lbp = model_declaration()
+
+    dataset = ProparaReader(file='updated_test_data.json')  # Adding the info on the reader
+
+#     lbp.test(dataset, device='auto')
+    for datanode in lbp.populate(dataset, device="cpu"):
+#         print('datanode:', datanode)
+        datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
+        final_output = {"id": datanode.getAttribute('id'), "steps":[], "actions":[], "steps_before": [], "actions_before": []}
+        for step_info in datanode.findDatanodes(select = step):
+            k = step_info.getAttribute(known_loc, "ILP").item()
+            u = step_info.getAttribute(unknown_loc, "ILP").item()
+            n = step_info.getAttribute(non_existence, "ILP").item()
+            assert k + u + n == 1
+        for action_info in datanode.findDatanodes(select = action):
+            c = action_info.getAttribute(create, "ILP").item()
+            d = action_info.getAttribute(destroy, "ILP").item()
+            o = action_info.getAttribute(other, "ILP").item()
+            assert c + d + o == 1
+
+main()
