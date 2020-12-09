@@ -25,15 +25,7 @@ def model(graph):
     token[document_contains_token.forward, 'ids', 'offset'] = cache(JointSensor)(document['text'], forward=Tokenizer(), cache=TorchCache(path="./cache/tokenizer"))
     token['emb'] = ModuleLearner('ids', module=BERT())
 
-    # token -> span
-    span_contains_token = span.relate_to(token)[0]
-    def token_to_span_fn(token_index):
-        token_index
-        pass
-    span[span_contains_token.backward] = EdgeSensor(token['emb'], mode='backward', relation=span_contains_token, forward=token_to_span_fn)
-    span['emb'] = FunctionalSensor(span_contains_token.backward('emb'), forward=lambda x: x)
-
-    # span equality extention
+    # span annotation
     span_annotation['index'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.text")
     span_annotation['start'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.start")
     span_annotation['end'] = MultiLevelReaderSensor(keyword="spans.*.mentions.*.head.end")
@@ -46,11 +38,52 @@ def model(graph):
     anchor_annotation['type'] = CustomMultiLevelReaderSensor(keyword="events.*.type")
     anchor_annotation['subtype'] = CustomMultiLevelReaderSensor(keyword="events.*.subtype")
 
+    # token -> span and span equality extention
+    span_contains_token = span.relate_to(token)[0]
     span_equal_annotation = span.relate_to(span_annotation)[0]
-    span[span_equal_annotation.backward] = EdgeSensor('emb', forward=makeSpanPairs, relation=span_equal_annotation, mode='backward')
     anchor_equal_annotation = span.relate_to(anchor_annotation)[0]
-    span[anchor_equal_annotation.backward] = EdgeSensor('emb', anchor_annotation['index'], anchor_annotation['start'], anchor_annotation['end'], relation=anchor_equal_annotation, forward=makeSpanAnchorPairs)
-    span['label'] = SpanLabelSensor('match', label=True, concept=span_annotation.name)
+
+    def token_to_span_fn(token_offset, sanno_start, sanno_end, aanno_start, aanno_end):
+        num_token = token_offset.shape[0]
+        token_start = token_offset[:,0]
+        token_end = token_offset[:,1]
+        spans = []
+        # dummy spans
+        for start in range(0, num_token, 4):
+            spans.append((start, start+2))
+        sannos = []
+        for start, end in zip(sanno_start, sanno_end):
+            start_token = torch.where(torch.logical_and(token_start <= start, start < token_end))[0]
+            end_token = torch.where(torch.logical_and(token_start <= end, end <= token_end))[0]
+            try:
+                span_index = spans.index((start_token, end_token))
+            except ValueError:
+                span_index = len(spans)
+                spans.append((start_token, end_token))
+            sannos.append(span_index)
+        aannos = []
+        for start, end in zip(aanno_start, aanno_end):
+            start_token = torch.where(torch.logical_and(token_start <= start, start < token_end))[0]
+            end_token = torch.where(torch.logical_and(token_start <= end, end <= token_end))[0]
+            try:
+                span_index = spans.index((start_token, end_token))
+            except ValueError:
+                span_index = len(spans)
+                spans.append((start_token, end_token))
+            aannos.append(span_index)
+
+        token_mapping = torch.zeros(len(spans), num_token)
+        for j, (start, end) in enumerate(spans):
+            token_mapping[j, start:end] = 1
+        sanno_mapping = torch.zeros(len(spans), len(sanno_start))
+        for i, index in enumerate(sannos):
+            sanno_mapping[index, i] = 1
+        aanno_mapping = torch.zeros(len(spans), len(aanno_start))
+        for i, index in enumerate(aannos):
+            aanno_mapping[index, i] = 1
+        return token_mapping, sanno_mapping, aanno_mapping
+    span[span_contains_token.backward, span_equal_annotation.backward, anchor_equal_annotation.backward] = JointSensor(token['offset'], span_annotation['start'], span_annotation['end'], anchor_annotation['start'], anchor_annotation['end'], forward=token_to_span_fn)
+    span['emb'] = FunctionalSensor(span_contains_token.backward('emb'), forward=lambda x: x)
 
     # span -> base types
     for concept in find_is_a(entities_graph, span):
@@ -74,7 +107,7 @@ def model(graph):
             if '.' in sub_concept.name:  # skip 'Class.', 'Role.', etc.
                 continue
             print(f'Creating learner/reader for {concept} -> {sub_concept}')
-            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
             span_annotation[sub_concept] = LabelConstantSensor('subtype', concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
@@ -82,14 +115,14 @@ def model(graph):
     value = entities_graph['value']
     for concept in find_is_a(entities_graph, value):
         print(f'Creating learner/reader for value -> {concept}')
-        span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+        span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
         span_annotation[concept] = LabelConstantSensor('type', concept=concept.name)
         # span[concept] = ConstantSensor(data=, label=True)
 
         # value -> sub classes
         for sub_concept in find_is_a(entities_graph, concept):
             print(f'Creating learner/reader for {concept} -> {sub_concept}')
-            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
             span_annotation[sub_concept] = LabelConstantSensor('subtype', concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
@@ -105,14 +138,14 @@ def model(graph):
     # event
     for concept in find_is_a(events_graph, event):
         print(f'Creating learner/reader for event -> {concept}')
-        span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+        span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
         # span_annotation[concept] = LabelConstantSensor('type', concept=concept.name)
         # span[concept] = ConstantSensor(data=, label=True)
 
         # event sub classes
         for sub_concept in find_is_a(events_graph, concept):
             print(f'Creating learner/reader for {concept} -> {sub_concept}')
-            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
+            span[sub_concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
             # span_annotation[sub_concept] = LabelConstantSensor('subtype', concept=sub_concept.name)
             # span[sub_concept] = ConstantSensor(data=, label=True)
 
@@ -120,7 +153,7 @@ def model(graph):
             # pair -> event argument
             for event_arg in find_event_arg(events_graph, sub_concept):
                 print(f'Creating learner/reader for pair -> {sub_concept.name}\'s {event_arg.name}')
-                pair[event_arg] = ModuleLearner('emb', module=torch.nn.Linear(768*4, 2))
+                pair[event_arg] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
                 # pair[event_arg] = ?
 
     # program = POIProgram(graph, poi=(span, pair))
