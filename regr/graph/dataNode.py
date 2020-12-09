@@ -545,6 +545,33 @@ class DataNode:
         # If the provided concept or relation is root (has not parents)
         return relationConcept 
 
+    def getEdgeDataNode(self, path):
+        if len(path) == 0:
+            return None
+
+        if len(path) == 1:
+            if path[0] in self.relationLinks:
+                return self.relationLinks[path[0]]
+            else:
+                return None
+        
+        if path[0] in self.relationLinks:
+            cDns = self.relationLinks[path[0]]
+            
+            rDNS = []
+            for cDn in cDns:
+                rDn = cDn.getEdgeDataNode(path[1:])
+                
+                if not rDn:
+                    rDNS.extend(rDn)
+                    
+            if rDNS:
+                return rDNS
+            else:
+                return None
+        else:
+            return None
+
     def __isHardConstrains(self, conceptRelation):
         # Check if dedicated DataNodes has been created for this concept or relation
         currentConceptOrRelationDNs = self.findDatanodes(select = conceptRelation)

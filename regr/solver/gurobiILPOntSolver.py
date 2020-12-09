@@ -18,7 +18,7 @@ from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
-from regr.graph import LogicalConstrain, eqL
+from regr.graph import LogicalConstrain, V, eqL
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -1314,55 +1314,100 @@ class gurobiILPOntSolver(ilpOntSolver):
             if result != None and bool(list(result.values())[0]):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
             else:
-                self.myLogger.warning('Failed to add Logical Constrain %s'%(lc.lcName))
+                self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, headLC = False):
-        lcVariables = []
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p,  lcVariablesDns = {}, headLC = False):
+        resultVariableNames = []
+        lcVariables = {}
         
         for eIndex, e in enumerate(lc.e): 
             if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
                 
                 # Look on step ahead in the parsed logical constrain and get variables names (if present) after the current concept
-                variablesNames = None
                 if eIndex + 1 < len(lc.e):
-                    if isinstance(lc.e[eIndex+1], tuple):
-                        variablesNames = lc.e[eIndex+1]
-                
-                # -- Concept or Relation
+                    if isinstance(lc.e[eIndex+1], V):
+                        variable = lc.e[eIndex+1]
+                    else:
+                        self.myLogger.error('The element of logical constrain %s after %s is of type %s but should be variable of type %s'%(lc.lcName, e, type(lc.e[eIndex+1]), V))
+                        return None
+                else:
+                    self.myLogger.error('The element %s of logical constrain %s has no variable'%(e, lc.lcName))
+                    return None
+                    
+                if variable.name:
+                    variableName = variable.name
+                else:
+                    variableName = "V" + str(eIndex)
+                            
+                # -- Concept 
                 if isinstance(e, Concept):
-                    typeOfConcept, _ = self._typeOfConcept(e)
                     conceptName = e.name
-                    _typeOfConcept = typeOfConcept
-                    
-                    if typeOfConcept == 'concept':
-                        if not variablesNames:
-                            variablesNames = ('x', )
-                            
-                        if len(variablesNames) > 1:
-                            self.myLogger.warning('Logical Constrain %s has incorrect variables set %s for %s'%(lc.lcName,variablesNames,conceptName))
-                            
-                        conceptVariables = {}
-                        foundConceptInX = False
-                        for token in tokens:
-                            if (conceptName, token) in x:
-                                conceptVariables[(token, )] = x[(conceptName, token)]
-                                foundConceptInX = True
-                            else:
-                                if conceptName in hardConstrains:
-                                    conceptVariables[(token, )] =  hardConstrains[conceptName][token][1]
-                                    foundConceptInX = True
-                                else:
-                                    conceptVariables[(token, )] = None
-   
-                        if not foundConceptInX:
-                            self.myLogger.warning('Not found data for concept %s required to build Logical Constrain %s - skipping this constrain'%(conceptName,lc.lcName))
-                            return None
+                    xPkey = '<' + conceptName + '>/ILP/xP'
 
-                        _lcVariables = {}
-                        _lcVariables[variablesNames] = conceptVariables
+                    vDns = []
+                    if variable.v == None:
+                        if variable.name == None and variable.match == None:
+                            self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(e, lc.lcName))
+                            return None
+                                                 
+                        rootConcept = dn.findRootConceptOrRelation(conceptName)
+                        dns = dn.findDatanodes(select = rootConcept)
                         
-                        lcVariables.append(_lcVariables)
+                        lcVariablesDns[variable.name] = dns
+                        
+                        for _dn in dns:
+                            if xPkey not in _dn.attributes:
+                                vDns.append(None)
+                                continue
+                            
+                            if p not in _dn.getAttribute(xPkey):
+                                vDns.append(None)
+                                continue
+                            
+                            vDn = _dn.getAttribute(xPkey)[p]
+                            
+                            vDns.append(vDn)
+                    else:
+                        if len(variable.v) == 0:
+                            self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(e, lc.lcName))
+                            return None
+                            
+                        referredVariableName = variable.v[0]      
                     
+                        if referredVariableName not in lcVariablesDns:
+                            self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(e, lc.lcName, referredVariableName))
+                            return None
+                        
+                        if len(variable.v) == 1:
+                            vDns = lcVariables[referredVariableName]
+                        else:
+                            referredDns = lcVariablesDns[referredVariableName]
+                            dns = []
+                            for rDn in referredDns:
+                                vDn = rDn.getEdgeDataNode(variable.v[1:])
+                                
+                                if vDn:
+                                    dns.extend(vDn)
+                                    
+                            for _dn in dns:
+                                if xPkey not in _dn.attributes:
+                                    vDns.append(None)
+                                    continue
+                                
+                                if p not in _dn.getAttribute(xPkey):
+                                    vDns.append(None)
+                                    continue
+                                
+                                vDn = _dn.getAttribute(xPkey)[p]
+                                
+                                vDns.append(vDn)
+                                    
+                    if variable.match:
+                        resultVariableNames.append(variable.match)
+                    else:
+                        resultVariableNames.append(variableName)
+
+                    lcVariables[variableName] = vDns
                 elif isinstance(e, eqL):
                     typeOfConcept, _ = self._typeOfConcept(e.e[0])
 
@@ -1405,13 +1450,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # LogicalConstrain - process recursively 
                 elif isinstance(e, LogicalConstrain):
                     self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(e.lcName, e, [str(e1) for e1 in lc.e]))
-                    lCvariables = self.__constructLogicalConstrains(e, booleanProcesor, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, resultVariableNames = variablesNames, headLC = False)
+                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, lcVariablesDns = lcVariablesDns, headLC = False)
                     
-                    if lCvariables == None:
+                    if vDns == None:
                         self.myLogger.warning('Not found data for %s nested logical Constrain required to build Logical Constrain %s - skipping this constrain'%(e.lcName,lc.lcName))
                         return None
                         
-                    lcVariables.append(lCvariables)
+                    if variable.match:
+                        resultVariableNames.append(variable.match)
+                    else:
+                        resultVariableNames.append(variableName)
+
+                    lcVariables[variableName] = vDns                    
             # Tuple with named variable 
             elif isinstance(e, tuple): 
                 if eIndex == 0:
@@ -1429,31 +1479,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 return None
         
         return lc(m, booleanProcesor, lcVariables, resultVariableNames=resultVariableNames, headConstrain = headLC)
-
-    def _typeOfConcept(self, e):
-        relationConcepts = []
-        
-        if len(e.has_a()) > 0: 
-            for has_a in e.has_a():
-                relationConcepts.append(has_a.dst.name)
-                
-        if len(relationConcepts) == 2:
-            return 'pair', relationConcepts
-        elif len(relationConcepts) == 3:
-            return 'triplet', relationConcepts
-        elif len(relationConcepts) > 3:
-            self.myLogger.error('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(relationConcepts)))
-            raise ValueError('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(relationConcepts)))
-                    
-        for is_a in e.is_a():
-            parentConcept = is_a.dst
-            
-            parentType, parentRelationConcepts = self._typeOfConcept(parentConcept)
-            
-            if len(parentRelationConcepts) > 0:
-                return parentType, parentRelationConcepts
-            
-        return 'concept', []
                 
     # Method updating provided probabilities with default negative probabilities if not provided by the user 
     def __checkIfContainNegativeProbability(self, concepts, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
@@ -1744,11 +1769,10 @@ class gurobiILPOntSolver(ilpOntSolver):
             if maxP:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
 
-                tokenResult, relationResult, tripleRelationResult = self.__collectILPSelectionResults(lcRun[maxP]['mP'], lcRun[maxP]['xP'])
+                # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
+                # Get ILP result from  maxP x 
             else:
-                tokenResult = None
-                relationResult = None
-                tripleRelationResult = None
+                pass
                                        
         except:
             self.myLogger.error('Error returning solutions')
