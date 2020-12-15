@@ -53,8 +53,8 @@ def model(graph):
             spans.append((start, start+2))
         sannos = []
         for start, end in zip(sanno_start, sanno_end):
-            start_token = torch.where(torch.logical_and(token_start <= start, start < token_end))[0]
-            end_token = torch.where(torch.logical_and(token_start <= end, end <= token_end))[0]
+            start_token = torch.nonzero(torch.logical_and(token_start <= start, start < token_end), as_tuple=False)[0, 0]
+            end_token = torch.nonzero(torch.logical_and(token_start < end, end <= token_end), as_tuple=False)[0, 0]
             try:
                 span_index = spans.index((start_token, end_token))
             except ValueError:
@@ -63,8 +63,8 @@ def model(graph):
             sannos.append(span_index)
         aannos = []
         for start, end in zip(aanno_start, aanno_end):
-            start_token = torch.where(torch.logical_and(token_start <= start, start < token_end))[0]
-            end_token = torch.where(torch.logical_and(token_start <= end, end <= token_end))[0]
+            start_token = torch.nonzero(torch.logical_and(token_start <= start, start < token_end), as_tuple=False)[0, 0]
+            end_token = torch.nonzero(torch.logical_and(token_start < end, end <= token_end), as_tuple=False)[0, 0]
             try:
                 span_index = spans.index((start_token, end_token))
             except ValueError:
