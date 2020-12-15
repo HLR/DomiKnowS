@@ -369,34 +369,66 @@ class DataNode:
         return conceptNames, relationNames
     
     # Find dataNodes in data graph of the given concept 
-    def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
-        if dns is None:
+    def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
+        # If no DataNodes provided use self
+        if not depth and dns is None:
             dns = [self]
             
         returnDns = []
         
+        # If empty list of provided DataNodes then return - it is a recursive call with empty list
+        if dns is None or len(dns) == 0:
+            return returnDns
+        
+        # No select provided - query not defined - return
         if select is None:
             if depth == 0 and not returnDns:
-                _DataNode__Logger.warning('Not found any DataNode - no value for select provided')
+                _DataNode__Logger.warning('Not found any DataNode - no value for the select part of query provided')
                 
             return returnDns
        
+        # Check each provided DataNode if it satisfy the select part of the query  
         for dn in dns:
+            # Test current DataNote against the query
             if self.__testDataNode(dn, select):
                 if dn not in returnDns:
                     returnDns.append(dn) 
+                            
+            if not visitedDns:
+                visitedDns = set()
+                             
+            visitedDns.add(dn)
+                    
+        # Call recursively
+        newDepth = depth + 1
+        for dn in dns:
+            # Visit  DataNodes in relations
+            for r, rValue in dn.getRelationLinks().items():            
                
-            for r, rValue in dn.getRelationLinks().items():
-                if r == "contains":
+                # Check if the nodes already visited
+                dnsToVisit = set()
+                for rDn in rValue:
+                    if rDn not in visitedDns:
+                        dnsToVisit.add(rDn)
+                    
+                if not dnsToVisit:
                     continue
                 
-                for _dn in rValue:
-                    if self.__testDataNode(_dn, select):
-                        if dn not in returnDns:
-                            returnDns.append(_dn) 
-                    
+                # Visit DataNodes in the current relation
+                _returnDns = self.findDatanodes(dnsToVisit, select = select, indexes = indexes, visitedDns = visitedDns, depth = newDepth)
+        
+                if _returnDns is not None:
+                    for _dn in _returnDns:
+                        if _dn not in returnDns:
+                            returnDns.append(_dn)
+
+        if depth: # Finish recursion
+            return returnDns
+        
+        # If index provided in query then filter the found results for the select part of query through the index part of query
         if (indexes != None):
-            _returnDns = []
+            _returnDns = [] # Will contain results from returnDns satisfying the index
+            
             for dn in returnDns:
                 fit = True       
                 for indexName, indexValue in indexes.items():
@@ -436,23 +468,12 @@ class DataNode:
                         _returnDns.append(dn)
                        
             returnDns = _returnDns
-                
-        if len(returnDns) > 0:     
-            return returnDns
         
-        # Not found - > call recursively
-        newDepth = depth + 1
-        for dn in dns:
-            _returnDns = self.findDatanodes(dn.getChildDataNodes(), select = select, indexes = indexes, depth = newDepth)
-            
-            if _returnDns is not None:
-                for _dn in _returnDns:
-                    if _dn not in returnDns:
-                        returnDns.append(_dn)
-    
+        # If not fund any results
         if depth == 0 and not returnDns:
             _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
     
+        # Sort results according to their ids
         if returnDns:
             returnDnsNotSorted = OrderedDict()
             for dn in returnDns:
@@ -1533,6 +1554,9 @@ class DataNodeBuilder(dict):
                 
             self.__updateRootDataNodeList(existingDnsForConcept)   
         else: # Attribute update
+            if not existingDnsForConcept:
+                existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName)
+                                                                    
             if keyDataName in existingDnsForConcept[0].attributes:
                 _DataNodeBulder__Logger.info('Updating attribute %s in existing dataNodes - found %i dataNodes of type %s'%(keyDataName, len(existingDnsForConcept),conceptName))
             else:
