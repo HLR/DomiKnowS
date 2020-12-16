@@ -585,7 +585,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if N - noOfVars == 0:
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, var)
             if cacheResult[0]:
-                if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                if cacheResult[1]:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,cacheResult[1].VarName))
+                else:
+                    if self.ifLog: self.myLogger.debug("%s returns existing variable: %s"%(logicMethodName,None))
+
                 return cacheResult[1]
         
         # If only constructing constrains forcing NAND to be true 

@@ -53,6 +53,10 @@ class RelationFunction():
     @property
     def T(self):
         return self.relation.bacward
+    
+    @property
+    def name(self):
+        return f'{self.relation.name}.{self.mode}'
 
     def __call__(self, *props, fn=None):
         return Transformed(self, props[0], fn=fn)

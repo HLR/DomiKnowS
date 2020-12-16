@@ -118,11 +118,15 @@ class LogicalConstrain:
             return None
         
         # input variable names
-        vKeys = [next(iter(v[i])) for i in range(len(v))]
+        try:
+            vKeys = [next(iter(v[i])) for i in range(len(v))]
+        except StopIteration:
+            pass
         
         # output variable names and variables
         ilpV = {} # output variable names 
         zVars = {} # output variables
+        ilpKey = None
         
         if len(v) == 2:
             # Depending on size of variable names tuples from input variables
@@ -221,7 +225,7 @@ class LogicalConstrain:
         if len(v) > 2: # Support more then 2 variables  if all are the same
             equals = True
             for k in vKeys:
-                if  len(k) > 1 or vKeys[0][0] != k[0]:
+                if  len(k) > 2 or vKeys[0][0] != k[0]:
                     equals = False
                     break
                 
@@ -239,7 +243,12 @@ class LogicalConstrain:
                             zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
 
         # Output
-        ilpV[ilpKey] = zVars
+        if ilpKey:
+            ilpV[ilpKey] = zVars
+        else:
+            if ifLog: myLogger.warning("%s Logical Constrain is not supported"%(self.lcName))
+            ilpV[()] = zVars
+
         if model: model.update()
 
         return ilpV
