@@ -15,7 +15,7 @@ from models import Tokenizer, BERT, SpanClassifier, token_to_span_candidate_emb,
 
 def model(graph):
     from ace05.graph import graph, entities_graph, events_graph
-    from ace05.graph import document, token, span_candidate, span, span_annotation, anchor_annotation, event, pair
+    from ace05.graph import document, token, token_b, token_i, token_o, span, span_annotation, anchor_annotation, event, pair
 
     # document
     document['text'] = ReaderSensor(keyword='text')
@@ -87,6 +87,26 @@ def model(graph):
 
     document_contains_span = document.relate_to(span)[0]
     span[document_contains_span.forward] = EdgeSensor(span_contains_token.backward(document_contains_token.forward, fn=lambda x: x.max(dim=1)[0]), relation=document_contains_span.forward, mode='forward', forward=lambda x: x)
+
+    def token_label(span_token):
+        num_token = span_token.shape[1]
+
+        token_b = torch.zeros(num_token)
+        idx_b = (span_token - torch.nn.functional.pad(span_token, pad=[1,0])[:, :-1] > 0).nonzero()[:, 1]
+        token_b[idx_b] = 1
+        token_i = torch.zeros(num_token)
+        idx_i = span_token.nonzero()[:, 1]
+        token_i[idx_i] = 1
+        token_i -= token_b
+        token_o = torch.ones(num_token)
+        token_o -= token_i +token_b
+
+        return token_b, token_i, token_o
+
+    token[token_b, token_i, token_o] = FunctionalSensor(span[span_contains_token.backward], forward=token_label, label=True)
+    token[token_b] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
+    token[token_i] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
+    token[token_o] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
 
     # span -> base types
     for concept in find_is_a(entities_graph, span):
