@@ -85,6 +85,9 @@ def model(graph):
     span[span_contains_token.backward, span_equal_annotation.backward, anchor_equal_annotation.backward] = JointSensor(token['offset'], span_annotation['start'], span_annotation['end'], anchor_annotation['start'], anchor_annotation['end'], forward=token_to_span_fn)
     span['emb'] = FunctionalSensor(span_contains_token.backward('emb'), forward=lambda x: x)
 
+    document_contains_span = document.relate_to(span)[0]
+    span[document_contains_span.forward] = EdgeSensor(span_contains_token.backward(document_contains_token.forward, fn=lambda x: x.max(dim=1)[0]), relation=document_contains_span.forward, mode='forward', forward=lambda x: x)
+
     # span -> base types
     for concept in find_is_a(entities_graph, span):
         print(f'Creating learner/reader for span -> {concept}')
