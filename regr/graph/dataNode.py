@@ -369,34 +369,66 @@ class DataNode:
         return conceptNames, relationNames
     
     # Find dataNodes in data graph of the given concept 
-    def findDatanodes(self, dns = None, select = None, indexes = None, depth = 0):
-        if dns is None:
+    def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
+        # If no DataNodes provided use self
+        if not depth and dns is None:
             dns = [self]
             
         returnDns = []
         
+        # If empty list of provided DataNodes then return - it is a recursive call with empty list
+        if dns is None or len(dns) == 0:
+            return returnDns
+        
+        # No select provided - query not defined - return
         if select is None:
             if depth == 0 and not returnDns:
-                _DataNode__Logger.warning('Not found any DataNode - no value for select provided')
+                _DataNode__Logger.warning('Not found any DataNode - no value for the select part of query provided')
                 
             return returnDns
        
+        # Check each provided DataNode if it satisfy the select part of the query  
         for dn in dns:
+            # Test current DataNote against the query
             if self.__testDataNode(dn, select):
                 if dn not in returnDns:
                     returnDns.append(dn) 
+                            
+            if not visitedDns:
+                visitedDns = set()
+                             
+            visitedDns.add(dn)
+                    
+        # Call recursively
+        newDepth = depth + 1
+        for dn in dns:
+            # Visit  DataNodes in relations
+            for r, rValue in dn.getRelationLinks().items():            
                
-            for r, rValue in dn.getRelationLinks().items():
-                if r == "contains":
+                # Check if the nodes already visited
+                dnsToVisit = set()
+                for rDn in rValue:
+                    if rDn not in visitedDns:
+                        dnsToVisit.add(rDn)
+                    
+                if not dnsToVisit:
                     continue
                 
-                for _dn in rValue:
-                    if self.__testDataNode(_dn, select):
-                        if dn not in returnDns:
-                            returnDns.append(_dn) 
-                    
+                # Visit DataNodes in the current relation
+                _returnDns = self.findDatanodes(dnsToVisit, select = select, indexes = indexes, visitedDns = visitedDns, depth = newDepth)
+        
+                if _returnDns is not None:
+                    for _dn in _returnDns:
+                        if _dn not in returnDns:
+                            returnDns.append(_dn)
+
+        if depth: # Finish recursion
+            return returnDns
+        
+        # If index provided in query then filter the found results for the select part of query through the index part of query
         if (indexes != None):
-            _returnDns = []
+            _returnDns = [] # Will contain results from returnDns satisfying the index
+            
             for dn in returnDns:
                 fit = True       
                 for indexName, indexValue in indexes.items():
@@ -436,23 +468,12 @@ class DataNode:
                         _returnDns.append(dn)
                        
             returnDns = _returnDns
-                
-        if len(returnDns) > 0:     
-            return returnDns
         
-        # Not found - > call recursively
-        newDepth = depth + 1
-        for dn in dns:
-            _returnDns = self.findDatanodes(dn.getChildDataNodes(), select = select, indexes = indexes, depth = newDepth)
-            
-            if _returnDns is not None:
-                for _dn in _returnDns:
-                    if _dn not in returnDns:
-                        returnDns.append(_dn)
-    
+        # If not fund any results
         if depth == 0 and not returnDns:
             _DataNode__Logger.debug('Not found any DataNode for - %s -'%(select))
     
+        # Sort results according to their ids
         if returnDns:
             returnDnsNotSorted = OrderedDict()
             for dn in returnDns:
@@ -984,12 +1005,37 @@ class DataNode:
                         
         return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
     
+    def __getILPsolver(self, conceptsRelations = []):
+        
+        _conceptsRelations = []
+        
+        # Get ontology graphs and then ilpOntsolver
+        myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
+        
+        for currentConceptOrRelation in conceptsRelations:
+            if isinstance(currentConceptOrRelation, str):
+                currentConceptOrRelation = self.__findConcept(currentConceptOrRelation)
+            
+            _conceptsRelations.append(currentConceptOrRelation)
+            
+            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
+            
+            if currentOntologyGraph is not None:
+                myOntologyGraphs.add(currentOntologyGraph)
+                
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
+        
+        if not myilpOntSolver:
+            _DataNode__Logger.error("ILPSolver not initialized")
+            raise DataNode.DataNodeError("ILPSolver not initialized")
+        
+        return myilpOntSolver, _conceptsRelations
+    
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
-            from regr.graph import Concept
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
         if not _conceptsRelations:
@@ -1006,44 +1052,15 @@ class DataNode:
                 _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
         else:
             pass
-
-        conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
-        _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
-        # Collect all the candidates for concepts and relations in conceptsRelations
-        for _currentConceptOrRelation in _conceptsRelations:
-            # Convert string to concept if provided as string
-            if isinstance(_currentConceptOrRelation, str):
-                currentConceptOrRelation = self.__findConcept(_currentConceptOrRelation)
                 
-                if currentConceptOrRelation is None:
-                    _DataNode__Logger.warning('Concept or relation name %s not found in the graph'%(currentConceptOrRelation))
-                    continue # String is not a name of concept or relation
-            else:
-                currentConceptOrRelation = _currentConceptOrRelation
-                
-            conceptsRelations.append(currentConceptOrRelation)
-                
-        # Get ontology graphs and then ilpOntsolver
-        myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
-        
-        for currentConceptOrRelation in conceptsRelations:
-            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
-            
-            if currentOntologyGraph is not None:
-                myOntologyGraphs.add(currentOntologyGraph)
-                
-        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
-        
-        if not myilpOntSolver:
-            _DataNode__Logger.error("ILPSolver not initialized")
-            raise DataNode.DataNodeError("ILPSolver not initialized")
+        myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
 
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)
     
-    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
+    # OLD -- Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
@@ -1133,15 +1150,10 @@ class DataNode:
         return verifyResult
     
     def calculateLcLoss(self):
-        _conceptsRelations = ()
-            
-        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
-            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getProbability)
-            
-        if not myilpOntSolver:
-            return False
         
-        lcResult = myilpOntSolver.calculateLcLoss(graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
+        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.__collectConceptsAndRelations(self))
+
+        lcResult = myilpOntSolver.calculateLcLoss(self)
         
         return lcResult
 

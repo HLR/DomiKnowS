@@ -63,7 +63,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Check if probability is NaN or if and has to be created based on positive value
                 if self.valueToBeSkipped(currentProbability[0]):
                     currentProbability[0] = 1 - currentProbability[1]
-                    self.myLogger.info("No ILP negative variable for concept %s and token %s - created based on positive value %f"%(dn.getInstanceID(), conceptRelation, currentProbability[0]))
+                    self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"%(dn.getInstanceID(), conceptRelation, currentProbability[0]))
     
                 # Create negative variable
                 if True: # ilpOntSolver.__negVarTrashhold:
@@ -75,14 +75,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                     Q += currentProbability[0] * dn.attributes[notxkey]     
 
                 else:
-                    self.myLogger.info("No ILP negative variable for concept %s and token %s created"%(conceptRelation, dn.getInstanceID()))
+                    self.myLogger.info("No ILP negative variable for concept %s and dataNode %s created"%(conceptRelation, dn.getInstanceID()))
 
         m.update()
 
         if len(x):
-            self.myLogger.info("Created %i ILP variables for tokens"%(len(x)))
+            self.myLogger.info("Created %i ILP variables"%(len(x)))
         else:
-            self.myLogger.warning("No ILP variables created for tokens")
+            self.myLogger.warning("No ILP variables created")
             
         return Q, x     
     
@@ -1858,50 +1858,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
     # -- Calculated values for logical constrains
-    def calculateLcLoss(self, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, hardConstrains = []):
-        if not graphResultsForPhraseToken:
-            self.myLogger.warning('graphResultsForPhraseToken is None or empty - returning')
-            return {}
-            
-        concepts = [k for k in graphResultsForPhraseToken.keys()]
-        relations = [k for k in graphResultsForPhraseRelation.keys()]
-        
-        graphResultsForPhraseToken1 = next(iter(graphResultsForPhraseToken.values()))
-        tokens = [i for i ,_ in enumerate(graphResultsForPhraseToken1)]
-        
-        self.__checkIfContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
-            
+    def calculateLcLoss(self, dn):
         m = None 
-        x = {}
-        # Create variables for token - concept and negative variables
-        for conceptName in concepts: 
-            for tokenIndex, token in enumerate(tokens):            
-                currentProbability = graphResultsForPhraseToken[conceptName][tokenIndex]
-                
-                # Check if probability is NaN or if and has to be skipped
-                if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for variable concept %s and token %s - skipping it"%(currentProbability[1],token,conceptName))
-                    continue
-
-                # Add value 
-                x[conceptName, token]=currentProbability[1]  
-                
-        y = {}
-        for relationName in relations:
-            if relationName in hardConstrains:
-                continue
-               
-            for token1Index, token1 in enumerate(tokens): 
-                for token2Index, token2 in enumerate(tokens):
-                    # Check if probability is NaN or if and has to be skipped
-                    currentProbability = graphResultsForPhraseRelation[relationName][token1Index][token2Index]
-                    if self.valueToBeSkipped(currentProbability[1]):
-                        self.myLogger.info("Probability is %f for relation %s and tokens %s %s - skipping it"%(currentProbability[1],relationName,token1,token2))
-                        continue
-
-                    # Create variable
-                    y[relationName, token1, token2]=currentProbability[1]
-        z = {} 
+        
+        self.createILPVariables()
+        
+        p = 100
         
         lcLosses = {}
         for graph in self.myGraph:
@@ -1910,7 +1872,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
+                lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, lcVariablesDns = {}, headLC = True)
                 
                 if lcLoss:
                     lossDict = next(iter(lcLoss.values()))

@@ -46,6 +46,9 @@ with Graph('global') as graph:
         
         #nandL(people,  V(name='x'), organization, V())
         
+        #LC2 Each sentence should contain at least one person phrase        
+        atLeastL(andL(sentence, V(name='x'), people, V(name='y', v=('x', rel_sentence_contains_word.name))), V(name='a'), 1, 'y')
+        
         nandL(people, V(name='x'), organization, V(match='x'))
         
         #nandL(people,  V(name='x'), location, V(v=('x',)))
@@ -73,8 +76,6 @@ with Graph('global') as graph:
         # LC1bis if x is people and y is organization then they are in work_for relation
         ifL(andL(people, V(name='x'), organization, V(name='y')), V(name='z'), work_for, V(match='z', v=(('x', rel_pair_phrase1.backward.name), ('y', rel_pair_phrase2.backward.name))))
 
-        #LC2 Each sentence should contain at least one person phrase        
-        atLeastL(andL(sentence, V(name='x'), people, V(name='y', v=('x', rel_sentence_contains_word.name))), V(name='a'), 1, 'y')
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
         ifL(phrase, V(name='x'), orL(andL(Iword, V(name='y', v=('x', rel_phrase_word1.name)), Iword, V(match='y', v=('x', rel_phrase_word2.name))), V(name='o'), andL(Bword, V(name='z', v=('x', rel_phrase_word1.name)), Eword, V(match='z', v=('x', rel_phrase_word2.name))), V(match='o')), V(match='x'))

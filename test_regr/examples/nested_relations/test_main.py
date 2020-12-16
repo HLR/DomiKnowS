@@ -328,7 +328,7 @@ def test_main_conll04(case):
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
-            assert len(child_node.findDatanodes(select="phrase")) == 1
+            assert len(child_node.getRelationLinks(relationName = "phrase", conceptName = None)) == 1
 
         elif child_node.ontologyNode.name == 'phrase':
             assert (child_node.getAttribute('emb') == case.phrase.emb[child_node.instanceID]).all()
@@ -338,11 +338,11 @@ def test_main_conll04(case):
             assert (child_node.getAttribute('<other>') == case.phrase.other[child_node.instanceID]).all()
             assert (child_node.getAttribute('<O>') == case.phrase.O[child_node.instanceID]).all()
             if child_node.instanceID == 0:
-                assert len(child_node.findDatanodes(select="pair")) == 3
+                assert len(child_node.getRelationLinks(relationName = "pair")) == 3
             elif child_node.instanceID == 1:
-                assert len(child_node.findDatanodes(select="pair")) == 2
+                assert len(child_node.getRelationLinks(relationName = "pair")) == 2
             elif child_node.instanceID == 2:
-                assert len(child_node.findDatanodes(select="pair")) == 3
+                assert len(child_node.getRelationLinks(relationName = "pair")) == 3
                 
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
