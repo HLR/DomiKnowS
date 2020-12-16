@@ -18,6 +18,7 @@ class TorchModel(torch.nn.Module):
         super().__init__()
         self.graph = graph
         self.mode(Mode.TRAIN)
+        self.build = True
 
         for learner in self.graph.get_sensors(TorchLearner):
             self.add_module(learner.fullname, learner.model)
@@ -63,7 +64,9 @@ class TorchModel(torch.nn.Module):
             ke_args = ke.args
             raise ValueError('To enable cache, data item must either contain a identifier key "id" or implement "__hass__" interface: \n{}'.format("\n".join(ke_args + te_args)))
 
-    def forward(self, data_item):
+    def forward(self, data_item, build=None):
+        if build is None:
+            build = self.build
         data_hash = None
         data_item = self.move(data_item)
 
@@ -72,11 +75,15 @@ class TorchModel(torch.nn.Module):
             sensor.fill_hash(data_hash)
         for sensor in self.graph.get_sensors(ReaderSensor):
             sensor.fill_data(data_item)
-        data_item.update({"graph": self.graph, 'READER': 0})
-        builder = DataNodeBuilder(data_item)
-        *out, = self.populate(builder)
-        datanode = builder.getDataNode()
-        return (*out, datanode)
+        if build:
+            data_item.update({"graph": self.graph, 'READER': 0})
+            builder = DataNodeBuilder(data_item)
+            *out, = self.populate(builder)
+            datanode = builder.getDataNode()
+            return (*out, datanode)
+        else:
+            return self.populate(data_item)
+
 
     def populate(self):
         raise NotImplementedError
