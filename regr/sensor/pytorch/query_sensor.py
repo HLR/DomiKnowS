@@ -10,7 +10,8 @@ class QuerySensor(FunctionalSensor):
         from ...graph import DataNodeBuilder
 
         if not isinstance(builder, DataNodeBuilder):
-            raise TypeError('{} should work with DataNodeBuilder.'.format(type(self)))
+            raise TypeError(f'{type(self)} should work with DataNodeBuilder.'
+                            'For example, set `build` option to `True` when running the program')
         return builder
 
     @property
