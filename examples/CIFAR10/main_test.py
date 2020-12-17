@@ -19,7 +19,8 @@ sys.path.append('../..')
 def prediction_softmax(pr, gt):
     return torch.softmax(pr.data, dim=-1)
 
-
+# image[‘emb] = ModuleLearner(‘pixels’)
+# image[Felan] = ModuleLearner(‘emb’, net)
 class ImageNetwork(torch.nn.Module):
     def __init__(self, n_outputs=2):
         super(ImageNetwork, self).__init__()
@@ -29,7 +30,7 @@ class ImageNetwork(torch.nn.Module):
         self.conv2 = nn.Conv2d(6, 16, 5)
 
 
-        # self.fc = nn.Linear(16 * 5 * 5, n_outputs)
+        self.fc = nn.Linear(16 * 5 * 5, n_outputs)
 
         # self.fc1 = nn.Linear(16 * 5 * 5, 120)
         # self.fc2 = nn.Linear(120, 84)
@@ -43,8 +44,8 @@ class ImageNetwork(torch.nn.Module):
         x = x.view(-1, 16 * 5 * 5)
         # x = F.relu(self.fc1(x))
         # x = F.relu(self.fc2(x))
-        # x = self.fc(x)
-        return x
+        x = self.fc(x)
+        return F.softmax(x, dim=-1)
 
 class ImageModel(PoiModel):
     def __init__(self, graph):
@@ -53,7 +54,7 @@ class ImageModel(PoiModel):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker())
 
-from graph import graph, airplane, dog, truck, image
+from graph import graph, airplane, dog, truck
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
@@ -74,10 +75,9 @@ def model_declaration():
     image[dog] = ReaderSensor(keyword='dog',label=True)
     image[truck] = ReaderSensor(keyword='truck',label=True)
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
-    image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[airplane] = ModuleLearner('pixels', module=ImageNetwork())
+    image[dog] = ModuleLearner('pixels', module=ImageNetwork())
+    image[truck] = ModuleLearner('pixels', module=ImageNetwork())
     program = LearningBasedProgram(graph, ImageModel)
 
     return program
@@ -202,31 +202,29 @@ def main():
     trainset = load_cifar10(train=True)
     # testset = load_cifar10(train=False)
 
-    program.train(trainset, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.01))
-
+    program.train(trainset, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.test(trainset)
     for datanode in program.populate(dataset=trainset):
-        print('>>>>>**********************************')
-        print('----------before ILP---------')
-
         print('airplane:', datanode.getAttribute(airplane))
-        print('airplane:', datanode.getAttribute(airplane).softmax(-1))
-        print('dog:', datanode.getAttribute(dog).softmax(-1))
-        print('truck:', datanode.getAttribute(truck).softmax(-1))
-        # print('airplane:', torch.softmax(datanode.getAttribute(airplane),dim=-1))
-        # print('dog:', torch.softmax(datanode.getAttribute(dog),dim=-1))
-        # print('truck:', torch.softmax(datanode.getAttribute(truck),dim=-1))
-        print(datanode.findDatanodes(select=image))
+        print('dog:', datanode.getAttribute(dog))
+        print('truck:', datanode.getAttribute(truck))
 
-        print(len(datanode.findDatanodes(select=image)))
 
-        datanode.inferILPConstrains('dog', 'truck', 'airplane', fun=None)
-        # datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1), epsilon=None)
+        # datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(),
+        #                             epsilon=None)
+        # print('inference airplane:', datanode.getAttribute(airplane, 'ILP'))
+        # print('inference dog:', datanode.getAttribute(dog, 'ILP'))
+        # print('inference truck:', datanode.getAttribute(truck, 'ILP'))
 
-        print('----------after ILP---------')
-        print('inference airplane:', datanode.getAttribute(airplane, 'ILP'))
-        print('inference dog:', datanode.getAttribute(dog, 'ILP'))
-        print('inference truck:', datanode.getAttribute(truck, 'ILP'))
 
+    # for loss, metric, x_node in program.test(trainset):
+    #     print('loss:', loss)
+    #     print(metric)
+    #     # print('airplane:', torch.softmax(x_node.getAttribute('airplane'), dim=-1))
+    #     # print('dog:', torch.softmax(x_node.getAttribute('dog'), dim=-1))
+    #     # print('truck:', torch.softmax(x_node.getAttribute('truck'), dim=-1))
+    #
+    #     # print('y0:', x_node.getAttribute('<y0>/ILP'))
 
 
 if __name__ == '__main__':
