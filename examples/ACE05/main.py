@@ -6,6 +6,7 @@ import config
 
 from dummy import DummyReader, DummyDictReader
 
+
 def main():
     program = model(graph)
     traint_reader = DictParagraphReader(config.path, list_path=config.list_path, type='train', status=config.status)
@@ -17,6 +18,7 @@ def main():
         spans = node.findDatanodes(select=graph['linguistic/span'])
         span_annotations = node.findDatanodes(select=graph['linguistic/span_annotation'])
         print(len(tokens), len(spans), len(span_annotations))
+
 
 if __name__ == "__main__":
     main()

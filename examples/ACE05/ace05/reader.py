@@ -136,8 +136,10 @@ class DictReader(Reader):
 
 
 class ParagraphReader(Reader):
-    def _filter_span(self, spans, start, end):
+    def _filter_span(self, spans, start, end, offset=None):
         from copy import deepcopy
+        if offset is None:
+            offset = start
         new_spans = {}
         for span_id, span_ in spans.items():
             span = deepcopy(span_)
@@ -146,11 +148,14 @@ class ParagraphReader(Reader):
                     start < mention.extent.end and mention.extent.end < end):
                     del span.mentions[key]
             if span.mentions: # if there is any left
+                span.apply_offset(offset)
                 new_spans[span_id] = span
         return new_spans
 
-    def _filter_relation(self, relations, spans, start, end):
+    def _filter_relation(self, relations, spans, start, end, offset=None):
         from copy import deepcopy
+        if offset is None:
+            offset = start
         new_relations = {}
         for relation_id, relation in relations.items():
             relation = deepcopy(relation)
@@ -159,11 +164,14 @@ class ParagraphReader(Reader):
                     start < mention.extent.end and mention.extent.end < end):
                     del relation.mentions[key]
             if relation.mentions: # if there is any left
+                relation.apply_offset(offset)
                 new_relations[relation_id] = relation
         return new_relations
 
-    def _filter_event(self, events, spans, start, end):
+    def _filter_event(self, events, spans, start, end, offset=None):
         from copy import deepcopy
+        if offset is None:
+            offset = start
         new_events = {}
         for event_id, event in events.items():
             event = deepcopy(event)
@@ -172,6 +180,7 @@ class ParagraphReader(Reader):
                     start < mention.extent.end and mention.extent.end < end):
                     del event.mentions[key]
             if event.mentions: # if there is any left
+                event.apply_offset(offset)
                 new_events[event_id] = event
         return new_events
 
