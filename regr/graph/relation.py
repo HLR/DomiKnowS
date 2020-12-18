@@ -15,7 +15,7 @@ else:
 class Transformed():
     def __init__(self, relationfunction, property, fn=None):
         self.relationfunction = relationfunction
-        if isinstance(property, str):
+        if isinstance(property, (str, RelationFunction)):
             property = self.relationfunction.src[property]
         self.property = property
         self.fn = fn
