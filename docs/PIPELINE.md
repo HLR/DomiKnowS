@@ -66,6 +66,9 @@ One can add more complex logical constraints with our logical expression notatio
 
 See [here](developer/KNOWLEDGE.md) for more details about declaring graph and constraints.
 
+The followig figure illustrate the graph for this task:
+![plot](NER.png)
+
 ## 2. Model Declaration
 
 Class reference:
