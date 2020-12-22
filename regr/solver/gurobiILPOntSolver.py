@@ -1,6 +1,8 @@
 from itertools import product
 from datetime import datetime
 from collections import OrderedDict
+from collections.abc import Mapping
+from torch import tensor
 
 # numpy
 import numpy as np
@@ -19,6 +21,7 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.graph import LogicalConstrain, V, eqL
+from torch import tensor
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -1307,16 +1310,18 @@ class gurobiILPOntSolver(ilpOntSolver):
     def addLogicalConstrains(self, m, dn, lcs, p):
         self.myLogger.info('Starting method')
         
+        key = "/ILP/xP"
+        
         for lc in lcs:   
             self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, headLC = True)
+            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  headLC = True)
             
             if result != None and bool(list(result.values())[0]):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p,  lcVariablesDns = {}, headLC = False):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
         resultVariableNames = []
         lcVariables = {}
         
@@ -1342,7 +1347,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # -- Concept 
                 if isinstance(e, Concept):
                     conceptName = e.name
-                    xPkey = '<' + conceptName + '>/ILP/xP'
+                    xPkey = '<' + conceptName + ">" + key
 
                     vDns = []
                     if variable.v == None:
@@ -1360,11 +1365,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 vDns.append(None)
                                 continue
                             
-                            if p not in _dn.getAttribute(xPkey):
+                            _dnAttr = _dn.getAttribute(xPkey)
+                            
+                            if isinstance(_dnAttr, Mapping) and p not in _dnAttr:
                                 vDns.append(None)
                                 continue
+                             
+                            vDn = _dnAttr[p]
                             
-                            vDn = _dn.getAttribute(xPkey)[p]
+                            if torch.is_tensor(vDn):
+                                vDn = vDn.item()
                             
                             vDns.append(vDn)
                     else:
@@ -1394,12 +1404,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     vDns.append(None)
                                     continue
                                 
-                                if p not in _dn.getAttribute(xPkey):
+                                _dnAttr = _dn.getAttribute(xPkey)
+                                
+                                if isinstance(_dnAttr, Mapping) and p not in _dnAttr:
                                     vDns.append(None)
                                     continue
                                 
-                                vDn = _dn.getAttribute(xPkey)[p]
-                                
+                                vDn = _dnAttr[p]
+                            
+                                if torch.is_tensor(vDn):
+                                    vDn = vDn.item()  
+                                                                  
                                 vDns.append(vDn)
                                     
                     if variable.match:
@@ -1450,7 +1465,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # LogicalConstrain - process recursively 
                 elif isinstance(e, LogicalConstrain):
                     self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(e.lcName, e, [str(e1) for e1 in lc.e]))
-                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, lcVariablesDns = lcVariablesDns, headLC = False)
+                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False)
                     
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s nested logical Constrain required to build Logical Constrain %s - skipping this constrain'%(e.lcName,lc.lcName))
@@ -1730,6 +1745,7 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                 # Run ILP model - Find solution 
                 mP.optimize()
+                mP.update()
                 
                 endOptimize = datetime.now()
                 elapsedOptimize = endOptimize - startOptimize
@@ -1765,10 +1781,37 @@ class gurobiILPOntSolver(ilpOntSolver):
                     else:
                         maxP = p
                
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
             # If found model - return best result          
             if maxP:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
 
+                for c in conceptsRelations:
+                    c_root = dn.findRootConceptOrRelation(c)
+                    c_root_dns = dn.findDatanodes(select = c_root)
+                    
+                    ILPkey = '<' + c.name + '>/ILP'
+                    xkey = ILPkey + '/x'
+                    xPkey = ILPkey + '/xP'
+                    xNotPkey = ILPkey + '/notxP'
+                   
+                    for dn in c_root_dns:
+                        dnAtt = dn.getAttributes()
+                        if xPkey not in dnAtt:
+                            dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
+                            continue
+                        
+                        maxPVar = dnAtt[xPkey][maxP]
+                        solution = maxPVar.X
+                        dnAtt[ILPkey] = torch.tensor([solution], device=device)
+                        dnAtt[xkey] = maxPVar
+                        
+                        del dnAtt[xPkey]
+                        
+                        if xNotPkey in dnAtt:
+                            del dnAtt[xNotPkey]
+                        
                 # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
                 # Get ILP result from  maxP x 
             else:
@@ -1860,10 +1903,8 @@ class gurobiILPOntSolver(ilpOntSolver):
     # -- Calculated values for logical constrains
     def calculateLcLoss(self, dn):
         m = None 
-        
-        self.createILPVariables()
-        
-        p = 100
+                
+        p = 1
         
         lcLosses = {}
         for graph in self.myGraph:
@@ -1872,27 +1913,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s - %s - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                lcLoss = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, lcVariablesDns = {}, headLC = True)
-                
-                if lcLoss:
-                    lossDict = next(iter(lcLoss.values()))
-                else:
-                    lossDict = None
+                lossDict = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = "", lcVariablesDns = {}, headLC = True)
                 
                 if not lossDict:
                     continue
                 
-                lossDictFirstKey = next(iter(lossDict.keys()))
-                lossDictFirstKeyLen = len(lossDictFirstKey)
-                
-                lossTensor = None
-                if lossDictFirstKeyLen == 1:
-                    lossTensor = torch.zeros(len(tokens))
-                elif lossDictFirstKeyLen == 2:
-                    lossTensor = torch.zeros(len(tokens),len(tokens))
-
-                if lossTensor is None:
-                    continue
+                lossTensor = torch.zeros(len(lossDict))
                 
                 for i, v in lossDict.items():
                     if v is not None:

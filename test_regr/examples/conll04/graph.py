@@ -32,7 +32,7 @@ with Graph('global') as graph:
 
         disjoint(people, organization, location, other, o)
 
-        nandL(people, V(name='x'), organization, V(match='x'))
+        nandL(people, V(name='x'), organization, V(name='y'))
         #for c1, c2 in permutations((people, organization, location, other, o), r=2):
         #nandL(c1, c2)
 
@@ -49,7 +49,7 @@ with Graph('global') as graph:
         kill.has_a(people, people)
 
         # LC1
-        ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_word1.name)), organization, V(name='z', v=('x', rel_pair_word2.name))), V(match='x'))
+        ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_word1.name)), organization, V(name='z', v=('x', rel_pair_word2.name))), V(name='v'))
                 
         #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
         #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))

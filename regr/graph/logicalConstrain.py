@@ -125,6 +125,18 @@ class LogicalConstrain:
         zVars = {} # output variables
         
         if len(v) == 2:
+            for i in range(len(v[vKeys[0]])):
+                    v1Var = v[vKeys[0]][i]
+                    v2Var = v[vKeys[1]][i]
+                        
+                    if v1Var is None or v2Var is None:
+                        zVars[i] = None
+                    else:
+                        zVars[i] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                        
+            return zVars
+
+# ------------------
             if resultVariableNames and len(resultVariableNames) and resultVariableNames[0] == resultVariableNames[1]:             
                 for i in range(len(v[vKeys[0]])):
                     v1Var = v[vKeys[0]][i]
