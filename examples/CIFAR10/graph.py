@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL
+from regr.graph.logicalConstrain import nandL, orL, andL, existsL, notL, atLeastL, atMostL, ifL
 from regr.graph.relation import disjoint
 
 Graph.clear()
@@ -20,6 +20,4 @@ with Graph('CIFAR10') as graph:
     horse = image(name='horse')
     ship = image(name='ship')
 
-    disjoint(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
-
-
+    nandL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)

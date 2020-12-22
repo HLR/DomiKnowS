@@ -1,6 +1,7 @@
 import sys
 import torch
-from regr.program.model.pytorch import PoiModel
+from regr.program.model.pytorch import PoiModel, IMLModel
+from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
@@ -44,7 +45,7 @@ class ImageNetwork(torch.nn.Module):
         # x = self.fc(x)
         return x
 
-class ImageModel(PoiModel):
+class ImageModel(PrimalDualModel):
     def __init__(self, graph):
         super().__init__(
             graph,
@@ -105,12 +106,9 @@ class CIFAR10_1(datasets.CIFAR10):
                  download=False):
 
         super(CIFAR10_1, self).__init__(root, transform=transform,
-                                      target_transform=target_transform)
+                                      target_transform=target_transform, download=download)
 
         self.train = train  # training set or test set
-
-        if download:
-            self.download()
 
         if not self._check_integrity():
             raise RuntimeError('Dataset not found or corrupted.' +
@@ -189,7 +187,7 @@ def load_cifar10(train=True, root='./data/', size=32):
              transforms.ToTensor(),
              transforms.Normalize(CIFAR100_TRAIN_MEAN, CIFAR100_TRAIN_STD)])
 
-    return CIFAR10_1(root=root, train=train, transform=transform,download=False)
+    return CIFAR10_1(root=root, train=train, transform=transform,download=True)
 
 def main():
     program = model_declaration()
