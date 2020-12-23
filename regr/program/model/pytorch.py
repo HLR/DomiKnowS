@@ -190,7 +190,7 @@ class SolverModel(PoiModel):
         # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPConstrains(*self.inference_with, fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        datanode.inferILPConstrains(*self.inference_with, fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         return builder
 
     def populate(self, builder):
