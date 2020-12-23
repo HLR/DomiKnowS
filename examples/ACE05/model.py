@@ -123,7 +123,10 @@ def model(graph):
         print(f'Creating learner/reader for entity -> {concept}')
         span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
         span_annotation[concept] = LabelConstantSensor('type', concept=concept.name)
-        # span[concept] = ConstantSensor(data=, label=True)
+        def fn(arg):
+            arg
+            pass
+        span[concept] = FunctionalSensor(span_equal_annotation.backward(span_annotation[concept]), forward=fn, label=True)
 
         # entity -> sub classes
         for sub_concept in find_is_a(entities_graph, concept):

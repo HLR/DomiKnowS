@@ -36,18 +36,17 @@ class TorchModel(torch.nn.Module):
         pass
 
     def move(self, value, device=None):
-        parameters = list(self.parameters())
-        if parameters:
-            device = device or next(self.parameters()).device
-        else:
-            device = device
+        if device is None:
+            parameters = list(self.parameters())
+            if parameters:
+                device = next(self.parameters()).device
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
             return [self.move(v, device) for v in value]
         elif isinstance(value, tuple):
             return tuple(self.move(v, device) for v in value)
-        elif isinstance(value, dict):
+        elif isinstance(value, dict) and not isinstance(value, Concept):
             return {k: self.move(v, device) for k, v in value.items()}
         else:
             return value
