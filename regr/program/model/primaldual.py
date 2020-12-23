@@ -1,13 +1,16 @@
 import logging
 
 import torch
+from torch.utils import data
+
+from ..model.pytorch import PoiModel
 
 
-class PrimalDualModel(torch.nn.Module):
+class PrimalDualModel(PoiModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph):
-        super().__init__()
+    def __init__(self, graph, *args, **kwargs):
+        super().__init__(graph, *args, **kwargs)
         nconstr = len(graph.logicalConstrains)
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
         self.lmbd_p = torch.empty(nconstr) # none parameter
@@ -23,11 +26,20 @@ class PrimalDualModel(torch.nn.Module):
     def get_lmbd(self, key):
         return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
 
-    def forward(self, datanode):
+    def pd_loss(self, datanode):
         # call the loss calculation
         # returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss()
-        lmbd_loss = [self.get_lmbd[key] * loss.clamp(min=0).sum() for key, loss in constr_loss]
+        if not constr_loss:
+            return 0
+        lmbd_loss = [self.get_lmbd(key) * loss['lossTensor'].clamp(min=0).sum() for key, loss in constr_loss.items()]
         # lmbd_loss = torch.cat(lmbd_loss, dim=1).sum(dim=1)
-        lmbd_loss = torch.cat(lmbd_loss, dim=1).sum(dim=1)
+        # NB: there is no batch-dim in this loss
+        lmbd_loss = torch.stack(lmbd_loss).sum()
         return lmbd_loss
+
+    def populate(self, builder):
+        loss, *outputs = super().populate(builder)
+        datanode = builder.getDataNode()
+        loss += self.pd_loss(datanode)
+        return (loss, *outputs)

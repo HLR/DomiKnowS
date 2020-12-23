@@ -1,17 +1,16 @@
 import sys
 import torch
-from data.reader import EmailSpamReader
 from regr.program.model.pytorch import PoiModel, IMLModel
-# from regr.program.metric import MacroAverageTracker, ValueTracker
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, ValueTracker
-
+from regr.program.model.primaldual import PrimalDualModel
+from regr.program.metric import MacroAverageTracker, PRF1Tracker
+import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
 import torch.nn.functional as F
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -46,54 +45,70 @@ class ImageNetwork(torch.nn.Module):
         # x = self.fc(x)
         return x
 
-class ImageModel(PoiModel):
+class ImageModel(IMLModel):
     def __init__(self, graph):
         super().__init__(
             graph,
-            loss=MacroAverageTracker(NBCrossEntropyLoss()),
+            loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
             metric=PRF1Tracker())
 
-from graph import graph, airplane, dog, truck, image
+from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
-    # from regr.sensor.pytorch.relation_sensors import CandidateReaderSensor
     from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
-    import torch
     from torch import nn
     graph.detach()
     image = graph['image']
     airplane = graph['airplane']
     dog = graph['dog']
     truck = graph['truck']
+    automobile = graph['automobile']
+    bird = graph['bird']
+    cat = graph['cat']
+    deer = graph['deer']
+    frog = graph['frog']
+    horse = graph['horse']
+    ship = graph['ship']
 
     image['pixels'] = ReaderSensor(keyword='pixels')
     image[airplane] = ReaderSensor(keyword='airplane',label=True)
     image[dog] = ReaderSensor(keyword='dog',label=True)
     image[truck] = ReaderSensor(keyword='truck',label=True)
+    image[automobile] = ReaderSensor(keyword='automobile',label=True)
+    image[bird] = ReaderSensor(keyword='bird',label=True)
+    image[cat] = ReaderSensor(keyword='cat',label=True)
+    image[deer] = ReaderSensor(keyword='deer',label=True)
+    image[frog] = ReaderSensor(keyword='frog',label=True)
+    image[horse] = ReaderSensor(keyword='horse',label=True)
+    image[ship] = ReaderSensor(keyword='ship',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
     image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[automobile] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[bird] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[cat] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[deer] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[frog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+
     program = LearningBasedProgram(graph, ImageModel)
 
     return program
 
-class CIFAR10_subset(datasets.CIFAR10):
+class CIFAR10_1(datasets.CIFAR10):
 
     def __init__(self, root, train=True, transform=None, target_transform=None,
                  download=False):
 
-        super(CIFAR10_subset, self).__init__(root, transform=transform,
-                                      target_transform=target_transform)
+        super(CIFAR10_1, self).__init__(root, transform=transform,
+                                      target_transform=target_transform, download=download)
 
         self.train = train  # training set or test set
-
-        if download:
-            self.download()
 
         if not self._check_integrity():
             raise RuntimeError('Dataset not found or corrupted.' +
@@ -116,18 +131,9 @@ class CIFAR10_subset(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-                a = np.array(entry['labels'])
-                selected_ix = []
-                selected_ix.extend(np.where(a == 0)[0][:100])# airplane
-                selected_ix.extend(np.where(a == 5)[0][:100])# dog
-                selected_ix.extend(np.where(a == 9)[0][:100])# truck
-                selected_data = [entry['data'][i] for i in range(len(entry['data'])) if i in selected_ix]
-                selected_labels = [entry['labels'][i] for i in range(len(entry['labels'])) if i in selected_ix]
-                self.data.append(selected_data)
-                # self.data.append(entry['data'])
+                self.data.append(entry['data'])
                 if 'labels' in entry:
-                    self.targets.extend(selected_labels)
-                    # self.targets.extend(entry['labels'])
+                    self.targets.extend(entry['labels'])
                 else:
                     self.targets.extend(entry['fine_labels'])
 
@@ -156,24 +162,12 @@ class CIFAR10_subset(datasets.CIFAR10):
             target = self.target_transform(target)
 
         img = img.unsqueeze(0)
-
+        target_dict = {0:'airplane',1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog', 7:'horse',8: 'ship', 9: 'truck'}
         dict = {}
         dict['pixels'] = img
-        if target == 0:
-            dict['airplane'] = [1]
-            dict['dog'] = [0]
-            dict['truck'] = [0]
-        elif target == 5:
-            dict['airplane'] = [0]
-            dict['dog'] = [1]
-            dict['truck'] = [0]
-        elif target == 9:
-            dict['airplane'] = [0]
-            dict['dog'] = [0]
-            dict['truck'] = [1]
-        else:
-            return None
-
+        for i in range(10):
+            dict[target_dict[i]] = [0]
+        dict[target_dict[target]] = [1]
         return dict
 
 def load_cifar10(train=True, root='./data/', size=32):
@@ -193,39 +187,46 @@ def load_cifar10(train=True, root='./data/', size=32):
              transforms.ToTensor(),
              transforms.Normalize(CIFAR100_TRAIN_MEAN, CIFAR100_TRAIN_STD)])
 
-    return CIFAR10_subset(root=root, train=train, transform=transform,download=False)
+    return CIFAR10_1(root=root, train=train, transform=transform,download=True)
 
 def main():
     program = model_declaration()
 
     ### load data
     trainset = load_cifar10(train=True)
-    # testset = load_cifar10(train=False)
+    testset = load_cifar10(train=False)
 
-    program.train(trainset, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.01))
+    program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
 
-    for datanode in program.populate(dataset=trainset):
+    label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    counter = 0
+    for datanode in program.populate(dataset=testset):
         print('>>>>>**********************************')
         print('----------before ILP---------')
+        for label in label_list:
+            print(label, datanode.getAttribute(eval(label)).softmax(-1))
 
-        print('airplane:', datanode.getAttribute(airplane))
-        print('airplane:', datanode.getAttribute(airplane).softmax(-1))
-        print('dog:', datanode.getAttribute(dog).softmax(-1))
-        print('truck:', datanode.getAttribute(truck).softmax(-1))
-        # print('airplane:', torch.softmax(datanode.getAttribute(airplane),dim=-1))
-        # print('dog:', torch.softmax(datanode.getAttribute(dog),dim=-1))
-        # print('truck:', torch.softmax(datanode.getAttribute(truck),dim=-1))
-        print(datanode.findDatanodes(select=image))
-
-        print(len(datanode.findDatanodes(select=image)))
-
-        datanode.inferILPConstrains('dog', 'truck', 'airplane', fun=None)
-        # datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1), epsilon=None)
-
+        datanode.inferILPConstrains('dog', 'truck', 'airplane',
+                                    'automobile', 'bird', 'cat',
+                                    'deer', 'frog', 'horse', 'ship',fun=None)
         print('----------after ILP---------')
-        print('inference airplane:', datanode.getAttribute(airplane, 'ILP'))
-        print('inference dog:', datanode.getAttribute(dog, 'ILP'))
-        print('inference truck:', datanode.getAttribute(truck, 'ILP'))
+        prediction = ' '
+        for label in label_list:
+            predt_label = datanode.getAttribute(eval(label), 'ILP').item()
+            if predt_label == 1.0:
+                prediction = label
+            print('inference ',label, predt_label )
+        d = datanode.getAttributes()['pixels'].numpy()
+        plt.figure()
+        plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
+        plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
+        plt.savefig(str(counter)+'.png')
+        # plt.show()
+        counter += 1
+        if counter == 20:
+            break
+
+
 
 
 
