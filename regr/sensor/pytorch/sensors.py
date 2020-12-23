@@ -311,7 +311,7 @@ class TorchCache(Cache):
         try:
             return torch.load(file_path)
         except FileNotFoundError as e:
-            raise KeyError(f'{name} (e.message)')
+            raise KeyError(f'{name} ({e.message})')
 
 
 class CacheSensor(FunctionalSensor):
