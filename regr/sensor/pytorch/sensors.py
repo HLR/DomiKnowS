@@ -58,12 +58,12 @@ class TorchSensor(Sensor):
             if not self.label:
                 data_item[self.prop] = None
 
-    @staticmethod
-    def non_label_sensor(sensor):
+    # @staticmethod
+    def non_label_sensor(self, sensor):
         if not isinstance(sensor, Sensor):
             return False
         elif isinstance(sensor, TorchSensor):
-            return not sensor.label
+            return self.label or not sensor.label  # if self is label, the dependent sensor should be called
         else:
             return True
 
