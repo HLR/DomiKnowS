@@ -311,6 +311,8 @@ def test_main_conll04(case):
 
     _, _, datanode = lbp.model(data)
 
+    datanode.infer()
+    
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
