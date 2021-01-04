@@ -1,7 +1,7 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
@@ -34,9 +34,9 @@ def main():
 
     program = model_declaration()
     data = [{
-        'x': [1.],
-        'y0': [1.,0.],
-        'y1': [0.,1.]
+        'x': [[1.]],
+        'y0': [[1.,0.]],
+        'y1': [[0.,1.]]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     print('Train loss:', program.model.loss)
