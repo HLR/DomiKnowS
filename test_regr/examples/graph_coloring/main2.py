@@ -25,11 +25,11 @@ def model_declaration():
     city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
 
     # --- Neighbor
-    cityLink[city1.reversed, city2.reversed] = CompositionCandidateSensor(city['index'], relations=(city1.reversed, city2.reversed), forward=lambda *_: True)
+    cityLink[city1.reversed, city2.reversed] = CompositionCandidateSensor(city['index'], relations=(city1.reversed, city2.reversed), forward=lambda *_, **__: True)
 
-    def readNeighbors(cityLink_node, *_, data):
-        city1_node = cityLink_node.relationLinks[city1.name][0]
-        city2_node = cityLink_node.relationLinks[city2.name][0]
+    def readNeighbors(*_, data, datanode):
+        city1_node = datanode.relationLinks[city1.name][0]
+        city2_node = datanode.relationLinks[city2.name][0]
         if city1_node.getAttribute('index') in data[int(city2_node.getAttribute('index'))]:
             return True
         else:

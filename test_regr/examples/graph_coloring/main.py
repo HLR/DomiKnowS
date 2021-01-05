@@ -24,7 +24,8 @@ def model_declaration():
     city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
 
 
-    def readNeighbors(city1, city2, _, data):
+    def readNeighbors(index, data, arg1, arg2):
+        city1, city2 = arg1, arg2
         if city1.getAttribute('index') in data[int(city2.getAttribute('index'))]:
             return True
         else:
