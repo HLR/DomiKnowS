@@ -10,8 +10,7 @@ sys.path.append('../../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, \
-        ConstantSensor, ConstantEdgeSensor
+    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, ConstantSensor
     from regr.sensor.pytorch.relation_sensors import CandidateSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import model_helper, PoiModel
@@ -21,19 +20,21 @@ def model_declaration():
     graph.detach()
 
     sentence['text'] = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
-    word[sentence_con_word.forward, 'text'] = Tokenizer(sentence['text'], relation=sentence_con_word, mode='forward', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
+    word[sentence_con_word, 'text'] = Tokenizer(sentence['text'], relation=sentence_con_word, tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
     word1['label'] = ConstantSensor(data=[1, 1, 1])
     word1['span'] = ConstantSensor(data=[(0, 3), (7, 12), (20, 26)])
 
     word['span'] = TokenizerSpan('text', tokenizer=BertTokenizer.from_pretrained('bert-base-uncased'))
 
-    def makeSpanPairs(word, word1, *_):
+    def makeSpanPairs(*_, dst, src):
+        word = dst
+        word1 = src
         if word.getAttribute('span')[0] == word1.getAttribute('span')[0] and word.getAttribute('span')[1] == word1.getAttribute('span')[1]:
             return True
         else:
             return False
 
-    word[word_equal_word1.backward] = CandidateSensor(word['span'], word1['label'], word1['span'],  forward=makeSpanPairs, relation=word_equal_word1, mode='backward')
+    word[word_equal_word1.reversed] = CandidateSensor(word['span'], word1['label'], word1['span'],  forward=makeSpanPairs, relation=word_equal_word1.reversed)
         
     program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[word]))
     return program

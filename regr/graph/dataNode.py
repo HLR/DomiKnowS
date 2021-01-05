@@ -1306,7 +1306,7 @@ class DataNodeBuilder(dict):
                 
             conceptInfo['relationAttrs'] = {}
             
-            conceptInfo['relationMode'] = sensor.mode
+            conceptInfo['relationMode'] = sensor.relation.mode
             conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
             conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
             

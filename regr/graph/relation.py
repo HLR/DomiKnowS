@@ -13,19 +13,19 @@ else:
 
 
 class Transformed():
-    def __init__(self, relationfunction, property, fn=None):
-        self.relationfunction = relationfunction
-        if isinstance(property, (str, RelationFunction)):
-            property = self.relationfunction.src[property]
+    def __init__(self, relation, property, fn=None):
+        self.relation = relation
+        if isinstance(property, (str, Relation)):
+            property = self.relation.src[property]
         self.property = property
         self.fn = fn
 
     def __call__(self, data_item, device=-1):
         value = self.property(data_item)
         try:
-            mapping = self.relationfunction.dst[self.relationfunction](data_item)
+            mapping = self.relation.dst[self.relation](data_item)
         except KeyError:
-            mapping = self.relationfunction.src[self.relationfunction.T](data_item).T
+            mapping = self.relation.src[self.relation.reversed](data_item).T
         mapping = mapping.to(dtype=torch.float, device=device)
         value = value.to(dtype=torch.float, device=device)
         if self.fn is None:
@@ -37,65 +37,13 @@ class Transformed():
         return self.fn(mapping * value)
 
 
-class RelationFunction():
-    def __init__(self, relation):
-        self.relation = relation
-        self.mode = "forward"
-
-    @property
-    def src(self):
-        return self.relation.src
-
-    @property
-    def dst(self):
-        return self.relation.dst
-
-    @property
-    def T(self):
-        return self.relation.bacward
-    
-    @property
-    def name(self):
-        return f'{self.relation.name}.{self.mode}'
-
-    def __call__(self, *props, fn=None):
-        return Transformed(self, props[0], fn=fn)
-        # TODO: support mapping multiple props together?
-        # for prop in props:
-        #     assert prop.sup == self.src
-        #     yield Transformed(self.relation, prop, fn=fn)
-
-    def __str__(self):
-        return f'{str(self.relation)}.{self.mode}'
-
-    def __repr__(self):
-        return f'{repr(self.relation)}.{self.mode}'
-
-
-class RelationBackwardFunction(RelationFunction):
-    def __init__(self, relation):
-        super().__init__(relation)
-        self.mode = "backward"
-
-    @property
-    def src(self):
-        return self.relation.dst
-
-    @property
-    def dst(self):
-        return self.relation.src
-
-    @property
-    def T(self):
-        return self.relation.forward
-
 @BaseGraphTree.localize_namespace
 class Relation(BaseGraphTree):
     @classmethod
     def name(cls):  # complicated to use class property, just function
         return cls.__name__
 
-    def __init__(self, src, dst, argument_name):
+    def __init__(self, src, dst, argument_name, reverse_of=None):
         cls = type(self)
         if isinstance(argument_name, str):
             name = argument_name
@@ -104,10 +52,25 @@ class Relation(BaseGraphTree):
         BaseGraphTree.__init__(self, name)
         self.src = src
         self.dst = dst
-        src._out.setdefault(cls.name(), []).append(self)
-        dst._in.setdefault(cls.name(), []).append(self)
-        self.forward = RelationFunction(self)
-        self.backward = RelationBackwardFunction(self)
+        if reverse_of is None:
+            self.is_reversed = False
+            src._out.setdefault(cls.name(), []).append(self)
+            dst._in.setdefault(cls.name(), []).append(self)
+            reverse_of = Relation(dst, src, f'{name}.reversed', self)
+        else:
+            self.is_reversed = True
+        self.reversed = reverse_of
+
+    @property
+    def mode(self):
+        return 'backward' if self.is_reversed else 'forward'
+
+    def __call__(self, *props, fn=None):
+        return Transformed(self, props[0], fn=fn)
+        # TODO: support mapping multiple props together?
+        # for prop in props:
+        #     assert prop.sup == self.src
+        #     yield Transformed(self.relation, prop, fn=fn)
 
     @property
     def src(self):

@@ -31,8 +31,7 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
-    from regr.sensor.pytorch.query_sensor import InstantiateSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.graph import Graph, Concept, Relation, Property
 
     from .sensors import TestSensor, TestEdgeSensor
@@ -53,10 +52,9 @@ def graph(case):
 
     # model
     container['raw'] = ReaderSensor(keyword='container_keyword')
-    concept[container_contains_concept.forward] = TestEdgeSensor(
+    concept[container_contains_concept] = TestEdgeSensor(
         container['raw'],
         relation=container_contains_concept,
-        mode='forward',
         expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
     concept['raw'] = TestSensor(
@@ -77,28 +75,28 @@ def sensor(case, graph):
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(datanode_concept1, datanode_concept2, constant, *_):
+    def forward(constant, raw, arg1, arg2):
         # update collector
         idx = len(collector)
         assert idx < 4
-        collector.append((datanode_concept1, datanode_concept2))
+        collector.append((arg1, arg2))
         # test concept 1
-        assert isinstance(datanode_concept1, DataNode)
-        assert datanode_concept1.getOntologyNode() == concept
+        assert isinstance(arg1, DataNode)
+        assert arg1.getOntologyNode() == concept
         # test concept 2
-        assert isinstance(datanode_concept2, DataNode)
-        assert datanode_concept2.getOntologyNode() == concept
+        assert isinstance(arg2, DataNode)
+        assert arg2.getOntologyNode() == concept
         # other arguments are like functional sensor
         assert constant == case.constant
-        index1 = datanode_concept1.getAttribute('raw')
-        index2 = datanode_concept2.getAttribute('raw')
+        index1 = arg1.getAttribute('raw')
+        index2 = arg2.getAttribute('raw')
         return case.edge[index1][index2]
     sensor = CompositionCandidateSensor(
         case.constant,
         concept['raw'],
-        relations=(edge_concept1.backward, edge_concept2.backward),
+        relations=(edge_concept1.reversed, edge_concept2.reversed),
         forward=forward)
-    edge[edge_concept1.backward, edge_concept2.backward] = sensor
+    edge[edge_concept1.reversed, edge_concept2.reversed] = sensor
     return sensor
 
 

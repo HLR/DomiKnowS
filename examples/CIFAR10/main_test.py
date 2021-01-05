@@ -57,7 +57,7 @@ class ImageModel(PoiModel):
 from graph import graph, airplane, dog, truck
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     # from regr.sensor.pytorch.relation_sensors import CandidateReaderSensor
     from regr.program import LearningBasedProgram

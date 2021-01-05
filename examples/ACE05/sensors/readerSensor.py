@@ -52,7 +52,7 @@ class SpanLabelSensor(DataNodeSensor):
         self.forward_ = forward
         self.concept_name = concept
 
-    def forward(self, datanode, match):
+    def forward(self, match, datanode):
         if len(datanode.getEqualTo(conceptName=self.concept_name)):
             return True
         else:
