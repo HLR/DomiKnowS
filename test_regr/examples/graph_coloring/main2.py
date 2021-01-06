@@ -6,8 +6,11 @@ sys.path.append('../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
-    from regr.sensor.pytorch.relation_sensors import CandidateSensor, CandidateReaderSensor
+    import torch
+
+    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+    from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
 
@@ -18,30 +21,27 @@ def model_declaration():
 
     # --- City
     world['index'] = ReaderSensor(keyword='world')
-    world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
+    city['index'] = ReaderSensor(keyword='city')
+    city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
 
     # --- Neighbor
-    city1['backward'] = ForwardEdgeSensor('index', to='city1', mode='backward')
-    city2['backward'] = ForwardEdgeSensor('index', to='city2', mode='backward')
-    
-    def readCitylinks(datanodes_edges, datanode_concept1, datanode_concept2):
-        return True
-    
-    cityLink['index'] = CandidateSensor(forward=readCitylinks, edges=[city1['backward'], city2['backward']])
+    cityLink[city1.reversed, city2.reversed] = CompositionCandidateSensor(city['index'], relations=(city1.reversed, city2.reversed), forward=lambda *_, **__: True)
 
-    def readNeighbors(links, current_neighbers, city1, city2, _):
-        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
+    def readNeighbors(*_, data, datanode):
+        city1_node = datanode.relationLinks[city1.name][0]
+        city2_node = datanode.relationLinks[city2.name][0]
+        if city1_node.getAttribute('index') in data[int(city2_node.getAttribute('index'))]:
             return True
         else:
             return False
         
-    cityLink['neighbor'] = CandidateReaderSensor('index', keyword='links', forward=readNeighbors, edges=[city1['backward'], city2['backward']])
+    cityLink['neighbor'] = DataNodeReaderSensor(city1.reversed, city2.reversed, keyword='links', forward=readNeighbors)
 
     # --- Learners
-    city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward'], cityLink['neighbor']])
-    city[firestationCity] = ConstantSensor(data=None, label=True)
+    city[firestationCity] = DummyCityLearner('index')
+    # city[firestationCity] = ConstantSensor(data=None, label=True)
     
-    program = LearningBasedProgram(graph2, PoiModel)
+    program = LearningBasedProgram(graph2, PoiModel, poi=[world, city, cityLink])
     return program
 
 

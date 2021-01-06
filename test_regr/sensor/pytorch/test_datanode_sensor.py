@@ -26,7 +26,7 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.graph import Graph, Concept, Relation
 
     from .sensors import TestSensor, TestEdgeSensor
@@ -43,10 +43,9 @@ def graph(case):
 
     # model
     container['raw'] = ReaderSensor(keyword='container_keyword')
-    concept[container_contains_concept.forward] = TestEdgeSensor(
+    concept[container_contains_concept] = TestEdgeSensor(
         container['raw'],
         relation=container_contains_concept,
-        mode='forward',
         expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
     concept['raw'] = TestSensor(
@@ -73,7 +72,7 @@ def sensor(case, graph):
     concept = graph['sub/concept']
 
     datanodes = []
-    def forward(datanode, reader1, reader2, constant):
+    def forward(reader1, reader2, constant, datanode):
         idx = len(datanodes)
         assert idx < 2
         datanodes.append(datanode)

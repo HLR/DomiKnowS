@@ -2,7 +2,7 @@ from typing import Any
 import torch
 import numpy as np
 
-from regr.sensor.pytorch.sensors import FunctionalSensor, ConstantSensor, ConstantEdgeSensor, JointSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, ConstantSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.sensor.pytorch.learners import TorchLearner
 

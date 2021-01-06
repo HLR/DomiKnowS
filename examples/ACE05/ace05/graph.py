@@ -1,6 +1,6 @@
 from regr.graph import Graph, Concept, Relation, Property
-from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, orL, andL
+# from regr.graph.relation import disjoint
+from regr.graph.logicalConstrain import ifL, nandL, orL, andL
 
 
 Graph.clear()
@@ -14,6 +14,10 @@ with Graph('global') as graph:
         span_candidate = Concept(name='span_candidate')
         span_annotation = Concept(name='span_annotation')
         anchor_annotation = Concept(name='anchor_annotation')
+        token_b = token(name='b')
+        token_i = token(name='i')
+        token_o = token(name='o')
+        nandL(token_b, token_i, token_o)
         span = Concept(name='span')
         document = Concept(name='document')
         span_candidate.has_a(start=token, end=token)
@@ -51,7 +55,7 @@ with Graph('global') as graph:
             usp = entity(name='Class.USP')
 
             # disjoint
-            disjoint(neg, spc, gen, usp)
+            nandL(neg, spc, gen, usp)
 
             # Types
             # Person - Person entities are limited to humans. A person may be a single individual or a group
@@ -84,7 +88,7 @@ with Graph('global') as graph:
             sen = value(name='Sentence')
 
             # disjoint
-            disjoint(person, organization, gpe, location, facility, vehicle, weapon, timex2, value)
+            nandL(person, organization, gpe, location, facility, vehicle, weapon, timex2, value)
 
             # Abbreviation
             PER = person
@@ -103,7 +107,7 @@ with Graph('global') as graph:
             # PER.Indefinite - If from the context you can’t judge whether the Person entity refers to one or more than one person, tag it as PER.Indefinite.
             indefinite = person('PER-Indeterminate')
             # disjoint
-            disjoint(individual, group, indefinite)
+            nandL(individual, group, indefinite)
 
             # organization subtypes
             # Government (GOV) - Government organizations are those that are of, relating to, or dealing with the structure or affairs of government, politics, or the state.
@@ -126,7 +130,7 @@ with Graph('global') as graph:
             sports = organization('ORG-Sports')
             # NOTE: The collection of organization subtypes is hierarchical in nature. ACE05 assigns the most specific type possible. So the annotated results are disjoint.
             # disjoint
-            disjoint(government, commercial, educational, entertainment, non_governmental, media, religious, medical_science, sports)
+            nandL(government, commercial, educational, entertainment, non_governmental, media, religious, medical_science, sports)
 
             # GPE subtypes
             # Continent - Taggable mentions of the entireties of any of the seven continents.
@@ -144,7 +148,7 @@ with Graph('global') as graph:
             # Special - A closed set of GPEs for which the conventional labels do not straightforwardly apply.
             special = GPE('GPE-Special')
             # disjoint
-            disjoint(continent, nation, state_or_province, county_or_district, population_center, gpe_cluster, special)
+            nandL(continent, nation, state_or_province, county_or_district, population_center, gpe_cluster, special)
 
             # GPE Roles - Annotators need to decide for each entity mention in the text which role (Person, Organization, Location, GPE) the context of that mention invokes. This judgment typically depends on the relations that the entity enters into.
             # TODO: Similar to Class, this is a field required from one the the following four.
@@ -159,7 +163,7 @@ with Graph('global') as graph:
             # GPE.GPE - GPE.GPE is used when more than one of the other GPE roles is being referenced at once or when no one role stands out in the context.
             gpe_gpe = gpe('Role.GPE')
             # disjoint
-            disjoint(gpe_org, gpe_per, gpe_loc, gpe_gpe)
+            nandL(gpe_org, gpe_per, gpe_loc, gpe_gpe)
 
             # Location subtypes
             # Address - A location denoted as a point such as in a postal system or abstract coordinates. The name of a location in a postal system is also an address.
@@ -177,7 +181,7 @@ with Graph('global') as graph:
             # Region-General - Taggable locations that do not cross national borders.
             region_general = location('LOC-Region-General')
             # disjoint
-            disjoint(address, boundary, celestial, water_body, land_region_natural, region_international, region_general)
+            nandL(address, boundary, celestial, water_body, land_region_natural, region_international, region_general)
 
             # Facilities subtypes
             # Airport - A facility whose primary use is as an airport.
@@ -191,7 +195,7 @@ with Graph('global') as graph:
             # Path - A facility that allows fluids, energies, persons or vehicles to pass from one location to another.
             path = facility('FAC-Path')
             # disjoint
-            disjoint(airport, plant, building_or_grounds, subarea_facility, path)
+            nandL(airport, plant, building_or_grounds, subarea_facility, path)
 
             # Vehicle subtypes
             # Air - Vehicles designed to locomote primarily through the air, not touching water or land.

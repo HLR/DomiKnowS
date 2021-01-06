@@ -4,8 +4,8 @@ from typing import Any
 
 
 class SpacyTokenizer(EdgeSensor):
-    def __init__(self, *pres, relation, mode="forward", edges=None, label=False, device='auto', spacy=None):
-        super().__init__(*pres, relation=relation, mode=mode, edges=edges, label=label, device=device)
+    def __init__(self, *pres, relation, edges=None, label=False, device='auto', spacy=None):
+        super().__init__(*pres, relation=relation, edges=edges, label=label, device=device)
         if not spacy:
             raise ValueError('You should select a default Spacy Pipeline')
         self.nlp = spacy

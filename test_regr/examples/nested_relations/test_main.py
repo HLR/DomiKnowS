@@ -125,8 +125,8 @@ def model_declaration(config, case):
 
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
-    # Edge: sentence to word forward
-    word[rel_sentence_contains_word.forward, 'raw'] = TestSensor(
+    # Edge: sentence to word
+    word[rel_sentence_contains_word, 'raw'] = TestSensor(
         sentence['raw'],
         expected_inputs=(case.sentence.raw,),
         expected_outputs=(case.word.scw, case.word.raw))
@@ -172,28 +172,28 @@ def model_declaration(config, case):
         expected_inputs=(case.word.emb,),
         expected_outputs=case.word.Bword)
 
-    phrase[rel_phrase_word1.backward, rel_phrase_word2.backward] = TestSensor(
+    phrase[rel_phrase_word1.reversed, rel_phrase_word2.reversed] = TestSensor(
         word['emb'],
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.phrase.pw1_backward, case.phrase.pw2_backward))
 
-    phrase[rel_sentence_contains_phrase.forward, 'raw'] = TestSensor(
+    phrase[rel_sentence_contains_phrase, 'raw'] = TestSensor(
         sentence['raw'],
         expected_inputs=(case.sentence.raw,),
         expected_outputs=(case.phrase.scw, case.phrase.raw))
     
     phrase['emb'] = TestSensor(
-        rel_phrase_word1.backward('emb'), rel_phrase_word2.backward('emb'),
+        rel_phrase_word1.reversed('emb'), rel_phrase_word2.reversed('emb'),
         expected_inputs=(case.phrase.emb[:, :2048], case.phrase.emb[:, 2048:]),
         expected_outputs=case.phrase.emb)
 
-    pair[rel_pair_phrase1.backward, rel_pair_phrase2.backward] = TestSensor(
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = TestSensor(
         phrase['emb'],
         expected_inputs=(case.phrase.emb,),
         expected_outputs=(case.pair.pa1_backward, case.pair.pa2_backward))
 
     pair['emb'] = TestSensor(
-        rel_pair_phrase1.backward('emb'), rel_pair_phrase2.backward('emb'),
+        rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         expected_inputs=(case.pair.emb[:,:4096],case.pair.emb[:,4096:]),
         expected_outputs=case.pair.emb)
 

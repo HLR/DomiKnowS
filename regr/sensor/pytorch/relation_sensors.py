@@ -1,19 +1,16 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, TriggerPrefilledSensor, JointSensor, FunctionalReaderSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, FunctionalReaderSensor, ReaderSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
-from typing import Any, Dict
+from typing import Any, Dict, OrderedDict
 import torch
 from itertools import product
 
 
 class EdgeSensor(FunctionalSensor):
-    modes = ("forward", "backward")
-
-    def __init__(self, *pres, relation, mode="forward", **kwargs):
+    def __init__(self, *pres, relation, **kwargs):
         super().__init__(*pres, **kwargs)
         self.relation = relation
-        self.mode = mode
 
     @property
     def relation(self):
@@ -22,27 +19,8 @@ class EdgeSensor(FunctionalSensor):
     @relation.setter
     def relation(self, relation):
         self._relation = relation
-        # try to update
-        try:
-            self.mode = self.mode
-        except:
-            pass
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @mode.setter
-    def mode(self, mode):
-        if mode not in self.modes:
-            raise ValueError('The mode passed to the edge sensor must be one of %s' % self.modes)
-        self._mode = mode
-        if self.mode == "forward":
-            self.src = self.relation.src
-            self.dst = self.relation.dst
-        elif self.mode == "backward":
-            self.src = self.relation.dst
-            self.dst = self.relation.src
+        self.src = self.relation.src
+        self.dst = self.relation.dst
 
     def update_pre_context(
         self,
@@ -57,75 +35,70 @@ class EdgeSensor(FunctionalSensor):
         return super().fetch_value(pre, selector, concept)
 
 
-class CandidateSensor(EdgeSensor, QuerySensor):
+class BaseCandidateSensor(QuerySensor):
     @property
     def args(self):
-        return [self.dst, self.src]
+        raise NotImplementedError
 
     def define_inputs(self):
         super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
-        if self.inputs is None:
-            self.inputs = []
-        args = []
-        for concept in self.args:
+        args = {}
+        for name, concept in self.args.items():
             datanodes = self.builder.findDataNodesInBuilder(select=concept)
-            args.append(datanodes)
-        self.inputs = args + self.inputs
+            args[name] = datanodes
+        self.kwinputs['datanodes'] = args
+
+class CandidateSensor(EdgeSensor, BaseCandidateSensor):
+    @property
+    def args(self):
+        return OrderedDict((('dst', self.dst), ('src', self.src)))
 
     def forward_wrap(self):
         # args
-        args = self.inputs[:len(self.args)]
+        args = self.kwinputs['datanodes']
         # functional inputs
-        inputs = self.inputs[len(self.args):]
+        inputs = self.inputs
 
         arg_lists = []
         dims = []
-        for arg_list in args:
+        for arg_list in args.values():
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
         output = torch.zeros(dims, dtype=torch.long, device=self.device)
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(*arg_list, *inputs)
+            candidates = dict(zip(self.args.keys(), arg_list))
+            output[(*index,)] = self.forward(*inputs, **candidates)
         return output
 
 
-class CompositionCandidateSensor(JointSensor, QuerySensor):
+class CompositionCandidateSensor(JointSensor, BaseCandidateSensor):
     @property
     def args(self):
-        return [relation.src for relation in self.relations]
+        return OrderedDict((relation.reversed.name, relation.src) for relation in self.relations)
 
     def __init__(self, *args, relations, **kwargs):
         super().__init__(*args, **kwargs)
         self.relations = relations
 
-    def define_inputs(self):
-        super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
-        if self.inputs is None:
-            self.inputs = []
-        args = []
-        for concept in self.args:
-            datanodes = self.builder.findDataNodesInBuilder(select=concept)
-            args.append(datanodes)
-        self.inputs = args + self.inputs
-
     def forward_wrap(self):
         # args
-        args = self.inputs[:len(self.args)]
+        args = self.kwinputs['datanodes']
         # functional inputs
-        inputs = self.inputs[len(self.args):]
+        inputs = self.inputs
 
         arg_lists = []
         indexes = []
         dims = []
-        for arg_list in args:
+        for arg_list in args.values():
             arg_lists.append(enumerate(arg_list))
             dims.append(len(arg_list))
             indexes.append([])
 
         for arg_enum in product(*arg_lists):
             index, arg_list = zip(*arg_enum)
-            if self.forward(*arg_list, *inputs):
+            candidates = dict(zip(self.args.keys(), arg_list))
+            if self.forward(*inputs, **candidates):
                 for i, index_ in enumerate(index):
                     indexes[i].append(index_)
 
@@ -143,8 +116,9 @@ class CompositionCandidateSensor(JointSensor, QuerySensor):
 class CandidateRelationSensor(CandidateSensor):
     @property
     def args(self):
+        # guess which side of the relation?
         concept = self.concept
-        return [(rel.dst if concept is rel.src else rel.src) for rel in self.relations]
+        return OrderedDict((rel.name, rel.dst) if concept is rel.src else (rel.reversed.name, rel.src) for rel in self.relations)
 
     def __init__(self, *pres, relations, edges=None, forward=None, label=False, device='auto'):
         super().__init__(*pres, edges=edges, forward=forward, label=label, device=device)

@@ -44,8 +44,8 @@ for sensor in twit['index'].find(Sensor):
     sensor(data_item)
     
 class ButDetector(DataNodeSensor):
-    def forward(self, instance, *inputs) -> Any:
-        if " but " in instance.getAttribute('index').lower():
+    def forward(self, *inputs, datanode) -> Any:
+        if " but " in datanode.getAttribute('index').lower():
             return True
         else:
             return False
@@ -56,8 +56,8 @@ class ClauseGenerator(EdgeSensor):
 
 
 class SpacyVector(DataNodeSensor):
-    def forward(self, instance, *inputs):
-        return instance.getAttribute('index').vector
+    def forward(self, *inputs, datanode):
+        return datanode.getAttribute('index').vector
     
 class SentenceRepSensor(DataNodeSensor):
     def __init__(self, *pres, edges=None, forward= None ,label=False, device='auto', spacy=None):
@@ -66,8 +66,8 @@ class SentenceRepSensor(DataNodeSensor):
             self.nlp = spacy
         else:
             raise ValueError("spacy should be instantiated")
-    def forward(self, instance, *inputs) -> Any:
-        text = self.nlp(instance.getAttribute(self.pres[0]))
+    def forward(self, *inputs, datanode) -> Any:
+        text = self.nlp(datanode.getAttribute(self.pres[0]))
         #return torch.from_numpy(text.vector).to(device=self.device)
         return text.vector
 
