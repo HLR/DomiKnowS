@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 
 from regr.graph import Property, Concept, DataNodeBuilder
-from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, CacheSensor, TorchEdgeReaderSensor
+from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, CacheSensor
 from regr.sensor.pytorch.learners import TorchLearner
 
 from .base import Mode

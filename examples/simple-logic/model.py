@@ -27,8 +27,9 @@ class Net(torch.nn.Module):
     def __init__(self, w=None):
         super().__init__()
         if w is not None:
-            self.w = torch.nn.Parameter(torch.tensor(w).float().view(2, 1))
+            self.w = torch.nn.Parameter(torch.tensor(w).float().view(1, 2))
         else:
-            self.w = torch.nn.Parameter(torch.randn(2, 1))
+            self.w = torch.nn.Parameter(torch.randn(1, 2))
+
     def forward(self, x):
-        return torch.matmul(self.w, x)
+        return x.matmul(self.w)

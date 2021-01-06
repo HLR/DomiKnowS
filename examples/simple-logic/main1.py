@@ -1,7 +1,8 @@
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
@@ -15,14 +16,13 @@ def model_declaration():
     y0 = graph['y0']
     y1 = graph['y1']
 
-    world['index'] = ReaderSensor(keyword='x')
-    world_contains_x['forward'] = TorchEdgeReaderSensor(keyword='x', mode='forward', to='x')
+    world['x'] = ReaderSensor(keyword='x')
+    x[world_contains_x] = EdgeSensor(world['x'], relation=world_contains_x, forward=lambda x: x)
 
-    # x['x'] = ReaderSensor(keyword='x')
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
-    x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']])
+    x[y0] = ModuleLearner(world_contains_x('x'), module=Net())
+    x[y1] = ModuleLearner(world_contains_x('x'), module=Net())
 
     program = LearningBasedProgram(graph, MyIMLModel)
     return program
@@ -38,9 +38,9 @@ def main():
 
     program = model_declaration()
     data = [{
-        'x': torch.tensor([1.]),
-        'y0': torch.tensor([1.,0.]),
-        'y1': torch.tensor([0.,1.])
+        'x': torch.tensor([[1.]]),
+        'y0': torch.tensor([[1.,0.]]),
+        'y1': torch.tensor([[0.,1.]])
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     print('Train loss:', program.model.loss)

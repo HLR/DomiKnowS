@@ -4,8 +4,8 @@ from regr.sensor.pytorch.relation_sensors import EdgeSensor
 
 
 class TokenizerEdgeSensor(EdgeSensor, JointSensor):
-    def __init__(self, *pres, relation, mode="forward", edges=None, label=False, device='auto', tokenizer=None):
-        super().__init__(*pres, relation=relation, mode=mode, edges=edges, label=label, device=device)
+    def __init__(self, *pres, relation, edges=None, label=False, device='auto', tokenizer=None):
+        super().__init__(*pres, relation=relation, edges=edges, label=label, device=device)
         if not tokenizer:
             raise ValueError('You should select a default Tokenizer')
         self.tokenizer = tokenizer

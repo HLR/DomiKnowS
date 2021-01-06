@@ -15,7 +15,6 @@ sys.path.append('../../../examples/ACE05')
 def test_edge_main():
     from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.sensors import ConstantSensor, JointSensor
-    from regr.sensor.pytorch.relation_sensors import CandidateEqualSensor, CandidateRelationSensor
     from graph import sentence, word, sentence_con_word, word1, word_equal_word1, graph, pair_word1, pair_word2, pair
     from regr.sensor.sensor import Sensor
     from regr.graph import DataNodeBuilder
@@ -28,7 +27,7 @@ def test_edge_main():
     sensor1 = ConstantSensor(data='This is a sample sentence to check the phrase equality or in this case the words.')
     sentence['index'] = sensor1
     sentence['joint1', 'joint2'] = JointSensor(forward=lambda : ((1,2,3), ('a', 'b', 'c')))
-    word['index', 'ids'] = SampleEdge('index', relation=sentence_con_word, mode="forward")
+    word['index', 'ids'] = SampleEdge('index', relation=sentence_con_word)
     word1['index'] = ConstantSensor(data=['words', 'case', 'quality', 'is'])
 
     data_item = DataNodeBuilder({"graph": graph})

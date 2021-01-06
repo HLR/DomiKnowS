@@ -1,9 +1,14 @@
 from typing import Dict, Any
+import torch
 
-from .sensors import TorchSensor, FunctionalSensor
+from .sensors import FunctionalSensor, FunctionalReaderSensor
 
 
 class QuerySensor(FunctionalSensor):
+    def __init__(self, *pres, **kwargs):
+        super().__init__(*pres, **kwargs)
+        self.kwinputs = {}
+
     @property
     def builder(self):
         builder = self.context_helper
@@ -24,20 +29,23 @@ class QuerySensor(FunctionalSensor):
 
     def define_inputs(self):
         super().define_inputs()
-        if self.inputs is None:
-            self.inputs = []
-
         datanodes = self.builder.findDataNodesInBuilder(select=self.concept)
-        self.inputs.insert(0, datanodes)
+        self.kwinputs['datanodes'] = datanodes
+
+    def forward_wrap(self):
+        value = self.forward(*self.inputs, **self.kwinputs)
+        if isinstance(value, torch.Tensor) and value.device is not self.device:
+            value = value.to(device=self.device)
+        return value
 
 
 class DataNodeSensor(QuerySensor):
     def forward_wrap(self):
         from ...graph import Property
-        datanodes = self.inputs[0]
-        assert len(self.inputs[1:]) == len(self.pres)
+        datanodes = self.kwinputs['datanodes']
+        assert len(self.inputs) == len(self.pres)
         inputs = []
-        for input, pre in zip(self.inputs[1:], self.pres):
+        for input, pre in zip(self.inputs, self.pres):
             if isinstance(pre, str):
                 try:
                     pre = self.concept[pre]
@@ -50,21 +58,13 @@ class DataNodeSensor(QuerySensor):
                 # otherwise, repeat the input
                 inputs.append([input] * len(datanodes))
 
-        return [self.forward(datanode, *input) for datanode, *input in zip(datanodes, *inputs)]
+        value = [self.forward(*input, datanode=datanode) for datanode, *input in zip(datanodes, *inputs)]
 
-
-class InstantiateSensor(TorchSensor):
-    def __call__(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(data_item)
-        except:
-            print('Error during updating pre with sensor {}'.format(self))
-            raise
-        try:
-            return data_item[self]
-        except KeyError:
-            return data_item[self.sup.sup['index']]
+            return torch.tensor(value, device=self.device)
+        except (TypeError, RuntimeError, ValueError):
+            return value
 
+
+class DataNodeReaderSensor(DataNodeSensor, FunctionalReaderSensor):
+    pass

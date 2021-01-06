@@ -1,5 +1,6 @@
 import numpy as np
 import torch.cuda
+import torch
 from collections import OrderedDict, namedtuple
 import time
 from itertools import product
@@ -978,6 +979,48 @@ class DataNode:
                         
         return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
     
+    def infer(self):
+        conceptsRelations = self.__collectConceptsAndRelations(self) 
+        
+        for c in conceptsRelations:
+            cRoot = self.__findRootConceptOrRelation(c)
+            dns = self.findDatanodes(select = cRoot)
+            
+            if not dns:
+                continue
+            
+            vs = []
+            
+            for dn in dns:
+                v = dn.getAttribute(c)
+                
+                if v is not None:
+                    vs.append(v[1])
+                else:
+                    vs.append(None)         
+            
+            t = torch.FloatTensor(vs)
+            t[torch.isnan(t)] = 0 # NAN  -> 0
+            
+            vM = torch.argmax(t).item() # argmax
+            
+            # Elements for softmax
+            tExp = torch.exp(t)
+            tExpSum = torch.sum(tExp).item()
+            
+            keyArgmax = "<" + c + ">/argmax"
+            keySoftMax = "<" + c + ">/softmax"
+            
+            # Add argmax and softmax to DataNodes
+            for dn in dns:
+                if dn.getInstanceID() == vM:
+                    dn.attributes[keyArgmax] = 1
+                else:
+                    dn.attributes[keyArgmax] = 0
+                
+                dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
+                dn.attributes[keySoftMax] = dnSoftmax.item()
+
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
@@ -1263,7 +1306,7 @@ class DataNodeBuilder(dict):
                 
             conceptInfo['relationAttrs'] = {}
             
-            conceptInfo['relationMode'] = sensor.mode
+            conceptInfo['relationMode'] = sensor.relation.mode
             conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
             conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
             
