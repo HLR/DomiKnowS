@@ -73,8 +73,7 @@ with Graph('global') as graph:
         # LC1 work_for has arg1 people and arg2 organization
         ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_phrase1.name)), organization, V(name='z', v=('x', rel_pair_phrase2.name))), V(match='x'))
             
-        # LC1bis if x is people and y is organization then they are in work_for relation
-        ifL(andL(people, V(name='x'), organization, V(name='y')), V(name='z'), work_for, V(match='z', v=(('x', rel_pair_phrase1.backward.name), ('y', rel_pair_phrase2.backward.name))))
+        # LC1bis if x is people and y is organization then they are in work_for relatio
 
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword

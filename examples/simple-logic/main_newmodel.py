@@ -3,7 +3,8 @@ def model_declaration():
     from regr.program import POILossProgram
     from regr.program.model.pytorch import PoiModelToWorkWithLearnerWithLoss
     from regr.program.loss import BCEWithLogitsLoss
-    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
+    from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.graph import Property
 
@@ -17,13 +18,14 @@ def model_declaration():
     y0 = graph['y0']
     y1 = graph['y1']
 
-    world['index'] = ConstantSensor(data=[[0.]])
-    world_contains_x['forward'] = TorchEdgeReaderSensor(keyword='x', mode='forward', to='x')
+    world['x'] = ReaderSensor(keyword='x')
+    x[world_contains_x] = EdgeSensor(world['x'], relation=world_contains_x, forward=lambda x: x)
 
     x[y0] = ReaderSensor(keyword='y0', label=True)
     x[y1] = ReaderSensor(keyword='y1', label=True)
-    x[y0] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
-    x[y1] = ModuleLearner('x', module=Net(), edges=[world_contains_x['forward']], loss=BCEWithLogitsLoss())
+    # x[y0] = ModuleLearner(world_contains_x('x'), module=Net(), loss=BCEWithLogitsLoss())
+    x[y0] = ModuleLearner(world_contains_x('x'), module=Net())
+    x[y1] = ModuleLearner(world_contains_x('x'), module=Net(), loss=BCEWithLogitsLoss())
 
     program = POILossProgram(graph)
     return program
@@ -39,9 +41,9 @@ def main():
 
     program = model_declaration()
     data = [{
-        'x': [1.],
-        'y0': [1.,0.],
-        'y1': [0.,1.]
+        'x': [[1.]],
+        'y0': [[1.,0.]],
+        'y1': [[0.,1.]]
         }]
     program.train(data, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=1))
     print('Train loss:', program.model.loss)

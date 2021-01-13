@@ -22,6 +22,9 @@ class APFObject():
     def parse_node(cls, node):
         return {}
 
+    def apply_offset(self, offset):
+        raise NotImplementedError()
+
 
 class Charseq(APFObject):
     tag = 'charseq'
@@ -45,11 +48,18 @@ class Charseq(APFObject):
                     b.splitlines(keepends=True))))
         return node_args
 
-    def __init__(self, start, end, text):
+    def __init__(self, start, end, text, offset=0):
         super().__init__()
         self.start = start
         self.end = end
         self.text = text
+        self.offset = offset
+
+    def apply_offset(self, offset):
+        assert self.offset == 0
+        self.start -= offset
+        self.end -= offset
+        self.offset = offset
 
 
 class Span(APFObject):
@@ -74,6 +84,9 @@ class Span(APFObject):
             self.span_basetype = span_basetype
             self.span_type = span_type
             self.span_subtype = span_subtype
+        
+        def apply_offset(self, offset):
+            self.extent.apply_offset(offset)  # head is a reference to extent
 
     @classmethod
     def from_node(cls, node, *args, **kwargs):
@@ -115,11 +128,15 @@ class Span(APFObject):
         self.subtype = subtype
         self.mentions = mentions
 
-    def __copy__(self):
-        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions)
+    def apply_offset(self, offset):
+        for mention in self.mentions.values():
+            mention.apply_offset(offset)
 
-    def __deepcopy__(self, memo):
-        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions))
+    # def __copy__(self):
+    #     return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions)
+
+    # def __deepcopy__(self, memo):
+    #     return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions))
 
 
 class Entity(Span):
@@ -139,6 +156,10 @@ class Entity(Span):
             super().__init__(id, extent, head, span_basetype, span_type, span_subtype)
             self.type = type
 
+        def apply_offset(self, offset):
+            super().apply_offset(offset)
+            self.head.apply_offset(offset)
+
     class Attribute(APFObject):
         tag = 'name'
 
@@ -154,10 +175,18 @@ class Entity(Span):
             self.name = name
             self.text = text
 
+        def apply_offset(self, offset):
+            self.text.apply_offset(offset)
+
     def __init__(self, id, basetype, type, subtype, mentions, entity_class, attributes):
         super().__init__(id, basetype, type, subtype, mentions)
         self.entity_class = entity_class
         self.attributes = attributes
+
+    def apply_offset(self, offset):
+        super().apply_offset(offset)
+        for attribute in self.attributes:
+            attribute.apply_offset(offset)
 
     @classmethod
     def parse_node(cls, node, text):
@@ -176,11 +205,11 @@ class Entity(Span):
         subtype = ace05['Entities']['{}-{}'.format(node.attrib['TYPE'], node.attrib['SUBTYPE'])]
         return basetype, type, subtype
 
-    def __copy__(self):
-        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions, entity_class=self.entity_class, attributes=self.attributes)
+    # def __copy__(self):
+    #     return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=self.mentions, entity_class=self.entity_class, attributes=self.attributes)
 
-    def __deepcopy__(self, memo):
-        return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions), entity_class=self.entity_class, attributes=list(self.attributes))
+    # def __deepcopy__(self, memo):
+    #     return type(self)(id=self.id, basetype=self.basetype, type=self.type, subtype=self.subtype, mentions=dict(self.mentions), entity_class=self.entity_class, attributes=list(self.attributes))
 
 
 class Timex2(Span):
@@ -227,6 +256,10 @@ class Trigger(Span):
             node_args['head'] = Charseq.from_node(node.find('anchor/charseq'), text)
             return node_args
 
+        def apply_offset(self, offset):
+            super().apply_offset(offset)
+            self.head.apply_offset(offset)
+
     @classmethod
     def init_types(cls, node, text):
         basetype = cls.__name__.lower()
@@ -254,6 +287,9 @@ class BaseArgument(APFObject):
         self.refid = refid
         self.ref = ref
         self.role = role
+
+    def apply_offset(self, offset):
+        pass  # should not update reference `ref`
 
 
 class Relation(APFObject):
@@ -293,6 +329,14 @@ class Relation(APFObject):
             self.arguments = arguments
             self.additional_arguments = additional_arguments
 
+        def apply_offset(self, offset):
+            self.extent.apply_offset(offset)
+            for argument in self.arguments:
+                if argument:
+                    argument.apply_offset(offset)
+            for argument in self.additional_arguments:
+                argument.apply_offset(offset)
+
     @classmethod
     def parse_node(cls, node, text, spans):
         node_args = super().parse_node(node)
@@ -325,11 +369,20 @@ class Relation(APFObject):
         self.additional_arguments = additional_arguments
         self.mentions = mentions
 
-    def __copy__(self):
-        return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=self.arguments, additional_arguments=self.additional_arguments, mentions=self.mentions)
+    def apply_offset(self, offset):
+        for argument in self.arguments:
+            if argument:
+                argument.apply_offset(offset)
+        for argument in self.additional_arguments:
+            argument.apply_offset(offset)
+        for mention in self.mentions.values():
+            mention.apply_offset(offset)
 
-    def __deepcopy__(self, memo):
-        return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=list(self.arguments), additional_arguments=list(self.additional_arguments), mentions=dict(self.mentions))
+    # def __copy__(self):
+    #     return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=self.arguments, additional_arguments=self.additional_arguments, mentions=self.mentions)
+
+    # def __deepcopy__(self, memo):
+    #     return type(self)(id=self.id, type=self.type, subtype=self.subtype, tense=self.tense, modality=self.modality, arguments=list(self.arguments), additional_arguments=list(self.additional_arguments), mentions=dict(self.mentions))
 
 
 class Event(APFObject):
@@ -375,6 +428,13 @@ class Event(APFObject):
             self.trigger = trigger
             self.arguments = arguments
 
+        def apply_offset(self, offset):
+            self.extent.apply_offset(offset)
+            self.ldc_scope.apply_offset(offset)
+            self.anchor.apply_offset(offset)
+            for argument in self.arguments:
+                argument.apply_offset(offset)
+
     @classmethod
     def parse_node(cls, node, text, spans):
         node_args = super().parse_node(node)
@@ -412,8 +472,15 @@ class Event(APFObject):
         self.arguments = arguments
         self.mentions = mentions
 
-    def __copy__(self):
-        return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=self.trigger, modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=self.arguments, mentions=self.mentions)
+    def apply_offset(self, offset):
+        for argument in self.arguments:
+            if argument:
+                argument.apply_offset(offset)
+        for mention in self.mentions.values():
+            mention.apply_offset(offset)
 
-    def __deepcopy__(self, memo):
-        return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=deepcopy(self.trigger, memo), modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=list(self.arguments), mentions=dict(self.mentions))
+    # def __copy__(self):
+    #     return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=self.trigger, modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=self.arguments, mentions=self.mentions)
+
+    # def __deepcopy__(self, memo):
+    #     return type(self)(id=self.id, type=self.type, subtype=self.subtype, trigger=deepcopy(self.trigger, memo), modality=self.modality, polarity=self.polarity, genericity=self.genericity, tense=self.tense, arguments=list(self.arguments), mentions=dict(self.mentions))

@@ -4,12 +4,9 @@ from typing import Any
 import torch
 
 #  --- City
-class DummyCityLearner(TorchLearner):  # Learn Fire station classification for City
-    def forward(self,) -> Any:
-        result = torch.zeros(len(self.inputs[0]), 2)
-        
-        for t in result: # Initially all cities are firestation cities
-            t[1] = 1
-            t[0] = 0
-
+class DummyCityLearner(TorchLearner):
+    def forward(self, x):
+        result = torch.zeros(len(x), 2)
+        # Initially all cities are firestation cities
+        result[:, 1] = 1
         return result

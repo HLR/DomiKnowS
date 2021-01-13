@@ -7,10 +7,10 @@ def case():
     import random
 
     case = {
-        'reader1': 'hello world, {}'.format(random.random()),
-        'reader2': 'hello world, {}'.format(random.random()),
+        'reader1': ['hello world, {}'.format(random.random())],
+        'reader2': ['hello world, {}'.format(random.random())],
         'constant': random.random(),
-        'output': 'output, {}'.format(random.random())}
+        'output': ['output, {}'.format(random.random())]}
     case = Namespace(case)
     return case
 
@@ -41,7 +41,7 @@ def sensor(case, graph):
 
     concept = graph['sub/concept']
 
-    def forward(datanodes, reader1, reader2, constant):
+    def forward(reader1, reader2, constant, datanodes):
         # datanodes is a list of datanode
         assert len(datanodes) == 1
         assert isinstance(datanodes[0], DataNode)

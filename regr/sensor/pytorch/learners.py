@@ -6,11 +6,11 @@ import warnings
 import torch
 
 from .. import Learner
-from .sensors import TorchSensor, ModuleSensor
+from .sensors import TorchSensor, FunctionalSensor, ModuleSensor
 from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 
 
-class TorchLearner(Learner, TorchSensor):
+class TorchLearner(Learner, FunctionalSensor):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto'):

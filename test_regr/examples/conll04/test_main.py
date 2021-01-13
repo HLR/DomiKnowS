@@ -133,8 +133,8 @@ def model_declaration(config, case):
 
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
-    # Edge: sentence to word forward
-    word[rel_sentence_contains_word.forward, 'raw'] = TestSensor(
+    # Edge: sentence to word
+    word[rel_sentence_contains_word, 'raw'] = TestSensor(
         sentence['raw'],
         expected_inputs=(case.sentence.raw,),
         expected_outputs=(case.word.scw, case.word.raw))
@@ -143,34 +143,33 @@ def model_declaration(config, case):
         expected_inputs=(case.word.raw,),
         expected_outputs=case.word.emb)
 
-    # Edge: word to char forward
-    char[rel_word_contains_char.forward, 'raw'] = TestSensor(
+    # Edge: word to char
+    char[rel_word_contains_char, 'raw'] = TestSensor(
         word['raw'],
         expected_inputs=(case.word.raw,),
         expected_outputs=(case.char.wcc, case.char.raw))
 
-    # Edge: word to phrase backward
-    phrase[rel_phrase_contains_word.backward, 'raw'] = TestSensor(
+    # Edge: word to phrase reversed
+    phrase[rel_phrase_contains_word.reversed, 'raw'] = TestSensor(
         word['emb'],
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.phrase.pcw_backward, case.phrase.raw))
     phrase['emb'] = TestSensor(
-        rel_phrase_contains_word.backward('emb'),
+        rel_phrase_contains_word.reversed('emb'),
         expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.emb)
-    phrase[rel_sentence_contains_phrase.forward] = TestEdgeSensor(
-        rel_phrase_contains_word.backward(word[rel_sentence_contains_word.forward], fn=lambda x: x.max(1)[0]),
+    phrase[rel_sentence_contains_phrase] = TestEdgeSensor(
+        rel_phrase_contains_word.reversed(word[rel_sentence_contains_word], fn=lambda x: x.max(1)[0]),
         relation=rel_sentence_contains_phrase,
-        mode='forward',
         expected_inputs=(case.phrase.scp,),
         expected_outputs=case.phrase.scp)
 
-    pair[rel_pair_word1.backward, rel_pair_word2.backward] = TestSensor(
+    pair[rel_pair_word1.reversed, rel_pair_word2.reversed] = TestSensor(
         word['emb'],
         expected_inputs=(case.word.emb,),
         expected_outputs=(case.pair.pa1_backward, case.pair.pa2_backward))
     pair['emb'] = TestSensor(
-        rel_pair_word1.backward('emb'), rel_pair_word2.backward('emb'),
+        rel_pair_word1.reversed('emb'), rel_pair_word2.reversed('emb'),
         expected_inputs=(case.pair.emb[:,:2048],case.pair.emb[:,2048:]),
         expected_outputs=case.pair.emb)
 
@@ -312,6 +311,8 @@ def test_main_conll04(case):
 
     _, _, datanode = lbp.model(data)
 
+    datanode.infer()
+    
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
             assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
@@ -322,7 +323,6 @@ def test_main_conll04(case):
             #assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
             num_pairs = (torch.max(case.pair.pa1_backward, case.pair.pa2_backward))[:,child_node.instanceID].sum()
             assert len(child_node.getRelationLinks(relationName = "pair")) == num_pairs # has relation named "pair"with each word (including itself)
-            
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
             assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
