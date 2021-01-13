@@ -1,5 +1,6 @@
 import sys
 from itertools import product
+import math
 #sys.path.append('../..')
 
 import pytest
@@ -108,10 +109,10 @@ def test_case():
         
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
-        'lc2LossTensor' : torch.tensor([[0.2000,         0.2000,        0.2000,  0.0200],  # John
-                                        [ float("nan"),  float("nan"),  0.4000,  0.2900],  # works
-                                        [0.0200,         0.0300,        0.0500,  0.1000],  # for
-                                        [0.5500,         0.2000,        0.1000,  0.0000]], # IBM
+        'lc2LossTensor' : torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
+                                        float("nan"),   float("nan"),  0.4000,  0.2900,  # works
+                                        0.0200,         0.0300,        0.0500,  0.1000,  # for
+                                        0.5500,         0.2000,        0.1000,  0.0000], # IBM
                                         device=device)
     
     }
@@ -322,7 +323,6 @@ def test_main_conll04(case):
             #assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
             num_pairs = (torch.max(case.pair.pa1_backward, case.pair.pa2_backward))[:,child_node.instanceID].sum()
             assert len(child_node.getRelationLinks(relationName = "pair")) == num_pairs # has relation named "pair"with each word (including itself)
-
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
             assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
@@ -353,7 +353,7 @@ def test_main_conll04(case):
         for i in range(3):
             assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
 
-        for i in product(range(3), repeat = 2):  
+        for i in range(15):  
             if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
                 if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
                     assert True
@@ -363,7 +363,7 @@ def test_main_conll04(case):
                 assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
 
         # ------------ Call the ILP Solver
-        datanode.inferILPConstrains(*conceptsRelations, fun=None)
+        datanode.inferILPResults(*conceptsRelations, fun=None)
         
         # ------------ Concepts Results
         
@@ -442,7 +442,7 @@ def test_main_conll04(case):
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 1
         #assert sum(pairResult['work_for'][1]) == 0
-        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() if not math.isnan(dn.getAttribute(work_for, 'ILP').item())  else 0 for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 2
         #assert sum(pairResult['work_for'][2]) == 0

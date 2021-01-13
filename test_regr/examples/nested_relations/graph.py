@@ -40,7 +40,19 @@ with Graph('global') as graph:
 
         # phrase constrains
         disjoint(people, organization, location, other, o)
-        nandL(people,organization) # ?? 
+        
+        #nandL(people,  ('x',), organization, V(name='y', v=('x',)))
+        #nandL(people, organization, V(name='y', v=('x',)))
+        
+        #nandL(people,  V(name='x'), organization, V())
+        
+        #LC2 Each sentence should contain at least one person phrase        
+        atLeastL(andL(sentence, V(name='x'), people, V(name='y', v=('x', rel_sentence_contains_word.name))), V(name='a'), 1, 'y')
+        
+        nandL(people, V(name='x'), organization, V(match='x'))
+        
+        #nandL(people,  V(name='x'), location, V(v=('x',)))
+
         #for c1, c2 in permutations((people, organization, location, other, o), r=2):
         #nandL(c1, c2)
 
@@ -57,15 +69,12 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
+        
         # LC1 work_for has arg1 people and arg2 organization
-        ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
+        ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_phrase1.name)), organization, V(name='z', v=('x', rel_pair_phrase2.name))), V(match='x'))
             
-        # LC1bis if x is people and y is organization then they are in work_for relation
-        ifL(andL(people, V(name='x'), organization, V(name='y')), work_for, V(name='z', v=(('x', rel_pair_phrase1.reversed.name), ('y', rel_pair_phrase2.reversed.name))))
+        # LC1bis if x is people and y is organization then they are in work_for relatio
 
-        #LC2 Each sentence should contain at least one person phrase        
-        atLeastL(andL(sentence, V(name='x'), people, V(name='y', v=('x', rel_sentence_contains_word.name))), 1, 'y')
         
         #LC3 each real phrase is either the same word starting and end with type arg1=arg2=Iword or two different words with arg1 is Bword and arg2 is Eword
-        lg = orL( andL( Iword, V(v=('x', rel_phrase_word1.name)), Iword, V(v=('x', rel_phrase_word2.name)) ), andL( Bword, V(v=('x', rel_phrase_word1.name)), Eword, V(v=('x', rel_phrase_word2.name)) ) )
-        ifL(phrase, V(name='x'), lg)
+        ifL(phrase, V(name='x'), orL(andL(Iword, V(name='y', v=('x', rel_phrase_word1.name)), Iword, V(match='y', v=('x', rel_phrase_word2.name))), V(name='o'), andL(Bword, V(name='z', v=('x', rel_phrase_word1.name)), Eword, V(match='z', v=('x', rel_phrase_word2.name))), V(match='o')), V(match='x'))

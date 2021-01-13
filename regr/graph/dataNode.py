@@ -551,7 +551,7 @@ class DataNode:
         return None 
     
     # Find the root parent of relation of the given relation
-    def __findRootConceptOrRelation(self, relationConcept, usedGraph = None):
+    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
@@ -562,10 +562,37 @@ class DataNode:
         for _isA in relationConcept.is_a():
             _relationConcept = _isA.dst
             
-            return  self.__findRootConceptOrRelation(_relationConcept, usedGraph)
+            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
         
         # If the provided concept or relation is root (has not parents)
         return relationConcept 
+
+    def getEdgeDataNode(self, path):
+        if len(path) == 0:
+            return None
+
+        if len(path) == 1:
+            if path[0] in self.relationLinks:
+                return self.relationLinks[path[0]]
+            else:
+                return None
+        
+        if path[0] in self.relationLinks:
+            cDns = self.relationLinks[path[0]]
+            
+            rDNS = []
+            for cDn in cDns:
+                rDn = cDn.getEdgeDataNode(path[1:])
+                
+                if not rDn:
+                    rDNS.extend(rDn)
+                    
+            if rDNS:
+                return rDNS
+            else:
+                return None
+        else:
+            return None
 
     def __isHardConstrains(self, conceptRelation):
         # Check if dedicated DataNodes has been created for this concept or relation
@@ -574,7 +601,7 @@ class DataNode:
             return True
         
         # Find the root parent  of the given concept or relation
-        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+        rootRelation = self.findRootConceptOrRelation(conceptRelation)
         
         if bool(rootRelation):
             # Find dedicated DataNodes for this rootRelation
@@ -592,7 +619,7 @@ class DataNode:
             
     def __getHardConstrains(self, conceptRelation, reltationAttrs, currentCandidate):
         key = conceptRelation.name  
-        rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+        rootRelation = self.findRootConceptOrRelation(conceptRelation)
         
         if rootRelation == conceptRelation:
             if bool(reltationAttrs):
@@ -634,7 +661,7 @@ class DataNode:
         if len(dataNode) == 1:
             value = dataNode[0].getAttribute(key) 
         else:
-            rootRelation = self.__findRootConceptOrRelation(conceptRelation)
+            rootRelation = self.findRootConceptOrRelation(conceptRelation)
             rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
             
             if not rl:
@@ -977,9 +1004,9 @@ class DataNode:
                 
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
                         
-        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
-    
-    def infer(self):
+        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation)
+
+      def infer(self):
         conceptsRelations = self.__collectConceptsAndRelations(self) 
         
         for c in conceptsRelations:
@@ -1021,12 +1048,37 @@ class DataNode:
                 dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
                 dn.attributes[keySoftMax] = dnSoftmax.item()
 
+    def __getILPsolver(self, conceptsRelations = []):
+        
+        _conceptsRelations = []
+        
+        # Get ontology graphs and then ilpOntsolver
+        myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
+        
+        for currentConceptOrRelation in conceptsRelations:
+            if isinstance(currentConceptOrRelation, str):
+                currentConceptOrRelation = self.__findConcept(currentConceptOrRelation)
+            
+            _conceptsRelations.append(currentConceptOrRelation)
+            
+            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
+            
+            if currentOntologyGraph is not None:
+                myOntologyGraphs.add(currentOntologyGraph)
+                
+        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
+        
+        if not myilpOntSolver:
+            _DataNode__Logger.error("ILPSolver not initialized")
+            raise DataNode.DataNodeError("ILPSolver not initialized")
+        
+        return myilpOntSolver, _conceptsRelations
+    
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
-            from regr.graph import Concept
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
         if not _conceptsRelations:
@@ -1043,44 +1095,15 @@ class DataNode:
                 _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
         else:
             pass
-
-        conceptsRelations = [] # Will contain concept or relation  - translated to ontological concepts if provided using names
-        _instances = set() # Set of all the candidates across all the concepts to be consider in the ILP constrains
-        # Collect all the candidates for concepts and relations in conceptsRelations
-        for _currentConceptOrRelation in _conceptsRelations:
-            # Convert string to concept if provided as string
-            if isinstance(_currentConceptOrRelation, str):
-                currentConceptOrRelation = self.__findConcept(_currentConceptOrRelation)
                 
-                if currentConceptOrRelation is None:
-                    _DataNode__Logger.warning('Concept or relation name %s not found in the graph'%(currentConceptOrRelation))
-                    continue # String is not a name of concept or relation
-            else:
-                currentConceptOrRelation = _currentConceptOrRelation
-                
-            conceptsRelations.append(currentConceptOrRelation)
-                
-        # Get ontology graphs and then ilpOntsolver
-        myOntologyGraphs = {self.ontologyNode.getOntologyGraph()}
-        
-        for currentConceptOrRelation in conceptsRelations:
-            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
-            
-            if currentOntologyGraph is not None:
-                myOntologyGraphs.add(currentOntologyGraph)
-                
-        myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
-        
-        if not myilpOntSolver:
-            _DataNode__Logger.error("ILPSolver not initialized")
-            raise DataNode.DataNodeError("ILPSolver not initialized")
+        myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
 
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)
     
-    # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
+    # OLD -- Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPConstrains(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
@@ -1121,7 +1144,7 @@ class DataNode:
             if concept_name in hardConstrains:
                 continue
             
-            rootRelation = self.__findRootConceptOrRelation(concept_name)
+            rootRelation = self.findRootConceptOrRelation(concept_name)
             attrNames = []
             for _, rel in enumerate(rootRelation.has_a()): 
                 attrNames.append(rel.name)
@@ -1170,15 +1193,10 @@ class DataNode:
         return verifyResult
     
     def calculateLcLoss(self):
-        _conceptsRelations = ()
-            
-        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
-            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getProbability)
-            
-        if not myilpOntSolver:
-            return False
         
-        lcResult = myilpOntSolver.calculateLcLoss(graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
+        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.__collectConceptsAndRelations(self))
+
+        lcResult = myilpOntSolver.calculateLcLoss(self)
         
         return lcResult
 
@@ -1300,16 +1318,17 @@ class DataNodeBuilder(dict):
         if (isinstance(sensor, EdgeSensor)):
             
             conceptInfo['relationType'] = type(sensor.relation)
+            conceptInfo['relationName'] = sensor.relation.name
                     
             if 'relationAttrs' in conceptInfo:
                 conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
                 
             conceptInfo['relationAttrs'] = {}
-            
+          
             conceptInfo['relationMode'] = sensor.relation.mode
             conceptInfo['relationAttrs']["src"] = self.__findConcept(sensor.src.name, usedGraph)  
             conceptInfo['relationAttrs']["dst"] = self.__findConcept(sensor.dst.name, usedGraph)  
-            
+
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True
 
