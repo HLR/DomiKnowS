@@ -511,7 +511,7 @@ class DataNode:
         return None 
     
     # Check if concept is relation
-    def __isRelation(self, conceptRelation, usedGraph = None):
+    def isRelation(self, conceptRelation, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -526,7 +526,7 @@ class DataNode:
         
         return False 
     
-    def __getRelationAttrNames(self, conceptRelation, usedGraph = None):
+    def getRelationAttrNames(self, conceptRelation, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -594,7 +594,7 @@ class DataNode:
         else:
             return None
 
-    def __isHardConstrains(self, conceptRelation):
+    def isHardConstrains(self, conceptRelation):
         # Check if dedicated DataNodes has been created for this concept or relation
         currentConceptOrRelationDNs = self.findDatanodes(select = conceptRelation)
         if len(currentConceptOrRelationDNs) > 0:
@@ -1004,9 +1004,9 @@ class DataNode:
                 
         myilpOntSolver = ilpOntSolverFactory.getOntSolverInstance(myOntologyGraphs)
                         
-        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation)
+        return myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation
 
-      def infer(self):
+    def infer(self):
         conceptsRelations = self.__collectConceptsAndRelations(self) 
         
         for c in conceptsRelations:

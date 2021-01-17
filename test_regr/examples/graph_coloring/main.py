@@ -60,7 +60,7 @@ def test_graph_coloring_main():
 
         # call solver
         conceptsRelations = (firestationCity, neighbor)  
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
+        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=True) 
 
         result = []
         for child_node in datanode.getChildDataNodes():

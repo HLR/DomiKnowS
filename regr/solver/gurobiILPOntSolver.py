@@ -37,6 +37,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                 abs(x) == float('inf')  # inf 
                 ) 
                
+    def __getProbability(self, dn, conceptRelation, hardConstrain = None):
+        if hardConstrain == None:
+            hardConstrain = dn.isHardConstrains(conceptRelation)
+    
+        if not dn:
+            currentProbability = [1, 0]
+        elif hardConstrain:
+            currentProbability = [0, 1]
+        else:
+            currentProbability = dn.getAttribute(conceptRelation)
+            
+        return currentProbability
+            
     def createILPVariables(self, m, rootDn, *conceptsRelations):
         x = {}
         Q = None
@@ -47,8 +60,10 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             conceptRelation = _conceptRelation.name
+            hardConstrain = rootDn.isHardConstrains(conceptRelation)
+            
             for dn in dns:
-                currentProbability = dn.getAttribute(conceptRelation)
+                currentProbability = self.__getProbability(dn, conceptRelation, hardConstrain)
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
@@ -96,6 +111,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             conceptRelation = _conceptRelation.name
+            hardConstrain = rootDn.isHardConstrains(conceptRelation)
+
             xkey = '<' + conceptRelation + '>/ILP/x'
             notxkey = '<' + conceptRelation + '>/ILP/notx'
             
@@ -108,7 +125,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(dn.getInstanceID(),conceptRelation,dn.getInstanceID(),'Not_'+conceptRelation,1))
                     
                 # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
-                currentProbability = dn.getAttribute(conceptRelation)
+                currentProbability = self.__getProbability(dn, conceptRelation, hardConstrain)
                 
                 if currentProbability[1] == 1:
                     m.addConstr(dn.getAttribute(xkey) == 1, name='c_%s_%shardConstrain'%(conceptRelation,dn.getInstanceID()))
