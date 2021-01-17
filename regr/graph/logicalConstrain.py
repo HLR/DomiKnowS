@@ -8,7 +8,7 @@ from regr.solver.ilpConfig import ilpConfig
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
-V = namedtuple("V", ['name', 'match', 'v'], defaults= [None, None, None])
+V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LogicalConstrain:
     def __init__(self, *e, p=100):
@@ -109,62 +109,8 @@ class LogicalConstrain:
             return self.__getContext(e.e[0])
         else:
             return e._context
-       
+        
     def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
-        if len(v) < 2:
-            myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
-            return None
-        
-        # input variable names
-        try:
-            vKeys = [e for e in iter(v)]
-        except StopIteration:
-            pass
-        
-        # output variable names and variables
-        zVars = {} # output variables
-        
-        if len(v) == 2:
-            for i in range(len(v[vKeys[0]])):
-                    v1Var = v[vKeys[0]][i]
-                    v2Var = v[vKeys[1]][i]
-                        
-                    if v1Var is None or v2Var is None:
-                        zVars[i] = None
-                    else:
-                        zVars[i] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                        
-            return zVars
-
-# ------------------
-            if resultVariableNames and len(resultVariableNames) and resultVariableNames[0] == resultVariableNames[1]:             
-                for i in range(len(v[vKeys[0]])):
-                    v1Var = v[vKeys[0]][i]
-                    v2Var = v[vKeys[1]][i]
-                        
-                    if v1Var is None or v2Var is None:
-                        zVars[i] = None
-                    else:
-                        zVars[i] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-            else:
-                len1 = len(v[vKeys[0]])
-                
-                if len(v[vKeys[0]]) != len(v[vKeys[1]]):
-                    return None
-                    
-                for i in range(len1):
-                    for j in range(len1):
-                        v1Var = v[vKeys[0]][i]
-                        v2Var = v[vKeys[1]][j]
-                            
-                        if v1Var is None or v2Var is None:
-                            zVars[i*len1 + j] = None
-                        else:
-                            zVars[i*len1 + j] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                            
-        return zVars
-    
-    def oldCreateILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
         if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
         
         if len(v) < 2:
