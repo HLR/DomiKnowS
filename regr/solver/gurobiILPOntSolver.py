@@ -50,6 +50,17 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return currentProbability
             
+    def __findDatanodeList(self, rootDn, rootConcept):
+        dns = rootDn.findDatanodes(select = rootConcept)
+        
+        if not rootDn.isRelation(rootConcept):
+            return dns
+        
+        attrNs = rootDn.getRelationAttrNames(rootConcept)
+        
+        for n in attrNs:
+            pass  
+    
     def createILPVariables(self, m, rootDn, *conceptsRelations):
         x = {}
         Q = None
