@@ -8,7 +8,7 @@ from regr.solver.ilpConfig import ilpConfig
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
-V = namedtuple("V", ['name', 'match', 'v'], defaults= [None, None, None])
+V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LogicalConstrain:
     def __init__(self, *e, p=100):
@@ -121,22 +121,22 @@ class LogicalConstrain:
         except StopIteration:
             pass
         
-        # output variable names and variables
         zVars = {} # output variables
         
         if len(v) == 2:
             for i in range(len(v[vKeys[0]])):
-                    v1Var = v[vKeys[0]][i]
-                    v2Var = v[vKeys[1]][i]
-                        
+                    v1Var = v[vKeys[0]][i][0]
+                    v2Var = v[vKeys[1]][i][0]
+
                     if v1Var is None or v2Var is None:
-                        zVars[i] = None
+                        zVars[i] = [None]
                     else:
-                        zVars[i] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
+                        zVars[i] = [lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)]
                         
             return zVars
 
-# ------------------
+# ------------------ Old - Remove Below
+
             if resultVariableNames and len(resultVariableNames) and resultVariableNames[0] == resultVariableNames[1]:             
                 for i in range(len(v[vKeys[0]])):
                     v1Var = v[vKeys[0]][i]
@@ -308,56 +308,18 @@ class LogicalConstrain:
         return ilpV
     
     def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1): 
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcMethodName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        #if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcMethodName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
         
-        if isinstance(self.e[0], tuple):
-            cVariable = self.e[0]
-                  
-        if not resultVariableNames:
-            resultVariableNames = ('x',)
+        if cVariable not in v:
+            return 
+        
+        existsV = []
+        
+        cVariableV = v[cVariable]
+        for _v in cVariableV:
+            existsVarResult = myIlpBooleanProcessor.countVar(model, *_v, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
             
-        existsV = {}
-        
-        _v = v[0]
-        _vKey = next(iter(_v))
-        _v=next(iter(_v.values()))
-        
-        if cVariable is None:
-            existsVars = []
-            for currentToken in _v:
-                existsVars.append(_v[currentToken])
-        
-            existsVarResult = myIlpBooleanProcessor.countVar(model, *existsVars, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
-                
-            existsV[resultVariableNames] = {}
-            existsV[resultVariableNames][(0,)] = existsVarResult
-        elif isinstance(cVariable, tuple):
-            if len(cVariable) == 1:
-                if cVariable[0] in _vKey:
-                    n1Index = _vKey.index(cVariable[0]) 
-                    
-                    existsVars = {}
-                    for currentToken in _v:
-                        key = (currentToken[:n1Index] + currentToken[n1Index+1:])
-                        
-                        if key in existsVars:
-                            existsVars[key].append(_v[currentToken])
-                        else:
-                            existsVars[key] = [_v[currentToken]]
-                        
-                    existsV[resultVariableNames] = {}     
-                    for k in existsVars:
-                        existsVarResult = myIlpBooleanProcessor.countVar(model, *existsVars[k], onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
-        
-                        existsV[resultVariableNames][k] = existsVarResult
-                else:
-                    pass
-            elif len(cVariable) == 2:
-                pass
-            elif len(cVariable) == 3:
-                pass
-            else:
-                pass
+            existsV.append([existsVarResult])
 
         if  headConstrain:
             if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcMethodName))
@@ -483,7 +445,7 @@ class existsL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         cLimit = 1
 
-        cVariable = self.e[1]
+        cVariable = self.e[2]
         lcMethodName = 'existsL'
         cOperation = '>'
         

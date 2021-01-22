@@ -569,7 +569,7 @@ class DataNode:
 
     def getEdgeDataNode(self, path):
         if len(path) == 0:
-            return None
+            return [self]
 
         if len(path) == 1:
             if path[0] in self.relationLinks:
@@ -584,7 +584,7 @@ class DataNode:
             for cDn in cDns:
                 rDn = cDn.getEdgeDataNode(path[1:])
                 
-                if not rDn:
+                if rDn:
                     rDNS.extend(rDn)
                     
             if rDNS:
@@ -1010,7 +1010,7 @@ class DataNode:
         conceptsRelations = self.__collectConceptsAndRelations(self) 
         
         for c in conceptsRelations:
-            cRoot = self.__findRootConceptOrRelation(c)
+            cRoot = self.findRootConceptOrRelation(c)
             dns = self.findDatanodes(select = cRoot)
             
             if not dns:

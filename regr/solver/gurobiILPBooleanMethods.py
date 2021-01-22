@@ -822,6 +822,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, varsNames))
         
+        # Purge vars
+        varSet = set()
+        for v in var:
+            varSet.add(v)
+            
+        var = varSet
+        
         # Check number of variables
         N = len(var)
         
@@ -881,14 +888,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # ------- If creating variables representing value of OR build of provided variables
         
         # Build new variables name and add it to model
-        countVarName = ""
+        countVarName = logicMethodName
         for currentVar in var:
-            countVarName = countVarName + "or"
             if self.__varIsNumber(currentVar):
                 countVarName += "_%s_"%(currentVar)
             else:
                 countVarName += "_%s_"%(currentVar.VarName)
-
+            
+        countVarName = countVarName[:-1]
         # Create new variable
         varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
         if m: m.update()
@@ -943,7 +950,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         m.addConstr(varSumLinExpr - varCOUNT >= limit-1)
         
         varSumLinExprStr = str(varSumLinExpr)
-        if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,countVarName,limit,countOnes))
+        if self.ifLog: self.myLogger.debug("%s created constrain: %s - varCOUNT %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,limit,countOnes))
              
         if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varCOUNT.VarName))
         return varCOUNT
