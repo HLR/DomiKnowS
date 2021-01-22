@@ -120,7 +120,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptRelation, 'Not_'+conceptRelation))
                     self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(dn.getInstanceID(),conceptRelation,dn.getInstanceID(),'Not_'+conceptRelation,1))
-                    
+                   
+                continue
+            
+             
                 # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
                 currentProbability = self.__getProbability(dn, conceptRelation, hardConstrain)
                 
@@ -475,6 +478,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 mP.optimize()
                 mP.update()
                 
+                print(mP.display())    
+                   
                 endOptimize = datetime.now()
                 elapsedOptimize = endOptimize - startOptimize
     
@@ -544,7 +549,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if ILPV == 1:
                             self.myLogger.info('\"%s\" is \"%s\"'%(dn,c))
 
-                        
+                 
                 # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
                 # Get ILP result from  maxP x 
             else:
