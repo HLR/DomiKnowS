@@ -16,15 +16,5 @@ with Graph('global') as graph:
         
         firestationCity = city(name='firestationCity')
         
-        # Constraints - For each city x either it is a firestationCity or exists a city y which is in neighbor relation to city x and y is a firestationCity
-        #orL(firestationCity, V(name='x'), existsL(andL(neighbor, V(name='y', v=('x')), firestationCity, V(name='z', v=('y', city2.name))), V(name='v'), 'y'), V(name='e'))
-        
-        orL(firestationCity, V(name='x'), existsL(firestationCity, V(name='y', v=('x', neighbor.name,  city2.name)), 'y'), V(name='z'))
-
-        # FirestationCity has at least 2 neighbors
-        #atLeastL(2, ('x',), andL(firestationCity, ('x',), neighbor, ('x', 'y')))
-               
-        # FirestationCity has at most 3 neighbors
-        #atMostL(3, ('x',), andL(firestationCity, ('x',), neighbor, ('x', 'y')))
-        
-        
+        # Constraints - For each city x either it is a firestationCity or exists a city y which is in neighbor relation to city x and y is a firestationCity        
+        orL(firestationCity, V(name='x'), existsL(firestationCity, V(name='y', v=('x', neighbor.name, city2.name)), 'y'), V(name='z'))

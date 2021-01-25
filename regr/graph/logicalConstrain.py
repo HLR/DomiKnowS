@@ -20,7 +20,7 @@ class LogicalConstrain:
         
         self.e = e
 
-        # Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
+        # -- Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
         self.graph = None
         from regr.graph import Concept
         conceptOrLc = None
@@ -121,195 +121,26 @@ class LogicalConstrain:
         except StopIteration:
             pass
         
-        zVars = {} # output variables
+        zVars = [] # output variables
         
         if len(v) == 2:
             for i in range(len(v[vKeys[0]])):
-                    v1Var = v[vKeys[0]][i][0]
-                    v2Var = v[vKeys[1]][i][0]
+                
+                if not (0 <= i < len(v[vKeys[0]])) or  not (0 <= i < len(v[vKeys[1]])):
+                    myLogger.error("%s Logical Constrain created with %i has not equal number of elements in provided sets: %i - %i"%(lcName, len(v[vKeys[0]]), len(v[vKeys[1]])))
+                    break
+                    
+                v1Var = v[vKeys[0]][i][0]
+                v2Var = v[vKeys[1]][i][0]
 
-                    if v1Var is None or v2Var is None:
-                        zVars[i] = [None]
-                    else:
-                        zVars[i] = [lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)]
+                if v1Var is None or v2Var is None:
+                    zVars.append([None])
+                else:
+                    zVars.append([lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)])
                         
             return zVars
-
-# ------------------ Old - Remove Below
-
-            if resultVariableNames and len(resultVariableNames) and resultVariableNames[0] == resultVariableNames[1]:             
-                for i in range(len(v[vKeys[0]])):
-                    v1Var = v[vKeys[0]][i]
-                    v2Var = v[vKeys[1]][i]
-                        
-                    if v1Var is None or v2Var is None:
-                        zVars[i] = None
-                    else:
-                        zVars[i] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-            else:
-                len1 = len(v[vKeys[0]])
-                
-                if len(v[vKeys[0]]) != len(v[vKeys[1]]):
-                    return None
-                    
-                for i in range(len1):
-                    for j in range(len1):
-                        v1Var = v[vKeys[0]][i]
-                        v2Var = v[vKeys[1]][j]
-                            
-                        if v1Var is None or v2Var is None:
-                            zVars[i*len1 + j] = None
-                        else:
-                            zVars[i*len1 + j] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                            
-        return zVars
     
-    def oldCreateILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-        
-        if len(v) < 2:
-            myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
-            return None
-        
-        # input variable names
-        try:
-            vKeys = [next(iter(v[i])) for i in range(len(v))]
-        except StopIteration:
-            pass
-        
-        # output variable names and variables
-        ilpV = {} # output variable names 
-        zVars = {} # output variables
-        ilpKey = None
-        
-        if len(v) == 2:
-            # Depending on size of variable names tuples from input variables
-            if len(vKeys[0]) == 1: # First variables names has one element
-                if len(vKeys[1]) == 1: # Second variables names has one elements
-                    if vKeys[0][0] == vKeys[1][0]: # The same variable names
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][v1]
-                                
-                            if v1Var is None or v2Var is None:
-                                zVars[v1] = None
-                            else:
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else: # Different variables names
-                        ilpKey = (vKeys[0][0], vKeys[1][0])
-                        
-                        for v1 in v[0][vKeys[0]]:
-                            for v2 in v[1][vKeys[1]]:
-                                v1Var = v[0][vKeys[0]][v1]
-                                v2Var = v[1][vKeys[1]][v2]
-                                    
-                                index = (v1[0], v2[0])
-                                
-                                if v1Var is None or v2Var is None:
-                                    zVars[index] = None
-                                else:
-                                    zVars[index] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                elif len(vKeys[1]) == 2: # Second variables names has two elements
-                    if vKeys[0][0] in vKeys[1]:
-                        ilpKey = vKeys[1]
-                            
-                        for v1 in v[1][vKeys[1]]:
-                           
-                            v1Var = v[0][vKeys[0]][(v1[0],)] 
-                            v2Var = v[1][vKeys[1]][v1]
-                                
-                            if v1Var is None or v2Var is None:
-                                zVars[v1] = None
-                            else:
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else:
-                        pass
-                else:
-                    pass # Support only 2 elements now !
-            elif len(vKeys[0]) == 2:  # First variables names has two elements
-                if len(vKeys[1]) == 1:  # Second variables names has one elements
-                    if vKeys[0][0] == vKeys[1][0]: # First name match
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                           
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][(v1[0],)]
-                             
-                            if v1Var is None or v2Var is None:
-                                zVars[v1] = None
-                            else:  
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    elif vKeys[0][1] == vKeys[1][0]: # Second name match
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                           
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][(v1[1],)]
-                            
-                            if v1Var is None or v2Var is None:
-                                zVars[v1] = None
-                            else:  
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else:  # Different variables names
-                        pass
-                elif len(vKeys[1]) == 2:  # Second variables names has two elements
-                    if (vKeys[0] == vKeys[1]): # The same sets of variables
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                            
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][v1]
-                                
-                            if v1Var is None or v2Var is None:
-                                zVars[v1] = None
-                            else:
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else:
-                        pass
-                else:
-                    pass # Support only 2 elements now !
-            else:
-                pass # Support only 2 elements in key now !
-        
-        if len(v) > 2: # Support more then 2 variables  if all are the same
-            equals = True
-            for k in vKeys:
-                if  len(k) > 2 or vKeys[0][0] != k[0]:
-                    equals = False
-                    break
-                
-                if equals:
-                    ilpKey = vKeys[0]
-                    
-                    for v1 in v[0][vKeys[0]]:
-                        _vars = []
-                        for i, _ in enumerate(vKeys):
-                            _vars.append(v[i][vKeys[0]][v1])
-                         
-                        if None in _vars:
-                            zVars[v1] = None
-                        else:
-                            zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
-
-        # Output
-        if ilpKey:
-            ilpV[ilpKey] = zVars
-        else:
-            if ifLog: myLogger.warning("%s Logical Constrain is not supported"%(self.lcName))
-            ilpV[()] = zVars
-
-        if model: model.update()
-
-        return ilpV
-    
-    def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1): 
-        #if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcMethodName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-        
+    def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
         if cVariable not in v:
             return 
         
@@ -317,7 +148,7 @@ class LogicalConstrain:
         
         cVariableV = v[cVariable]
         for _v in cVariableV:
-            existsVarResult = myIlpBooleanProcessor.countVar(model, *_v, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
+            existsVarResult = myIlpBooleanProcessor.countVar(model, *_v, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)
             
             existsV.append([existsVarResult])
 
@@ -379,18 +210,18 @@ class epqL(LogicalConstrain):
     
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
-        
+       
 class eqL(LogicalConstrain):
     def __init__(self, *e):
         LogicalConstrain.__init__(self, *e, p=100)
-      
+        self.headLC = False
+
 class notL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
         lcName = 'notL'
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
               
         if not resultVariableNames:
             resultVariableNames = ('x',)
@@ -427,16 +258,16 @@ class exactL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
+        if isinstance(self.e[3], int):
+            cLimit = self.e[3]
         else:
             cLimit = 1
             
-        cVariable = self.e[1]
+        cVariable = self.e[2]
         lcMethodName = 'exactL'
         cOperation = '='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
 
 class existsL(LogicalConstrain):
     def __init__(self, *e, p=100):
@@ -449,32 +280,32 @@ class existsL(LogicalConstrain):
         lcMethodName = 'existsL'
         cOperation = '>'
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
 
 class atLeastL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
+        if isinstance(self.e[3], int):
+            cLimit = self.e[3]
             
-        cVariable = self.e[1]
+        cVariable = self.e[2]
         lcMethodName = 'atLeastL'
         cOperation = '>'
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
     
 class atMostL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
+        if isinstance(self.e[3], int):
+            cLimit = self.e[3]
             
-        cVariable = self.e[1]
+        cVariable = self.e[2]
         lcMethodName = 'atMostL'
         cOperation = '<'
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))

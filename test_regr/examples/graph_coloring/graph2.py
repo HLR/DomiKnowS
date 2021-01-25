@@ -25,9 +25,7 @@ with Graph('global') as graph2:
         exactL(firestationCity, V(name='x'), 'x', 2, p=55)
         
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
-        #orL(firestationCity, ('x',), existsL(('y',), andL(eqL(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',))))
-
-        orL(firestationCity, V(name='x'), existsL(firestationCity, V(name='y', v=('x', eqL(cityLink, 'neighbor', {1}),  city2.name)), 'y'), V(name='z'))
+        orL(firestationCity, V(name='x'), existsL(firestationCity, V(name='y', v=('x', eqL(cityLink, 'neighbor', {True}),  city2.name)), 'y'), V(name='z'))
 
         # Each city has no more then 4 neighbors which are firestationCity
-        atMostL(andL(city, V(name='x'), firestationCity, V(name='y', v=('x', eqL(cityLink, 'neighbor', {1}), city2.name))), V(name='z'), 'x', 4)
+        atMostL(andL(city, V(name='x'), firestationCity, V(name='y', v=('x', eqL(cityLink, 'neighbor', {True}), city2.name))), V(name='z'), 'z', 4)

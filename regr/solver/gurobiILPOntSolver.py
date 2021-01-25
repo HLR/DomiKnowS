@@ -17,7 +17,7 @@ from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
-from regr.graph import LogicalConstrain, V, eqL
+from regr.graph import LogicalConstrain, V
 from torch import tensor
 
 class gurobiILPOntSolver(ilpOntSolver):
@@ -34,16 +34,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 abs(x) == float('inf')  # inf 
                 ) 
                
-    def __getProbability(self, dn, conceptRelation, hardConstrain = None):
-        if hardConstrain == None:
-            hardConstrain = dn.isHardConstrains(conceptRelation)
-    
+    def __getProbability(self, dn, conceptRelation):
         if not dn:
             currentProbability = [1, 0]
-        elif hardConstrain:
-            currentProbability = [0, 1]
         else:
             currentProbability = dn.getAttribute(conceptRelation)
+            
+        if currentProbability == None:
+            currentProbability = [1,0]
             
         return currentProbability
     
@@ -57,10 +55,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             conceptRelation = _conceptRelation.name
-            hardConstrain = rootDn.isHardConstrains(conceptRelation)
             
             for dn in dns:
-                currentProbability = self.__getProbability(dn, conceptRelation, hardConstrain)
+                currentProbability = self.__getProbability(dn, conceptRelation)
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
@@ -108,7 +105,6 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             conceptRelation = _conceptRelation.name
-            hardConstrain = rootDn.isHardConstrains(conceptRelation)
 
             xkey = '<' + conceptRelation + '>/ILP/x'
             notxkey = '<' + conceptRelation + '>/ILP/notx'
@@ -120,28 +116,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(conceptRelation, 'Not_'+conceptRelation))
                     self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(dn.getInstanceID(),conceptRelation,dn.getInstanceID(),'Not_'+conceptRelation,1))
-                   
-                continue
-            
-             
-                # Add constrain for tokens with probability 1 or 0 - assuming that they are only information not to be classified
-                currentProbability = self.__getProbability(dn, conceptRelation, hardConstrain)
-                
-                if currentProbability[1] == 1:
-                    m.addConstr(dn.getAttribute(xkey) == 1, name='c_%s_%shardConstrain'%(conceptRelation,dn.getInstanceID()))
-                    self.myLogger.debug("Hard constrain for variable \"dataNode %s is concept %s\" == %i"%(dn.getInstanceID(),conceptRelation,1))
-                    
-                    if notxkey in dn.attributes:
-                        m.addConstr(dn.getAttribute(notxkey) == 0, name='c_%s_%shardConstrain'%('Not_'+conceptRelation,dn.getInstanceID()))
-                        self.myLogger.debug("Hard constrain for variable \"dataNode %s is not concept %s\" == %i"%(dn.getInstanceID(),conceptRelation,0))
-                        
-                elif currentProbability[1] == 0:
-                    m.addConstr(dn.getAttribute(xkey) == 0, name='c_%s_%shardConstrain'%(conceptRelation, dn.getInstanceID()))
-                    self.myLogger.debug("Hard constrain for variable \"dataNode %s is concept %s\" == %i"%(dn.getInstanceID(),conceptRelation,0))
-                    
-                    if notxkey in dn.attributes:
-                        m.addConstr(dn.getAttribute(notxkey) == 1, name='c_%s_%shardConstrain'%('Not_'+conceptRelation,dn.getInstanceID()))
-                        self.myLogger.debug("Hard constrain for variable \"dataNode %s is not concept %s\"== %i"%(dn.getInstanceID(),conceptRelation,1))
 
         m.update()
         
@@ -220,7 +194,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
             result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  headLC = True)
             
-            if result != None and bool(list(result.values())[0]):
+            if result != None and isinstance(result, list):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
@@ -231,7 +205,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         for eIndex, e in enumerate(lc.e): 
             if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
-                
                 # Look one step ahead in the parsed logical constrain and get variables names (if present) after the current concept
                 if eIndex + 1 < len(lc.e):
                     if isinstance(lc.e[eIndex+1], V):
@@ -290,6 +263,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for dns in dnsList:
                         _vDns = []
                         for _dn in dns:
+                            if _dn == None:
+                                _vDns.append(None)
+                                continue
+                            
+                            if _dn.ontologyNode.name == conceptName:
+                                _vDns.append(1)
+                                continue
+                            
                             if xPkey not in _dn.attributes:
                                 _vDns.append(None)
                                 continue
@@ -312,45 +293,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     resultVariableNames.append(variableName)
                     lcVariablesDns[variable.name] = dnsList
                     lcVariables[variableName] = vDns
-                elif isinstance(e, eqL):
-                    typeOfConcept, _ = self._typeOfConcept(e.e[0])
-
-                    r = None
-                    if typeOfConcept == 'concept':
-                        r = 1
-                    elif typeOfConcept == 'pair':
-                        r = 2
-                    elif typeOfConcept == 'triplet':                        
-                        r =3
-                    else:
-                        pass
-                    
-                    eqlVariables = {}       
-
-                    if r:
-                        for tokensPermutation in product(tokens, repeat=r):
-                            if isinstance(e.e[2], set):
-                                eqlVariables[tokensPermutation] = 0
-                                for e2 in e.e[2]:
-                                    key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e2)
-                                    if key in hardConstrains:
-                                        if hardConstrains[key][tokensPermutation][1] == 1:
-                                            eqlVariables[tokensPermutation] = 1
-                                            break 
-                            else:
-                                key = str(e.e[0])+ ":" + e.e[1] + ":" + str(e.e[2])
-                                if key in hardConstrains:
-                                    eqlVariables[tokensPermutation] = hardConstrains[key][tokensPermutation][1]
-                    
-                    if eqlVariables is not None: 
-                        _lcVariables = {}
-                        _lcVariables[variablesNames] = eqlVariables
-                            
-                        lcVariables.append(_lcVariables)
-                    else:
-                        self.myLogger.warning('Not found data for %s equality required to build Logical Constrain %s - skipping this constrain'%(e,lc.lcName))
-                        return None
-                    
                 # LogicalConstrain - process recursively 
                 elif isinstance(e, LogicalConstrain):
                     self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(e.lcName, e, [str(e1) for e1 in e.e]))
@@ -651,16 +593,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                lossDict = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = "", lcVariablesDns = {}, headLC = True)
+                lossList = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = "", lcVariablesDns = {}, headLC = True)
                 
-                if not lossDict:
+                if not lossList:
                     continue
                 
-                lossTensor = torch.zeros(len(lossDict))
+                lossTensor = torch.zeros(len(lossList))
                 
-                for i, v in lossDict.items():
-                    if v is not None:
-                        lossTensor[i] = v[0]
+                for i, l in enumerate(lossList):
+                    l = l[0]
+                    if l is not None:
+                        lossTensor[i] = l
                     else:
                         lossTensor[i] = float("nan")
                

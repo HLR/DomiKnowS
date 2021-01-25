@@ -796,9 +796,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if self.ifLog: self.myLogger.debug("EQ returns : %s"%(varEQ.VarName))
         return varEQ
     
-    def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1):
+    def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1, logicMethodName = "COUNT"):
         methodName = "countVar"
-        logicMethodName = "COUNT"
+        #logicMethodName = "COUNT"
         
         if not limitOp:
             if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))
