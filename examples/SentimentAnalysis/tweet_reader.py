@@ -4,7 +4,7 @@ from regr.data.reader import RegrReader
 class SentimentReader(RegrReader):
 
     def gettweetval(self, item):
-        return item['tweet']
+        return [item['tweet']]
 
     def getNegativeLabelval(self, item):
 

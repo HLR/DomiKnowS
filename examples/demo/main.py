@@ -66,8 +66,8 @@ class Reader():
 sentence['text'] = ReaderSensor(keyword='text')
 
 scw = sentence.relate_to(word)[0]
-word[scw.forward, 'text'] = JointSensor(sentence['text'], forward=tokenize)
-word['emb'] = ModuleLearner('text', scw.forward, module=WordEmbedding())
+word[scw, 'text'] = JointSensor(sentence['text'], forward=tokenize)
+word['emb'] = ModuleLearner('text', scw, module=WordEmbedding())
 
 word[people] = ReaderSensor(keyword='peop', label=True)
 word[organization] = ReaderSensor(keyword='org', label=True)
@@ -76,11 +76,11 @@ word[people] = ModuleLearner('emb', module=Classifier())
 word[organization] = ModuleLearner('emb', module=Classifier())
 
 arg1, arg2 = pair.relate_to(word)
-pair[arg1.backward, arg2.backward] = JointSensor(word['text'], forward=make_pair)
-pair['emb'] = FunctionalSensor(arg1.backward('emb'), arg2.backward('emb'), forward=concat)
+pair[arg1.reversed, arg2.reversed] = JointSensor(word['text'], forward=make_pair)
+pair['emb'] = FunctionalSensor(arg1.reversed('emb'), arg2.reversed('emb'), forward=concat)
 pair[work_for] = ModuleLearner('emb', module=Classifier(200))
 
-pair[work_for] = FunctionalReaderSensor(pair[arg1.backward], pair[arg2.backward], keyword='wf', forward=pair_label, label=True)
+pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed], keyword='wf', forward=pair_label, label=True)
 
 #
 # Program
@@ -121,6 +121,6 @@ linearsoftmax = torch.nn.Sequential(
 for node in program.populate(reader, device=device):
     node.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     for word_node in node.getChildDataNodes():
-        print(word_node.getAttribute('index'))
+        print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
