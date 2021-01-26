@@ -6,7 +6,7 @@ import operator
 
 from .. import Sensor
 from ...graph import Property
-
+from ...graph.relation import Transformed, Relation
 
 class TorchSensor(Sensor):
     def __init__(self, *pres, edges=None, label=False, device='auto'):
@@ -124,7 +124,6 @@ class BasicFunctionalSensor(TorchSensor):
         data_item: Dict[str, Any],
         concept=None
     ):
-        from ...graph.relation import Transformed, Relation
         concept = concept or self.concept
         for edge in self.edges:
             for sensor in edge.find(self.non_label_sensor):
@@ -187,7 +186,7 @@ class BasicFunctionalSensor(TorchSensor):
 
 
 class FunctionalSensor(BasicFunctionalSensor):
-    def __init__(self, *pres, batchify=None, ignore=None, cache=dict(), bundle_call=False, **kwargs):
+    def __init__(self, *pres, batchify=None, batchify_output=True, ignore=None, cache=dict(), bundle_call=False, **kwargs):
         super().__init__(*pres, **kwargs)
         self._components = None
         self.bundle_call = bundle_call
@@ -201,6 +200,7 @@ class FunctionalSensor(BasicFunctionalSensor):
             self.ignore = []
         else:
             self.ignore = ignore
+        self.batchify_output = batchify_output
 
     @property
     def components(self):
@@ -260,13 +260,7 @@ class FunctionalSensor(BasicFunctionalSensor):
         data_item: Dict[str, Any],
         force=False,
         override=True):
-        super().update_context(data_item, force=force, override=override and self.components is None)
-
-    def update_context(
-            self,
-            data_item: Dict[str, Any],
-            force=False,
-            override=True):
+        override = override and self.components is None
         if not force and self in data_item:
             # data_item cached results by sensor name. override if forced recalc is needed
             val = data_item[self]
@@ -275,7 +269,7 @@ class FunctionalSensor(BasicFunctionalSensor):
             self.define_inputs()
             val = self.forward_wrap()
 
-            if len(self.batchify):
+            if self.batchify_output:
                 val = functools.reduce(operator.iconcat, val, [])
 
             data_item[self] = val
@@ -405,6 +399,7 @@ class BatchifySensor(BasicFunctionalSensor):
                     for hint in hinter.t():
                         slicer = torch.nonzero(hint).squeeze(-1)
                         final_val.append(values.index_select(0, slicer))
+                    # this requires the format to be compatible with a tensor
                     values = torch.stack(final_val)
                 self.inputs.append(values)
 
@@ -540,6 +535,23 @@ class LabelReaderSensor(ReaderSensor):
     def __init__(self, *args, **kwargs):
         kwargs['label'] = True
         super().__init__(*args, **kwargs)
+
+
+# This sensor makes a basic check for a set of aggregation Functionalities
+# This sensor requires all the pres to be tensor instances
+# This sensor requires the batchify value to be filled
+class FunctionalAggregationSensor(FunctionalSensor):
+    def __init__(self, *pres, torch_operation=None, **kwargs):
+        super().__init__(*pres, batchify_output=False, **kwargs)
+        self.operation = torch_operation
+        if len(self.batchify) == 0:
+            raise (self, "The batchify hint should not be zero for this sensor")
+
+    def forward(self, *inputs, **kwinputs):
+        outputs = tuple()
+        for _input in inputs:
+            outputs = outputs + (self.operation(_input),)
+        return outputs
 
 
 # Out of sync with the new interface
