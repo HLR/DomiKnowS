@@ -119,7 +119,7 @@ linearsoftmax = torch.nn.Sequential(
 # datanode
 #
 for node in program.populate(reader, device=device):
-    node.(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     for word_node in node.getChildDataNodes():
         print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
