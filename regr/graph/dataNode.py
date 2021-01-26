@@ -1611,7 +1611,10 @@ class DataNodeBuilder(dict):
                 if len(existingDnsForConcept) == 0:
                     return
                 elif vInfo.dim == 0:
-                    existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
+                    if isinstance(vInfo.value, Tensor):
+                        existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
+                    else:
+                        existingDnsForConcept[0].attributes[keyDataName] = [vInfo.value]
                 else:
                     for vIndex, v in enumerate(vInfo.value):
                         if isinstance(existingDnsForConcept[vIndex], DataNode): # Check if dataNode
