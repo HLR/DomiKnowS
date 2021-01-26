@@ -162,9 +162,9 @@ class FunctionalSensor(TorchSensor):
             data_item[self.prop] = val  # override state under property name
 
     def fetch_value(self, pre, selector=None, concept=None):
-        from ...graph.relation import Transformed
+        from ...graph.relation import Transformed, Relation
         concept = concept or self.concept
-        if isinstance(pre, str):
+        if isinstance(pre, (str, Relation)):
             return super().fetch_value(pre, selector, concept)
         elif isinstance(pre, (Property, Sensor)):
             return self.context_helper[pre]
