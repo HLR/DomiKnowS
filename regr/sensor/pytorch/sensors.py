@@ -1,6 +1,8 @@
 from typing import Dict, Any
 import os
 import torch
+import functools
+import operator
 
 from .. import Sensor
 from ...graph import Property
@@ -111,7 +113,7 @@ class TorchSensor(Sensor):
         return self.prop.sup
 
 
-class FunctionalSensor(TorchSensor):
+class BasicFunctionalSensor(TorchSensor):
     def __init__(self, *pres, forward=None, build=True, **kwargs):
         super().__init__(*pres, **kwargs)
         self.forward_ = forward
@@ -182,6 +184,114 @@ class FunctionalSensor(TorchSensor):
         if self.forward_ is not None:
             return self.forward_(*inputs, **kwinputs)
         return super().forward()
+
+
+class FunctionalSensor(BasicFunctionalSensor):
+    def __init__(self, *pres, batchify=None, ignore=None, cache=dict(), bundle_call=False, **kwargs):
+        super().__init__(*pres, **kwargs)
+        self._components = None
+        self.bundle_call = bundle_call
+        self.cache = cache
+        self._hash = None
+        if self.batchify is None:
+            self.batchify = []
+        else:
+            self.batchify = batchify
+        if self.ignore is None:
+            self.ignore = []
+        else:
+            self.ignore = ignore
+
+    @property
+    def components(self):
+        return self._components
+
+    def attached(self, sup):
+        from ...graph.relation import Relation
+        from .relation_sensors import EdgeSensor
+        super().attached(sup)
+        if isinstance(self.prop.name, tuple):
+            self.build = False
+            self._components = []
+            for name in self.prop.name:
+                index = len(self.components)
+                if isinstance(name, Relation):
+                    sensor = EdgeSensor(self, forward=lambda x, index=index: x[index], relation=name, cache=self.cache, batchify=self.batchify, ignore=self.ignore)
+                else:
+                    sensor = FunctionalSensor(self, forward=lambda x, index=index: x[index], cache=self.cache, batchify=self.batchify, ignore=self.ignore)
+                self.concept[name] = sensor
+                self.components.append(sensor)
+
+    def __iter__(self):
+        self.build = False
+        if self.components is None:
+            self._components = []
+            while(True):
+                index = len(self.components)
+                sensor = FunctionalSensor(self, forward=lambda x, index=index: x[index])
+                self.components.append(sensor)
+                yield sensor
+        else:
+            yield from self.components
+
+    def __call__(self, *args, **kwargs):
+        value = super().__call__(*args, **kwargs)
+        if self.bundle_call and self.components is not None:
+            for sensor in self.components:
+                sensor(*args, **kwargs)
+        return value
+
+    def fill_hash(self, hash):
+        self._hash = hash
+
+    def update_pre_context(
+            self,
+            data_item: Dict[str, Any],
+            concept=None
+    ) -> Any:
+        super().update_pre_context(data_item, concept)
+        concept = concept or self.concept
+        for batchifier in self.batchify:
+            for sensor in concept[batchifier].find(self.non_label_sensor):
+                sensor(data_item=data_item)
+
+    def update_context(
+        self,
+        data_item: Dict[str, Any],
+        force=False,
+        override=True):
+        super().update_context(data_item, force=force, override=override and self.components is None)
+
+    def update_context(
+            self,
+            data_item: Dict[str, Any],
+            force=False,
+            override=True):
+        if not force and self in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self]
+        else:
+            self.update_pre_context(data_item)
+            self.define_inputs()
+            val = self.forward_wrap()
+
+            if len(self.batchify):
+                val = functools.reduce(operator.iconcat, val, [])
+
+            data_item[self] = val
+        if override and not self.label:
+            data_item[self.prop] = val  # override state under property name
+
+    def forward_wrap(self):
+        if self.cache is not None:
+            try:
+                return self.cache[self._hash]
+            except KeyError:
+                value = super().forward_wrap()
+                self.cache[self._hash] = value
+                return value
+        else:
+            return super().forward_wrap()
 
 
 class ConstantSensor(FunctionalSensor):
@@ -272,6 +382,62 @@ def joint(SensorClass, JointSensorClass=JointSensor):
     if not issubclass(JointSensorClass, JointSensor):
         raise ValueError(f'JointSensorClass ({JointSensorClass}) must be a sub class of JointSensor.')
     return type(f"Joint{SensorClass.__name__}", (SensorClass, JointSensorClass), {})
+
+
+class BatchifySensor(FunctionalSensor):
+
+    def __init__(self, *pres, batchify=True, ignore=(-1,), **kwargs):
+        super().__init__(*pres, **kwargs)
+        self.batchify = batchify
+        self.ignore = ignore
+
+    def define_inputs(self):
+        self.inputs = []
+        if len(self.batchify):
+            hinter = self.fetch_value(self.batchify[0])
+        for pre_num, pre in enumerate(self.pres):
+            values = self.fetch_value(pre)
+            if pre_num in self.ignore:
+                self.inputs.append(values)
+            else:
+                if len(self.batchify):
+                    final_val = []
+                    for hint in hinter.t():
+                        slicer = torch.nonzero(hint).squeeze(-1)
+                        final_val.append(values.index_select(0, slicer))
+                    values = torch.stack(final_val)
+                self.inputs.append(values)
+
+    def update_pre_context(
+            self,
+            data_item: Dict[str, Any],
+            concept=None
+    ) -> Any:
+        super().update_pre_context(data_item, concept)
+        concept = concept or self.concept
+        for batchifier in self.batchify:
+            for sensor in concept[batchifier].find(self.non_label_sensor):
+                sensor(data_item=data_item)
+
+    def update_context(
+            self,
+            data_item: Dict[str, Any],
+            force=False,
+            override=True):
+        if not force and self in data_item:
+            # data_item cached results by sensor name. override if forced recalc is needed
+            val = data_item[self]
+        else:
+            self.update_pre_context(data_item)
+            self.define_inputs()
+            val = self.forward_wrap()
+
+            if len(self.batchify):
+                val = functools.reduce(operator.iconcat, val, [])
+
+            data_item[self] = val
+        if override and not self.label:
+            data_item[self.prop] = val  # override state under property name
 
 
 class Cache:
