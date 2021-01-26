@@ -4,6 +4,5 @@ pytest-cov==2.10.0
 flaky==3.7.0
 torch==1.5.0
 gekko==0.2.7
-allennlp==0.8.5
 transformers==3.0.2
 python-constraint==1.4.0
