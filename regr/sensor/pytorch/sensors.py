@@ -325,7 +325,7 @@ class TriggerPrefilledSensor(PrefilledSensor):
         return super().forward(*args, **kwargs)
 
 
-class JointSensor(FunctionalSensor):
+class JointSensor(BasicFunctionalSensor):
     def __init__(self, *args, bundle_call=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._components = None
@@ -384,7 +384,7 @@ def joint(SensorClass, JointSensorClass=JointSensor):
     return type(f"Joint{SensorClass.__name__}", (SensorClass, JointSensorClass), {})
 
 
-class BatchifySensor(FunctionalSensor):
+class BatchifySensor(BasicFunctionalSensor):
 
     def __init__(self, *pres, batchify=True, ignore=(-1,), **kwargs):
         super().__init__(*pres, **kwargs)
@@ -480,7 +480,7 @@ class TorchCache(Cache):
             raise KeyError(f'{name} (e.message)')
 
 
-class CacheSensor(FunctionalSensor):
+class CacheSensor(BasicFunctionalSensor):
     def __init__(self, *args, cache=dict(), **kwargs):
         super().__init__(*args, **kwargs)
         self.cache = cache
@@ -542,6 +542,7 @@ class LabelReaderSensor(ReaderSensor):
         super().__init__(*args, **kwargs)
 
 
+# Out of sync with the new interface
 class NominalSensor(TorchSensor):
     def __init__(self, *pres, vocab=None, edges=None, device='auto'):
         super().__init__(*pres, edges=edges, device=device)
@@ -599,7 +600,7 @@ class ModuleSensor(FunctionalSensor):
         return self.module(*inputs)
 
 
-class TorchEdgeSensor(FunctionalSensor):
+class TorchEdgeSensor(BasicFunctionalSensor):
     modes = ("forward", "backward", "selection")
 
     def __init__(self, *pres, to, mode="forward", edges=None, forward=None, label=False, device='auto'):
@@ -687,7 +688,8 @@ class TorchEdgeSensor(FunctionalSensor):
 #         except (TypeError, RuntimeError, ValueError):
 #             return self.data
 
-        
+
+#Out of sync
 class AggregationSensor(TorchSensor):
     def __init__(self, *pres, edges, map_key, deafault_dim=480, device='auto'):
         super().__init__(*pres, edges=edges, device=device)
@@ -866,7 +868,7 @@ class SpacyTokenizorSensor(FunctionalSensor):
         return list(tokens)
 
 
-class BertTokenizorSensor(FunctionalSensor):
+class BertTokenizorSensor(BasicFunctionalSensor):
     from transformers import BertTokenizer
     TRANSFORMER_MODEL = 'bert-base-uncased'
     tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
