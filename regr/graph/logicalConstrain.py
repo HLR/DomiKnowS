@@ -223,32 +223,28 @@ class notL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
         lcName = 'notL'
               
-        if not resultVariableNames:
-            resultVariableNames = ('x',)
-            
-        notV = {}
+        notV = []
                     
         if len(v) > 1:
             myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(v)))
             return notV
-        
-        _v = v[0]
-        _vKey = next(iter(_v))
-        _v=next(iter(_v.values()))
-        
-        notV[resultVariableNames] = {}
-
-        for currentToken in _v:
-            currentILPVar = _v[currentToken]
+    
+        for currentILPVars in v.values():
+            if not currentILPVars:
+                notV.append([None])
+                
+            if len(currentILPVars) > 1:
+                myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(currentILPVars)))
+                return notV
+                
+            currentILPVar = currentILPVars[0]
             
-            notVar = myIlpBooleanProcessor.notVar(model, currentILPVar, onlyConstrains = headConstrain)
-            notV[resultVariableNames][currentToken] = notVar
+            notVar = myIlpBooleanProcessor.notVar(model, *currentILPVar, onlyConstrains = headConstrain)
+            notV.append([notVar])
         
         if headConstrain:
             if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
-        else:
-            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variable created: %s"%(notVar.VarName))
-            
+        
         model.update()
         
         return notV

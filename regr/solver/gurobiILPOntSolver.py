@@ -202,6 +202,7 @@ class gurobiILPOntSolver(ilpOntSolver):
     def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
         resultVariableNames = []
         lcVariables = {}
+        lcNo = 0
         
         for eIndex, e in enumerate(lc.e): 
             if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
@@ -210,11 +211,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if isinstance(lc.e[eIndex+1], V):
                         variable = lc.e[eIndex+1]
                     else:
-                        self.myLogger.error('The element of logical constrain %s after %s is of type %s but should be variable of type %s'%(lc.lcName, e, type(lc.e[eIndex+1]), V))
-                        return None
+                        if isinstance(e, LogicalConstrain):
+                            variable = V(name="lc" + str(lcNo))
+                            lcNo =+ 1
+                        else:
+                            self.myLogger.error('The element of logical constrain %s after %s is of type %s but should be variable of type %s'%(lc.lcName, e, type(lc.e[eIndex+1]), V))
+                            return None
                 else:
-                    self.myLogger.error('The element %s of logical constrain %s has no variable'%(e, lc.lcName))
-                    return None
+                    if isinstance(e, LogicalConstrain):
+                        variable = V(name="lc" + str(lcNo))
+                        lcNo =+ 1
+                    else:
+                        self.myLogger.error('The element %s of logical constrain %s has no variable'%(e, lc.lcName))
+                        return None
                     
                 if variable.name:
                     variableName = variable.name
