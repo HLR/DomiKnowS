@@ -1,4 +1,5 @@
 import sys
+sys.path.append("../..")
 import torch
 from data.reader import EmailSpamReader
 
@@ -7,7 +8,7 @@ sys.path.append('../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import PoiModel
@@ -27,7 +28,7 @@ def model_declaration():
     email['subject_rep'] = SentenceRepSensor('subject')
     email['body_rep'] = SentenceRepSensor('body')
     email['forward_presence'] = ForwardPresenceSensor('forward_body')
-    email['features'] = ConcatSensor('subject_rep', 'body_rep', 'forward_presence')
+    email['features'] = FunctionalSensor('subject_rep', 'body_rep', 'forward_presence', forward=lambda x: torch.cat(x, dim=-1))
     email[Spam] = ModuleLearner('features', module=nn.Linear(601, 2))
     email[Regular] = ModuleLearner('features', module=nn.Linear(601, 2))
     email[Spam] = ReaderSensor(keyword='Spam', label=True)
