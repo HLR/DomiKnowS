@@ -380,10 +380,11 @@ def joint(SensorClass, JointSensorClass=JointSensor):
 
 class BatchifySensor(BasicFunctionalSensor):
 
-    def __init__(self, *pres, batchify=True, ignore=(-1,), **kwargs):
+    def __init__(self, *pres, batchify=True, batchify_output=True, ignore=(-1,), **kwargs):
         super().__init__(*pres, **kwargs)
         self.batchify = batchify
         self.ignore = ignore
+        self.batchify_output = batchify_output
 
     def define_inputs(self):
         self.inputs = []
@@ -427,7 +428,7 @@ class BatchifySensor(BasicFunctionalSensor):
             self.define_inputs()
             val = self.forward_wrap()
 
-            if len(self.batchify):
+            if self.batchify_output:
                 val = functools.reduce(operator.iconcat, val, [])
 
             data_item[self] = val
