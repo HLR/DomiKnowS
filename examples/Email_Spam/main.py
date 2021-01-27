@@ -3,9 +3,6 @@ sys.path.append("../..")
 import torch
 from data.reader import EmailSpamReader
 
-sys.path.append('.')
-sys.path.append('../..')
-
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor
