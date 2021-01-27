@@ -158,7 +158,7 @@ class FunctionalSensor(TorchSensor):
             val = self.forward_wrap()
 
             data_item[self] = val
-        if override and not self.label:
+        if (self.prop not in data_item) or (override and not self.label):
             data_item[self.prop] = val  # override state under property name
 
     def fetch_value(self, pre, selector=None, concept=None):
