@@ -28,9 +28,13 @@ def model_declaration():
     email['subject_rep'] = SentenceRepSensor('subject')
     email['body_rep'] = SentenceRepSensor('body')
     email['forward_presence'] = ForwardPresenceSensor('forward_body')
-    email['features'] = FunctionalSensor('subject_rep', 'body_rep', 'forward_presence', forward=lambda x: torch.cat(x, dim=-1))
-    email[Spam] = ModuleLearner('features', module=nn.Linear(601, 2))
-    email[Regular] = ModuleLearner('features', module=nn.Linear(601, 2))
+    def concat(*x): 
+        output = torch.cat(x, dim=-1)
+        print(output.shape)
+        return output
+    email['features'] = FunctionalSensor('subject_rep', 'body_rep', 'forward_presence', forward=concat)
+    email[Spam] = ModuleLearner('features', module=nn.Linear(193, 2))
+    email[Regular] = ModuleLearner('features', module=nn.Linear(193, 2))
     email[Spam] = ReaderSensor(keyword='Spam', label=True)
     email[Regular] = ReaderSensor(keyword='Regular', label=True)
 

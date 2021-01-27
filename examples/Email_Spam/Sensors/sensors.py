@@ -17,6 +17,6 @@ class SentenceRepSensor(FunctionalSensor):
 class ForwardPresenceSensor(FunctionalSensor):
     def forward(self, forward_body) -> Any:
         if forward_body:
-            return torch.ones(1).to(self.device)
+            return torch.ones(1,1).to(self.device)
         else:
-            return torch.zeros(1).to(self.device)
+            return torch.zeros(1,1).to(self.device)
