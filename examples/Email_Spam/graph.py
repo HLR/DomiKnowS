@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, V
 
 Graph.clear()
 Concept.clear()
@@ -13,5 +13,5 @@ with Graph('global') as graph:
     Regular = email(name='regular')
 
     # The constraint of
-    orL(andL(notL(Spam, ('x', )), Regular, ('x', )), andL(notL(Regular, ('x', )), Spam, ('x', )))
+    orL(andL(notL(Spam, V(name='x')), Regular, V(name='y')), andL(notL(Regular, V(name='z')), Spam, V(name='t')))
 

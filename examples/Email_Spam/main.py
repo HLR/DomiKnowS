@@ -1,6 +1,8 @@
 import sys
 import torch
 from data.reader import EmailSpamReader
+import os
+
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -46,7 +48,9 @@ def test_main():
 
     lbp = model_declaration()
 
-    dataset = EmailSpamReader(file='data/train', type="folder")  # Adding the info on the reader
+    pwd = os.getcwd()
+    
+    dataset = EmailSpamReader(file='examples/Email_Spam/data/train', type="folder")  # Adding the info on the reader
 
     lbp.train(dataset, train_epoch_num=30, Optim=torch.optim.Adam, device='auto')
 
