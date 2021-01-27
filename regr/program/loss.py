@@ -111,3 +111,9 @@ class BCEWithLogitsIMLoss(torch.nn.Module):
             return loss.sum
 
         raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
+
+
+class NBCrossEntropyIMLoss(BCEWithLogitsIMLoss):
+    def forward(self, input, inference, target, weight=None):
+        target = torch.stack((1-target, target), dim=-1)
+        return super().forward(input, inference, target, weight=weight)
