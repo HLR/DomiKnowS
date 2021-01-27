@@ -524,6 +524,10 @@ class ReaderSensor(ConstantSensor):
             return super().forward(self.data)
 
 
+class FunctionalSensor1(BasicFunctionalSensor, CacheSensor, JointSensor, BatchifySensor):
+    pass
+
+
 class FunctionalReaderSensor(ReaderSensor):
     def forward(self, *args, **kwargs) -> Any:
         if isinstance(self.keyword, tuple) and isinstance(self.data, tuple):
