@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../..")
+
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram, IMLProgram
