@@ -33,7 +33,7 @@ with Graph('example') as graph:
     (arg1, arg2) = pair.has_a(arg1=word, arg2=word)
     work_for = pair(name='work_for')
 
-    nandL(people, V(name='x'), organization, V(name='y', v=('x')))
+    nandL(people, organization)
     ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', arg1)), organization, V(name='y', v=('x', arg2))))
 
 SAMPLE = {

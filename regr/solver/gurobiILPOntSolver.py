@@ -59,6 +59,11 @@ class gurobiILPOntSolver(ilpOntSolver):
             for dn in dns:
                 currentProbability = self.__getProbability(dn, conceptRelation)
                 
+                if currentProbability == None or currentProbability.dim() == 0 or len(currentProbability) < 2:
+                    self.myLogger.warning("Probability not provided for variable concept %s and dataNode %s - skipping it"%(conceptRelation,dn.getInstanceID()))
+
+                    continue
+                
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
                     self.myLogger.info("Probability is %f for variable concept %s and dataNode %s - skipping it"%(currentProbability[1],conceptRelation,dn.getInstanceID()))
@@ -203,27 +208,23 @@ class gurobiILPOntSolver(ilpOntSolver):
         resultVariableNames = []
         lcVariables = {}
         lcNo = 0
+        firstV = True
         
         for eIndex, e in enumerate(lc.e): 
             if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
                 # Look one step ahead in the parsed logical constrain and get variables names (if present) after the current concept
-                if eIndex + 1 < len(lc.e):
-                    if isinstance(lc.e[eIndex+1], V):
-                        variable = lc.e[eIndex+1]
-                    else:
-                        if isinstance(e, LogicalConstrain):
-                            variable = V(name="lc" + str(lcNo))
-                            lcNo =+ 1
-                        else:
-                            self.myLogger.error('The element of logical constrain %s after %s is of type %s but should be variable of type %s'%(lc.lcName, e, type(lc.e[eIndex+1]), V))
-                            return None
+                if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
+                    variable = lc.e[eIndex+1]
                 else:
                     if isinstance(e, LogicalConstrain):
-                        variable = V(name="lc" + str(lcNo))
+                        variable = V(name="_lc" + str(lcNo))
                         lcNo =+ 1
                     else:
-                        self.myLogger.error('The element %s of logical constrain %s has no variable'%(e, lc.lcName))
-                        return None
+                        if firstV:
+                            variable = V(name="_x" )
+                            firstV = False
+                        else:
+                            variable = V(name="_x", v="_x")
                     
                 if variable.name:
                     variableName = variable.name

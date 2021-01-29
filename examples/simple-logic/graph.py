@@ -14,4 +14,4 @@ with Graph(name='global') as graph:
     y0 = x(name='y0')
     y1 = x(name='y1')
     
-    orL(andL(y0,  V(name='x'), notL(y1,  V(name='y'))), andL(notL(y0,  V(name='z')), y1,  V(name='t')))
+    orL(andL(y0, notL(y1)), andL(notL(y0), y1))

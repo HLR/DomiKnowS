@@ -52,7 +52,7 @@ def main():
     print('Test loss:', program.model.loss)
 
     for world_node in program.populate(data):
-        world_node.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        world_node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         x_node = world_node.getChildDataNodes(x)[0]
         print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
         print('y1:', torch.softmax(x_node.getAttribute('<y1>'), dim=-1))
