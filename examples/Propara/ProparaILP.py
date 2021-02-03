@@ -270,6 +270,8 @@ def main():
 #         print('datanode:', datanode)
         datanode.inferILPConstrains(create, destroy, other, non_existence, known_loc, unknown_loc, fun=None)
         final_output = {"id": datanode.getAttribute('id'), "steps":[], "actions":[], "steps_before": [], "actions_before": []}
+        number_of_create = 0
+        number_of_destroy = 0
         for step_info in datanode.findDatanodes(select = step):
             k = step_info.getAttribute(known_loc, "ILP").item()
             u = step_info.getAttribute(unknown_loc, "ILP").item()
@@ -280,5 +282,11 @@ def main():
             d = action_info.getAttribute(destroy, "ILP").item()
             o = action_info.getAttribute(other, "ILP").item()
             assert c + d + o == 1
+            if c == 1:
+                number_of_create += 1
+            if d == 1:
+                number_of_destroy += 1
+        assert number_of_create <= 1
+        assert number_of_destroy <= 1
 
 main()

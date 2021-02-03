@@ -1,6 +1,5 @@
 import sys
-
-sys.path.append('.')
+sys.path.append("../..")
 
 import torch
 
@@ -52,8 +51,8 @@ twit['emb'] = SentenceRepSensor('raw')
 class Net(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.l1 = torch.nn.Linear(96,128)
-        self.l2 = torch.nn.Linear(128,2)
+        self.l1 = torch.nn.Linear(300,300)
+        self.l2 = torch.nn.Linear(300,2)
     def forward(self, x):
         a1 = self.l1(x)
         a1 = torch.nn.functional.relu(a1)

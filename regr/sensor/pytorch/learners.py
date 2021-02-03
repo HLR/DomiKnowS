@@ -37,7 +37,7 @@ class TorchLearner(Learner, FunctionalSensor):
     @device.setter
     def device(self, device):
         if self.model is not None:
-            self.parameters.to(deivce)
+            self.parameters.to(device)
         self._device = device
 
     def update_parameters(self):
