@@ -58,7 +58,7 @@ def test_main():
         print('datanode:', datanode)
         print('Spam:', datanode.getAttribute(Spam))
         print('Regular:', datanode.getAttribute(Regular))
-        datanode.inferILPConstrains(Spam, Regular, epsilon=None)
+        datanode.inferILPResults(Spam, Regular, epsilon=None)
         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
 

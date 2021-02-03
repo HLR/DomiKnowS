@@ -59,7 +59,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             for dn in dns:
                 currentProbability = self.__getProbability(dn, conceptRelation)
                 
-                if currentProbability == None or currentProbability.dim() == 0 or len(currentProbability) < 2:
+                if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
                     self.myLogger.warning("Probability not provided for variable concept %s and dataNode %s - skipping it"%(conceptRelation,dn.getInstanceID()))
 
                     continue
