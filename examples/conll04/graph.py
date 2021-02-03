@@ -25,7 +25,7 @@ with Graph('global') as graph:
         other = phrase(name='other')
         o = phrase(name='O')
 
-        nandL(people, organization, location, other, o)
+        # nandL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
@@ -33,9 +33,8 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
-        # LC1
-        ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        # ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
+        # ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
+        # ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
+        # ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
