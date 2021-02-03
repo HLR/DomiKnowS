@@ -32,7 +32,10 @@ with Graph('global') as graph:
 
         disjoint(people, organization, location, other, o)
 
-        nandL(people, V(name='x'), organization, V(name='y'))
+        nandL(people, organization)
+        
+        #nandL(people, organization, location, other, o)
+
         #for c1, c2 in permutations((people, organization, location, other, o), r=2):
         #nandL(c1, c2)
 

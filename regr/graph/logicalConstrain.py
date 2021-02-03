@@ -123,22 +123,33 @@ class LogicalConstrain:
         
         zVars = [] # output variables
         
-        if len(v) == 2:
-            for i in range(len(v[vKeys[0]])):
-                
-                if not (0 <= i < len(v[vKeys[0]])) or  not (0 <= i < len(v[vKeys[1]])):
+        for i in range(len(v[vKeys[0]])):
+            var = []
+            error = False
+            varIsNone = False
+            
+            for k in vKeys:
+                if not (0 <= i < len(v[k])):
                     myLogger.error("%s Logical Constrain created with %i has not equal number of elements in provided sets: %i - %i"%(lcName, len(v[vKeys[0]]), len(v[vKeys[1]])))
+                    error = True
                     break
-                    
-                v1Var = v[vKeys[0]][i][0]
-                v2Var = v[vKeys[1]][i][0]
-
-                if v1Var is None or v2Var is None:
+                
+                cVar = v[k][i][0]
+                
+                if cVar is None:
                     zVars.append([None])
-                else:
-                    zVars.append([lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)])
-                        
-            return zVars
+                    varIsNone = True
+                    break
+            
+                var.append(v[k][i][0])
+                
+            if error: break
+            
+            if varIsNone: continue
+                
+            zVars.append([lcFun(model, *var, onlyConstrains = headConstrain)])
+        
+        return zVars
     
     def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
         if cVariable not in v:

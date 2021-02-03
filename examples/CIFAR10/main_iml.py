@@ -206,7 +206,7 @@ def main():
         for label in label_list:
             print(label, datanode.getAttribute(eval(label)).softmax(-1))
 
-        datanode.inferILPConstrains('dog', 'truck', 'airplane',
+        datanode.inferILPResults('dog', 'truck', 'airplane',
                                     'automobile', 'bird', 'cat',
                                     'deer', 'frog', 'horse', 'ship',fun=None)
         print('----------after ILP---------')
