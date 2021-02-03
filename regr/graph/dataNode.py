@@ -16,6 +16,7 @@ from .property import Property
 from .concept import Concept
 from .relation import Contains
 from future.builtins.misc import isinstance
+from _ast import If
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -577,8 +578,13 @@ class DataNode:
 
         # Path has single element
         if len(path) == 1:
-            if path[0] in self.relationLinks:
-                return self.relationLinks[path[0]]
+            if isinstance(path[0], str):
+                path0 = path[0]
+            else:
+                path0 = path[0].name
+                
+            if path0 in self.relationLinks:
+                return self.relationLinks[path0]
             else:
                 return [None]
         
@@ -600,7 +606,12 @@ class DataNode:
         if isinstance(path[0], eqL):
             _cDns = []
             for cDn in cDns:
-                if path[0].e[1] in cDn.attributes and cDn.attributes[path[0].e[1]].item() in path[0].e[2]:
+                if isinstance(path[0].e[1], str):
+                    path0e1 = path[0].e[1]
+                else:
+                    path0e1 = path[0].e[1].name
+                    
+                if path0e1 in cDn.attributes and cDn.attributes[path0e1].item() in path[0].e[2]:
                     _cDns.append(cDn)
                     
             cDns = _cDns

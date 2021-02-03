@@ -207,7 +207,7 @@ class gurobiILPOntSolver(ilpOntSolver):
     def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
         resultVariableNames = []
         lcVariables = {}
-        lcNo = 0
+        vNo = 0
         firstV = True
         
         for eIndex, e in enumerate(lc.e): 
@@ -217,22 +217,30 @@ class gurobiILPOntSolver(ilpOntSolver):
                     variable = lc.e[eIndex+1]
                 else:
                     if isinstance(e, LogicalConstrain):
-                        variable = V(name="_lc" + str(lcNo))
-                        lcNo =+ 1
+                        variable = V(name="_lc" + str(vNo))
+                        vNo =+ 1
                     else:
                         if firstV:
                             variable = V(name="_x" )
                             firstV = False
                         else:
-                            variable = V(name="_x", v="_x")
+                            variable = V(name="_x" + str(vNo), v = ("_x",))
+                            vNo =+ 1
                     
                 if variable.name:
                     variableName = variable.name
                 else:
                     variableName = "V" + str(eIndex)
-                            
-                # -- Concept 
-                if isinstance(e, Concept):
+                    
+                if variableName in lcVariables:
+                    newvVariableName = "_x" + str(vNo)
+                    vNo =+ 1
+                    
+                    resultVariableNames.append(newvVariableName)
+                    lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
+                    lcVariables[newvVariableName] = lcVariables[variableName]
+                    
+                elif isinstance(e, Concept): # -- Concept 
                     conceptName = e.name
                     xPkey = '<' + conceptName + ">" + key
 
@@ -303,8 +311,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     resultVariableNames.append(variableName)
                     lcVariablesDns[variable.name] = dnsList
                     lcVariables[variableName] = vDns
-                # LogicalConstrain - process recursively 
-                elif isinstance(e, LogicalConstrain):
+                
+                elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(e.lcName, e, [str(e1) for e1 in e.e]))
                     vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False)
                     

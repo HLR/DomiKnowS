@@ -34,7 +34,7 @@ with Graph('example') as graph:
     work_for = pair(name='work_for')
 
     nandL(people, organization)
-    ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', arg1)), organization, V(name='y', v=('x', arg2))))
+    ifL(work_for, V(name='x'), andL(people, V(v=('x', arg1)), organization, V(v=('x', arg2))))
 
 SAMPLE = {
     'text': ['John works for IBM'],

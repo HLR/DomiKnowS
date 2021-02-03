@@ -13,5 +13,5 @@ with Graph('global') as graph:
     Regular = email(name='regular')
 
     # The constraint of
-    orL(andL(notL(Spam, V(name='x')), Regular, V(name='y')), andL(notL(Regular, V(name='z')), Spam, V(name='t')))
+    orL(andL(notL(Spam), Regular, andL(notL(Regular), Spam)))
 

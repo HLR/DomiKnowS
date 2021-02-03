@@ -1,8 +1,5 @@
-from itertools import permutations
-
 from regr.graph import Graph, Concept, Relation
-from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, eqL, atLeastL, atMostL, exactL, V
+from regr.graph.logicalConstrain import orL, andL, existsL, eqL, atLeastL, atMostL, exactL, V
 
 
 Graph.clear()
