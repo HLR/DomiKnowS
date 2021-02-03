@@ -19,7 +19,7 @@ def model():
 
     def merge_phrase(phrase_text):
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
-    sentence[rel_sentence_contains_phrase.reversed, 'text'] = JointSensor(phrase['text'], forward=merge_phrase)
+    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
     word[rel_sentence_contains_word, 'text'] = JointSensor(sentence, )
 
@@ -32,7 +32,8 @@ def main():
     reader = SingletonDataLoader('data/conll04.corp')
 
     for node in program.populate(reader, device='auto'):
-        node
+        from graph import graph, sentence, word, phrase, pair
+        assert node.ontologyNode is sentence
 
 
 if __name__ == '__main__':
