@@ -497,6 +497,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         maxPVar = dnAtt[xPkey][maxP]
                         solution = maxPVar.X
+                        if solution == 0:
+                            solution = 0
+                        elif solution == 1: 
+                            solution = 1
+                            
                         dnAtt[ILPkey] = torch.tensor([solution], device=device)
                         dnAtt[xkey] = maxPVar
                         

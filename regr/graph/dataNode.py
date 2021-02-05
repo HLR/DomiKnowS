@@ -3,7 +3,6 @@ import torch.cuda
 import torch
 from collections import OrderedDict, namedtuple
 import time
-from itertools import product
 from .dataNodeConfig import dnConfig 
 from torch.tensor import Tensor
 
@@ -14,9 +13,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
-from .relation import Contains
 from future.builtins.misc import isinstance
-from _ast import If
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -371,7 +368,7 @@ class DataNode:
             
         return conceptNames, relationNames
     
-    # Find dataNodes in data graph of the given concept 
+    # Find dataNodes in data graph for the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
         # If no DataNodes provided use self
         if not depth and dns is None:
@@ -560,7 +557,7 @@ class DataNode:
         if isinstance(relationConcept, str):
             relationConcept = self.__findConcept(relationConcept)
             
-        # Does this concept or elation has parent (through _isA)
+        # Does this concept or relation has parent (through _isA)
         for _isA in relationConcept.is_a():
             _relationConcept = _isA.dst
             
@@ -737,48 +734,6 @@ class DataNode:
 
         return conceptsAndRelations
                     
-    def infer(self):
-        conceptsRelations = self.__collectConceptsAndRelations(self) 
-        
-        for c in conceptsRelations:
-            cRoot = self.findRootConceptOrRelation(c)
-            dns = self.findDatanodes(select = cRoot)
-            
-            if not dns:
-                continue
-            
-            vs = []
-            
-            for dn in dns:
-                v = dn.getAttribute(c)
-                
-                if v is not None:
-                    vs.append(v[1])
-                else:
-                    vs.append(None)         
-            
-            t = torch.FloatTensor(vs)
-            t[torch.isnan(t)] = 0 # NAN  -> 0
-            
-            vM = torch.argmax(t).item() # argmax
-            
-            # Elements for softmax
-            tExp = torch.exp(t)
-            tExpSum = torch.sum(tExp).item()
-            
-            keyArgmax = "<" + c + ">/argmax"
-            keySoftMax = "<" + c + ">/softmax"
-            
-            # Add argmax and softmax to DataNodes
-            for dn in dns:
-                if dn.getInstanceID() == vM:
-                    dn.attributes[keyArgmax] = 1
-                else:
-                    dn.attributes[keyArgmax] = 0
-                
-                dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
-                dn.attributes[keySoftMax] = dnSoftmax.item()
-
     def __getILPsolver(self, conceptsRelations = []):
         
         _conceptsRelations = []
@@ -806,7 +761,75 @@ class DataNode:
         return myilpOntSolver, _conceptsRelations
     
     #----------------- Solver methods
+
+    # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
+    def collectInferedResults(self, concept, inferKey):
+        rootConcept = self.findRootConceptOrRelation(concept)
+        
+        if not rootConcept:
+            return []
+        
+        rootConceptDns = self.findDatanodes(select = rootConcept)
+        
+        if not rootConceptDns:
+            return []
+        
+        keys = [concept, inferKey]
+        
+        collectAttributeList = [dn.getAttribute(*keys).item() for dn in rootConceptDns]
+        
+        return collectAttributeList          
     
+    # Calculate argMax and softMax
+    def infer(self):
+        conceptsRelations = self.__collectConceptsAndRelations(self) 
+        
+        for c in conceptsRelations:
+            cRoot = self.findRootConceptOrRelation(c)
+            dns = self.findDatanodes(select = cRoot)
+            
+            if not dns:
+                continue
+            
+            vs = []
+            
+            for dn in dns:
+                v = dn.getAttribute(c)
+                
+                if v is None:
+                    vs = []
+                    break
+                elif not torch.is_tensor(v) or len(v.size()) != 1 or v.size()[0] != 2:
+                    vs = []
+                    break
+                else:
+                    vs.append(v[1])
+            
+            if not vs:
+                continue
+            
+            t = torch.FloatTensor(vs)
+            t[torch.isnan(t)] = 0 # NAN  -> 0
+            
+            vM = torch.argmax(t).item() # argmax
+            
+            # Elements for softmax
+            tExp = torch.exp(t)
+            tExpSum = torch.sum(tExp).item()
+            
+            keyArgmax = "<" + c + ">/argmax"
+            keySoftMax = "<" + c + ">/softmax"
+            
+            # Add argmax and softmax to DataNodes
+            for dn in dns:
+                if dn.getInstanceID() == vM:
+                    dn.attributes[keyArgmax] = torch.tensor([1])
+                else:
+                    dn.attributes[keyArgmax] = torch.tensor([0])
+                
+                dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
+                dn.attributes[keySoftMax] = torch.tensor([dnSoftmax.item()])
+
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
@@ -834,8 +857,8 @@ class DataNode:
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
 
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)
-    
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)    
+        
     def verifySelection(self, *_conceptsRelations):
         if not _conceptsRelations:
             _conceptsRelations = ()

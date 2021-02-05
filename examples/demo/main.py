@@ -119,8 +119,20 @@ linearsoftmax = torch.nn.Sequential(
 # datanode
 #
 for node in program.populate(reader, device=device):
+    node.infer()
     node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     for word_node in node.getChildDataNodes():
         print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
+    
+    print("\nILP results for people - %s"%(node.collectInferedResults(people, "ILP")))
+    print("SofMax results for people - %s"%(node.collectInferedResults(people, "softmax")))
+    print("ArgMax results for people - %s"%(node.collectInferedResults(people, "argmax")))
+
+
+    print("\nILP results for organization - %s"%(node.collectInferedResults(organization, "ILP")))
+    print("SofMax results for organization - %s"%(node.collectInferedResults(organization, "softmax")))
+    print("ArgMax results for organization - %s"%(node.collectInferedResults(organization, "argmax")))
+
+
