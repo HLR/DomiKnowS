@@ -975,8 +975,8 @@ class DataNodeBuilder(dict):
 
         if (isinstance(sensor, EdgeSensor)):
             
-            conceptInfo['relationType'] = type(sensor.relation)
             conceptInfo['relationName'] = sensor.relation.name
+            conceptInfo['relationTypeName'] = str(type(sensor.relation))
                     
             if 'relationAttrs' in conceptInfo:
                 conceptInfo['relationAttrsGraph'] = conceptInfo['relationAttrs']
@@ -1197,7 +1197,7 @@ class DataNodeBuilder(dict):
         elif vInfo.dim == 2:
             _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
             
-            if "relationType" in conceptInfo and conceptInfo['relationType'] == Contains and "relationMode" in conceptInfo:
+            if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
@@ -1245,7 +1245,7 @@ class DataNodeBuilder(dict):
         existingDnsForConcept = self.findDataNodesInBuilder(select = conceptName) # Try to get DataNodes of the current concept
 
         # Check if this is the contain relation update or attribute update
-        if "relationType" in conceptInfo and conceptInfo['relationType'] == Contains and "relationMode" in conceptInfo:
+        if "relationMode" in conceptInfo:
             _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
 
             relatedDnsType = conceptInfo["relationAttrs"]['src']
