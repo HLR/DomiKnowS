@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:mlgraph="http://ontology.ihmc.us/ML/MLGraph.owl#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:emr="http://ontology.ihmc.us/ML/EMR.owl#"
+  xml:base="http://ontology.ihmc.us/ML/EMR.owl">
+  <owl:Ontology rdf:about="">
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/PhraseGraph.owl"/>
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/MLGraph.owl"/>
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >This ontology contains EMR concepts. Created by Andrzej Uszok (auszok@ihmc.us).</rdfs:comment>
+  </owl:Ontology>
+  <owl:Class rdf:ID="people">
+    <rdfs:subClassOf>
+      <owl:Class rdf:ID="entity"/>
+    </rdfs:subClassOf>
+    <owl:disjointWith rdf:resource="#organization" />
+    <owl:disjointWith rdf:resource="#location" />
+    <owl:disjointWith rdf:resource="#O" />
+    <owl:disjointWith rdf:resource="#other" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology people.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="organization">
+    <rdfs:subClassOf>
+      <owl:Class rdf:about="#entity"/>
+    </rdfs:subClassOf>
+    <owl:disjointWith rdf:resource="#location" />
+    <owl:disjointWith rdf:resource="#O" />
+    <owl:disjointWith rdf:resource="#other" />
+    <owl:disjointWith rdf:resource="#people" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology organization.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:about="#entity">
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="http://ontology.ihmc.us/ML/PhraseGraph.owl#phrase">
+        <mlgraph:graphType rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+        >ling_graph</mlgraph:graphType>
+        <mlgraph:graphName rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+        >linguistic</mlgraph:graphName>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology entity.</rdfs:comment>
+    <mlgraph:graphName rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >application</mlgraph:graphName>
+    <mlgraph:graphType rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >app_graph</mlgraph:graphType>
+  </owl:Class>
+  <owl:Class rdf:ID="other">
+    <rdfs:subClassOf rdf:resource="#entity"/>
+    <owl:disjointWith rdf:resource="#organization" />
+    <owl:disjointWith rdf:resource="#location" />
+    <owl:disjointWith rdf:resource="#O" />
+    <owl:disjointWith rdf:resource="#people" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology other.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="location">
+    <rdfs:subClassOf rdf:resource="#entity"/>
+    <owl:disjointWith rdf:resource="#organization" />
+    <owl:disjointWith rdf:resource="#O" />
+    <owl:disjointWith rdf:resource="#other" />
+    <owl:disjointWith rdf:resource="#people" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology location.</rdfs:comment>
+  </owl:Class>
+  <owl:Class rdf:ID="O">
+    <rdfs:subClassOf rdf:resource="#entity"/>
+    <owl:disjointWith rdf:resource="#organization" />
+    <owl:disjointWith rdf:resource="#location" />
+    <owl:disjointWith rdf:resource="#other" />
+    <owl:disjointWith rdf:resource="#people" />
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >EMR ontology O.</rdfs:comment>
+  </owl:Class>
+  <owl:ObjectProperty rdf:ID="orgbase_on">
+    <rdfs:domain rdf:resource="#organization"/>
+    <rdfs:range rdf:resource="#location"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="located_in">
+    <rdfs:domain rdf:resource="#location"/>
+    <rdfs:range rdf:resource="#location"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="work_for">
+    <rdfs:domain rdf:resource="#people"/>
+    <rdfs:range rdf:resource="#organization"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="live_in">
+    <rdfs:domain rdf:resource="#people"/>
+    <rdfs:range rdf:resource="#location"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:ID="kill">
+    <rdfs:domain rdf:resource="#people"/>
+    <rdfs:range rdf:resource="#people"/>
+  </owl:ObjectProperty>
+</rdf:RDF>
+
+<!-- Created with TopBraid -->

@@ -19,11 +19,12 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application') as app_graph:
-        people = phrase(name='people')
-        organization = phrase(name='organization')
-        location = phrase(name='location')
-        other = phrase(name='other')
-        o = phrase(name='O')
+        entity = phrase(name='entity')
+        people = entity(name='people')
+        organization = entity(name='organization')
+        location = entity(name='location')
+        other = entity(name='other')
+        o = entity(name='O')
 
         # nandL(people, organization, location, other, o)
 
