@@ -67,12 +67,22 @@ def model():
 
 
 def main():
+    from graph import graph, sentence, word, phrase, pair
+    from graph import people, organization, location, other, o
+    from graph import work_for, located_in, live_in, orgbase_on, kill
+
     program = model()
     reader = SingletonDataLoader('data/conll04.corp')
 
     for node in program.populate(reader, device='auto'):
-        from graph import graph, sentence, word, phrase, pair
         assert node.ontologyNode is sentence
+        phrase_node = node.getChildDataNodes()[0]
+        assert phrase_node.ontologyNode is phrase
+
+        node.infer()
+        assert phrase_node.getAttribute(people, 'softmax') > 0
+        node.inferILPResults(fun=None)
+        assert phrase_node.getAttribute(people, 'ILP') >= 0
 
 
 if __name__ == '__main__':
