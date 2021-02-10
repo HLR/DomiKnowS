@@ -4,6 +4,9 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from torch import tensor
 
+# ontology
+from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
+
 # numpy
 import numpy as np
 
@@ -187,7 +190,194 @@ class gurobiILPOntSolver(ilpOntSolver):
                            
             if concept.name in foundDisjoint:
                 self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+                
+        # Create relation links constraints
+        for concept in conceptsRelations:
+            rels = [ rel for rel in enumerate(concept.has_a())]
+            for arg_id, rel in enumerate(concept.has_a()): 
+                
+                # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
+                # A has_a B : A(x,y,...) <= B(x)
+                #for xy in candidates[rel.src]:
+                #x = xy[arg_id]
+                
+                relationName = rel.src.name
+                rootRelation = rootDn.findRootConceptOrRelation(relationName)
+                dnsR = rootDn.findDatanodes(select = rootRelation)
+                _relAttr = rootDn.getRelationAttrNames(rootRelation)
+                relAttr = list(_relAttr.keys())
+                
+                conceptName = rel.dst.name
+                rootConcept = rootDn.findRootConceptOrRelation(conceptName)
+                dnsC = rootDn.findDatanodes(select = rootConcept)
+                
+                rxkey = '<' + relationName + '>/ILP/x'
+                cxkey = '<' + conceptName + '>/ILP/x'
+                
+                for dn in dnsR:
+                    if rxkey not in dn.attributes:
+                        continue
+                    
+                    cdn = dn.relationLinks[relAttr[arg_id]]
+                    
+                    if not cdn or cxkey not in cdn[0].attributes:
+                        continue
+                    
+                    self.myIlpBooleanProcessor.ifVar(m,dn.getAttribute(rxkey), cdn[0].getAttribute(cxkey), onlyConstrains = True)
+                    
+        m.update()
+        
+    def addOntologyConstrains(self, m, rootDn, *_conceptsRelations):
+        
+        if not hasattr(self, 'myOnto'): 
+            return
+        
+        conceptsRelations = [cr.name for cr in _conceptsRelations]
+        
+        # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
+        foundDisjoint = dict() # too eliminate duplicates
+        for conceptName in conceptsRelations:
             
+            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+            
+            if currentConcept is None :
+                continue
+            
+            rootConcept = rootDn.findRootConceptOrRelation(conceptName)
+            dns = rootDn.findDatanodes(select = rootConcept)
+            
+            #self.myLogger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
+                
+            for d in currentConcept.disjoints():
+                disjointConcept = d.entities[1]._name
+                    
+                if currentConcept._name == disjointConcept:
+                    disjointConcept = d.entities[0]._name
+                        
+                    if currentConcept._name == disjointConcept:
+                        continue
+                        
+                if disjointConcept not in conceptsRelations:
+                    continue
+                        
+                if conceptName in foundDisjoint:
+                    if disjointConcept in foundDisjoint[conceptName]:
+                        continue
+                
+                if disjointConcept in foundDisjoint:
+                    if conceptName in foundDisjoint[disjointConcept]:
+                        continue
+                 
+                rootDisjointConcept = rootDn.findRootConceptOrRelation(disjointConcept)
+                dnsDC = rootDn.findDatanodes(select = rootDisjointConcept)           
+                            
+                cxkey = '<' + conceptName + '>/ILP/x'
+                dxkey = '<' + disjointConcept + '>/ILP/x'
+                
+                for dn in zip(dns,dnsDC):
+                    if cxkey not in dn[0].attributes:
+                        continue
+                    
+                    if dxkey not in dn[1].attributes:
+                        continue
+                        
+                    self.myIlpBooleanProcessor.nandVar(m, dn[0].getAttribute(cxkey), dn[1].getAttribute(dxkey), onlyConstrains = True)
+                    
+                if not (conceptName in foundDisjoint):
+                    foundDisjoint[conceptName] = {disjointConcept}
+                else:
+                    foundDisjoint[conceptName].add(disjointConcept)
+                           
+            if conceptName in foundDisjoint:
+                self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+
+            # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
+            foundEquivalent = dict() # too eliminate duplicates
+            for conceptName in conceptsRelations:
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                    
+                if currentConcept is None :
+                    continue
+                    
+                for equivalentConcept in currentConcept.equivalent_to:
+                    if equivalentConcept.name not in conceptsRelations:
+                        continue
+                            
+                    if conceptName in foundEquivalent:
+                        if equivalentConcept.name in foundEquivalent[conceptName]:
+                            continue
+                    
+                    if equivalentConcept.name in foundEquivalent:
+                        if conceptName in foundEquivalent[equivalentConcept.name]:
+                            continue
+                                
+                    rootEquivalentConcept = rootDn.findRootConceptOrRelation(equivalentConcept)
+                    dnsEC = rootDn.findDatanodes(select = rootEquivalentConcept)           
+                            
+                    cxkey = '<' + conceptName + '>/ILP/x'
+                    exkey = '<' + equivalentConcept + '>/ILP/x'
+                    
+                    for dn in zip(dns,dnsEC):
+                        if cxkey not in dn[0].attributes:
+                            continue
+                        
+                        if exkey not in dn[1].attributes:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.andVar(m, dn[0].getAttribute(cxkey), dn[1].getAttribute(exkey), onlyConstrains = True)
+                        
+                    if not (conceptName in foundEquivalent):
+                        foundEquivalent[conceptName] = {equivalentConcept.name}
+                    else:
+                        foundEquivalent[conceptName].add(equivalentConcept.name)
+               
+                if conceptName in foundEquivalent:
+                    self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
+        
+            # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
+            for conceptName in conceptsRelations:
+                
+                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                    
+                if currentConcept is None :
+                    continue
+                    
+                for ancestorConcept in currentConcept.ancestors(include_self = False):
+                    if ancestorConcept.name not in conceptsRelations:
+                        continue
+                    
+                    rootAncestorConcept = rootDn.findRootConceptOrRelation(ancestorConcept)
+                    dnsAC = rootDn.findDatanodes(select = rootAncestorConcept)           
+                            
+                    cxkey = '<' + conceptName + '>/ILP/x'
+                    axkey = '<' + ancestorConcept + '>/ILP/x'
+                    
+                    for dn in zip(dns,dnsAC):
+                        if cxkey not in dn[0].attributes:
+                            continue
+                        
+                        if exkey not in dn[1].attributes:
+                            continue
+                            
+                        self.myIlpBooleanProcessor.ifVar(m,  dn[0].getAttribute(cxkey), dn[1].getAttribute(axkey), onlyConstrains = True)
+                            
+                    self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+    
+            
+            # ---- ------No supported yet --------
+            
+            # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
+                            
+            # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
+            
+            # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
+           
+           
+            # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
+            
+            # -- Add constraints based on concept oneOf statements in ontology - ?
+        
         m.update()
         
     def addLogicalConstrains(self, m, dn, lcs, p):
@@ -363,9 +553,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Create ILP Variables for concepts and objective
             Q, x = self.createILPVariables(m, dn, *conceptsRelations)
             
-            # Add constrains based on graph definition
-            self.addGraphConstrains(m, dn, *conceptsRelations)
-                        
+            # Add constrains based on ontology or graph definition
+            if hasattr(self, 'myOnto'): 
+                self.addOntologyConstrains(m, dn, *conceptsRelations)
+            else:
+                self.addGraphConstrains(m, dn, *conceptsRelations)
+        
             # ILP Model objective setup
             if minimizeObjective:
                 m.setObjective(Q, GRB.MINIMIZE)
@@ -429,7 +622,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         break     
     
                 # Add constraints to the copy model
-                self.addLogicalConstrains(mP, dn, lcs, p)
+                if not hasattr(self, 'myOnto'): 
+                    self.addLogicalConstrains(mP, dn, lcs, p)
                 self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constrains'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
