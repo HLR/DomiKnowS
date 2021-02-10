@@ -8,6 +8,9 @@ Relation.clear()
 
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:
+        ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
+        #ling_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './examples/conll04')
+        
         word = Concept(name='word')
         phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
@@ -19,6 +22,8 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application') as app_graph:
+        app_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
+
         entity = phrase(name='entity')
         people = entity(name='people')
         organization = entity(name='organization')
@@ -29,10 +34,17 @@ with Graph('global') as graph:
         # nandL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
+        work_for.has_a(people, organization)
+        
         located_in = pair(name='located_in')
+        located_in.has_a(location, location)
+
         live_in = pair(name='live_in')
+        live_in.has_a(people, location)
+
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
+        
 
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         # ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))

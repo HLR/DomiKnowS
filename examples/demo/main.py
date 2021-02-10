@@ -126,6 +126,7 @@ for node in program.populate(reader, device=device):
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
     
+    
     print("\nILP results for people - %s"%(node.collectInferedResults(people, "ILP")))
     print("SofMax results for people - %s"%(node.collectInferedResults(people, "softmax")))
     print("ArgMax results for people - %s"%(node.collectInferedResults(people, "argmax")))

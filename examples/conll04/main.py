@@ -80,9 +80,13 @@ def main():
         assert phrase_node.ontologyNode is phrase
 
         node.infer()
-        assert phrase_node.getAttribute(people, 'softmax') > 0
-        node.inferILPResults(fun=None)
-        assert phrase_node.getAttribute(people, 'ILP') >= 0
+        if phrase_node.getAttribute(people) is not None:
+            assert phrase_node.getAttribute(people, 'softmax') > 0
+            node.inferILPResults(fun=None)
+            assert phrase_node.getAttribute(people, 'ILP') >= 0
+        else:
+            print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
+            break
 
 
 if __name__ == '__main__':
