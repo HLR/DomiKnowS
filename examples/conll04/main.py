@@ -1,9 +1,10 @@
 import torch
 
 from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
 
@@ -48,6 +49,16 @@ def model():
     phrase[other] = ModuleLearner('w2v', module=Classifier(96))
     phrase[o] = ModuleLearner('w2v', module=Classifier(96))
 
+    def find_label(label):
+        def find(data):
+            return torch.tensor([item==label for item in data])
+        return find
+    phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
+    phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
+    phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
+    phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
+    phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
+
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
         phrase['w2v'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
@@ -62,6 +73,36 @@ def model():
     pair[orgbase_on] = ModuleLearner('emb', module=Classifier(96*2))
     pair[kill] = ModuleLearner('emb', module=Classifier(96*2))
 
+    def find_relation(label):
+        def find(arg1m, arg2m, data):
+            label = torch.zeros(arg1m.shape[0], dtype=torch.long)
+            for rel, (arg1,*_), (arg2,*_) in data:
+                i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
+                label[i] = 1
+            return label
+        return find
+    pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Work_For'), label=True)
+    pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Located_In'), label=True)
+    pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Live_In'), label=True)
+    pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
+    pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
+
+    # def find_relation(label):
+    #     def find(*_, datanode, data):
+    #         arg1 = datanode.relationLinks['arg1'][0]
+    #         arg2 = datanode.relationLinks['arg2'][0]
+    #         arg1.getAttribute('index')
+    #         for arg1, arg2 in data:
+    #             i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
+    #             label[i] = 1
+    #         return label
+    #     return find
+    # pair[work_for] = DataNodeReaderSensor(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed, keyword='relation', forward=find_relation('Work_For'), label=True)
+    # pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Located_In'), label=True)
+    # pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Live_In'), label=True)
+    # pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
+    # pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
+
     lbp = POIProgram(graph, poi=(phrase, sentence, pair))
     return lbp
 
@@ -73,6 +114,8 @@ def main():
 
     program = model()
     reader = SingletonDataLoader('data/conll04.corp')
+
+    # program.train(reader, device='auto')
 
     for node in program.populate(reader, device='auto'):
         assert node.ontologyNode is sentence
