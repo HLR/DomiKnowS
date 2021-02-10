@@ -206,7 +206,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return epqSuccess
      
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '=', limit = 1):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '=', limit = 1, logicMethodName = "COUNT"):
         methodName = "countVar"
         logicMethodName = "COUNT"
         

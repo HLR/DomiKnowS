@@ -2,6 +2,8 @@ import sys
 sys.path.append("../..")
 import torch
 from data.reader import EmailSpamReader
+import os
+
 
 
 def model_declaration():
@@ -46,7 +48,9 @@ def test_main():
 
     lbp = model_declaration()
 
-    dataset = EmailSpamReader(file='data/train', type="folder")  # Adding the info on the reader
+    pwd = os.getcwd()
+    
+    dataset = EmailSpamReader(file='examples/Email_Spam/data/train', type="folder")  # Adding the info on the reader
 
     lbp.train(dataset, train_epoch_num=5, Optim=torch.optim.Adam, device='auto')
 
@@ -54,7 +58,7 @@ def test_main():
         print('datanode:', datanode)
         print('Spam:', datanode.getAttribute(Spam))
         print('Regular:', datanode.getAttribute(Regular))
-        datanode.inferILPConstrains(Spam, Regular, epsilon=None)
+        datanode.inferILPResults(Spam, Regular, epsilon=None)
         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
 

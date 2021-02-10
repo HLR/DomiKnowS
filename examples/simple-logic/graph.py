@@ -1,5 +1,7 @@
+import sys
+sys.path.append("../..")
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, notL, andL
+from regr.graph.logicalConstrain import orL, notL, andL, V
 
 Graph.clear()
 Concept.clear()
@@ -11,4 +13,5 @@ with Graph(name='global') as graph:
     (world_contains_x,) = world.contains(x)
     y0 = x(name='y0')
     y1 = x(name='y1')
+    
     orL(andL(y0, notL(y1)), andL(notL(y0), y1))

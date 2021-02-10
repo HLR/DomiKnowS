@@ -1,3 +1,0 @@
-torch
-tqdm
-spacy

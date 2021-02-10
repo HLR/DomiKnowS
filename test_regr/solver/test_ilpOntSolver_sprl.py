@@ -76,7 +76,7 @@ def sprl_input(request):
 
     yield test_phrase, test_graphResultsForPhraseToken, test_graphResultsForTripleRelations
 
-
+@pytest.mark.skip(reason="define model building datanode")
 @pytest.mark.gurobi
 def test_main_sprl(sprl_input):
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory

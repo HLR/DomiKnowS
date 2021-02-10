@@ -82,8 +82,7 @@ def main():
         print('datanode:', datanode)
 #         print('Spam:', datanode.getAttribute(Spam).softmax(-1))
 #         print('Regular:', datanode.getAttribute(Regular).softmax(-1))
-        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(),
-                                    epsilon=None)
+        datanode.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         print('datanode:', datanode)
 #         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
 #         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))

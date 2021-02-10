@@ -3,7 +3,7 @@ import logging
 import torch
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph import ifL, notL, andL, orL, nandL
+from regr.graph import ifL, notL, andL, orL, nandL, V
 from regr.program import POIProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
@@ -30,11 +30,11 @@ with Graph('example') as graph:
     organization = word(name='organization')
     O = word(name='O')
     pair = Concept(name='pair')
-    pair.has_a(arg1=word, arg2=word)
+    (arg1, arg2) = pair.has_a(arg1=word, arg2=word)
     work_for = pair(name='work_for')
 
     nandL(people, organization)
-    ifL(work_for, ('x', 'y'), andL(people, 'x', organization, 'y'))
+    ifL(work_for, V(name='x'), andL(people, V(v=('x', arg1)), organization, V(v=('x', arg2))))
 
 SAMPLE = {
     'text': ['John works for IBM'],
@@ -119,8 +119,21 @@ linearsoftmax = torch.nn.Sequential(
 # datanode
 #
 for node in program.populate(reader, device=device):
-    node.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.infer()
+    node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
     for word_node in node.getChildDataNodes():
         print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
+    
+    
+    print("\nILP results for people - %s"%(node.collectInferedResults(people, "ILP")))
+    print("SofMax results for people - %s"%(node.collectInferedResults(people, "softmax")))
+    print("ArgMax results for people - %s"%(node.collectInferedResults(people, "argmax")))
+
+
+    print("\nILP results for organization - %s"%(node.collectInferedResults(organization, "ILP")))
+    print("SofMax results for organization - %s"%(node.collectInferedResults(organization, "softmax")))
+    print("ArgMax results for organization - %s"%(node.collectInferedResults(organization, "argmax")))
+
+

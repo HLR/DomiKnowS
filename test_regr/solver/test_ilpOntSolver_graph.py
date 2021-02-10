@@ -108,6 +108,7 @@ def emr_input(request):
 
     yield app_graph, test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation
 
+@pytest.mark.skip(reason="define model building datanode")
 @pytest.mark.gurobi
 def test_main_emr_owl(emr_input):
     from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory

@@ -59,8 +59,8 @@ def test_graph_coloring_main():
             assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
-        conceptsRelations = (firestationCity, neighbor)  
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
+        conceptsRelations = (firestationCity)  
+        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=True) 
 
         result = []
         for child_node in datanode.getChildDataNodes():
