@@ -3,9 +3,6 @@ sys.path.append("../..")
 import torch
 from data.reader import EmailSpamReader
 
-sys.path.append('.')
-sys.path.append('../..')
-
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor
@@ -29,9 +26,7 @@ def model_declaration():
     email['body_rep'] = SentenceRepSensor('body')
     email['forward_presence'] = ForwardPresenceSensor('forward_body')
     def concat(*x): 
-        output = torch.cat(x, dim=-1)
-        print(output.shape)
-        return output
+        return torch.cat(x, dim=-1)
     email['features'] = FunctionalSensor('subject_rep', 'body_rep', 'forward_presence', forward=concat)
     email[Spam] = ModuleLearner('features', module=nn.Linear(193, 2))
     email[Regular] = ModuleLearner('features', module=nn.Linear(193, 2))
@@ -53,14 +48,13 @@ def test_main():
 
     dataset = EmailSpamReader(file='data/train', type="folder")  # Adding the info on the reader
 
-    lbp.train(dataset, train_epoch_num=30, Optim=torch.optim.Adam, device='auto')
+    lbp.train(dataset, train_epoch_num=5, Optim=torch.optim.Adam, device='auto')
 
     for datanode in lbp.populate(dataset=dataset):
         print('datanode:', datanode)
-        print('Spam:', datanode.getAttribute(Spam).softmax(-1))
-        print('Regular:', datanode.getAttribute(Regular).softmax(-1))
-        datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(),
-                                    epsilon=None)
+        print('Spam:', datanode.getAttribute(Spam))
+        print('Regular:', datanode.getAttribute(Regular))
+        datanode.inferILPConstrains(Spam, Regular, epsilon=None)
         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
 
