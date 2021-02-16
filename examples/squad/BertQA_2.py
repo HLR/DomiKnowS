@@ -18,8 +18,10 @@ print('Downloading dataset')
 url = "https://rajpurkar.github.io/SQuAD-explorer/dataset/train-v1.1.json"
 url_2 = "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt"
 
+if not os.path.exists('data/squad1.1/'):
+    os.makedirs("data/squad1.1")
+
 if not os.path.exists('data/squad1.1/train-v1.1.json'):
-    os.mkdir("data/squad1.1")
     wget.download(url, 'data/squad1.1/train-v1.1.json')
 
 if not os.path.exists('data/squad1.1/bert-base-uncased-vocab.txt'):
