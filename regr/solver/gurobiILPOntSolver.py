@@ -37,7 +37,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 abs(x) == float('inf')  # inf 
                 ) 
                
-    def __getProbability(self, dn, conceptRelation):
+    def ___getProbability(self, dn, conceptRelation):
         if not dn:
             currentProbability = [1, 0]
         else:
@@ -48,7 +48,41 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return currentProbability
     
-    def createILPVariables(self, m, rootDn, *conceptsRelations):
+    # Get Ground Truth for provided concept
+    def __getLabel(self, dn, conceptRelation, fun=None, epsilon = None):
+        value = dn.getAttribute(conceptRelation, 'label')
+        
+        return value
+        
+    # Get and calculate probability for provided concept
+    def __getProbability(self, dn, conceptRelation, fun=None, epsilon = 0.00001):
+        if not dn:
+            value = None
+        else:
+            value = dn.getAttribute(conceptRelation)
+                    
+        if value is None: # No probability value - return negative probability 
+            return [float("nan"), float("nan")]
+            
+        # Process probability through function and apply epsilon
+        if epsilon is not None:
+            if value[0] > 1-epsilon:
+                value[0] = 1-epsilon
+            elif value[1] > 1-epsilon:
+                value[1] = 1-epsilon
+                
+            if value[0] < epsilon:
+                value[0] = epsilon
+            elif value[1] < epsilon:
+                value[1] = epsilon
+               
+            # Apply fun on probabilities 
+            if fun is not None:
+                value = fun(value)
+            
+        return value # Return probability
+    
+    def createILPVariables(self, m, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
         x = {}
         Q = None
         
@@ -60,7 +94,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             conceptRelation = _conceptRelation.name
             
             for dn in dns:
-                currentProbability = self.__getProbability(dn, conceptRelation)
+                currentProbability = dnFun(dn, conceptRelation, fun=fun, epsilon=epsilon)
                 
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
                     self.myLogger.warning("Probability not provided for variable concept %s and dataNode %s - skipping it"%(conceptRelation,dn.getInstanceID()))
@@ -551,7 +585,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             m.params.outputflag = 0
             
             # Create ILP Variables for concepts and objective
-            Q, x = self.createILPVariables(m, dn, *conceptsRelations)
+            Q, x = self.createILPVariables(m, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
             
             # Add constrains based on ontology or graph definition
             if hasattr(self, 'myOnto'): 
