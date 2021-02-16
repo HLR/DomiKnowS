@@ -6,6 +6,7 @@ import numpy as np
 from regr.program import POIProgram
 import subprocess
 import sys
+import shutil
 from torch import nn
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
 from regr.program.loss import NBCrossEntropyLoss
@@ -47,5 +48,12 @@ from src.wiqa_wrapper import WIQADataPoint
 wimd = WIQADataPoint.get_default_whatif_metadata()
 sg = wimd.get_graph_for_id(graph_id="13")
 print(sg.to_json_v1())
+
+os.remove("data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
+shutil.copyfile("data/tmp_files/run_wiqa_classifier.sh","data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
+
+os.remove("data/WIQA/repo/wiqadataset/model/run.py")
+shutil.copyfile("data/tmp_files/run.py","data/WIQA/repo/wiqadataset/model/run.py")
+
 os.chdir("data/WIQA/repo/wiqadataset/")
 subprocess.call(['sh', 'model/run_wiqa_classifier.sh'])
