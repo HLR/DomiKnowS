@@ -918,6 +918,9 @@ class DataNodeBuilder(dict):
     def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
         from regr.sensor.pytorch.relation_sensors import EdgeSensor
         conceptInfo["relationAttrData"] = False
+        conceptInfo['label'] = False
+        if hasattr(sensor, 'label') and sensor.label: 
+            conceptInfo['label'] = True
 
         if (isinstance(sensor, EdgeSensor)):
             
@@ -1428,6 +1431,9 @@ class DataNodeBuilder(dict):
         keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
+        if conceptInfo['label']:
+            keyDataName += '/label'
+            
         vInfo = self.__processAttributeValue(value, keyDataName)
         
         # Decide if this is equality between concept data, dataNode creation or update for concept or relation link

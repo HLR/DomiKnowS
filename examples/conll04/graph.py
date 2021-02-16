@@ -9,8 +9,7 @@ Relation.clear()
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
-        #ling_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './examples/conll04')
-        
+       
         word = Concept(name='word')
         phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
