@@ -14,6 +14,7 @@ from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
 from future.builtins.misc import isinstance
+from _pytest.reports import _R
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -690,18 +691,18 @@ class DataNode:
         rootConcept = self.findRootConceptOrRelation(concept)
         
         if not rootConcept:
-            return []
+            return torch.FloatTensor([])
         
         rootConceptDns = self.findDatanodes(select = rootConcept)
         
         if not rootConceptDns:
-            return []
-        
+            return torch.FloatTensor([])
+
         keys = [concept, inferKey]
         
-        collectAttributeList = [dn.getAttribute(*keys).item() for dn in rootConceptDns]
+        collectAttributeList = [dn.getAttribute(*keys).item() if dn.getAttribute(*keys) is not None else 0 for dn in rootConceptDns]
         
-        return collectAttributeList          
+        return torch.FloatTensor(collectAttributeList)        
     
     # Calculate argMax and softMax
     def infer(self):
@@ -804,6 +805,66 @@ class DataNode:
         
         return lcResult
 
+    def getILPMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
+                    
+        if not conceptsRelations:
+            conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
+        
+        result = {}
+        tp, fp, tn, fn  = [], [], [], []
+
+        for cr in conceptsRelations:
+            preds = self.collectInferedResults(cr, inferType)
+            labels = self.collectInferedResults(cr, 'label')
+            
+            result[cr] = {}
+            if preds is not None and labels is not None:
+                # calculate confusion matrix
+                _tp = (preds * labels * weight).sum() # true positive
+                tp.append(_tp)
+                result[cr]['TP'] = _tp 
+                _fp = (preds * (1 - labels) * weight).sum() # false positive
+                fp.append(_fp)
+                result[cr]['FP'] = _fp
+                _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
+                tn.append(_tn)
+                result[cr]['TN'] = _tn
+                _fn = ((1 - preds) * labels * weight).sum() # false positive
+                fn.append(_fn)
+                result[cr]['FN'] = _fn
+                
+                if _tp + _fp:
+                    _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
+                    result[cr]['P'] = _p
+                    _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
+                    result[cr]['R'] = _r
+                    
+                    if _p + _r:
+                        _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
+                        result[cr]['F1'] = _f1
+                      
+        result['Total'] = {}  
+        tpT = (torch.FloatTensor(tp)).sum()
+        result['Total']['TP'] = tpT 
+        fpT = (torch.FloatTensor(fp)).sum() 
+        result['Total']['FP'] = fpT
+        tnT = (torch.FloatTensor(tn)).sum() 
+        result['Total']['TN'] = tnT
+        fnT = (torch.FloatTensor(fn)).sum() 
+        result['Total']['FN'] = fnT
+        
+        if tpT + fpT:
+            pT = tpT / (tpT + fpT)
+            result['Total']['P'] = pT
+            rT = tpT / (tpT + fnT)
+            result['Total']['R'] = rT
+            
+            if pT + rT:
+                f1T = 2 * pT * rT / (pT + rT)
+                result['Total']['F1'] = f1T
+                
+        return result
+    
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
     def __init__(self, *args, **kwargs ):

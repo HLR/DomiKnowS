@@ -1,8 +1,8 @@
 import torch
 
 from regr.program import POIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, BinaryPRF1Tracker
-from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
+from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
@@ -10,9 +10,11 @@ from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
 
+
 import spacy
-from spacy.lang.en import English
+# from spacy.lang.en import English
 nlp = spacy.load('en_core_web_sm') #English()
+
 
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features) -> None:
@@ -20,6 +22,10 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         # softmax = torch.nn.Softmax(dim=-1)
         # super().__init__(linear, softmax)
+    
+    def forward(self, input):
+        return super().forward(input)
+
 
 def model():
     from graph import graph, sentence, word, phrase, pair
@@ -54,7 +60,7 @@ def model():
     def find_label(label_type):
         def find(data):
             label = torch.tensor([item==label_type for item in data])
-            return torch.stack((~label, label), dim=1)
+            return label # torch.stack((~label, label), dim=1)
         return find
     phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
     phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
@@ -83,7 +89,7 @@ def model():
                 if rel == relation_type:
                     i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
                     label[i] = True
-            return torch.stack((~label, label), dim=1)
+            return label # torch.stack((~label, label), dim=1)
         return find
     pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Work_For'), label=True)
     pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Located_In'), label=True)
@@ -94,12 +100,13 @@ def model():
     lbp = POIProgram(
         graph,
         poi=(phrase, sentence, pair),
-        loss=MacroAverageTracker(BCEWithLogitsLoss()),
-        metric=BinaryPRF1Tracker())
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        metric=PRF1Tracker())
     # lbp = IMLProgram(
     #     graph,
-    #     loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
+    #     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
     #     metric=PRF1Tracker())
+
     return lbp
 
 
@@ -124,9 +131,15 @@ def main():
         assert phrase_node.ontologyNode is phrase
 
         node.infer()
+
         if phrase_node.getAttribute(people) is not None:
             assert phrase_node.getAttribute(people, 'softmax') > 0
             node.inferILPResults(fun=None)
+            
+            ILPmetrics = node.getILPMetric()
+            
+            print("ILP metrics Total %s"%(ILPmetrics['Total']))
+            
             assert phrase_node.getAttribute(people, 'ILP') >= 0
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
