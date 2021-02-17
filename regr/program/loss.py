@@ -5,7 +5,7 @@ from torch.nn import functional as F
 class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
         input = input.view(-1, input.shape[-1])
-        target = target.view(-1)
+        target = target.view(-1).to(dtype=torch.long)
         return super().forward(input, target, *args, **kwargs)
 
 

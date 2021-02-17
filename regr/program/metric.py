@@ -26,6 +26,7 @@ class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
     def forward(self, input, target, weight=None):
         num_classes = input.shape[-1]
         input = input.view(-1, num_classes)
+        target = target.view(-1).to(dtype=torch.long)
         target = F.one_hot(target.view(-1), num_classes=num_classes)
         return super().forward(input, target, weight)
 
