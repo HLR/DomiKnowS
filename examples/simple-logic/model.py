@@ -3,7 +3,6 @@ import torch
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, ValueTracker
-from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
 def prediction_softmax(pr, gt):
     return torch.softmax(pr.data, dim=-1)
@@ -13,8 +12,7 @@ class MyIMLModel(IMLModel):
         super().__init__(
             graph, 
             loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.)),
-            metric=ValueTracker(prediction_softmax),
-            Solver=ilpOntSolverFactory.getOntSolverInstance)
+            metric=ValueTracker(prediction_softmax))
 
 class MyModel(PoiModel):
     def __init__(self, graph):
