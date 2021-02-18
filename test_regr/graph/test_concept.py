@@ -260,6 +260,36 @@ class TestConcept(object):
         # assert phrase[people, 'sensor'] is sensor  # concept tuple query is not supported
 
 
+@pytest.fixture()
+def multi_classes():
+    return 'hello', 'world', '.'
+
+
+@pytest.fixture()
+def enum_concept(multi_classes):
+    from regr.graph.concept import EnumConcept
+    return EnumConcept(name='enum', values=multi_classes)
+
+
+def test_enum_concept(multi_classes, enum_concept):
+    from regr.graph.concept import EnumConcept
+    concept = EnumConcept()
+    
+    for index, value in enumerate(multi_classes, start=1):
+        assert enum_concept.get_index(value) == index
+        assert enum_concept.get_value(index) == value
+
+
+def test_sub_enum_concept():
+    from regr.graph.concept import Concept, EnumConcept
+
+    parent = Concept('parent')
+    child = parent('child', ConceptClass=EnumConcept, values=['child1', 'child2', 'child3'])
+    assert child.get_index('child1') == 1
+    assert child.get_index('child2') == 2
+    assert child.get_index('child3') == 3
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__])
