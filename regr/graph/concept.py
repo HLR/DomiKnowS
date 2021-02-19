@@ -303,7 +303,7 @@ class EnumConcept(Concept):
     @values.setter
     def values(self, values):
         from enum import Enum
-        self._values = Enum(self.name, values)
+        self._values = Enum(self.name, values, start=0)
 
     def get_index(self, value):
         return self.values[value].value
