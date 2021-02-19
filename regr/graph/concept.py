@@ -298,15 +298,15 @@ class EnumConcept(Concept):
 
     @property
     def values(self):
-        return self._values
+        return [e.name for e in self.enum]
 
     @values.setter
     def values(self, values):
         from enum import Enum
-        self._values = Enum(self.name, values, start=0)
+        self.enum = Enum(self.name, values, start=0)
 
     def get_index(self, value):
-        return self.values[value].value
+        return self.enum[value].value
 
     def get_value(self, index):
-        return self.values(index).name
+        return self.enum(index).name
