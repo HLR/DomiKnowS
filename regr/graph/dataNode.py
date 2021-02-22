@@ -14,6 +14,7 @@ from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
 from future.builtins.misc import isinstance
+from _pytest.reports import _R
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -626,84 +627,7 @@ class DataNode:
         else:
             return [None]
 
-    def __getAttributeValue(self, key, conceptRelation, *dataNode):
-        # Get attribute with probability
-        if len(dataNode) == 1:
-            value = dataNode[0].getAttribute(key) 
-        else:
-            rootRelation = self.findRootConceptOrRelation(conceptRelation)
-            rl = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)
-            
-            if not rl:
-                return [float("nan"), float("nan")]
-            
-            if len(dataNode) == 2:
-                attrNames = []
-                for _, rel in enumerate(rootRelation.has_a()): 
-                    attrNames.append(rel.name)
-                        
-                _rDN = dataNode[0].findDatanodes(select = rootRelation, indexes = {attrNames[0] : dataNode[0].getInstanceID(), attrNames[1]: dataNode[1].getInstanceID()})
-                
-                if _rDN:
-                    value = _rDN[0].getAttribute(key)
-                else:
-                    return [1, float("nan")] # ?
-                #value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
-            elif len(dataNode) == 3:
-                value = dataNode[0].getRelationLinks(relationName = rootRelation, conceptName = None)[dataNode[1].getInstanceID()].getAttribute(key)
-            else:
-                return [1, float("nan")] # ?
-        
-        if value is None: # No probability value - return negative probability 
-            return [float("nan"), float("nan")]
-        
-        # Translate probability to list
-        if isinstance(value, torch.Tensor):
-            with torch.no_grad():
-                value = value.cpu().detach().numpy()
-        if isinstance(value, (np.ndarray, np.generic)):
-            value = value.tolist()  
-        
-        return value
-    
-    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
-    def __getLabel(self, conceptRelation,  *dataNode, fun=None, epsilon = None):
-        # Build probability key to retrieve attribute
-        key = '<' + conceptRelation.name + '>/label'
-        
-        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
-        
-        return value
-        
-    # Get and calculate probability for provided concept and datanodes based on datanodes attributes  - move to concept? - see predict method
-    def __getProbability(self, conceptRelation,  *dataNode, fun=None, epsilon = 0.00001):
-        # Build probability key to retrieve attribute
-        key = '<' + conceptRelation.name + '>'
-        
-        value = self.__getAttributeValue(key, conceptRelation, *dataNode)
-            
-        # Process probability through function and apply epsilon
-        if isinstance(value, (list, tuple)):
-            _list = value
-            if epsilon is not None:
-                if _list[0] > 1-epsilon:
-                    _list[0] = 1-epsilon
-                elif _list[1] > 1-epsilon:
-                    _list[1] = 1-epsilon
-                    
-                if _list[0] < epsilon:
-                    _list[0] = epsilon
-                elif _list[1] < epsilon:
-                    _list[1] = epsilon
-                   
-            # Apply fun on probabilities 
-            if fun is not None:
-                _list = fun(_list)
-            
-            return _list # Return probability
 
-        return [float("nan"), float("nan")]
-                    
     def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
         
         # Find concepts in dataNode - concept are in attributes from learning sensors
@@ -767,18 +691,18 @@ class DataNode:
         rootConcept = self.findRootConceptOrRelation(concept)
         
         if not rootConcept:
-            return []
+            return torch.FloatTensor([])
         
         rootConceptDns = self.findDatanodes(select = rootConcept)
         
         if not rootConceptDns:
-            return []
-        
+            return torch.FloatTensor([])
+
         keys = [concept, inferKey]
         
-        collectAttributeList = [dn.getAttribute(*keys).item() for dn in rootConceptDns]
+        collectAttributeList = [dn.getAttribute(*keys).item() if dn.getAttribute(*keys) is not None else 0 for dn in rootConceptDns]
         
-        return collectAttributeList          
+        return torch.FloatTensor(collectAttributeList)        
     
     # Calculate argMax and softMax
     def infer(self):
@@ -881,6 +805,66 @@ class DataNode:
         
         return lcResult
 
+    def getILPMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
+                    
+        if not conceptsRelations:
+            conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
+        
+        result = {}
+        tp, fp, tn, fn  = [], [], [], []
+
+        for cr in conceptsRelations:
+            preds = self.collectInferedResults(cr, inferType)
+            labels = self.collectInferedResults(cr, 'label')
+            
+            result[cr] = {}
+            if preds is not None and labels is not None:
+                # calculate confusion matrix
+                _tp = (preds * labels * weight).sum() # true positive
+                tp.append(_tp)
+                result[cr]['TP'] = _tp 
+                _fp = (preds * (1 - labels) * weight).sum() # false positive
+                fp.append(_fp)
+                result[cr]['FP'] = _fp
+                _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
+                tn.append(_tn)
+                result[cr]['TN'] = _tn
+                _fn = ((1 - preds) * labels * weight).sum() # false positive
+                fn.append(_fn)
+                result[cr]['FN'] = _fn
+                
+                if _tp + _fp:
+                    _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
+                    result[cr]['P'] = _p
+                    _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
+                    result[cr]['R'] = _r
+                    
+                    if _p + _r:
+                        _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
+                        result[cr]['F1'] = _f1
+                      
+        result['Total'] = {}  
+        tpT = (torch.FloatTensor(tp)).sum()
+        result['Total']['TP'] = tpT 
+        fpT = (torch.FloatTensor(fp)).sum() 
+        result['Total']['FP'] = fpT
+        tnT = (torch.FloatTensor(tn)).sum() 
+        result['Total']['TN'] = tnT
+        fnT = (torch.FloatTensor(fn)).sum() 
+        result['Total']['FN'] = fnT
+        
+        if tpT + fpT:
+            pT = tpT / (tpT + fpT)
+            result['Total']['P'] = pT
+            rT = tpT / (tpT + fnT)
+            result['Total']['R'] = rT
+            
+            if pT + rT:
+                f1T = 2 * pT * rT / (pT + rT)
+                result['Total']['F1'] = f1T
+                
+        return result
+    
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
     def __init__(self, *args, **kwargs ):
@@ -995,6 +979,9 @@ class DataNodeBuilder(dict):
     def __updateConceptInfo(self,  usedGraph, conceptInfo, sensor):
         from regr.sensor.pytorch.relation_sensors import EdgeSensor
         conceptInfo["relationAttrData"] = False
+        conceptInfo['label'] = False
+        if hasattr(sensor, 'label') and sensor.label: 
+            conceptInfo['label'] = True
 
         if (isinstance(sensor, EdgeSensor)):
             
@@ -1505,6 +1492,9 @@ class DataNodeBuilder(dict):
         keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
         keyDataName = keyDataName[1:] # __cut first '/' from the string
         
+        if conceptInfo['label']:
+            keyDataName += '/label'
+            
         vInfo = self.__processAttributeValue(value, keyDataName)
         
         # Decide if this is equality between concept data, dataNode creation or update for concept or relation link

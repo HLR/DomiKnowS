@@ -44,13 +44,16 @@ class Concept(BaseGraphTree):
     def __str__(self):
         return self.name
     
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, name=None, ConceptClass=None, **kwargs):
         from .relation import IsA, HasA
+        if ConceptClass is None:
+            ConceptClass = Concept
+        if isinstance(args[0], str):
+            name = args[0]
+            args = args[1:]
 
-        if (len(args) + len(kwargs) == 0 or
-                ('name' in kwargs) or
-                (len(args)==1 and isinstance(args[0], str))):
-            new_concept = Concept(*args, **kwargs)
+        if (not args and not kwargs) or name is not None:
+            new_concept = ConceptClass(name=name, *args, **kwargs)
             new_concept.is_a(self)
             return new_concept
         else:
@@ -286,3 +289,24 @@ class Concept(BaseGraphTree):
         while isinstance(node, Concept):  # None is not instance of Concept, If this concept has no graph, it will end up None
             node = node.sup
         return node
+
+
+class EnumConcept(Concept):
+    def __init__(self, name=None, values=[]):
+        super().__init__(name=name)
+        self.values = values
+
+    @property
+    def values(self):
+        return [e.name for e in self.enum]
+
+    @values.setter
+    def values(self, values):
+        from enum import Enum
+        self.enum = Enum(self.name, values, start=0)
+
+    def get_index(self, value):
+        return self.enum[value].value
+
+    def get_value(self, index):
+        return self.enum(index).name

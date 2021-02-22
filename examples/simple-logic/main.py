@@ -10,7 +10,6 @@ def model_declaration():
     from regr.graph import Property
     from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
     from regr.program.metric import MacroAverageTracker, ValueTracker
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
 
     from graph import graph, world_contains_x
     from model import MyModel, MyIMLModel, Net, prediction_softmax
@@ -34,8 +33,7 @@ def model_declaration():
     program = IMLProgram(
         graph,
         loss=MacroAverageTracker(BCEWithLogitsIMLoss(0.)),
-        metric=ValueTracker(prediction_softmax),
-        Solver=ilpOntSolverFactory.getOntSolverInstance)
+        metric=ValueTracker(prediction_softmax))
     # With the following line, the inference will not take x into account
     # which results in a complain (UserWarning) not getting inference result
     # program.model.inference_with = [world]
