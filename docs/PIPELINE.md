@@ -207,7 +207,7 @@ This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convent
 Instead of overwriting the assignment, "Multiple Assignment" indicates consistency of the `Sensor`s and `Learner`s assigned.
 For the above example, the framework will generate loss to impose consistency between corresponding `ReaderSensor` and `ModuleLearner`.
 
-```
+```python
 def offset_len(offset):
   return offset[:,1] - offset[:,0]
 word['len'] = FunctionalSensor('offset', forward=offset_len)
