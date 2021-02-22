@@ -48,7 +48,7 @@ class Concept(BaseGraphTree):
         from .relation import IsA, HasA
         if ConceptClass is None:
             ConceptClass = Concept
-        if isinstance(args[0], str):
+        if len(args) and isinstance(args[0], str):
             name = args[0]
             args = args[1:]
 
