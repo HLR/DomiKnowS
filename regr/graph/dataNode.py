@@ -805,7 +805,7 @@ class DataNode:
         
         return lcResult
 
-    def getILPMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
+    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
                     
         if not conceptsRelations:
             conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
@@ -1369,35 +1369,42 @@ class DataNodeBuilder(dict):
     def __processAttributeValue(self, value, keyDataName):
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
+        lenV = len(value)
+        
+        if isinstance(value, Tensor):
+            dimV = value.dim()
+            
         if not isinstance(value, (Tensor, list)): # It is scalar value
             return ValueInfo(len = 1, value = value, dim=0) 
             
-        if isinstance(value, Tensor) and value.dim() == 0: # It is a Tensor but also scalar value
+        if isinstance(value, Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
         
-        if (len(value) == 1): # It is Tensor or list with length 1 - treat it as scalar
+        if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
             if isinstance(value, list) and not isinstance(value[0], (Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
-            elif isinstance(value, Tensor) and value.dim() < 2:
+            elif isinstance(value, Tensor) and dimV < 2:
                 return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
-        if len(value) ==  2 and keyDataName[0] == '<': 
+        if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<': 
+            return ValueInfo(lenV = 1, value = value, dim=0)
+        elif isinstance(value, Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
-        
+
         if isinstance(value, list): 
             if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=1)
+                return ValueInfo(len = lenV, value = value, dim=1)
             elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=2)
+                return ValueInfo(len = lenV, value = value, dim=2)
             elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=3)
+                return ValueInfo(len = lenV, value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))
-                return ValueInfo(len = len(value), value = value, dim=4)
+                return ValueInfo(len = lenV, value = value, dim=4)
 
         elif isinstance(value, Tensor):
-            return ValueInfo(len = len(value), value = value, dim=value.dim())
+            return ValueInfo(len = lenV, value = value, dim=dimV)
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):

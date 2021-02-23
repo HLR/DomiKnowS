@@ -136,7 +136,7 @@ def main():
             assert phrase_node.getAttribute(people, 'softmax') > 0
             node.inferILPResults(fun=None)
             
-            ILPmetrics = node.getILPMetric()
+            ILPmetrics = node.getInferMetric()
             
             print("ILP metrics Total %s"%(ILPmetrics['Total']))
             
