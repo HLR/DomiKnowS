@@ -14,7 +14,7 @@ from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
 from future.builtins.misc import isinstance
-from _pytest.reports import _R
+# from _pytest.reports import _R
 
 logName = __name__
 logLevel = logging.CRITICAL
