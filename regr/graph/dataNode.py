@@ -1015,7 +1015,7 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if 'contains' not in dnE.impactLinks: 
+            if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)    
 
@@ -1036,7 +1036,7 @@ class DataNodeBuilder(dict):
             flattenDns = dns
             
         for dnE in flattenDns: # review them if they got connected
-            if 'contains' not in dnE.impactLinks: 
+            if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)   
                          
@@ -1132,8 +1132,14 @@ class DataNodeBuilder(dict):
                 _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 return
  
-            for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
-                rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+            if len(existingDnsForRelationSorted) == 1:
+                if vInfo.dim == 0:
+                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
+            elif vInfo.dim > 0:
+                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                    rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+            else:
+                pass
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1261,7 +1267,10 @@ class DataNodeBuilder(dict):
             relatedDnsType = conceptInfo["relationAttrs"]['src']
             relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
 
-            requiredLenOFReltedDns = len(vInfo.value[0])
+            if vInfo.dim:
+                requiredLenOFReltedDns = len(vInfo.value[0])
+            else:
+                requiredLenOFReltedDns = len(vInfo.item())
             
             if requiredLenOFReltedDns != len(relatedDns):
                 _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
@@ -1270,7 +1279,16 @@ class DataNodeBuilder(dict):
             for i in range(0,vInfo.len):
                 _dn = existingDnsForConcept[i]
                     
-                _dn.attributes[keyDataName] = vInfo.value[i]
+                if vInfo.dim == 0:
+                    if i == 0:
+                        if isinstance(vInfo.value, Tensor):
+                            _dn.attributes[keyDataName] =  vInfo.value.item()
+                        else:
+                            _dn.attributes[keyDataName] =  vInfo.value
+                    else:
+                        _DataNodeBulder__Logger.error('Provided value %s is a single element value (its dim is 0) but its length is %i'%(vInfo.value, vInfo.len))
+                else:
+                    _dn.attributes[keyDataName] = vInfo.value[i]
                 
                 # Create contain relation between existings datanodes
                 if conceptInfo["relationMode"] == "forward":
