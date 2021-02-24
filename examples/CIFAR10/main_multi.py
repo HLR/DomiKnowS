@@ -52,7 +52,7 @@ class ImageModel(PrimalDualModel):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker())
 
-from graph import graph, Image, Category, Label
+from graph import graph
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -142,16 +142,14 @@ class CIFAR10_1(datasets.CIFAR10):
         animal_category = [2,3,4,5,6,7]
         dict = {}
         dict['pixels'] = img
+        category_dict = {0:'animal', 1: 'vehicle'}
         for i in range(10):
-            dict[target_dict[i]] = [0]
-        dict[target_dict[target]] = [1]
+            dict['label'] = target
 
         if target in animal_category:
-            dict['animal'] = [1]
-            dict['vehicle'] = [0]
+            dict['category'] = 0
         else:
-            dict['vehicle'] = [1]
-            dict['animal'] = [0]
+            dict['category'] = 1
 
         return dict
 
