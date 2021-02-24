@@ -700,7 +700,16 @@ class DataNode:
 
         keys = [concept, inferKey]
         
-        collectAttributeList = [dn.getAttribute(*keys).item() if dn.getAttribute(*keys) is not None else 0 for dn in rootConceptDns]
+        collectAttributeList = []
+        for dn in rootConceptDns:
+            rTensor = dn.getAttribute(*keys)
+            if rTensor is None:
+                continue
+            
+            if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
+                collectAttributeList.append(rTensor.item())
+            else:
+                collectAttributeList.append(rTensor[1])
         
         return torch.FloatTensor(collectAttributeList)        
     
