@@ -52,7 +52,7 @@ class ImageModel(PrimalDualModel):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker())
 
-from graph import graph
+from graph_multi import graph
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
