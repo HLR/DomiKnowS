@@ -14,7 +14,7 @@ from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept
 from future.builtins.misc import isinstance
-from _pytest.reports import _R
+# from _pytest.reports import _R
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -700,7 +700,16 @@ class DataNode:
 
         keys = [concept, inferKey]
         
-        collectAttributeList = [dn.getAttribute(*keys).item() if dn.getAttribute(*keys) is not None else 0 for dn in rootConceptDns]
+        collectAttributeList = []
+        for dn in rootConceptDns:
+            rTensor = dn.getAttribute(*keys)
+            if rTensor is None:
+                continue
+            
+            if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
+                collectAttributeList.append(rTensor.item())
+            else:
+                collectAttributeList.append(rTensor[1])
         
         return torch.FloatTensor(collectAttributeList)        
     
@@ -805,7 +814,7 @@ class DataNode:
         
         return lcResult
 
-    def getILPMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
+    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
                     
         if not conceptsRelations:
             conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
@@ -1015,7 +1024,7 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if 'contains' not in dnE.impactLinks: 
+            if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)    
 
@@ -1036,7 +1045,7 @@ class DataNodeBuilder(dict):
             flattenDns = dns
             
         for dnE in flattenDns: # review them if they got connected
-            if 'contains' not in dnE.impactLinks: 
+            if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)   
                          
@@ -1132,8 +1141,14 @@ class DataNodeBuilder(dict):
                 _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 return
  
-            for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
-                rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+            if len(existingDnsForRelationSorted) == 1:
+                if vInfo.dim == 0:
+                    existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
+            elif vInfo.dim > 0:
+                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                    rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+            else:
+                pass
 
     def __createInitialdDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
@@ -1261,7 +1276,10 @@ class DataNodeBuilder(dict):
             relatedDnsType = conceptInfo["relationAttrs"]['src']
             relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
 
-            requiredLenOFReltedDns = len(vInfo.value[0])
+            if vInfo.dim:
+                requiredLenOFReltedDns = len(vInfo.value[0])
+            else:
+                requiredLenOFReltedDns = len(vInfo.item())
             
             if requiredLenOFReltedDns != len(relatedDns):
                 _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
@@ -1270,7 +1288,16 @@ class DataNodeBuilder(dict):
             for i in range(0,vInfo.len):
                 _dn = existingDnsForConcept[i]
                     
-                _dn.attributes[keyDataName] = vInfo.value[i]
+                if vInfo.dim == 0:
+                    if i == 0:
+                        if isinstance(vInfo.value, Tensor):
+                            _dn.attributes[keyDataName] =  vInfo.value.item()
+                        else:
+                            _dn.attributes[keyDataName] =  vInfo.value
+                    else:
+                        _DataNodeBulder__Logger.error('Provided value %s is a single element value (its dim is 0) but its length is %i'%(vInfo.value, vInfo.len))
+                else:
+                    _dn.attributes[keyDataName] = vInfo.value[i]
                 
                 # Create contain relation between existings datanodes
                 if conceptInfo["relationMode"] == "forward":
@@ -1369,35 +1396,42 @@ class DataNodeBuilder(dict):
     def __processAttributeValue(self, value, keyDataName):
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
+        lenV = len(value)
+        
+        if isinstance(value, Tensor):
+            dimV = value.dim()
+            
         if not isinstance(value, (Tensor, list)): # It is scalar value
             return ValueInfo(len = 1, value = value, dim=0) 
             
-        if isinstance(value, Tensor) and value.dim() == 0: # It is a Tensor but also scalar value
+        if isinstance(value, Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
         
-        if (len(value) == 1): # It is Tensor or list with length 1 - treat it as scalar
+        if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
             if isinstance(value, list) and not isinstance(value[0], (Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
-            elif isinstance(value, Tensor) and value.dim() < 2:
+            elif isinstance(value, Tensor) and dimV < 2:
                 return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
-        if len(value) ==  2 and keyDataName[0] == '<': 
+        if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<': 
+            return ValueInfo(lenV = 1, value = value, dim=0)
+        elif isinstance(value, Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
-        
+
         if isinstance(value, list): 
             if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=1)
+                return ValueInfo(len = lenV, value = value, dim=1)
             elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=2)
+                return ValueInfo(len = lenV, value = value, dim=2)
             elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
-                return ValueInfo(len = len(value), value = value, dim=3)
+                return ValueInfo(len = lenV, value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))
-                return ValueInfo(len = len(value), value = value, dim=4)
+                return ValueInfo(len = lenV, value = value, dim=4)
 
         elif isinstance(value, Tensor):
-            return ValueInfo(len = len(value), value = value, dim=value.dim())
+            return ValueInfo(len = lenV, value = value, dim=dimV)
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):

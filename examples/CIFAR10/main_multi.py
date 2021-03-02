@@ -52,7 +52,7 @@ class ImageModel(PrimalDualModel):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker())
 
-from graph import graph, Image, Category, Label
+from graph_multi import graph
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -69,7 +69,7 @@ def model_declaration():
     image[label] = ReaderSensor(keyword='label',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
-    image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 3))
+    image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[label] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
 
     program = LearningBasedProgram(graph, ImageModel)
@@ -139,11 +139,18 @@ class CIFAR10_1(datasets.CIFAR10):
 
         img = img.unsqueeze(0)
         target_dict = {0:'airplane',1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog', 7:'horse',8: 'ship', 9: 'truck'}
+        animal_category = [2,3,4,5,6,7]
         dict = {}
         dict['pixels'] = img
+        category_dict = {0:'animal', 1: 'vehicle'}
         for i in range(10):
-            dict[target_dict[i]] = [0]
-        dict[target_dict[target]] = [1]
+            dict['label'] = target
+
+        if target in animal_category:
+            dict['category'] = 0
+        else:
+            dict['category'] = 1
+
         return dict
 
 def load_cifar10(train=True, root='./data/', size=32):
@@ -172,35 +179,38 @@ def main():
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
 
-    program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    print(trainset[0])
 
-    label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-    counter = 0
-    for datanode in program.populate(dataset=testset):
-        print('>>>>>**********************************')
-        print('----------before ILP---------')
-        for label in label_list:
-            print(label, datanode.getAttribute(eval(label)).softmax(-1))
-
-        datanode.inferILPResults('dog', 'truck', 'airplane',
-                                    'automobile', 'bird', 'cat',
-                                    'deer', 'frog', 'horse', 'ship',fun=None)
-        print('----------after ILP---------')
-        prediction = ' '
-        for label in label_list:
-            predt_label = datanode.getAttribute(eval(label), 'ILP').item()
-            if predt_label == 1.0:
-                prediction = label
-            print('inference ',label, predt_label )
-        d = datanode.getAttributes()['pixels'].numpy()
-        plt.figure()
-        plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
-        plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
-        plt.savefig(str(counter)+'.png')
-        # plt.show()
-        counter += 1
-        if counter == 20:
-            break
+    # program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    #
+    # label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    # category_list = ['animal', 'vehicle']
+    # counter = 0
+    # for datanode in program.populate(dataset=testset):
+    #     print('>>>>>**********************************')
+    #     print('----------before ILP---------')
+    #     for label in label_list:
+    #         print(label, datanode.getAttribute(eval(label)).softmax(-1))
+    #
+    #     datanode.inferILPResults('dog', 'truck', 'airplane',
+    #                                 'automobile', 'bird', 'cat',
+    #                                 'deer', 'frog', 'horse', 'ship',fun=None)
+    #     print('----------after ILP---------')
+    #     prediction = ' '
+    #     for label in label_list:
+    #         predt_label = datanode.getAttribute(eval(label), 'ILP').item()
+    #         if predt_label == 1.0:
+    #             prediction = label
+    #         print('inference ',label, predt_label )
+    #     d = datanode.getAttributes()['pixels'].numpy()
+    #     plt.figure()
+    #     plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
+    #     plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
+    #     plt.savefig(str(counter)+'.png')
+    #     # plt.show()
+    #     counter += 1
+    #     if counter == 20:
+    #         break
 
 
 
