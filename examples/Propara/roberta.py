@@ -261,7 +261,7 @@ class RobertaEmbeddings(nn.Module):
         
         if timestep_type_ids is None:
             timestep_type_ids = torch.ones(input_shape, dtype=torch.long, device=self.position_ids.device)
-            
+        
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
