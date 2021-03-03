@@ -144,12 +144,12 @@ class CIFAR10_1(datasets.CIFAR10):
         dict['pixels'] = img
         category_dict = {0:'animal', 1: 'vehicle'}
         for i in range(10):
-            dict['label'] = target
+            dict['label'] = [target] #[0] [1] [2] ... [9]
 
         if target in animal_category:
-            dict['category'] = 0
+            dict['category'] = [0]
         else:
-            dict['category'] = 1
+            dict['category'] = [1]
 
         return dict
 
