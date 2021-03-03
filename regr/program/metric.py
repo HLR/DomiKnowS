@@ -26,11 +26,12 @@ class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
     def forward(self, input, target, weight=None):
         num_classes = input.shape[-1]
         input = input.view(-1, num_classes)
+        target = target.view(-1).to(dtype=torch.long)
         target = F.one_hot(target.view(-1), num_classes=num_classes)
         return super().forward(input, target, weight)
 
 
-class PRF1WithLogitsMetric(CMWithLogitsMetric):
+class BinaryPRF1WithLogitsMetric(BinaryCMWithLogitsMetric):
     def forward(self, input, target, weight=None):
         CM = super().forward(input, target, weight)
         tp = CM['TP'].float()
@@ -45,6 +46,9 @@ class PRF1WithLogitsMetric(CMWithLogitsMetric):
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
         return {'P': p, 'R': r, 'F1': f1}
+
+class PRF1WithLogitsMetric(CMWithLogitsMetric, BinaryPRF1WithLogitsMetric):
+    pass
 
 
 class MetricTracker(torch.nn.Module):
@@ -123,8 +127,8 @@ class ValueTracker(MetricTracker):
 
 
 class PRF1Tracker(MetricTracker):
-    def __init__(self):
-        super().__init__(CMWithLogitsMetric())
+    def __init__(self, metric=CMWithLogitsMetric()):
+        super().__init__(metric)
 
     def forward(self, values):
         CM = wrap_batch(values)
@@ -140,3 +144,8 @@ class PRF1Tracker(MetricTracker):
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
         return {'P': p, 'R': r, 'F1': f1}
+
+
+class BinaryPRF1Tracker(PRF1Tracker):
+    def __init__(self, metric=BinaryCMWithLogitsMetric()):
+        super().__init__(metric)

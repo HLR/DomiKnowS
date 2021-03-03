@@ -36,10 +36,11 @@ class TorchModel(torch.nn.Module):
         pass
 
     def move(self, value, device=None):
-        if device is None:
-            parameters = list(self.parameters())
-            if parameters:
-                device = next(self.parameters()).device
+        parameters = list(self.parameters())
+        if parameters:
+            device = device or next(self.parameters()).device
+        else:
+            device = device
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
@@ -172,12 +173,8 @@ class PoiModel(TorchModel):
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, Solver=None):
+    def __init__(self, graph, poi=None, loss=None, metric=None):
         super().__init__(graph, poi=poi, loss=loss, metric=metric)
-        if Solver:
-            self.solver = Solver(self.graph)
-        else:
-            self.solver = None
         self.inference_with = []
 
     def inference(self, builder):
@@ -186,10 +183,9 @@ class SolverModel(PoiModel):
             # make sure the sensors are evaluated
                 output = output_sensor(builder)
                 target = target_sensor(builder)
-        # data_item = self.solver.inferSelection(builder, list(self.poi))
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPConstrains(*self.inference_with, fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+        datanode.inferILPResults(*self.inference_with, fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
         return builder
 
     def populate(self, builder):

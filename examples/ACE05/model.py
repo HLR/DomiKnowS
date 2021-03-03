@@ -3,6 +3,8 @@ import torch
 from regr.program import POIProgram
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.pytorch import PoiModel
+from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, cache, TorchCache, JointSensor
 from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
@@ -123,10 +125,9 @@ def model(graph):
         print(f'Creating learner/reader for entity -> {concept}')
         span[concept] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
         span_annotation[concept] = LabelConstantSensor('type', concept=concept.name)
-        def fn(arg):
-            arg
-            pass
-        span[concept] = FunctionalSensor(span_equal_annotation.reversed(span_annotation[concept]), forward=fn, label=True)
+        def fn(arg, concept):  # add concept for debug, to remove later
+            return arg
+        span[concept] = FunctionalSensor(span_equal_annotation.reversed(span_annotation[concept]), concept, forward=fn, label=True)
 
         # entity -> sub classes
         for sub_concept in find_is_a(entities_graph, concept):
@@ -182,6 +183,16 @@ def model(graph):
                 # pair[event_arg] = ?
 
     # program = POIProgram(graph, poi=(span, pair))
-    program = PrimalDualProgram(graph, PoiModel, poi=(document, token, span, pair))
+    # program = PrimalDualProgram(graph, PoiModel, poi=(document, token, span, pair))
+    program = POIProgram(
+        graph,
+        poi=(document, token, span, pair),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        metric=PRF1Tracker())
+    # program = IMLProgram(
+    #     graph,
+    #     poi=(document, token, span, pair),
+    #     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
+    #     metric=PRF1Tracker())
 
     return program
