@@ -435,7 +435,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         firstV = True
         
         for eIndex, e in enumerate(lc.e): 
-            if isinstance(e, Concept) or isinstance(e, LogicalConstrain): 
+            if isinstance(e, (Concept,  LogicalConstrain, tuple)): 
                 # Look one step ahead in the parsed logical constrain and get variables names (if present) after the current concept
                 if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
                     variable = lc.e[eIndex+1]
@@ -464,8 +464,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
                     lcVariables[newvVariableName] = lcVariables[variableName]
                     
-                elif isinstance(e, Concept): # -- Concept 
-                    conceptName = e.name
+                elif isinstance(e, (Concept, tuple)): # -- Concept 
+                    if isinstance(e, Concept):
+                        conceptName = e.name
+                    else:
+                        conceptName = e[0].name
+                        
                     xPkey = '<' + conceptName + ">" + key
 
                     dnsList = [] # Stores lists of dataNode for each corresponding dataNode 
@@ -517,13 +521,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 _vDns.append(None)
                                 continue
                             
-                            ilpVs = _dn.getAttribute(xPkey) # Get ILP variable for the concept 
-                            
-                            if isinstance(ilpVs, Mapping) and p not in ilpVs:
-                                _vDns.append(None)
-                                continue
-                            
-                            vDn = ilpVs[p]
+                            if isinstance(e, Concept):
+                                ilpVs = _dn.getAttribute(xPkey) # Get ILP variable for the concept 
+                                
+                                if isinstance(ilpVs, Mapping) and len(ilpVs) < p:
+                                    _vDns.append(None)
+                                    continue
+                                
+                                vDn = ilpVs[p]
+                            else:
+                                vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
                         
                             if torch.is_tensor(vDn):
                                 vDn = vDn.item()  

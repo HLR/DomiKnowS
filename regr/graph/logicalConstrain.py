@@ -27,6 +27,8 @@ class LogicalConstrain:
         
         if isinstance(e[0], (Concept, LogicalConstrain)):
             conceptOrLc = e[0]
+        elif isinstance(e[0], tuple):
+            conceptOrLc = e[0][0]
         elif len(e) > 1 and isinstance(e[1], (Concept, LogicalConstrain)): 
             conceptOrLc = e[1]
         elif len(e) > 2 and isinstance(e[2], (Concept, LogicalConstrain)):

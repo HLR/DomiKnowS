@@ -123,7 +123,7 @@ class CustomMultiLevelReaderSensor(ReaderSensor):
     
     
 class LabelConstantSensor(FunctionalSensor):
-    def __init__(self, *pres, concept, edges=None, label=False, device='auto'):
+    def __init__(self, *pres, concept, edges=None, label=True, device='auto'):
         super().__init__(*pres, edges=edges, forward=None, label=label, device=device)
         self.concept_name = concept
         

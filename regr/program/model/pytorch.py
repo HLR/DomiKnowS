@@ -47,7 +47,7 @@ class TorchModel(torch.nn.Module):
             return [self.move(v, device) for v in value]
         elif isinstance(value, tuple):
             return tuple(self.move(v, device) for v in value)
-        elif isinstance(value, dict):
+        elif isinstance(value, dict) and not isinstance(value, Concept):
             return {k: self.move(v, device) for k, v in value.items()}
         else:
             return value

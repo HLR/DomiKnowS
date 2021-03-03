@@ -140,6 +140,7 @@ class DataNode:
     
     def getAttribute(self, *keys):
         key = ""
+        index = None
         
         for k in keys:
             if key != "":
@@ -149,14 +150,21 @@ class DataNode:
                 _k = self.__findConcept(k)
                 
                 if _k is not None:  
-                    key = key + '<' + k +'>'
+                    if isinstance(_k, tuple):
+                        key = key + '<' + _k[0].name +'>'
+                        index = _k[1]
+                    else:
+                        key = key + '<' + k +'>'
                 else:
                     key = key + k
             else:
                 key = key + '<' + k.name +'>'
                     
         if key in self.attributes:
-            return self.attributes[key]
+            if index is None:
+                return self.attributes[key]
+            else:
+                return self.attributes[key][index]
         else:
             return None   
            
@@ -494,7 +502,10 @@ class DataNode:
             return self
                 
     # Find concept in the graph based on concept name
+    
+    
     def __findConcept(self, _conceptName, usedGraph = None):
+        from .concept import EnumConcept
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -507,6 +518,11 @@ class DataNode:
                     concept = subGraph.concepts[conceptNameItem]
                     
                     return concept
+                elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
+                    if _conceptName in subGraph.concepts[conceptNameItem].values:
+                        concept = subGraph.concepts[conceptNameItem]
+                        
+                        return (concept, subGraph.concepts[conceptNameItem].get_index(_conceptName))
         
         return None 
     
@@ -1396,10 +1412,14 @@ class DataNodeBuilder(dict):
     def __processAttributeValue(self, value, keyDataName):
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
-        lenV = len(value)
-        
         if isinstance(value, Tensor):
             dimV = value.dim()
+            if dimV:
+                lenV = len(value)
+            else:
+                lenV = 1
+        else:
+            lenV = len(value)
             
         if not isinstance(value, (Tensor, list)): # It is scalar value
             return ValueInfo(len = 1, value = value, dim=0) 
