@@ -129,7 +129,13 @@ class Concept(BaseGraphTree):
         try:
             Rel = cls._rels[rel]
         except KeyError as e:
-            raise AttributeError(*e.args)
+            if  isinstance(self, EnumConcept):
+                if rel in self.values:
+                    result = (self, self.get_index(rel))
+                    
+                    return result
+            else:
+                raise AttributeError(*e.args)
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])

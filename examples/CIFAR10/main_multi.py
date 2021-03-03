@@ -176,25 +176,24 @@ def main():
     program = model_declaration()
 
     ### load data
-    trainset = load_cifar10(train=True)
+    #trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
 
-    print(trainset[0])
+    #print(trainset[0])
 
-    # program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    #
-    # label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-    # category_list = ['animal', 'vehicle']
-    # counter = 0
-    # for datanode in program.populate(dataset=testset):
-    #     print('>>>>>**********************************')
-    #     print('----------before ILP---------')
-    #     for label in label_list:
-    #         print(label, datanode.getAttribute(eval(label)).softmax(-1))
-    #
-    #     datanode.inferILPResults('dog', 'truck', 'airplane',
-    #                                 'automobile', 'bird', 'cat',
-    #                                 'deer', 'frog', 'horse', 'ship',fun=None)
+    #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    
+    label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    category_list = ['animal', 'vehicle']
+    counter = 0
+    for datanode in program.populate(dataset=testset):
+        print('>>>>>**********************************')
+        print('----------before ILP---------')
+        for label in label_list:
+            print(label, datanode.getAttribute(label).softmax(-1))
+    
+        datanode.inferILPResults('dog', 'truck', 'airplane', 'automobile', 'bird', 'cat', 'deer', 'frog', 'horse', 'ship', fun=None)
+   
     #     print('----------after ILP---------')
     #     prediction = ' '
     #     for label in label_list:
