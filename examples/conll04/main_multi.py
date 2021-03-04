@@ -52,18 +52,15 @@ def model():
 
     phrase[entity_label] = ModuleLearner('w2v', module=Classifier(96, 5))
 
-    def find_label(label_type):
+    def find_label():
         def find(data):
-            label = torch.tensor([item==label_type for item in data])
+            order = ["Peop", "Org", "Loc", "Other", "O"]
+            label = torch.tensor([order.index(item) for item in data])
             return label # torch.stack((~label, label), dim=1)
         return find
     
     #TODO change the reader
-    phrase[people] = FunctionalReaderSensor(keyword='label', forward=find_label('Peop'), label=True)
-    phrase[organization] = FunctionalReaderSensor(keyword='label', forward=find_label('Org'), label=True)
-    phrase[location] = FunctionalReaderSensor(keyword='label', forward=find_label('Loc'), label=True)
-    phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
-    phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
+    phrase[entity_label] = FunctionalReaderSensor(keyword='label', forward=find_label(), label=True)
 
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
         phrase['w2v'],
@@ -75,22 +72,19 @@ def model():
 
     pair[pair_label] = ModuleLearner('emb', module=Classifier(96*2, 5))
 
-    def find_relation(relation_type):
+    def find_relation():
         def find(arg1m, arg2m, data):
+            rel_list = ["Work_For", "Located_In", "Live_In", "OrgBased_In", "Kill"]
             label = torch.zeros(arg1m.shape[0], dtype=torch.bool)
             for rel, (arg1,*_), (arg2,*_) in data:
-                if rel == relation_type:
+                if rel in rel_list:
                     i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
-                    label[i] = True
+                    label[i] = rel_list.index(rel)
             return label # torch.stack((~label, label), dim=1)
         return find
     
     #TODO change the reader
-    pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Work_For'), label=True)
-    pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Located_In'), label=True)
-    pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Live_In'), label=True)
-    pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
-    pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
+    pair[pair_label] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation(), label=True)
 
     lbp = POIProgram(
         graph,
@@ -107,8 +101,8 @@ def model():
 
 def main():
     from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
+    from graph import entity_label
+    from graph import pair_label
 
     program = model()
 
@@ -128,7 +122,7 @@ def main():
         node.infer()
 
         if phrase_node.getAttribute(people) is not None:
-            assert phrase_node.getAttribute(people, 'softmax') > 0
+            assert phrase_node.getAttribute(entity_label, 'softmax') > 0
             node.inferILPResults(fun=None)
             
             ILPmetrics = node.getInferMetric()
