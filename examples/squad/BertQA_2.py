@@ -59,9 +59,10 @@ paragraph['answer_start'] = ReaderSensor(keyword='answer_start')
 paragraph['answer_end'] = ReaderSensor(keyword='answer_end')
 
 context = paragraph.relate_to(question)[0]
+
 question[context,"context2", 'text',"start","end"] = JointSensor(paragraph['context'],paragraph['questions'],paragraph['answer_start'],paragraph['answer_end'], forward=make_questions)
 
-question["token_ids","Mask","Sent_number","offsets"] = JointSensor("context2", 'text', forward=QA_Tokenize(max_lenght=max_lenght))
+question["token_ids","Mask","Sent_number","offsets"] = JointSensor(context,"context2", 'text', forward=QA_Tokenize(max_lenght=max_lenght))
 
 question['label'] = FunctionalSensor('start', 'end',"token_ids","offsets", forward=PutNear(max_lenght),label=True)
 
@@ -114,5 +115,4 @@ for node in program.populate(reader, device=device):
     print(node.getAttribute('context'),"\n")
     for word_node in node.getChildDataNodes():
         print(word_node.getAttribute('text'))
-
 

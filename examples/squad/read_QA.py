@@ -213,7 +213,8 @@ def QA_reader_2(sample_num=1000 * 1000 * 10):
 
 
 def make_questions(context, questions, start, end):
-    return torch.ones((len(questions), 1)), [context for i in range(len(questions[0]))], questions[0], start[0], end[0]
+    #print("make_questions", context,questions, start, end)
+    return torch.ones((len(questions[0]), 1)), [context for i in range(len(questions[0]))], questions[0], start[0], end[0]
 
 
 class QA_Tokenize:
@@ -221,7 +222,10 @@ class QA_Tokenize:
         self.tokenizer = BertWordPieceTokenizer("data/squad1.1/bert-base-uncased-vocab.txt", lowercase=True)
         self.max_lenght = max_lenght
 
-    def __call__(self, context, question):
+    def __call__(self,_, context, question):
+        print("")
+        print("QA_Tokenize: ",len(context),len(question))
+        print("")
         X = []
         Mask = []
         Sent_number = []
@@ -258,7 +262,12 @@ class PutNear:
         self.max_lenght = max_lenght
 
     def __call__(self, x1, x2, tokens_list, offsets):
-
+        print("*"*10)
+        print(x1)
+        print(x2)
+        print(tokens_list)
+        print(offsets)
+        print("*"*10)
         Y_S = []
         Y_E = []
         for k1, k2, tokens, offset in zip(x1, x2, tokens_list, offsets):
