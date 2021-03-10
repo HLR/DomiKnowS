@@ -5,7 +5,7 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
@@ -93,8 +93,31 @@ def model():
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset'] = JointSensor(sentence['text'], forward=Tokenizer())
-    word['emb'] = ModuleLearner('ids', module=BERT())
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
+    word['bert'] = ModuleLearner('ids', module=BERT())
+
+    def match_phrase(phrase, word_offset):
+        def overlap(a_s, a_e, b_s, b_e):
+            return (a_s <= b_s and b_s <= a_e) or (a_s <= b_e and b_e <= a_e)
+        ph_offset = 0
+        ph_word_overlap = []
+        for ph in phrase:
+            ph_len = len(ph)
+            word_overlap = []
+            for word_s, word_e in word_offset:
+                if word_e - word_s <= 0:
+                    # empty string / special tokens
+                    word_overlap.append(False)
+                else:
+                    # other tokens, do compare offset
+                    word_overlap.append(overlap(ph_offset, ph_offset+ph_len, word_s, word_e))
+            ph_word_overlap.append(word_overlap)
+            ph_offset += ph_len + 1
+        return torch.tensor(ph_word_overlap)
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'], relation=rel_phrase_contains_word.reversed, forward=match_phrase)
+    def phrase_bert(bert):
+        return bert
+    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
 
     phrase[people] = ModuleLearner('w2v', module=Classifier(96))
     phrase[organization] = ModuleLearner('w2v', module=Classifier(96))
