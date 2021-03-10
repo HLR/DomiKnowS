@@ -40,8 +40,8 @@ class Tokenizer():
         mask = mask.bool()
         ids = ids.masked_select(mask)
         offset = torch.stack((offset[:,:,0].masked_select(mask), offset[:,:,1].masked_select(mask)), dim=-1)
-
-        return mapping, ids, offset 
+        tokens = self.tokenizer.convert_ids_to_tokens(ids)
+        return mapping, ids, offset, tokens
 
 # emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
 # to freeze BERT, uncomment the following
