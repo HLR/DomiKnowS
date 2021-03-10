@@ -22,9 +22,6 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
         # softmax = torch.nn.Softmax(dim=-1)
         # super().__init__(linear, softmax)
-    
-    def forward(self, input):
-        return super().forward(input)
 
 
 def model():
