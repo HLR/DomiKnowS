@@ -4,7 +4,7 @@ REGR_SOLVER = os.environ.get('REGR_SOLVER', 'Gurobi')
 
 ilpConfig = {
     # variable controlling what ILP solver is used  - one of "Gurobi", "GEKKO", None
-    'ilpSolver' : REGR_SOLVER,
+    'ilpSolver' : 'Gurobi',
 
     # Logging configuration for ilpOntSolver
     'ifLog': True,
