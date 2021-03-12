@@ -18,7 +18,6 @@ sys.path.append('../..')
 def prediction_softmax(pr, gt):
     return torch.softmax(pr.data, dim=-1)
 
-
 class ImageNetwork(torch.nn.Module):
     def __init__(self, n_outputs=2):
         super(ImageNetwork, self).__init__()
@@ -53,17 +52,17 @@ class ImageModel(PrimalDualModel):
             metric=PRF1Tracker())
 
 from graph_multi import graph
-
+graph.detach()
+image = graph['image']
+category = graph['category']
+label = graph['label']
+    
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
     from regr.program import LearningBasedProgram
     from torch import nn
-    graph.detach()
-    image = graph['image']
-    category = graph['category']
-    label = graph['label']
-
+    
     image['pixels'] = ReaderSensor(keyword='pixels')
     image[category] = ReaderSensor(keyword='category',label=True)
     image[label] = ReaderSensor(keyword='label',label=True)
@@ -78,17 +77,14 @@ def model_declaration():
 
 class CIFAR10_1(datasets.CIFAR10):
 
-    def __init__(self, root, train=True, transform=None, target_transform=None,
-                 download=False):
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
 
-        super(CIFAR10_1, self).__init__(root, transform=transform,
-                                      target_transform=target_transform, download=download)
+        super(CIFAR10_1, self).__init__(root, transform=transform, target_transform=target_transform, download=download)
 
         self.train = train  # training set or test set
 
         if not self._check_integrity():
-            raise RuntimeError('Dataset not found or corrupted.' +
-                               ' You can use download=True to download it')
+            raise RuntimeError('Dataset not found or corrupted.' + ' You can use download=True to download it')
 
         if self.train:
             downloaded_list = self.train_list
@@ -101,6 +97,7 @@ class CIFAR10_1(datasets.CIFAR10):
         # now load the picked numpy arrays
         for file_name, checksum in downloaded_list:
             file_path = os.path.join(self.root, self.base_folder, file_name)
+            
             with open(file_path, 'rb') as f:
                 if sys.version_info[0] == 2:
                     entry = pickle.load(f)
@@ -140,6 +137,7 @@ class CIFAR10_1(datasets.CIFAR10):
         img = img.unsqueeze(0)
         target_dict = {0:'airplane',1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog', 7:'horse',8: 'ship', 9: 'truck'}
         animal_category = [2,3,4,5,6,7]
+        
         dict = {}
         dict['pixels'] = img
         category_dict = {0:'animal', 1: 'vehicle'}
@@ -183,18 +181,22 @@ def main():
 
     #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
-    label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-    category_list = ['animal', 'vehicle']
     counter = 0
     for datanode in program.populate(dataset=testset):
         print('>>>>>**********************************')
         print('----------before ILP---------')
-        for label in label_list:
-            print(label, datanode.getAttribute(label).softmax(-1))
+        
+        for l in label.values:
+            print(l, datanode.getAttribute(l).softmax(-1))
     
-        datanode.inferILPResults('dog', 'truck', 'airplane', 'automobile', 'bird', 'cat', 'deer', 'frog', 'horse', 'ship', fun=None)
+        datanode.inferILPResults(*category.values, *label.values, fun=None)
    
-    #     print('----------after ILP---------')
+        print('----------after ILP---------')
+        
+        ILPmetrics = datanode.getInferMetric()
+            
+        print("ILP metrics Total %s"%(ILPmetrics['Total']))
+        
     #     prediction = ' '
     #     for label in label_list:
     #         predt_label = datanode.getAttribute(eval(label), 'ILP').item()
@@ -210,10 +212,6 @@ def main():
     #     counter += 1
     #     if counter == 20:
     #         break
-
-
-
-
 
 if __name__ == '__main__':
     main()
