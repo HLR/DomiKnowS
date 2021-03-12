@@ -9,7 +9,7 @@ Relation.clear()
 with Graph('CIFAR10') as graph:
     Image = Concept(name='image')
     Category = Image(name="category", ConceptClass=EnumConcept, values=["animal", "vehicle"])
-    Label = Image(name="label", ConceptClass=EnumConcept, values=["airplane", "dog", "truck", "automobile", "bird", "cat", "deer", "frog", "horse", "ship"])
+    Label = Image(name="tag", ConceptClass=EnumConcept, values=["airplane", "dog", "truck", "automobile", "bird", "cat", "deer", "frog", "horse", "ship"])
 
     nandL(Category.animal, Label.airplane)
     nandL(Category.animal, Label.truck)
