@@ -193,9 +193,9 @@ def main():
    
         print('----------after ILP---------')
         
-        ILPmetrics = datanode.getInferMetric()
+        #ILPmetrics = datanode.getInferMetric()
             
-        print("ILP metrics Total %s"%(ILPmetrics['Total']))
+        #print("ILP metrics Total %s"%(ILPmetrics['Total']))
         
     #     prediction = ' '
     #     for label in label_list:
