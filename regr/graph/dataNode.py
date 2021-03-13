@@ -883,31 +883,32 @@ class DataNode:
             preds = self.collectInferedResults(cr, inferType)
             labels = self.collectInferedResults(cr, 'label')
             
-            result[cr] = {}
+            result[cr[1]] = {}
             if preds is not None and labels is not None:
+                labels = labels.long()
                 # calculate confusion matrix
                 _tp = (preds * labels * weight).sum() # true positive
                 tp.append(_tp)
-                result[cr]['TP'] = _tp 
+                result[cr[1]]['TP'] = _tp 
                 _fp = (preds * (1 - labels) * weight).sum() # false positive
                 fp.append(_fp)
-                result[cr]['FP'] = _fp
+                result[cr[1]]['FP'] = _fp
                 _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
                 tn.append(_tn)
-                result[cr]['TN'] = _tn
+                result[cr[1]]['TN'] = _tn
                 _fn = ((1 - preds) * labels * weight).sum() # false positive
                 fn.append(_fn)
-                result[cr]['FN'] = _fn
+                result[cr[1]]['FN'] = _fn
                 
                 if _tp + _fp:
                     _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                    result[cr]['P'] = _p
+                    result[cr[1]]['P'] = _p
                     _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                    result[cr]['R'] = _r
+                    result[cr[1]]['R'] = _r
                     
                     if _p + _r:
                         _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                        result[cr]['F1'] = _f1
+                        result[cr[1]]['F1'] = _f1
                       
         result['Total'] = {}  
         tpT = (torch.tensor(tp)).sum()

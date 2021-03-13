@@ -72,7 +72,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             value = torch.empty(2, dtype=torch.float)
             
-            value[0] = 1 - tExp[conceptRelation[2]]/tExpSum
+            value[0] = float("nan") # 1 - tExp[conceptRelation[2]]/tExpSum
             value[1] = tExp[conceptRelation[2]]/tExpSum
         else:
             value = valueI
@@ -313,7 +313,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         if not hasattr(self, 'myOnto'): 
             return
         
-        conceptsRelations = [cr.name for cr in _conceptsRelations]
+        conceptsRelations = [cr[0].name for cr in _conceptsRelations]
         
         # -- Add constraints based on concept disjoint statements in ontology - not(and(var1, var2)) = nand(var1, var2)
         foundDisjoint = dict() # too eliminate duplicates
