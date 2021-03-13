@@ -55,7 +55,7 @@ from graph_multi import graph
 graph.detach()
 image = graph['image']
 category = graph['category']
-label = graph['tag']
+label = graph['label']
     
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -65,7 +65,7 @@ def model_declaration():
     
     image['pixels'] = ReaderSensor(keyword='pixels')
     image[category] = ReaderSensor(keyword='category',label=True)
-    image[label] = ReaderSensor(keyword='tag',label=True)
+    image[label] = ReaderSensor(keyword='label',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
     image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
@@ -142,12 +142,16 @@ class CIFAR10_1(datasets.CIFAR10):
         dict['pixels'] = img
         category_dict = {0:'animal', 1: 'vehicle'}
         for i in range(10):
-            dict['tag'] = [target] #[0] [1] [2] ... [9]
+            dict['label'] = [target] #[0] [1] [2] ... [9]
 
         if target in animal_category:
-            dict['category'] = [0]
+            dict['vehicle'] = [0]
+            dict['animal'] = [1]
+
         else:
-            dict['category'] = [1]
+            dict['vehicle'] = [1]
+            dict['animal'] = [0]
+
 
         return dict
 
@@ -181,42 +185,37 @@ def main():
 
     #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
+    counter = 0
     for datanode in program.populate(dataset=testset):
         print('>>>>>**********************************')
-        #print('----------before ILP---------')
+        print('----------before ILP---------')
         
-        label = graph['tag']
-        
-        #for l in label.values:
-            #print(l, datanode.getAttribute(l).softmax(-1))
+        for l in label.values:
+            print(l, datanode.getAttribute(l).softmax(-1))
     
         datanode.inferILPResults(*category.values, *label.values, fun=None)
    
         print('----------after ILP---------')
         
-        ILPmetrics = datanode.getInferMetric()
+        #ILPmetrics = datanode.getInferMetric()
             
-        print("ILP metrics Total %s"%(ILPmetrics['Total']))
+        #print("ILP metrics Total %s"%(ILPmetrics['Total']))
         
-        for c in category.values:
-            predt_category = datanode.getAttribute(c, 'ILP').item()
-            if predt_category == 1.0:
-                print('inference ', c, predt_category)
-            
-        prediction = ''
-        for l in label.values:
-            predt_label = datanode.getAttribute(l, 'ILP').item()
-            if predt_label == 1.0:
-                print('inference ', l, predt_label)
-            
-            if predt_label == 1.0:
-                prediction = l
-            #d = datanode.getAttributes()['pixels'].numpy()
-            #plt.figure()
-            #plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
-            #plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
-            #plt.savefig(str(counter)+'.png')
-            #plt.show()
-        break
+    #     prediction = ' '
+    #     for label in label_list:
+    #         predt_label = datanode.getAttribute(eval(label), 'ILP').item()
+    #         if predt_label == 1.0:
+    #             prediction = label
+    #         print('inference ',label, predt_label )
+    #     d = datanode.getAttributes()['pixels'].numpy()
+    #     plt.figure()
+    #     plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
+    #     plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
+    #     plt.savefig(str(counter)+'.png')
+    #     # plt.show()
+    #     counter += 1
+    #     if counter == 20:
+    #         break
+
 if __name__ == '__main__':
     main()

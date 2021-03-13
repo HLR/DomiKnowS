@@ -1,5 +1,3 @@
-import numpy as np
-import torch.cuda
 import torch
 from collections import OrderedDict, namedtuple
 import time
@@ -12,7 +10,7 @@ from regr.solver import ilpOntSolverFactory
 import logging
 from logging.handlers import RotatingFileHandler
 from .property import Property
-from .concept import Concept
+from .concept import Concept, EnumConcept
 from future.builtins.misc import isinstance
 # from _pytest.reports import _R
 
@@ -142,22 +140,24 @@ class DataNode:
         key = ""
         index = None
         
-        for k in keys:
+        for i, k in enumerate(keys):
             if key != "":
                 key = key + "/"
                 
             if isinstance(k, str):
-                _k = self.__findConcept(k)
+                _k = self.findConcept(k)
                 
                 if _k is not None:  
                     if isinstance(_k, tuple):
                         key = key + '<' + _k[0].name +'>'
-                        index = _k[1]
+                        index = _k[2]
                     else:
                         key = key + '<' + k +'>'
                 else:
                     key = key + k
-            else:
+            elif isinstance(k, tuple):
+                key = key + '<' + k[0].name +'>'
+            elif isinstance(k, Concept):
                 key = key + '<' + k.name +'>'
                     
         if key in self.attributes:
@@ -502,10 +502,7 @@ class DataNode:
             return self
                 
     # Find concept in the graph based on concept name
-    
-    
-    def __findConcept(self, _conceptName, usedGraph = None):
-        from .concept import EnumConcept
+    def findConcept(self, _conceptName, usedGraph = None):
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -517,12 +514,14 @@ class DataNode:
                 if _conceptName == conceptNameItem:
                     concept = subGraph.concepts[conceptNameItem]
                     
-                    return concept
+                    return (concept, concept.name, None, 1)
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
+                    vlen = len(subGraph.concepts[conceptNameItem].values)
+                    
                     if _conceptName in subGraph.concepts[conceptNameItem].values:
                         concept = subGraph.concepts[conceptNameItem]
                         
-                        return (concept, subGraph.concepts[conceptNameItem].get_index(_conceptName))
+                        return (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
         
         return None 
     
@@ -550,7 +549,7 @@ class DataNode:
             relationAttrs = OrderedDict()
             for _, rel in enumerate(conceptRelation.has_a()): 
                 dstName = rel.dst.name                
-                relationAttr = self.__findConcept(dstName, usedGraph)
+                relationAttr = self.findConcept(dstName, usedGraph)[0]
     
                 relationAttrs[rel.name] = relationAttr
                 
@@ -572,7 +571,7 @@ class DataNode:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
         if isinstance(relationConcept, str):
-            relationConcept = self.__findConcept(relationConcept)
+            relationConcept = self.findConcept(relationConcept)[0]
             
         # Does this concept or relation has parent (through _isA)
         for _isA in relationConcept.is_a():
@@ -648,7 +647,7 @@ class DataNode:
         
         # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
-            if att[0] == '<' and att[-1] == '>':
+            if att[0] == '<' and att[-1] == '>':  
                 if att[1:-1] not in conceptsAndRelations:
                     conceptsAndRelations.add(att[1:-1])
                     _DataNode__Logger.info('Found concept %s in dataNode %s'%(att[1:-1],dn))
@@ -673,7 +672,36 @@ class DataNode:
                 self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations)
 
         return conceptsAndRelations
+                                
+    def collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
+        candR = self.__collectConceptsAndRelations(self)
+        
+        returnCandR = []
+        
+        for c in candR:
+            _concept = self.findConcept(c)[0]
+            
+            if _concept is None:
+                continue
+            
+            if isinstance(_concept, tuple):
+                _concept = _concept[0]
+            
+            if isinstance(_concept, EnumConcept):
+                for i, a in enumerate(_concept.values):
                     
+                    if conceptsAndRelations and a not in conceptsAndRelations:
+                        continue
+                    
+                    returnCandR.append((_concept, a, i, len(_concept.values)))
+            else:
+                if conceptsAndRelations and c not in conceptsAndRelations:
+                    continue
+                
+                returnCandR.append((_concept, _concept.name, None, 1))
+        
+        return returnCandR
+        
     def __getILPsolver(self, conceptsRelations = []):
         
         _conceptsRelations = []
@@ -683,11 +711,14 @@ class DataNode:
         
         for currentConceptOrRelation in conceptsRelations:
             if isinstance(currentConceptOrRelation, str):
-                currentConceptOrRelation = self.__findConcept(currentConceptOrRelation)
+                currentConceptOrRelation = self.findConcept(currentConceptOrRelation)
             
             _conceptsRelations.append(currentConceptOrRelation)
             
-            currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
+            if isinstance(currentConceptOrRelation, tuple):
+                currentOntologyGraph = currentConceptOrRelation[0].getOntologyGraph()
+            else:
+                currentOntologyGraph = currentConceptOrRelation.getOntologyGraph()
             
             if currentOntologyGraph is not None:
                 myOntologyGraphs.add(currentOntologyGraph)
@@ -704,15 +735,15 @@ class DataNode:
 
     # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
     def collectInferedResults(self, concept, inferKey):
-        rootConcept = self.findRootConceptOrRelation(concept)
+        rootConcept = self.findRootConceptOrRelation(concept[0])
         
         if not rootConcept:
-            return torch.FloatTensor([])
+            return torch.tensor([])
         
         rootConceptDns = self.findDatanodes(select = rootConcept)
         
         if not rootConceptDns:
-            return torch.FloatTensor([])
+            return torch.tensor([])
 
         keys = [concept, inferKey]
         
@@ -727,14 +758,14 @@ class DataNode:
             else:
                 collectAttributeList.append(rTensor[1])
         
-        return torch.FloatTensor(collectAttributeList)        
+        return torch.tensor(collectAttributeList)        
     
     # Calculate argMax and softMax
     def infer(self):
-        conceptsRelations = self.__collectConceptsAndRelations(self) 
+        conceptsRelations = self.collectConceptsAndRelations(self) 
         
         for c in conceptsRelations:
-            cRoot = self.findRootConceptOrRelation(c)
+            cRoot = self.findRootConceptOrRelation(c[0])
             dns = self.findDatanodes(select = cRoot)
             
             if not dns:
@@ -743,21 +774,28 @@ class DataNode:
             vs = []
             
             for dn in dns:
-                v = dn.getAttribute(c)
+                v = dn.getAttribute(c[0])
                 
                 if v is None:
                     vs = []
                     break
-                elif not torch.is_tensor(v) or len(v.size()) != 1 or v.size()[0] != 2:
+                elif not torch.is_tensor(v):
                     vs = []
                     break
                 else:
-                    vs.append(v[1])
+                    if c[2] is not None:
+                        vs.append(v[c[2]])
+                    else:
+                        if len(v.size()) != 1 or v.size()[0] != 2:
+                            vs = []
+                            break
+                        else:
+                            vs.append(v[1])
             
             if not vs:
                 continue
             
-            t = torch.FloatTensor(vs)
+            t = torch.tensor(vs)
             t[torch.isnan(t)] = 0 # NAN  -> 0
             
             vM = torch.argmax(t).item() # argmax
@@ -766,18 +804,24 @@ class DataNode:
             tExp = torch.exp(t)
             tExpSum = torch.sum(tExp).item()
             
-            keyArgmax = "<" + c + ">/argmax"
-            keySoftMax = "<" + c + ">/softmax"
+            keyArgmax = "<" + c[0].name + ">/argmax"
+            keySoftMax = "<" + c[0].name + ">/softmax"
             
             # Add argmax and softmax to DataNodes
-            for dn in dns:
+            for dn in dns:    
+                if keyArgmax not in dn.attributes:
+                    dn.attributes[keyArgmax] = torch.empty(c[3], dtype=torch.float)
+                    
                 if dn.getInstanceID() == vM:
-                    dn.attributes[keyArgmax] = torch.tensor([1])
+                    dn.attributes[keyArgmax][c[2]] = 1
                 else:
-                    dn.attributes[keyArgmax] = torch.tensor([0])
+                    dn.attributes[keyArgmax][c[2]] = 0
                 
+                if keySoftMax not in dn.attributes:
+                    dn.attributes[keySoftMax] = torch.empty(c[3], dtype=torch.float)
+                    
                 dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
-                dn.attributes[keySoftMax] = torch.tensor([dnSoftmax.item()])
+                dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
@@ -786,29 +830,26 @@ class DataNode:
         else:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
-        if not _conceptsRelations:
-            _conceptsRelations = ()
-            
         # Check if concepts and/or relations have been provided for inference
-        if not _conceptsRelations:
-            _conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
+        _conceptsRelations = self.collectConceptsAndRelations(self, _conceptsRelations) # Collect all concepts and relation from graph as default set
 
-            if len(_conceptsRelations) == 0:
-                _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
-                raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
-            else:        
-                _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
-        else:
-            pass
+        if len(_conceptsRelations) == 0:
+            _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+            raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
+        else:        
+            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
                 
         myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
-
+        
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)    
         
     def verifySelection(self, *_conceptsRelations):
+        
+        # --- Update !
+        
         if not _conceptsRelations:
             _conceptsRelations = ()
             
@@ -824,7 +865,7 @@ class DataNode:
     
     def calculateLcLoss(self):
         
-        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.__collectConceptsAndRelations(self))
+        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
 
         lcResult = myilpOntSolver.calculateLcLoss(self)
         
@@ -833,7 +874,7 @@ class DataNode:
     def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
                     
         if not conceptsRelations:
-            conceptsRelations = self.__collectConceptsAndRelations(self) # Collect all concepts and relation from graph as default set
+            conceptsRelations = self.collectConceptsAndRelations(self, conceptsRelations) # Collect all concepts and relation from graph as default set
         
         result = {}
         tp, fp, tn, fn  = [], [], [], []
@@ -842,40 +883,41 @@ class DataNode:
             preds = self.collectInferedResults(cr, inferType)
             labels = self.collectInferedResults(cr, 'label')
             
-            result[cr] = {}
+            result[cr[1]] = {}
             if preds is not None and labels is not None:
+                labels = labels.long()
                 # calculate confusion matrix
                 _tp = (preds * labels * weight).sum() # true positive
                 tp.append(_tp)
-                result[cr]['TP'] = _tp 
+                result[cr[1]]['TP'] = _tp 
                 _fp = (preds * (1 - labels) * weight).sum() # false positive
                 fp.append(_fp)
-                result[cr]['FP'] = _fp
+                result[cr[1]]['FP'] = _fp
                 _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
                 tn.append(_tn)
-                result[cr]['TN'] = _tn
+                result[cr[1]]['TN'] = _tn
                 _fn = ((1 - preds) * labels * weight).sum() # false positive
                 fn.append(_fn)
-                result[cr]['FN'] = _fn
+                result[cr[1]]['FN'] = _fn
                 
                 if _tp + _fp:
                     _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                    result[cr]['P'] = _p
+                    result[cr[1]]['P'] = _p
                     _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                    result[cr]['R'] = _r
+                    result[cr[1]]['R'] = _r
                     
                     if _p + _r:
                         _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                        result[cr]['F1'] = _f1
+                        result[cr[1]]['F1'] = _f1
                       
         result['Total'] = {}  
-        tpT = (torch.FloatTensor(tp)).sum()
+        tpT = (torch.tensor(tp)).sum()
         result['Total']['TP'] = tpT 
-        fpT = (torch.FloatTensor(fp)).sum() 
+        fpT = (torch.tensor(fp)).sum() 
         result['Total']['FP'] = fpT
-        tnT = (torch.FloatTensor(tn)).sum() 
+        tnT = (torch.tensor(tn)).sum() 
         result['Total']['TN'] = tnT
-        fnT = (torch.FloatTensor(fn)).sum() 
+        fnT = (torch.tensor(fn)).sum() 
         result['Total']['FN'] = fnT
         
         if tpT + fpT:
@@ -1342,7 +1384,10 @@ class DataNodeBuilder(dict):
                     return
                 elif vInfo.dim == 0:
                     if isinstance(vInfo.value, Tensor):
-                        existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
+                        if keyDataName[0] == '<' and keyDataName[-1] == '>':
+                            existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
+                        else:
+                            existingDnsForConcept[0].attributes[keyDataName] = vInfo.value
                     else:
                         existingDnsForConcept[0].attributes[keyDataName] = [vInfo.value]
                 else:
