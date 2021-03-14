@@ -157,49 +157,85 @@ To create a program, user needs to first assign `Sensor`s and `Learner`s to `Pro
 There are different [pre-defined sensors](./apis/sensor/PYTORCH.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./apis/SENSORS.md) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
 
 ```python
-sentence['index'] = ReaderSensor(keyword='sentence')
+SAMPLE = {
+    'text': ['John works for IBM'],
+    'peop': [1, 0, 0, 0],
+    'org': [0, 0, 0, 1],
+    'wf': [(0,3)]
+}
 
-rel_sentence_contains_word['forward'] = TokenizerEdgeSensor('index', mode='forward', to=('index', 'ids', 'offset'), tokenizer=Tokenizer())
+reader = [SAMPLE]
 
-def offset_len(offset):
-  return offset[:,1] - offset[:,0]
-word['len'] = FunctionalSensor('offset', forward=offset_len)
-word[people] = ReaderSensor(keyword='people', label=True)
-word[organization] = ReaderSensor(keyword='organization', label=True)
-pair[work_for] = ReaderSensor(keyword='work_for', label=True)
+sentence['text'] = ReaderSensor(keyword='text')
+
+scw = sentence.relate_to(word)[0]
+word[scw, 'text','ids','offset'] = JointSensor(sentence['text'], forward=tokenize)
+
+
+word[people] = ReaderSensor(keyword='peop', label=True)
+word[organization] = ReaderSensor(keyword='org', label=True)
+
+word['emb'] = ModuleLearner('text', scw, module=WordEmbedding())
+word[people] = ModuleLearner('emb', module=Classifier())
+word[organization] = ModuleLearner('emb', module=Classifier())
+
 ```
 
-In the example above, the first `ReaderSensor` is assigned to a special property `'index'`.
-This `ReaderSensor` will simply read the key `'sentence'` from an sample, which is expected to be a `dict`, retrieved by enumerating through [the reader](#221-reader-example).
+In the example above, the first `ReaderSensor` is assigned to a special property `'text'`.
+This `ReaderSensor` will simply read the key `'text'` from an sample, which is expected to be a `dict`, retrieved by enumerating through [the reader](#221-reader-example).
 `Datanode` instance of concept `sentence` will be created based on the output of this sensor when being populated.
-Next, a `TokenizerEdgeSensor` is assigned to `'forward'` property of the edge `rel_sentence_contains_word`. As the first argument `'index'` suggest, this sensor will take the property of `sentence` keyed by `'index'` as input.
-`Tokenizer()` is an external tokenizor from the [`transformers` package](https://huggingface.co/transformers/), which returns a bunch of informative values, and converted to an identity indicator `index`, token index in vocabulary `ids`, and tuple of starting and ending charactor in sentence `offset`.
-Indicated by `to=('index', 'ids', 'offset')`, the tokenized result goes to the three properties, `'index'`, `'ids'`, and `'offset'`, of concept `word`,.
+Next, a `JointSensor` is assigned uses the relation between sentence and word by sentence.relate_to(word)[0] to conect a sentence to its word nodes and assign them 'text','ids' and 'offset' features.
+scw is the same relation as the realtion descrived in the graph 'sentence.contains(word)', so another way of getting it would have been (scw,)=sentence.contains(word). this relation contains sentence as its source feature 'src' and word as its destination feature 'dst'. so while we put this relation as the first feature of the jointSensor output, the sensor will convert sentence input to word output.
+conversly, if we wanted to form a sentence from a group of words we would use 'scw.reversed'.
 
-`FunctionalSensor` is a useful tool to plug in a python snippet to transform the values. For example, here the `FunctionalSensor` is instantiate with function `offset_len()` that transform offset to length of a token and it is assigned to `'len'` property of `word`.
+the input of the `JointSensor` is a sentence and the output should be a tuple for scw, 'text','ids' and 'offset' features in the form (scw, text,ids,offset). each of these output variables should be a tensor or a python list and their len or first dimention should be equal to the number of word. for instance scw could be 'torch.ones((number_of_words(sentence), 1))' and text could be a list of words. the framework will assign this attributes to each word seprately. later while using a feature of word, a list of features for each sentece is returned as you will see below.
 
-The last three lines of the example shows `ReaderSensor`s assigned to property of `word` and `pair`. The inherit concepts `people`, `organization`, and `work_for` are used as property name to indicate a classification property.
+when we want to define our neural network output labels, we can do so by defining our cathegories as sub_concepts of a concept and then assigning 0 and 1 to every sub_concept (we can't define multiple cathegories but we can define our cathegories seprately and give them binary values). is this case our cathegories are not nessecarilly mutually exclusive unless we define constarints on them. here we have 'people' and 'organization' as sub_concepts of word and the syntax is using them to assgin 1 or 0 values to 'word[people]' and 'word[organization]'. their values are read by 'ReadorSensor' ( in this case we assume we already knew the number of tokens of the sentence and we already labled them based on that).
+
 The extra argument `label=True` indicates it is the ground-true value that this `Sensor` should not be taked into accont the process of forward computing.
 
 `Learner`s, are similar to `Sensor`s. The only difference is that `Learner`s have trainable parameters. The `Program` will update the parameters in `Learner`s based on model performance.
 
-```python
-word['emb'] = ModuleLearner('ids', module=BERT())
-word[people] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
-word[organization] = ModuleLearner('emb', module=torch.nn.Linear(768, 2))
-pair[wor_for] = ModuleLearner('emb', module=torch.nn.Linear(768*2, 2))
-```
+we can assign `Learner`s to `Property`s of `Concept`s. `ModuleLearner` is specifically useful to plug in PyTorch modules. Specificly, `word['emb']` is instanciated as a `BERT()` module (implemented using the [`transformers` package](https://huggingface.co/transformers/)) which takes `'ids'` of `word` as input.
+so we use `ModuleLearner` to calculate an embedding for our words and use them later to assgin binary classification values to our words.
 
-The above snippet shows we can assign `Learner`s to `Property`s of `Concept`s.
-`ModuleLearner` is specifically useful to plug in PyTorch modules.
-Specificly, `word['emb']` is instanciated as a `BERT()` module (implemented using the [`transformers` package](https://huggingface.co/transformers/)) which takes `'ids'` of `word` as input.
-Three other `ModuleLearner`s are assigned to `Property`s named by `people`, `organization`, and `workd_for`, which are sub-types of `word` and `pair`, implemented by PyTorch linear module `torch.nn.Linear`.
+next we use a classifier class that is just a simple torch.nn.Linear module and convert the embedding of the words to a tensor of shape 2. 
 These indicates they are type classifiers of the concept.
 
-It should be noticed that we have assigned `ReaderSensor`s to the same `Property`s of `word` and `pair`.
+It should be noticed that we have assigned `ReaderSensor`s to the same `Property`s of `word`.
 This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
 Instead of overwriting the assignment, "Multiple Assignment" indicates consistency of the `Sensor`s and `Learner`s assigned.
 For the above example, the framework will generate loss to impose consistency between corresponding `ReaderSensor` and `ModuleLearner`.
+
+```python
+def offset_len(offset):
+  return offset[:,1] - offset[:,0]
+word['len'] = FunctionalSensor('offset', forward=offset_len)
+
+arg1, arg2 = pair.relate_to(word)
+pair[arg1.reversed, arg2.reversed] = JointSensor(word['text'], forward=make_pair)
+pair['emb'] = FunctionalSensor(arg1.reversed('emb'), arg2.reversed('emb'), forward=concat)
+pair[work_for] = ModuleLearner('emb', module=Classifier(200))
+
+def pair_label(arg1m, arg2m, data):
+    label = torch.zeros(arg1m.shape[0], dtype=torch.long)
+    for arg1, arg2 in data:
+        i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
+        label[i] = 1
+    return label
+
+pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed], keyword='wf', forward=pair_label, label=True)
+```
+
+`FunctionalSensor` is a useful tool to plug in a python snippet to transform the values. For example, here the `FunctionalSensor` is instantiate with function `offset_len()` that transform offset to length of a token and it is assigned to `'len'` property of `word`. the input of the FunctionalSensor is the list of words for a sentence. the reason that this happens is because while creating the word nodes we used a list of word nodes as output.
+
+now in order to read the pair data, first, we get the relations from 'pair.relate_to(word)'. then we create a pair between every word of a sentence for each sentence. the function 'make_pair' returns a tuple of two tensors each of the n*(n-1) lenght ( n is the number of tokens in the sentence). and each tensor contains a tensor markinf the word used in the pair in one-hot format (a feature that we will use shortly).
+
+in the next line, the embedding of the pair is extracted by concating the embedding of the words used in creating that pair. the words are selected by reversing the relations (from pair to word, to pair to word). and frinally we use a classifier to calculate the work_for relation.
+
+in the last line, we use a `FunctionalReaderSensor` to calculate a binary classification for each pair by using the arg.reversed feature that we created earlier and reading the 'wf' key from the reader. the `FunctionalReaderSensor` gets 3 inputs. first two are the Tesnors of the size n*(n-1) for each sentence. and finally we get a list of tuples that would determine which two words are related. so we created a tensor of the size n*(n-1) and mark every pair that is mentioned in 'wf'. 
+
+
 
 Now in the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s.
 We can create a `Program` from the `graph`.
