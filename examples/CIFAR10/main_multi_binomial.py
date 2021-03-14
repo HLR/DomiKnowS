@@ -54,7 +54,8 @@ class ImageModel(PrimalDualModel):
 from graph_multi import graph
 graph.detach()
 image = graph['image']
-category = graph['category']
+animal = graph['animal']
+vehicle = graph['vehicle']
 label = graph['label']
     
 def model_declaration():
@@ -64,11 +65,13 @@ def model_declaration():
     from torch import nn
     
     image['pixels'] = ReaderSensor(keyword='pixels')
-    image[category] = ReaderSensor(keyword='category',label=True)
+    image[animal] = ReaderSensor(keyword='animal',label=True)
+    image[vehicle] = ReaderSensor(keyword='vehicle',label=True)
     image[label] = ReaderSensor(keyword='label',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
-    image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[animal] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image[vehicle] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[label] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
 
     program = LearningBasedProgram(graph, ImageModel)
@@ -193,8 +196,9 @@ def main():
         for l in label.values:
             print(l, datanode.getAttribute(l).softmax(-1))
     
-        datanode.inferILPResults(*category.values, *label.values, fun=None)
-   
+        datanode.inferILPResults(*animal.values, *label.values, fun=None)
+        datanode.inferILPResults(*vehicle.values, *label.values, fun=None)
+
         print('----------after ILP---------')
         
         #ILPmetrics = datanode.getInferMetric()
