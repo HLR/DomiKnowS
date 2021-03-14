@@ -1,14 +1,13 @@
 import torch
 import numpy as np
 from regr.program import POIProgram
-from regr.graph import ifL, notL, andL, orL, nandL, eqL
 from torch import nn
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
 from regr.program.loss import NBCrossEntropyLoss
 import logging
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-
+from regr.graph.logicalConstrain import nandL,ifL, V, orL, andL, existsL, notL, atLeastL, atMostL
 from regr.graph import Graph, Concept, Relation
 from preprocess import make_reader
 
@@ -33,14 +32,16 @@ with Graph('WIQA_graph') as graph:
 
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
-    ifL(symmetric, ('x', 'y'), orL( andL(is_more, 'x', is_less, 'y'), andL(is_less, 'x', is_more, 'y')))
+    #ifL(symmetric, ('x', 'y'), orL( andL(is_more, 'x', is_less, 'y'), andL(is_less, 'x', is_more, 'y')))
+
+    #ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
 
     transitive = Concept(name='transitive')
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg1=question, arg2=question, arg3=question)
-    ifL(eqL(transitive , 'label', {1}), ('x', 'y','z'), orL(
-       ifL( andL(is_more, 'x', is_more), 'y',is_more, 'z')),
-       ifL( andL(is_more, 'x', is_less, 'y'),is_less, 'z')
-    )
+    #ifL(eqL(transitive , 'label', {1}), ('x', 'y','z'), orL(
+    #   ifL( andL(is_more, 'x', is_more), 'y',is_more, 'z')),
+    #   ifL( andL(is_more, 'x', is_less, 'y'),is_less, 'z')
+    #)
 
 print("Sensor part:")
 
@@ -75,7 +76,6 @@ def label_reader(_, label):
 question[is_more] = FunctionalSensor(para_quest_contains, "is_more", forward=label_reader, label=True)
 question[is_less] = FunctionalSensor(para_quest_contains, "is_less", forward=label_reader, label=True)
 question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect", forward=label_reader, label=True)
-
 
 roberta_model=DariusWIQA_Robert()
 
