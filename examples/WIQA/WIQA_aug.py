@@ -56,9 +56,9 @@ paragraph['quest_ids'] = ReaderSensor(keyword='quest_ids')
 
 
 def make_questions(paragraph, question_list, less_list, more_list, no_effect_list, quest_ids):
-    # print("make_questions", paragraph)
-    return torch.ones((len(question_list), 1)), [paragraph for i in range(
-        len(question_list))], question_list, less_list, more_list, no_effect_list, quest_ids
+    #print("make_questions", paragraph,question_list[0],less_list[0])
+    return torch.ones((len(question_list[0]), 1)), [paragraph for i in range(
+        len(question_list[0]))], question_list[0], less_list[0], more_list[0], no_effect_list[0], quest_ids[0]
 
 
 question[para_quest_contains, "question_paragraph", 'text', "is_more", "is_less", "no_effect", "quest_id"] = JointSensor(
