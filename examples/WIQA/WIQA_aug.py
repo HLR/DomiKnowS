@@ -10,6 +10,8 @@ from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSen
 from regr.graph.logicalConstrain import nandL,ifL, V, orL, andL, existsL, notL, atLeastL, atMostL
 from regr.graph import Graph, Concept, Relation
 from preprocess import make_reader
+from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
+from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=10)
 # reader.append({"paragraph":para,"more_list":more_list,"less_list":less_list,"no_effect_list":no_effect_list,"question_list":question_list})
@@ -75,6 +77,8 @@ question["token_ids_no_effect", "Mask_no_effect"] = JointSensor(para_quest_conta
 def label_reader(_, label):
     return label
 
+
+
 question[is_more] = FunctionalSensor(para_quest_contains, "is_more", forward=label_reader, label=True)
 question[is_less] = FunctionalSensor(para_quest_contains, "is_less", forward=label_reader, label=True)
 question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect", forward=label_reader, label=True)
@@ -85,8 +89,10 @@ question["emb_is_more"] = ModuleLearner("token_ids_more", "Mask_more", module=ro
 question["emb_is_less"] = ModuleLearner("token_ids_less", "Mask_less", module=roberta_model)
 question["emb_no_effect"] = ModuleLearner("token_ids_no_effect", "Mask_no_effect", module=roberta_model)
 
-from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels
+from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair,guess_pair_datanode_2
 
+#symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateReaderSensor(question['quest_id'], keyword='links', relations=(s_arg1.reversed, s_arg2.reversed), forward=guess_pair)
+#symmetric['neighbor'] = DataNodeReaderSensor(s_arg1.reversed, s_arg2.reversed, keyword='links', forward=guess_pair_datanode_2)
 symmetric[s_arg1.reversed, s_arg2.reversed] = JointSensor(question['quest_id'], forward=make_pair)
 transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = JointSensor(question['quest_id'], forward=make_triple)
 
@@ -123,9 +129,10 @@ print('-' * 40)
 
 print('-' * 40)
 
-for node in program.populate(reader, device='auto'):
-    print("paragraph:", node.getAttribute('paragraph'))
-    for word_node in node.getChildDataNodes():
-        print(word_node.getAttribute('text'))
-        print(word_node.getAttribute('question_paragraph'))
+for paragraph_ in program.populate(reader, device='auto'):
+    print("paragraph:", paragraph_.getAttribute('paragraph'))
+    for question_ in paragraph_.getChildDataNodes():
+        print(question_.getAttribute('text'))
+        print(question_.getAttribute('question_paragraph'))
+
     print("_" * 20)
