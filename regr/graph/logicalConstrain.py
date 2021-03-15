@@ -4,6 +4,7 @@ import numpy
 import torch
 from  collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
+from future.builtins.misc import isinstance
    
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
@@ -17,32 +18,40 @@ class LogicalConstrain:
         if not e:
             myLogger.error("Logical Constrain initialized is empty")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
+          
+        from regr.graph import Concept
         
-        self.e = e
+        updatedE = []
+        for i, eItem in enumerate(e):
+            if isinstance(eItem, Concept):
+                updatedE.append((eItem, 0))
+            else:
+                updatedE.append(eItem)
+                
+        self.e = updatedE
 
         # -- Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
         self.graph = None
-        from regr.graph import Concept
+       
         conceptOrLc = None
         
-        if isinstance(e[0], (Concept, LogicalConstrain)):
-            conceptOrLc = e[0]
-        elif isinstance(e[0], tuple):
-            conceptOrLc = e[0][0]
-        elif len(e) > 1 and isinstance(e[1], (Concept, LogicalConstrain)): 
-            conceptOrLc = e[1]
-        elif len(e) > 2 and isinstance(e[2], (Concept, LogicalConstrain)):
-            conceptOrLc = e[2]
-        else:
+        for i, eItem in enumerate(self.e):
+            if isinstance(eItem, LogicalConstrain):
+                conceptOrLc = eItem
+                break
+            elif isinstance(eItem, tuple):
+                conceptOrLc = eItem[0]
+                break
+    
+        if conceptOrLc is None:
             myLogger.error("Logical Constrain is incorrect")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect")
             
-        if conceptOrLc != None:
-            if isinstance(conceptOrLc, Concept):
-                if self.__getContext(conceptOrLc):
-                    self.graph = self.__getContext(conceptOrLc)[-1]
-            else:
-                self.graph = conceptOrLc.graph
+        if isinstance(conceptOrLc, Concept):
+            if self.__getContext(conceptOrLc):
+                self.graph = self.__getContext(conceptOrLc)[-1]
+        else:
+            self.graph = conceptOrLc.graph
                 
         if self.graph == None:
             myLogger.error("Logical Constrain initialized is not associated with graph")
@@ -55,7 +64,7 @@ class LogicalConstrain:
         self.graph.logicalConstrains[self.lcName] = self
                 
         # Go though constrain, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
-        for e_item in e:
+        for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False
                 

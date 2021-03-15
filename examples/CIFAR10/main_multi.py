@@ -182,7 +182,6 @@ def main():
     #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
     for datanode in program.populate(dataset=testset):
-        print('>>>>>**********************************')
         #print('----------before ILP---------')
         
         label = graph['tag']
@@ -192,31 +191,52 @@ def main():
     
         datanode.inferILPResults(*category.values, *label.values, fun=None)
    
-        print('----------after ILP---------')
+        print('\n----------after ILP---------')
         
-        ILPmetrics = datanode.getInferMetric()
-            
-        print("ILP metrics Total %s"%(ILPmetrics['Total']))
+        print("\n --- catagory")
+
+        output = [category.get_value(i) + ": " + str(round(datanode.getAttribute(category)[i].item(), 2)) for i in range(len(category.values))]
+        print("Output:   ", output)
+                
+        soft = [category.get_value(i) + ": " + str(round(datanode.getAttribute(category, "local", "softmax")[i].item(), 2)) for i in range(len(category.values))]
+        print("Softmax:  ", soft)
+
+        labelIndex = datanode.getAttribute(category, "label").item()
+        print("Label:     %s"%(category.get_value(labelIndex)))
         
         for c in category.values:
             predt_category = datanode.getAttribute(c, 'ILP').item()
             if predt_category == 1.0:
-                print('inference ', c, predt_category)
-            
+                print("Inference: %s"%(c))
+                
+        print("\n --- tag")
+          
+        output = [label.get_value(i) + ": " + str(round(datanode.getAttribute(label)[i].item(), 2)) for i in range(len(label.values))]
+        print("Output:   ", output)
+                
+        soft = [label.get_value(i) + ": " + str(round(datanode.getAttribute(label, "local", "softmax")[i].item(), 2)) for i in range(len(label.values))]
+        print("Softmax:  ", soft)
+
+        labelIndex = datanode.getAttribute(label, "label").item()
+        print("Label:     %s"%(label.get_value(labelIndex)))
+
         prediction = ''
-        for l in label.values:
-            predt_label = datanode.getAttribute(l, 'ILP').item()
+        for t in label.values:
+            predt_label = datanode.getAttribute(t, 'ILP').item()
             if predt_label == 1.0:
-                print('inference ', l, predt_label)
-            
-            if predt_label == 1.0:
-                prediction = l
-            #d = datanode.getAttributes()['pixels'].numpy()
-            #plt.figure()
-            #plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
-            #plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
-            #plt.savefig(str(counter)+'.png')
-            #plt.show()
-        break
+                print("Inference: %s"%(t))
+                prediction = t
+
+        #d = datanode.getAttributes()['pixels'].numpy()
+        #plt.figure()
+        #plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
+        #plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
+        #plt.savefig(str(counter)+'.png')
+        #plt.show()
+        
+        ILPmetrics = datanode.getInferMetric()
+        print("\nILP metrics Total %s"%(ILPmetrics['Total']))
+        
+        #break
 if __name__ == '__main__':
     main()

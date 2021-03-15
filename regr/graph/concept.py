@@ -305,6 +305,10 @@ class EnumConcept(Concept):
     @property
     def values(self):
         return [e.name for e in self.enum]
+    
+    @property
+    def attributes(self):
+        return [(self, self.get_index(e.name)) for e in self.enum]
 
     @values.setter
     def values(self, values):

@@ -51,12 +51,12 @@ class ImageModel(PrimalDualModel):
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker())
 
-from graph_multi import graph
+from graph_multi_binomial import graph
 graph.detach()
 image = graph['image']
 animal = graph['animal']
 vehicle = graph['vehicle']
-label = graph['label']
+tag = graph['tag']
     
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -67,12 +67,12 @@ def model_declaration():
     image['pixels'] = ReaderSensor(keyword='pixels')
     image[animal] = ReaderSensor(keyword='animal',label=True)
     image[vehicle] = ReaderSensor(keyword='vehicle',label=True)
-    image[label] = ReaderSensor(keyword='label',label=True)
+    image[tag] = ReaderSensor(keyword='tag',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
     image[animal] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[vehicle] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[label] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
+    image[tag] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
 
     program = LearningBasedProgram(graph, ImageModel)
 
@@ -145,7 +145,7 @@ class CIFAR10_1(datasets.CIFAR10):
         dict['pixels'] = img
         category_dict = {0:'animal', 1: 'vehicle'}
         for i in range(10):
-            dict['label'] = [target] #[0] [1] [2] ... [9]
+            dict['tag'] = [target] #[0] [1] [2] ... [9]
 
         if target in animal_category:
             dict['vehicle'] = [0]
@@ -190,36 +190,59 @@ def main():
     
     counter = 0
     for datanode in program.populate(dataset=testset):
-        print('>>>>>**********************************')
-        print('----------before ILP---------')
-        
-        for l in label.values:
-            print(l, datanode.getAttribute(l).softmax(-1))
-    
-        datanode.inferILPResults(*animal.values, *label.values, fun=None)
-        datanode.inferILPResults(*vehicle.values, *label.values, fun=None)
+        datanode.inferILPResults(animal, vehicle, *tag.values, fun=None)
 
-        print('----------after ILP---------')
+        print('\n----------after ILP---------')
         
-        #ILPmetrics = datanode.getInferMetric()
+        print("\n --- animal/vehicle")
+        aP = str( round( datanode.getAttribute(animal)[1].item(), 2) )
+        vP = str( round( datanode.getAttribute(vehicle)[1].item(), 2) )
+        print("Probability: animal: %s vehicle: %s"%(aP,vP))
+        
+        aS = str( round( datanode.getAttribute(animal, "local", "softmax")[1].item(), 2) )
+        vS = str( round( datanode.getAttribute(vehicle, "local", "softmax")[1].item(), 2) )
+        print("Softmax:     animal: %s vehicle: %s"%(aS, vS))
+        
+        if datanode.getAttribute(animal, "label").item():
+            print("Label:       animal")
+        if datanode.getAttribute(vehicle, "label").item():
+            print("Label:       vehicle")
             
-        #print("ILP metrics Total %s"%(ILPmetrics['Total']))
-        
-    #     prediction = ' '
-    #     for label in label_list:
-    #         predt_label = datanode.getAttribute(eval(label), 'ILP').item()
-    #         if predt_label == 1.0:
-    #             prediction = label
-    #         print('inference ',label, predt_label )
-    #     d = datanode.getAttributes()['pixels'].numpy()
-    #     plt.figure()
-    #     plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
-    #     plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
-    #     plt.savefig(str(counter)+'.png')
-    #     # plt.show()
-    #     counter += 1
-    #     if counter == 20:
-    #         break
+        if datanode.getAttribute(animal, "ILP").item():
+            print("Inference:   animal")
+        if datanode.getAttribute(vehicle, "ILP").item():
+            print("Inference:   vehicle")
+                
+        print("\n --- tag")
+          
+        probability = [tag.get_value(i) + ": " + str(round(datanode.getAttribute(tag)[i].item(), 2)) for i in range(len(tag.values))]
+        print("Probability:", probability)
+                
+        soft = [tag.get_value(i) + ": " + str(round(datanode.getAttribute(tag, "local", "softmax")[i].item(), 2)) for i in range(len(tag.values))]
+        print("Softmax:    ", soft)
 
+        labelIndex = datanode.getAttribute(tag, "label").item()
+        print("Label:       %s"%(tag.get_value(labelIndex)))
+
+        prediction = ''
+        for t in tag.values:
+            predt_label = datanode.getAttribute(t, 'ILP').item()
+            if predt_label == 1.0:
+                print("Inference:   %s"%(t))
+                prediction = t
+        
+        #d = datanode.getAttributes()['pixels'].numpy()
+        #plt.figure()
+        #plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
+        #plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
+        #plt.savefig(str(counter)+'.png')
+        #plt.show()
+        
+        ILPmetrics = datanode.getInferMetric()
+        print("\nILP metrics Total %s"%(ILPmetrics['Total']))
+        
+        #counter += 1
+        #if counter == 20:
+        #    break
 if __name__ == '__main__':
     main()

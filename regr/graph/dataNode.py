@@ -695,7 +695,7 @@ class DataNode:
                     
                     returnCandR.append((_concept, a, i, len(_concept.values)))
             else:
-                if conceptsAndRelations and c not in conceptsAndRelations:
+                if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
                 
                 returnCandR.append((_concept, _concept.name, None, 1))
@@ -755,8 +755,10 @@ class DataNode:
             
             if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
                 collectAttributeList.append(rTensor.item())
-            else:
+            elif concept[2] is None:
                 collectAttributeList.append(rTensor[1])
+            else:
+                collectAttributeList.append(rTensor[concept[2]])
         
         return torch.tensor(collectAttributeList)        
     
@@ -823,6 +825,40 @@ class DataNode:
                 dnSoftmax = tExp[dn.getInstanceID()]/tExpSum
                 dn.attributes[keySoftMax][c[2]] = dnSoftmax.item()
 
+    # Calculate local for datanote argMax and softMax
+    def inferLocal(self):
+        conceptsRelations = self.collectConceptsAndRelations(self) 
+        
+        for c in conceptsRelations:
+            cRoot = self.findRootConceptOrRelation(c[0])
+            dns = self.findDatanodes(select = cRoot)
+            
+            if not dns:
+                continue
+            
+            vs = []
+            
+            for dn in dns:
+                keySoftmax = "<" + c[0].name + ">/local/softmax"
+                if keySoftmax in dn.attributes:
+                    continue
+                
+                v = dn.getAttribute(c[0])
+                
+                if v is None:
+                    continue
+                elif not torch.is_tensor(v):
+                    continue
+                
+                vClone = torch.clone(v)
+                tExp = torch.exp(vClone)
+                tExpSum = torch.sum(tExp).item()
+            
+                vSoftmax = [(tExp[i]/tExpSum).item() for i in range(len(v))]
+                vSoftmaxT = torch.as_tensor(vSoftmax) 
+                
+                dn.attributes[keySoftmax] = vSoftmaxT
+        
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
@@ -844,6 +880,7 @@ class DataNode:
         # Call ilpOntsolver with the collected probabilities for chosen candidates
         _DataNode__Logger.info("Calling ILP solver")
         
+        self.inferLocal()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)    
         
     def verifySelection(self, *_conceptsRelations):
@@ -867,6 +904,7 @@ class DataNode:
         
         myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
 
+        self.inferLocal()
         lcResult = myilpOntSolver.calculateLcLoss(self)
         
         return lcResult
@@ -881,7 +919,16 @@ class DataNode:
 
         for cr in conceptsRelations:
             preds = self.collectInferedResults(cr, inferType)
-            labels = self.collectInferedResults(cr, 'label')
+            labelsR = self.collectInferedResults(cr, 'label')
+            
+            labels = torch.clone(labelsR)
+            
+            if cr[2] is not None:
+                for i, l in enumerate(labelsR):
+                    if labelsR[i] == cr[2]:
+                        labels[i] = 1
+                    else:
+                        labels[i] = 0
             
             result[cr[1]] = {}
             if preds is not None and labels is not None:
@@ -900,15 +947,21 @@ class DataNode:
                 fn.append(_fn)
                 result[cr[1]]['FN'] = _fn
                 
+                _p, _r  = 0, 0
+                
                 if _tp + _fp:
                     _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
                     result[cr[1]]['P'] = _p
+                if _tp + _fn:
                     _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
                     result[cr[1]]['R'] = _r
                     
-                    if _p + _r:
-                        _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                        result[cr[1]]['F1'] = _f1
+                if _p + _r:
+                    _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
+                    result[cr[1]]['F1'] = _f1
+                elif _tp + (_fp + _fn)/2: 
+                    _f1 = _tp/(_tp + (_fp + _fn)/2)
+                    result[cr[1]]['F1'] = _f1
                       
         result['Total'] = {}  
         tpT = (torch.tensor(tp)).sum()
@@ -928,6 +981,9 @@ class DataNode:
             
             if pT + rT:
                 f1T = 2 * pT * rT / (pT + rT)
+                result['Total']['F1'] = f1T
+            elif tpT + (fpT + fnT)/2:
+                f1T = tpT/(tpT + (fpT + fnT)/2)
                 result['Total']['F1'] = f1T
                 
         return result

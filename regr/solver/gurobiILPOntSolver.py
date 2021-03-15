@@ -37,17 +37,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 x != x or  # nan 
                 abs(x) == float('inf')  # inf 
                 ) 
-               
-    def ___getProbability(self, dn, conceptRelation):
-        if not dn:
-            currentProbability = [1, 0]
-        else:
-            currentProbability = dn.getAttribute(conceptRelation)
-            
-        if currentProbability == None:
-            currentProbability = [1,0]
-            
-        return currentProbability
     
     # Get Ground Truth for provided concept
     def __getLabel(self, dn, conceptRelation, fun=None, epsilon = None):
@@ -60,20 +49,16 @@ class gurobiILPOntSolver(ilpOntSolver):
         if not dn:
             valueI = None
         else:
-            valueI = dn.getAttribute(conceptRelation)
+            valueI = dn.getAttribute(conceptRelation, "local" , "softmax")
                     
         if valueI is None: # No probability value - return negative probability 
             return [float("nan"), float("nan")]
         
         if conceptRelation[2] is not None:
-            ValueIs = torch.clone(valueI)
-            tExp = torch.exp(ValueIs)
-            tExpSum = torch.sum(tExp).item()
-            
             value = torch.empty(2, dtype=torch.float)
             
-            value[0] = float("nan") # 1 - tExp[conceptRelation[2]]/tExpSum
-            value[1] = tExp[conceptRelation[2]]/tExpSum
+            value[0] = 1 - valueI[conceptRelation[2]]
+            value[1] = valueI[conceptRelation[2]]
         else:
             value = valueI
 
@@ -138,8 +123,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     currentProbability[0] = 1 - currentProbability[1]
                     self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"%(dn.getInstanceID(), _conceptRelation[0].name, currentProbability[1]))
     
-                # Create negative variable
-                if True: # ilpOntSolver.__negVarTrashhold:
+                # Create negative variable for binary concept
+                if _conceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
                     xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  _conceptRelation[1]))
                     notxkey = '<' + _conceptRelation[0].name + '>/ILP/notx'
                 
@@ -181,10 +166,14 @@ class gurobiILPOntSolver(ilpOntSolver):
             for dn in dns:
                 if notxkey not in dn.attributes:
                     continue
-                     
-                x = dn.getAttribute(xkey)[_conceptRelation[2]]
-                notx = dn.getAttribute(notxkey)[_conceptRelation[2]]
-               
+                
+                if _conceptRelation[2] is None:
+                    x = dn.getAttribute(xkey)[0]
+                    notx = dn.getAttribute(notxkey)[0]
+                else:
+                    x = dn.getAttribute(xkey)[_conceptRelation[2]]
+                    notx = dn.getAttribute(notxkey)[_conceptRelation[2]]
+                   
                 currentConstrLinExpr = x + notx 
                 
                 m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
@@ -202,7 +191,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             rootConcept = rootDn.findRootConceptOrRelation(concept[0])
             dns = rootDn.findDatanodes(select = rootConcept)
             
-            for rel in concept.is_a():
+            for rel in concept[0].is_a():
                 # A is_a B : if(A, B) : A(x) <= B(x)
                 
                 sxkey = '<' + rel.src.name + '>/ILP/x'
@@ -230,8 +219,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             rootConcept = rootDn.findRootConceptOrRelation(concept[0])
             dns = rootDn.findDatanodes(select = rootConcept)
                
-            for rel in concept.not_a():
-                conceptName = concept.name
+            for rel in concept[0].not_a():
+                conceptName = concept[1]
                 
                 if rel.dst not in conceptsRelations:
                     continue
@@ -263,7 +252,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     foundDisjoint[conceptName].add(disjointConcept)
                            
-            if concept.name in foundDisjoint:
+            if concept[1] in foundDisjoint:
                 self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
                 
         # Create relation links constraints
@@ -571,7 +560,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if isinstance(e, Concept):
                                 ilpVs = _dn.getAttribute(xPkey) # Get ILP variable for the concept 
                                 
-                                if isinstance(ilpVs, Mapping) and pn not in len(ilpVs):
+                                if isinstance(ilpVs, Mapping) and p not in ilpVs:
                                     _vDns.append(None)
                                     continue
                                 
@@ -908,6 +897,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         m = None 
                 
         p = 1
+        key = "/local/softmax"
         
         lcLosses = {}
         for graph in self.myGraph:
@@ -916,7 +906,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                lossList = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = "", lcVariablesDns = {}, headLC = True)
+                lossList = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True)
                 
                 if not lossList:
                     continue
