@@ -2,8 +2,6 @@ import pandas as pd
 import networkx as nx
 from collections import defaultdict
 
-from examples.WIQA.WIQA_aug import s_arg1, s_arg2
-
 
 def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000):
 
@@ -242,12 +240,4 @@ def guess_pair(quest_id, data, arg1, arg2):
     else:
         return False
 
-def guess_pair_datanode_2(*_, data, datanode):
-    quest1_node = datanode.relationLinks[s_arg1.name][0]
-    quest2_node = datanode.relationLinks[s_arg2.name][0]
-    quest1=quest1_node.getAttribute('quest_id')
-    quest2=quest2_node.getAttribute('quest_id')
-    if quest1 in quest2 and "_symmetric" in quest2: #directed?
-        return True
-    else:
-        return False
+

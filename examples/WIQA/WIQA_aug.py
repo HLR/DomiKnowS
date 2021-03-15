@@ -13,6 +13,16 @@ from preprocess import make_reader
 from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
+def guess_pair_datanode_2(*_, data, datanode):
+    quest1_node = datanode.relationLinks[s_arg1.name][0]
+    quest2_node = datanode.relationLinks[s_arg2.name][0]
+    quest1=quest1_node.getAttribute('quest_id')
+    quest2=quest2_node.getAttribute('quest_id')
+    if quest1 in quest2 and "_symmetric" in quest2: #directed?
+        return True
+    else:
+        return False
+
 reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=10)
 # reader.append({"paragraph":para,"more_list":more_list,"less_list":less_list,"no_effect_list":no_effect_list,"question_list":question_list})
 # print(reader[0]["paragraph"])
@@ -89,7 +99,7 @@ question["emb_is_more"] = ModuleLearner("token_ids_more", "Mask_more", module=ro
 question["emb_is_less"] = ModuleLearner("token_ids_less", "Mask_less", module=roberta_model)
 question["emb_no_effect"] = ModuleLearner("token_ids_no_effect", "Mask_no_effect", module=roberta_model)
 
-from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair,guess_pair_datanode_2
+from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair
 
 #symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateReaderSensor(question['quest_id'], keyword='links', relations=(s_arg1.reversed, s_arg2.reversed), forward=guess_pair)
 #symmetric['neighbor'] = DataNodeReaderSensor(s_arg1.reversed, s_arg2.reversed, keyword='links', forward=guess_pair_datanode_2)
