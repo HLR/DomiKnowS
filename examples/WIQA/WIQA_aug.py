@@ -11,7 +11,7 @@ from regr.graph.logicalConstrain import nandL,ifL, V, orL, andL, existsL, notL, 
 from regr.graph import Graph, Concept, Relation
 from preprocess import make_reader
 
-reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=100)
+reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=10)
 # reader.append({"paragraph":para,"more_list":more_list,"less_list":less_list,"no_effect_list":no_effect_list,"question_list":question_list})
 # print(reader[0]["paragraph"])
 # print(reader[1])
