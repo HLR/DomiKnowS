@@ -54,11 +54,13 @@ paragraph['no_effect_list'] = ReaderSensor(keyword='no_effect_list')
 
 paragraph['quest_ids'] = ReaderSensor(keyword='quest_ids')
 
-
+def str_to_int_list(x):
+    return torch.LongTensor([[int(i)] for i in x])
 def make_questions(paragraph, question_list, less_list, more_list, no_effect_list, quest_ids):
-    #print("make_questions", paragraph,question_list[0],less_list[0])
-    return torch.ones((len(question_list[0]), 1)), [paragraph for i in range(
-        len(question_list[0]))], question_list[0], less_list[0], more_list[0], no_effect_list[0], quest_ids[0]
+    #print("make_questions", paragraph,question_list,less_list.split("@@"))
+    return torch.ones((len(question_list.split("@@")), 1)), [paragraph for i in range(len(question_list.split("@@")))], \
+           question_list.split("@@"), str_to_int_list(less_list.split("@@")), str_to_int_list(more_list.split("@@")),\
+           str_to_int_list(no_effect_list.split("@@")), quest_ids.split("@@")
 
 
 question[para_quest_contains, "question_paragraph", 'text', "is_more", "is_less", "no_effect", "quest_id"] = JointSensor(

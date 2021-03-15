@@ -115,11 +115,12 @@ def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000):
         for j in i:
             datum=quest_id_to_datum[j]
             para=datum["paragraph"]
-            more_list.append(datum["more"])
-            less_list.append(datum["less"])
-            no_effect_list.append(datum["no_effect"])
+            more_list.append(str(datum["more"][0]))
+            less_list.append(str(datum["less"][0]))
+            no_effect_list.append(str(datum["no_effect"][0]))
             question_list.append(datum["question"])
-        reader.append({"paragraph":para,"more_list":[more_list],"less_list":[less_list],"no_effect_list":[no_effect_list],"question_list":[question_list],"quest_ids":[i]})
+        reader.append({"paragraph":para,"more_list":"@@".join(more_list),"less_list":"@@".join(less_list),"no_effect_list":"@@".join(no_effect_list),
+                       "question_list":"@@".join(question_list),"quest_ids":"@@".join(i)})
     return reader
 
 from transformers import RobertaTokenizerFast
