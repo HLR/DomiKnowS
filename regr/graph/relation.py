@@ -43,7 +43,7 @@ class Relation(BaseGraphTree):
     def name(cls):  # complicated to use class property, just function
         return cls.__name__
 
-    def __init__(self, src, dst, argument_name, reverse_of=None):
+    def __init__(self, src, dst, argument_name, reverse_of=None, auto_constraint=None):
         cls = type(self)
         if isinstance(argument_name, str):
             name = argument_name
@@ -60,10 +60,21 @@ class Relation(BaseGraphTree):
         else:
             self.is_reversed = True
         self.reversed = reverse_of
+        self.auto_constraint = auto_constraint
 
     @property
     def mode(self):
         return 'backward' if self.is_reversed else 'forward'
+
+    @property
+    def auto_constraint(self):
+        if self._auto_constraint is None and self.sup is not None:
+            return self.sup.auto_constraint
+        return self._auto_constraint or False  # if None, return False instead
+
+    @auto_constraint.setter
+    def auto_constraint(self, value):
+        self._auto_constraint = value
 
     def __call__(self, *props, fn=None):
         return Transformed(self, props[0], fn=fn)

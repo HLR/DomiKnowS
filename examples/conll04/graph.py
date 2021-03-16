@@ -20,30 +20,40 @@ with Graph('global') as graph:
         pair = Concept(name='pair')
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
-    with Graph('application') as app_graph:
+    with Graph('application', auto_constraint=True) as app_graph:
         app_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
 
         entity = phrase(name='entity')
-        people = entity(name='people')
-        organization = entity(name='organization')
-        location = entity(name='location')
+        people = entity(name='people', auto_constraint=True)
+        assert people.relate_to(entity)[0].auto_constraint == True
+        organization = entity(name='organization', auto_constraint=False)
+        assert organization.relate_to(entity)[0].auto_constraint == False
+        location = entity(name='location', auto_constraint=None)
+        # auto_constraint->True due to its graph
+        assert location.relate_to(entity)[0].auto_constraint == True
         other = entity(name='other')
         o = entity(name='O')
 
         # nandL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
-        work_for.has_a(people, organization)
+        work_for.has_a(people, organization, auto_constraint=True)
+        assert work_for.relate_to(people)[0].auto_constraint == True
+        assert work_for.relate_to(organization)[0].auto_constraint == True
         
         located_in = pair(name='located_in')
-        located_in.has_a(location, location)
+        located_in.has_a(location, location, auto_constraint=False)
+        assert located_in.relate_to(location)[0].auto_constraint == False
+        assert located_in.relate_to(location)[1].auto_constraint == False
 
         live_in = pair(name='live_in')
-        live_in.has_a(people, location)
+        live_in.has_a(people, location, auto_constraint=None)
+        # auto_constraint->True due to its graph
+        assert live_in.relate_to(people)[0].auto_constraint == True
+        assert live_in.relate_to(location)[0].auto_constraint == True
 
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
-        
 
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         # ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))

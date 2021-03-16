@@ -18,12 +18,12 @@ class Concept(BaseGraphTree):
             if name is not None:
                 Rel.name = classmethod(lambda cls: name)
 
-            def create(src, *args, **kwargs):
+            def create(src, *args, auto_constraint=None, **kwargs):
                 # add one-by-one
                 rels = []
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
-                    rel_inst = Rel(src, dst, argument_name=argument_name)
+                    rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
 
@@ -44,7 +44,7 @@ class Concept(BaseGraphTree):
     def __str__(self):
         return self.name
     
-    def __call__(self, *args, name=None, ConceptClass=None, **kwargs):
+    def __call__(self, *args, name=None, ConceptClass=None, auto_constraint=None, **kwargs):
         from .relation import IsA, HasA
         if ConceptClass is None:
             ConceptClass = Concept
@@ -54,10 +54,10 @@ class Concept(BaseGraphTree):
 
         if (not args and not kwargs) or name is not None:
             new_concept = ConceptClass(name=name, *args, **kwargs)
-            new_concept.is_a(self)
+            new_concept.is_a(self, auto_constraint=auto_constraint)
             return new_concept
         else:
-            return self.has_a(*args, **kwargs)
+            return self.has_a(*args, auto_constraint=auto_constraint, **kwargs)
 
     def relate_to(self, concept, *tests):
         from .relation import Relation

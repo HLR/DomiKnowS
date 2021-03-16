@@ -11,7 +11,7 @@ else:
 
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
-    def __init__(self, name=None, ontology=None, iri=None, local=None):
+    def __init__(self, name=None, ontology=None, iri=None, local=None, auto_constraint=None):
         BaseGraphTree.__init__(self, name)
         if ontology is None:
             self.ontology = (iri, local)
@@ -19,6 +19,7 @@ class Graph(BaseGraphTree):
             self.ontology = ontology
         elif isinstance(ontology, str):
             self.ontology = (ontology, local)
+        self.auto_constraint = auto_constraint
         self._concepts = OrderedDict()
         self._logicalConstrains = OrderedDict()
         self._relations = OrderedDict()
@@ -31,7 +32,17 @@ class Graph(BaseGraphTree):
     @property
     def ontology(self):
         return self._ontology
-    
+
+    @property
+    def auto_constraint(self):
+        if self._auto_constraint is None and self.sup:
+            return self.sup.auto_constraint
+        return self._auto_constraint or False  # if None, return False instead
+
+    @auto_constraint.setter
+    def auto_constraint(self, value):
+        self._auto_constraint = value
+
     @ontology.setter
     def ontology(self, ontology):
         if isinstance(ontology, Graph.Ontology):
