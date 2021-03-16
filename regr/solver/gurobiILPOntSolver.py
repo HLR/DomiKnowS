@@ -351,7 +351,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn[1].attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.nandVar(m, dn[0].getAttribute(cxkey), dn[1].getAttribute(dxkey), onlyConstrains = True)
+                    self.myIlpBooleanProcessor.nandVar(m, dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(dxkey)[0], onlyConstrains = True)
                     
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -361,92 +361,143 @@ class gurobiILPOntSolver(ilpOntSolver):
             if conceptName in foundDisjoint:
                 self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
 
-            # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
-            foundEquivalent = dict() # too eliminate duplicates
-            for conceptName in conceptsRelations:
+        # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
+        foundEquivalent = dict() # too eliminate duplicates
+        for conceptName in conceptsRelations:
+            
+            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
                 
-                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                    
-                if currentConcept is None :
+            if currentConcept is None :
+                continue
+                
+            for equivalentConcept in currentConcept.equivalent_to:
+                if equivalentConcept.name not in conceptsRelations:
                     continue
-                    
-                for equivalentConcept in currentConcept.equivalent_to:
-                    if equivalentConcept.name not in conceptsRelations:
-                        continue
-                            
-                    if conceptName in foundEquivalent:
-                        if equivalentConcept.name in foundEquivalent[conceptName]:
-                            continue
-                    
-                    if equivalentConcept.name in foundEquivalent:
-                        if conceptName in foundEquivalent[equivalentConcept.name]:
-                            continue
-                                
-                    rootEquivalentConcept = rootDn.findRootConceptOrRelation(equivalentConcept)
-                    dnsEC = rootDn.findDatanodes(select = rootEquivalentConcept)           
-                            
-                    cxkey = '<' + conceptName + '>/ILP/x'
-                    exkey = '<' + equivalentConcept + '>/ILP/x'
-                    
-                    for dn in zip(dns,dnsEC):
-                        if cxkey not in dn[0].attributes:
-                            continue
                         
-                        if exkey not in dn[1].attributes:
-                            continue
-                        
-                        self.myIlpBooleanProcessor.andVar(m, dn[0].getAttribute(cxkey), dn[1].getAttribute(exkey), onlyConstrains = True)
-                        
-                    if not (conceptName in foundEquivalent):
-                        foundEquivalent[conceptName] = {equivalentConcept.name}
-                    else:
-                        foundEquivalent[conceptName].add(equivalentConcept.name)
-               
                 if conceptName in foundEquivalent:
-                    self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
-        
-            # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
-            for conceptName in conceptsRelations:
+                    if equivalentConcept.name in foundEquivalent[conceptName]:
+                        continue
                 
-                currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
-                    
-                if currentConcept is None :
-                    continue
-                    
-                for ancestorConcept in currentConcept.ancestors(include_self = False):
-                    if ancestorConcept.name not in conceptsRelations:
+                if equivalentConcept.name in foundEquivalent:
+                    if conceptName in foundEquivalent[equivalentConcept.name]:
+                        continue
+                            
+                rootEquivalentConcept = rootDn.findRootConceptOrRelation(equivalentConcept)
+                dnsEC = rootDn.findDatanodes(select = rootEquivalentConcept)           
+                        
+                cxkey = '<' + conceptName + '>/ILP/x'
+                exkey = '<' + equivalentConcept + '>/ILP/x'
+                
+                for dn in zip(dns,dnsEC):
+                    if cxkey not in dn[0].attributes:
                         continue
                     
-                    rootAncestorConcept = rootDn.findRootConceptOrRelation(ancestorConcept)
-                    dnsAC = rootDn.findDatanodes(select = rootAncestorConcept)           
-                            
-                    cxkey = '<' + conceptName + '>/ILP/x'
-                    axkey = '<' + ancestorConcept + '>/ILP/x'
+                    if exkey not in dn[1].attributes:
+                        continue
                     
-                    for dn in zip(dns,dnsAC):
-                        if cxkey not in dn[0].attributes:
+                    self.myIlpBooleanProcessor.andVar(m, dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(exkey)[0], onlyConstrains = True)
+                    
+                if not (conceptName in foundEquivalent):
+                    foundEquivalent[conceptName] = {equivalentConcept.name}
+                else:
+                    foundEquivalent[conceptName].add(equivalentConcept.name)
+           
+            if conceptName in foundEquivalent:
+                self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
+    
+        # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
+        for conceptName in conceptsRelations:
+            
+            currentConcept = self.myOnto.search_one(iri = "*%s"%(conceptName))
+                
+            if currentConcept is None :
+                continue
+                
+            for ancestorConcept in currentConcept.ancestors(include_self = False):
+                if ancestorConcept.name not in conceptsRelations:
+                    continue
+                
+                rootAncestorConcept = rootDn.findRootConceptOrRelation(ancestorConcept)
+                dnsAC = rootDn.findDatanodes(select = rootAncestorConcept)           
+                        
+                cxkey = '<' + conceptName + '>/ILP/x'
+                axkey = '<' + ancestorConcept + '>/ILP/x'
+                
+                for dn in zip(dns,dnsAC):
+                    if cxkey not in dn[0].attributes:
+                        continue
+                    
+                    if exkey not in dn[1].attributes:
+                        continue
+                        
+                    self.myIlpBooleanProcessor.ifVar(m,  dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(axkey)[0], onlyConstrains = True)
+                        
+                self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+    
+        # ---- ------No supported yet ontology concept constraints --------
+        
+        # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
+        # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
+        # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
+        # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
+        # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
+        # -- Add constraints based on concept oneOf statements in ontology - ?
+
+        # -- Add constraints based on property domain and range statements in ontology - P(x,y) -> D(x), R(y)
+        for relationName in conceptsRelations:
+            currentRelation = self.myOnto.search_one(iri = "*%s"%(relationName))
+                
+            if currentRelation is None:
+                continue
+    
+            try:
+                currentRelationDomain = currentRelation.get_domain() # domains_indirect()
+                currentRelationRange = currentRelation.get_range()
+            except AttributeError:
+                continue
+                    
+            self.myLogger.debug("Relation \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentRelation.name, relationName))
+
+            rootRelation = rootDn.findRootConceptOrRelation(relationName)
+            dnsR = rootDn.findDatanodes(select = rootRelation)
+            _relAttr = rootDn.getRelationAttrNames(rootRelation)
+            relAttr = list(_relAttr.keys())
+            
+            cxkey = '<' + currentRelation.name + '>/ILP/x'
+
+            for domain in currentRelationDomain:
+                if domain._name not in conceptsRelations:
+                    continue
+                        
+                dxkey = '<' + domain._name + '>/ILP/x'
+
+                for range in currentRelationRange:
+                    if range.name not in conceptsRelations:
+                        continue
+                         
+                    rxkey = '<' + range._name + '>/ILP/x'
+                    
+                    for dn in dnsR:
+                        if cxkey not in dn.attributes:
                             continue
                         
-                        if exkey not in dn[1].attributes:
+                        ddn = dn.relationLinks[relAttr[0]]
+                        
+                        if not ddn or dxkey not in ddn[0].attributes:
                             continue
-                            
-                        self.myIlpBooleanProcessor.ifVar(m,  dn[0].getAttribute(cxkey), dn[1].getAttribute(axkey), onlyConstrains = True)
-                            
-                    self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
-    
-            
-            # ---- ------No supported yet --------
-            
-            # -- Add constraints based on concept intersection statements in ontology - and(var1, var2, var3, ..)
-                            
-            # -- Add constraints based on concept union statements in ontology -  or(var1, var2, var3, ..)
-            
-            # -- Add constraints based on concept objectComplementOf statements in ontology - xor(var1, var2)
-           
-           
-            # -- Add constraints based on concept disjonitUnion statements in ontology -  Not supported by owlready2 yet
-            
-            # -- Add constraints based on concept oneOf statements in ontology - ?
+                        
+                        self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(cxkey)[0], ddn[0].getAttribute(dxkey)[0], onlyConstrains = True)
+                        
+                        rdn = dn.relationLinks[relAttr[1]]
+                        
+                        if not rdn or rxkey not in rdn[0].attributes:
+                            continue
+                        
+                        self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(cxkey)[0], rdn[0].getAttribute(rxkey)[0], onlyConstrains = True)
+                        
+                
+                self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+        
         
         m.update()
         

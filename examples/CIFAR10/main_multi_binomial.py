@@ -197,38 +197,38 @@ def main():
         print("\n --- animal/vehicle")
         aP = str( round( datanode.getAttribute(animal)[1].item(), 2) )
         vP = str( round( datanode.getAttribute(vehicle)[1].item(), 2) )
-        print("Probability: animal: %s vehicle: %s"%(aP,vP))
+        print("Output:    animal: %s vehicle: %s"%(aP,vP))
         
         aS = str( round( datanode.getAttribute(animal, "local", "softmax")[1].item(), 2) )
         vS = str( round( datanode.getAttribute(vehicle, "local", "softmax")[1].item(), 2) )
-        print("Softmax:     animal: %s vehicle: %s"%(aS, vS))
+        print("Softmax:   animal: %s vehicle: %s"%(aS, vS))
         
         if datanode.getAttribute(animal, "label").item():
-            print("Label:       animal")
+            print("Label:     animal")
         if datanode.getAttribute(vehicle, "label").item():
-            print("Label:       vehicle")
+            print("Label:     vehicle")
             
         if datanode.getAttribute(animal, "ILP").item():
-            print("Inference:   animal")
+            print("Inference: animal")
         if datanode.getAttribute(vehicle, "ILP").item():
-            print("Inference:   vehicle")
+            print("Inference: vehicle")
                 
         print("\n --- tag")
           
-        probability = [tag.get_value(i) + ": " + str(round(datanode.getAttribute(tag)[i].item(), 2)) for i in range(len(tag.values))]
-        print("Probability:", probability)
+        output = [tag.get_value(i) + ": " + str(round(datanode.getAttribute(tag)[i].item(), 2)) for i in range(len(tag.values))]
+        print("Output:   ", output)
                 
         soft = [tag.get_value(i) + ": " + str(round(datanode.getAttribute(tag, "local", "softmax")[i].item(), 2)) for i in range(len(tag.values))]
-        print("Softmax:    ", soft)
+        print("Softmax:  ", soft)
 
         labelIndex = datanode.getAttribute(tag, "label").item()
-        print("Label:       %s"%(tag.get_value(labelIndex)))
+        print("Label:     %s"%(tag.get_value(labelIndex)))
 
         prediction = ''
         for t in tag.values:
             predt_label = datanode.getAttribute(t, 'ILP').item()
             if predt_label == 1.0:
-                print("Inference:   %s"%(t))
+                print("Inference: %s"%(t))
                 prediction = t
         
         #d = datanode.getAttributes()['pixels'].numpy()
