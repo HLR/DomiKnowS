@@ -162,7 +162,7 @@ class DariusWIQA_Robert(nn.Module):
 from itertools import product
 
 def make_pair(question_ids):
-    print("im here 2")
+    print("im here in make_pair")
     n=len(question_ids)
     p1=[]
     p2=[]
@@ -194,7 +194,7 @@ def make_pair_with_labels(question_ids):
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(label_output)
 
 def make_triple(question_ids):
-    print("im here 3")
+    print("im here in make_triple")
     n=len(question_ids)
     p1=[]
     p2=[]
