@@ -24,13 +24,21 @@ class Classifier(torch.nn.Sequential):
         # super().__init__(linear, softmax)
 
 
-def model():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-    from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, rel_sentence_contains_phrase
+def model(use_ont):
+    if use_ont:
+        from graph_ont import graph_ont, sentence, word, phrase, pair
+        from graph_ont import people, organization, location, other, o
+        from graph_ont import work_for, located_in, live_in, orgbase_on, kill
+        from graph_ont import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, rel_sentence_contains_phrase
+        
+        graph_ont.detach()
+    else:
+        from graph import graph, sentence, word, phrase, pair
+        from graph import people, organization, location, other, o
+        from graph import work_for, located_in, live_in, orgbase_on, kill
+        from graph import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, rel_sentence_contains_phrase
 
-    graph.detach()
+        graph.detach()
 
     phrase['text'] = ReaderSensor(keyword='tokens')
     phrase['postag'] = ReaderSensor(keyword='postag')
@@ -94,25 +102,28 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp = POIProgram(
-        graph,
-        poi=(phrase, sentence, pair),
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric=PRF1Tracker())
-    # lbp = IMLProgram(
-    #     graph,
-    #     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
-    #     metric=PRF1Tracker())
-
+    if use_ont:
+        lbp = POIProgram(graph_ont, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    else:
+        lbp = POIProgram(graph, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    
     return lbp
 
-
 def main():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
+    
+    while True:
+        val = input("Use ontology constraint (y/n):")
+        if val == 'y' or val == 'n':
+            break
+        
+    if val == 'y':
+        use_ont = True
+        from graph_ont import graph_ont, sentence, phrase, people, organization, location, other, o
+    else:
+        use_ont = False
+        from graph import  sentence, phrase, people, organization, location, other, o
 
-    program = model()
+    program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
     #train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
