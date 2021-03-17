@@ -58,8 +58,11 @@ with Graph('WIQA_graph') as graph:
     #   ifL( andL(is_more, 'x', is_more), 'y',is_more, 'z')),
     #   ifL( andL(is_more, 'x', is_less, 'y'),is_less, 'z')
     #)
-    #ifL(andL(is_more, V(name='x'),is_more,V(name='z', v=('x', transitive.name, t_arg2.name))),
-    #    is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
+    ifL(andL(is_more, V(name='x'),is_more,V(name='z', v=('x', transitive.name, t_arg2.name))),
+        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
+    ifL(andL(is_more, V(name='x'),is_less,V(name='z', v=('x', transitive.name, t_arg2.name))),
+        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
 
 print("Sensor part:")
 
@@ -162,5 +165,6 @@ for paragraph_ in program.populate(reader, device='auto'):
         print(question_.getAttribute('text'))
         print(question_.getAttribute('question_paragraph'))
         #print(question_.getAttribute(is_more,"ILP"))
+    paragraph_.inferILPResults()
     #print("\nILP results for paragraph - %s"%(paragraph_.collectInferedResults(is_more, "ILP")))
     print("_" * 20)
