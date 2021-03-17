@@ -300,7 +300,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     self.myIlpBooleanProcessor.ifVar(m,dn.getAttribute(rxkey)[0], cdn[0].getAttribute(cxkey)[0], onlyConstrains = True)
                             
-            self.myLogger.info("Created - doman/range constraints for concepts %s"%(conceptName))
+            self.myLogger.info("Created - doman/range constraints for concepts %s"%(concept[2]))
                     
         m.update()
         
