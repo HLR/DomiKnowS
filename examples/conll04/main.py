@@ -15,6 +15,11 @@ import spacy
 # from spacy.lang.en import English
 nlp = spacy.load('en_core_web_sm') #English()
 
+FEATURE_DIM = 96
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features) -> None:
@@ -48,11 +53,11 @@ def model():
 
     # word[rel_sentence_contains_word, 'text'] = JointSensor(sentence, )
 
-    phrase[people] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[organization] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[location] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[other] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[o] = ModuleLearner('w2v', module=Classifier(96))
+    phrase[people] = ModuleLearner('w2v', module=Classifier(FEATURE_DIM))
+    phrase[organization] = ModuleLearner('w2v', module=Classifier(FEATURE_DIM))
+    phrase[location] = ModuleLearner('w2v', module=Classifier(FEATURE_DIM))
+    phrase[other] = ModuleLearner('w2v', module=Classifier(FEATURE_DIM))
+    phrase[o] = ModuleLearner('w2v', module=Classifier(FEATURE_DIM))
 
     def find_label(label_type):
         def find(data):
@@ -73,11 +78,11 @@ def model():
         rel_pair_phrase1.reversed('w2v'), rel_pair_phrase2.reversed('w2v'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
-    pair[work_for] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[located_in] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[live_in] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[kill] = ModuleLearner('emb', module=Classifier(96*2))
+    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
 
     def find_relation(relation_type):
         def find(arg1m, arg2m, data):
@@ -115,10 +120,10 @@ def main():
     program = model()
 
     # Uncomment the following lines to enable training and testing
-    #train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    #test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    #program.train(train_reader, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    #program.test(test_reader)
+    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    program.train(train_reader, train_epoch_num=200, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.test(test_reader)
 
     reader = SingletonDataLoader('data/conll04.corp')
 

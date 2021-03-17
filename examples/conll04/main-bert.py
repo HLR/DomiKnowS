@@ -16,9 +16,16 @@ import spacy
 nlp = spacy.load('en_core_web_sm') #English()
 
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+
 from transformers import BertTokenizerFast, BertModel
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
+
+FEATURE_DIM = 768
 
 class Tokenizer():
     def __init__(self) -> None:
@@ -119,11 +126,11 @@ def model():
         return bert
     phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
 
-    phrase[people] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[organization] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[location] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[other] = ModuleLearner('w2v', module=Classifier(96))
-    phrase[o] = ModuleLearner('w2v', module=Classifier(96))
+    phrase[people] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
+    phrase[organization] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
+    phrase[location] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
+    phrase[other] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
+    phrase[o] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
 
     def find_label(label_type):
         def find(data):
@@ -141,14 +148,14 @@ def model():
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
         forward=lambda *_, **__: True)
     pair['emb'] = FunctionalSensor(
-        rel_pair_phrase1.reversed('w2v'), rel_pair_phrase2.reversed('w2v'),
+        rel_pair_phrase1.reversed('bert'), rel_pair_phrase2.reversed('bert'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
-    pair[work_for] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[located_in] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[live_in] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(96*2))
-    pair[kill] = ModuleLearner('emb', module=Classifier(96*2))
+    pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[located_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[live_in] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[orgbase_on] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
+    pair[kill] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
 
     def find_relation(relation_type):
         def find(arg1m, arg2m, data):
@@ -186,10 +193,10 @@ def main():
     program = model()
 
     # Uncomment the following lines to enable training and testing
-    # train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    #test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    # program.train(train_reader, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    #program.test(test_reader)
+    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    program.train(train_reader, train_epoch_num=200, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.test(test_reader)
 
     reader = SingletonDataLoader('data/conll04.corp')
 
