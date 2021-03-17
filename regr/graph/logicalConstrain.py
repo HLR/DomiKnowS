@@ -23,8 +23,12 @@ class LogicalConstrain:
         
         updatedE = []
         for i, eItem in enumerate(e):
-            if isinstance(eItem, Concept):
-                updatedE.append((eItem, 0))
+            if isinstance(eItem, V):
+                updatedE.append(eItem)
+            elif isinstance(eItem, Concept):
+                updatedE.append((eItem, 1, 0))
+            elif isinstance(eItem, tuple):
+                updatedE.append((eItem[0], eItem[1], eItem[1]))
             else:
                 updatedE.append(eItem)
                 

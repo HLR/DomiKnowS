@@ -177,11 +177,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 currentConstrLinExpr = x + notx 
                 
                 m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
-                self.myLogger.debug("Disjoint constrain between variable \"token %s is concept %s\" and variable \"token %s is concept - %s\" == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
+                self.myLogger.debug("Disjoint constrain between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
 
         m.update()
         
-        # Create subclass constrains
+        # Create subclass constraints
         for concept in conceptsRelations:
             
             # Skip if multiclass
@@ -205,8 +205,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes: # superclass (B)
                         continue
                                                                     
-                    self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(sxkey), dn.getAttribute(dxkey), onlyConstrains = True)
-                    self.myLogger.info("Created - subclass - constrains between concept \"%s\" and concepts %s"%(rel.src.name,rel.dst.name))
+                    self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(sxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True)
+                    self.myLogger.info("Created - subclass - constraints between concept \"%s\" and concepts %s"%(rel.src.name,rel.dst.name))
 
         # Create disjoint constraints
         foundDisjoint = dict() # To eliminate duplicates
@@ -222,7 +222,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             for rel in concept[0].not_a():
                 conceptName = concept[1]
                 
-                if rel.dst not in conceptsRelations:
+                relDestFound = False
+                for c in conceptsRelations:
+                    if rel.dst == c[0]:
+                        relDestFound = True
+                        break
+                if not relDestFound:
                     continue
                 
                 disjointConcept = rel.dst.name
@@ -245,7 +250,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.nandVar(m, dn.getAttribute(cxkey), dn.getAttribute(dxkey), onlyConstrains = True)
+                    self.myIlpBooleanProcessor.nandVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True)
                         
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -253,7 +258,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     foundDisjoint[conceptName].add(disjointConcept)
                            
             if concept[1] in foundDisjoint:
-                self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+                self.myLogger.info("Created - disjoint - constraints between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
                 
         # Create relation links constraints
         for concept in conceptsRelations:
@@ -293,7 +298,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if not cdn or cxkey not in cdn[0].attributes:
                         continue
                     
-                    self.myIlpBooleanProcessor.ifVar(m,dn.getAttribute(rxkey), cdn[0].getAttribute(cxkey), onlyConstrains = True)
+                    self.myIlpBooleanProcessor.ifVar(m,dn.getAttribute(rxkey)[0], cdn[0].getAttribute(cxkey)[0], onlyConstrains = True)
+                            
+            self.myLogger.info("Created - doman/range constraints for concepts %s"%(conceptName))
                     
         m.update()
         
@@ -359,7 +366,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     foundDisjoint[conceptName].add(disjointConcept)
                            
             if conceptName in foundDisjoint:
-                self.myLogger.info("Created - disjoint - constrains between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
+                self.myLogger.info("Created - disjoint - constraints between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
 
         # -- Add constraints based on concept equivalent statements in ontology - and(var1, av2)
         foundEquivalent = dict() # too eliminate duplicates
@@ -403,7 +410,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     foundEquivalent[conceptName].add(equivalentConcept.name)
            
             if conceptName in foundEquivalent:
-                self.myLogger.info("Created - equivalent - constrains between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
+                self.myLogger.info("Created - equivalent - constraints between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
     
         # -- Add constraints based on concept subClassOf statements in ontology - var1 -> var2
         for conceptName in conceptsRelations:
@@ -432,7 +439,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     self.myIlpBooleanProcessor.ifVar(m,  dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(axkey)[0], onlyConstrains = True)
                         
-                self.myLogger.info("Created - subClassOf - constrains between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+                self.myLogger.info("Created - subClassOf - constraints between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
     
         # ---- ------No supported yet ontology concept constraints --------
         
@@ -496,7 +503,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(cxkey)[0], rdn[0].getAttribute(rxkey)[0], onlyConstrains = True)
                         
                 
-                self.myLogger.info("Created - domain-range - constrains for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
+                self.myLogger.info("Created - domain-range - constraints for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
         
         
         m.update()
@@ -620,10 +627,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                                 vDn = ilpVs[p]
                             else:
-                                if p == 1:
+                                if p == 0:
                                     vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
                                 else:
-                                    vDn = _dn.getAttribute(xPkey)[p][e[1]] # Get ILP variable for the concept 
+                                    vDn = _dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
                         
                             if torch.is_tensor(vDn):
                                 vDn = vDn.item()  
@@ -663,7 +670,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return lc(m, booleanProcesor, lcVariables, resultVariableNames=resultVariableNames, headConstrain = headLC)
                 
-    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
     def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
@@ -680,7 +687,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Create ILP Variables for concepts and objective
             Q, x = self.createILPVariables(m, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
             
-            # Add constrains based on ontology or graph definition
+            # Add constraints based on ontology or graph definition
             if hasattr(self, 'myOnto'): 
                 self.addOntologyConstrains(m, dn, *conceptsRelations)
             else:
@@ -756,7 +763,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Add constraints to the copy model
                 if not hasattr(self, 'myOnto'): 
                     self.addLogicalConstrains(mP, dn, lcs, p)
-                self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constrains'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
 
@@ -868,7 +875,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         # Return
         return
     
-    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
     def verifySelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
         tokenResult, relationResult, tripleRelationResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, minimizeObjective, hardConstrains)
         concepts = [k for k in graphResultsForPhraseToken.keys()]
@@ -900,7 +907,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
         return True
     
-    # -- Main method of the solver - creating ILP constrains and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
     def verifySelectionLC(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
         if not graphResultsForPhraseToken:
             self.myLogger.warning('graphResultsForPhraseToken is None or empty - returning False')
@@ -939,12 +946,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
                 
-    # -- Calculated values for logical constrains
+    # -- Calculated values for logical constraints
     def calculateLcLoss(self, dn):
         m = None 
                 
-        p = 1
+        p = 0
         key = "/local/softmax"
+        key = ""
         
         lcLosses = {}
         for graph in self.myGraph:
