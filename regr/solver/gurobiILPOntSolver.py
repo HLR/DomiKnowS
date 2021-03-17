@@ -574,7 +574,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     if variable.v == None:
                         if variable.name == None:
-                            self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(e, lc.lcName))
+                            self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(conceptName, lc.lcName))
                             return None
                                                  
                         rootConcept = dn.findRootConceptOrRelation(conceptName)
@@ -582,13 +582,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnsList = [[dn] for dn in _dns]
                     else:
                         if len(variable.v) == 0:
-                            self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(e, lc.lcName))
+                            self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(conceptName, lc.lcName))
                             return None
                             
                         referredVariableName = variable.v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
                     
                         if referredVariableName not in lcVariablesDns:
-                            self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(e, lc.lcName, referredVariableName))
+                            self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
                             return None
                        
                         referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
@@ -597,8 +597,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                             for _rDn in rDn:
                                 _eDns = _rDn.getEdgeDataNode(variable.v[1:]) # Get Datanodes for the edge defined by the path part of the v
                                 
-                                if _eDns:
+                                if _eDns and _eDns[0]:
                                     eDns.extend(_eDns)
+                                else:
+                                    self.myLogger.error('The element %s of logical constrain %s has v referring to not valid path %s'%(conceptName, lc.lcName, variable.v[1:]))
+                                    eDns.extend([None])
                                     
                             dnsList.append(eDns)
                                 
