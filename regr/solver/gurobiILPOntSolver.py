@@ -522,6 +522,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         firstV = True
         
         for eIndex, e in enumerate(lc.e): 
+            if  isinstance(e, V):
+                continue # already processed in the previous Concept 
+            
             if isinstance(e, (Concept,  LogicalConstrain, tuple)): 
                 # Look one step ahead in the parsed logical constrain and get variables names (if present) after the current concept
                 if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
@@ -643,13 +646,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     resultVariableNames.append(variableName)
                     lcVariables[variableName] = vDns   
-                                     
-            # Tuple with named variable 
-            elif isinstance(e, tuple): 
-                if eIndex == 0:
-                    pass
-                else:
-                    pass # Already processed 
             # Int - limit 
             elif isinstance(e, int): 
                 if eIndex == 0:

@@ -2,7 +2,8 @@ from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, Functiona
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
-from typing import Any, Dict, OrderedDict
+from typing import Any, Dict
+from collections import OrderedDict
 import torch
 from itertools import product
 

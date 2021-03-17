@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, nandL
+from regr.graph.logicalConstrain import ifL, andL, nandL, V
 
 
 Graph.clear()
@@ -7,9 +7,7 @@ Concept.clear()
 Relation.clear()
 
 with Graph('global') as graph:
-    with Graph('linguistic') as ling_graph:
-        ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
-       
+    with Graph('linguistic') as ling_graph:       
         word = Concept(name='word')
         phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
@@ -18,11 +16,9 @@ with Graph('global') as graph:
         (rel_phrase_contains_word,) = phrase.contains(word)
 
         pair = Concept(name='pair')
-        (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
+        (rel_pair_phrase1, rel_pair_phrase2) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application', auto_constraint=True) as app_graph:
-        app_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
-
         entity = phrase(name='entity')
         people = entity(name='people', auto_constraint=True)
         assert people.relate_to(entity)[0].auto_constraint == True
@@ -34,7 +30,7 @@ with Graph('global') as graph:
         other = entity(name='other')
         o = entity(name='O')
 
-        # nandL(people, organization, location, other, o)
+        nandL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
         work_for.has_a(people, organization, auto_constraint=True)
@@ -55,8 +51,17 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
-        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        # ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        # ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        # ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        # ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
+
+        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
+        ifL(located_in, V(name='x'), andL(location, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+        
+        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
+        ifL(live_in, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+
+        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
+        ifL(orgbase_on, V(name='x'), andL(organization, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+        
+        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        ifL(kill, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), people, V(v=('x', rel_pair_phrase2.name))))
