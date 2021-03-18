@@ -138,11 +138,13 @@ class DataNode:
     
     def getAttribute(self, *keys):
         key = ""
+        keyBis  = ""
         index = None
         
         for i, k in enumerate(keys):
             if key != "":
                 key = key + "/"
+                keyBis = keyBis + "/"
                 
             if isinstance(k, str):
                 _k = self.findConcept(k)
@@ -151,20 +153,30 @@ class DataNode:
                     if isinstance(_k, tuple):
                         key = key + '<' + _k[0].name +'>'
                         index = _k[2]
+                        keyBis = keyBis + k
                     else:
                         key = key + '<' + k +'>'
+                        keyBis = keyBis + k
                 else:
                     key = key + k
+                    keyBis = keyBis + k
             elif isinstance(k, tuple):
                 key = key + '<' + k[0].name +'>'
+                keyBis = keyBis + k[0].name
             elif isinstance(k, Concept):
                 key = key + '<' + k.name +'>'
+                keyBis = keyBis + k.name
                     
         if key in self.attributes:
             if index is None:
                 return self.attributes[key]
             else:
                 return self.attributes[key][index]
+        elif keyBis in self.attributes:
+            if index is None:
+                return self.attributes[keyBis]
+            else:
+                return self.attributes[keyBis][index]
         else:
             return None   
            

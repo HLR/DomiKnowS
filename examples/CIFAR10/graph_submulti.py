@@ -1,6 +1,6 @@
 from regr.graph import Graph, Concept, Relation
 from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL
+from regr.graph.logicalConstrain import nandL, ifL
 from itertools import combinations
 
 Graph.clear()
