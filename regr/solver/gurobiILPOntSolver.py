@@ -192,6 +192,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             for rel in concept[0].is_a():
+                if  not rel.auto_constraint:
+                    continue
+                
                 # A is_a B : if(A, B) : A(x) <= B(x)
                 
                 sxkey = '<' + rel.src.name + '>/ILP/x'
@@ -220,6 +223,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
                
             for rel in concept[0].not_a():
+                if  not rel.auto_constraint:
+                    continue
+                
                 conceptName = concept[1]
                 
                 relDestFound = False
@@ -266,10 +272,11 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Skip if multiclass
             if concept[2] is not None:
                 continue
-            
-            rels = [ rel for rel in enumerate(concept[0].has_a())]
-            
+                        
             for arg_id, rel in enumerate(concept[0].has_a()): 
+                
+                if  not rel.auto_constraint:
+                    continue
                 
                 # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
                 # A has_a B : A(x,y,...) <= B(x)
@@ -690,11 +697,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Create ILP Variables for concepts and objective
             Q, x = self.createILPVariables(m, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
             
-            # Add constraints based on ontology or graph definition
-            if hasattr(self, 'myOnto'): 
-                self.addOntologyConstrains(m, dn, *conceptsRelations)
-            else:
-                self.addGraphConstrains(m, dn, *conceptsRelations)
+            # Add constraints based on ontology and graph definition
+            self.addOntologyConstrains(m, dn, *conceptsRelations)
+            self.addGraphConstrains(m, dn, *conceptsRelations)
         
             # ILP Model objective setup
             if minimizeObjective:
@@ -763,9 +768,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if _p == p:
                         break     
     
-                # Add constraints to the copy model
-                if not hasattr(self, 'myOnto'): 
-                    self.addLogicalConstrains(mP, dn, lcs, p)
+                # Add LC constraints to the copy model
+                self.addLogicalConstrains(mP, dn, lcs, p)
                 self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
