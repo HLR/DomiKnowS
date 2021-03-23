@@ -90,10 +90,10 @@ question[para_quest_contains, "question_paragraph", 'text', "is_more", "is_less"
     paragraph['paragraph'], paragraph['question_list']
     , paragraph['less_list'], paragraph['more_list'], paragraph['no_effect_list'], paragraph['quest_ids'], forward=make_questions)
 
-
-question["token_ids_more", "Mask_more"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("more"))
-question["token_ids_less", "Mask_less"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("less"))
-question["token_ids_no_effect", "Mask_no_effect"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("no effect"))
+question["token_ids", "Mask"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("more"))
+#question["token_ids_more", "Mask_more"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("more"))
+#question["token_ids_less", "Mask_less"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("less"))
+#question["token_ids_no_effect", "Mask_no_effect"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("no effect"))
 
 def label_reader(_, label):
     return label
@@ -104,16 +104,16 @@ question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect", forward
 
 roberta_model=DariusWIQA_Robert()
 
-question["all_embs"] = ModuleLearner("token_ids_more", "Mask_more","token_ids_less", "Mask_less","token_ids_no_effect", "Mask_no_effect", module=roberta_model)
+#question["all_embs"] = ModuleLearner("token_ids_more", "Mask_more","token_ids_less", "Mask_less","token_ids_no_effect", "Mask_no_effect", module=roberta_model)
 class EmbSeprateor:
     def __init__(self,dim):
         self.dim=dim
     def __call__(self,_,all_embs):
         return all_embs[self.dim]
-
-question["emb_is_more"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(0))
-question["emb_is_less"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(1))
-question["emb_no_effect"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(2))
+question["emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
+#question["emb_is_more"] = ModuleLearner("token_ids_more", "Mask_more", module=roberta_model)
+#question["emb_is_less"] = ModuleLearner("token_ids_less", "Mask_less", module=roberta_model)
+#question["emb_no_effect"] = ModuleLearner("token_ids_no_effect", "Mask_no_effect", module=roberta_model)
 
 from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair
 
@@ -128,13 +128,13 @@ class Classifier(torch.nn.Linear):
     def __init__(self, dim_in=roberta_model.last_layer_size):
         super().__init__(dim_in, 2)
 
-shared_layer = Classifier()
+#shared_layer = Classifier()
 
 
 
-question[is_more] = ModuleLearner("emb_is_more", module=shared_layer)
-question[is_less] = ModuleLearner("emb_is_less", module=shared_layer)
-question[no_effect] = ModuleLearner("emb_no_effect", module=shared_layer)
+question[is_more] = ModuleLearner("emb", module=Classifier())
+question[is_less] = ModuleLearner("emb", module=Classifier())
+question[no_effect] = ModuleLearner("emb", module=Classifier())
 
 class WIQAModel(PrimalDualModel):
     def __init__(self, graph,poi,loss,metric):
@@ -149,7 +149,7 @@ program = LearningBasedProgram(graph, model_helper(PoiModel,#WIQAModel
                     poi=[question[is_less], question[is_more], question[no_effect],symmetric,transitive],
                             loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 logging.basicConfig(level=logging.INFO)
-program.train(reader, train_epoch_num=1, Optim=torch.optim.Adam, device='auto')
+program.train(reader, train_epoch_num=2, Optim=torch.optim.Adam, device='auto')
 
 print('Training result:')
 print(program.model.loss)
