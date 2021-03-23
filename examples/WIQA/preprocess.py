@@ -253,9 +253,9 @@ def is_ILP_consistant(questions_id,results):
     for arg1, arg2, arg3 in product(range(n), repeat=3):
         if arg1 == arg2 or arg2 == arg3:
             continue
-        if question_ids[arg1] in question_ids[arg3] and \
-           question_ids[arg2] in question_ids[arg3] and \
-                "_transit" in question_ids[arg3]:
+        if questions_id[arg1] in questions_id[arg3] and \
+           questions_id[arg2] in questions_id[arg3] and \
+                "_transit" in questions_id[arg3]:
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 return False
