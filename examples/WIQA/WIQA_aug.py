@@ -1,6 +1,7 @@
+
 import torch
 import numpy as np
-
+from transformers import  AdamW
 from regr.graph.relation import disjoint
 from regr.program import POIProgram
 from torch import nn
@@ -27,8 +28,11 @@ def guess_pair_datanode_2(*_, data, datanode):
         return True
     else:
         return False
-
-reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=10)
+cur_epoch=100
+cur_device="cuda:1"
+reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=100000000000)
+reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=1000000000)
+reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=1000000000)
 # reader.append({"paragraph":para,"more_list":more_list,"less_list":less_list,"no_effect_list":no_effect_list,"question_list":question_list})
 # print(reader[0]["paragraph"])
 # print(reader[1])
@@ -86,7 +90,7 @@ def make_questions(paragraph, question_list, less_list, more_list, no_effect_lis
            str_to_int_list(no_effect_list.split("@@")), quest_ids.split("@@")
 
 
-question[para_quest_contains, "question_paragraph", 'text', "is_more", "is_less", "no_effect", "quest_id"] = JointSensor(
+question[para_quest_contains, "question_paragraph", 'text', "is_more_", "is_less_", "no_effect_", "quest_id"] = JointSensor(
     paragraph['paragraph'], paragraph['question_list']
     , paragraph['less_list'], paragraph['more_list'], paragraph['no_effect_list'], paragraph['quest_ids'], forward=make_questions)
 
@@ -98,9 +102,9 @@ question["token_ids", "Mask"] = JointSensor(para_quest_contains, "question_parag
 def label_reader(_, label):
     return label
 
-question[is_more] = FunctionalSensor(para_quest_contains, "is_more", forward=label_reader, label=True)
-question[is_less] = FunctionalSensor(para_quest_contains, "is_less", forward=label_reader, label=True)
-question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect", forward=label_reader, label=True)
+question[is_more] = FunctionalSensor(para_quest_contains, "is_more_", forward=label_reader, label=True)
+question[is_less] = FunctionalSensor(para_quest_contains, "is_less_", forward=label_reader, label=True)
+question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect_", forward=label_reader, label=True)
 
 roberta_model=DariusWIQA_Robert()
 
@@ -149,7 +153,8 @@ program = LearningBasedProgram(graph, model_helper(PoiModel,#WIQAModel
                     poi=[question[is_less], question[is_more], question[no_effect],symmetric,transitive],
                             loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 logging.basicConfig(level=logging.INFO)
-program.train(reader, train_epoch_num=2, Optim=torch.optim.Adam, device='auto')
+program.train(reader, train_epoch_num=cur_epoch, Optim=AdamW, device=cur_device)
+
 
 print('Training result:')
 print(program.model.loss)
@@ -166,8 +171,9 @@ print('-' * 40)
 # print(program.model.metric)
 
 print('-' * 40)
-
-for paragraph_ in program.populate(reader, device='auto'):
+counter=0
+ac_=0
+for paragraph_ in program.populate(reader_dev, device=cur_device):
     #print("paragraph:", paragraph_.getAttribute('paragraph'))
     paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
     questions_id,results=[],[]
@@ -177,8 +183,41 @@ for paragraph_ in program.populate(reader, device='auto'):
         #print(question_.getAttribute('quest_id'))
         questions_id.append(question_.getAttribute('quest_id'))
         results.append((question_.getAttribute(is_more,"ILP"),question_.getAttribute(is_less,"ILP"),question_.getAttribute(no_effect,"ILP")))
-        #print(question_.getAttribute(is_more,"ILP"))
+
+        #predict_is_more=question_.getAttribute(is_more).softmax(-1).argmax().item()
+        predict_is_more_value=question_.getAttribute(is_more).softmax(-1)[0].item()
+        predict_is_less_value=question_.getAttribute(is_less).softmax(-1)[0].item()
+        predict_no_effect_value=question_.getAttribute(no_effect).softmax(-1)[0].item()
+        counter+=1
+        ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
+
     if not is_ILP_consistant(questions_id,results):
         print("ILP inconsistency")
+print("dev accuracy:",ac_/counter)
+
+print('-' * 40)
+counter=0
+ac_=0
+for paragraph_ in program.populate(reader_test, device=cur_device):
+    #print("paragraph:", paragraph_.getAttribute('paragraph'))
+    paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
+    questions_id,results=[],[]
+    for question_ in paragraph_.getChildDataNodes():
+        #print(question_.getAttribute('text'))
+        #print(question_.getAttribute('question_paragraph'))
+        #print(question_.getAttribute('quest_id'))
+        questions_id.append(question_.getAttribute('quest_id'))
+        results.append((question_.getAttribute(is_more,"ILP"),question_.getAttribute(is_less,"ILP"),question_.getAttribute(no_effect,"ILP")))
+
+        #predict_is_more=question_.getAttribute(is_more).softmax(-1).argmax().item()
+        predict_is_more_value=question_.getAttribute(is_more).softmax(-1)[0].item()
+        predict_is_less_value=question_.getAttribute(is_less).softmax(-1)[0].item()
+        predict_no_effect_value=question_.getAttribute(no_effect).softmax(-1)[0].item()
+        counter+=1
+        ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
+
+    if not is_ILP_consistant(questions_id,results):
+        print("ILP inconsistency")
+print("test accuracy:",ac_/counter)
     #print("\nILP results for paragraph - %s"%(paragraph_.collectInferedResults(is_more, "ILP")))
     #print("_" * 20)
