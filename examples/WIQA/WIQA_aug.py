@@ -14,7 +14,8 @@ from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSen
 from regr.graph.logicalConstrain import nandL,ifL, V, orL, andL, existsL, notL, atLeastL, atMostL
 from regr.graph import Graph, Concept, Relation
 from preprocess import make_reader
-from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor, \
+    CompositionCandidateSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import model_helper, PoiModel
@@ -28,11 +29,10 @@ def guess_pair_datanode_2(*_, data, datanode):
         return True
     else:
         return False
-cur_epoch=100
-cur_device="cuda:1"
-reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=100000000000)
-reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=1000000000)
-reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=1000000000)
+cur_epoch=1
+cur_device="auto"
+reader = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=10)
+
 # reader.append({"paragraph":para,"more_list":more_list,"less_list":less_list,"no_effect_list":no_effect_list,"question_list":question_list})
 # print(reader[0]["paragraph"])
 # print(reader[1])
@@ -119,13 +119,14 @@ question["emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 #question["emb_is_less"] = ModuleLearner("token_ids_less", "Mask_less", module=roberta_model)
 #question["emb_no_effect"] = ModuleLearner("token_ids_no_effect", "Mask_no_effect", module=roberta_model)
 
-from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair
+from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair,guess_triple
 
-#symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateReaderSensor(question['quest_id'], keyword='links', relations=(s_arg1.reversed, s_arg2.reversed), forward=guess_pair)
+symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(question['quest_id'], relations=(s_arg1.reversed, s_arg2.reversed), forward=guess_pair)
 #symmetric['neighbor'] = DataNodeReaderSensor(s_arg1.reversed, s_arg2.reversed, keyword='links', forward=guess_pair_datanode_2)
-symmetric[s_arg1.reversed, s_arg2.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_pair)
+#symmetric[s_arg1.reversed, s_arg2.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_pair)
 #symmetric[s_arg1.reversed, s_arg2.reversed] = JointSensor(question['quest_id'], forward=make_pair_with_labels)
 
+#transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'], relations=(t_arg1.reversed, t_arg2.reversed, t_arg3.reversed), forward=guess_triple)
 transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_triple)
 
 class Classifier(torch.nn.Linear):
@@ -173,7 +174,7 @@ print('-' * 40)
 print('-' * 40)
 counter=0
 ac_=0
-for paragraph_ in program.populate(reader_dev, device=cur_device):
+for paragraph_ in program.populate(reader, device=cur_device):
     #print("paragraph:", paragraph_.getAttribute('paragraph'))
     paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
     questions_id,results=[],[]
@@ -194,30 +195,3 @@ for paragraph_ in program.populate(reader_dev, device=cur_device):
     if not is_ILP_consistant(questions_id,results):
         print("ILP inconsistency")
 print("dev accuracy:",ac_/counter)
-
-print('-' * 40)
-counter=0
-ac_=0
-for paragraph_ in program.populate(reader_test, device=cur_device):
-    #print("paragraph:", paragraph_.getAttribute('paragraph'))
-    paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
-    questions_id,results=[],[]
-    for question_ in paragraph_.getChildDataNodes():
-        #print(question_.getAttribute('text'))
-        #print(question_.getAttribute('question_paragraph'))
-        #print(question_.getAttribute('quest_id'))
-        questions_id.append(question_.getAttribute('quest_id'))
-        results.append((question_.getAttribute(is_more,"ILP"),question_.getAttribute(is_less,"ILP"),question_.getAttribute(no_effect,"ILP")))
-
-        #predict_is_more=question_.getAttribute(is_more).softmax(-1).argmax().item()
-        predict_is_more_value=question_.getAttribute(is_more).softmax(-1)[0].item()
-        predict_is_less_value=question_.getAttribute(is_less).softmax(-1)[0].item()
-        predict_no_effect_value=question_.getAttribute(no_effect).softmax(-1)[0].item()
-        counter+=1
-        ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
-
-    if not is_ILP_consistant(questions_id,results):
-        print("ILP inconsistency")
-print("test accuracy:",ac_/counter)
-    #print("\nILP results for paragraph - %s"%(paragraph_.collectInferedResults(is_more, "ILP")))
-    #print("_" * 20)

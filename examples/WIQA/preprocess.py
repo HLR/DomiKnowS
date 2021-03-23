@@ -170,8 +170,8 @@ def make_pair(question_ids):
         if arg1 == arg2:
             continue
         if question_ids[arg1] in question_ids[arg2] and "_symmetric" in question_ids[arg2]:
-            p1.append([0 if i==arg1 else 1 for i in range(n)])
-            p2.append([0 if i==arg2 else 1 for i in range(n)])
+            p1.append([1 if i==arg1 else 0 for i in range(n)])
+            p2.append([1 if i==arg2 else 0 for i in range(n)])
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.ones((n,1))
 
@@ -184,8 +184,8 @@ def make_pair_with_labels(question_ids):
     for arg1, arg2 in product(range(n), repeat=2):
         if arg1 == arg2:
             continue
-        p1.append([0 if i==arg1 else 1 for i in range(n)])
-        p2.append([0 if i==arg2 else 1 for i in range(n)])
+        p1.append([1 if i==arg1 else 0 for i in range(n)])
+        p2.append([1 if i==arg2 else 0 for i in range(n)])
         if question_ids[arg1] in question_ids[arg2] and "_symmetric" in question_ids[arg2]:
             label_output.append([1])
         else:
@@ -199,15 +199,19 @@ def make_triple(question_ids):
     p1=[]
     p2=[]
     p3=[]
+    if not any(["_transit" in i for i in question_ids]) or n<3:
+            p1.append([1 if i==0 else 0 for i in range(n)])
+            p2.append([1 if i==0 else 0 for i in range(n)])
+            p3.append([1 if i==0 else 0 for i in range(n)])
     for arg1, arg2, arg3 in product(range(n), repeat=3):
         if arg1 == arg2 or arg2 == arg3:
             continue
         if question_ids[arg1] in question_ids[arg3] and \
            question_ids[arg2] in question_ids[arg3] and \
                 "_transit" in question_ids[arg3]:
-            p1.append([0 if i==arg1 else 1 for i in range(n)])
-            p2.append([0 if i==arg2 else 1 for i in range(n)])
-            p3.append([0 if i==arg3 else 1 for i in range(n)])
+            p1.append([1 if i==arg1 else 0 for i in range(n)])
+            p2.append([1 if i==arg2 else 0 for i in range(n)])
+            p3.append([1 if i==arg3 else 0 for i in range(n)])
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(p3),torch.ones((n,1))
 
@@ -220,9 +224,9 @@ def make_triple_with_labels(question_ids):
     for arg1, arg2, arg3 in product(range(n), repeat=3):
         if arg1 == arg2 or arg2 == arg3:
             continue
-        p1.append([0 if i==arg1 else 1 for i in range(n)])
-        p2.append([0 if i==arg2 else 1 for i in range(n)])
-        p3.append([0 if i==arg3 else 1 for i in range(n)])
+        p1.append([1 if i==arg1 else 0 for i in range(n)])
+        p2.append([1 if i==arg2 else 0 for i in range(n)])
+        p3.append([1 if i==arg3 else 0 for i in range(n)])
 
         if question_ids[arg1] in question_ids[arg3] and \
            question_ids[arg2] in question_ids[arg3] and \
@@ -233,7 +237,17 @@ def make_triple_with_labels(question_ids):
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(p3),torch.LongTensor(label_output)
 
-def guess_pair(quest_id, data, arg1, arg2):
+def guess_pair(quest_id, arg1, arg2):
+    if len(quest_id)<2:
+        return True
+    if not any(["_symmetric" in i for i in quest_id]) and arg1.getAttribute('quest_id')==quest_id[0] and arg2.getAttribute('quest_id')==quest_id[1]:
+        return True
+    if len(quest_id)<2 or arg1==arg2:
+        return False
+    #print("\n in guess pair \n")
+    #print(quest_id)
+    #print(arg1.getAttribute('quest_id'))
+    #print(arg2.getAttribute('quest_id'))
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
     if quest1 in quest2 and "_symmetric" in quest2: #directed?
         return True
@@ -261,3 +275,19 @@ def is_ILP_consistant(questions_id,results):
                 return False
     return True
 
+
+def guess_triple(quest_id, arg1, arg2,arg3):
+    return True
+    if len(quest_id)<3:
+        return True
+    if not any(["_transit" in i for i in quest_id]) and arg1.getAttribute('quest_id')==quest_id[0] \
+        and arg2.getAttribute('quest_id')==quest_id[1] and arg3.getAttribute('quest_id')==quest_id[2]:
+        return True
+
+    if len(quest_id)<3 or arg1==arg2 or arg2==arg3:
+        return False
+
+    quest1, quest2,quest3 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id'), arg3.getAttribute('quest_id')
+    if quest1 in quest3 and quest2 in quest3 and "_transit" in quest3:
+        return True
+    return False
