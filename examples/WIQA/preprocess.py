@@ -162,12 +162,12 @@ class DariusWIQA_Robert(nn.Module):
 from itertools import product
 
 def make_pair(question_ids):
-    print("im here in make_pair")
+
     n=len(question_ids)
     p1=[]
     p2=[]
     for arg1, arg2 in product(range(n), repeat=2):
-        if arg1 >= arg2:
+        if arg1 == arg2:
             continue
         if question_ids[arg1] in question_ids[arg2] and "_symmetric" in question_ids[arg2]:
             p1.append([0 if i==arg1 else 1 for i in range(n)])
@@ -182,7 +182,7 @@ def make_pair_with_labels(question_ids):
     p2=[]
     label_output=[]
     for arg1, arg2 in product(range(n), repeat=2):
-        if arg1 >= arg2:
+        if arg1 == arg2:
             continue
         p1.append([0 if i==arg1 else 1 for i in range(n)])
         p2.append([0 if i==arg2 else 1 for i in range(n)])
@@ -194,13 +194,13 @@ def make_pair_with_labels(question_ids):
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(label_output)
 
 def make_triple(question_ids):
-    print("im here in make_triple")
+
     n=len(question_ids)
     p1=[]
     p2=[]
     p3=[]
     for arg1, arg2, arg3 in product(range(n), repeat=3):
-        if arg1 >= arg2 or arg2 >= arg3:
+        if arg1 == arg2 or arg2 == arg3:
             continue
         if question_ids[arg1] in question_ids[arg3] and \
            question_ids[arg2] in question_ids[arg3] and \
@@ -218,7 +218,7 @@ def make_triple_with_labels(question_ids):
     p3=[]
     label_output=[]
     for arg1, arg2, arg3 in product(range(n), repeat=3):
-        if arg1 >= arg2 or arg2 >= arg3:
+        if arg1 == arg2 or arg2 == arg3:
             continue
         p1.append([0 if i==arg1 else 1 for i in range(n)])
         p2.append([0 if i==arg2 else 1 for i in range(n)])
@@ -240,4 +240,24 @@ def guess_pair(quest_id, data, arg1, arg2):
     else:
         return False
 
+def is_ILP_consistant(questions_id,results):
+
+    n=len(questions_id)
+    for arg1, arg2 in product(range(n), repeat=2):
+        if arg1 == arg2:
+            continue
+        if questions_id[arg1] in questions_id[arg2] and "_symmetric" in questions_id[arg2]:
+            if (results[arg1][0] and not results[arg2][1]) or (results[arg1][1] and not results[arg2][0]):
+                return False
+
+    for arg1, arg2, arg3 in product(range(n), repeat=3):
+        if arg1 == arg2 or arg2 == arg3:
+            continue
+        if question_ids[arg1] in question_ids[arg3] and \
+           question_ids[arg2] in question_ids[arg3] and \
+                "_transit" in question_ids[arg3]:
+            if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
+                    (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
+                return False
+    return True
 

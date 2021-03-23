@@ -15,7 +15,7 @@ from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidat
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import model_helper, PoiModel
-
+from preprocess import RobertaTokenizer,DariusWIQA_Robert,is_ILP_consistant
 def guess_pair_datanode_2(*_, data, datanode):
     quest1_node = datanode.relationLinks[s_arg1.name][0]
     quest2_node = datanode.relationLinks[s_arg2.name][0]
@@ -88,7 +88,7 @@ question[para_quest_contains, "question_paragraph", 'text', "is_more", "is_less"
     paragraph['paragraph'], paragraph['question_list']
     , paragraph['less_list'], paragraph['more_list'], paragraph['no_effect_list'], paragraph['quest_ids'], forward=make_questions)
 
-from preprocess import RobertaTokenizer,DariusWIQA_Robert
+
 question["token_ids_more", "Mask_more"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("more"))
 question["token_ids_less", "Mask_less"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("less"))
 question["token_ids_no_effect", "Mask_no_effect"] = JointSensor(para_quest_contains, "question_paragraph", 'text', forward=RobertaTokenizer("no effect"))
@@ -159,12 +159,17 @@ print('-' * 40)
 print('-' * 40)
 
 for paragraph_ in program.populate(reader, device='auto'):
-    print("paragraph:", paragraph_.getAttribute('paragraph'))
-    #paragraph_.inferILPResults(fun=None)
-    for question_ in paragraph_.getChildDataNodes():
-        print(question_.getAttribute('text'))
-        print(question_.getAttribute('question_paragraph'))
-        #print(question_.getAttribute(is_more,"ILP"))
+    #print("paragraph:", paragraph_.getAttribute('paragraph'))
     paragraph_.inferILPResults()
+    questions_id,results=[],[]
+    for question_ in paragraph_.getChildDataNodes():
+        #print(question_.getAttribute('text'))
+        #print(question_.getAttribute('question_paragraph'))
+        #print(question_.getAttribute('quest_id'))
+        questions_id.append(question_.getAttribute('quest_id'))
+        results.append((question_.getAttribute(is_more,"ILP"),question_.getAttribute(is_less,"ILP"),question_.getAttribute(no_effect,"ILP")))
+        #print(question_.getAttribute(is_more,"ILP"))
+    if not is_ILP_consistant(questions_id,results):
+        print("ILP inconsistency")
     #print("\nILP results for paragraph - %s"%(paragraph_.collectInferedResults(is_more, "ILP")))
-    print("_" * 20)
+    #print("_" * 20)
