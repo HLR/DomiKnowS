@@ -155,9 +155,11 @@ class DariusWIQA_Robert(nn.Module):
     self.bert = RobertaModel.from_pretrained('roberta-base')
     self.last_layer_size = self.bert.config.hidden_size
 
-  def forward(self, input_ids,attention_mask,use_soft_max=False):
-    last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
-    return last_hidden_state[:,0]
+  def forward(self, input_ids_1,attention_mask_1,input_ids_2,attention_mask_2,input_ids_3,attention_mask_3,use_soft_max=False):
+    last_hidden_state_1, _ = self.bert(input_ids=input_ids_1,attention_mask=attention_mask_1,return_dict=False)
+    last_hidden_state_2, _ = self.bert(input_ids=input_ids_2,attention_mask=attention_mask_2,return_dict=False)
+    last_hidden_state_3, _ = self.bert(input_ids=input_ids_3,attention_mask=attention_mask_3,return_dict=False)
+    return last_hidden_state_1[:,0],last_hidden_state_2[:,0],last_hidden_state_3[:,0]
 
 from itertools import product
 

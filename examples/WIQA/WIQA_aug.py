@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+
+from regr.graph.relation import disjoint
 from regr.program import POIProgram
 from torch import nn
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
@@ -43,7 +45,7 @@ with Graph('WIQA_graph') as graph:
     is_less = question(name='is_less')
     no_effect = question(name='no_effect')
 
-    nandL(is_more, is_less, no_effect)
+    disjoint(is_more, is_less, no_effect)
 
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
@@ -102,9 +104,16 @@ question[no_effect] = FunctionalSensor(para_quest_contains, "no_effect", forward
 
 roberta_model=DariusWIQA_Robert()
 
-question["emb_is_more"] = ModuleLearner("token_ids_more", "Mask_more", module=roberta_model)
-question["emb_is_less"] = ModuleLearner("token_ids_less", "Mask_less", module=roberta_model)
-question["emb_no_effect"] = ModuleLearner("token_ids_no_effect", "Mask_no_effect", module=roberta_model)
+question["all_embs"] = ModuleLearner("token_ids_more", "Mask_more","token_ids_less", "Mask_less","token_ids_no_effect", "Mask_no_effect", module=roberta_model)
+class EmbSeprateor:
+    def __init__(self,dim):
+        self.dim=dim
+    def __call__(self,_,all_embs):
+        return all_embs[self.dim]
+
+question["emb_is_more"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(0))
+question["emb_is_less"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(1))
+question["emb_no_effect"] = FunctionalSensor(para_quest_contains, "all_embs", forward=EmbSeprateor(2))
 
 from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_with_labels,guess_pair
 
@@ -160,7 +169,7 @@ print('-' * 40)
 
 for paragraph_ in program.populate(reader, device='auto'):
     #print("paragraph:", paragraph_.getAttribute('paragraph'))
-    paragraph_.inferILPResults()
+    paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
     questions_id,results=[],[]
     for question_ in paragraph_.getChildDataNodes():
         #print(question_.getAttribute('text'))
