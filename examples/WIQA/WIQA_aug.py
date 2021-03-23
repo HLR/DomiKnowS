@@ -11,7 +11,7 @@ import logging
 from regr.program.model.primaldual import PrimalDualModel
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL,ifL, V, orL, andL, existsL, notL, atLeastL, atMostL
+from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL
 from regr.graph import Graph, Concept, Relation
 from preprocess import make_reader
 from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor, \
@@ -53,22 +53,27 @@ with Graph('WIQA_graph') as graph:
 
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
-    #ifL(symmetric, ('x', 'y'), orL( andL(is_more, 'x', is_less, 'y'), andL(is_less, 'x', is_more, 'y')))
 
     ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
     ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
 
+    #ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', eqL(symmetric, 'label_', {1}), s_arg2.name)))
+    #ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', eqL(symmetric, 'label_', {1}), s_arg2.name)))
+
     transitive = Concept(name='transitive')
-    t_arg1, t_arg2, t_arg3 = transitive.has_a(arg1=question, arg2=question, arg3=question)
-    #ifL(eqL(transitive , 'label', {1}), ('x', 'y','z'), orL(
-    #   ifL( andL(is_more, 'x', is_more), 'y',is_more, 'z')),
-    #   ifL( andL(is_more, 'x', is_less, 'y'),is_less, 'z')
-    #)
+    t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
+
     ifL(andL(is_more, V(name='x'),is_more,V(name='z', v=('x', transitive.name, t_arg2.name))),
         is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
 
     ifL(andL(is_more, V(name='x'),is_less,V(name='z', v=('x', transitive.name, t_arg2.name))),
         is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
+    #ifL(andL(is_more, V(name='x'),is_more,V(name='z', v=('x', eqL(transitive, 'label_', {1}), t_arg2.name))),
+    #    is_more, V(name='y', v=('x', eqL(transitive, 'label_', {1}), t_arg3.name)))
+
+    #ifL(andL(is_more, V(name='x'),is_less,V(name='z', v=('x', eqL(transitive, 'label_', {1}), t_arg2.name))),
+    #    is_less, V(name='y', v=('x', eqL(transitive, 'label_', {1}), t_arg3.name)))
 
 print("Sensor part:")
 
@@ -124,10 +129,10 @@ from preprocess import make_pair,make_pair_with_labels,make_triple,make_triple_w
 symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(question['quest_id'], relations=(s_arg1.reversed, s_arg2.reversed), forward=guess_pair)
 #symmetric['neighbor'] = DataNodeReaderSensor(s_arg1.reversed, s_arg2.reversed, keyword='links', forward=guess_pair_datanode_2)
 #symmetric[s_arg1.reversed, s_arg2.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_pair)
-#symmetric[s_arg1.reversed, s_arg2.reversed] = JointSensor(question['quest_id'], forward=make_pair_with_labels)
+#symmetric[s_arg1.reversed, s_arg2.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_pair_with_labels)
 
-#transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'], relations=(t_arg1.reversed, t_arg2.reversed, t_arg3.reversed), forward=guess_triple)
-transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_triple)
+transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'], relations=(t_arg1.reversed, t_arg2.reversed, t_arg3.reversed), forward=guess_triple)
+#transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed,"labels_"] = JointSensor(question['quest_id'], forward=make_triple_with_labels)
 
 class Classifier(torch.nn.Linear):
     def __init__(self, dim_in=roberta_model.last_layer_size):
@@ -149,10 +154,18 @@ class WIQAModel(PrimalDualModel):
             loss=loss,
             metric=metric)
 
-#program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+class NBCrossEntropyLoss_(torch.nn.CrossEntropyLoss):
+    def forward(self, input, target, *args, **kwargs):
+        input = input.view(-1, input.shape[-1])
+        target = target.view(-1).to(dtype=torch.long)
+        #print(input.shape,target.shape,super().forward(input, target, *args, **kwargs))
+        #print(input,target)
+        return super().forward(input, target, *args, **kwargs)
+
+#program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss_()), metric=PRF1Tracker())
 program = LearningBasedProgram(graph, model_helper(PoiModel,#WIQAModel
                     poi=[question[is_less], question[is_more], question[no_effect],symmetric,transitive],
-                            loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+                            loss=MacroAverageTracker(NBCrossEntropyLoss_()), metric=PRF1Tracker()))
 logging.basicConfig(level=logging.INFO)
 program.train(reader, train_epoch_num=cur_epoch, Optim=AdamW, device=cur_device)
 
@@ -181,7 +194,7 @@ for paragraph_ in program.populate(reader, device=cur_device):
     for question_ in paragraph_.getChildDataNodes():
         #print(question_.getAttribute('text'))
         #print(question_.getAttribute('question_paragraph'))
-        #print(question_.getAttribute('quest_id'))
+        #print(question_.getAttribute('emb'))
         questions_id.append(question_.getAttribute('quest_id'))
         results.append((question_.getAttribute(is_more,"ILP"),question_.getAttribute(is_less,"ILP"),question_.getAttribute(no_effect,"ILP")))
 
