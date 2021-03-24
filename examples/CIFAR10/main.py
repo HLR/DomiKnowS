@@ -1,11 +1,12 @@
 import sys
 import torch
 sys.path.append('.')
-sys.path.append("~/DomiKnowS/regr/")
+sys.path.append('../..')
+
 from regr.program import SolverPOIProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
@@ -15,8 +16,7 @@ import os,pickle
 import numpy as np
 from regr.program.loss import NBCrossEntropyLoss
 
-sys.path.append('.')
-sys.path.append('../..')
+
 
 def prediction_softmax(pr, gt):
     return torch.softmax(pr.data, dim=-1)
@@ -53,7 +53,7 @@ class ImageModel(PrimalDualModel):
         super().__init__(
             graph,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker())
+            metric=PRF1Tracker(DatanodeCMMetric()))
 
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
@@ -100,7 +100,7 @@ def model_declaration():
     image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
     
 
-    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 #     poi=(sentence, phrase, pair), , metric=PRF1Tracker(DatanodeCMMetric())
 
 #     program = LearningBasedProgram(graph, ImageModel)
@@ -198,6 +198,9 @@ def load_cifar10(train=True, root='./data/', size=32):
 
 def main():
     program = model_declaration()
+    
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
     ### load data
     trainset = load_cifar10(train=True)
