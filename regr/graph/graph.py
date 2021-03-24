@@ -92,7 +92,7 @@ class Graph(BaseGraphTree):
             pass
 
 
-    def visualize(self, filename):
+    def visualize(self, filename, open_image=False):
         import graphviz
         concept_graph = graphviz.Digraph(name=f"{self.name}")
         concept_graph.attr(label=f"Graph: {self.name}") 
@@ -111,7 +111,7 @@ class Graph(BaseGraphTree):
                 concept_graph.edge(relation.src.name, relation.dst.name, label=relation.__class__.__name__)
 
         if filename is not None:
-            concept_graph.render(filename, format='png', view=True)
+            concept_graph.render(filename, format='png', view=open_image)
         else:
             return concept_graph
 
