@@ -3,6 +3,7 @@ from collections import OrderedDict, namedtuple
 import time
 from .dataNodeConfig import dnConfig 
 from torch.tensor import Tensor
+import graphviz
 
 from regr.graph.logicalConstrain import eqL
 from regr.solver import ilpOntSolverFactory
@@ -130,6 +131,31 @@ class DataNode:
     
     def getOntologyNode(self):
         return self.ontologyNode
+
+    def visualize(self, filename: str):
+        g = graphviz.Digraph()
+        g.node(str(self.getInstanceID()))
+        g.attr('node', shape = 'rectangle')
+
+        # for relation_name, value in self.getRelationLinks().items():
+        #     # Recursive call here over datanodes
+        #     # value is always a list
+
+        #     print(value[0], type(value[0]))
+        #     # value[0].visualize(filename=None)
+
+        print(self.getAttributes())
+        for attribute_name, attribute in self.getAttributes().items():
+            # Visualize all attributes which are not a relation
+            # Filter out:
+            #  .reverse
+            #   */label*
+            #   */ilp*
+            # <.*> decisions
+            g.node(str(attribute), str(attribute))
+            g.edge('datanode', str(attribute))
+
+        g.render(filename, format='png', view=True)
     
     # --- Attributes methods
     
