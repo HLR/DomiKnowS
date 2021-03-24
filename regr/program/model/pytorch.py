@@ -152,7 +152,7 @@ class PoiModel(TorchModel):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
-        local_metric = self.metric[(*sensors,)](*outs)
+        local_metric = self.metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
         return local_metric
 
     def populate(self, builder):
