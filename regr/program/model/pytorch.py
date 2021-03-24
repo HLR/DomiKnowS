@@ -155,13 +155,14 @@ class PoiModel(TorchModel):
         local_metric = self.metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
         return local_metric
 
-    def populate(self, builder):
+    def populate(self, builder, run=True):
         loss = 0
         metric = {}
         for prop in self.poi:
             # make sure the sensors are evaluated
-            for sensor in prop.find(TorchSensor):
-                    sensor(builder)
+            if run:
+                for sensor in prop.find(TorchSensor):
+                        sensor(builder)
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
@@ -179,18 +180,23 @@ class SolverModel(PoiModel):
 
     def inference(self, builder):
         for prop in self.poi:
-            for output_sensor, target_sensor in self.find_sensors(prop):
-            # make sure the sensors are evaluated
-                output = output_sensor(builder)
-                target = target_sensor(builder)
+            for sensor in prop.find(TorchSensor):
+                sensor(builder)
+#             for output_sensor, target_sensor in self.find_sensors(prop):
+#             # make sure the sensors are evaluated
+#                 output = output_sensor(builder)
+#                 target = target_sensor(builder)
+#         print("Done with the computation")
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPResults(*self.inference_with, fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+#         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
+        datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None)
+#         print("Done with the inference")
         return builder
 
     def populate(self, builder):
         data_item = self.inference(builder)
-        return super().populate(builder)
+        return super().populate(builder, run=False)
 
 
 class IMLModel(SolverModel):

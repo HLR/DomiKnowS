@@ -1,11 +1,14 @@
 from .program import LearningBasedProgram
-from .model.pytorch import PoiModel, IMLModel, PoiModelToWorkWithLearnerWithLoss
+from .model.pytorch import PoiModel, IMLModel, PoiModelToWorkWithLearnerWithLoss, SolverModel
 
 
 class POIProgram(LearningBasedProgram):
     def __init__(self, graph, **kwargs):
         super().__init__(graph, PoiModel, **kwargs)
 
+class SolverPOIProgram(LearningBasedProgram):
+    def __init__(self, graph, **kwargs):
+        super().__init__(graph, SolverModel, **kwargs)
 
 class IMLProgram(LearningBasedProgram):
     def __init__(self, graph, **kwargs):

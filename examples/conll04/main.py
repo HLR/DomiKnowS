@@ -1,4 +1,9 @@
+import sys
 import torch
+
+sys.path.append('.')
+sys.path.append('../..')
+
 
 from regr.program import POIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
@@ -108,9 +113,9 @@ def model(use_ont):
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     if use_ont:
-        lbp = POIProgram(graph_ont, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = POIProgram(graph_ont, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
     else:
-        lbp = POIProgram(graph, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+        lbp = POIProgram(graph, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
     
     return lbp
 
@@ -133,7 +138,7 @@ def main():
     # Uncomment the following lines to enable training and testing
     train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
     test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    program.train(train_reader, train_epoch_num=200, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     program.test(test_reader)
 
     reader = SingletonDataLoader('data/conll04.corp')
