@@ -638,7 +638,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 vDn = ilpVs[p]
                             else:
                                 if p == 0:
-                                    vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
+                                    try:
+                                        vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
+                                    except IndexError: 
+                                        vDn = None
                                 else:
                                     vDn = _dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
                         

@@ -1315,6 +1315,9 @@ class DataNodeBuilder(dict):
         return dns
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
+        conceptName = conceptInfo['concept'].name
+        _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+
         # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
@@ -1332,7 +1335,12 @@ class DataNodeBuilder(dict):
         
         dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
                 
-        if vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
+        _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+
+        if vInfo.dim == 0: 
+            _DataNodeBulder__Logger.error('Provided value is empty %s - abandon the update'%(vInfo.value))
+            return
+        elif vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
             _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
@@ -1347,16 +1355,20 @@ class DataNodeBuilder(dict):
                                     
             dns.append(dns1)              
         elif vInfo.dim == 2:
-            _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
-            
             if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
-                requiredLenOFReltedDns = len(vInfo.value[0])
-                
+                if len(vInfo.value) > 0:
+                    try:
+                        requiredLenOFReltedDns = len(vInfo.value[0])
+                    except IndexError:
+                        requiredLenOFReltedDns = 0
+                else:
+                    requiredLenOFReltedDns = 0
+                    
                 if requiredLenOFReltedDns != len(relatedDns):
-                    _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    _DataNodeBulder__Logger.error('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
                 _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
