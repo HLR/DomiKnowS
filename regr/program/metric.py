@@ -9,7 +9,7 @@ from ..utils import wrap_batch
 
 
 class BinaryCMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, weight=None, dim=None):
+    def forward(self, input, target, data_item, prop, weight=None, dim=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
         preds = (input > 0).clone().detach().to(dtype=weight.dtype)
@@ -21,18 +21,24 @@ class BinaryCMWithLogitsMetric(torch.nn.Module):
         fn = ((1 - preds) * labels * weight).sum()
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
+class DatanodeCMMetric(torch.nn.Module):
+    def forward(self, input, target, data_item, prop, weight=None, dim=None):
+        datanode = data_item.getDataNode()
+        datanode.inferILPResults(prop.name)
+        result = datanode.getInferMetric(inferType='ILP')
+        return
 
 class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
+    def forward(self, input, target, data_item, prop, weight=None):
         num_classes = input.shape[-1]
         input = input.view(-1, num_classes)
         target = target.view(-1).to(dtype=torch.long)
         target = F.one_hot(target.view(-1), num_classes=num_classes)
-        return super().forward(input, target, weight)
+        return super().forward(input, target, data_item, weight)
 
 
 class BinaryPRF1WithLogitsMetric(BinaryCMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
+    def forward(self, input, target, data_item, prop, weight=None):
         CM = super().forward(input, target, weight)
         tp = CM['TP'].float()
         fp = CM['FP'].float()

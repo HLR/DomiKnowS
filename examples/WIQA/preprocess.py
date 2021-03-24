@@ -134,11 +134,10 @@ class RobertaTokenizer:
         self.tokenizer= RobertaTokenizerFast.from_pretrained("roberta-base")
 
     def __call__(self,_, question_paragraph, text):
-        encoded_input = self.tokenizer(question_paragraph,[i+" </s> "+self.answer_option for i in text] ,padding="max_length",max_length =self.max_length)
-
+        #encoded_input = self.tokenizer(question_paragraph,[i+" </s> "+self.answer_option for i in text] ,padding="max_length",max_length =self.max_length)
+        encoded_input = self.tokenizer(question_paragraph,text ,padding="max_length",max_length =self.max_length)
         input_ids = encoded_input["input_ids"]
-        #print(input_ids[0])
-        #print(self.tokenizer.convert_ids_to_tokens(input_ids[0]))
+        #print(input_ids[0]==input_ids[1])
 
         attention_mask = encoded_input["attention_mask"]
         return torch.LongTensor(input_ids),torch.LongTensor(attention_mask)
@@ -150,28 +149,28 @@ from torch import nn
 
 class DariusWIQA_Robert(nn.Module):
 
-  def __init__(self):
-    super(DariusWIQA_Robert, self).__init__()
-    self.bert = RobertaModel.from_pretrained('roberta-base')
-    self.last_layer_size = self.bert.config.hidden_size
+    def __init__(self):
+        super(DariusWIQA_Robert, self).__init__()
+        self.bert = RobertaModel.from_pretrained('roberta-base')
+        self.last_layer_size = self.bert.config.hidden_size
 
-  def forward(self, input_ids,attention_mask,use_soft_max=False):
-    last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
-    return last_hidden_state[:,0]
+    def forward(self, input_ids,attention_mask,use_soft_max=False):
+        last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+        return last_hidden_state[:,0]
 
 from itertools import product
 
 def make_pair(question_ids):
-    print("im here in make_pair")
+
     n=len(question_ids)
     p1=[]
     p2=[]
     for arg1, arg2 in product(range(n), repeat=2):
-        if arg1 >= arg2:
+        if arg1 == arg2:
             continue
         if question_ids[arg1] in question_ids[arg2] and "_symmetric" in question_ids[arg2]:
-            p1.append([0 if i==arg1 else 1 for i in range(n)])
-            p2.append([0 if i==arg2 else 1 for i in range(n)])
+            p1.append([1 if i==arg1 else 0 for i in range(n)])
+            p2.append([1 if i==arg2 else 0 for i in range(n)])
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.ones((n,1))
 
@@ -182,10 +181,12 @@ def make_pair_with_labels(question_ids):
     p2=[]
     label_output=[]
     for arg1, arg2 in product(range(n), repeat=2):
-        if arg1 >= arg2:
+
+        p1.append([1 if i==arg1 else 0 for i in range(n)])
+        p2.append([1 if i==arg2 else 0 for i in range(n)])
+        if arg1 == arg2:
+            label_output.append([0])
             continue
-        p1.append([0 if i==arg1 else 1 for i in range(n)])
-        p2.append([0 if i==arg2 else 1 for i in range(n)])
         if question_ids[arg1] in question_ids[arg2] and "_symmetric" in question_ids[arg2]:
             label_output.append([1])
         else:
@@ -194,20 +195,24 @@ def make_pair_with_labels(question_ids):
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(label_output)
 
 def make_triple(question_ids):
-    print("im here in make_triple")
+
     n=len(question_ids)
     p1=[]
     p2=[]
     p3=[]
+   # if not any(["_transit" in i for i in question_ids]) or n<3:
+  #          p1.append([1 if i==0 else 0 for i in range(n)])
+  #          p2.append([1 if i==0 else 0 for i in range(n)])
+ #           p3.append([1 if i==0 else 0 for i in range(n)])
     for arg1, arg2, arg3 in product(range(n), repeat=3):
-        if arg1 >= arg2 or arg2 >= arg3:
+        if arg1 == arg2 or arg2 == arg3:
             continue
         if question_ids[arg1] in question_ids[arg3] and \
            question_ids[arg2] in question_ids[arg3] and \
                 "_transit" in question_ids[arg3]:
-            p1.append([0 if i==arg1 else 1 for i in range(n)])
-            p2.append([0 if i==arg2 else 1 for i in range(n)])
-            p3.append([0 if i==arg3 else 1 for i in range(n)])
+            p1.append([1 if i==arg1 else 0 for i in range(n)])
+            p2.append([1 if i==arg2 else 0 for i in range(n)])
+            p3.append([1 if i==arg3 else 0 for i in range(n)])
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(p3),torch.ones((n,1))
 
@@ -218,12 +223,14 @@ def make_triple_with_labels(question_ids):
     p3=[]
     label_output=[]
     for arg1, arg2, arg3 in product(range(n), repeat=3):
-        if arg1 >= arg2 or arg2 >= arg3:
-            continue
-        p1.append([0 if i==arg1 else 1 for i in range(n)])
-        p2.append([0 if i==arg2 else 1 for i in range(n)])
-        p3.append([0 if i==arg3 else 1 for i in range(n)])
 
+
+        p1.append([1 if i==arg1 else 0 for i in range(n)])
+        p2.append([1 if i==arg2 else 0 for i in range(n)])
+        p3.append([1 if i==arg3 else 0 for i in range(n)])
+        if arg1 == arg2 or arg2 == arg3:
+            label_output.append([0])
+            continue
         if question_ids[arg1] in question_ids[arg3] and \
            question_ids[arg2] in question_ids[arg3] and \
                 "_transit" in question_ids[arg3]:
@@ -233,11 +240,58 @@ def make_triple_with_labels(question_ids):
 
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(p3),torch.LongTensor(label_output)
 
-def guess_pair(quest_id, data, arg1, arg2):
+def guess_pair(quest_id, arg1, arg2):
+
+    #if len(quest_id)<2:
+    #    return True
+    #if not any(["_symmetric" in i for i in quest_id]) and arg1.getAttribute('quest_id')==quest_id[0] and arg2.getAttribute('quest_id')==quest_id[1]:
+     #   return True
+    if len(quest_id)<2 or arg1==arg2:
+        return False
+    #print("\n in guess pair \n")
+    #print(quest_id)
+    #print(arg1.getAttribute('quest_id'))
+    #print(arg2.getAttribute('quest_id'))
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
     if quest1 in quest2 and "_symmetric" in quest2: #directed?
         return True
     else:
         return False
 
+def is_ILP_consistant(questions_id,results):
 
+    n=len(questions_id)
+    for arg1, arg2 in product(range(n), repeat=2):
+        if arg1 == arg2:
+            continue
+        if questions_id[arg1] in questions_id[arg2] and "_symmetric" in questions_id[arg2]:
+            if (results[arg1][0] and not results[arg2][1]) or (results[arg1][1] and not results[arg2][0]):
+                return False
+
+    for arg1, arg2, arg3 in product(range(n), repeat=3):
+        if arg1 == arg2 or arg2 == arg3:
+            continue
+        if questions_id[arg1] in questions_id[arg3] and \
+           questions_id[arg2] in questions_id[arg3] and \
+                "_transit" in questions_id[arg3]:
+            if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
+                    (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
+                return False
+    return True
+
+
+def guess_triple(quest_id, arg11, arg22,arg33):
+
+    #if len(quest_id)<3:
+    #    return True
+    #if not any(["_transit" in i for i in quest_id]) and arg11.getAttribute('quest_id')==quest_id[0] \
+    #    and arg22.getAttribute('quest_id')==quest_id[1] and arg33.getAttribute('quest_id')==quest_id[2]:
+    #    return True
+
+    if len(quest_id)<3 or arg11==arg22 or arg22==arg33:
+        return False
+
+    quest1, quest2,quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
+    if quest1 in quest3 and quest2 in quest3 and "_transit" in quest3:
+        return True
+    return False

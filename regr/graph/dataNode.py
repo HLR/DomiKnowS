@@ -138,11 +138,13 @@ class DataNode:
     
     def getAttribute(self, *keys):
         key = ""
+        keyBis  = ""
         index = None
         
         for i, k in enumerate(keys):
             if key != "":
                 key = key + "/"
+                keyBis = keyBis + "/"
                 
             if isinstance(k, str):
                 _k = self.findConcept(k)
@@ -151,20 +153,30 @@ class DataNode:
                     if isinstance(_k, tuple):
                         key = key + '<' + _k[0].name +'>'
                         index = _k[2]
+                        keyBis = keyBis + k
                     else:
                         key = key + '<' + k +'>'
+                        keyBis = keyBis + k
                 else:
                     key = key + k
+                    keyBis = keyBis + k
             elif isinstance(k, tuple):
                 key = key + '<' + k[0].name +'>'
+                keyBis = keyBis + k[0].name
             elif isinstance(k, Concept):
                 key = key + '<' + k.name +'>'
+                keyBis = keyBis + k.name
                     
         if key in self.attributes:
             if index is None:
                 return self.attributes[key]
             else:
                 return self.attributes[key][index]
+        elif keyBis in self.attributes:
+            if index is None:
+                return self.attributes[keyBis]
+            else:
+                return self.attributes[keyBis][index]
         else:
             return None   
            
@@ -604,8 +616,10 @@ class DataNode:
         # Path has at least 2 elements - will perfomr recursion
         if isinstance(path[0], eqL): # check if eqL
             concept = path[0].e[0]
-        if path[0] in self.relationLinks:
+        elif path[0] in self.relationLinks:
             concept = path[0]
+        else:
+            return [None]
 
         if isinstance(concept, Concept):
             concept = concept.name
@@ -641,7 +655,6 @@ class DataNode:
             return rDNS
         else:
             return [None]
-
 
     def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
         
@@ -873,7 +886,7 @@ class DataNode:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
         else:        
-            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%(_conceptsRelations))
+            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[0].name if isinstance(x, tuple) else x for x in _conceptsRelations]))
                 
         myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
@@ -1302,6 +1315,9 @@ class DataNodeBuilder(dict):
         return dns
     
     def __createSingleDataNode(self, vInfo, conceptInfo, keyDataName):
+        conceptName = conceptInfo['concept'].name
+        _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+
         # -- Create a single the new dataNode 
         instanceValue = ""
         instanceID = 0
@@ -1319,7 +1335,12 @@ class DataNodeBuilder(dict):
         
         dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
                 
-        if vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
+        _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
+
+        if vInfo.dim == 0: 
+            _DataNodeBulder__Logger.error('Provided value is empty %s - abandon the update'%(vInfo.value))
+            return
+        elif vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
             _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
@@ -1334,16 +1355,20 @@ class DataNodeBuilder(dict):
                                     
             dns.append(dns1)              
         elif vInfo.dim == 2:
-            _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
-            
             if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
                 
-                requiredLenOFReltedDns = len(vInfo.value[0])
-                
+                if len(vInfo.value) > 0:
+                    try:
+                        requiredLenOFReltedDns = len(vInfo.value[0])
+                    except IndexError:
+                        requiredLenOFReltedDns = 0
+                else:
+                    requiredLenOFReltedDns = 0
+                    
                 if requiredLenOFReltedDns != len(relatedDns):
-                    _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    _DataNodeBulder__Logger.error('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
                 _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
@@ -1719,9 +1744,13 @@ class DataNodeBuilder(dict):
                 returnDn = _dataNode[0]
                 
                 if len(_dataNode) == 1:
-                    _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode()))
+                    _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:
-                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes'%(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode)))
+                    typesInDNs = set()
+                    for d in _dataNode:
+                        typesInDNs.add(returnDn.getOntologyNode().name)
+                        
+                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'%(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
 
                 return returnDn
         

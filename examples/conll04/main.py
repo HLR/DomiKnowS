@@ -1,7 +1,7 @@
 import torch
 
 from regr.program import POIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -110,7 +110,7 @@ def model(use_ont):
     if use_ont:
         lbp = POIProgram(graph_ont, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
     else:
-        lbp = POIProgram(graph, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = POIProgram(graph, poi=(phrase, sentence, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
     
     return lbp
 
