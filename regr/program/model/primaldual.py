@@ -3,10 +3,10 @@ import logging
 import torch
 from torch.utils import data
 
-from ..model.pytorch import PoiModel
+from ..model.pytorch import PoiModel, SolverModel
 
 
-class PrimalDualModel(PoiModel):
+class PrimalDualModel(SolverModel):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, *args, **kwargs):
@@ -38,8 +38,8 @@ class PrimalDualModel(PoiModel):
         lmbd_loss = torch.stack(lmbd_loss).sum()
         return lmbd_loss
 
-    def populate(self, builder):
-        loss, *outputs = super().populate(builder)
+    def populate(self, builder, run=True):
+        loss, *outputs = super().populate(builder, run=True)
         datanode = builder.getDataNode()
         loss += self.pd_loss(datanode)
         return (loss, *outputs)
