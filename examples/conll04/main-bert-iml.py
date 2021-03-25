@@ -192,7 +192,7 @@ def main():
     program.test(test_reader, device='auto')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-{split_id}-{now}.pt')
+    program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
 
 
 if __name__ == '__main__':
