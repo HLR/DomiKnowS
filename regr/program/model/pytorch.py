@@ -173,9 +173,10 @@ class PoiModel(TorchModel):
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None):
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP']):
         super().__init__(graph, poi=poi, loss=loss, metric=metric)
         self.inference_with = []
+        self.inferTypes = inferTypes
 
     def inference(self, builder):
         for prop in self.poi:
@@ -189,7 +190,12 @@ class SolverModel(PoiModel):
         datanode = builder.getDataNode()
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
-        datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None)
+        for infertype in self.inferTypes:
+            {
+                'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                'argmax': lambda :datanode.infer(),
+                'softmax': lambda :datanode.infer(),
+            }[infertype]()
 #         print("Done with the inference")
         return builder
 

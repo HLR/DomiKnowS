@@ -30,9 +30,13 @@ class BinaryCMWithLogitsMetric(torch.nn.Module):
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 class DatanodeCMMetric(torch.nn.Module):
+    def __init__(self, inferType='ILP'):
+        super().__init__()
+        self.inferType = inferType
+
     def forward(self, input, target, data_item, prop, weight=None, dim=None):
         datanode = data_item.getDataNode()
-        result = datanode.getInferMetric(prop.name, inferType='ILP')
+        result = datanode.getInferMetric(prop.name, inferType=self.inferType)
         val =  result[str(prop.name)]
         return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
 
