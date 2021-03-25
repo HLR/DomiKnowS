@@ -33,7 +33,7 @@ class TorchSensor(Sensor):
         try:
             self.update_context(data_item)
         except:
-            print('Error during updating data item with sensor {}'.format(self))
+            print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
         return data_item[self]
 
