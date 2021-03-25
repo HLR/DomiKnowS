@@ -136,8 +136,8 @@ def main():
     program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
-    # train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    train_reader = SingletonDataLoader('data/conll04-one.corp')
+    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    # train_reader = SingletonDataLoader('data/conll04-one.corp')
     test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
     program.train(train_reader, test_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
     program.test(test_reader, device='auto')

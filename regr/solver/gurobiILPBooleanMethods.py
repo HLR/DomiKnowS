@@ -234,7 +234,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             for currentVar in var:
                 varSumLinExpr.addTerms(1.0, currentVar)
         
-            if self.ifLog: self.myLogger.debug("% created constrain only: and %s > 1"%(logicMethodName,varSumLinExpr))
+            if self.ifLog: self.myLogger.debug("%s created constrain only: and %s > 1"%(logicMethodName,varSumLinExpr))
 
             #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
             m.addConstr(varSumLinExpr >= N)

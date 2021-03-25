@@ -91,6 +91,30 @@ class Graph(BaseGraphTree):
             # TODO: what are other cases
             pass
 
+
+    def visualize(self, filename, open_image=False):
+        import graphviz
+        concept_graph = graphviz.Digraph(name=f"{self.name}")
+        concept_graph.attr(label=f"Graph: {self.name}") 
+
+        for concept_name, concept in self.concepts.items():
+            concept_graph.node(concept_name)
+
+        for subgraph_name, subgraph in self.subgraphs.items():
+            sub_graph_viz = subgraph.visualize(filename=None)
+            sub_graph_viz.name = 'cluster_' + sub_graph_viz.name
+            concept_graph.subgraph(sub_graph_viz)
+
+        for relation_name, relation in self.relations.items():
+            if not relation.name.endswith('reversed'):
+                # add case for HasA
+                concept_graph.edge(relation.src.name, relation.dst.name, label=relation.__class__.__name__)
+
+        if filename is not None:
+            concept_graph.render(filename, format='png', view=open_image)
+        else:
+            return concept_graph
+
     @property
     def subgraphs(self):
         return OrderedDict(self)
@@ -98,7 +122,7 @@ class Graph(BaseGraphTree):
     @property
     def concepts(self):
         return self._concepts
-    
+
     @property
     def logicalConstrains(self):
         return self._logicalConstrains

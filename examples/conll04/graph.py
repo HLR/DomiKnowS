@@ -30,7 +30,7 @@ with Graph('global') as graph:
         other = entity(name='other')
         o = entity(name='O')
 
-        #atMostL(people, organization, location, other, o, 1)
+        #atMostL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
         work_for.has_a(people, organization, auto_constraint=True)

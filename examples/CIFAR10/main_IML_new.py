@@ -3,7 +3,7 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import SolverPOIProgram, POIProgram
+from regr.program import SolverPOIProgram, POIProgram, IMLProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
@@ -113,12 +113,10 @@ def model_declaration():
 #     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 #     program = LearningBasedProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 
-    program = LearningBasedProgram(graph, ImageModel)
-
-    program_before_inf = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
 #     program = LearningBasedProgram(graph, ImageModel)
 
-    return program, program_before_inf
+    return program
 
 class CIFAR10_1(datasets.CIFAR10):
 
@@ -213,7 +211,7 @@ def load_cifar10(train=True, root='./data/', size=32):
 
 def main():
     
-    program, program_before_inf = model_declaration()
+    program = model_declaration()
     
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -228,45 +226,29 @@ def main():
 # 
 
 
-    for i in range(10):
-        print('^^^^^^^^^^^^^^^epoch: ',i)
-        program.train(train_ds, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device="cuda:1")
+#     for i in range(10):
+#         print('^^^^^^^^^^^^^^^epoch: ',i)
+#         program.train(train_ds, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device="cuda:1")
         
-        print('------------------------------below is test results before the inference----------------------')
-        program_before_inf.test(testset)
-        print(program_before_inf.model.metric)
+#         print('------------------------------below is test results before the inference----------------------')
+#         program_before_inf.test(testset)
+#         print(program_before_inf.model.metric)
         
-        print('------------------------------below is test results after the inference----------------------')
-        program.test(testset)
-        print(program.model.metric)
+#         print('------------------------------below is test results after the inference----------------------')
+#         program.test(testset)
+#         print(program.model.metric)
         
       
-        print('------------------------------below is val results before the inference----------------------')
-        program_before_inf.test(val_ds)
-        print(program_before_inf.model.metric)
+#         print('------------------------------below is val results before the inference----------------------')
+#         program_before_inf.test(val_ds)
+#         print(program_before_inf.model.metric)
         
-        print('------------------------------below is val results after the inference----------------------')
-        program.test(val_ds)
-        print(program.model.metric)
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+#         print('------------------------------below is val results after the inference----------------------')
+#         program.test(val_ds)
+#         print(program.model.metric)
 
-    
-    
-    
-    
-
-
-
-
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=20, Optim=lambda param: torch.optim.SGD(param, lr=.001))  
+        
 
 if __name__ == '__main__':
     main()
