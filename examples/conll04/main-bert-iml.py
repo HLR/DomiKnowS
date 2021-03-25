@@ -167,9 +167,9 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp = SolverPOIProgram(
+    lbp = IMLProgram(
         graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'softmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'softmax': PRF1Tracker(DatanodeCMMetric('softmax'))})

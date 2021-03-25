@@ -143,7 +143,7 @@ def main():
     program.test(test_reader, device='auto')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save('conll04-{now}.pt')
+    program.save(f'conll04-{now}.pt')
 
     reader = SingletonDataLoader('data/conll04-one.corp')
 
