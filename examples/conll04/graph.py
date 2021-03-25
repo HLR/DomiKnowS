@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, atMostL, V
+from regr.graph.logicalConstrain import ifL, andL, atMostL, V, exactL
 
 
 Graph.clear()
@@ -31,6 +31,7 @@ with Graph('global') as graph:
         o = entity(name='O')
 
         #atMostL(people, organization, location, other, o)
+        exactL(people, organization, location, other, o, 1)
 
         work_for = pair(name='work_for')
         work_for.has_a(people, organization, auto_constraint=True)
