@@ -60,7 +60,9 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
             if valid_set is not None:
                 self.logger.info('Validation:')
