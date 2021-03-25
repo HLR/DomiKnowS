@@ -70,7 +70,9 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
         if test_set is not None:
             self.logger.info('Testing:')
@@ -78,7 +80,9 @@ class LearningBasedProgram():
             self.logger.info(' - loss:')
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
-            self.logger.info(self.model.metric)
+            for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
             
     def train_epoch(self, dataset):
         self.model.mode(Mode.TRAIN)
@@ -100,7 +104,9 @@ class LearningBasedProgram():
         self.logger.info(' - loss:')
         self.logger.info(self.model.loss)
         self.logger.info(' - metric:')
-        self.logger.info(self.model.metric)
+        for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
     def test_epoch(self, dataset, device=None):
         self.model.mode(Mode.TEST)
