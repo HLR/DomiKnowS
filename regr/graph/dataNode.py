@@ -782,14 +782,19 @@ class DataNode:
             if rTensor is None:
                 continue
             
-            if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
-                collectAttributeList.append(rTensor.item())
-            elif (concept[2] is None) and concept[3] == 1:
-                collectAttributeList.append(rTensor[1])
-            elif concept[2] is not None:
-                collectAttributeList.append(rTensor[concept[2]])
-            elif (concept[2] is None) and concept[3] > 1:
-                return rTensor
+            if torch.is_tensor(rTensor):
+                if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
+                    collectAttributeList.append(rTensor.item())
+                elif (concept[2] is None) and concept[3] == 1:
+                    collectAttributeList.append(rTensor[1])
+                elif concept[2] is not None:
+                    collectAttributeList.append(rTensor[concept[2]])
+                elif (concept[2] is None) and concept[3] > 1:
+                    return rTensor
+            elif rTensor:
+                collectAttributeList.append(1)
+            else:
+                collectAttributeList.append(0)
         
         return torch.tensor(collectAttributeList)        
     

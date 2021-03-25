@@ -141,7 +141,7 @@ def main():
     #program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
    # program.test(test_reader)
 
-    reader = SingletonDataLoader('data/conll04.corp')
+    reader = SingletonDataLoader('data/conll04-one.corp')
 
     for node in program.populate(reader, device='auto'):
         assert node.ontologyNode is sentence
