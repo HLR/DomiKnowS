@@ -176,7 +176,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                    
                 currentConstrLinExpr = x + notx 
                 
-                m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
+                m.addConstr(currentConstrLinExpr == 1, name='Disjoint: %s and %s'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
                 self.myLogger.debug("Disjoint constrain between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
 
         m.update()
@@ -781,7 +781,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 mP.optimize()
                 mP.update()
                 
-                #mP.display()    
+                mP.display()    
                 
                 endOptimize = datetime.now()
                 elapsedOptimize = endOptimize - startOptimize
@@ -858,18 +858,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnAtt[ILPkey][index] = solution
                         dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
                         
-                        #del dnAtt[xPkey]
-                        
-                        #if xNotPkey in dnAtt:
-                            #del dnAtt[xNotPkey]
-                            
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
                             self.myLogger.info('\"%s\" is \"%s\"'%(dn,c[1]))
-
-                 
-                # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
-                # Get ILP result from  maxP x 
             else:
                 pass
                                        

@@ -276,7 +276,7 @@ class exactL(LogicalConstrain):
             cLimit = 1
             
         lcMethodName = 'exactL'
-        cOperation = '='
+        cOperation = '=='
         
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
@@ -288,7 +288,7 @@ class existsL(LogicalConstrain):
         cLimit = 1
 
         lcMethodName = 'existsL'
-        cOperation = '>'
+        cOperation = '>='
         
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
@@ -303,7 +303,7 @@ class atLeastL(LogicalConstrain):
             cLimit = 1
             
         lcMethodName = 'atLeastL'
-        cOperation = '>'
+        cOperation = '>='
         
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
     
@@ -318,6 +318,6 @@ class atMostL(LogicalConstrain):
             cLimit = 1
             
         lcMethodName = 'atMostL'
-        cOperation = '<'
+        cOperation = '<='
         
         return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
