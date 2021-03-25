@@ -109,7 +109,12 @@ class PoiModel(TorchModel):
                     raise ValueError(f'Unexpected type of POI item {type(item)}: Property or Concept expected.')
             self.poi = properties
         self.loss = loss
-        self.metric = metric
+        if metric is None:
+            self.metric = None
+        elif isinstance(metric, dict):
+            self.metric = metric
+        else:
+            self.metric = {'': metric}
 
     def default_poi(self):
         poi = []
@@ -137,8 +142,9 @@ class PoiModel(TorchModel):
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        if isinstance(self.metric, MetricTracker):
-            self.metric.reset()
+        for metric in self.metric.values():
+            if isinstance(metric, MetricTracker):
+                metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):
         if not self.loss:
@@ -151,7 +157,11 @@ class PoiModel(TorchModel):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
-        local_metric = self.metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
+        local_metric = {}
+        for key, metric in self.metric.items():
+            local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
+        if len(local_metric) == 1:
+            local_metric = list(local_metric.values())[0]
         return local_metric
 
     def populate(self, builder, run=True):
@@ -199,7 +209,7 @@ class SolverModel(PoiModel):
 #         print("Done with the inference")
         return builder
 
-    def populate(self, builder):
+    def populate(self, builder, run=True):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
 
