@@ -119,7 +119,7 @@ def model():
     def phrase_bert(bert):
         return bert
     phrase['bert'] = cache(FunctionalSensor)(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert, cache=TorchCache(path="./cache/phrase-bert"))
-    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat(bert, w2v, dim=-1))
+    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1))
 
     phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
     phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
