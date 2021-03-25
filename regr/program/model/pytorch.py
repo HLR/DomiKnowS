@@ -199,7 +199,7 @@ class SolverModel(PoiModel):
 #         print("Done with the inference")
         return builder
 
-    def populate(self, builder):
+    def populate(self, builder, run=True):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
 

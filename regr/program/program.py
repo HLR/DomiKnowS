@@ -77,7 +77,7 @@ class LearningBasedProgram():
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
             self.logger.info(self.model.metric)
-
+            
     def train_epoch(self, dataset):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
