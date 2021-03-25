@@ -7,7 +7,7 @@ Concept.clear()
 Relation.clear()
 
 with Graph('global') as graph:
-    with Graph('linguistic') as ling_graph:       
+    with Graph('linguistic') as ling_graph:
         word = Concept(name='word')
         phrase = Concept(name='phrase')
         sentence = Concept(name='sentence')
