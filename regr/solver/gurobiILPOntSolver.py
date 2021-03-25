@@ -546,14 +546,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     if isinstance(e, LogicalConstrain):
                         variable = V(name="_lc" + str(vNo))
-                        vNo =+ 1
+                        vNo += 1
                     else:
                         if firstV:
                             variable = V(name="_x" )
                             firstV = False
                         else:
                             variable = V(name="_x" + str(vNo), v = ("_x",))
-                            vNo =+ 1
+                            vNo += 1
                     
                 if variable.name:
                     variableName = variable.name
@@ -562,7 +562,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 if variableName in lcVariables:
                     newvVariableName = "_x" + str(vNo)
-                    vNo =+ 1
+                    vNo += 1
                     
                     resultVariableNames.append(newvVariableName)
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
