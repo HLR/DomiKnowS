@@ -54,7 +54,7 @@ class TorchModel(torch.nn.Module):
 
     def data_hash(self, data_item):
         try:
-            return hash(data_item)
+            return str(hash(data_item))
         except TypeError as te:
             te_args = te.args
             pass  # fall back to 'id'
