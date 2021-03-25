@@ -12,19 +12,27 @@ class BinaryCMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, data_item, prop, weight=None, dim=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
-        preds = (input > 0).clone().detach().to(dtype=weight.dtype)
+        preds = F.softmax(input, dim=-1)
+        preds = (preds > 0.5).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
         assert (0 <= labels).all() and (labels <= 1).all()
-        tp = (preds * labels * weight).sum()
-        fp = (preds * (1 - labels) * weight).sum()
-        tn = ((1 - preds) * (1 - labels) * weight).sum()
-        fn = ((1 - preds) * labels * weight).sum()
+        tp = (preds * labels * weight)[:, 1].sum()
+        fp = (preds * (1 - labels) * weight)[:, 1].sum()
+        tn = (preds * labels * weight)[:, 0].sum()
+        fn = ((1 - preds) * labels * weight)[:, 1].sum()
+#         print(prop.name)
+#         datanode = data_item.getDataNode()
+#         result = datanode.getInferMetric(inferType='argmax')
+#         val =  result[str(prop.name)]
+#         print(val)
+#         return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+#         print(preds, labels, {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn})
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 class DatanodeCMMetric(torch.nn.Module):
     def forward(self, input, target, data_item, prop, weight=None, dim=None):
         datanode = data_item.getDataNode()
-        result = datanode.getInferMetric()
+        result = datanode.getInferMetric(prop.name, inferType='ILP')
         val =  result[str(prop.name)]
         return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
 
@@ -34,7 +42,7 @@ class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
         input = input.view(-1, num_classes)
         target = target.view(-1).to(dtype=torch.long)
         target = F.one_hot(target.view(-1), num_classes=num_classes)
-        return super().forward(input, target, data_item, weight)
+        return super().forward(input, target, data_item, prop, weight)
 
 
 class BinaryPRF1WithLogitsMetric(BinaryCMWithLogitsMetric):

@@ -515,6 +515,9 @@ class DataNode:
                 
     # Find concept in the graph based on concept name
     def findConcept(self, _conceptName, usedGraph = None):
+        if isinstance(_conceptName, Concept):
+            _conceptName = _conceptName.name()
+            
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -748,19 +751,32 @@ class DataNode:
 
     # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
     def collectInferedResults(self, concept, inferKey):
+        collectAttributeList = []
+        
+        if not isinstance(concept, tuple):
+            if not isinstance(concept, Concept):
+                concept = self.findConcept(concept)
+                if concept is None:
+                    return torch.tensor(collectAttributeList)
+                
+            if isinstance(concept, EnumConcept):
+                concept = (concept, concept.name, None, len(concept.values))
+            else:
+                concept = (concept, concept.name, None, 1)
+
+            
         rootConcept = self.findRootConceptOrRelation(concept[0])
         
         if not rootConcept:
-            return torch.tensor([])
+            return torch.tensor(collectAttributeList)
         
         rootConceptDns = self.findDatanodes(select = rootConcept)
         
         if not rootConceptDns:
-            return torch.tensor([])
+            return torch.tensor(collectAttributeList)
 
         keys = [concept, inferKey]
         
-        collectAttributeList = []
         for dn in rootConceptDns:
             rTensor = dn.getAttribute(*keys)
             if rTensor is None:
@@ -768,10 +784,12 @@ class DataNode:
             
             if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
                 collectAttributeList.append(rTensor.item())
-            elif concept[2] is None:
+            elif (concept[2] is None) and concept[3] == 1:
                 collectAttributeList.append(rTensor[1])
-            else:
+            elif concept[2] is not None:
                 collectAttributeList.append(rTensor[concept[2]])
+            elif (concept[2] is None) and concept[3] > 1:
+                return rTensor
         
         return torch.tensor(collectAttributeList)        
     
@@ -922,8 +940,11 @@ class DataNode:
         
         return lcResult
 
-    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = 1):
-                    
+    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = None):
+               
+        if weight is None:
+            weight = torch.tensor(1)
+                 
         if not conceptsRelations:
             conceptsRelations = self.collectConceptsAndRelations(self, conceptsRelations) # Collect all concepts and relation from graph as default set
         
@@ -931,6 +952,19 @@ class DataNode:
         tp, fp, tn, fn  = [], [], [], []
 
         for cr in conceptsRelations:
+            if not isinstance(cr, tuple):
+                if not isinstance(cr, Concept):
+                    cr = self.findConcept(cr)
+                    
+                    if cr is None:
+                        continue
+                
+                if isinstance(cr, EnumConcept):
+                    cr = (cr, cr.name, None, len(cr.values))
+                else:
+                    cr = (cr, cr.name, None, 1)
+            
+            
             preds = self.collectInferedResults(cr, inferType)
             labelsR = self.collectInferedResults(cr, 'label')
             
@@ -939,6 +973,14 @@ class DataNode:
             if cr[2] is not None:
                 for i, l in enumerate(labelsR):
                     if labelsR[i] == cr[2]:
+                        labels[i] = 1
+                    else:
+                        labels[i] = 0
+            elif (cr[2] is None) and cr[3] > 1:
+                labels = torch.clone(preds)
+                l = labelsR.item()
+                for i, _ in enumerate(preds):
+                    if i == l:
                         labels[i] = 1
                     else:
                         labels[i] = 0
@@ -1338,7 +1380,7 @@ class DataNodeBuilder(dict):
         _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
         if vInfo.dim == 0: 
-            _DataNodeBulder__Logger.error('Provided value is empty %s - abandon the update'%(vInfo.value))
+            _DataNodeBulder__Logger.warning('Provided value is empty %s - abandon the update'%(vInfo.value))
             return
         elif vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
             _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
@@ -1368,7 +1410,7 @@ class DataNodeBuilder(dict):
                     requiredLenOFReltedDns = 0
                     
                 if requiredLenOFReltedDns != len(relatedDns):
-                    _DataNodeBulder__Logger.error('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    _DataNodeBulder__Logger.warning('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
                 _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
@@ -1399,7 +1441,7 @@ class DataNodeBuilder(dict):
                         
                     dns.append(_dn)
         else:
-            _DataNodeBulder__Logger.error('It is a unsupported sensor ipnut')
+            _DataNodeBulder__Logger.warning('It is a unsupported sensor ipnut - %s'%(vInfo))
                 
         self.__updateRootDataNodeList(dns)   
         return dns

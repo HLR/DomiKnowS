@@ -136,10 +136,10 @@ def main():
     program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
-    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    program.test(test_reader)
+    #train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    #test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    #program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+   # program.test(test_reader)
 
     reader = SingletonDataLoader('data/conll04.corp')
 
@@ -156,8 +156,11 @@ def main():
             
             ILPmetrics = node.getInferMetric()
             
-            print("ILP metrics Total %s"%(ILPmetrics['Total']))
-            
+            print("\nILP metrics Total %s"%(ILPmetrics['Total']))
+            print("ILP metrics work_for %s"%(ILPmetrics['work_for']))
+            ILPmetrics = node.getInferMetric(people)
+            print("ILP metrics people %s"%(ILPmetrics['people']))
+
             assert phrase_node.getAttribute(people, 'ILP') >= 0
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))

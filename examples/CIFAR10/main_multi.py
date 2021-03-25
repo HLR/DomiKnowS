@@ -1,8 +1,10 @@
 import sys
 import torch
+from regr.program import SolverPOIProgram
+
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
@@ -49,7 +51,8 @@ class ImageModel(PrimalDualModel):
         super().__init__(
             graph,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker())
+            metric=PRF1Tracker(DatanodeCMMetric()))
+            #metric=PRF1Tracker())
 
 from graph_multi import graph
 graph.detach()
@@ -71,7 +74,8 @@ def model_declaration():
     image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[label] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
 
-    program = LearningBasedProgram(graph, ImageModel)
+    #program = LearningBasedProgram(graph, ImageModel)
+    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 
     return program
 
@@ -174,12 +178,12 @@ def main():
     program = model_declaration()
 
     ### load data
-    #trainset = load_cifar10(train=True)
+    trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
 
     #print(trainset[0])
 
-    #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
     for datanode in program.populate(dataset=testset):
         #print('----------before ILP---------')

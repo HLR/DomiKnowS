@@ -84,7 +84,6 @@ class TorchModel(torch.nn.Module):
         else:
             return self.populate(data_item)
 
-
     def populate(self):
         raise NotImplementedError
 

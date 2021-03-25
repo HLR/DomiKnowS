@@ -1,8 +1,12 @@
 import sys
 import torch
+sys.path.append('.')
+sys.path.append('../..')
+
+from regr.program import SolverPOIProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
@@ -12,8 +16,7 @@ import os,pickle
 import numpy as np
 from regr.program.loss import NBCrossEntropyLoss
 
-sys.path.append('.')
-sys.path.append('../..')
+
 
 def prediction_softmax(pr, gt):
     return torch.softmax(pr.data, dim=-1)
@@ -50,7 +53,7 @@ class ImageModel(PrimalDualModel):
         super().__init__(
             graph,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker())
+            metric=PRF1Tracker(DatanodeCMMetric()))
 
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
@@ -72,31 +75,35 @@ def model_declaration():
     horse = graph['horse']
     ship = graph['ship']
 
-    image['pixels'] = ReaderSensor(keyword='pixels')
-    image[airplane] = ReaderSensor(keyword='airplane',label=True)
-    image[dog] = ReaderSensor(keyword='dog',label=True)
-    image[truck] = ReaderSensor(keyword='truck',label=True)
-    image[automobile] = ReaderSensor(keyword='automobile',label=True)
-    image[bird] = ReaderSensor(keyword='bird',label=True)
-    image[cat] = ReaderSensor(keyword='cat',label=True)
-    image[deer] = ReaderSensor(keyword='deer',label=True)
-    image[frog] = ReaderSensor(keyword='frog',label=True)
-    image[horse] = ReaderSensor(keyword='horse',label=True)
-    image[ship] = ReaderSensor(keyword='ship',label=True)
+    image['pixels'] = ReaderSensor(keyword='pixels', device="cuda:1")
+    image[airplane] = ReaderSensor(keyword='airplane',label=True, device="cuda:1")
+    image[dog] = ReaderSensor(keyword='dog',label=True, device="cuda:1")
+    image[truck] = ReaderSensor(keyword='truck',label=True, device="cuda:1")
+    image[automobile] = ReaderSensor(keyword='automobile',label=True, device="cuda:1")
+    image[bird] = ReaderSensor(keyword='bird',label=True, device="cuda:1")
+    image[cat] = ReaderSensor(keyword='cat',label=True, device="cuda:1")
+    image[deer] = ReaderSensor(keyword='deer',label=True, device="cuda:1")
+    image[frog] = ReaderSensor(keyword='frog',label=True, device="cuda:1")
+    image[horse] = ReaderSensor(keyword='horse',label=True, device="cuda:1")
+    image[ship] = ReaderSensor(keyword='ship',label=True, device="cuda:1")
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
-    image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[automobile] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[bird] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[cat] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[deer] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[frog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device="cuda:1")
+    image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[automobile] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[bird] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[cat] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[deer] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[frog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    
 
-    program = LearningBasedProgram(graph, ImageModel)
+    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+#     poi=(sentence, phrase, pair), , metric=PRF1Tracker(DatanodeCMMetric())
+
+#     program = LearningBasedProgram(graph, ImageModel)
 
     return program
 
@@ -131,7 +138,7 @@ class CIFAR10_1(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-                self.data.append(entry['data'])
+                self.data.append(entry['data'][:50])
                 if 'labels' in entry:
                     self.targets.extend(entry['labels'])
                 else:
@@ -191,40 +198,40 @@ def load_cifar10(train=True, root='./data/', size=32):
 
 def main():
     program = model_declaration()
+    
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
     ### load data
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
 
-    program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(trainset, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device="cuda:1")
+    program.test(testset)
 
-    label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-    counter = 0
-    for datanode in program.populate(dataset=testset):
-        print('>>>>>**********************************')
-        print('----------before ILP---------')
-        for label in label_list:
-            print(label, datanode.getAttribute(eval(label)).softmax(-1))
+#     label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+#     counter = 0
+#     correct_before_infer = 0
+#     correct_after_infer = 0
+#     total = 0
+#     for datanode in program.populate(dataset=testset):
+#         total += 1
+#         print('>>>>>**********************************')
+#         print('----------before ILP---------')
+#         for label in label_list:
+#             print(label, datanode.getAttribute(eval(label)).softmax(-1))
 
-        datanode.inferILPResults('dog', 'truck', 'airplane',
-                                    'automobile', 'bird', 'cat',
-                                    'deer', 'frog', 'horse', 'ship',fun=None)
-        print('----------after ILP---------')
-        prediction = ' '
-        for label in label_list:
-            predt_label = datanode.getAttribute(eval(label), 'ILP').item()
-            if predt_label == 1.0:
-                prediction = label
-            print('inference ',label, predt_label )
-        d = datanode.getAttributes()['pixels'].numpy()
-        plt.figure()
-        plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
-        plt.text(5, 5, 'prediction: '+str(prediction), color='white',fontsize=15 )
-        plt.savefig(str(counter)+'.png')
-        # plt.show()
-        counter += 1
-        if counter == 20:
-            break
+#         datanode.inferILPResults('dog', 'truck', 'airplane','automobile', 'bird', 'cat','deer', 'frog', 'horse', 'ship',fun=None)
+#         ILPmetrics = datanode.getInferMetric()
+#         print("ILP metrics Total %s"%(ILPmetrics['Total']))
+#         print('----------after ILP---------')
+#         prediction = ' '
+#         for label in label_list:
+#             predt_label = datanode.getAttribute(eval(label), 'ILP').item()
+#             if predt_label == 1.0:
+#                 prediction = label
+#             print('inference ',label, predt_label )
+
 
 
 

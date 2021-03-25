@@ -123,3 +123,9 @@ class LearningBasedProgram():
             for data_item in dataset:
                 _, _, output = self.model(data_item)
                 yield output
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def load(self, path):
+        self.model.load_state_dict(torch.load(path))

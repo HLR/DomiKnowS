@@ -280,8 +280,8 @@ class exactL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
         else:
             cLimit = 1
             
@@ -309,8 +309,8 @@ class atLeastL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
             
         cVariable = self.e[2]
         lcMethodName = 'atLeastL'
@@ -323,8 +323,8 @@ class atMostL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
             
         cVariable = self.e[2]
         lcMethodName = 'atMostL'
