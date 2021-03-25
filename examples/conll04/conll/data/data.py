@@ -39,7 +39,7 @@ class SingletonDataLoader(Conll04DataLoader):
         tokens, postags, labels = zip(*sentences)
         text = [' '.join(token.replace('/', ' ') for token in tokens[0])]
         data_item = {
-            'id': hash(text),
+            'id': str(hash(frozenset(text))),
             'text': text,
             'tokens': tokens[0],
             'postag': postags[0],
