@@ -429,6 +429,19 @@ class ModuleSensor(FunctionalSensor):
         self.module = module
         super().__init__(*args, **kwargs)
 
+    @property
+    def model(self):
+        return self.module
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, device):
+        self.module.to(device)
+        self._device = device
+
     def forward(self, *inputs):
         return self.module(*inputs)
 
