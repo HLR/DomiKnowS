@@ -100,6 +100,7 @@ class LogicalConstrain:
         else:
             return e._context
        
+    # Method building ILP constraints
     def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
         if len(v) < 2:
             myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
@@ -107,31 +108,42 @@ class LogicalConstrain:
         
         # input variable names
         try:
-            vKeys = [e for e in iter(v)]
+            lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
         zVars = [] # output variables
         
-        for i in range(len(v[vKeys[0]])):
+        lcVariableName0 = lcVariableNames[0] # First LC variable
+        
+        # Loop through input ILP variables sets in the list of the first input LC variable
+        for i in range(len(v[lcVariableName0])):
             var = []
             error = False
             varIsNone = False
             
-            for k in vKeys:
-                if not (0 <= i < len(v[k])):
-                    myLogger.error("%s Logical Constrain created with %i has not equal number of elements in provided sets: %i - %i"%(lcName, len(v[vKeys[0]]), len(v[vKeys[1]])))
+            for cLcVariableName in lcVariableNames:
+                cLcVariableSet = v[cLcVariableName]
+
+                if not (0 <= i < len(cLcVariableSet)):
+                    myLogger.error("%s Logical Constrain has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"%(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
                     error = True
                     break
                 
-                cVar = v[k][i][0]
-                
-                if cVar is None:
+                if len(cLcVariableSet[i]) == 0:
                     zVars.append([None])
                     varIsNone = True
-                    break
-            
-                var.append(v[k][i][0])
+                elif len(cLcVariableSet[i]) > 0:
+                    cVar = cLcVariableSet[i][0] # Take only the first ILP variable from the current set
+                    
+                    if cVar is None:
+                        zVars.append([None])
+                        varIsNone = True
+                    else:
+                        var.append(cVar)
+                        
+                    if len(cLcVariableSet[i]) > 1:
+                        myLogger.warning("%s Logical Constrain has more then one - %i ILP variables in the set for logical variable %s on index %i "%(lcName, len(cLcVariableSet[i]), cLcVariableName, i))
                 
             if error: break
             
@@ -142,37 +154,27 @@ class LogicalConstrain:
         return zVars
     
     def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
+        if len(v) != 1:
+            myLogger.error("%s Logical Constrain created with %i sets of logical variables which is not equal to one"%(lcMethodName, len(v)))
+            return None
+        
         try:
-            vKeys = [e for e in iter(v)]
+            lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        zVars = [] # output variables
+        lcVariableName0 = lcVariableNames[0] # First and only one LC variable
+        lcVariableSet0 =  v[lcVariableName0]
+
+        zVars = [] # Output variables
         
-        for i in range(len(v[vKeys[0]])):
-            var = []
-            error = False
-            varIsNone = False
+        # Loop through input ILP variables sets in the list of the first input LC variable
+        for var in lcVariableSet0:
             
-            for k in vKeys:
-                if not (0 <= i < len(v[k])):
-                    myLogger.error("%s Logical Constrain created with %i has not equal number of elements in provided sets: %i - %i"%(lcMethodName, len(v[vKeys[0]]), len(v[vKeys[1]])))
-                    error = True
-                    break
-                
-                cVar = v[k][i][0]
-                
-                if cVar is None:
-                    zVars.append([None])
-                    varIsNone = True
-                    break
-            
-                var.append(v[k][i][0])
-                
-            if error: break
-            
-            if varIsNone: continue
-                
+            if len(var) == 0:
+                zVars.append([None])
+                continue
+                         
             zVars.append([myIlpBooleanProcessor.countVar(model, *var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
        
         model.update()
