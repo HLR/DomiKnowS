@@ -894,6 +894,18 @@ class DataNode:
                 vSoftmaxT = torch.as_tensor(vSoftmax) 
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
+                
+                keyArgmax  = "<" + c[0].name + ">/local/argmax "
+                vArgmax = torch.clone(v)
+                vArgmaxIndex = torch.argmax(v).item()
+                
+                for i, _ in enumerate(v):
+                    if i == vArgmaxIndex:
+                        vArgmax[i] = 1
+                    else:
+                        vArgmax[i] = 0
+                                
+                dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
