@@ -142,9 +142,10 @@ class PoiModel(TorchModel):
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        for metric in self.metric.values():
-            if isinstance(metric, MetricTracker):
-                metric.reset()
+        if self.metric != None:
+            for metric in self.metric.values():
+                if isinstance(metric, MetricTracker):
+                    metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):
         if not self.loss:

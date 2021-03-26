@@ -121,10 +121,15 @@ def model(use_ont):
 
 def main():
     
-    while True:
-        val = input("Use ontology constraint (y/n):")
-        if val == 'y' or val == 'n':
-            break
+    val = 'n'
+    from threading import Timer
+
+    timeout = 10
+    t = Timer(timeout, print, ['Will not use ontology'])
+    t.start()
+    prompt = "Use ontology constraint (y/n):"
+    val = input(prompt)
+    t.cancel()
         
     if val == 'y':
         use_ont = True
@@ -145,7 +150,7 @@ def main():
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     program.save(f'conll04-{now}.pt')
 
-    reader = SingletonDataLoader('data/conll04-one.corp')
+    reader = SingletonDataLoader('data/conll04.corp')
 
     for node in program.populate(reader, device='auto'):
         assert node.ontologyNode is sentence

@@ -67,7 +67,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 self.myLogger.warning("%s has set value: %s - do nothing"%(logicMethodName,varName))
                 return 
             
-            m.addConstr(1 - var >= 1)
+            m.addConstr(1 - var >= 1, name='Not:')
             if self.ifLog: self.myLogger.debug("%s created constrain only: not %s > %i"%(logicMethodName,var.VarName,1))
 
             #self.__addToConstrainCaches(methodName, onlyConstrains, (var, ), None)
@@ -86,7 +86,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         varNOT = m.addVar(vtype=GRB.BINARY, name="not_%s"%(var.VarName))
         if m: m.update()
 
-        m.addConstr(1 - var == varNOT)
+        m.addConstr(1 - var == varNOT, name='Not:')
         if self.ifLog: self.myLogger.debug("%s created constrain: %i - %s == %s "%(logicMethodName,1,varName,varNOT.VarName))
 
         # Update cache
@@ -130,7 +130,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 0
             elif self.__varIsNumber(var1):
                 if var1 == 1:
-                    m.addConstr(var2 >= 1)
+                    m.addConstr(var2 >= 1, name='And:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= 1"%(logicMethodName,var2Name))
                     return
                 else:
@@ -138,14 +138,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 0
             elif  self.__varIsNumber(var2):
                 if var2 == 1:
-                    m.addConstr(var1 >= 1)
+                    m.addConstr(var1 >= 1, name='And:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= 1"%(logicMethodName,var1Name))
                     return
                 else:
                     if self.ifLog: self.myLogger.error("%s always False: %s is 0"%(logicMethodName,var2Name))
                     return 0
             else: # Both variables are ILP variables
-                m.addConstr(var1 + var2 >= 2) 
+                m.addConstr(var1 + var2 >= 2, name='And:') 
                 if self.ifLog: self.myLogger.debug("% created constrain only: and %s %s >= 2"%(logicMethodName,var1.VarName,var2.Name))
     
                 #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
@@ -178,13 +178,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1Name, var2Name))
             if m: m.update()
 
-            m.addConstr(varAND - var1 <= 0) # varAND <= var1
+            m.addConstr(varAND - var1 <= 0, name='And:') # varAND <= var1
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= %i"%(logicMethodName,varAND.VarName,var1Name,0))
 
-            m.addConstr(varAND - var2 <= 0) # varAND <= var2
+            m.addConstr(varAND - var2 <= 0, name='And:') # varAND <= var2
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= %i"%(logicMethodName,varAND.VarName,var2Name,0))
 
-            m.addConstr(var1 + var2 - varAND <= 1) # var1 + var2 <= varAND + 2 - 1
+            m.addConstr(var1 + var2 - varAND <= 1, name='And:') # var1 + var2 <= varAND + 2 - 1
             if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s - %s <= %i"%(logicMethodName,var1Name,varAND.VarName,var2Name,1))
 
             # Update cache
@@ -237,7 +237,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.ifLog: self.myLogger.debug("%s created constrain only: and %s > 1"%(logicMethodName,varSumLinExpr))
 
             #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
-            m.addConstr(varSumLinExpr >= N)
+            m.addConstr(N - varSumLinExpr <= 0, name='And:') # varSumLinExpr >= N
             return
             
         # ------- If creating variables representing value of AND build of provided variables
@@ -246,13 +246,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if m: m.update()
 
         for currentVar in var:
-            m.addConstr(varAND - currentVar <= 0) # varAND <= currentVar
+            m.addConstr(varAND - currentVar <= 0, name='And:') # varAND <= currentVar
 
         varSumLinExpr = LinExpr()
         for currentVar in var:
             varSumLinExpr.addTerms(1.0, currentVar)
         
-        m.addConstr(varSumLinExpr - varAND <= N - 1) # varSumLinExpr <= varAND + N - 1
+        m.addConstr(varSumLinExpr - varAND <= N - 1, name='And:') #  varSumLinExpr <= varAND + N - 1
             
         # Update cache
         self.__addToConstrainCaches(methodName, onlyConstrains, var, varAND) 
@@ -288,7 +288,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if onlyConstrains:
             if self.__varIsNumber(var1):
                 if var1 == 0:
-                    m.addConstr(var2 >= 1)
+                    m.addConstr(var2 >= 1, name='Or:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= %i"%(logicMethodName,var2Name,1))
                     return
                 else:
@@ -296,14 +296,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return
             if self.__varIsNumber(var2):
                 if var2 == 0:
-                    m.addConstr(var1 >= 1)
+                    m.addConstr(var1 >= 1, name='Or:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= %i"%(logicMethodName,var1Name,1))
                     return
                 else:
                     if self.ifLog: self.myLogger.debug("%s created no constrain second variable is already 1"%(logicMethodName))
                     return
             else:
-                m.addConstr(var1 + var2 >= 1) 
+                m.addConstr(var1 + var2 >= 1, name='Or:') 
                 if self.ifLog: self.myLogger.debug("%s created constrain only: %s + %s >= %i"%(logicMethodName,var1Name,var2Name,1))
 
                 #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
@@ -329,13 +329,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1Name, var2Name))
             if m: m.update()
 
-            m.addConstr(var1 - varOR <= 0) # var1 <= varOR
+            m.addConstr(var1 - varOR <= 0, name='Or:') # var1 <= varOR
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= %i"%(logicMethodName,var1Name,var2Name,0))
 
-            m.addConstr(var2 - varOR <= 0) # var2 <= varOR
+            m.addConstr(var2 - varOR <= 0, name='Or:') # var2 <= varOR
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= %i"%(logicMethodName,var2Name,var2Name,0))
 
-            m.addConstr(var1 + var2 - varOR >= 1-1) # var1 + var2 >= varOR
+            m.addConstr(var1 + var2 - varOR >= 1-1, name='Or:') # var1 + var2 >= varOR
             if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s - %s >= %i"%(logicMethodName,var1Name,var2Name,varOR.VarName,1-1))
 
             # Update cache
@@ -397,7 +397,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is 0"%(logicMethodName))
                 return
             
-            m.addConstr(varSumLinExpr >= 1)
+            m.addConstr(varSumLinExpr >= 1, name='Or:')
             
             varSumLinExprStr = str(varSumLinExpr)
             if self.ifLog: self.myLogger.debug("%s created constrain only: %s >= %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],1))
@@ -438,7 +438,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # Build constrains
         for currentVar in var:
             if not self.__varIsNumber(currentVar):
-                m.addConstr(currentVar - varOR <= 0) # currentVar <= varOR
+                m.addConstr(currentVar - varOR <= 0, name='Or:') # currentVar <= varOR
                 if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= %i"%(logicMethodName,currentVar.VarName,orVarName,0))
             else:
                 pass # Only 0 possible now - has no effect on Or value
@@ -450,7 +450,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             else:
                 pass
             
-        m.addConstr(varSumLinExpr - varOR >= 1-1) # varSumLinExpr >= varOR
+        m.addConstr(varSumLinExpr - varOR >= 1-1, name='Or:') # varSumLinExpr >= varOR
         varSumLinExprStr = str(varSumLinExpr)
         if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s >= %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],orVarName,1-1))
 
@@ -492,7 +492,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 1
             elif self.__varIsNumber(var1):
                 if var1 == 1:
-                    m.addConstr(var2 <= 0)
+                    m.addConstr(var2 <= 0, name='Nand:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %i"%(logicMethodName,var2Name,0))
                     return
                 else:
@@ -500,14 +500,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 1
             elif self.__varIsNumber(var2):
                 if var2 == 1:
-                    m.addConstr(var1 <= 0)
+                    m.addConstr(var1 <= 0, name='Nand:')
                     if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %i"%(logicMethodName,var1Name,0))
                     return
                 else:
                     self.myLogger.error("%s always True: %s is %i"%(logicMethodName,var2Name,var2))
                     return 1
             else: # Both variables are ILP variables
-                m.addConstr(var1 + var2 <= 1)
+                m.addConstr(var1 + var2 <= 1, name='Nand:')
                 if self.ifLog: self.myLogger.debug("%s created constrain only: and %s %s <= %i"%(logicMethodName,var1Name,var2Name,1))
     
                 #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
@@ -540,13 +540,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
             if m: m.update()
 
-            m.addConstr(self.notVar(m, varNAND) <= var1)
+            m.addConstr(self.notVar(m, varNAND) <= var1, name='Nand:')
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= 0 "%(logicMethodName,varNAND.VarName,var1Name))
 
-            m.addConstr(self.notVar(m, varNAND) <= var2) # varAND <= var2
+            m.addConstr(self.notVar(m, varNAND) <= var2, name='Nand:') # varAND <= var2
             if self.ifLog: self.myLogger.debug("%s created constrain: %s - %s <= 0 "%(logicMethodName,varNAND.VarName,var2Name))
 
-            m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1) # var1 + var2 <= varAND + 2 - 1
+            m.addConstr(var1 + var2 <= self.notVar(m, varNAND) + 2 - 1, name='Nand:') # var1 + var2 <= varAND + 2 - 1
             if self.ifLog: self.myLogger.debug("%s created constrain: %s + %s - %s <= 1 "%(logicMethodName,var1Name,var2Name,varNAND.VarName))
 
             # Update cache
@@ -598,7 +598,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             for currentVar in var:
                 varSumLinExpr.addTerms(1.0, currentVar)
         
-            m.addConstr(varSumLinExpr <= N - 1)
+            m.addConstr(varSumLinExpr <= N - 1, name='Nand:')
                         
             varSumLinExprStr = str(varSumLinExpr)
             if self.ifLog: self.myLogger.debug("NAND created constrain only: %s <= %i"%(varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')], N-1))
@@ -614,13 +614,13 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         varNAND = m.addVar(vtype=GRB.BINARY, name=nandVarName)
         for currentVar in var:
-            m.addConstr(self.notVar(m, varNAND) <= currentVar)
+            m.addConstr(self.notVar(m, varNAND) <= currentVar, name='Nand:')
 
         varSumLinExpr = LinExpr()
         for currentVar in var:
             varSumLinExpr.addTerms(1.0, currentVar)
     
-        m.addConstr(varSumLinExpr <= self.notVar(m, varNAND) + N - 1)
+        m.addConstr(varSumLinExpr <= self.notVar(m, varNAND) + N - 1, name='Nand:')
     
         self.__addToConstrainCaches('nandVar', onlyConstrains, var, varNAND)
 
@@ -744,17 +744,15 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,notVar1.VarName))
                     return notVar1
             else:
-                m.addConstr(var1 <= var2)
+                m.addConstr(var1 - var2 <= 0, name='If:') #var1 <= var1
                 if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %s"%(logicMethodName,var1Name,var2Name))
-
-                #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
                 return
     
         varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_then_%s"%(var1.VarName, var2.VarName))
             
-        m.addConstr(1 - var1 <= varIF)
-        m.addConstr(var2 <= varIF)
-        m.addConstr(1 - var1 + var2 >= varIF)
+        m.addConstr(1 - var1 <= varIF, name='If:')
+        m.addConstr(var2 <= varIF, name='If:')
+        m.addConstr(1 - var1 + var2 >= varIF, name='If:')
             
         m.update()
 
@@ -804,7 +802,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))
             return None
 
-        if limitOp not in ('<', '>', '='):
+        if limitOp not in ('<=', '>=', '=='):
             if self.ifLog: self.myLogger.error("%s called with incorrect operation specified for comparing limit %s"%(logicMethodName,limitOp))
             return None
             
@@ -842,7 +840,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 elif currentVar == 1: # currentVar is Number 
                     countOnes = countOnes + 1
 
-            if limitOp == '>':
+            if limitOp == '>=':
                 if countOnes > limit:
                     if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
                     return 1
@@ -851,8 +849,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
                 else:
-                    m.addConstr(varSumLinExpr >= limit - countOnes)
-            if limitOp == '<':
+                    m.addConstr(varSumLinExpr >= limit - countOnes, name='Count %s:'%(logicMethodName))
+            if limitOp == '<=':
                 if varSumLinExpr.size() == 0:
                     if countOnes < limit:
                         if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
@@ -867,8 +865,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                         if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                     else:
-                        m.addConstr(varSumLinExpr <= limit - countOnes)
-            if limitOp == '=':
+                        m.addConstr(varSumLinExpr <= limit - countOnes, name='Count %s:'%(logicMethodName))
+            if limitOp == '==':
                 if varSumLinExpr.size() == 0:
                     if countOnes == limit:
                         if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
@@ -878,7 +876,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                         if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                         return 0
                 else:
-                    m.addConstr(varSumLinExpr == limit - countOnes)
+                    m.addConstr(varSumLinExpr == limit - countOnes, name='Count %s:'%(logicMethodName))
                  
             varSumLinExprStr = str(varSumLinExpr)
             if self.ifLog: self.myLogger.debug("%s created constrain only: %s %s= %i - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,limit,countOnes))
@@ -909,7 +907,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             elif currentVar == 1:
                 countOnes = countOnes + 1
 
-        if limitOp == '>':
+        if limitOp == '>=':
             if countOnes > limit:
                 if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
                 return 1
@@ -918,8 +916,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                 return 0
             else:
-                m.addConstr(varSumLinExpr - varCOUNT >= limit - 1 - countOnes)
-        if limitOp == '<':
+                m.addConstr(varSumLinExpr - varCOUNT >= limit - 1 - countOnes, name='Count %s:'%(logicMethodName))
+        if limitOp == '<=':
             if varSumLinExpr.size() == 0:
                 if countOnes < limit:
                     if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
@@ -934,8 +932,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
                 else:
-                    m.addConstr(varSumLinExpr - varCOUNT <= limit - 1 - countOnes)
-        if limitOp == '=':
+                    m.addConstr(varSumLinExpr - varCOUNT <= limit - 1 - countOnes, name='Count %s:'%(logicMethodName))
+        if limitOp == '==':
             if varSumLinExpr.size() == 0:
                 if countOnes == limit:
                     if self.ifLog: self.myLogger.debug("%s created no constrain - the value of the method is True"%(logicMethodName))
@@ -945,9 +943,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.warning("%s created contradictory constrain 1 <= 0 - the value of the method is False"%(logicMethodName))
                     return 0
             else:
-                m.addConstr(varSumLinExpr == limit - countOnes)
+                m.addConstr(varSumLinExpr == limit - countOnes, name='Count %s:'%(logicMethodName))
                  
-        m.addConstr(varSumLinExpr - varCOUNT >= limit-1)
+        m.addConstr(varSumLinExpr - varCOUNT >= limit-1, name='Count %s:'%(logicMethodName))
         
         varSumLinExprStr = str(varSumLinExpr)
         if self.ifLog: self.myLogger.debug("%s created constrain: %s - varCOUNT %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('>')],limitOp,limit,countOnes))

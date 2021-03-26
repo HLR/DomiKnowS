@@ -991,37 +991,49 @@ class DataNode:
                         labels[i] = 0
             
             result[cr[1]] = {}
-            if preds is not None and labels is not None:
-                labels = labels.long()
-                # calculate confusion matrix
-                _tp = (preds * labels * weight).sum() # true positive
-                tp.append(_tp)
-                result[cr[1]]['TP'] = _tp 
-                _fp = (preds * (1 - labels) * weight).sum() # false positive
-                fp.append(_fp)
-                result[cr[1]]['FP'] = _fp
-                _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
-                tn.append(_tn)
-                result[cr[1]]['TN'] = _tn
-                _fn = ((1 - preds) * labels * weight).sum() # false positive
-                fn.append(_fn)
-                result[cr[1]]['FN'] = _fn
+            
+            if preds is None or labels is None:
+                continue
+            
+            if not torch.is_tensor(preds) or not torch.is_tensor(labels):
+                continue
+            
+            if preds.dim() != 1 or labels.dim() != 1:
+                continue
+            
+            if  preds.size()[0] != labels.size()[0]:
+                continue
+            
+            labels = labels.long()
+            # calculate confusion matrix
+            _tp = (preds * labels * weight).sum() # true positive
+            tp.append(_tp)
+            result[cr[1]]['TP'] = _tp 
+            _fp = (preds * (1 - labels) * weight).sum() # false positive
+            fp.append(_fp)
+            result[cr[1]]['FP'] = _fp
+            _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
+            tn.append(_tn)
+            result[cr[1]]['TN'] = _tn
+            _fn = ((1 - preds) * labels * weight).sum() # false positive
+            fn.append(_fn)
+            result[cr[1]]['FN'] = _fn
+            
+            _p, _r  = 0, 0
+            
+            if _tp + _fp:
+                _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
+                result[cr[1]]['P'] = _p
+            if _tp + _fn:
+                _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
+                result[cr[1]]['R'] = _r
                 
-                _p, _r  = 0, 0
-                
-                if _tp + _fp:
-                    _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                    result[cr[1]]['P'] = _p
-                if _tp + _fn:
-                    _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                    result[cr[1]]['R'] = _r
-                    
-                if _p + _r:
-                    _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                    result[cr[1]]['F1'] = _f1
-                elif _tp + (_fp + _fn)/2: 
-                    _f1 = _tp/(_tp + (_fp + _fn)/2)
-                    result[cr[1]]['F1'] = _f1
+            if _p + _r:
+                _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
+                result[cr[1]]['F1'] = _f1
+            elif _tp + (_fp + _fn)/2: 
+                _f1 = _tp/(_tp + (_fp + _fn)/2)
+                result[cr[1]]['F1'] = _f1
                       
         result['Total'] = {}  
         tpT = (torch.tensor(tp)).sum()
