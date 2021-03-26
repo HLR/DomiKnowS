@@ -256,7 +256,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.nandVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True)
+                    self.myIlpBooleanProcessor.countVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True,  limitOp = '<=', limit = 1, logicMethodName = "atMostL")
                         
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
