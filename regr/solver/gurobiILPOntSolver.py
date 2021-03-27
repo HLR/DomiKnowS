@@ -790,17 +790,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('%s optimal solution was found with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('%s optimal solution was found for p - %i with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', p, mP.ObjVal,elapsedOptimize.microseconds/1000))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
-                    self.myLogger.warning('Model was proven to be infeasible.')
+                    self.myLogger.warning('Model was proven to be infeasible for p - %i.'%(p))
                 elif mP.status == GRB.Status.INF_OR_UNBD:
-                    self.myLogger.warning('Model was proven to be infeasible or unbound.')
+                    self.myLogger.warning('Model was proven to be infeasible or unbound for p - %i.'%(p))
                 elif mP.status == GRB.Status.UNBOUNDED:
                     self.myLogger.warning('Model was proven to be unbound.')
                 else:
-                    self.myLogger.warning('Optimal solution not was found - error code %i'%(mP.status))
+                    self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}

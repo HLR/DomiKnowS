@@ -618,7 +618,7 @@ class DataNode:
         
         # Path has at least 2 elements - will perfomr recursion
         if isinstance(path[0], eqL): # check if eqL
-            concept = path[0].e[0]
+            concept = path[0].e[0][0]
         elif path[0] in self.relationLinks:
             concept = path[0]
         else:
