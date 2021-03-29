@@ -154,12 +154,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         # ------- If creating variables representing value of AND build of provided variables
         
         if self.__varIsNumber(var1) and self.__varIsNumber(var2):
-                if var1 == 1 and var2 == 1:
-                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
-                    return 1
-                else:
-                    if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,0))
-                    return 0
+            if var1 == 1 and var2 == 1:
+                if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,1))
+                return 1
+            else:
+                if self.ifLog: self.myLogger.debug("%s always True returning %i"%(logicMethodName,0))
+                return 0
         elif self.__varIsNumber(var1):
             if var1 == 0:
                 if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,0))
@@ -232,12 +232,15 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if onlyConstrains:
             varSumLinExpr = LinExpr()
             for currentVar in var:
+                if self.__varIsNumber(var):
+                    continue
+                
                 varSumLinExpr.addTerms(1.0, currentVar)
         
             if self.ifLog: self.myLogger.debug("%s created constrain only: and %s > 1"%(logicMethodName,varSumLinExpr))
 
             #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
-            m.addConstr(N - varSumLinExpr <= 0, name='And:') # varSumLinExpr >= N
+            m.addConstr(N - noOfVars - varSumLinExpr <= 0, name='And:') # varSumLinExpr >= N
             return
             
         # ------- If creating variables representing value of AND build of provided variables
@@ -246,13 +249,19 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if m: m.update()
 
         for currentVar in var:
+            if self.__varIsNumber(var):
+                continue
+            
             m.addConstr(varAND - currentVar <= 0, name='And:') # varAND <= currentVar
 
         varSumLinExpr = LinExpr()
         for currentVar in var:
+            if self.__varIsNumber(var):
+                continue
+                
             varSumLinExpr.addTerms(1.0, currentVar)
         
-        m.addConstr(varSumLinExpr - varAND <= N - 1, name='And:') #  varSumLinExpr <= varAND + N - 1
+        m.addConstr(varSumLinExpr - varAND <= N - noOfVars - 1, name='And:') #  varSumLinExpr <= varAND + N - 1
             
         # Update cache
         self.__addToConstrainCaches(methodName, onlyConstrains, var, varAND) 
