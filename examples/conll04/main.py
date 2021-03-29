@@ -113,9 +113,9 @@ def model(use_ont):
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     if use_ont:
-        lbp = SolverPOIProgram(graph_ont, poi=(sentence, phrase, pair), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+        lbp = SolverPOIProgram(graph_ont, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     else:
-        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
     return lbp
 
