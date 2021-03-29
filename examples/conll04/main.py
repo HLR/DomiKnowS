@@ -122,14 +122,10 @@ def model(use_ont):
 def main():
     
     val = 'n'
-    from threading import Timer
-
-    timeout = 10
-    t = Timer(timeout, print, ['Will not use ontology'])
-    t.start()
-    prompt = "Use ontology constraint (y/n):"
-    val = input(prompt)
-    t.cancel()
+    while True:
+        val = input("Use ontology constraint (y/n):")
+        if val == 'y' or val == 'n':
+            break
         
     if val == 'y':
         use_ont = True

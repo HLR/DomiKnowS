@@ -618,7 +618,7 @@ class DataNode:
         
         # Path has at least 2 elements - will perfomr recursion
         if isinstance(path[0], eqL): # check if eqL
-            concept = path[0].e[0]
+            concept = path[0].e[0][0]
         elif path[0] in self.relationLinks:
             concept = path[0]
         else:
@@ -894,6 +894,18 @@ class DataNode:
                 vSoftmaxT = torch.as_tensor(vSoftmax) 
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
+                
+                keyArgmax  = "<" + c[0].name + ">/local/argmax "
+                vArgmax = torch.clone(v)
+                vArgmaxIndex = torch.argmax(v).item()
+                
+                for i, _ in enumerate(v):
+                    if i == vArgmaxIndex:
+                        vArgmax[i] = 1
+                    else:
+                        vArgmax[i] = 0
+                                
+                dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
@@ -1296,25 +1308,26 @@ class DataNodeBuilder(dict):
                                     
                 attributeNames = [*existingDnsForAttr]
                 
-                for i in range(0, len(existingDnsForRelationSorted)):
-                      
-                    currentRdn = existingDnsForRelationSorted[i]  
-                        
-                    for _, a in enumerate(attributeNames):
+                # Create links between this relation and instance dataNode based on the candidate information provided by sensor for each relation attribute
+                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():
+                    for attributeIndex, attribute in enumerate(attributeNames):
                           
-                        aValue = relationAttrsCache[a][i]
+                        candidatesForRelation = relationAttrsCache[attribute][relationDnIndex]
                         
-                        for j, av in enumerate(aValue):
-                            isInRelation = av.item()
+                        for candidateIndex, candidate in enumerate(candidatesForRelation):
+                            isInRelation = candidate.item()
                             if isInRelation == 0:
                                 continue
                             
-                            dn = existingDnsForAttr[a][j]
+                            candidateDn = existingDnsForAttr[attribute][candidateIndex]
                             
-                            dn.addRelationLink(relationName, currentRdn)
-                            currentRdn.addRelationLink(a, dn)  
-                            currentRdn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                            if attributeIndex == 0:
+                                candidateDn.addRelationLink(relationName, relationDn)
+                            
+                            relationDn.addRelationLink(attribute, candidateDn)  
+                            relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
             else:
+                # Just add the sensor value to relation DataNodes
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
@@ -1441,14 +1454,15 @@ class DataNodeBuilder(dict):
                     dns.append(_dn)
                     
                     # Create contain relation between the new datanode and existing datanodes
-                    if conceptInfo["relationMode"] == "forward":
-                        for index, isRelated in enumerate(vInfo.value[i]):
-                            if isRelated == 1:
-                                relatedDns[index].addChildDataNode(_dn)                            
-                    elif conceptInfo["relationMode"] == "backward":
-                        for index, isRelated in enumerate(vInfo.value[i]):
-                            if isRelated == 1:
-                                _dn.addChildDataNode(relatedDns[index])  
+                    if not conceptInfo['relation']:
+                        if conceptInfo["relationMode"] == "forward":
+                            for index, isRelated in enumerate(vInfo.value[i]):
+                                if isRelated == 1:
+                                    relatedDns[index].addChildDataNode(_dn)                            
+                        elif conceptInfo["relationMode"] == "backward":
+                            for index, isRelated in enumerate(vInfo.value[i]):
+                                if isRelated == 1:
+                                    _dn.addChildDataNode(relatedDns[index])  
             else:
                 _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
                 for i in range(0,vInfo.len):
@@ -1498,15 +1512,16 @@ class DataNodeBuilder(dict):
                     _dn.attributes[keyDataName] = vInfo.value[i]
                 
                 # Create contain relation between existings datanodes
-                if conceptInfo["relationMode"] == "forward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            relatedDns[index].addChildDataNode(_dn)                            
-                elif conceptInfo["relationMode"] == "backward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            _dn.addChildDataNode(relatedDns[index])  
-                
+                if not conceptInfo["relation"]:
+                    if conceptInfo["relationMode"] == "forward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                relatedDns[index].addChildDataNode(_dn)                            
+                    elif conceptInfo["relationMode"] == "backward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                _dn.addChildDataNode(relatedDns[index])  
+                    
             self.__updateRootDataNodeList(existingDnsForConcept)   
         else: # Attribute update
             if not existingDnsForConcept:
