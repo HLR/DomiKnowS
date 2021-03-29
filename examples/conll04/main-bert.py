@@ -168,11 +168,11 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     lbp = SolverPOIProgram(
-        graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'softmax'],
+        graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
-            'softmax': PRF1Tracker(DatanodeCMMetric('softmax'))})
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp
 
