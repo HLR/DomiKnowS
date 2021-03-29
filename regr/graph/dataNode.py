@@ -895,7 +895,7 @@ class DataNode:
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
                 
-                keyArgmax  = "<" + c[0].name + ">/local/argmax "
+                keyArgmax  = "<" + c[0].name + ">/local/argmax"
                 vArgmax = torch.clone(v)
                 vArgmaxIndex = torch.argmax(v).item()
                 
