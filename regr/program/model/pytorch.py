@@ -204,6 +204,8 @@ class SolverModel(PoiModel):
         for infertype in self.inferTypes:
             {
                 'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                'local/argmax': lambda :datanode.inferLocal(),
+                'local/softmax': lambda :datanode.inferLocal(),
                 'argmax': lambda :datanode.infer(),
                 'softmax': lambda :datanode.infer(),
             }[infertype]()
