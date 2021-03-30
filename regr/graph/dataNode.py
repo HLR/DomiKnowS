@@ -134,7 +134,7 @@ class DataNode:
 
     def visualize(self, filename: str):
         g = graphviz.Digraph()
-        g.node(str(self.getInstanceID()))
+        #g.node(str(self.getInstanceID()))
         g.attr('node', shape = 'rectangle')
 
         # for relation_name, value in self.getRelationLinks().items():
@@ -152,8 +152,9 @@ class DataNode:
             #   */label*
             #   */ilp*
             # <.*> decisions
-            g.node(str(attribute), str(attribute))
-            g.edge('datanode', str(attribute))
+            if str(attribute_name).find('/') == -1 and str(attribute_name).find('.') == -1:
+                g.node(str(attribute), str(attribute))
+                g.edge('datanode', str(attribute))
 
         g.render(filename, format='png', view=True)
     
