@@ -14,6 +14,8 @@ from .concept import Concept, EnumConcept
 from future.builtins.misc import isinstance
 # from _pytest.reports import _R
 
+import graphviz
+
 logName = __name__
 logLevel = logging.CRITICAL
 logFilename='datanode.log'
@@ -1846,3 +1848,15 @@ class DataNodeBuilder(dict):
         
         _DataNodeBulder__Logger.error('Returning None - there are no dataNodes')
         return None
+    
+    #Graph visualization
+    def visualize(self, filename: str):
+        g = graphviz.Digraph()
+        g.node('Datanode', getInstanceID(self))
+        g.attr('node', shape = 'rectangle')
+        for i in getAttributes(self):
+            g.node(str(i), str(i))
+            g.edge('Datanode', str(i))
+        g.render(str, format = 'jpeg')
+        return None
+
