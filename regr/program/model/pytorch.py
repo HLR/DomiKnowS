@@ -142,9 +142,10 @@ class PoiModel(TorchModel):
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        for metric in self.metric.values():
-            if isinstance(metric, MetricTracker):
-                metric.reset()
+        if self.metric != None:
+            for metric in self.metric.values():
+                if isinstance(metric, MetricTracker):
+                    metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):
         if not self.loss:
@@ -203,6 +204,8 @@ class SolverModel(PoiModel):
         for infertype in self.inferTypes:
             {
                 'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                'local/argmax': lambda :datanode.inferLocal(),
+                'local/softmax': lambda :datanode.inferLocal(),
                 'argmax': lambda :datanode.infer(),
                 'softmax': lambda :datanode.infer(),
             }[infertype]()

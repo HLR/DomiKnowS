@@ -14,6 +14,8 @@ from .concept import Concept, EnumConcept
 from future.builtins.misc import isinstance
 # from _pytest.reports import _R
 
+import graphviz
+
 logName = __name__
 logLevel = logging.CRITICAL
 logFilename='datanode.log'
@@ -618,7 +620,7 @@ class DataNode:
         
         # Path has at least 2 elements - will perfomr recursion
         if isinstance(path[0], eqL): # check if eqL
-            concept = path[0].e[0]
+            concept = path[0].e[0][0]
         elif path[0] in self.relationLinks:
             concept = path[0]
         else:
@@ -894,6 +896,18 @@ class DataNode:
                 vSoftmaxT = torch.as_tensor(vSoftmax) 
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
+                
+                keyArgmax  = "<" + c[0].name + ">/local/argmax"
+                vArgmax = torch.clone(v)
+                vArgmaxIndex = torch.argmax(v).item()
+                
+                for i, _ in enumerate(v):
+                    if i == vArgmaxIndex:
+                        vArgmax[i] = 1
+                    else:
+                        vArgmax[i] = 0
+                                
+                dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
     def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
@@ -991,37 +1005,49 @@ class DataNode:
                         labels[i] = 0
             
             result[cr[1]] = {}
-            if preds is not None and labels is not None:
-                labels = labels.long()
-                # calculate confusion matrix
-                _tp = (preds * labels * weight).sum() # true positive
-                tp.append(_tp)
-                result[cr[1]]['TP'] = _tp 
-                _fp = (preds * (1 - labels) * weight).sum() # false positive
-                fp.append(_fp)
-                result[cr[1]]['FP'] = _fp
-                _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
-                tn.append(_tn)
-                result[cr[1]]['TN'] = _tn
-                _fn = ((1 - preds) * labels * weight).sum() # false positive
-                fn.append(_fn)
-                result[cr[1]]['FN'] = _fn
+            
+            if preds is None or labels is None:
+                continue
+            
+            if not torch.is_tensor(preds) or not torch.is_tensor(labels):
+                continue
+            
+            if preds.dim() != 1 or labels.dim() != 1:
+                continue
+            
+            if  preds.size()[0] != labels.size()[0]:
+                continue
+            
+            labels = labels.long()
+            # calculate confusion matrix
+            _tp = (preds * labels * weight).sum() # true positive
+            tp.append(_tp)
+            result[cr[1]]['TP'] = _tp 
+            _fp = (preds * (1 - labels) * weight).sum() # false positive
+            fp.append(_fp)
+            result[cr[1]]['FP'] = _fp
+            _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
+            tn.append(_tn)
+            result[cr[1]]['TN'] = _tn
+            _fn = ((1 - preds) * labels * weight).sum() # false positive
+            fn.append(_fn)
+            result[cr[1]]['FN'] = _fn
+            
+            _p, _r  = 0, 0
+            
+            if _tp + _fp:
+                _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
+                result[cr[1]]['P'] = _p
+            if _tp + _fn:
+                _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
+                result[cr[1]]['R'] = _r
                 
-                _p, _r  = 0, 0
-                
-                if _tp + _fp:
-                    _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                    result[cr[1]]['P'] = _p
-                if _tp + _fn:
-                    _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                    result[cr[1]]['R'] = _r
-                    
-                if _p + _r:
-                    _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                    result[cr[1]]['F1'] = _f1
-                elif _tp + (_fp + _fn)/2: 
-                    _f1 = _tp/(_tp + (_fp + _fn)/2)
-                    result[cr[1]]['F1'] = _f1
+            if _p + _r:
+                _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
+                result[cr[1]]['F1'] = _f1
+            elif _tp + (_fp + _fn)/2: 
+                _f1 = _tp/(_tp + (_fp + _fn)/2)
+                result[cr[1]]['F1'] = _f1
                       
         result['Total'] = {}  
         tpT = (torch.tensor(tp)).sum()
@@ -1284,25 +1310,26 @@ class DataNodeBuilder(dict):
                                     
                 attributeNames = [*existingDnsForAttr]
                 
-                for i in range(0, len(existingDnsForRelationSorted)):
-                      
-                    currentRdn = existingDnsForRelationSorted[i]  
-                        
-                    for _, a in enumerate(attributeNames):
+                # Create links between this relation and instance dataNode based on the candidate information provided by sensor for each relation attribute
+                for relationDnIndex, relationDn in existingDnsForRelationSorted.items():
+                    for attributeIndex, attribute in enumerate(attributeNames):
                           
-                        aValue = relationAttrsCache[a][i]
+                        candidatesForRelation = relationAttrsCache[attribute][relationDnIndex]
                         
-                        for j, av in enumerate(aValue):
-                            isInRelation = av.item()
+                        for candidateIndex, candidate in enumerate(candidatesForRelation):
+                            isInRelation = candidate.item()
                             if isInRelation == 0:
                                 continue
                             
-                            dn = existingDnsForAttr[a][j]
+                            candidateDn = existingDnsForAttr[attribute][candidateIndex]
                             
-                            dn.addRelationLink(relationName, currentRdn)
-                            currentRdn.addRelationLink(a, dn)  
-                            currentRdn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                            if attributeIndex == 0:
+                                candidateDn.addRelationLink(relationName, relationDn)
+                            
+                            relationDn.addRelationLink(attribute, candidateDn)  
+                            relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
             else:
+                # Just add the sensor value to relation DataNodes
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
 
@@ -1429,14 +1456,15 @@ class DataNodeBuilder(dict):
                     dns.append(_dn)
                     
                     # Create contain relation between the new datanode and existing datanodes
-                    if conceptInfo["relationMode"] == "forward":
-                        for index, isRelated in enumerate(vInfo.value[i]):
-                            if isRelated == 1:
-                                relatedDns[index].addChildDataNode(_dn)                            
-                    elif conceptInfo["relationMode"] == "backward":
-                        for index, isRelated in enumerate(vInfo.value[i]):
-                            if isRelated == 1:
-                                _dn.addChildDataNode(relatedDns[index])  
+                    if not conceptInfo['relation']:
+                        if conceptInfo["relationMode"] == "forward":
+                            for index, isRelated in enumerate(vInfo.value[i]):
+                                if isRelated == 1:
+                                    relatedDns[index].addChildDataNode(_dn)                            
+                        elif conceptInfo["relationMode"] == "backward":
+                            for index, isRelated in enumerate(vInfo.value[i]):
+                                if isRelated == 1:
+                                    _dn.addChildDataNode(relatedDns[index])  
             else:
                 _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
                 for i in range(0,vInfo.len):
@@ -1486,15 +1514,16 @@ class DataNodeBuilder(dict):
                     _dn.attributes[keyDataName] = vInfo.value[i]
                 
                 # Create contain relation between existings datanodes
-                if conceptInfo["relationMode"] == "forward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            relatedDns[index].addChildDataNode(_dn)                            
-                elif conceptInfo["relationMode"] == "backward":
-                    for index, isRelated in enumerate(vInfo.value[i]):
-                        if isRelated == 1:
-                            _dn.addChildDataNode(relatedDns[index])  
-                
+                if not conceptInfo["relation"]:
+                    if conceptInfo["relationMode"] == "forward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                relatedDns[index].addChildDataNode(_dn)                            
+                    elif conceptInfo["relationMode"] == "backward":
+                        for index, isRelated in enumerate(vInfo.value[i]):
+                            if isRelated == 1:
+                                _dn.addChildDataNode(relatedDns[index])  
+                    
             self.__updateRootDataNodeList(existingDnsForConcept)   
         else: # Attribute update
             if not existingDnsForConcept:
@@ -1819,3 +1848,15 @@ class DataNodeBuilder(dict):
         
         _DataNodeBulder__Logger.error('Returning None - there are no dataNodes')
         return None
+    
+    #Graph visualization
+    def visualize(self, filename: str):
+        g = graphviz.Digraph()
+        g.node('Datanode', getInstanceID(self))
+        g.attr('node', shape = 'rectangle')
+        for i in getAttributes(self):
+            g.node(str(i), str(i))
+            g.edge('Datanode', str(i))
+        g.render(str, format = 'jpeg')
+        return None
+

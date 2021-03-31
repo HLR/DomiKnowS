@@ -176,7 +176,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                    
                 currentConstrLinExpr = x + notx 
                 
-                m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
+                m.addConstr(currentConstrLinExpr == 1, name='Disjoint: %s and %s'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
                 self.myLogger.debug("Disjoint constrain between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
 
         m.update()
@@ -256,7 +256,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.nandVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True)
+                    self.myIlpBooleanProcessor.countVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True,  limitOp = '<=', limit = 1, logicMethodName = "atMostL")
                         
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -790,17 +790,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('%s optimal solution was found with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('%s optimal solution was found for p - %i with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', p, mP.ObjVal,elapsedOptimize.microseconds/1000))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
-                    self.myLogger.warning('Model was proven to be infeasible.')
+                    self.myLogger.warning('Model was proven to be infeasible for p - %i.'%(p))
                 elif mP.status == GRB.Status.INF_OR_UNBD:
-                    self.myLogger.warning('Model was proven to be infeasible or unbound.')
+                    self.myLogger.warning('Model was proven to be infeasible or unbound for p - %i.'%(p))
                 elif mP.status == GRB.Status.UNBOUNDED:
                     self.myLogger.warning('Model was proven to be unbound.')
                 else:
-                    self.myLogger.warning('Optimal solution not was found - error code %i'%(mP.status))
+                    self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}
@@ -858,18 +858,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnAtt[ILPkey][index] = solution
                         dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
                         
-                        #del dnAtt[xPkey]
-                        
-                        #if xNotPkey in dnAtt:
-                            #del dnAtt[xNotPkey]
-                            
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
                             self.myLogger.info('\"%s\" is \"%s\"'%(dn,c[1]))
-
-                 
-                # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
-                # Get ILP result from  maxP x 
             else:
                 pass
                                        
