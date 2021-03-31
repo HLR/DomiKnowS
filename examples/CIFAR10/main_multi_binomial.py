@@ -240,7 +240,11 @@ def main():
         
         ILPmetrics = datanode.getInferMetric()
         print("\nILP metrics Total %s"%(ILPmetrics['Total']))
-        
+        print("ILP metrics animal %s"%(ILPmetrics['animal']))
+        print("ILP metrics vehicle %s"%(ILPmetrics['vehicle']))
+        ILPmetrics = datanode.getInferMetric(tag)
+        print("ILP metrics tag %s"%(ILPmetrics['tag']))
+
         #counter += 1
         #if counter == 20:
         #    break

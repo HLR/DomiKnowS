@@ -54,7 +54,7 @@ class TorchModel(torch.nn.Module):
 
     def data_hash(self, data_item):
         try:
-            return hash(data_item)
+            return str(hash(data_item))
         except TypeError as te:
             te_args = te.args
             pass  # fall back to 'id'
@@ -84,7 +84,6 @@ class TorchModel(torch.nn.Module):
         else:
             return self.populate(data_item)
 
-
     def populate(self):
         raise NotImplementedError
 
@@ -110,7 +109,12 @@ class PoiModel(TorchModel):
                     raise ValueError(f'Unexpected type of POI item {type(item)}: Property or Concept expected.')
             self.poi = properties
         self.loss = loss
-        self.metric = metric
+        if metric is None:
+            self.metric = None
+        elif isinstance(metric, dict):
+            self.metric = metric
+        else:
+            self.metric = {'': metric}
 
     def default_poi(self):
         poi = []
@@ -138,8 +142,10 @@ class PoiModel(TorchModel):
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        if isinstance(self.metric, MetricTracker):
-            self.metric.reset()
+        if self.metric != None:
+            for metric in self.metric.values():
+                if isinstance(metric, MetricTracker):
+                    metric.reset()
 
     def poi_loss(self, data_item, prop, sensors):
         if not self.loss:
@@ -152,16 +158,21 @@ class PoiModel(TorchModel):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
-        local_metric = self.metric[(*sensors,)](*outs)
+        local_metric = {}
+        for key, metric in self.metric.items():
+            local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
+        if len(local_metric) == 1:
+            local_metric = list(local_metric.values())[0]
         return local_metric
 
-    def populate(self, builder):
+    def populate(self, builder, run=True):
         loss = 0
         metric = {}
         for prop in self.poi:
             # make sure the sensors are evaluated
-            for sensor in prop.find(TorchSensor):
-                    sensor(builder)
+            if run:
+                for sensor in prop.find(TorchSensor):
+                        sensor(builder)
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
@@ -173,24 +184,37 @@ class PoiModel(TorchModel):
 
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None):
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP']):
         super().__init__(graph, poi=poi, loss=loss, metric=metric)
         self.inference_with = []
+        self.inferTypes = inferTypes
 
     def inference(self, builder):
         for prop in self.poi:
-            for output_sensor, target_sensor in self.find_sensors(prop):
-            # make sure the sensors are evaluated
-                output = output_sensor(builder)
-                target = target_sensor(builder)
+            for sensor in prop.find(TorchSensor):
+                sensor(builder)
+#             for output_sensor, target_sensor in self.find_sensors(prop):
+#             # make sure the sensors are evaluated
+#                 output = output_sensor(builder)
+#                 target = target_sensor(builder)
+#         print("Done with the computation")
         datanode = builder.getDataNode()
         # trigger inference
-        datanode.inferILPResults(*self.inference_with, fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+#         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
+        for infertype in self.inferTypes:
+            {
+                'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                'local/argmax': lambda :datanode.inferLocal(),
+                'local/softmax': lambda :datanode.inferLocal(),
+                'argmax': lambda :datanode.infer(),
+                'softmax': lambda :datanode.infer(),
+            }[infertype]()
+#         print("Done with the inference")
         return builder
 
-    def populate(self, builder):
+    def populate(self, builder, run=True):
         data_item = self.inference(builder)
-        return super().populate(builder)
+        return super().populate(builder, run=False)
 
 
 class IMLModel(SolverModel):

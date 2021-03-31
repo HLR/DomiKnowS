@@ -5,7 +5,7 @@ sys.path.append('.')
 sys.path.append('../..')
 
 
-from regr.program import POIProgram, IMLProgram
+from regr.program import POIProgram, IMLProgram, SolverPOIProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
@@ -113,15 +113,14 @@ def model(use_ont):
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     if use_ont:
-        lbp = POIProgram(graph_ont, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = SolverPOIProgram(graph_ont, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
     else:
-        lbp = POIProgram(graph, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
     
     return lbp
 
 def main():
     
-    val = 'n'
     while True:
         val = input("Use ontology constraint (y/n):")
         if val == 'y' or val == 'n':
@@ -137,35 +136,32 @@ def main():
     program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
-    #train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    #test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    #program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-   # program.test(test_reader)
+    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    program.train(list(iter(train_reader))[0:50], train_epoch_num=5, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.test(list(iter(test_reader))[0:10])
 
     reader = SingletonDataLoader('data/conll04.corp')
 
-    for node in program.populate(reader, device='auto'):
-        assert node.ontologyNode is sentence
-        phrase_node = node.getChildDataNodes()[0]
-        assert phrase_node.ontologyNode is phrase
+#     for node in program.populate(reader, device='auto'):
+#         assert node.ontologyNode is sentence
+#         phrase_node = node.getChildDataNodes()[0]
+#         assert phrase_node.ontologyNode is phrase
 
-        node.infer()
+#         node.infer()
 
-        if phrase_node.getAttribute(people) is not None:
-            assert phrase_node.getAttribute(people, 'softmax') > 0
-            node.inferILPResults(fun=None)
+#         if phrase_node.getAttribute(people) is not None:
+#             assert phrase_node.getAttribute(people, 'softmax') > 0
+#             node.inferILPResults(fun=None)
             
-            ILPmetrics = node.getInferMetric()
+#             ILPmetrics = node.getInferMetric()
             
-            print("\nILP metrics Total %s"%(ILPmetrics['Total']))
-            print("ILP metrics work_for %s"%(ILPmetrics['work_for']))
-            ILPmetrics = node.getInferMetric(people)
-            print("ILP metrics people %s"%(ILPmetrics['people']))
-
-            assert phrase_node.getAttribute(people, 'ILP') >= 0
-        else:
-            print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
-            break
+#             print("ILP metrics Total %s"%(ILPmetrics['Total']))
+            
+#             assert phrase_node.getAttribute(people, 'ILP') >= 0
+#         else:
+#             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
+#             break
 
 
 if __name__ == '__main__':

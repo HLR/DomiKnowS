@@ -321,7 +321,7 @@ def test_main_conll04(case):
                 assert child_node1.ontologyNode.name == 'char'
                        
             #assert len(child_node.getChildDataNodes()) == len(case.char.raw[child_node.instanceID])
-            num_pairs = (torch.max(case.pair.pa1_backward, case.pair.pa2_backward))[:,child_node.instanceID].sum()
+            num_pairs = case.pair.pa1_backward[:,child_node.instanceID].sum()
             assert len(child_node.getRelationLinks(relationName = "pair")) == num_pairs # has relation named "pair"with each word (including itself)
 
             assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
@@ -414,7 +414,7 @@ def test_main_conll04(case):
         assert len(JohnDN.getChildDataNodes(conceptName=phrase)) == 0
         
         assert len(JohnDN.getRelationLinks()) == 2
-        assert len(JohnDN.getRelationLinks(relationName=pair)) == 7
+        assert len(JohnDN.getRelationLinks(relationName=pair)) == 4
 
         # Get value of attribute o/ILP for word 2
         #assert tokenResult['O'][2] == 1

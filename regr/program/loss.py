@@ -98,6 +98,7 @@ class BCEWithLogitsIMLoss(torch.nn.Module):
         # make sure target is float
         target = target.to(dtype=logp.dtype)
         inference = inference.to(dtype=logp.dtype)
+        inference = inference.to(device=logp.device)
         # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
         loss = - (1 - (1 - self.lmbd) * inference) * target * logp
         loss += - (self.lmbd + (1 - self.lmbd) * inference) * (1 - target) * lognp
@@ -115,5 +116,7 @@ class BCEWithLogitsIMLoss(torch.nn.Module):
 
 class NBCrossEntropyIMLoss(BCEWithLogitsIMLoss):
     def forward(self, input, inference, target, weight=None):
-        target = torch.stack((1-target, target), dim=-1)
+        num_classes = input.shape[-1]
+        target = target.to(dtype=torch.long)
+        target = F.one_hot(target, num_classes=num_classes)
         return super().forward(input, inference, target, weight=weight)

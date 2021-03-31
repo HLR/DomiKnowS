@@ -85,31 +85,6 @@ class LogicalConstrain:
     class LogicalConstrainError(Exception):
         pass
     
-    def __conceptVariableCount(self, e):
-        variableTypes = []
-        
-        if len(e.has_a()) > 0: 
-            for has_a in e.has_a():
-                variableTypes.append(has_a.dst)
-                
-        if len(variableTypes) == 2:
-            return 2, variableTypes
-        elif len(variableTypes) == 3:
-            return 3, variableTypes
-        elif len(variableTypes) > 3:
-            self.myLogger.error('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(variableTypes)))
-            raise ValueError('Not supporting relation with more then 3 attributes - the relation %s has %i attributes'%(e,len(variableTypes)))
-                    
-        for is_a in e.is_a():
-            parentConcept = is_a.dst
-            
-            parentType, parentRelationConcepts = self.__conceptVariableCount(parentConcept)
-            
-            if len(parentRelationConcepts) > 0:
-                return parentType, parentRelationConcepts
-            
-        return 1, variableTypes
-    
     def __str__(self):
         return self.__class__.__name__
     
@@ -125,6 +100,31 @@ class LogicalConstrain:
         else:
             return e._context
        
+    # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
+    # sVars - returned list of ILP variables setups
+    def _collectILPVariableSeupts(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
+        cLcVariableSet = v[lcVariableName][index] # Current logical variable (lcVariableName) sets of ILP variables
+        
+        if len(cLcVariableSet) == 0: # No ILP variables for a given logical variable
+            lcVars.append(None)
+            self._collectILPVariableSeupts(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
+            
+            return
+                                       
+        for ilvV in cLcVariableSet:
+            newLcVars = lcVars[:] # clone
+            
+            if ilvV is None:
+                newLcVars.append(None) # alternative code: sVars.append([None]), continue
+            else:
+                newLcVars.append(ilvV)
+
+            if lcVariableNames: # There still remaining lc variables
+                self._collectILPVariableSeupts(lcVariableNames[0], lcVariableNames[1:], index, v, newLcVars, sVars)
+            else:
+                sVars.append(newLcVars) # This is the last logical variable  - setup of ILP variables finish - collect it
+
+    # Method building ILP constraints
     def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
         if len(v) < 2:
             myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
@@ -132,62 +132,67 @@ class LogicalConstrain:
         
         # input variable names
         try:
-            vKeys = [e for e in iter(v)]
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+                
+        lcVariableName0 = lcVariableNames[0] # First LC variable
+        lcVariableSet0 = v[lcVariableName0]
+
+        rVars = [] # output variables
+
+        # Check consistency of provided sets of ILP variables
+        for cLcVariableName in lcVariableNames:
+            cLcVariableSet = v[cLcVariableName]
+
+            if len(cLcVariableSet) != len(lcVariableSet0):
+                myLogger.error("%s Logical Constrain has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"%(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
+                
+                return rVars
+            
+        # Loop through input ILP variables sets in the list of the first input LC variable
+        zVars = []
+        for i in range(len(lcVariableSet0)):
+            sVars = []
+            self._collectILPVariableSeupts(lcVariableName0, lcVariableNames[1:], i, v, [], sVars)
+            zVars.append(sVars)
+        
+        for z in zVars:
+            for t in z:
+                tVars = []
+                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                
+            rVars.append(tVars)
+        
+        return rVars
+    
+    def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
+        if len(v) != 1:
+            myLogger.error("%s Logical Constrain created with %i sets of logical variables which is not equal to one"%(lcMethodName, len(v)))
+            return None
+        
+        try:
+            lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        zVars = [] # output variables
-        
-        for i in range(len(v[vKeys[0]])):
-            var = []
-            error = False
-            varIsNone = False
-            
-            for k in vKeys:
-                if not (0 <= i < len(v[k])):
-                    myLogger.error("%s Logical Constrain created with %i has not equal number of elements in provided sets: %i - %i"%(lcName, len(v[vKeys[0]]), len(v[vKeys[1]])))
-                    error = True
-                    break
-                
-                cVar = v[k][i][0]
-                
-                if cVar is None:
-                    zVars.append([None])
-                    varIsNone = True
-                    break
-            
-                var.append(v[k][i][0])
-                
-            if error: break
-            
-            if varIsNone: continue
-                
-            zVars.append([lcFun(model, *var, onlyConstrains = headConstrain)])
-        
-        return zVars
-    
-    def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
-        if cVariable not in v:
-            return 
-        
-        existsV = []
-        
-        cVariableV = v[cVariable]
-        for _v in cVariableV:
-            existsVarResult = myIlpBooleanProcessor.countVar(model, *_v, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)
-            
-            existsV.append([existsVarResult])
+        lcVariableName0 = lcVariableNames[0] # First and only one LC variable
+        lcVariableSet0 =  v[lcVariableName0]
 
-        if  headConstrain:
-            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcMethodName))
-        else:
-            #if ifLog: myLogger.debug("Exists Logical Constrain result - ILP variables created: %s"%([x.VarName for x in existsV]))
-            pass
-                 
+        zVars = [] # Output variables
+        
+        # Loop through input ILP variables sets in the list of the first input LC variable
+        for var in lcVariableSet0:
+            
+            if len(var) == 0:
+                zVars.append([None])
+                continue
+                         
+            zVars.append([myIlpBooleanProcessor.countVar(model, *var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
+       
         model.update()
+        return zVars
         
-        return existsV
-
 class andL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
@@ -280,16 +285,15 @@ class exactL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
         else:
             cLimit = 1
             
-        cVariable = self.e[2]
         lcMethodName = 'exactL'
-        cOperation = '='
+        cOperation = '=='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
 class existsL(LogicalConstrain):
     def __init__(self, *e, p=100):
@@ -298,36 +302,37 @@ class existsL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
         cLimit = 1
 
-        cVariable = self.e[2]
         lcMethodName = 'existsL'
-        cOperation = '>'
+        cOperation = '>='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
 class atLeastL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
             
-        cVariable = self.e[2]
         lcMethodName = 'atLeastL'
-        cOperation = '>'
+        cOperation = '>='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))
     
 class atMostL(LogicalConstrain):
     def __init__(self, *e, p=100):
         LogicalConstrain.__init__(self, *e, p=p)
         
     def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[3], int):
-            cLimit = self.e[3]
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
             
-        cVariable = self.e[2]
         lcMethodName = 'atMostL'
-        cOperation = '<'
+        cOperation = '<='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit, logicMethodName = str(self))
+        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cOperation, cLimit, logicMethodName = str(self))

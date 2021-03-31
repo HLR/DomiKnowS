@@ -60,7 +60,9 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
             if valid_set is not None:
                 self.logger.info('Validation:')
@@ -68,7 +70,9 @@ class LearningBasedProgram():
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
                 self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
         if test_set is not None:
             self.logger.info('Testing:')
@@ -76,8 +80,10 @@ class LearningBasedProgram():
             self.logger.info(' - loss:')
             self.logger.info(self.model.loss)
             self.logger.info(' - metric:')
-            self.logger.info(self.model.metric)
-
+            for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
+            
     def train_epoch(self, dataset):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
@@ -98,7 +104,9 @@ class LearningBasedProgram():
         self.logger.info(' - loss:')
         self.logger.info(self.model.loss)
         self.logger.info(' - metric:')
-        self.logger.info(self.model.metric)
+        for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
 
     def test_epoch(self, dataset, device=None):
         self.model.mode(Mode.TEST)
@@ -123,3 +131,9 @@ class LearningBasedProgram():
             for data_item in dataset:
                 _, _, output = self.model(data_item)
                 yield output
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def load(self, path):
+        self.model.load_state_dict(torch.load(path))
