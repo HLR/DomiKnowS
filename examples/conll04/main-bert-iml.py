@@ -178,13 +178,8 @@ def model():
 
 
 def main():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-
     program = model()
 
-    # Uncomment the following lines to enable training and testing
     split_id = 1
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
