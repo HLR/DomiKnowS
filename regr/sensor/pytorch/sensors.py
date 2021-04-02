@@ -33,7 +33,7 @@ class TorchSensor(Sensor):
         try:
             self.update_context(data_item)
         except:
-            print('Error during updating data item with sensor {}'.format(self))
+            print('Error during updating data item with sensor {}'.format(self.fullname))
             raise
         return data_item[self]
 
@@ -428,6 +428,19 @@ class ModuleSensor(FunctionalSensor):
     def __init__(self, *args, module, **kwargs):
         self.module = module
         super().__init__(*args, **kwargs)
+
+    @property
+    def model(self):
+        return self.module
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, device):
+        self.module.to(device)
+        self._device = device
 
     def forward(self, *inputs):
         return self.module(*inputs)

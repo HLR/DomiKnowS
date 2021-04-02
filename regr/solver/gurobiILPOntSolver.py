@@ -176,7 +176,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                    
                 currentConstrLinExpr = x + notx 
                 
-                m.addConstr(currentConstrLinExpr == 1, name='c_%s_%sselfDisjoint'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
+                m.addConstr(currentConstrLinExpr == 1, name='Disjoint: %s and %s'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
                 self.myLogger.debug("Disjoint constrain between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
 
         m.update()
@@ -192,6 +192,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
             
             for rel in concept[0].is_a():
+                if  not rel.auto_constraint:
+                    continue
+                
                 # A is_a B : if(A, B) : A(x) <= B(x)
                 
                 sxkey = '<' + rel.src.name + '>/ILP/x'
@@ -220,6 +223,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             dns = rootDn.findDatanodes(select = rootConcept)
                
             for rel in concept[0].not_a():
+                if  not rel.auto_constraint:
+                    continue
+                
                 conceptName = concept[1]
                 
                 relDestFound = False
@@ -250,7 +256,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.nandVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True)
+                    self.myIlpBooleanProcessor.countVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True,  limitOp = '<=', limit = 1, logicMethodName = "atMostL")
                         
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -266,10 +272,11 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Skip if multiclass
             if concept[2] is not None:
                 continue
-            
-            rels = [ rel for rel in enumerate(concept[0].has_a())]
-            
+                        
             for arg_id, rel in enumerate(concept[0].has_a()): 
+                
+                if  not rel.auto_constraint:
+                    continue
                 
                 # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
                 # A has_a B : A(x,y,...) <= B(x)
@@ -539,14 +546,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     if isinstance(e, LogicalConstrain):
                         variable = V(name="_lc" + str(vNo))
-                        vNo =+ 1
+                        vNo += 1
                     else:
                         if firstV:
                             variable = V(name="_x" )
                             firstV = False
                         else:
                             variable = V(name="_x" + str(vNo), v = ("_x",))
-                            vNo =+ 1
+                            vNo += 1
                     
                 if variable.name:
                     variableName = variable.name
@@ -555,7 +562,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 if variableName in lcVariables:
                     newvVariableName = "_x" + str(vNo)
-                    vNo =+ 1
+                    vNo += 1
                     
                     resultVariableNames.append(newvVariableName)
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
@@ -631,7 +638,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 vDn = ilpVs[p]
                             else:
                                 if p == 0:
-                                    vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
+                                    try:
+                                        vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
+                                    except IndexError: 
+                                        vDn = None
                                 else:
                                     vDn = _dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
                         
@@ -690,11 +700,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Create ILP Variables for concepts and objective
             Q, x = self.createILPVariables(m, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
             
-            # Add constraints based on ontology or graph definition
-            if hasattr(self, 'myOnto'): 
-                self.addOntologyConstrains(m, dn, *conceptsRelations)
-            else:
-                self.addGraphConstrains(m, dn, *conceptsRelations)
+            # Add constraints based on ontology and graph definition
+            self.addOntologyConstrains(m, dn, *conceptsRelations)
+            self.addGraphConstrains(m, dn, *conceptsRelations)
         
             # ILP Model objective setup
             if minimizeObjective:
@@ -763,9 +771,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if _p == p:
                         break     
     
-                # Add constraints to the copy model
-                if not hasattr(self, 'myOnto'): 
-                    self.addLogicalConstrains(mP, dn, lcs, p)
+                # Add LC constraints to the copy model
+                self.addLogicalConstrains(mP, dn, lcs, p)
                 self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
@@ -783,17 +790,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('%s optimal solution was found with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('%s optimal solution was found for p - %i with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', p, mP.ObjVal,elapsedOptimize.microseconds/1000))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
-                    self.myLogger.warning('Model was proven to be infeasible.')
+                    self.myLogger.warning('Model was proven to be infeasible for p - %i.'%(p))
                 elif mP.status == GRB.Status.INF_OR_UNBD:
-                    self.myLogger.warning('Model was proven to be infeasible or unbound.')
+                    self.myLogger.warning('Model was proven to be infeasible or unbound for p - %i.'%(p))
                 elif mP.status == GRB.Status.UNBOUNDED:
                     self.myLogger.warning('Model was proven to be unbound.')
                 else:
-                    self.myLogger.warning('Optimal solution not was found - error code %i'%(mP.status))
+                    self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}
@@ -851,18 +858,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnAtt[ILPkey][index] = solution
                         dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
                         
-                        #del dnAtt[xPkey]
-                        
-                        #if xNotPkey in dnAtt:
-                            #del dnAtt[xNotPkey]
-                            
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
                             self.myLogger.info('\"%s\" is \"%s\"'%(dn,c[1]))
-
-                 
-                # self.__collectILPSelectionResults(dn, lcRun[maxP]['mP'], lcRun[maxP]['xP'])
-                # Get ILP result from  maxP x 
             else:
                 pass
                                        

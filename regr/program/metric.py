@@ -8,47 +8,33 @@ from ..base import AutoNamed
 from ..utils import wrap_batch
 
 
-class BinaryCMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, weight=None, dim=None):
+class CMWithLogitsMetric(torch.nn.Module):
+    def forward(self, input, target, data_item, prop, weight=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
-        preds = (input > 0).clone().detach().to(dtype=weight.dtype)
+        preds = input.argmax(dim=-1).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
-        assert (0 <= labels).all() and (labels <= 1).all()
         tp = (preds * labels * weight).sum()
         fp = (preds * (1 - labels) * weight).sum()
         tn = ((1 - preds) * (1 - labels) * weight).sum()
         fn = ((1 - preds) * labels * weight).sum()
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
+class BinaryCMWithLogitsMetric(CMWithLogitsMetric):
+    def forward(self, input, target, data_item, prop, weight=None):
+        target = target.argmax(dim=-1)
+        return super().forward(input, target, data_item, prop, weight)
 
-class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
-        num_classes = input.shape[-1]
-        input = input.view(-1, num_classes)
-        target = target.view(-1).to(dtype=torch.long)
-        target = F.one_hot(target.view(-1), num_classes=num_classes)
-        return super().forward(input, target, weight)
+class DatanodeCMMetric(torch.nn.Module):
+    def __init__(self, inferType='ILP'):
+        super().__init__()
+        self.inferType = inferType
 
-
-class BinaryPRF1WithLogitsMetric(BinaryCMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
-        CM = super().forward(input, target, weight)
-        tp = CM['TP'].float()
-        fp = CM['FP'].float()
-        fn = CM['FN'].float()
-        if CM['TP']:
-            p = tp / (tp + fp)
-            r = tp / (tp + fn)
-            f1 = 2 * p * r / (p + r)
-        else:
-            p = torch.zeros_like(tp)
-            r = torch.zeros_like(tp)
-            f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
-
-class PRF1WithLogitsMetric(CMWithLogitsMetric, BinaryPRF1WithLogitsMetric):
-    pass
+    def forward(self, input, target, data_item, prop, weight=None):
+        datanode = data_item.getDataNode()
+        result = datanode.getInferMetric(prop.name, inferType=self.inferType)
+        val =  result[str(prop.name)]
+        return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
 
 
 class MetricTracker(torch.nn.Module):

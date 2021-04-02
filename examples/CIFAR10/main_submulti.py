@@ -1,10 +1,8 @@
 import sys
 import torch
-from regr.program import SolverPOIProgram
-
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from regr.program.metric import MacroAverageTracker, PRF1Tracker
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
@@ -13,6 +11,7 @@ import torch.nn as nn
 import os,pickle
 import numpy as np
 from regr.program.loss import NBCrossEntropyLoss
+from future.builtins.misc import isinstance
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -51,15 +50,15 @@ class ImageModel(PrimalDualModel):
         super().__init__(
             graph,
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker(DatanodeCMMetric()))
-            #metric=PRF1Tracker())
+            metric=PRF1Tracker())
 
-from graph_multi import graph
+from graph_submulti import graph
 graph.detach()
 image = graph['image']
 category = graph['category']
-label = graph['tag']
-    
+ALabel = graph['ALabel']
+VLabel = graph['VLabel']
+
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
@@ -68,14 +67,15 @@ def model_declaration():
     
     image['pixels'] = ReaderSensor(keyword='pixels')
     image[category] = ReaderSensor(keyword='category',label=True)
-    image[label] = ReaderSensor(keyword='tag',label=True)
+    image[ALabel] = ReaderSensor(keyword='ALabel',label=True)
+    image[VLabel] = ReaderSensor(keyword='VLabel',label=True)
 
     image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
     image[category] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
-    image[label] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 10))
+    image[ALabel] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 6))
+    image[VLabel] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 4))
 
-    #program = LearningBasedProgram(graph, ImageModel)
-    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+    program = LearningBasedProgram(graph, ImageModel)
 
     return program
 
@@ -129,31 +129,37 @@ class CIFAR10_1(datasets.CIFAR10):
         """
         img, target = self.data[index], self.targets[index]
 
-        # doing this so that it is consistent with all other datasets
-        # to return a PIL Image
+        # Doing this so that it is consistent with all other datasets to return a PIL Image
         img = Image.fromarray(img)
 
         if self.transform is not None:
             img = self.transform(img)
+            
         if self.target_transform is not None:
             target = self.target_transform(target)
 
         img = img.unsqueeze(0)
         target_dict = {0:'airplane',1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog', 7:'horse',8: 'ship', 9: 'truck'}
-        animal_category = [2,3,4,5,6,7]
+
+        animal_label = [2,3,4,5,6,7]
+        vehicle_label = [0,1,8,9]
         
-        dict = {}
-        dict['pixels'] = img
-        category_dict = {0:'animal', 1: 'vehicle'}
-        for i in range(10):
-            dict['tag'] = [target] #[0] [1] [2] ... [9]
-
-        if target in animal_category:
-            dict['category'] = [0]
+        resultDict = {}
+        resultDict['pixels'] = img
+        
+        if target in animal_label:
+            resultDict['ALabel'] = [animal_label.index(target)]
+            resultDict['VLabel'] = [float("nan")]
         else:
-            dict['category'] = [1]
+            resultDict['ALabel'] = [float("nan")]
+            resultDict['VLabel'] = [vehicle_label.index(target)]
 
-        return dict
+        if target in animal_label:
+            resultDict['category'] = [0]
+        else:
+            resultDict['category'] = [1]
+            
+        return resultDict
 
 def load_cifar10(train=True, root='./data/', size=32):
     CIFAR100_TRAIN_MEAN = (0.5071, 0.4867, 0.4408)
@@ -178,23 +184,17 @@ def main():
     program = model_declaration()
 
     ### load data
-    trainset = load_cifar10(train=True)
+    #trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
 
     #print(trainset[0])
 
-    program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    #program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
+    counter = 0
     for datanode in program.populate(dataset=testset):
-        #print('----------before ILP---------')
-        
-        label = graph['tag']
-        
-        #for l in label.values:
-            #print(l, datanode.getAttribute(l).softmax(-1))
-    
-        datanode.inferILPResults(*category.values, *label.values, fun=None)
-   
+        datanode.inferILPResults(*category.values, *ALabel.values, *VLabel.values, fun=None)
+
         print('\n----------after ILP---------')
         
         print("\n --- catagory")
@@ -213,24 +213,49 @@ def main():
             if predt_category == 1.0:
                 print("Inference: %s"%(c))
                 
-        print("\n --- tag")
+        print("\n --- ALabel")
           
-        output = [label.get_value(i) + ": " + str(round(datanode.getAttribute(label)[i].item(), 2)) for i in range(len(label.values))]
+        output = [ALabel.get_value(i) + ": " + str(round(datanode.getAttribute(ALabel)[i].item(), 2)) for i in range(len(ALabel.values))]
         print("Output:   ", output)
                 
-        soft = [label.get_value(i) + ": " + str(round(datanode.getAttribute(label, "local", "softmax")[i].item(), 2)) for i in range(len(label.values))]
+        soft = [ALabel.get_value(i) + ": " + str(round(datanode.getAttribute(ALabel, "local", "softmax")[i].item(), 2)) for i in range(len(ALabel.values))]
         print("Softmax:  ", soft)
 
-        labelIndex = datanode.getAttribute(label, "label").item()
-        print("Label:     %s"%(label.get_value(labelIndex)))
+        alabelIndex = datanode.getAttribute(ALabel, "label").item()
+        if ALabel.get_value(alabelIndex) is not None:
+            print("Label:     %s"%(ALabel.get_value(alabelIndex)))
+        else:
+            print("Label:     not specified")
 
         prediction = ''
-        for t in label.values:
+        for t in ALabel.values:
             predt_label = datanode.getAttribute(t, 'ILP').item()
             if predt_label == 1.0:
                 print("Inference: %s"%(t))
                 prediction = t
+                
+        print("\n --- VLabel")
+          
+        output = [VLabel.get_value(i) + ": " + str(round(datanode.getAttribute(VLabel)[i].item(), 2)) for i in range(len(VLabel.values))]
+        print("Output:   ", output)
+                
+        soft = [VLabel.get_value(i) + ": " + str(round(datanode.getAttribute(VLabel, "local", "softmax")[i].item(), 2)) for i in range(len(VLabel.values))]
+        print("Softmax:  ", soft)
 
+        vlabelIndex = datanode.getAttribute(VLabel, "label").item()
+        if VLabel.get_value(vlabelIndex) is not None:
+            print("Label:     %s"%(VLabel.get_value(vlabelIndex)))
+        else:
+            VLabel.get_value(vlabelIndex)
+            print("Label:     not specified")
+
+        prediction = ''
+        for t in VLabel.values:
+            predt_label = datanode.getAttribute(t, 'ILP').item()
+            if predt_label == 1.0:
+                print("Inference: %s"%(t))
+                prediction = t
+        
         #d = datanode.getAttributes()['pixels'].numpy()
         #plt.figure()
         #plt.imshow((d[0,:,:]),interpolation='nearest', aspect='auto')
@@ -241,6 +266,8 @@ def main():
         ILPmetrics = datanode.getInferMetric()
         print("\nILP metrics Total %s"%(ILPmetrics['Total']))
         
-        #break
+        #counter += 1
+        #if counter == 20:
+        #    break
 if __name__ == '__main__':
     main()

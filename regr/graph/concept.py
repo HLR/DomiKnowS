@@ -319,4 +319,10 @@ class EnumConcept(Concept):
         return self.enum[value].value
 
     def get_value(self, index):
-        return self.enum(index).name
+        try:
+            t = self.enum(index) 
+            return t.name
+        except ValueError:
+            return None
+        
+        

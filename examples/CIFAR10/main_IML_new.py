@@ -3,7 +3,7 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import SolverPOIProgram
+from regr.program import SolverPOIProgram, POIProgram, IMLProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
@@ -14,7 +14,9 @@ import torch.nn.functional as F
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from torch.utils.data import random_split
+
 
 
 
@@ -48,13 +50,21 @@ class ImageNetwork(torch.nn.Module):
         # x = self.fc(x)
         return x
 
-class ImageModel(PrimalDualModel):
+# class ImageModel(IMLModel):
+#     def __init__(self, graph):
+#         super().__init__(
+#             graph,
+#             loss=MacroAverageTracker(NBCrossEntropyLoss()),
+#             metric=PRF1Tracker(DatanodeCMMetric()))
+        
+class ImageModel(IMLModel):
     def __init__(self, graph):
         super().__init__(
             graph,
-            loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker(DatanodeCMMetric()))
+            loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
+            metric=PRF1Tracker())
 
+        
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
 def model_declaration():
@@ -100,9 +110,10 @@ def model_declaration():
     image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
     
 
-    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
-#     poi=(sentence, phrase, pair), , metric=PRF1Tracker(DatanodeCMMetric())
+#     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+#     program = LearningBasedProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 
+    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
 #     program = LearningBasedProgram(graph, ImageModel)
 
     return program
@@ -138,7 +149,9 @@ class CIFAR10_1(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-                self.data.append(entry['data'][:50])
+                self.data.append(entry['data'][:100])
+#                 self.data.append(entry['data'])
+
                 if 'labels' in entry:
                     self.targets.extend(entry['labels'])
                 else:
@@ -197,45 +210,45 @@ def load_cifar10(train=True, root='./data/', size=32):
     return CIFAR10_1(root=root, train=train, transform=transform,download=True)
 
 def main():
+    
     program = model_declaration()
     
     import logging
     logging.basicConfig(level=logging.INFO)
 
     ### load data
+    val_size = 50
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
-
-    program.train(trainset, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device="cuda:1")
-    program.test(testset)
-
-#     label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-#     counter = 0
-#     correct_before_infer = 0
-#     correct_after_infer = 0
-#     total = 0
-#     for datanode in program.populate(dataset=testset):
-#         total += 1
-#         print('>>>>>**********************************')
-#         print('----------before ILP---------')
-#         for label in label_list:
-#             print(label, datanode.getAttribute(eval(label)).softmax(-1))
-
-#         datanode.inferILPResults('dog', 'truck', 'airplane','automobile', 'bird', 'cat','deer', 'frog', 'horse', 'ship',fun=None)
-#         ILPmetrics = datanode.getInferMetric()
-#         print("ILP metrics Total %s"%(ILPmetrics['Total']))
-#         print('----------after ILP---------')
-#         prediction = ' '
-#         for label in label_list:
-#             predt_label = datanode.getAttribute(eval(label), 'ILP').item()
-#             if predt_label == 1.0:
-#                 prediction = label
-#             print('inference ',label, predt_label )
+    train_size = len(trainset) - val_size
+    train_ds, val_ds = random_split(trainset, [train_size, val_size])
+    print(len(train_ds), len(val_ds))
+# 
 
 
+#     for i in range(10):
+#         print('^^^^^^^^^^^^^^^epoch: ',i)
+#         program.train(train_ds, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device="cuda:1")
+        
+#         print('------------------------------below is test results before the inference----------------------')
+#         program_before_inf.test(testset)
+#         print(program_before_inf.model.metric)
+        
+#         print('------------------------------below is test results after the inference----------------------')
+#         program.test(testset)
+#         print(program.model.metric)
+        
+      
+#         print('------------------------------below is val results before the inference----------------------')
+#         program_before_inf.test(val_ds)
+#         print(program_before_inf.model.metric)
+        
+#         print('------------------------------below is val results after the inference----------------------')
+#         program.test(val_ds)
+#         print(program.model.metric)
 
-
-
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=20, Optim=lambda param: torch.optim.SGD(param, lr=.001))  
+        
 
 if __name__ == '__main__':
     main()

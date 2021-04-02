@@ -85,19 +85,6 @@ class ModuleLearner(ModuleSensor, TorchLearner):
         self._metric = metric
         self.updated = True  # no need to update
 
-    @property
-    def model(self):
-        return self.module
-
-    @property
-    def device(self):
-        return self._device
-
-    @device.setter
-    def device(self, device):
-        self.module.to(device)
-        self._device = device
-
     def update_parameters(self):
         pass
 

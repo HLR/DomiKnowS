@@ -10,8 +10,8 @@ Relation.clear()
 with Graph('CIFAR10') as graph:
     Image = Concept(name='image')
     Category = Image(name="category", ConceptClass=EnumConcept, values=["animal", "vehicle"])
-    ALabel = Image(name="tag", ConceptClass=EnumConcept, values=["dog", "bird", "cat", "deer", "frog", "horse"])
-    VLabel = Image(name="tag", ConceptClass=EnumConcept, values=["airplane", "truck", "automobile", "ship"])
+    ALabel = Image(name="ALabel", ConceptClass=EnumConcept, values=["dog", "bird", "cat", "deer", "frog", "horse"])
+    VLabel = Image(name="VLabel", ConceptClass=EnumConcept, values=["airplane", "truck", "automobile", "ship"])
     
     ifL(Category.animal, ALabel)
     ifL(Category.vehicle, VLabel)
