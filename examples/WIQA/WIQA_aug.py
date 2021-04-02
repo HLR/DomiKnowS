@@ -37,10 +37,10 @@ current_model = WIQAModel if args.primaldual else PoiModel
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -158,11 +158,11 @@ for i in range(args.cur_epoch):
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
-    ##test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
+    #test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
+    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
+    #test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
+    #test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
 
 
 

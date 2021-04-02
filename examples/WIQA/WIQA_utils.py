@@ -135,6 +135,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect)
         questions_id, results = [], []
         for question_ in paragraph_.getChildDataNodes():
             print(question_.getAttribute('text'))
+            print(question_.getRelationLinks())
             questions_id.append(question_.getAttribute('quest_id'))
             results.append((question_.getAttribute(is_more, "ILP").item(), question_.getAttribute(is_less, "ILP").item(),question_.getAttribute(no_effect, "ILP").item()))
 
