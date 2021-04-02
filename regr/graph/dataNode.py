@@ -1,6 +1,7 @@
 import torch
 from collections import OrderedDict, namedtuple
 import time
+import re
 from .dataNodeConfig import dnConfig 
 from torch.tensor import Tensor
 import graphviz
@@ -133,29 +134,60 @@ class DataNode:
         return self.ontologyNode
 
     def visualize(self, filename: str):
-        g = graphviz.Digraph()
-        g.node(str(self.getInstanceID()))
+        # Build Legend subgraph
+        legend = graphviz.Digraph(name='cluster_legend',comment='Legend')
+        legend.attr('node', shape='rectangle')
+        legend.attr(label="Legend")
+        legend.node('Attribute')
+
+        legend.attr('node', shape='diamond')
+        legend.node('Decision')
+
+        legend.attr('node', shape='oval')
+        legend.node('Concept')
+        # ----
+        print(self.getChildDataNodes())
+        g = graphviz.Digraph(name='cluster_main')
+        #g.subgraph(legend)
+
+        # Root node
+        root_id = self.ontologyNode.name
+        g.node(root_id)
+
         g.attr('node', shape = 'rectangle')
-
-        # for relation_name, value in self.getRelationLinks().items():
-        #     # Recursive call here over datanodes
-        #     # value is always a list
-
-        #     print(value[0], type(value[0]))
-        #     # value[0].visualize(filename=None)
-
-        print(self.getAttributes())
         for attribute_name, attribute in self.getAttributes().items():
+            print(f"attr name: {attribute_name}")
             # Visualize all attributes which are not a relation
-            # Filter out:
-            #  .reverse
-            #   */label*
-            #   */ilp*
-            # <.*> decisions
-            g.node(str(attribute), str(attribute))
-            g.edge('datanode', str(attribute))
+            attr_node_id = str(attribute_name)
 
-        g.render(filename, format='png', view=True)
+            if attribute_name.endswith('.reversed'):
+                continue
+            elif re.match(r'^.*\/(label|ilp).*$', attribute_name):
+                print(f'Filtered {attribute_name}')
+                continue 
+            elif re.match(r'<.*>', attribute_name):
+                # Decisions
+                g.attr('node', shape='diamond')
+                g.node(str(attribute_name), str(attribute_name))
+                g.edge(root_id, str(attribute_name))
+                print(attribute, type(attribute))
+            else:
+                # Normal nodes
+                g.attr('node', shape='rectangle')
+                
+                # Format attribute
+                attr_str = str(attribute)
+                if isinstance(attribute, Tensor):
+                    attr_str = f'<tensor of shape {list(attribute.shape)}>'
+
+                g.node(attr_node_id, f'{attribute_name}: {attr_str}')
+                g.edge(root_id, attr_node_id)
+
+        main_graph = graphviz.Digraph()
+        main_graph.subgraph(legend)
+        main_graph.subgraph(g)
+
+        main_graph.render(filename, format='png', view=True)
     
     # --- Attributes methods
     

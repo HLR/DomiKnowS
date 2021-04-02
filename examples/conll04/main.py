@@ -131,11 +131,11 @@ def main():
     #program.train(train_reader, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     #program.test(test_reader)
 
-    reader = SingletonDataLoader('data/conll04.corp')
+    reader = SingletonDataLoader('/Users/drewhayward/Source/DomiKnowS/examples/conll04/data/conll04.corp')
 
     for i, node in enumerate(program.populate(reader, device='auto')):
         if i == 0:
-            node.getRelationLinks()['contains'][0].visualize('testnode')
+            node.getChildDataNodes()[0].visualize('testnode')
         assert node.ontologyNode is sentence
         phrase_node = node.getChildDataNodes()[0]
         assert phrase_node.ontologyNode is phrase
