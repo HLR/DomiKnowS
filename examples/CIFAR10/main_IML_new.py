@@ -50,20 +50,6 @@ class ImageNetwork(torch.nn.Module):
         # x = self.fc(x)
         return x
 
-# class ImageModel(IMLModel):
-#     def __init__(self, graph):
-#         super().__init__(
-#             graph,
-#             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-#             metric=PRF1Tracker(DatanodeCMMetric()))
-        
-class ImageModel(IMLModel):
-    def __init__(self, graph):
-        super().__init__(
-            graph,
-            loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
-            metric=PRF1Tracker())
-
         
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
@@ -110,11 +96,8 @@ def model_declaration():
     image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
     
 
-#     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
-#     program = LearningBasedProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 
     program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
-#     program = LearningBasedProgram(graph, ImageModel)
 
     return program
 
@@ -212,9 +195,6 @@ def load_cifar10(train=True, root='./data/', size=32):
 def main():
     
     program = model_declaration()
-    
-    import logging
-    logging.basicConfig(level=logging.INFO)
 
     ### load data
     val_size = 50
@@ -223,31 +203,13 @@ def main():
     train_size = len(trainset) - val_size
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
-# 
+    
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=3, Optim=lambda param: torch.optim.SGD(param, lr=.1))
+    
+    program.test(testset)
 
 
-#     for i in range(10):
-#         print('^^^^^^^^^^^^^^^epoch: ',i)
-#         program.train(train_ds, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device="cuda:1")
-        
-#         print('------------------------------below is test results before the inference----------------------')
-#         program_before_inf.test(testset)
-#         print(program_before_inf.model.metric)
-        
-#         print('------------------------------below is test results after the inference----------------------')
-#         program.test(testset)
-#         print(program.model.metric)
-        
-      
-#         print('------------------------------below is val results before the inference----------------------')
-#         program_before_inf.test(val_ds)
-#         print(program_before_inf.model.metric)
-        
-#         print('------------------------------below is val results after the inference----------------------')
-#         program.test(val_ds)
-#         print(program.model.metric)
 
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=20, Optim=lambda param: torch.optim.SGD(param, lr=.001))  
         
 
 if __name__ == '__main__':

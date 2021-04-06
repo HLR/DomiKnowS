@@ -20,4 +20,18 @@ with Graph('CIFAR10') as graph:
     horse = image(name='horse')
     ship = image(name='ship')
 
-    nandL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
+#     l = [truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship]
+#     for i in range(len(l)):
+#         for j in range(i,len(l)):
+#             if l[i] != l[j]:
+#                 nandL(l[i],l[j])
+    
+    
+#     orL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
+#     disjoint()
+    
+#     ##### Old version constraints
+#     nandL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
+
+    disjoint(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
+
