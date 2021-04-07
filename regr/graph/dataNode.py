@@ -1844,7 +1844,7 @@ class DataNodeBuilder(dict):
                 
                 _DataNodeBulder__Logger.info('Returning %i dataNodes - %s'%(len(_dataNode),_dataNode))
 
-                return _dataNode[0]
+                return _dataNode
         
         _DataNodeBulder__Logger.error('Returning None - there are no dataNodes')
         return None

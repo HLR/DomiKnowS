@@ -4,7 +4,8 @@ sys.path.append('.')
 sys.path.append('../..')
 
 from regr.program import SolverPOIProgram, POIProgram, IMLProgram
-from regr.program.model.pytorch import PoiModel, IMLModel
+from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.model.pytorch import PoiModel, IMLModel, SolverModel
 from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
@@ -49,6 +50,20 @@ class ImageNetwork(torch.nn.Module):
         # x = F.relu(self.fc2(x))
         # x = self.fc(x)
         return x
+
+# class ImageModel(IMLModel):
+#     def __init__(self, graph):
+#         super().__init__(
+#             graph,
+#             loss=MacroAverageTracker(NBCrossEntropyLoss()),
+#             metric=PRF1Tracker(DatanodeCMMetric()))
+        
+class ImageModel(PrimalDualModel):
+    def __init__(self, graph):
+        super().__init__(
+            graph,
+            MacroAverageTracker(NBCrossEntropyLoss()),
+            metric=PRF1Tracker())
 
         
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
@@ -96,8 +111,14 @@ def model_declaration():
     image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
     
 
+#     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+#     program = LearningBasedProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
 
-    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+#     program = PrimalDualProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+    
+    program = PrimalDualProgram(graph, SolverModel, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+    
+#     program = LearningBasedProgram(graph, ImageModel)
 
     return program
 
@@ -195,6 +216,7 @@ def load_cifar10(train=True, root='./data/', size=32):
 def main():
     
     program = model_declaration()
+  
 
     ### load data
     val_size = 50
@@ -204,10 +226,9 @@ def main():
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
     
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=3, Optim=lambda param: torch.optim.SGD(param, lr=.1))
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
     program.test(testset)
-
 
 
         
