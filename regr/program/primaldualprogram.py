@@ -36,6 +36,11 @@ class PrimalDualProgram(LearningBasedProgram):
         self.cmodel = CModel(graph)
         self.copt = None
 
+    def to(self, device):
+        super().to(device=device)
+        if self.device is not None:
+            self.cmodel.to(self.device)
+
     def train(
         self,
         training_set,
@@ -45,8 +50,6 @@ class PrimalDualProgram(LearningBasedProgram):
         train_epoch_num=1,
         Optim=None,
         COptim=None):
-        if device is not None:
-            self.cmodel.to(device)
         if COptim is not None and list(self.cmodel.parameters()):
             self.copt = COptim(self.cmodel.parameters())
         else:
@@ -64,7 +67,7 @@ class PrimalDualProgram(LearningBasedProgram):
         self.cmodel.train()
         for data in dataset:
             mloss, metric, output = self.model(data)
-            closs = self.cmodel(output)
+            closs, cmetric, coutput = self.cmodel(data)
             loss = mloss + closs
             if self.opt is not None:
                 self.opt.zero_grad()
