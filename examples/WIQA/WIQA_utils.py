@@ -83,6 +83,7 @@ def make_triple_with_labels(question_ids):
     return torch.LongTensor(p1),torch.LongTensor(p2),torch.LongTensor(p3),torch.LongTensor(label_output)
 
 def guess_pair(quest_id, arg1, arg2):
+
     if len(quest_id)<2 or arg1==arg2:
         return False
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
@@ -92,6 +93,7 @@ def guess_pair(quest_id, arg1, arg2):
         return False
 
 def guess_triple(quest_id, arg11, arg22,arg33):
+
     if len(quest_id)<3 or arg11==arg22 or arg22==arg33:
         return False
     quest1, quest2,quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
@@ -130,12 +132,12 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect)
     ac_ = 0
     ILPac_ = 0
     for paragraph_ in program.populate(reader, device=cur_device):
-        print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
+        #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
         for question_ in paragraph_.getChildDataNodes():
-            print(question_.getAttribute('text'))
-            print(question_.getRelationLinks())
+            #print(question_.getAttribute('text'))
+            #print(question_.getRelationLinks())
             questions_id.append(question_.getAttribute('quest_id'))
             results.append((question_.getAttribute(is_more, "ILP").item(), question_.getAttribute(is_less, "ILP").item(),question_.getAttribute(no_effect, "ILP").item()))
 
