@@ -2,7 +2,7 @@
 
 - [Query and Access](#query-and-access)
   - [Class Overview](#class-overview)
-  - [DataNode and Data Graph](#datanode-and-data-graph)
+  - [DataNode and Data Graph](#dataNode-and-data-graph)
     - [Data Graph Query](#data-graph-query)
     - [Data Graph construction](#data-graph-construction)
 
@@ -67,22 +67,22 @@ The method returns the list of DataNodes satisfying the query provided in the *s
 The data nodes are searched in the graph starting from the DataNode on which this method is called and below it.
 The examples:
 
-- **datanode.findDatanodes(select = word)** - find all dataNodes of type *word*
+- **dataNode.findDatanodes(select = word)** - find all dataNodes of type *word*
 
-- **datanode.findDatanodes(select = (char, 'raw', 'J'))** - find dataNode of type *char* with with *raw* attribute equal *J*
+- **dataNode.findDatanodes(select = (char, 'raw', 'J'))** - find dataNode of type *char* with with *raw* attribute equal *J*
 
-- **datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')** - find dataNodes of type *word* and containing char with *raw* attribute equal *J*
+- **dataNode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')** - find dataNodes of type *word* and containing char with *raw* attribute equal *J*
 
-- **datanode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'))** - find dataNodes of type *word* and containing dataNode of type *char* with *raw* attribute equal *o* and dataNode of type*char* with *raw* attribute equal *h*
+- **dataNode.findDatanodes(select = word,  indexes = {"contains" : ((char, 'raw', 'o'), (char, 'raw', 'h'))** - find dataNodes of type *word* and containing dataNode of type *char* with *raw* attribute equal *o* and dataNode of type*char* with *raw* attribute equal *h*
 
-- **datanode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})** - find dataNode of type *pair* linking dataNodes with id 0 and 3
+- **dataNode.findDatanodes(select = pair, indexes = {"arg1" : 0, "arg2": 3})** - find dataNode of type *pair* linking dataNodes with id 0 and 3
 
-- **datanode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})** - find dataNode of type *pair* linking dataNode of type *word* with *raw* attribute equal *John* and dataNode of type *word* with *raw* attribute equal *IBM*
+- **dataNode.findDatanodes(select = pair, indexes = {"arg1" : (word, 'raw', 'John'), "arg2": (word, 'raw', "IBM")})** - find dataNode of type *pair* linking dataNode of type *word* with *raw* attribute equal *John* and dataNode of type *word* with *raw* attribute equal *IBM*
 
 ### Data Graph construction
 
 Class **DataNodeBuilder** builds Data Graph consisting of DataNodes during the learning process based on the sensor context update.
-The datanodes a populated based on the concepts in the graph and each datanodes atttributes are also update from the value associated to the corresponding concepts' property.
+The dataNodes a populated based on the concepts in the graph and each dataNodes atttributes are also update from the value associated to the corresponding concepts' property.
 
 Each sensor has its context dictionary implemented with the object of DataNodeBuilder class which also implements Dictionary interface but overloads its methods.
 It creates Data Graph based on sensors' context update.
@@ -97,32 +97,32 @@ updates the created DataNode with information submitted to the dictionary by the
 
 The *key* is assumed to be a `str`, `Sensor`, or `Property`.
 
-#### `str` key
+- `str` key
 
 For `str` key, it is used for general purpose data storage, for example, the result of data reader. The `DataNodeBuilder` instance is initialized by a `data_item` from data reader, and all the keys (and corresponding values) in `data_item` are stored it.
 It can be used to store other resources by string keys.
 
-#### `Sensor` key
+- Sensor` key
 
-When a `Sensor` instance is used as a key, it will trigger an creation/update to datanodes.
-If there is no datanode of this sensor's concept, datanodes will be created first.
-The value of the sensor will be used to update the datanodes' attributes.
+When a `Sensor` instance is used as a key, it will trigger an creation/update to dataNodes.
+If there is no dataNode of this sensor's concept, dataNodes will be created first.
+The value of the sensor will be used to update the dataNodes' attributes.
 The attributes will has the same name as the sensor's property.
 
 If the sensor is an `EdgeSensor`, relation link will be updated based on the source and destination of the `EdgeSensor`.
 
-#### `Property` key
+- `Property` key
 
 When a `Property` instance is used as a key, it is just to serve the retrieval shortcut based on `property`.
 Our design is update value by sensors and retrieve value by properties. Every time a sensor update its value, it will pass the value to the builder with itself as key and also its property as key. So other sensor can retrieve this value by just query the propery.
-However, the datanode builder will just store the value for properties and won't trigger updating to datanodes based on property key, because updates of sensor key already include all creation and updating activity.
+However, the dataNode builder will just store the value for properties and won't trigger updating to dataNodes based on property key, because updates of sensor key already include all creation and updating activity.
 
 #### Values
 
-The values provided to the builder is interprete as a ordered collection of attributes values that are to be distributed to each datanode of the associated concept.
+The values provided to the builder is interprete as a ordered collection of attributes values that are to be distributed to each dataNode of the associated concept.
 Basically, it should be a python `list` or a`torch.Tensor`.
-If a list is assigned, the length of the list must match the number of datanodes of this concept and each element in this list, whatever type it is, should be associated to the attribute of a datanode in the same order as the datanode index order.
-If a tensor is provided, the first dimension of the sensor must match the number of datanodes of this concept and each "row" containing the rest of dimension should be associated to the attribute of a datanode in the same order as the datanode index order.
+If a list is assigned, the length of the list must match the number of dataNodes of this concept and each element in this list, whatever type it is, should be associated to the attribute of a dataNode in the same order as the dataNode index order.
+If a tensor is provided, the first dimension of the sensor must match the number of dataNodes of this concept and each "row" containing the rest of dimension should be associated to the attribute of a dataNode in the same order as the dataNode index order.
 
 Examples:
 
@@ -136,7 +136,7 @@ sentence['ids'] = DummySensor01()
 tensor([[48, 97, 72, 9, 83]])  # shape = (1,5)
 ```
 
-Where `DummySensor00` returns a list of only one `str`, indicating there is only one sentence datanode. The sentence datanode has a `'text'` attribute with `'John works for IBM .'`.
+Where `DummySensor00` returns a list of only one `str`, indicating there is only one sentence dataNode. The sentence dataNode has a `'text'` attribute with `'John works for IBM .'`.
 `DummySensor01` returns a tensor where the first dimension is 1, which also match the only one sentence. Then the vector `tensor([48, 97, 72, 9, 83])` should be associated with the sentence.
 
 ```python
@@ -153,13 +153,13 @@ tensor([[0.63, 1.12, ..., -0.83],
         [0.08, 1.10, ..., 0.01]])  # shape = (5,100)
 ```
 
-Here `DummySensor02` returns a list of 5 `str`s. Each of them will be associated with a corresponding word datanode in `'text'` attribute.
-`DummySensor03`, similarly, returns a tensor of whose first dimension if 5. Each raw of the 100-dim vector will be associated with a word datanode in `emb` attribute.
-For instance, the second datanode of word have `'text'` attribute as string `'work'` and `'emb'` attribute as tensor `tensor([0.05, -0.94, ..., 2.72])`.
+Here `DummySensor02` returns a list of 5 `str`s. Each of them will be associated with a corresponding word dataNode in `'text'` attribute.
+`DummySensor03`, similarly, returns a tensor of whose first dimension if 5. Each raw of the 100-dim vector will be associated with a word dataNode in `emb` attribute.
+For instance, the second dataNode of word have `'text'` attribute as string `'work'` and `'emb'` attribute as tensor `tensor([0.05, -0.94, ..., 2.72])`.
 
 #### DataNode(s) for concept
 
-If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analyses the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
+If the *<conceptOrRelationName>* part of the *key* is a *concept* from the  [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder** analysis the *value* and determines how many elements of the type specified by the third part of the *key* will be created or updated by this *value*.
 The *value* is assumed to provide **single element** (contribute to single DataNode) if the value is:
 - not Tensor or List, e.g. string,
 - Tensor but of the dimension equals 0,
@@ -171,10 +171,10 @@ If the single DataNode is determined to be for created for the *root* concept th
 
 #### DataNode creation
 
-When the builder recieve an update to a sensor whose concept's datanode are not yet initiated, the builder will create them first.
+When the builder receives an update to a sensor whose concept's dataNode are not yet initiated, the builder will create them first.
 
 The *value* determine how many new DataNodes are created.
-If the value is a list, then datanodes are created based on the length of the list. If the value is a tensor, then datanodes are created based on the first dimension of the tensor. Each datanode will be initiated with an index which indicated its matching with elements in the list or "row" in the tensor.
+If the value is a list, then dataNodes are created based on the length of the list. If the value is a tensor, then dataNodes are created based on the first dimension of the tensor. Each dataNode will be initiated with an index which indicated its matching with elements in the list or "row" in the tensor.
 
 The *value* cannot be **None** otherwise the *set* method logs an error and returns.
 
@@ -192,7 +192,7 @@ Datanodes-wise relation links are also build based on the value passed to builde
 The the key is an `EdgeSensor`, the relation link will be create/update.
 A relation (between concepts in the graph) will be associated to the edge sensor, with another argument `mode='forward'|'backward'` which indicates the direction for the sensor.
 The `dst` of the sensor is always the sensor's concept and the `src` of the sensor indicates the other end of the relation. `relation` of sensor is used to indicates which relation link to be udpated.
-The relation is represented as a matrix tensor, whose first dimension represents the number of datanodes of `dst` concept and the second dimension matches the number of `src` concept's datanodes.
+The relation is represented as a matrix tensor, whose first dimension represents the number of dataNodes of `dst` concept and the second dimension matches the number of `src` concept's dataNodes.
 
 Example:
 
@@ -208,12 +208,12 @@ tensor([[1, 0, 0, 0],
 
 Here `phrace_contains_word.forward` helps `DummyEdgeSensor10` to identify the relation and the forward/backward mode to be used. In this example, the sensor's `src` is the concept `phrase` and `dst` is the concept `word`, which matches the concept we are assign property to.
 
-The return value of the sensor is a 5 by 4 matrix which inidicates the existence of relation link between datanotes by ones, and the rest are zeros.
-The first dimension 5 indicates there should be 5 words. And the second dimension 4 matches the number of phrase datanodes.
+The return value of the sensor is a 5 by 4 matrix which indicates the existence of relation link between dataNodes by ones, and the rest are zeros.
+The first dimension 5 indicates there should be 5 words. And the second dimension 4 matches the number of phrase dataNodes.
 In this example, the matrix is indicating that, word with index 0 is connected to phrase 0, the word 1 and 2 is connected to phrase 1, word 3 is connected to phrase 2, and word 4 is connecting to phrase 3.
 This format is used consistently for 1-to-1, 1-to-many, many-to-1, and many-to-many relation.
 
-If this is the first property that is populated by the data for the concept, it will also trigger the creation of datanodes. Otherwise, the dimensions must be matching, as mention above.
+If this is the first property that is populated by the data for the concept, it will also trigger the creation of dataNodes. Otherwise, the dimensions must be matching, as mention above.
 
 Multiple relations can be used at the same time.
 
@@ -245,7 +245,7 @@ tensor([[0, 1, 0, 0, 0],
         ...])  # shape = (20,5)
 ```
 
-Where the matrix dimension implies there are 20 datanode instances of `pair`, and each is to be connected with word datanodes seperately.
+Where the matrix dimension implies there are 20 dataNode instances of `pair`, and each is to be connected with word dataNodes separately.
 
 In this example, the 7th pair's arguments it is as simple as to get the 7th row from `pair[pair_arg1.backward]`
 
@@ -258,41 +258,6 @@ and 7th from `pair[pair_arg2.backward]`
 ```python
         [0, 0, 0, 1, 0]  #  indicating the fourth word
 ```
-
-#### DataNode for Relation (TO BE UPDATED)
-
-If the *<conceptOrRelationName>* part of the *key* is a *concept* from the [knowledge graph](KNOWLEDGE.md) then the **DataNodeBuilder* collected from the Data Graph DataNotes related by the given relation based on the relation definition which specify types of DataNotes linked by the relation.
-The *value* dimension has to be the larger or equal to the number of elements linked by the given relation.
-The length of each dimension  has to be equal to the number of DataNoded found for the given concept linked by the relation.
-
-If the dimension and lengths matches the [knowledge graph](KNOWLEDGE.md) definition and the number of existing DataNodes for the given in the concepts then the DataNodes representing the relation are created (or updated if already exists).
-
-For instance:
-
-- key *global/linguistic/pair/<work_for>/testsensor-19* indicates that this is infromation about *work_for* relation.
-- value:
-```python
-    tensor([[[0.6000, 0.4000],
-             [0.8000, 0.2000],
-             [0.8000, 0.2000],
-             [0.3700, 0.6300]],
-             [[1.0000,    nan],
-             [1.0000,    nan],
-             [0.6000, 0.4000],
-             [0.7000, 0.3000]],
-             [[0.9800, 0.0200],
-             [0.7000, 0.0300],
-             [0.9500, 0.0500],
-             [0.9000, 0.1000]],
-             [[0.3500, 0.6500],
-             [0.8000, 0.2000],
-             [0.9000, 0.1000],
-             [0.7000, 0.3000]]])
-```
-
-is a tensor of *torch.Size([4, 4, 2])* the relation *work_for* relates two elements thus the first dimensions of the tensor will be used to create DataNode for relation. The last dimension of the tensor will be as attribute value to the newly created DataNodes.
-
-Additionally if the *<conceptOrRelationName>* part of the *key* contain has "_Candidate_" string attached then this indicate that the *value* has information (in the form of 0 or 1) if the given DataNode for relation are to be created.
 
 #### Returning Constructed DataNodes
 

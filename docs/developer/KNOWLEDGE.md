@@ -33,7 +33,7 @@ We provide a graph language based on python for knowledge declaration with notat
 ### Constraints classes
 
 - Package `regr.graph.logicalConstrain`: a set of functions with logical symantics, that one can express logical constraints in first order logic.
-- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the locigal constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, `inSetL()`, etc.
+- Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the locigal constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
 
 ## Graph
 
@@ -50,8 +50,10 @@ The graph is a partial program, and there is no sensor or learner, which are dat
 ### Relation Types
 
 We have three defined relationship between nodes that each program can use. `contains`, `has_a`, and `equal` are used to define relations between concepts. 
+
 `contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
 Whgen ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
+
 ```python
 sentence = Concept('sentence')
 word = Concept('word')
@@ -60,18 +62,24 @@ phrase = Concept('phrase')
 sentence.contains(word)
 phrase.contains(word)
 ```
+
 we use the relationship `has_a` only to define relations between concepts and to produce candidates of a relationship. For instance, a relationship between `word` and `word` can be defined using an intermediate concept `pair` and two `has_a` relation links.
+
 ```python
 pair = Concept("pair")
 pair.has_a(arg1=word, arg2=word)
 ```
+
 This means that the candidates of a `pair` concept are generated based on a `word_{i}` and a `word_{j}`.
 Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` we have to define the following code.
+
 ```python
 semanic_frame = Concept('semantic-frame')
 semantic_frame.has_a(verb=word, subject=word, object=word)
 ```
+
 As we only support relationships between three concepts, in case of a relation with more arguments, you have to break it to relationships between a main concept and one other concept each time.
+
 ```python
 semanic_frame = Concept('semantic-frame')
 verb_semantic = Concept('verb-semantic')
@@ -81,12 +89,15 @@ verb_semantic.has_a(semantic=semanic_frame, verb=word)
 subject_semantic.has_a(semantic=semanic_frame, subject=word)
 object_semantic.has_a(semantic=semanic_frame, object=word)
 ```
+
 the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
+
 ```python
 word = Concept("word")
 word1 = Concept("word1")
 word.equal(word1)
 ```
+
 This edge enables us to transfer properties of concepts between instances that are marked as equal.
 
 Using each of these relation edges requires us to assign a sensor to them in the model execution. The sensors input is selected properties from the source concept and the output will be stored as selected properties in the destination node.
@@ -145,34 +156,39 @@ organization.is_a(word)
 ### Access the nodes
 
  All the sub-`Graph`s and `Concept` instances can be retrieved from a graph (or sub-graph) with a (relative) pathname.
- For example, to retieve `people` from the above example, one can do `graph['sub/people']` or `sub_graph['people']`.
+ For example, to retrieve `people` from the above example, one can do `graph['sub/people']` or `sub_graph['people']`.
 
 ## Constraints
 
-The ILP constrains could be specified in the **ontology graph itself with defined logical constrains** or in the **ontology (in OWL file)** provided as url in the ontology graph.
+The constrains are collected from three sources:
 
-### Graph with logical Constrains
+- **knowledge graph** definition, 
+- **logical constrains** defined in the graph,
+- **ontology (OWL file)** provided as url in the ontology graph.
 
-**If ontology url is not provided in the graph then the graph defined constrains and logical constrains will be retrieved by the ILP solver.**
+*Graph Constrains*
 
 The graph can specify constrains:
 
 - **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
 
-  *IF(people(token), word(token))*
+  *IF(people, word)*
 
 - **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
 
-  *NAND(people(token), organization(token), location(token), other(token), o(token))*
+  *atMostL(people, organization, location, other, o, 1)*
   
 - **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)` is mapped to logical expressions-
 
-  *IF(work_for(token1, token2), people(token1))*
+  *ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))*
 
-  *IF(work_for(token1, token2), organization(token1))*
+*Logical Constrains*
 
+They express constrains between concepts defined in the graph using logical and counting constructs.
 
-Additional, logical constrains defined within the graph can use the following logical functions to build logical expression:
+The basic building block  of the logical constrain contain the `name` of the concept followed by the optional instance of `V` class which can either have a variable assigning to this concept through attribute `name` and can also provide information how elements will be selected for the concept during logical constrain  computing, trough the `v` attribute. This attribute can specify an previously defined variable and the path from this  variable through relation links to elements selected for this concept.
+
+These basic blocks are combined using the following logical functions to build logical expression:
 
 - `notL()`,
 - `andL()`,
@@ -184,82 +200,30 @@ Additional, logical constrains defined within the graph can use the following lo
 - `epqL()`,
 - `eqL()`, -  used to select, for the logical constrain, instances with value for specified attribute in the provided set or equal to the provided value, e.g.: 
 
-*eqL(cityLink, 'neighbor', {1}* - instances of *cityLink* with attribute *neighbor* in the set containing only single value 1,
+*eqL(cityLink, 'neighbor', {True})* - instances of *cityLink* with attribute *neighbor* in the set containing only single value True,
 
-- `existsL()`, e.g.:
+- `existsL()`, e.g.: 
 
-*existsL(('y',), andL(eqL(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',)))* - exists a city *y* which is in *cityLink* relation with *neighbor* attribute equal 1 to city x and y is a *firestationCity*,
+*existsL(firestationCity)* - *firestationCity* exists,
 
-- `exactL()`, e.g.:
+- `exactL(firestationCity)`, e.g.:
 
-*exactL(2, ('x', ), firestationCity, ('x', ))* - exists exactly 2 *firestationCity*,
+*exactL(firestationCity, 2)* - exists exactly 2 *firestationCity*,
 
 - `atLeastL()`, e.g.:
 
-*atLeastL(1, ('x', ), firestationCity, ('x', ))* - exists at least 1 *firestationCity*,
+*atLeastL(firestationCity, 4)* - exists at least 4 *firestationCity*,
 
 - `atMostL()`,  e.g.:
 
-*atMostL(4, ('y', ), andL(firestationCity, ('x',), eqL(cityLink, 'neighbor', 1), ('x', 'y')))* - Each city has no more then 4 *neighbors*.
+*atMostL(andL(city, V(name='x'), firestationCity, V(v=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - each city has no more then 4 *neighbors*.
 
 The logical constrain can use variables to associate related objects of the logical expression.
 The expressions use concepts defined in the graph and set additional constrains on them.
-Example:
-
-```python
-ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-```
-
-This above example logical constrain specify that: *if two object are linked by work_for relation that the first has to be of concept people and the second has to be of concept organization*.
 
 The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
-Backus-Naur form of the Logical Constrain:
-
-	<logicalConstrain> ::= <notLogicalConstrain> | <2ElementsLogicalConstrain> | <multiElementsLogicalConstrain> | <countConstrain> | <existsConstrain>
-
-	<notLogicalConstrain> ::= <notOperator> "(" <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
-	<2ElementsLogicalConstrain> ::= <2ElementsOperator> "(" <opt_whitespace> <logicalConstrainElement> <variables> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
-	<multiElementsLogicalConstrain> ::= <multiElementsOperator> "(" <opt_whitespace> <logicalConstrainElements> <p> ")"
-	<countConstrain> ::= <countOperator> "(" <opt_whitespace> <number> "," <opt_whitespace> <variablesTuple> <opt_whitespace> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")" 
-	<existsConstrain> ::= <existsOperator> "(" <opt_whitespace> <variablesTuple> <opt_whitespace> "," <opt_whitespace> <logicalConstrainElement> <variables> <p> ")"
-	
-	<notOperator> ::= "notL"
-	<eqOperator> ::=  "eqL"
-	<2ElementsOperator> ::= "ifL" | "epqL" | "xorL"
-	<multiElementsOperator> ::= "andL" | "orL" | "nandL" | "norL"
-	<countOperator> ::= "exactL" | "atLeastL" | "atMostL"
-	<existsOperator> ::= "existsL" 
-	<eqElement> ::= <eqOperator> "(" <conceptOrRelation> "," <opt_whitespace> "'" <attributeName> "'" "," <opt_whitespace> <eqValue> ")"	
-	<conceptOrRelation> ::= <name>
-	<logicalConstrainElement> ::= <conceptOrRelation> | <eqElement> | <logicalConstrain>
-	<logicalConstrainElements> ::= <logicalConstrainElement> <variables> | <logicalConstrainElement> <variables> "," <opt_whitespace> <logicalConstrainElements>
-	
-	<variables> ::= <opt_whitespace> "," <opt_whitespace> <variablesTuple> <opt_whitespace> | <opt_whitespace>
-	<variablesTuple> ::= "(" <opt_whitespace> <variablesTupleElement> <opt_whitespace> ")"
-    <variablesTupleElement> ::= <variablesTupleElementHead> <variablesTupleElementRest>
-	<variablesTupleElementHead> ::= "'" <loLetter> "'" 
-	<variablesTupleElementRest> ::= <opt_whitespace> "," <opt_whitespace> | <variablesTupleRestElements>
-    <variablesTupleRestElements> ::= <opt_whitespace> "," <opt_whitespace> "'" <loLetter> "'" | "," <opt_whitespace> "'" <loLetter> "'" <opt_whitespace> <variablesTupleRestElements>
-    
-	<p> ::= <opt_whitespace> "," <opt_whitespace> "p" <opt_whitespace> "=" <opt_whitespace> <digit> <digit> <opt_whitespace> | <opt_whitespace>
-	<attributeName> ::= <name>
-	<eqValue> ::= <value> | "{" <values> "}"
-	<value> ::= <number> | <name>
-	<values> ::= <value> | <value> "," <values>
-	<number> ::= <digit> | <digit> <number>
-	<name> ::= <character> | <character> <name>
-	<opt_whitespace> ::= " "*	
-	<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-	<character> ::= <letter> | <digit> | <symbol>
-	<letter> ::= <upLetter> | <loLetter>
-	<upLetter> ::= "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
-	<loLetter> ::=  "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
-	<symbol> ::= "_" | "-"
-   
-### Ontology file as a source of constrains
-
-**If ontology url is provided in the graph then only this ontology will be used to retrieved constrains by the ILP solver.**
+*Ontology*
 
 The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
 
@@ -293,7 +257,7 @@ This detail of mapping from OWL to logical representation is presented below for
   
   *XOR(Concept1(token), Concept2(token))*
 
-#### No supported yet
+**No supported yet**
 
 - **[disjonitUnion](https://www.w3.org/TR/owl2-syntax/#Disjoint_Union_of_Class_Expressions "OWL example of disjointUnion of classes")** statement between classes *Concept1*, *Concept2*, *Concept3*, ... is Not yet supported by owlready2 Python ontology parser used inside the solver
 

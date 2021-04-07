@@ -272,7 +272,7 @@ print(program.model.loss)  # last training loss will be print
 print(program.model.metric)  # last training metrics will be print
 ```
 
-Checkout for more details about [workflows in the program](WORKFLOW.md)
+Checkout for more details about [workflows in the program](developer/WORKFLOW.md)
 
 ## 4. Inference
 
@@ -284,16 +284,16 @@ sentence_node = program.eval(test_reader)
 ```
 
 `sentence_node` is a `Datanode` corresponding with the root `Concept` in the `graph`, that is `sentence`.
-To access the properties of `Datanode`s or query related nodes, see [here](QUERY.md) for more information.
+To access the properties of `Datanode`s or query related nodes, see [here](developer/QUERY.md) for more information.
 
 To trigger the inference,
 
 ```python
-sentence_node.inferILPConstrains('people', 'organization', 'work_for', fun=None)
+sentence_node.inferILPResults('people', 'organization', 'work_for', fun=None)
 ```
 
 The list of `Concept` names is used to determine constraints related to `people`, `organization`, `work_for` are taken into account in the inference.
-This method `inferILPConstrains` will invoke a solver to find the global best prediction which satisfies all the mentioned constraints.
+This method `inferILPResults` will invoke a solver to find the global best prediction which satisfies all the mentioned constraints.
 
 ```python
 word_nodes = sentence_node.getChildDataNodes(conceptName='word')
@@ -311,7 +311,7 @@ Then, for each `word_node`, we can get its attributes by `getAttribute()`, which
 The `people` attribute of `word_node` shows the model classification result the current `word_node`.
 By adding an extra `'ILP'` indicator, we can retrieve the result after inference.
 
-Please find in specific topic for more information about [how to query a `Datanode`](QUERY.md) and [how inference works](INFERENCE.md).
+Please find in specific topic for more information about [how to query a `Datanode`](developer/QUERY.md) and [how inference works](developer/INFERENCE.md).
 
 ## 5. Takeaway
 
@@ -378,7 +378,7 @@ print(program.model.metric)  # last training metrics will be print
 
 # 4. Inference
 sentence_node = program.eval(test_reader)
-sentence_node.inferILPConstrains('people', 'organization', 'work_for', fun=None)
+sentence_node.inferILPResults('people', 'organization', 'work_for', fun=None)
 word_nodes = sentence_node.getChildDataNodes(conceptName='word')
 for word_node in word_nodes:
   # print the word
