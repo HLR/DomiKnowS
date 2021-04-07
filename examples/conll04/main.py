@@ -83,10 +83,13 @@ def model(use_ont):
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
+    POSTAGS_MAKE_PAIRS = ['NN', 'NNP', 'NNPS', 'NNS']
+    def filter_pairs(phrase_postag, arg1, arg2):
+        return arg1 is not arg2 and arg1.getAttribute('postag') in POSTAGS_MAKE_PAIRS and arg2.getAttribute('postag') in POSTAGS_MAKE_PAIRS
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-        phrase['w2v'],
+        phrase['postag'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        forward=lambda *_, **__: True)
+        forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('w2v'), rel_pair_phrase2.reversed('w2v'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
@@ -137,14 +140,14 @@ def main():
     program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
-    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    # train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
     # train_reader = SingletonDataLoader('data/conll04-one.corp')
-    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    program.train(train_reader, test_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
-    program.test(test_reader, device='auto')
-    from datetime import datetime
-    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-{now}.pt')
+    # test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    # program.train(train_reader, test_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
+    # program.test(test_reader, device='auto')
+    # from datetime import datetime
+    # now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    # program.save(f'conll04-{now}.pt')
 
     reader = SingletonDataLoader('data/conll04.corp')
 
