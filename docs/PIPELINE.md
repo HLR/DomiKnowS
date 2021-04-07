@@ -159,6 +159,15 @@ It should be noted that we have assigned `ReaderSensor`s to the same `Property`s
 This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
 Instead of overwriting the assignment, "Multiple Assignment" indicates consistency of the `Sensor`s and `Learner`s assigned to a single `Property`.
 
+we should also define the sensors for symmetric and transitive concepts. these concepts have arguemnts and their definition is a little different from previous sensors. for these concepts we use Edge Sensors.
+
+```python
+symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(s_arg1.reversed, s_arg2.reversed),forward=guess_pair)
+transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(t_arg1.reversed,t_arg2.reversed,t_arg3.reversed),forward=guess_triple)
+```
+
+`CompositionCandidateSensor` is an Edge sensor that takes two questions ( `quest_id` property of them is this case) and return True or False determining whether or not they have a symmetric relation. `CompositionCandidateSensor` is an Edge sensor that creates the relation Tensors for us but these tensors can be define and outputed manuelly.
+the same process also goes for the transitive concept with difference being the input that is a three questions and their `quest_id`s.
 
 Now that the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s, We can create a `Program` from the `graph`.
 
