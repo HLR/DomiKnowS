@@ -44,13 +44,15 @@ class LearningBasedProgram():
         test_set=None,
         device=None,
         train_epoch_num=1,
-        Optim=None):
+        Optim=None,
+        callbacks={}):
         if device is not None:
             self.to(device)
         if Optim is not None and list(self.model.parameters()):
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
+        callback_storage = {}
         for epoch in range(train_epoch_num):
             self.logger.info('Epoch: %d', epoch)
 
@@ -73,6 +75,10 @@ class LearningBasedProgram():
                 for key, metric in self.model.metric.items():
                     self.logger.info(f' - - {key}')
                     self.logger.info(metric)
+
+            for key, callback in callbacks.items():
+                storage = callback_storage.setdefault(key, None)
+                callback_storage[key] = callback(self, storage)
 
         if test_set is not None:
             self.logger.info('Testing:')
