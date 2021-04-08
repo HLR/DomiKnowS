@@ -138,10 +138,14 @@ def model():
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
+    def pairArgCandidate(tag):
+        return 'NN' in tag or 'CD' in tag or 'JJ' in tag
+    def filter_pairs(phrase_postag, arg1, arg2):
+        return arg1 is not arg2 and pairArgCandidate(arg1.getAttribute('postag')) and pairArgCandidate(arg2.getAttribute('postag'))
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-        phrase['text'],
+        phrase['postag'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        forward=lambda *_, **__: True)
+        forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
