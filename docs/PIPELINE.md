@@ -1,16 +1,10 @@
 # Pipeline
 
-The following is user's steps to using our framework.
+The following are the user's steps to using our framework.
 
 - [Pipeline](#pipeline)
   - [1. Knowledge Declaration](#1-knowledge-declaration)
-    - [1.1. Output](#11-output)
-    - [1.2. Example](#12-example)
   - [2. Model Declaration](#2-model-declaration)
-    - [2.1. Output](#21-output)
-    - [2.2. Example](#22-example)
-      - [2.2.1. `Reader` Example](#221-reader-example)
-      - [2.2.2. `Program` Example](#222-program-example)
   - [3. Training and Testing](#3-training-and-testing)
   - [4. Inference](#4-inference)
   - [5. Takeaway](#5-takeaway)
@@ -26,48 +20,75 @@ Class reference:
 - `regr.graph.LogicalConstrain`
 - `regr.graph.Datanode`
 
-In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
-We provide a graph language based on python for knowledge declaration with notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
+In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge for a task.
+We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
 
-### 1.1. Output
+The output of the Knowledge Declaration step is a `Graph`, within which there are `Concept`s, `Relation`s, and `LogicalConstrain`s. `Graph` instances are a basic container of the `Concept`s, `Relation`s, `LogicalConstrain`s and other instances in the framework. The `Graph` is a *"partial program"*, and there is no behavior associated. It is only a data structure to express domain knowledge.
 
-The output of the Knowledge Declaration step is a `Graph`, within which there are `Concept`s, `Relation`s, and `LogicalConstrain`s. `Graph` instances are basic container of the `Concept`s, `Relation`s, `LogicalConstrain`s and other instances in the framework. The `Graph` is a *"partial program"*, and there is no behavior associated. It is only a data structure to express domain knowledge.
 
-Notice that this graph, the *"conceptual graph"*, declare a data structure. When real data come, they will be populate based on the conceptual graph to generate `Datanode`s and the `Datanode`s will be connected and form a *"data graph"*.
-
-### 1.2. Example
-
-Follows is an example showing how to declare a graph.
+Follows is an example showing how to declare a graph. in this example, we have a paragraph, each paragraph has some questions related to it and the answer to each question can be "more", "less" and "no effect".
 
 ```python
-with Graph('global') as graph:
-  sentence = Concept(name='sentence')
-  word = Concept(name='word')
-  (rel_sentence_contains_word,) = sentence.contains(word)
-  pair = Concept(name='pair')
-  (rel_pair_word1, rel_pair_word2) = pair.has_a(arg1=word, arg2=word)
+with Graph('WIQA_graph') as graph:
 
-  people = word(name='people')
-  organization = word(name='organization')
-  disjoint(people, organization)
+    paragraph = Concept(name='paragraph')
+    question = Concept(name='question')
+    para_quest_contains, = paragraph.contains(question)
 
-  work_for = pair(name='work_for')
-  work_for.has_a(people, organization)
+    is_more = question(name='is_more')
+    is_less = question(name='is_less')
+    no_effect = question(name='no_effect')
+
+    symmetric = Concept(name='symmetric')
+    s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
+
+    transitive = Concept(name='transitive')
+    t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
+    ...
+
 ```
 
-The above snippet shows the declaration of a `Graph` named `'global'` as variable `graph`.
-With in the graph, there are `Concept`s named `'sentence'`, `'word'`, and `'pair'` as python variable `sentence`, `word`, and `pair`. `sentence` contains `word`s. `pair` has two arguments named `arg1` and `arg2`, which are both `word`.
-`people` and `organization` are inheritance `Concept` extended from `word`. That means `people` and `organization` are `word`s.
-`people` and `organization` are disjoint, which means if an instance of `word` is `people`, it must not be an `organization`, and vice versa.
-`work_for` extends `pair` by limiting the first argument (which was a `word` for `pair`) to be `people` and the first argument (which was also a `word` for `pair`) to be `organization`.
+The above code shows the declaration of a `Graph` named `'WIQA_graph'` as variable `graph`.
 
-There are inheritance (relation `IsA` or logical `ifL()`), disjoint (relation `NotA`, or logical `nandL()`), and composition (relation `HasA` or a compositional logical expression) constraints implied in the above `graph`.
-One can add more complex logical constraints with our logical expression notations.
+first, we define paragraph, then we define questions and add a contains relation from paragraph to question
+
+In the graph, there are `Concepts`s named `'paragraph'`, `'question'`, `'symmetric'` and `'transitive'` as python variables with the same name. 
+`symmetric` has two arguments named `arg1` and `arg2`, which are both `question`.
+`transitive` on the other hand has three arguments named `arg11`, `arg22` and `arg33`, all of which are `question` as well.
+`is_more` , `is_less` and `no_effect` are concepts that have IsA relation with `question`. we will use these three concepts as labels of questions as in the answer to these questions can be one of these three.
+
+further, in the graph, we define our constraints.
+
+```python
+with Graph('WIQA_graph') as graph:
+    ...
+    disjoint(is_more, is_less, no_effect)
+    orL(is_more, is_less, no_effect)
+    
+    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+    ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+
+    ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
+        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
+    ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
+        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+```
+
+some constraints are inherent in the graph such as the relations that are defined in them. but other constraints must be defined explicitly. 
+the first constraint is the `disjoint` constraint between `is_more` , `is_less` and `no_effect`. disjoint means that at most one of these labels can be True at the same time. in the next line, we add `orL` among our labels to make sure at least one of them is correct as well.
+
+further, we define the symmetric and transitive constraints. 
+
+the symmetric relation is between questions that are opposite of each other and have opposing values. we define that if a question is `is_more` or `is_less` and it has asymmetric relation with another question, then the second question should be `is_less` and `is_more` respectively.
+
+the transitive relation is between questions that have a transitive relation between them meaning that the effect of the first question is the cause of the second question and the third question is made of the cause of the first and the effect of the second question. the transitive relation implies that if the first and the second question are `is_more`, so should be the third question. but if the first question is `is_more` and the second question is `is_less`, then the third question should also be `is_less`
+
+The following figure illustrates the graph for this task:
+![plot](WIQA.png)
 
 See [here](developer/KNOWLEDGE.md) for more details about declaring graph and constraints.
 
-The followig figure illustrate the graph for this task:
-![plot](NER.png)
 
 ## 2. Model Declaration
 
@@ -78,313 +99,125 @@ Class reference:
 - `regr.sensor.Learner`
 - `regr.program.Program`
 
-In model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
-We use `Reader`s, `Sensor`s, and `Learner`s accodingly for model declaration to create a *"full program"* as `Program`.
+In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
+We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaration to create a *"full program"* as `Program`.
 
-### 2.1. Output
-
-One output of this phase is a `Reader` and a `Program`.
-
-`Reader` are python `Iterable`s that yields a `dict` at a time. The `dict` instance is a data item (or a batch) that the model will be handling one time.
-A `list` of `dict` is a simplest form of `Reader`.
-However, users might want more flexible way to interact with data source and yield a data item. Implementing an `Iterable` would be a good option.
-[This post](https://nvie.com/posts/iterators-vs-generators/) explain the role of `Iterable` in python, that might help one to understand what should be implemented.
-The `Reader` will be used later when the full `Program` is created and a workflow that requires real data (e.g. `train(...)`) is invoked.
-
-The `Program` is created from a `Graph` with `Sensor`s and `Learner`s attached.
-`Sensor`s and `Learner`s are assigned to `Property`s associated with `Concept` in the `Graph`.
-
-### 2.2. Example
-
-#### 2.2.1. `Reader` Examples
-
-An example of `Reader` as `list` of `dict`:
-
-```python
-reader = []
-with open('data.txt', 'r') as fin:
-  for line in fin:
-    item = json.loads(line)
-    reader.append(item)
-```
-
-In this example, reader is simply a `list` of items. Each item is a `dict` containing a single line loaded from `'data.txt'` as JSON object.
-
-An example of `Reader` as `Iterable`:
-
-```python
-class Reader():
-  def __init__(self, source):
-    self.source=source
-
-  def __iter__(self):
-    with open(self.source, 'r') as fin:
-      for line in fin:
-        item = json.loads(line)
-        yield item
-
-reader = Reader('data.txt')
-```
-
-Please consult the [generator pattern](https://wiki.python.org/moin/Generators), [yield statement](https://docs.python.org/3/reference/expressions.html#grammar-token-yield-expression), and [this post](https://nvie.com/posts/iterators-vs-generators/) if you are not familiar with python `yield` and `Iterable`.
-
-Being an `Iterable` that yields a `dict` at a time implies one can write a for loop with it
-
-```python
-for item in reader:
-  # do something with `item`
-  pass
-```
-
-Also, `torch.utils.data.DataLoader` is a good choice when working with PyTorch. Just remember to provide a `dict` at a time in the `dataset` to the `DataLoader`. `DataLoader` handles batch automatically with `collate_fn`, please consult [this section](https://pytorch.org/docs/stable/data.html#working-with-collate-fn) for more information if you run into issue with batching in `DataLoader`.
-
-```python
-dataset = []
-with open('data.txt', 'r') as fin:
-  for line in fin:
-    item = json.loads(line)
-    dataset.append(item)
-  
-reader = DataLoader(dataset)
-```
-
-The framework also has a simple reader `regr.data.reader.RegrReader`.
-
-#### 2.2.2. `Program` Example
-
-To create a program, user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
+To create a program, the user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
 
 There are different [pre-defined sensors](./apis/sensor/PYTORCH.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./apis/SENSORS.md) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
 
 ```python
-SAMPLE = {
-    'text': ['John works for IBM'],
-    'peop': [1, 0, 0, 0],
-    'org': [0, 0, 0, 1],
-    'wf': [(0,3)]
-}
-
-reader = [SAMPLE]
-
-sentence['text'] = ReaderSensor(keyword='text')
-
-scw = sentence.relate_to(word)[0]
-word[scw, 'text','ids','offset'] = JointSensor(sentence['text'], forward=tokenize)
-
-
-word[people] = ReaderSensor(keyword='peop', label=True)
-word[organization] = ReaderSensor(keyword='org', label=True)
-
-word['emb'] = ModuleLearner('text', scw, module=WordEmbedding())
-word[people] = ModuleLearner('emb', module=Classifier())
-word[organization] = ModuleLearner('emb', module=Classifier())
+paragraph['paragraph_intext'] = ReaderSensor(keyword='paragraph_intext')
+paragraph['question_list'] = ReaderSensor(keyword='question_list')
+paragraph['less_list'] = ReaderSensor(keyword='less_list')
+paragraph['more_list'] = ReaderSensor(keyword='more_list')
+paragraph['no_effect_list'] = ReaderSensor(keyword='no_effect_list')
+paragraph['quest_ids'] = ReaderSensor(keyword='quest_ids')
 
 ```
 
-In the example above, the first `ReaderSensor` is assigned to a special property `'text'`.
-This `ReaderSensor` will simply read the key `'text'` from an sample, which is expected to be a `dict`, retrieved by enumerating through [the reader](#221-reader-example).
-`Datanode` instance of concept `sentence` will be created based on the output of this sensor when being populated.
-Next, a `JointSensor` is assigned uses the relation between sentence and word by sentence.relate_to(word)[0] to conect a sentence to its word nodes and assign them 'text','ids' and 'offset' features.
-scw is the same relation as the realtion descrived in the graph 'sentence.contains(word)', so another way of getting it would have been (scw,)=sentence.contains(word). this relation contains sentence as its source feature 'src' and word as its destination feature 'dst'. so while we put this relation as the first feature of the jointSensor output, the sensor will convert sentence input to word output.
-conversly, if we wanted to form a sentence from a group of words we would use 'scw.reversed'.
+In the example above, the first `ReaderSensor` is assigned to the property `'paragraph_intext'`.
+is the following reader sensors, a list of concatenated properties are read from the reader and later through other sensors are given to individual questions.
 
-the input of the `JointSensor` is a sentence and the output should be a tuple for scw, 'text','ids' and 'offset' features in the form (scw, text,ids,offset). each of these output variables should be a tensor or a python list and their len or first dimention should be equal to the number of word. for instance scw could be 'torch.ones((number_of_words(sentence), 1))' and text could be a list of words. the framework will assign this attributes to each word seprately. later while using a feature of word, a list of features for each sentece is returned as you will see below.
+```python
+question[para_quest_contains, "question_paragraph", 'text', "is_more_", "is_less_", "no_effect_", "quest_id"] = JointSensor(
+    paragraph['paragraph_intext'], paragraph['question_list'], paragraph['less_list'], paragraph['more_list'],
+    paragraph['no_effect_list'], paragraph['quest_ids'],forward=make_questions)
+```
 
-when we want to define our neural network output labels, we can do so by defining our cathegories as sub_concepts of a concept and then assigning 0 and 1 to every sub_concept (we can't define multiple cathegories but we can define our cathegories seprately and give them binary values). is this case our cathegories are not nessecarilly mutually exclusive unless we define constarints on them. here we have 'people' and 'organization' as sub_concepts of word and the syntax is using them to assgin 1 or 0 values to 'word[people]' and 'word[organization]'. their values are read by 'ReadorSensor' ( in this case we assume we already knew the number of tokens of the sentence and we already labled them based on that).
+A joint sensor is a sensor that outputs multiple properties. here it calculates `para_quest_contains`, `"question_paragraph"`, `'text'`, `"is_more_"`, `"is_less_"`, `"no_effect_"`and `"quest_id"` properties for a question while taking multiple properties of a paragraph. the forward function make_questions takes one instance of a paragraph with its properties in the input and the output, it returns seven lists of questions properties.
+the first property `para_quest_contains` is the Containts relation between a paragraph and the questions from the definition of graph earlier and its list is equal to a torch of ones of the shape ( length of questions for a paragraph, 1). this encoding implies that a paragraph contains its questions. the length of questions can be different for different paragraphs.
+the rest of the lists are lists of the properties of questions in a list of length equal to the number of questions.
 
-The extra argument `label=True` indicates it is the ground-true value that this `Sensor` should not be taked into accont the process of forward computing.
+```python
+question["token_ids", "Mask"] = JointSensor( "question_paragraph", 'text',forward=RobertaTokenizer())
+```
+in another joint sensor here we take `question_paragraph` and `text` properties of a question, which are the text of its related paragraph and its own text respectively, feed it to a Roberta tokenizer and as output, we get `token_ids` and `Mask` properties of the question. unlike the previous joint sensor, here the input is a list not a single instance. the reason for that is the internal dynamics of DomiKnows. when questions were created they were created in a list and that's how they can be accessed in sensors. however, later during inference, they can be accessed individually. as a result, the output should also be two lists of the desired properties equal to the size of the input questions.
 
-`Learner`s, are similar to `Sensor`s. The only difference is that `Learner`s have trainable parameters. The `Program` will update the parameters in `Learner`s based on model performance.
 
-we can assign `Learner`s to `Property`s of `Concept`s. `ModuleLearner` is specifically useful to plug in PyTorch modules. Specificly, `word['emb']` is instanciated as a `BERT()` module (implemented using the [`transformers` package](https://huggingface.co/transformers/)) which takes `'ids'` of `word` as input.
-so we use `ModuleLearner` to calculate an embedding for our words and use them later to assgin binary classification values to our words.
+```python
+question[is_more] = FunctionalSensor("is_more_", forward=label_reader, label=True)
+question[is_less] = FunctionalSensor("is_less_", forward=label_reader, label=True)
+question[no_effect] = FunctionalSensor("no_effect_", forward=label_reader, label=True)
+```
 
-next we use a classifier class that is just a simple torch.nn.Linear module and convert the embedding of the words to a tensor of shape 2. 
-These indicates they are type classifiers of the concept.
+the properties that we want to train our program on must be calculated in a sensor with `label=True`. joint sensor deals with multiple properties. so instead we use a functional sensor, which here takes the `is_more_`, `is_less_` and `no_effect_` properties of questions and with the function, `label_reader` returns them exactly as they are ( in a list) but with `label=True` in the sensor. the `is_more`, `is_less`, and `no_effect` properties here are also not a string but the variable assigned to these concepts in our graph. so we can calculate these properties here and also define constraints on them in the graph.
 
-It should be noticed that we have assigned `ReaderSensor`s to the same `Property`s of `word`.
+`Learner`s, are similar to `Sensor`s. The only difference is that `Learner`s have trainable parameters. The `Program` will update the parameters in `Learner`s based on model performance. we can assign `Learner`s to `Property`s of `Concept`s. `ModuleLearner` is specifically useful to plugin PyTorch modules.
+
+
+```python
+question["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
+question[is_more] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
+question[is_less] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
+question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
+```
+
+`ModuleLearner` in the above code is used first to calculate an embedding for a question given its `token_ids` and `Mask` properties. being a Learner, this sensor's parameters will change and update itself during training later. in the following three lines, this `embedding` property is used to calculate the binary labels for `is_more`, `is_less`, and `no_effect`. these learners will also learn from predictions after calculating loss given the actual values of these properties.
+
+It should be noted that we have assigned `ReaderSensor`s to the same `Property`s of `is_more`, `is_less`, and `no_effect`.
 This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
-Instead of overwriting the assignment, "Multiple Assignment" indicates consistency of the `Sensor`s and `Learner`s assigned.
-For the above example, the framework will generate loss to impose consistency between corresponding `ReaderSensor` and `ModuleLearner`.
+Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`.
+
+we should also define the sensors for symmetric and transitive concepts. these concepts have arguments and their definition is a little different from previous sensors. for these concepts, we use Edge Sensors.
 
 ```python
-def offset_len(offset):
-  return offset[:,1] - offset[:,0]
-word['len'] = FunctionalSensor('offset', forward=offset_len)
-
-arg1, arg2 = pair.relate_to(word)
-pair[arg1.reversed, arg2.reversed] = JointSensor(word['text'], forward=make_pair)
-pair['emb'] = FunctionalSensor(arg1.reversed('emb'), arg2.reversed('emb'), forward=concat)
-pair[work_for] = ModuleLearner('emb', module=Classifier(200))
-
-def pair_label(arg1m, arg2m, data):
-    label = torch.zeros(arg1m.shape[0], dtype=torch.long)
-    for arg1, arg2 in data:
-        i, = (arg1m[:, arg1] * arg2m[:, arg2]).nonzero(as_tuple=True)
-        label[i] = 1
-    return label
-
-pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed], keyword='wf', forward=pair_label, label=True)
+symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(s_arg1.reversed, s_arg2.reversed),forward=guess_pair)
+transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(t_arg1.reversed,t_arg2.reversed,t_arg3.reversed),forward=guess_triple)
 ```
 
-`FunctionalSensor` is a useful tool to plug in a python snippet to transform the values. For example, here the `FunctionalSensor` is instantiate with function `offset_len()` that transform offset to length of a token and it is assigned to `'len'` property of `word`. the input of the FunctionalSensor is the list of words for a sentence. the reason that this happens is because while creating the word nodes we used a list of word nodes as output.
+`CompositionCandidateSensor` is an Edge sensor that takes two questions ( `quest_id` property of them is this case) and returns True or False determining whether or not they have symmetric relation. `CompositionCandidateSensor` is an Edge sensor that creates the relation Tensors for us but these tensors can be defined and output manually.
+the same process also goes for the transitive concept with the difference being the input that is three questions and their `quest_id`s.
 
-now in order to read the pair data, first, we get the relations from 'pair.relate_to(word)'. then we create a pair between every word of a sentence for each sentence. the function 'make_pair' returns a tuple of two tensors each of the n*(n-1) lenght ( n is the number of tokens in the sentence). and each tensor contains a tensor markinf the word used in the pair in one-hot format (a feature that we will use shortly).
-
-in the next line, the embedding of the pair is extracted by concating the embedding of the words used in creating that pair. the words are selected by reversing the relations (from pair to word, to pair to word). and frinally we use a classifier to calculate the work_for relation.
-
-in the last line, we use a `FunctionalReaderSensor` to calculate a binary classification for each pair by using the arg.reversed feature that we created earlier and reading the 'wf' key from the reader. the `FunctionalReaderSensor` gets 3 inputs. first two are the Tesnors of the size n*(n-1) for each sentence. and finally we get a list of tuples that would determine which two words are related. so we created a tensor of the size n*(n-1) and mark every pair that is mentioned in 'wf'. 
-
-
-
-Now in the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s.
-We can create a `Program` from the `graph`.
+Now that the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s, We can create a `Program` from the `graph`.
 
 ```python
-program = POIProgram(graph, loss=..., metrics=...)
+program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 ```
-
-`POIProgram` is a wrapper of training and testing behavior using specific properties in the graph. [Here](./apis/program) is a list of different programs avaliable for the uses. Now, `program` is a "full program" with data and modeling behavior attached.
-It can be used for training, testing, etc. with `Reader`s as input.
-Two other important components of `program` are `loss` and `metrics`. In `loss` you define the loss function by which your model will be updated.
-Using `metrics`, you will measure the performance of your model. For example, you would like to see the *F1-score*, *precision*, *recall*, etc.
-You can find explanation about different `loss` function [here](../regr/program/loss.py) , and
-explanation about different `metrics` [here](../regr/program/metric.py) .
+the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch. one can find explanations about different `loss` function [here](../regr/program/loss.py), and explanations about different `metrics` [here](../regr/program/metric.py).
 
 ## 3. Training and Testing
 
-With `Reader` and `Program` prepared by modeling step, user can play with it now.
-Simply do the training by
+With `Reader` and `Program` prepared by modeling step, the user can train the program now.
+Simply do 
 
 ```python
-program.train(reader, train_epoch_num=10, Optim=torch.optim.Adam)
-print(program.model.loss)  # last training loss will be print
+program.train(reader, train_epoch_num=10, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device='cuda:0')
+print(program.model.loss)  # last training loss will be printed
+print(program.model.metric)  # last training metrics will be printed
 ```
 
-Here, `program` will check for "Multiple Assignment" of `Property` and generate a loss between each two `Sensor`s and/or `Learner`s where one has `label=True` and the other has `label=False`. The default total loss will be the sum of all "Multiple Assignment" losses, and be optimized by `torch.optim.Adam`. Parameters in direct and indirect `Learner`s will be updated towards a lower total loss.
+Here, `program` will check for "Multiple Assignment" of `Property` and generate a loss between each two `Sensor`s and/or `Learner`s where one has `label=True` and the other has `label=False`. The default total loss will be the sum of all "Multiple Assignment" losses, and optimization will be used with `Optim`. Parameters in direct and indirect `Learner`s will be updated towards a lower total loss.
 
-After training, we can do testing with another dataset
+After training, we can test our trained program with another dataset
 
 ```python
-test_reader = Reader('test.txt')
 program.test(test_reader)
-print(program.model.loss)  # last training loss will be print
-print(program.model.metric)  # last training metrics will be print
+print(program.model.loss)  
+print(program.model.metric)  
 ```
 
 Checkout for more details about [workflows in the program](developer/WORKFLOW.md)
 
 ## 4. Inference
 
-One feature of our framework is automatic inference based on domain knowledge.
-To try out this user can first retieve `Datanode`.
+One feature of our framework is an automatic inference based on domain knowledge.
+To try this out, the user must first create `Datanode`.
 
 ```python
-sentence_node = program.eval(test_reader)
+for paragraph_ in program.populate(reader_test):
+        paragraph_.inferILPResults(is_more)
+        for question_ in paragraph_.getChildDataNodes():
+            print(question_.getAttribute(is_more))
+            print(question_.getAttribute(is_more, "ILP"))
 ```
+`program.populate` given the reader, will create a datagraph of `Datanode`s and returns a list of "Root" concepts. the "Root" concept here is the `paragraph` concept. each `paragraph` is an instance of `Datanode` class. `paragraph_.inferILPResults(is_more)` tells the datagraph to calculates the "ILP" inference for the property `is_more`.
 
-`sentence_node` is a `Datanode` corresponding with the root `Concept` in the `graph`, that is `sentence`.
-To access the properties of `Datanode`s or query related nodes, see [here](developer/QUERY.md) for more information.
+we can use `getChildDataNodes` method of a `paragraph` to access its questions. each `question` we can access this way, is also a `Datanode` class. one can use the `getAttribute` method of this `Datanode` to access the calculated result for its `is_more` property or as it is shown in the next line of the code, to access this property after "ILP" inference that enforces the constraints. here, unlike in sensors, the questions and their properties are accessed individually. we can use created datagraph here to do inference and calculate the metric with or without "ILP" however we wish.
 
-To trigger the inference,
-
-```python
-sentence_node.inferILPResults('people', 'organization', 'work_for', fun=None)
-```
-
-The list of `Concept` names is used to determine constraints related to `people`, `organization`, `work_for` are taken into account in the inference.
-This method `inferILPResults` will invoke a solver to find the global best prediction which satisfies all the mentioned constraints.
-
-```python
-word_nodes = sentence_node.getChildDataNodes(conceptName='word')
-for word_node in word_nodes:
-  # print the word
-  print(word_node.getAttribute('index').item())
-  # prediction before inference
-  print(word_node.getAttribute(people).item())
-  # prediction after inference
-  print(word_node.getAttribute(people, 'ILP').item())
-```
-
-The above snippet shows that we get a list of `Datanode`s of `word` as `sentence_node`'s children.
-Then, for each `word_node`, we can get its attributes by `getAttribute()`, which is corresponding with the `Property` with the same name.
-The `people` attribute of `word_node` shows the model classification result the current `word_node`.
-By adding an extra `'ILP'` indicator, we can retrieve the result after inference.
-
-Please find in specific topic for more information about [how to query a `Datanode`](developer/QUERY.md) and [how inference works](developer/INFERENCE.md).
+Please find in a specific topic for more information about [how to query a `Datanode`](developer/QUERY.md) and [how inference works](developer/INFERENCE.md).
 
 ## 5. Takeaway
 
-Just putting everthing presented above together, we have a user perspective pipeline.
-
-```python
-# 1. Knowledge Declaration
-with Graph('global') as graph:
-  sentence = Concept(name='sentence')
-  word = Concept(name='word')
-  (rel_sentence_contains_word,) = sentence.contains(word)
-  pair = Concept(name='pair')
-  (rel_pair_word1, rel_pair_word2) = pair.has_a(arg1=word, arg2=word)
-
-  people = word(name='people')
-  organization = word(name='organization')
-  disjoint(people, organization)
-
-  work_for = pair(name='work_for')
-  work_for.has_a(people, organization)
-
-# 2.1. Model Declaration - Reader
-class Reader():
-  def __init__(self, source):
-    self.source=source
-
-  def __iter__(self):
-    with open(self.source, 'r') as fin:
-      for line in fin:
-        item = json.loads(line)
-        yield item
-
-reader = Reader('data.txt')
-
-# 2.2. Model Declaration - Program
-# - Sensor
-sentence['index'] = ReaderSensor(key='sentence')
-
-rel_sentence_contains_word['forward'] = TokenizorSensor('index', mode='forward', keyword='index')
-word['emb'] = GloveSensor('index', edges=[rel_sentence_contains_word['forward'],])
-
-word[people] = LabelReaderSensor(key='people')
-word[organization] = LabelReaderSensor(key='organization')
-pair[work_for] = LabelReaderSensor(key='work_for')
-
-# - Learner
-word[people] = LogisticRegressionLearner('emb')
-word[organization] = LogisticRegressionLearner('emb')
-pair[wor_for] = LogisticRegressionLearner('emb')
-
-# - Program
-program = LearningBasedProgram(graph)
-
-# 3. Training and Testing
-# - Training
-program.train(reader, train_epoch_num=10, Optim=torch.optim.Adam)
-print(program.model.loss)  # last training loss will be print
-
-# - Testing
-test_reader = Reader('test.txt')
-program.test(test_reader)
-print(program.model.loss)  # last training loss will be print
-print(program.model.metric)  # last training metrics will be print
-
-# 4. Inference
-sentence_node = program.eval(test_reader)
-sentence_node.inferILPResults('people', 'organization', 'work_for', fun=None)
-word_nodes = sentence_node.getChildDataNodes(conceptName='word')
-for word_node in word_nodes:
-  # print the word
-  print(word_node.getAttribute('index').item())
-  # prediction before inference
-  print(word_node.getAttribute(people).item())
-  # prediction after inference
-  print(word_node.getAttribute(people, 'ILP').item())
-```
+to see a full model at work visit the tutorial folder in the repository where the dynamics of a complete code are explained in jupyter.

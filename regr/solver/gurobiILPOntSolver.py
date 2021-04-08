@@ -822,7 +822,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             # If found model - return best result          
             if maxP:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
-
+                
+                lcRun[maxP]['mP'].update()
+                
                 for c in conceptsRelations:
                     if c[2] is None:
                         index = 0
@@ -837,10 +839,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     xPkey = ILPkey + '/xP'
                     xNotPkey = ILPkey + '/notxP'
                    
-                    for dn in c_root_dns:
-                        dnAtt = dn.getAttributes()
+                    for cDn in c_root_dns:
+                        dnAtt = cDn.getAttributes()
                         if xPkey not in dnAtt:
                             dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
+                            self.myLogger.error('Error returning solutions for %s'%(c[1]))
                             continue
                         
                         solution = dnAtt[xPkey][maxP][index].X
@@ -848,24 +851,29 @@ class gurobiILPOntSolver(ilpOntSolver):
                             solution = 0
                         elif solution == 1: 
                             solution = 1
-                            
+
                         if ILPkey not in dnAtt:
                             dnAtt[ILPkey] = torch.empty(c[3], dtype=torch.float)
-                            
+                        
                         if xkey not in dnAtt:
                             dnAtt[xkey] = torch.empty(c[3], dtype=torch.float)
                             
+                        if xNotPkey not in dnAtt:
+                            dnAtt[xNotPkey] = torch.empty(c[3], dtype=torch.float)
+                       
                         dnAtt[ILPkey][index] = solution
                         dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                        
+                        dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
+
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
-                            self.myLogger.info('\"%s\" is \"%s\"'%(dn,c[1]))
+                            self.myLogger.info('\"%s\" is \"%s\"'%(cDn,c[1]))
+                        
             else:
                 pass
                                        
-        except:
-            self.myLogger.error('Error returning solutions')
+        except Exception as inst:
+            self.myLogger.error('Error returning solutions -  %s'%(inst))
             raise
            
         end = datetime.now()
