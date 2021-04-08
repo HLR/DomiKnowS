@@ -37,6 +37,11 @@ current_model = WIQAModel if args.primaldual else PoiModel
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+
+for i in reader_train_aug:
+    if "suppose there will be fewer new trees happens, how will it affect LESS forest formation." in i['question_list']:
+        tmp=[i]
+
 #reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
@@ -78,7 +83,7 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
 
-    # the transitive question impiles that if the first and the second question are is_more, so should be the
+    # the transitive relation implies that if the first and the second question are is_more, so should be the
     # third question. but if the first question is is_more and the second question is is_less, then the third
     # question should also be is_less
 
@@ -87,6 +92,9 @@ with Graph('WIQA_graph') as graph:
 
     ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
         is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+from IPython.display import Image
+graph.visualize("./image")
+Image(filename='image.png')
 
 print("Sensor Part:")
 
@@ -154,11 +162,12 @@ program = LearningBasedProgram(graph, model_helper(current_model,poi=[question[i
 
 logging.basicConfig(level=logging.INFO)
 
+# at the end we run our program for each epoch and test the results each time
 for i in range(args.cur_epoch):
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
-    test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,tmp,cur_device,is_more,is_less,no_effect)
     #test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
     #test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
