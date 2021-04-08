@@ -139,6 +139,11 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect)
             #print(question_.getAttribute('text'))
             #print(question_.getRelationLinks())
             questions_id.append(question_.getAttribute('quest_id'))
+            
+            is_moreILP = question_.getAttribute(is_more, "ILP")
+            is_lessILP = question_.getAttribute(is_less, "ILP")
+            no_effectILP =  question_.getAttribute(no_effect, "ILP") 
+            
             results.append((question_.getAttribute(is_more, "ILP").item(), question_.getAttribute(is_less, "ILP").item(),question_.getAttribute(no_effect, "ILP").item()))
 
             predict_is_more_value=question_.getAttribute(is_more).softmax(-1)[1].item()
