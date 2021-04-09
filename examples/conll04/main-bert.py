@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
@@ -188,19 +189,13 @@ def main():
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
 
-    def save_epoch(program, storage):
-        if storage is None:
-            storage = 0
-        program.save(f'conll04-bert-{split_id}-{storage}.pt')
-        return storage + 1
+    def save_epoch(program, epoch=1):
+        program.save(f'conll04-bert-{split_id}-{epoch}.pt')
+        return epoch + 1
 
-    def save_best(program, storage):
-        import numpy as np
+    def save_best(program, epoch=1, best_epoch=-1, best_loss=np.inf):
         import logging
         logger = logging.getLogger(__name__)
-        if storage is None:
-            storage = 0, -1, np.inf
-        epoch, best_epoch, best_loss = storage
         loss = sum(program.model.loss.value().values())
         if loss < best_loss:
             logger.info(f'New Best loss {loss} achieved at Epoch {epoch}.')
@@ -209,7 +204,7 @@ def main():
             program.save(f'conll04-bert-{split_id}-best.pt')
         return epoch + 1, best_epoch, best_loss
 
-    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
     program.test(test_reader, device='auto')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
