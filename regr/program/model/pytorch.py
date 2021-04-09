@@ -1,4 +1,6 @@
 from itertools import combinations, product
+import hashlib
+import pickle
 import warnings
 
 import torch
@@ -53,16 +55,22 @@ class TorchModel(torch.nn.Module):
             return value
 
     def data_hash(self, data_item):
-        try:
-            return str(hash(data_item))
-        except TypeError as te:
-            te_args = te.args
-            pass  # fall back to 'id'
+        # NB: hash() is not consistent over different runs, don't use it!
+        # try:
+        #     return str(hash(data_item))
+        # except TypeError as te:
+        #     hash_message = te.args
+        #     pass  # fall back to 'id'
         try:
             return data_item['id']
         except KeyError as ke:
-            ke_args = ke.args
-            raise ValueError('To enable cache, data item must either contain a identifier key "id" or implement "__hass__" interface: \n{}'.format("\n".join(ke_args + te_args)))
+            key_message = ke.args
+            pass  # fall back to pickle dump and hashlib
+        try:
+            return hashlib.sha1(pickle.dumps(data_item)).hexdigest()
+        except TypeError as te:
+            dump_message = te.args
+            raise ValueError(f'To enable cache for {self}, data item must either contain a identifier key "id" or picklable (might be slow): \n{key_message}\n{dump_message}')
 
     def forward(self, data_item, build=None):
         if build is None:

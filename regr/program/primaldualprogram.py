@@ -27,14 +27,17 @@ def reverse_sign_grad(parameters, factor=-1.):
             parameter.grad = factor * parameter.grad
 
 class PrimalDualProgram(LearningBasedProgram):
+    DEFAULTCMODEL = PrimalDualModel
+
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=None, **kwargs):
+    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
         super().__init__(graph, Model, **kwargs)
         if CModel is None:
-            CModel = PrimalDualModel
+            CModel = self.DEFAULTCMODEL
         self.cmodel = CModel(graph)
         self.copt = None
+        self.beta = beta
 
     def to(self, device):
         super().to(device=device)
@@ -50,6 +53,8 @@ class PrimalDualProgram(LearningBasedProgram):
         train_epoch_num=1,
         Optim=None,
         COptim=None):
+        if COptim is None:
+            COptim = Optim
         if COptim is not None and list(self.cmodel.parameters()):
             self.copt = COptim(self.cmodel.parameters())
         else:
@@ -68,7 +73,7 @@ class PrimalDualProgram(LearningBasedProgram):
         for data in dataset:
             mloss, metric, output = self.model(data)
             closs, cmetric, coutput = self.cmodel(data)
-            loss = mloss + closs
+            loss = mloss + self.beta * closs
             if self.opt is not None:
                 self.opt.zero_grad()
                 loss.backward()
