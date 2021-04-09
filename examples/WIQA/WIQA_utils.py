@@ -135,6 +135,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect)
         #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
+        sresult=[]
         for question_ in paragraph_.getChildDataNodes():
             #print(question_.getAttribute('text'))
             #print(question_.getRelationLinks())
@@ -149,11 +150,14 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect)
             predict_is_more_value=question_.getAttribute(is_more).softmax(-1)[1].item()
             predict_is_less_value=question_.getAttribute(is_less).softmax(-1)[1].item()
             predict_no_effect_value=question_.getAttribute(no_effect).softmax(-1)[1].item()
+
+            sresult.append([predict_is_more_value,predict_is_less_value,predict_no_effect_value])
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 counter += 1
                 ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
                 ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
-        print(results)
+        #print(results)
+        #print(sresult)
         if not is_ILP_consistant(questions_id, results):
             print("ILP inconsistency")
 

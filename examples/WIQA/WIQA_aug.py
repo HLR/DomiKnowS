@@ -25,7 +25,7 @@ parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number t
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on')
 parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser')
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning')
-parser.add_argument('--samplenum', dest='samplenum', default=10, help='number of samples to train the model on')
+parser.add_argument('--samplenum', dest='samplenum', default=20, help='number of samples to train the model on')
 parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training')
 args = parser.parse_args()
 
@@ -38,14 +38,14 @@ current_model = WIQAModel if args.primaldual else PoiModel
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
-for i in reader_train_aug:
-    if "suppose there will be fewer new trees happens, how will it affect LESS forest formation." in i['question_list']:
-        tmp=[i]
+#for i in reader_train_aug:
+#    if "suppose there will be fewer new trees happens, how will it affect LESS forest formation." in i['question_list']:
+#        tmp=[i]
 
-#reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-#reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-#reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -65,7 +65,9 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     # we want only one of the labels to be true
-    disjoint(is_more, is_less, no_effect)
+    nandL( is_less, no_effect)
+    nandL(is_more,  no_effect)
+    nandL(is_more, is_less)
     orL(is_more, is_less, no_effect)
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
@@ -151,6 +153,8 @@ symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(questio
 transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(t_arg1.reversed,t_arg2.reversed,t_arg3.reversed),forward=guess_triple)
 
 # finally the embedding are used to learn the label of each question by defining a linear model on top of roberta
+
+
 question[is_more] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
 question[is_less] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
 question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
@@ -167,11 +171,11 @@ for i in range(args.cur_epoch):
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
-    test_inference_results(program,tmp,cur_device,is_more,is_less,no_effect)
-    #test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
-    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
-    #test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
-    #test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
+    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
 
 
 
