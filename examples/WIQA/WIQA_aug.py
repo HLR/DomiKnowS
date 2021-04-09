@@ -7,6 +7,8 @@ from regr.graph.relation import disjoint
 from regr.program.loss import NBCrossEntropyLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
 import logging
+
+from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL
@@ -14,7 +16,7 @@ from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import model_helper, PoiModel
+from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results
 from WIQA_models import WIQA_Robert, RobertaClassificationHead,WIQAModel
 import argparse
@@ -37,11 +39,6 @@ current_model = WIQAModel if args.primaldual else PoiModel
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-
-#for i in reader_train_aug:
-#    if "suppose there will be fewer new trees happens, how will it affect LESS forest formation." in i['question_list']:
-#        tmp=[i]
-
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
@@ -164,6 +161,12 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 program = LearningBasedProgram(graph, model_helper(current_model,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 
+program = PrimalDualProgram(graph, model_helper(SolverModel,poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
+
+#program = PrimalDualProgram(graph, model_helper(WIQAModel,poi=[question[is_less], question[is_more], question[no_effect],\
+#                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
+
 logging.basicConfig(level=logging.INFO)
 
 # at the end we run our program for each epoch and test the results each time
@@ -171,6 +174,7 @@ for i in range(args.cur_epoch):
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
+    print(program.cmodel.loss)
     test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
     test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
     test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
