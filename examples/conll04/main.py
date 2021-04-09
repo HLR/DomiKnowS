@@ -118,7 +118,8 @@ def model(use_ont):
     if use_ont:
         lbp = SolverPOIProgram(graph_ont, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     else:
-        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'internal':PRF1Tracker(),'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        # lbp = IMLProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)), metric={'internal':PRF1Tracker(),'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
     return lbp
 
@@ -143,7 +144,7 @@ def main():
     # train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
     # train_reader = SingletonDataLoader('data/conll04-one.corp')
     # test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    # program.train(train_reader, test_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
+    # program.train(train_reader, test_set=train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
     # program.test(test_reader, device='auto')
     # from datetime import datetime
     # now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
@@ -157,6 +158,11 @@ def main():
         assert phrase_node.ontologyNode is phrase
 
         node.infer()
+        node.inferLocal()
+        argmax_metrics = node.getInferMetric(inferType='local/argmax')
+        print("\nArgmax metrics Total %s"%(argmax_metrics['Total']))
+        print("\nArgmax metrics work_for %s"%(argmax_metrics['work_for']))
+        print("\nArgmax metrics people %s"%(argmax_metrics['people']))
 
         if phrase_node.getAttribute(people) is not None:
             assert phrase_node.getAttribute(people, 'softmax') > 0
