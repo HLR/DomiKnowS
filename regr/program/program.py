@@ -2,7 +2,7 @@ import logging
 import torch
 from tqdm import tqdm
 
-from ..utils import consume
+from ..utils import consume, entuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -44,53 +44,56 @@ class LearningBasedProgram():
         test_set=None,
         device=None,
         train_epoch_num=1,
+        test_every_epoch=False,
         Optim=None,
-        callbacks={}):
+        train_callbacks={},
+        valid_callbacks={},
+        test_callbacks={}):
         if device is not None:
             self.to(device)
         if Optim is not None and list(self.model.parameters()):
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
-        callback_storage = {}
-        for epoch in range(train_epoch_num):
-            self.logger.info('Epoch: %d', epoch)
+        train_callback_storage = {}
+        valid_callback_storage = {}
+        test_callback_storage = {}
+        self.stop = False
+        self.train_epoch_num = train_epoch_num
+        self.epoch = 0
+        while self.epoch < self.train_epoch_num:
+            self.epoch += 1
+            self.logger.info('Epoch: %d', self.epoch)
 
-            if training_set is not None:
-                self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set), total=get_len(training_set), desc='Epoch {} Training'.format(epoch)))
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
-                self.logger.info(' - metric:')
-                for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
+            def epoch(name, dataset, epoch_fn, callbacks, callback_storage):
+                if dataset is not None:
+                    self.logger.info(f'{name}:')
+                    if callbacks:
+                        def callback():
+                            for key, callback in callbacks.items():
+                                storage = callback_storage.setdefault(key, tuple())
+                                callback_storage[key] = callback(self, *entuple(storage))
+                    else:
+                        callback = None
+                    consume(tqdm(epoch_fn(dataset, callback), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
+                    if self.model.loss:
+                        self.logger.info(' - loss:')
+                        self.logger.info(self.model.loss)
+                    if self.model.metric:
+                        self.logger.info(' - metric:')
+                        for key, metric in self.model.metric.items():
+                            self.logger.info(f' - - {key}')
+                            self.logger.info(metric)
 
-            if valid_set is not None:
-                self.logger.info('Validation:')
-                consume(tqdm(self.test_epoch(valid_set), total=get_len(valid_set), desc='Epoch {} Validation'.format(epoch)))
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
-                self.logger.info(' - metric:')
-                for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
+            epoch('Training', training_set, self.train_epoch, train_callbacks, train_callback_storage)
+            epoch('Validation', valid_set, self.test_epoch, valid_callbacks, valid_callback_storage)
+            if test_every_epoch:
+                epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage)
+        if not test_every_epoch:
+            epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage)
 
-            for key, callback in callbacks.items():
-                storage = callback_storage.setdefault(key, None)
-                callback_storage[key] = callback(self, storage)
-
-        if test_set is not None:
-            self.logger.info('Testing:')
-            consume(tqdm(self.test_epoch(test_set), total=get_len(test_set), desc='Epoch {} Testing'.format(epoch)))
-            self.logger.info(' - loss:')
-            self.logger.info(self.model.loss)
-            self.logger.info(' - metric:')
-            for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
             
-    def train_epoch(self, dataset):
+    def train_epoch(self, dataset, callback=None):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
@@ -101,6 +104,8 @@ class LearningBasedProgram():
                 loss.backward()
                 self.opt.step()
             yield loss, metric, output
+        if callable(callback):
+            callback()
 
     def test(self, dataset, device=None):
         if device is not None:
@@ -114,29 +119,33 @@ class LearningBasedProgram():
                     self.logger.info(f' - - {key}')
                     self.logger.info(metric)
 
-    def test_epoch(self, dataset, device=None):
+    def test_epoch(self, dataset, callback=None):
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
                 loss, metric, output = self.model(data_item)
                 yield loss, metric, output
+        if callable(callback):
+            callback()
 
     def populate(self, dataset, device=None):
         if device is not None:
             self.to(device)
         yield from self.populate_epoch(dataset, device)
 
-    def populate_one(self, data_item, device=None):
-        return next(self.populate([data_item], device))
-
-    def populate_epoch(self, dataset, device=None):
+    def populate_epoch(self, dataset, callback=None):
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
                 _, _, output = self.model(data_item)
                 yield output
+        if callable(callback):
+            callback()
+
+    def populate_one(self, data_item):
+        return next(self.populate_epoch([data_item]))
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)
