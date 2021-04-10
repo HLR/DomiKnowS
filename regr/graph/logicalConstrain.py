@@ -102,12 +102,12 @@ class LogicalConstrain:
        
     # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
     # sVars - returned list of ILP variables setups
-    def _collectILPVariableSeupts(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
+    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
         cLcVariableSet = v[lcVariableName][index] # Current logical variable (lcVariableName) sets of ILP variables
         
         if len(cLcVariableSet) == 0: # No ILP variables for a given logical variable
             lcVars.append(None)
-            self._collectILPVariableSeupts(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
+            self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
             
             return
                                        
@@ -120,7 +120,7 @@ class LogicalConstrain:
                 newLcVars.append(ilvV)
 
             if lcVariableNames: # There still remaining lc variables
-                self._collectILPVariableSeupts(lcVariableNames[0], lcVariableNames[1:], index, v, newLcVars, sVars)
+                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, newLcVars, sVars)
             else:
                 sVars.append(newLcVars) # This is the last logical variable  - setup of ILP variables finish - collect it
 
@@ -154,7 +154,7 @@ class LogicalConstrain:
         zVars = []
         for i in range(len(lcVariableSet0)):
             sVars = []
-            self._collectILPVariableSeupts(lcVariableName0, lcVariableNames[1:], i, v, [], sVars)
+            self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], i, v, [], sVars)
             zVars.append(sVars)
         
         for z in zVars:
