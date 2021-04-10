@@ -97,7 +97,8 @@ def model_declaration():
     
 
 
-    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+#     program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program
 
@@ -132,8 +133,8 @@ class CIFAR10_1(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-                self.data.append(entry['data'][:100])
-#                 self.data.append(entry['data'])
+#                 self.data.append(entry['data'][:100])
+                self.data.append(entry['data'])
 
                 if 'labels' in entry:
                     self.targets.extend(entry['labels'])
@@ -197,14 +198,16 @@ def main():
     program = model_declaration()
 
     ### load data
-    val_size = 50
+#     val_size = 50
+    val_size = 5000
+
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
     train_size = len(trainset) - val_size
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
     
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=3, Optim=lambda param: torch.optim.SGD(param, lr=.1))
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=30, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
     program.test(testset)
 
