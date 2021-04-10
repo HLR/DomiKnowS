@@ -3,9 +3,8 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import SolverPOIProgram, POIProgram, IMLProgram
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.model.pytorch import PoiModel, IMLModel, SolverModel
+from regr.program import SolverPOIProgram, POIProgram
+from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
@@ -15,9 +14,8 @@ import torch.nn.functional as F
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from regr.program.loss import NBCrossEntropyLoss
 from torch.utils.data import random_split
-
 
 
 
@@ -51,21 +49,13 @@ class ImageNetwork(torch.nn.Module):
         # x = self.fc(x)
         return x
 
-# class ImageModel(IMLModel):
-#     def __init__(self, graph):
-#         super().__init__(
-#             graph,
-#             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-#             metric=PRF1Tracker(DatanodeCMMetric()))
-        
 class ImageModel(PrimalDualModel):
     def __init__(self, graph):
         super().__init__(
             graph,
-            MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker())
+            loss=MacroAverageTracker(NBCrossEntropyLoss()),
+            metric=PRF1Tracker(DatanodeCMMetric()))
 
-        
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
 def model_declaration():
@@ -112,18 +102,18 @@ def model_declaration():
     
 
 #     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
-#     program = LearningBasedProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
+#     program_before_inf = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+# #     program = LearningBasedProgram(graph, ImageModel)
 
-#     program = PrimalDualProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
-    
-#     program = PrimalDualProgram(graph, SolverModel, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+#     return program, program_before_inf
 
-    program = PrimalDualProgram(graph, SolverModel, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-    
-    
-#     program = LearningBasedProgram(graph, ImageModel)
+#     program = SolverPOIProgram(graph, poi=(image, ), inferTypes=['ILP', 'softmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('softmax'))})
+
+    program = SolverPOIProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program
+
+
 
 class CIFAR10_1(datasets.CIFAR10):
 
@@ -217,24 +207,35 @@ def load_cifar10(train=True, root='./data/', size=32):
     return CIFAR10_1(root=root, train=train, transform=transform,download=True)
 
 def main():
-    
+    torch.manual_seed(43)
+
+#     program, program_before_inf = model_declaration()
     program = model_declaration()
-  
+
+    
+    
+#     #### check if two programs have the same paramters
+#     print(list(program.model.parameters())[0][0])
+#     print('********************************')
+#     print(list(program_before_inf.model.parameters())[0][0])
+    
 
     ### load data
+#     ###e used a validation set with 5000 images (10% of the dataset)
+#     val_size = 50
     val_size = 5000
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
     train_size = len(trainset) - val_size
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
-    
+
     program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=30, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    
+
+  
     program.test(testset)
 
 
-        
 
 if __name__ == '__main__':
     main()

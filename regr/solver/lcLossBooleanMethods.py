@@ -11,12 +11,23 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
 
+    def _isNumber(self, v):
+        if v is None:
+            return  False
+        elif isinstance(v, (int, float, complex)):
+            return True
+        else:
+            return False
+            
     def notVar(self, _, var, onlyConstrains = False):
         methodName = "notVar"
         logicMethodName = "NOT"
                 
         if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
         
+        if not self._isNumber(var):
+            var = 0
+            
         notSuccess = 1 - var
 
         if onlyConstrains:
@@ -32,6 +43,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
         
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         and2Success = max(var1 + var2 - 1, 0)
          
         if onlyConstrains:
@@ -46,6 +63,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "AND"
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+                
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
                 
         N = len(var)
         
@@ -68,6 +89,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         or2Success = min(var1 + var2, 1)
 
         if onlyConstrains:
@@ -82,6 +109,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "OR"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
         
         N = len(var)
         
@@ -104,6 +135,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
         
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         # nand(var1, var2) = not(and(var1, var2))
         nand2Success = self.notVar(_, self.and2Var(_, var1, var2))
 
@@ -120,6 +157,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
+                
         nandLoss = 0
         
         N = len(var)
@@ -144,6 +185,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
      
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         # if(var1, var2) = or(not(var1), var2)
         ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
 
@@ -160,6 +207,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
+                
         varSum = 0
         for currentVar in var:
             varSum += currentVar
@@ -180,6 +231,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         # xor(var1, var2) = or(and(var1, not(var2)), and(not(var1), var2))
         xorSuccess = self.or2Var(_, self.and2Var(_, var1, self.notVar(_, var2)), self.and2Var(_, self.notVar(_, var1), var2))
         
@@ -196,6 +253,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
+        if not self._isNumber(var1):
+            var1 = 0
+            
+        if not self._isNumber(var2):
+            var2 = 0
+            
         # epq(var1, var2) = and(or(var1, not(var2)), or(not(var1), var2)))
         epqSuccess = self.and2Var(_, self.or2Var(_, var1, self.notVar(_, var2)), self.or2Var(_, self.notVar(_, var1), var2))
         
@@ -212,6 +275,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
+                
         varSum = 0
         for currentVar in var:
             varSum += currentVar
