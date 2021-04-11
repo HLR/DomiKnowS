@@ -370,6 +370,10 @@ class FunctionalReaderSensor(ReaderSensor):
             return super(ConstantSensor, self).forward(*args, data=self.data, **kwargs) # skip ConstantSensor
 
 
+class JointReaderSensor(JointSensor, ReaderSensor):
+    pass
+
+
 class LabelReaderSensor(ReaderSensor):
     def __init__(self, *args, **kwargs):
         kwargs['label'] = True
