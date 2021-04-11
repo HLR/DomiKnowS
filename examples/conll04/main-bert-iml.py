@@ -5,7 +5,7 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetr
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
@@ -138,10 +138,20 @@ def model():
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
-    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
+    #     phrase['text'],
+    #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+    #     forward=lambda *_, **__: True)
+    def filter_pairs(phrase_text, arg1, arg2, data):
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+                return True
+        return False
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
         phrase['text'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        forward=lambda *_, **__: True)
+        keyword='relation',
+        forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))

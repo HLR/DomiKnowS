@@ -4,9 +4,9 @@ import numpy as np
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
@@ -139,14 +139,42 @@ def model():
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
-    def pairArgCandidate(tag):
-        return 'NN' in tag or 'CD' in tag or 'JJ' in tag
-    def filter_pairs(phrase_postag, arg1, arg2):
-        return arg1 is not arg2 and pairArgCandidate(arg1.getAttribute('postag')) and pairArgCandidate(arg2.getAttribute('postag'))
-    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-        phrase['postag'],
+    # def pairArgCandidate(tag):
+    #     return 'NN' in tag or 'CD' in tag or 'JJ' in tag
+    # def filter_pairs(phrase_postag, arg1, arg2):
+    #     return arg1 is not arg2 and pairArgCandidate(arg1.getAttribute('postag')) and pairArgCandidate(arg2.getAttribute('postag'))
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
+    #     phrase['postag'],
+    #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+    #     forward=filter_pairs)
+    def filter_pairs(phrase_text, arg1, arg2, data):
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+                return True
+        return False
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
+        phrase['text'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+        keyword='relation',
         forward=filter_pairs)
+    # def make_pairs(phrase_text, data):
+    #     n = len(phrase_text)
+    #     arg1i = []
+    #     arg2i = []
+    #     for _, (rel_arg1, *_), (rel_arg2, *_) in data:
+    #         arg1i.append(rel_arg1)
+    #         arg2i.append(rel_arg2)
+    #     arg1i = torch.tensor(arg1i).unsqueeze(-1)
+    #     arg1m = torch.zeros(arg1i.shape[0], n)
+    #     arg1m.scatter_(1, arg1i, 1)
+    #     arg2i = torch.tensor(arg2i).unsqueeze(-1)
+    #     arg2m = torch.zeros(arg2i.shape[0], n)
+    #     arg2m.scatter_(1, arg2i, 1)
+    #     return arg1m, arg2m
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = JointReaderSensor(
+    #     phrase['text'],
+    #     keyword='relation',
+    #     forward=make_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
