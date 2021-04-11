@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, FunctionalReaderSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, JointReaderSensor
 from regr.sensor.sensor import Sensor
 from regr.graph.graph import Property
 from regr.sensor.pytorch.query_sensor import QuerySensor
@@ -129,12 +129,10 @@ class CandidateRelationSensor(CandidateSensor):
 class CompositionCandidateReaderSensor(CompositionCandidateSensor, FunctionalReaderSensor):
     pass
 
-
-class JoinReaderSensor(JointSensor, ReaderSensor):
+class EdgeReaderSensor(ReaderSensor, EdgeSensor):
     pass
 
-
-class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
+class JointEdgeReaderSensor(JointReaderSensor, EdgeSensor):
     pass
 
 

@@ -239,7 +239,11 @@ class IMLModel(SolverModel):
             for cdn in datanode.findDatanodes(select=concept):
                 value = cdn.getAttribute(f'<{prop.name}>/ILP')
                 values.append(torch.cat((1-value, value), dim=-1))
-            inference = torch.stack(values)
+            if values:
+                inference = torch.stack(values)
+            else:
+                assert logit.shape == (0, 2)
+                inference = torch.zeros_like(logit)
         except TypeError:
             message = (f'Failed to get inference result for {prop}. '
                        'Is it included in the inference (with `inference_with` attribute)? '
