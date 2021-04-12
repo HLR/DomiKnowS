@@ -1,11 +1,12 @@
 import torch
+import numpy as np
 
-from regr.program import POIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
@@ -25,7 +26,7 @@ from transformers import BertTokenizerFast, BertModel
 
 TRANSFORMER_MODEL = 'bert-base-uncased'
 
-FEATURE_DIM = 768
+FEATURE_DIM = 768 + 96
 
 class Tokenizer():
     def __init__(self) -> None:
@@ -50,17 +51,13 @@ class Tokenizer():
         tokens = self.tokenizer.convert_ids_to_tokens(ids)
         return mapping, ids, offset, tokens
 
-# emb_model = BertModel.from_pretrained(TRANSFORMER_MODEL)
-# to freeze BERT, uncomment the following
-# for param in emb_model.base_model.parameters():
-#     param.requires_grad = False
 class BERT(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.module = BertModel.from_pretrained(TRANSFORMER_MODEL)
         # to freeze BERT, uncomment the following
-        # for param in emb_model.base_model.parameters():
-        #     param.requires_grad = False
+        for param in self.module.base_model.parameters():
+            param.requires_grad = False
 
     def forward(self, input):
         input = input.unsqueeze(0)
@@ -74,8 +71,6 @@ class Classifier(torch.nn.Sequential):
     def __init__(self, in_features) -> None:
         linear = torch.nn.Linear(in_features, 2)
         super().__init__(linear)
-        # softmax = torch.nn.Softmax(dim=-1)
-        # super().__init__(linear, softmax)
 
 
 def model():
@@ -100,8 +95,8 @@ def model():
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
-    word['bert'] = ModuleLearner('ids', module=BERT())
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = cache(JointSensor)(sentence['text'], forward=Tokenizer(), cache=TorchCache(path='./cache/tokenizer'))
+    word['bert'] = cache(ModuleSensor)('ids', module=BERT(), cache=TorchCache(path='./cache/bert'))
 
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
@@ -121,16 +116,17 @@ def model():
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
         return torch.tensor(ph_word_overlap)
-    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'], relation=rel_phrase_contains_word.reversed, forward=match_phrase)
+    phrase[rel_phrase_contains_word.reversed] = cache(EdgeSensor)(phrase['text'], word['offset'], relation=rel_phrase_contains_word.reversed, forward=match_phrase, cache=TorchCache(path='./cache/phrase-word'))
     def phrase_bert(bert):
         return bert
-    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
+    phrase['bert'] = cache(FunctionalSensor)(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert, cache=TorchCache(path="./cache/phrase-bert"))
+    phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1))
 
-    phrase[people] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
-    phrase[organization] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
-    phrase[location] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
-    phrase[other] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
-    phrase[o] = ModuleLearner('bert', module=Classifier(FEATURE_DIM))
+    phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
+    phrase[organization] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
+    phrase[location] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
+    phrase[other] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
+    phrase[o] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
 
     def find_label(label_type):
         def find(data):
@@ -143,12 +139,44 @@ def model():
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
-    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-        phrase['w2v'],
+    # def pairArgCandidate(tag):
+    #     return 'NN' in tag or 'CD' in tag or 'JJ' in tag
+    # def filter_pairs(phrase_postag, arg1, arg2):
+    #     return arg1 is not arg2 and pairArgCandidate(arg1.getAttribute('postag')) and pairArgCandidate(arg2.getAttribute('postag'))
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
+    #     phrase['postag'],
+    #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
+    #     forward=filter_pairs)
+    def filter_pairs(phrase_text, arg1, arg2, data):
+        for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
+            if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
+                return True
+        return False
+    pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateReaderSensor(
+        phrase['text'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        forward=lambda *_, **__: True)
+        keyword='relation',
+        forward=filter_pairs)
+    # def make_pairs(phrase_text, data):
+    #     n = len(phrase_text)
+    #     arg1i = []
+    #     arg2i = []
+    #     for _, (rel_arg1, *_), (rel_arg2, *_) in data:
+    #         arg1i.append(rel_arg1)
+    #         arg2i.append(rel_arg2)
+    #     arg1i = torch.tensor(arg1i).unsqueeze(-1)
+    #     arg1m = torch.zeros(arg1i.shape[0], n)
+    #     arg1m.scatter_(1, arg1i, 1)
+    #     arg2i = torch.tensor(arg2i).unsqueeze(-1)
+    #     arg2m = torch.zeros(arg2i.shape[0], n)
+    #     arg2m.scatter_(1, arg2i, 1)
+    #     return arg1m, arg2m
+    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = JointReaderSensor(
+    #     phrase['text'],
+    #     keyword='relation',
+    #     forward=make_pairs)
     pair['emb'] = FunctionalSensor(
-        rel_pair_phrase1.reversed('bert'), rel_pair_phrase2.reversed('bert'),
+        rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
 
     pair[work_for] = ModuleLearner('emb', module=Classifier(FEATURE_DIM*2))
@@ -172,53 +200,43 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp = POIProgram(
-        graph,
-        poi=(phrase, sentence, pair, word),
+    lbp = SolverPOIProgram(
+        graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric=PRF1Tracker())
-    # lbp = IMLProgram(
-    #     graph,
-    #     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
-    #     metric=PRF1Tracker())
+        metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp
 
 
 def main():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import people, organization, location, other, o
-    from graph import work_for, located_in, live_in, orgbase_on, kill
-
     program = model()
 
-    # Uncomment the following lines to enable training and testing
-    train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    program.train(train_reader, train_epoch_num=200, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    program.test(test_reader)
+    split_id = 1
+    train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
+    test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
 
-    reader = SingletonDataLoader('data/conll04.corp')
+    def save_epoch(program, epoch=1):
+        program.save(f'conll04-bert-{split_id}-{epoch}.pt')
+        return epoch + 1
 
-    for node in program.populate(reader, device='auto'):
-        assert node.ontologyNode is sentence
-        phrase_node = node.getChildDataNodes()[0]
-        assert phrase_node.ontologyNode is phrase
+    def save_best(program, epoch=1, best_epoch=-1, best_loss=np.inf):
+        import logging
+        logger = logging.getLogger(__name__)
+        loss = sum(program.model.loss.value().values())
+        if loss < best_loss:
+            logger.info(f'New Best loss {loss} achieved at Epoch {epoch}.')
+            best_epoch = epoch
+            best_loss = loss
+            program.save(f'conll04-bert-{split_id}-best.pt')
+        return epoch + 1, best_epoch, best_loss
 
-        node.infer()
-
-        if phrase_node.getAttribute(people) is not None:
-            assert phrase_node.getAttribute(people, 'softmax') > 0
-            node.inferILPResults(fun=None)
-            
-            ILPmetrics = node.getInferMetric()
-            
-            print("ILP metrics Total %s"%(ILPmetrics['Total']))
-            
-            assert phrase_node.getAttribute(people, 'ILP') >= 0
-        else:
-            print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
-            break
+    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+    program.test(test_reader, device='auto')
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    program.save(f'conll04-bert-{split_id}-{now}.pt')
 
 
 if __name__ == '__main__':

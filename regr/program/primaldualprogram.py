@@ -74,8 +74,8 @@ class PrimalDualProgram(LearningBasedProgram):
                 self.opt.zero_grad()
             if self.copt is not None:
                 self.copt.zero_grad()
-            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
-            closs, *_ = self.cmodel(output[1])
+            mloss, metric, output = self.model(data)
+            closs, cmetric, coutput = self.cmodel(data)
             loss = mloss + self.beta * closs
             if self.opt is not None or self.copt is not None and loss:
                 loss.backward()
@@ -89,6 +89,6 @@ class PrimalDualProgram(LearningBasedProgram):
                 #       for the dual. Don't zero_grad() here!
                 reverse_sign_grad(self.cmodel.parameters())
                 self.copt.step()
-            yield (loss, metric, *output)
+            yield loss, metric, output
         if callable(callback):
             callback()

@@ -705,10 +705,6 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.addGraphConstrains(m, dn, *conceptsRelations)
         
             # ILP Model objective setup
-            if Q is None:
-                Q = 0
-                self.myLogger.error("No data provided to create any ILP varibale - not ILP result reurn")
-                
             if minimizeObjective:
                 m.setObjective(Q, GRB.MINIMIZE)
             else:
