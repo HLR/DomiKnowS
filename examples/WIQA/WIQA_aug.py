@@ -17,7 +17,6 @@ from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
-from regr.program.model.primaldual import PrimalDualModel
 from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results
 from WIQA_models import WIQA_Robert, RobertaClassificationHead,WIQAModel
 import argparse
@@ -162,12 +161,8 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 program = LearningBasedProgram(graph, model_helper(current_model,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 
-program = PrimalDualProgram(
-    graph,
-    Model=SolverModel, poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive],
-    loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(),
-    CModel=model_helper(PrimalDualModel, loss=MacroAverageTracker()),
-    beta=0.5)
+program = PrimalDualProgram(graph, model_helper(SolverModel,poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
 
 #program = PrimalDualProgram(graph, model_helper(WIQAModel,poi=[question[is_less], question[is_more], question[no_effect],\
 #                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
