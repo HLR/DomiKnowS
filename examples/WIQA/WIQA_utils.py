@@ -116,7 +116,7 @@ def is_ILP_consistant(questions_id,results):
                 return False
 
     for arg1, arg2, arg3 in product(range(n), repeat=3):
-        if arg1 == arg2 or arg2 == arg3:
+        if arg1 == arg2 or arg2 == arg3 or arg1==arg3:
             continue
         if questions_id[arg1] in questions_id[arg3] and \
            questions_id[arg2] in questions_id[arg3] and \
