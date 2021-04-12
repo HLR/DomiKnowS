@@ -184,9 +184,10 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     lbp = PrimalDualProgram(
-        graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+        graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp
