@@ -185,7 +185,7 @@ def model():
 
     lbp = PrimalDualProgram(
         graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
