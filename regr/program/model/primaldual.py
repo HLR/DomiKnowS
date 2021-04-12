@@ -6,7 +6,7 @@ from torch.utils import data
 from ..model.pytorch import PoiModel, SolverModel
 
 
-class PrimalDualModel(SolverModel):
+class PrimalDualModel(PoiModel):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph, *args, **kwargs):
