@@ -58,7 +58,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if not self.__varIsNumber(var):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var,))
             if cacheResult[0]:
-                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"(logicMethodName))
+                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
                 return cacheResult[1]
             
         # If only constructing constrains forcing NOT to be true 
