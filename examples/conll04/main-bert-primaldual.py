@@ -200,7 +200,8 @@ def main():
     split_id = 1
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
-    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=device)
     program.test(test_reader, device='cuda:0')
 #     for datanode, data_item in program.populate(train_reader, device="cuda:0"):
 #         print(datanode)
