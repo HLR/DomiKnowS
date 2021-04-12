@@ -110,9 +110,9 @@ def test_case():
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
         'lc2LossTensor' : torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
-                                        float("nan"),  float("nan"),  0.4000,  0.2900,  # works
+                                        float("nan"),   float("nan"),  0.4000,  0.2900,  # works
                                         0.0200,         0.0300,        0.0500,  0.1000,  # for
-                                        0.5500,         0.2000,        0.1000,  0.0000], # IBM
+                                        0.5500,         0.2000,        0.1000,  0.2000], # IBM
                                         device=device)
     
     }
@@ -309,7 +309,7 @@ def test_main_conll04(case):
     lbp = model_declaration(CONFIG.Model, case)
     data = {}
 
-    _, _, datanode = lbp.model(data)
+    _, _, datanode, _ = lbp.model(data)
 
     datanode.infer()
     
@@ -355,13 +355,13 @@ def test_main_conll04(case):
             assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
 
         for i in range(15):  
-            if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                if lcResult['LC2']['lossTensor'][i] != lcResult['LC2']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+            if lcResult['LC22']['lossTensor'][i] != lcResult['LC22']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+                if lcResult['LC22']['lossTensor'][i] != lcResult['LC22']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
                     assert True
                 else:
                     assert False
             else:
-                assert round(lcResult['LC2']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
+                assert round(lcResult['LC22']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
 
         # ------------ Call the ILP Solver
         datanode.inferILPResults(*conceptsRelations, fun=None)
