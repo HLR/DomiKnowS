@@ -5,13 +5,13 @@ from torch.utils import data
 
 from ...graph import DataNodeBuilder
 from ..model.pytorch import TorchModel
-from ..metric import MetricTracker
+from ..metric import MetricTracker, MacroAverageTracker
 
 
 class PrimalDualModel(TorchModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, loss):
+    def __init__(self, graph):
         super().__init__(graph)
         nconstr = len(graph.logicalConstrains)
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
@@ -21,7 +21,7 @@ class PrimalDualModel(TorchModel):
             self.lmbd_index[key] = i
             self.lmbd_p[i] = float(lc.p) / 100.
         self.reset_parameters()
-        self.loss = loss
+        self.loss = MacroAverageTracker(lambda x:x)
 
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 0.5)
