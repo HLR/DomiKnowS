@@ -88,9 +88,10 @@ class TorchModel(torch.nn.Module):
             builder = DataNodeBuilder(data_item)
             *out, = self.populate(builder)
             datanode = builder.getDataNode()
-            return (*out, datanode)
+            return (*out, datanode, builder)
         else:
-            return self.populate(data_item)
+            *out, = self.populate(data_item)
+            return (*out,)
 
     def populate(self):
         raise NotImplementedError
@@ -150,7 +151,7 @@ class PoiModel(TorchModel):
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
-        if self.metric != None:
+        if self.metric is not None:
             for metric in self.metric.values():
                 if isinstance(metric, MetricTracker):
                     metric.reset()

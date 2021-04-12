@@ -38,7 +38,7 @@ class DatanodeCMMetric(torch.nn.Module):
 
 
 class MetricTracker(torch.nn.Module):
-    def __init__(self, metric):
+    def __init__(self, metric=lambda x:x):
         super().__init__()
         self.metric = metric
         self.list = []
