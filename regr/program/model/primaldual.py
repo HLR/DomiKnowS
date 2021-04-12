@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 import torch
 from torch.utils import data
@@ -14,6 +15,9 @@ class PrimalDualModel(TorchModel):
     def __init__(self, graph):
         super().__init__(graph)
         nconstr = len(graph.logicalConstrains)
+        if nconstr == 0:
+            warnings.warn('No logical constraint detected in the graph. '
+                          'PrimalDualModel will not generate any constraint loss.')
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
         self.lmbd_p = torch.empty(nconstr)  # none parameter
         self.lmbd_index = {}
@@ -43,7 +47,7 @@ class PrimalDualModel(TorchModel):
         # returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss()
         if not constr_loss:
-            return 0
+            return 0, datanode, builder
         lmbd_loss = []
         for key, loss in constr_loss.items():
             loss_ = self.get_lmbd(key) * loss['lossTensor'].clamp(min=0).sum()
