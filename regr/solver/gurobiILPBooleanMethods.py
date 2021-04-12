@@ -5,6 +5,7 @@ from regr.solver.ilpBooleanMethods import ilpBooleanProcessor
 from regr.solver.ilpConfig import ilpConfig 
 
 from gurobipy import Var, GRB, LinExpr
+from future.builtins.misc import isinstance
 
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
@@ -20,6 +21,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         self.constrainCaches = {}
 
     def __addToConstrainCaches(self, lmName, onlyConstrains, var, cachedValue):
+        if isinstance(var, list):
+            var = tuple(var)
+            
+            try:
+                h = hash(var)
+            except Exception as e:
+                return 
+            
         if lmName in self.constrainCaches:
             if onlyConstrains in self.constrainCaches[lmName]:
                 self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
@@ -33,6 +42,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
             
     def __isInConstrainCaches(self, lmName, onlyConstrains, var):
+        if isinstance(var, list):
+            var = tuple(var)
+            
+            try:
+                h = hash(var)
+            except Exception as e:
+                return (False, None)
+            
         if lmName in self.constrainCaches:
             if onlyConstrains in self.constrainCaches[lmName]:
                 for currentVarPermutation in permutations(var):
@@ -76,7 +93,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if not self.__varIsNumber(var):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var,))
             if cacheResult[0]:
-                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"(logicMethodName))
+                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
                 return cacheResult[1]
             
         # If only constructing constrains forcing NOT to be true 
