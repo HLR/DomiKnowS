@@ -120,13 +120,12 @@ class Conll04Stat():
 def main():
     parser = ArgumentParser(
         description='Show stat of the data set.')
-    # parser.add_argument('path', nargs=1)
+    parser.add_argument('path', nargs=1)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
     stat = Conll04Stat()
-    # path = args.path[0]
-    path = '../data/conll04.corp'
+    path = args.path[0]
     for name, result in stat(path):
         pass
 
