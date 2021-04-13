@@ -49,7 +49,8 @@ class LearningBasedProgram():
         Optim=None,
         train_callbacks={},
         valid_callbacks={},
-        test_callbacks={}):
+        test_callbacks={},
+        **kwargs):
         if device is not None:
             self.to(device)
         if Optim is not None and list(self.model.parameters()):
@@ -76,7 +77,7 @@ class LearningBasedProgram():
                                 callback_storage[key] = callback(self, *entuple(storage))
                     else:
                         callback = None
-                    consume(tqdm(epoch_fn(dataset, callback), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
+                    consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
                     if self.model.loss:
                         self.logger.info(' - loss:')
                         self.logger.info(self.model.loss)
