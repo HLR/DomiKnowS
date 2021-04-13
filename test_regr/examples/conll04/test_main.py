@@ -105,14 +105,19 @@ def test_case():
         
         # nandL(people,organization)
         #                               John    works   for     IBM
-        'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
+        'lc0LossTensor' : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
+        #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
         # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
-        'lc2LossTensor' : torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
-                                        float("nan"),   float("nan"),  0.4000,  0.2900,  # works
-                                        0.0200,         0.0300,        0.0500,  0.1000,  # for
-                                        0.5500,         0.2000,        0.1000,  0.2000], # IBM
+        'lc2LossTensor' : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
+                                        float("nan"),   float("nan"),  0.4502,  0.3971, # works
+                                        0.2769,         0.3385,        0.2891,  0.3100, # for
+                                        0.5246,         0.3543,        0.3100,  0.1572], # IBM
+                         # torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
+                         #             float("nan"),   float("nan"),  0.4000,  0.2900,  # works
+                         #              0.0200,         0.0300,        0.0500,  0.1000,  # for
+                         #               0.5500,         0.2000,        0.1000,  0.2000], # IBM
                                         device=device)
     
     }
