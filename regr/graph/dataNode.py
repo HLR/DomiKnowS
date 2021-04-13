@@ -170,7 +170,7 @@ class DataNode:
                 label = self.getAttribute(f'{attribute_name}/label').item()
                 if inference_mode.lower() == "ilp":
                     prediction = self.getAttribute(f"{attribute_name}/ILP")
-                    if prediction:
+                    if prediction is None:
                         raise Exception(f'inference_mode=\"{inference_mode}\" could not be found in the DataNode')
                 else:
                     # Extract decision
