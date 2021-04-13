@@ -888,21 +888,12 @@ class DataNode:
                 elif not torch.is_tensor(v):
                     continue
                 
-                vClone = torch.clone(v).double()
+                vClone = torch.clone(v)
                 tExp = torch.exp(vClone)
-                for i, e in enumerate(tExp):
-                    if e == float("inf"):
-                        tExp[i] = 1.0
-                        
                 tExpSum = torch.sum(tExp).item()
             
                 vSoftmax = [(tExp[i]/tExpSum).item() for i in range(len(v))]
-                    
                 vSoftmaxT = torch.as_tensor(vSoftmax) 
-                
-                for i, s in enumerate(vSoftmaxT):
-                    if s != s:
-                        vSoftmaxT[i] = 1/len(v)
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
                 
@@ -1013,7 +1004,7 @@ class DataNode:
                     else:
                         labels[i] = 0
             
-            result[cr[1]] = {'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
+            result[cr[1]] = {}
             
             if preds is None or labels is None:
                 continue

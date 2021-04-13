@@ -18,16 +18,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return True
         else:
             return False
-        
-    def _fixVar(self, var):
-        varFixed = []  
-        for v in var:
-            if not self._isNumber(v):
-                varFixed.append(0)
-            else:
-                varFixed.append(v)
-        
-        return varFixed
             
     def notVar(self, _, var, onlyConstrains = False):
         methodName = "notVar"
@@ -73,8 +63,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "AND"
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
-              
-        var = self._fixVar(var)
+                
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
                 
         N = len(var)
         
@@ -118,7 +110,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
-        var = self._fixVar(var)
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
         
         N = len(var)
         
@@ -163,7 +157,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
-        var = self._fixVar(var)
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
                 
         nandLoss = 0
         
@@ -211,7 +207,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
-        var = self._fixVar(var)
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
                 
         varSum = 0
         for currentVar in var:
@@ -277,7 +275,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
-        var = self._fixVar(var)
+        for v in var:
+            if not self._isNumber(v):
+                v = 0
                 
         varSum = 0
         for currentVar in var:

@@ -1,3 +1,5 @@
+import pickle
+import hashlib
 from torch.utils.data import DataLoader
 
 
@@ -37,8 +39,10 @@ class SingletonDataLoader(Conll04DataLoader):
         # (tokens, pos, label)
         # (relation_type, (src_index, src_token), (dst_index, dst_token))
         tokens, postags, labels = zip(*sentences)
+        text = [' '.join(token.replace('/', ' ') for token in tokens[0])]
         data_item = {
-            #'sentence': [' '.join(token_list) for token_list in tokens],
+            'id': hashlib.sha1(pickle.dumps(tokens[0])).hexdigest(),
+            'text': text,
             'tokens': tokens[0],
             'postag': postags[0],
             'label': labels[0],

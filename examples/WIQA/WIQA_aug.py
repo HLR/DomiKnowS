@@ -1,6 +1,3 @@
-import sys
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/DomiKnowS/regr')
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/DomiKnowS/')
 import torch
 import numpy as np
 from transformers import AdamW
@@ -26,6 +23,7 @@ import argparse
 from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_triple_with_labels, guess_pair, guess_triple
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
+
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser',type=float)
@@ -38,6 +36,8 @@ args = parser.parse_args()
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+
+current_model = WIQAModel if args.primaldual else PoiModel
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
@@ -94,8 +94,8 @@ with Graph('WIQA_graph') as graph:
     ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
         is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
 from IPython.display import Image
-#graph.visualize("./image")
-#Image(filename='image.png')
+graph.visualize("./image")
+Image(filename='image.png')
 
 print("Sensor Part:")
 
@@ -160,12 +160,14 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
-if not args.primaldual:
-    program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
+program = LearningBasedProgram(graph, model_helper(current_model,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
-else:
-    program = PrimalDualProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=args.beta)
+
+program = PrimalDualProgram(graph, model_helper(SolverModel,poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
+
+#program = PrimalDualProgram(graph, model_helper(WIQAModel,poi=[question[is_less], question[is_more], question[no_effect],\
+#                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=0.5)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -174,8 +176,7 @@ for i in range(args.cur_epoch):
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
-    if args.primaldual:
-        print(program.cmodel.loss)
+    print(program.cmodel.loss)
     test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
     test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
     test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)

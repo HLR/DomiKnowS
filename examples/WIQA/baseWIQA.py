@@ -54,17 +54,21 @@ sys.path.append("data/WIQA/repo/")
 sys.path.append("data/WIQA/repo/wiqadataset/")
 sys.path.append("data/WIQA/repo/wiqadataset/model/")
 
-#os.remove("data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
-#shutil.copyfile("data/tmp_files/run_wiqa_classifier.sh","data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
+from src.wiqa_wrapper import WIQADataPoint
 
-#os.remove("data/WIQA/repo/wiqadataset/model/run.py")
-#shutil.copyfile("data/tmp_files/run.py","data/WIQA/repo/wiqadataset/model/run.py")
+wimd = WIQADataPoint.get_default_whatif_metadata()
+sg = wimd.get_graph_for_id(graph_id="13")
+print(sg.to_json_v1())
+
+os.remove("data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
+shutil.copyfile("data/tmp_files/run_wiqa_classifier.sh","data/WIQA/repo/wiqadataset/model/run_wiqa_classifier.sh")
+
+os.remove("data/WIQA/repo/wiqadataset/model/run.py")
+shutil.copyfile("data/tmp_files/run.py","data/WIQA/repo/wiqadataset/model/run.py")
 
 #os.chdir("data/WIQA/repo/wiqadataset/")
 #subprocess.call(['sh', 'model/run_wiqa_classifier.sh'])
 
 #python wiqa_augmentation.py --data_dir PATH_TO_WIQA_DATA_DIR --output_dir PATH_TO_AUGMENTED_DATA
-subprocess.check_call([sys.executable, 'data/WIQA_AUG/repo/logic_guided_qa/wiqa_augmentation.py',
-                       '--data_dir',"data/WIQA/",'--output_dir',"data/WIQA_AUG/",
-                       "--store_dev_test_augmented_data",
-                       "--sample_ratio_augmentation", "1.0"])
+#subprocess.check_call([sys.executable, 'data/WIQA_AUG/repo/logic_guided_qa/wiqa_augmentation.py',
+#                       '--data_dir',"data/WIQA/",'--output_dir',"data/WIQA_AUG/"])
