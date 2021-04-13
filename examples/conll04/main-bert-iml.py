@@ -4,14 +4,12 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-import numpy as np
-
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
+from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
@@ -144,14 +142,10 @@ def model():
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
-    # def pairArgCandidate(tag):
-    #     return 'NN' in tag or 'CD' in tag or 'JJ' in tag
-    # def filter_pairs(phrase_postag, arg1, arg2):
-    #     return arg1 is not arg2 and pairArgCandidate(arg1.getAttribute('postag')) and pairArgCandidate(arg2.getAttribute('postag'))
     # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-    #     phrase['postag'],
+    #     phrase['text'],
     #     relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-    #     forward=filter_pairs)
+    #     forward=lambda *_, **__: True)
     def filter_pairs(phrase_text, arg1, arg2, data):
         for rel, (rel_arg1, *_), (rel_arg2, *_) in data:
             if arg1.instanceID == rel_arg1 and arg2.instanceID == rel_arg2:
@@ -162,24 +156,6 @@ def model():
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
         keyword='relation',
         forward=filter_pairs)
-    # def make_pairs(phrase_text, data):
-    #     n = len(phrase_text)
-    #     arg1i = []
-    #     arg2i = []
-    #     for _, (rel_arg1, *_), (rel_arg2, *_) in data:
-    #         arg1i.append(rel_arg1)
-    #         arg2i.append(rel_arg2)
-    #     arg1i = torch.tensor(arg1i).unsqueeze(-1)
-    #     arg1m = torch.zeros(arg1i.shape[0], n)
-    #     arg1m.scatter_(1, arg1i, 1)
-    #     arg2i = torch.tensor(arg2i).unsqueeze(-1)
-    #     arg2m = torch.zeros(arg2i.shape[0], n)
-    #     arg2m.scatter_(1, arg2i, 1)
-    #     return arg1m, arg2m
-    # pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = JointReaderSensor(
-    #     phrase['text'],
-    #     keyword='relation',
-    #     forward=make_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('emb'), rel_pair_phrase2.reversed('emb'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
@@ -205,49 +181,27 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp1 = SolverPOIProgram(
+    lbp = IMLProgram(
         graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.6)),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-    
-    lbp = SolverPOIProgram(
-        graph, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric={
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-    return lbp, lbp1
+    return lbp
 
 
 def main():
-    program, program1 = model()
+    program = model()
 
-    split_id = 4
+    split_id = 1
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
-
-    def save_epoch(program, epoch=1):
-        program.save(f'conll04-bert-{split_id}-{epoch}.pt')
-        return epoch + 1
-
-    def save_best(program, epoch=1, best_epoch=-1, best_loss=np.inf):
-        import logging
-        logger = logging.getLogger(__name__)
-        loss = sum(program.model.loss.value().values())
-        if loss < best_loss:
-            logger.info(f'New Best loss {loss} achieved at Epoch {epoch}.')
-            best_epoch = epoch
-            best_loss = loss
-            program.save(f'conll04-bert-{split_id}-best.pt')
-        return epoch + 1, best_epoch, best_loss
-
-    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
-    program1.test(test_reader, device='auto')
+    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
+    program.test(test_reader, device='cuda:0')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-{split_id}-{now}.pt')
+    program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ sys.path.append('.')
 sys.path.append('../..')
 
 
-from regr.program import POIProgram, IMLProgram
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
@@ -83,10 +83,13 @@ def model(use_ont):
     phrase[other] = FunctionalReaderSensor(keyword='label', forward=find_label('Other'), label=True)
     phrase[o] = FunctionalReaderSensor(keyword='label', forward=find_label('O'), label=True)
 
+    POSTAGS_MAKE_PAIRS = ['NN', 'NNP', 'NNPS', 'NNS']
+    def filter_pairs(phrase_postag, arg1, arg2):
+        return arg1 is not arg2 and arg1.getAttribute('postag') in POSTAGS_MAKE_PAIRS and arg2.getAttribute('postag') in POSTAGS_MAKE_PAIRS
     pair[rel_pair_phrase1.reversed, rel_pair_phrase2.reversed] = CompositionCandidateSensor(
-        phrase['w2v'],
+        phrase['postag'],
         relations=(rel_pair_phrase1.reversed, rel_pair_phrase2.reversed),
-        forward=lambda *_, **__: True)
+        forward=filter_pairs)
     pair['emb'] = FunctionalSensor(
         rel_pair_phrase1.reversed('w2v'), rel_pair_phrase2.reversed('w2v'),
         forward=lambda arg1, arg2: torch.cat((arg1, arg2), dim=-1))
@@ -113,9 +116,10 @@ def model(use_ont):
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     if use_ont:
-        lbp = POIProgram(graph_ont, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = SolverPOIProgram(graph_ont, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     else:
-        lbp = POIProgram(graph, poi=(sentence, phrase, pair), loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+        lbp = SolverPOIProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'internal':PRF1Tracker(),'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        # lbp = IMLProgram(graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)), metric={'internal':PRF1Tracker(),'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
     return lbp
 
@@ -137,10 +141,14 @@ def main():
     program = model(use_ont)
 
     # Uncomment the following lines to enable training and testing
-    #train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
-    #test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
-    #program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-   # program.test(test_reader)
+    # train_reader = SingletonDataLoader('data/conll04.corp_1_train.corp')
+    # train_reader = SingletonDataLoader('data/conll04-one.corp')
+    # test_reader = SingletonDataLoader('data/conll04.corp_1_test.corp')
+    # program.train(train_reader, test_set=train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto')
+    # program.test(test_reader, device='auto')
+    # from datetime import datetime
+    # now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    # program.save(f'conll04-{now}.pt')
 
     reader = SingletonDataLoader('data/conll04.corp')
 
@@ -150,6 +158,11 @@ def main():
         assert phrase_node.ontologyNode is phrase
 
         node.infer()
+        node.inferLocal()
+        argmax_metrics = node.getInferMetric(inferType='local/argmax')
+        print("\nArgmax metrics Total %s"%(argmax_metrics['Total']))
+        print("\nArgmax metrics work_for %s"%(argmax_metrics['work_for']))
+        print("\nArgmax metrics people %s"%(argmax_metrics['people']))
 
         if phrase_node.getAttribute(people) is not None:
             assert phrase_node.getAttribute(people, 'softmax') > 0
