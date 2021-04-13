@@ -900,9 +900,10 @@ class DataNode:
                     
                 vSoftmaxT = torch.as_tensor(vSoftmax) 
                 
-                for i, s in enumerate(vSoftmaxT):
-                    if s != s:
-                        vSoftmaxT[i] = 1/len(v)
+                # Replace non with 1/len
+                #for i, s in enumerate(vSoftmaxT):
+                #    if s != s:
+                 #       vSoftmaxT[i] = 1/len(v)
                 
                 dn.attributes[keySoftmax] = vSoftmaxT
                 
