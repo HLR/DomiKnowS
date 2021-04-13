@@ -185,7 +185,7 @@ def model():
 
     lbp = PrimalDualProgram(
         graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -194,13 +194,30 @@ def model():
 
 
 def main():
+    from graph import graph, sentence, word, phrase, pair
     program = model()
 
-    split_id = 1
+    split_id = 2
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
     program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
     program.test(test_reader, device='cuda:0')
+#     for datanode, data_item in program.populate(train_reader, device="cuda:0"):
+#         print(datanode)
+#         ph = len(datanode.getChildDataNodes(conceptName=phrase))
+#         t = len(data_item['tokens'])
+#         if ph != t:
+#             print("this example is wrong")
+            
+#         if len(data_item['relation']):
+#             print("I have relations")
+            
+#         if len(data_item['relation']) != len(datanode.findDatanodes(select = pair)):
+#             print(data_item['relation'])
+#             print(datanode.findDatanodes(select = pair))
+#             print("this example is wrong")
+#         print(data_item)
+        
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
