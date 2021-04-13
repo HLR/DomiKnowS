@@ -23,12 +23,14 @@ import argparse
 from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_triple_with_labels, guess_pair, guess_triple
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
-parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on')
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on')
-parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser')
-parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning')
-parser.add_argument('--samplenum', dest='samplenum', default=20, help='number of samples to train the model on')
-parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training')
+
+parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser',type=float)
+parser.add_argument('--pd', dest='primaldual', default=True, help='whether or not to use primaldual constriant learning',type=bool)
+parser.add_argument('--samplenum', dest='samplenum', default=20, help='number of samples to train the model on',type=int)
+parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training',type=int)
+parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
 args = parser.parse_args()
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
