@@ -1,8 +1,10 @@
 import torch
 from collections import OrderedDict, namedtuple
 import time
+import re
 from .dataNodeConfig import dnConfig 
 from torch.tensor import Tensor
+import graphviz
 
 from regr.graph.logicalConstrain import eqL
 from regr.solver import ilpOntSolverFactory
@@ -132,6 +134,73 @@ class DataNode:
     
     def getOntologyNode(self):
         return self.ontologyNode
+
+    def visualize(self, filename: str, inference_mode="ILP", include_legend=False):
+        if include_legend:
+            # Build Legend subgraph
+            legend = graphviz.Digraph(name='cluster_legend',comment='Legend')
+            legend.attr('node', shape='rectangle')
+            legend.attr(label="Legend")
+            legend.node('Attribute')
+
+            legend.attr('node', shape='diamond')
+            legend.node('Decision')
+
+            legend.attr('node', shape='oval')
+            legend.node('Concept')
+        # ----
+        print(self.getChildDataNodes())
+        g = graphviz.Digraph(name='cluster_main')
+
+        # Root node
+        root_id = self.ontologyNode.name
+        g.node(root_id)
+
+        g.attr('node', shape = 'rectangle')
+        for attribute_name, attribute in self.getAttributes().items():
+            # Visualize all attributes which are not a relation
+            attr_node_id = str(attribute_name)
+
+            if attribute_name.endswith('.reversed'):
+                continue
+            elif re.match(r'^<.*>$', attribute_name):
+                if attribute.shape[0] != 2:
+                    print('WARNING: We currently only support visualization for binary decisions.')
+                    continue
+
+                label = self.getAttribute(f'{attribute_name}/label').item()
+                if inference_mode.lower() == "ilp":
+                    prediction = self.getAttribute(f"{attribute_name}/ILP")
+                else:
+                    # Extract decision
+                    decisions = self.getAttribute(f"{attribute_name}/local/{inference_mode}")
+                    prediction = decisions[1]
+
+                g.attr('node', shape='diamond')
+                g.node(attr_node_id, f'{attribute_name[1:-1]}\nlabel={label}\nscore={prediction.item():.2f}')
+                g.edge(root_id, attr_node_id)
+                g.attr('node', color='black')
+            elif re.match(r'^<.*>(/.*)+', attribute_name):
+                #print(f'Filtered {attribute_name}')
+                continue
+            else:
+                # Normal nodes
+                g.attr('node', shape='rectangle')
+                
+                # Format attribute
+                attr_str = str(attribute)
+                if isinstance(attribute, Tensor):
+                    attr_str = f'<tensor of shape {list(attribute.shape)}>'
+
+                g.node(attr_node_id, f'{attribute_name}: {attr_str}')
+                g.edge(root_id, attr_node_id)
+
+        main_graph = graphviz.Digraph()
+        if include_legend:
+            main_graph.subgraph(legend)
+        main_graph.subgraph(g)
+
+        main_graph.render(filename, format='png', view=True)
     
     # --- Attributes methods
     
@@ -1858,15 +1927,3 @@ class DataNodeBuilder(dict):
         
         _DataNodeBulder__Logger.error('Returning None - there are no dataNodes')
         return None
-    
-    #Graph visualization
-    def visualize(self, filename: str):
-        g = graphviz.Digraph()
-        g.node('Datanode', getInstanceID(self))
-        g.attr('node', shape = 'rectangle')
-        for i in getAttributes(self):
-            g.node(str(i), str(i))
-            g.edge('Datanode', str(i))
-        g.render(str, format = 'jpeg')
-        return None
-

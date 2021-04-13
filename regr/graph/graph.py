@@ -106,7 +106,7 @@ class Graph(BaseGraphTree):
             concept_graph.subgraph(sub_graph_viz)
 
         for relation_name, relation in self.relations.items():
-            if not relation.name.endswith('reversed'):
+            if not relation.name.endswith('reversed') and not ('not_a' in relation.name):
                 # add case for HasA
                 concept_graph.edge(relation.src.name, relation.dst.name, label=relation.__class__.__name__)
 
