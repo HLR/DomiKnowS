@@ -106,8 +106,11 @@ class PrimalDualProgram(LearningBasedProgram):
             if self.copt is not None:
                 self.copt.zero_grad()
             mloss, metric, *output = self.model(data)  # output = (datanode, builder)
-            closs, *_ = self.cmodel(output[1])
-            loss = mloss + self.beta * closs
+            if iter <= c_warmup_iters:
+                loss = mloss
+            else:
+                closs, *_ = self.cmodel(output[1])
+                loss = mloss + self.beta * closs
             if self.opt is not None or self.copt is not None and loss:
                 loss.backward()
             if self.opt is not None:

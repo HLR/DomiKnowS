@@ -30,7 +30,7 @@ class PrimalDualModel(TorchModel):
         self.loss = MacroAverageTracker(lambda x:x)
 
     def reset_parameters(self):
-        torch.nn.init.constant_(self.lmbd, 0.5)
+        torch.nn.init.constant_(self.lmbd, 1.)
 
     def reset(self):
         if isinstance(self.loss, MetricTracker):
