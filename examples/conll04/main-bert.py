@@ -1,4 +1,9 @@
+import sys
 import torch
+
+sys.path.append('.')
+sys.path.append('../..')
+
 import numpy as np
 
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
@@ -95,8 +100,8 @@ def model():
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
     sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = cache(JointSensor)(sentence['text'], forward=Tokenizer(), cache=TorchCache(path='./cache/tokenizer'))
-    word['bert'] = cache(ModuleSensor)('ids', module=BERT(), cache=TorchCache(path='./cache/bert'))
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
+    word['bert'] = ModuleSensor('ids', module=BERT())
 
     def match_phrase(phrase, word_offset):
         def overlap(a_s, a_e, b_s, b_e):
@@ -116,10 +121,10 @@ def model():
             ph_word_overlap.append(word_overlap)
             ph_offset += ph_len + 1
         return torch.tensor(ph_word_overlap)
-    phrase[rel_phrase_contains_word.reversed] = cache(EdgeSensor)(phrase['text'], word['offset'], relation=rel_phrase_contains_word.reversed, forward=match_phrase, cache=TorchCache(path='./cache/phrase-word'))
+    phrase[rel_phrase_contains_word.reversed] = EdgeSensor(phrase['text'], word['offset'], relation=rel_phrase_contains_word.reversed, forward=match_phrase)
     def phrase_bert(bert):
         return bert
-    phrase['bert'] = cache(FunctionalSensor)(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert, cache=TorchCache(path="./cache/phrase-bert"))
+    phrase['bert'] = FunctionalSensor(rel_phrase_contains_word.reversed(word['bert']), forward=phrase_bert)
     phrase['emb'] = FunctionalSensor('bert', 'w2v', forward=lambda bert, w2v: torch.cat((bert, w2v), dim=-1))
 
     phrase[people] = ModuleLearner('emb', module=Classifier(FEATURE_DIM))
@@ -200,20 +205,26 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp = SolverPOIProgram(
+    lbp1 = SolverPOIProgram(
         graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    
+    lbp = SolverPOIProgram(
+        graph, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        metric={
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-    return lbp
+    return lbp, lbp1
 
 
 def main():
-    program = model()
+    program, program1 = model()
 
-    split_id = 1
+    split_id = 4
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
 
@@ -233,7 +244,7 @@ def main():
         return epoch + 1, best_epoch, best_loss
 
     program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
-    program.test(test_reader, device='auto')
+    program1.test(test_reader, device='auto')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     program.save(f'conll04-bert-{split_id}-{now}.pt')
