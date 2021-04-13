@@ -965,7 +965,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
         p = 0
         key = "/local/softmax"
-        key = ""
+        #key = ""
         
         lcLosses = {}
         for graph in self.myGraph:
