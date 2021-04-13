@@ -184,10 +184,9 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     lbp = PrimalDualProgram(
-        graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
+        graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
-            'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp
@@ -197,7 +196,7 @@ def main():
     from graph import graph, sentence, word, phrase, pair
     program = model()
 
-    split_id = 2
+    split_id = 1
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
     program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
@@ -220,7 +219,7 @@ def main():
         
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
+    program.save(f'conll04-bert-pd-{split_id}-{now}.pt')
 
 
 if __name__ == '__main__':
