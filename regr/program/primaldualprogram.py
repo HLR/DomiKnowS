@@ -50,7 +50,6 @@ class PrimalDualProgram(LearningBasedProgram):
         training_set,
         valid_set=None,
         test_set=None,
-        Optim=None,
         # COptim=None,  # SGD only
         c_lr=0.05,
         c_momentum=0.9,
