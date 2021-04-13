@@ -5,6 +5,7 @@ from regr.solver.ilpBooleanMethods import ilpBooleanProcessor
 from regr.solver.ilpConfig import ilpConfig 
 
 from gurobipy import Var, GRB, LinExpr
+from future.builtins.misc import isinstance
 
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     
@@ -20,6 +21,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         self.constrainCaches = {}
 
     def __addToConstrainCaches(self, lmName, onlyConstrains, var, cachedValue):
+        if isinstance(var, list):
+            var = tuple(var)
+            
+            try:
+                h = hash(var)
+            except Exception as e:
+                return 
+            
         if lmName in self.constrainCaches:
             if onlyConstrains in self.constrainCaches[lmName]:
                 self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
@@ -33,6 +42,14 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.constrainCaches[lmName][onlyConstrains][var] = cachedValue
             
     def __isInConstrainCaches(self, lmName, onlyConstrains, var):
+        if isinstance(var, list):
+            var = tuple(var)
+            
+            try:
+                h = hash(var)
+            except Exception as e:
+                return (False, None)
+            
         if lmName in self.constrainCaches:
             if onlyConstrains in self.constrainCaches[lmName]:
                 for currentVarPermutation in permutations(var):
@@ -45,9 +62,27 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def __varIsNumber(self, var):
         return not isinstance(var, Var)
     
+    def __fixVar(self, var):
+        if var is None:
+            return 0
+        else:
+            return  var
+        
+    def __fixVars(self, var):
+        varFixed = []  
+        for v in var:
+            if v is None:
+                varFixed.append(0)
+            else:
+                varFixed.append(v)
+        
+        return varFixed
+    
     def notVar(self, m, var, onlyConstrains = False):
         methodName = "notVar"
         logicMethodName = "NOT"
+        
+        var = self.__fixVar(var)
         
         varName = var
         if not self.__varIsNumber(var):
@@ -58,7 +93,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if not self.__varIsNumber(var):
             cacheResult = self.__isInConstrainCaches(methodName, onlyConstrains, (var,))
             if cacheResult[0]:
-                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"(logicMethodName))
+                if self.ifLog: self.myLogger.debug("%s constrain already created - doing nothing"%(logicMethodName))
                 return cacheResult[1]
             
         # If only constructing constrains forcing NOT to be true 
@@ -99,6 +134,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "and2Var"
         logicMethodName = "AND"
         
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
+
         # Get names of ILP variables
         var1Name = var1
         var2Name = var2
@@ -197,6 +235,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "andVar"
         logicMethodName = "AND"
         
+        var = self.__fixVars(var)
+        
         # Get names of variables - some of them can be numbers
         noOfVars = 0 # count the numbers in variables
         varsNames = []
@@ -272,6 +312,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def or2Var(self, m, var1, var2, onlyConstrains = False):
         methodName = "or2Var"
         logicMethodName = "OR"
+        
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
         
         # Get names of ILP variables
         var1Name = var1
@@ -356,6 +399,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def orVar(self, m, *var, onlyConstrains = False):
         methodName = "orVar"
         logicMethodName = "OR"
+        
+        var = self.__fixVars(var)
         
         # Get names of variables - some of them can be numbers
         noOfVars = 0 # count the numbers in variables
@@ -473,6 +518,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "nand2Var"
         logicMethodName = "NAND"
         
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
+        
         # Get names of ILP variables
         var1Name = var1
         var2Name = var2
@@ -569,6 +617,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "nandVar"
         logicMethodName = "NAND"
        
+        var = self.__fixVars(var)
+       
         # Get names of variables - some of them can be numbers
         noOfVars = 0 # count the numbers in variables
         varsNames = []
@@ -650,6 +700,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         return varNOR
     
     def norVar(self, m, *var, onlyConstrains = False):
+        
+        var = self.__fixVars(var)
+        
         N = len(var)
         
         if N <= 1:
@@ -686,6 +739,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if cacheResult[0]:
             return cacheResult[1]
 
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
+        
         if onlyConstrains:
             m.addConstr(var1 + var2 <= 1)
             m.addConstr(var1 + var2 >= 1)
@@ -707,6 +763,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "ifVar"
         logicMethodName = "IF"
 
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
         if (not var1) or (not var2):
             return
     
@@ -779,6 +837,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.ifLog: self.myLogger.debug("EQ constrain already created - doing nothing")
             return cacheResult[1]
         
+        var1 = self.__fixVar(var1)
+        var2 = self.__fixVar(var2)
+        
         if onlyConstrains:
             m.addConstr(var1 >= var2)
             if self.ifLog: self.myLogger.debug("EQ created constrain only: %s => %s"%(var1.VarName, var2.VarName))
@@ -806,6 +867,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     def countVar(self, m, *var, onlyConstrains = False, limitOp = 'None', limit = 1, logicMethodName = "COUNT"):
         methodName = "countVar"
         #logicMethodName = "COUNT"
+        
+        var = self.__fixVars(var)
         
         if not limitOp:
             if self.ifLog: self.myLogger.error("%s called with no operation specified for comparing limit"%(logicMethodName))

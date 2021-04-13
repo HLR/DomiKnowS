@@ -57,6 +57,12 @@ def entuple(args):
     return (args,)
 
 
+def detuple(*args):
+    if isinstance(args, tuple) and len(args) == 1:
+        return args[0]
+    return args
+
+
 def enum(inst, cls=None, offset=0):
     if isinstance(inst, cls):
         enum = {offset: inst}.items()

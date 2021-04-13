@@ -2,7 +2,7 @@ import logging
 import torch
 from tqdm import tqdm
 
-from ..utils import consume, entuple
+from ..utils import consume, entuple, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -12,6 +12,7 @@ def get_len(dataset, default=None):
         return len(dataset)
     except TypeError:  # `generator` does not have __len__
         return default
+
 
 class LearningBasedProgram():
     logger = logging.getLogger(__name__)
@@ -99,11 +100,11 @@ class LearningBasedProgram():
         for data_item in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
-            loss, metric, output = self.model(data_item)
+            loss, metric, *output = self.model(data_item)
             if self.opt and loss:
                 loss.backward()
                 self.opt.step()
-            yield loss, metric, output
+            yield (loss, metric, *output[:1])
         if callable(callback):
             callback()
 
@@ -124,8 +125,8 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                loss, metric, output = self.model(data_item)
-                yield loss, metric, output
+                loss, metric, *output = self.model(data_item)
+                yield (loss, metric, *output[:1])
         if callable(callback):
             callback()
 
@@ -139,8 +140,8 @@ class LearningBasedProgram():
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                _, _, output = self.model(data_item)
-                yield output
+                _, _, *output = self.model(data_item)
+                yield detuple(*output[:1])
         if callable(callback):
             callback()
 
