@@ -160,7 +160,7 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
-if not args.primaldual:
+if not args.primaldual and False:
     program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 else:
