@@ -135,7 +135,7 @@ class DataNode:
     def getOntologyNode(self):
         return self.ontologyNode
 
-    def visualize(self, filename: str, inference_mode="ILP", include_legend=False):
+    def visualize(self, filename: str, inference_mode="ILP", include_legend=False, open_image=False):
         if include_legend:
             # Build Legend subgraph
             legend = graphviz.Digraph(name='cluster_legend',comment='Legend')
@@ -149,7 +149,6 @@ class DataNode:
             legend.attr('node', shape='oval')
             legend.node('Concept')
         # ----
-        print(self.getChildDataNodes())
         g = graphviz.Digraph(name='cluster_main')
 
         # Root node
@@ -174,10 +173,12 @@ class DataNode:
                 else:
                     # Extract decision
                     decisions = self.getAttribute(f"{attribute_name}/local/{inference_mode}")
+                    if decisions is None:
+                        raise Exception(f'inference_mode=\"{inference_mode}\" could not be found in the DataNode')
                     prediction = decisions[1]
 
                 g.attr('node', shape='diamond')
-                g.node(attr_node_id, f'{attribute_name[1:-1]}\nlabel={label}\nscore={prediction.item():.2f}')
+                g.node(attr_node_id, f'{attribute_name[1:-1]}\nlabel={label}\nprediction={prediction.item():.2f}')
                 g.edge(root_id, attr_node_id)
                 g.attr('node', color='black')
             elif re.match(r'^<.*>(/.*)+', attribute_name):
@@ -200,7 +201,7 @@ class DataNode:
             main_graph.subgraph(legend)
         main_graph.subgraph(g)
 
-        main_graph.render(filename, format='png', view=True)
+        main_graph.render(filename, format='png', view=open_image)
     
     # --- Attributes methods
     
