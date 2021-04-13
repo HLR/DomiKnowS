@@ -1,5 +1,6 @@
 import logging
 import torch
+import numpy as np
 
 from .program import LearningBasedProgram
 from .model.primaldual import PrimalDualModel
@@ -49,22 +50,52 @@ class PrimalDualProgram(LearningBasedProgram):
         training_set,
         valid_set=None,
         test_set=None,
-        Optim=None,
-        COptim=None,
+        # COptim=None,  # SGD only
+        c_lr=0.05,
+        c_momentum=0.9,
+        c_warmup_iters=100,  # warmup
+        c_freq=10,
+        c_freq_increase=5,  # d
+        c_freq_increase_freq=1,
+        c_lr_decay=4,  # strategy
+        c_lr_decay_beta=1,  # beta or param in the strategy
         **kwargs):
-        if COptim is None:
-            COptim = Optim
-        if COptim is not None and list(self.cmodel.parameters()):
-            self.copt = COptim(self.cmodel.parameters())
+        # if COptim is None:
+        #     COptim = Optim
+        # if COptim is not None and list(self.cmodel.parameters()):
+        #     self.copt = COptim(self.cmodel.parameters())
+        if list(self.cmodel.parameters()):
+            self.copt = torch.optim.SGD(self.cmodel.parameters(), lr=c_lr, momentum=c_momentum)
         else:
             self.copt = None
+        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  # to provide a session cache for cross-epoch variables like iter-count
         return super().train(
             training_set,
             valid_set=valid_set,
             test_set=test_set,
+            c_lr=c_lr,
+            c_warmup_iters=c_warmup_iters,
+            c_freq_increase=c_freq_increase,
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay,
+            c_lr_decay_beta=c_lr_decay_beta,
+            c_session=c_session,
             **kwargs)
 
-    def train_epoch(self, dataset, callback=None):
+    def train_epoch(
+        self, dataset, callback=None,
+        c_lr=1,
+        c_warmup_iters=100,  # warmup
+        c_freq_increase=1,  # d
+        c_freq_increase_freq=1,
+        c_lr_decay=0,  # strategy
+        c_lr_decay_beta=1,
+        c_session={}):
+        assert c_session
+        iter = c_session['iter']
+        c_update_iter = c_session['c_update_iter']
+        c_update_freq = c_session['c_update_freq']
+        c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
         self.cmodel.train()
@@ -81,7 +112,12 @@ class PrimalDualProgram(LearningBasedProgram):
                 loss.backward()
             if self.opt is not None:
                 self.opt.step()
-            if self.copt is not None:
+            iter += 1
+            if (
+                self.copt is not None and
+                iter > c_warmup_iters and
+                iter - c_update_iter > c_update_freq
+            ):
                 # NOTE: Based on the face the gradient of lambda in dual
                 #       is reversing signs of their gradient in primal,
                 #       we avoid a repeated backward (and also pytorch's
@@ -89,6 +125,50 @@ class PrimalDualProgram(LearningBasedProgram):
                 #       for the dual. Don't zero_grad() here!
                 reverse_sign_grad(self.cmodel.parameters())
                 self.copt.step()
+                # update counting
+                c_update_iter = iter
+                c_update += 1
+                # update freq
+                if c_freq_increase_freq > 0 and c_update % c_freq_increase_freq == 0:
+                    c_update_freq += c_freq_increase
+                # update c_lr
+                if c_lr_decay == 0:
+                    # on the paper
+                    def update_lr(lr):
+                        return c_lr * 1. / (1 + c_lr_decay_beta * c_update)
+                elif c_lr_decay == 1:
+                    # in pd code / srl strategy 1
+                    # c_lr_decay_beta = lr_decay_after
+                    def update_lr(lr):
+                        return lr * np.sqrt(((c_update-1.) / c_lr_decay_beta + 1.) / (c_update / c_lr_decay_beta + 1.))
+                elif c_lr_decay == 2:
+                    # in pd code / srl strategy 2
+                    # c_lr_decay_beta = lr_decay_after
+                    def update_lr(lr):
+                        return lr * (((c_update-1.) / c_lr_decay_beta + 1.) / (c_update / c_lr_decay_beta + 1.))
+                elif c_lr_decay == 3:
+                    # in pd code / srl strategy 3
+                    # c_lr_decay_beta = lr_decay_after
+                    assert c_lr_decay_beta <= 1.
+                    def update_lr(lr):
+                        return lr * c_lr_decay_beta
+                elif c_lr_decay == 4:
+                    # in pd code / ner strategy 1
+                    def update_lr(lr):
+                        return lr * np.sqrt((c_update+1) / (c_update+2))
+                else:
+                    raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
+                for param_group in self.copt.param_groups:
+                    param_group['lr'] = update_lr(param_group['lr'])
             yield (loss, metric, *output)
+
+        c_session['iter'] = iter
+        c_session['c_update_iter'] = c_update_iter
+        c_session['c_update_freq'] = c_update_freq
+        c_session['c_update'] = c_update
         if callable(callback):
             callback()
+
+    def test_epoch(self, dataset, callback, **kwargs):
+        # just to consum kwargs
+        return super().test_epoch(dataset, callback=callback)

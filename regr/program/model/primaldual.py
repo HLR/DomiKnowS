@@ -46,13 +46,10 @@ class PrimalDualModel(TorchModel):
         # call the loss calculation
         # returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss()
-        if not constr_loss:
-            return 0, datanode, builder
         lmbd_loss = []
         for key, loss in constr_loss.items():
             loss_ = self.get_lmbd(key) * loss['lossTensor'].clamp(min=0).sum()
             self.loss[key](loss_)
             lmbd_loss.append(loss_)
-        # NB: there is no batch-dim in this loss
-        lmbd_loss = torch.stack(lmbd_loss).sum()
+        lmbd_loss = sum(lmbd_loss)
         return lmbd_loss, datanode, builder
