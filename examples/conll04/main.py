@@ -150,9 +150,11 @@ def main():
     # now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     # program.save(f'conll04-{now}.pt')
 
-    reader = SingletonDataLoader('data/conll04.corp')
+    reader = SingletonDataLoader('/Users/drewhayward/Source/DomiKnowS/examples/conll04/data/conll04.corp')
 
-    for node in program.populate(reader, device='auto'):
+    for i, node in enumerate(program.populate(reader, device='auto')):
+        if i == 0:
+            node.getChildDataNodes()[0].visualize('testnode')
         assert node.ontologyNode is sentence
         phrase_node = node.getChildDataNodes()[0]
         assert phrase_node.ontologyNode is phrase
