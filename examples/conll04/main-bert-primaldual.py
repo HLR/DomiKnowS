@@ -197,7 +197,7 @@ def main():
     from graph import graph, sentence, word, phrase, pair
     program = model()
 
-    split_id = 1
+    split_id = 2
     train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
     program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
