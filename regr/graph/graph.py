@@ -128,6 +128,13 @@ class Graph(BaseGraphTree):
         return self._logicalConstrains
 
     @property
+    def logicalConstrainsRecursive(self):
+        def func(node):
+            if isinstance(node, Graph):
+                yield from node.logicalConstrains.items()
+        yield from self.traversal_apply(func)
+
+    @property
     def relations(self):
         return self._relations
 

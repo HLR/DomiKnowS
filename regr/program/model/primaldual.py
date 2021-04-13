@@ -1,5 +1,6 @@
 import logging
 import warnings
+from collections import OrderedDict
 
 import torch
 from torch.utils import data
@@ -14,14 +15,15 @@ class PrimalDualModel(TorchModel):
 
     def __init__(self, graph):
         super().__init__(graph)
-        nconstr = len(graph.logicalConstrains)
+        constr = OrderedDict(graph.logicalConstrainsRecursive)
+        nconstr = len(constr)
         if nconstr == 0:
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
         self.lmbd = torch.nn.Parameter(torch.empty(nconstr))
         self.lmbd_p = torch.empty(nconstr)  # none parameter
         self.lmbd_index = {}
-        for i, (key, lc) in enumerate(graph.logicalConstrains.items()):
+        for i, (key, lc) in enumerate(constr.items()):
             self.lmbd_index[key] = i
             self.lmbd_p[i] = float(lc.p) / 100.
         self.reset_parameters()
