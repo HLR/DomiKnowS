@@ -11,11 +11,13 @@ from ..model.pytorch import TorchModel
 from ..metric import MetricTracker, MacroAverageTracker
 
 
-class PrimalDualModel(TorchModel):
+class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
     def __init__(self, graph):
-        super().__init__(graph)
+        super().__init__()
+        self.graph = graph
+        self.build = True
         constr = OrderedDict(graph.logicalConstrainsRecursive)
         nconstr = len(constr)
         if nconstr == 0:
