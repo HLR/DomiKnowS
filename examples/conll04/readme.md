@@ -14,6 +14,11 @@ Run the following code to prepare the required splits for the task. The splits a
 ```
 python scripts/split.py data/conll04.corp
 ```
+## Models
+The model uses `Bert` + `Spacy W2V` to represent tokens(phrases) in a sentence. We use the pretrained parameters and do not further train those representations for this task.
+For each concept such as `People`, `Organization`, .. we use a linear layer on top of the token representations with a boolean(2 logits) classifier at the end.
+
+For the relation extraction, we only use the known pairs from the `Conll` and use `concat(phrase1.rep,phrase2.rep)` to represent the pairs. We use similar linear layer for classifying each pair into types such as `Work_for` or `Live_in`.
 
 ## Running the model
 ### Arguments
