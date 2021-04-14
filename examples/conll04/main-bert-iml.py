@@ -251,6 +251,7 @@ def parse_arguments():
         type=float,
         required=False,
         choices=[1, 0.25, 0.1],
+        default=1,
     )
     parser.add_argument(
         "-i",
