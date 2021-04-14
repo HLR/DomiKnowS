@@ -221,15 +221,21 @@ def model():
     return lbp, lbp1
 
 
-def main():
+def main(args):
     program, program1 = model()
 
-    split_id = 4
-    train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
+    split_id = args.split
+    if args.number == 1:
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
+    else:
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp_subsample_{args.number}.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
 
     def save_epoch(program, epoch=1):
-        program.save(f'conll04-bert-{split_id}-{epoch}.pt')
+        if args.number == 1:
+            program.save(f'conll04-bert-{split_id}-{epoch}.pt')
+        else:
+            program.save(f'conll04-bert-{split_id}-{epoch}-size-{args.number}.pt')
         return epoch + 1
 
     def save_best(program, epoch=1, best_epoch=-1, best_loss=np.inf):
@@ -240,15 +246,76 @@ def main():
             logger.info(f'New Best loss {loss} achieved at Epoch {epoch}.')
             best_epoch = epoch
             best_loss = loss
-            program.save(f'conll04-bert-{split_id}-best.pt')
+            if args.number == 1:
+                program.save(f'conll04-bert-{split_id}-best.pt')
+            else:
+                program.save(f'conll04-bert-{split_id}-size-{args.number}-best.pt')
         return epoch + 1, best_epoch, best_loss
 
-    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='auto', train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
-    program1.test(test_reader, device='auto')
+    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+    program1.test(test_reader, device=args.gpu)
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-{split_id}-{now}.pt')
+    if args.number == 1:
+        program.save(f'conll04-bert-{split_id}-{now}.pt')
+    else:
+        program.save(f'conll04-bert-{split_id}-{now}_size_{args.number}.pt')
 
+import argparse
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Getting the arguments passed")
+    parser.add_argument(
+        "-s",
+        "--split",
+        help="The split",
+        required=False,
+        type=int,
+        default=1,
+        choices=[1, 2, 3, 4, 5],
+    )
+    parser.add_argument(
+        "-n",
+        "--number",
+        help="Number of examples",
+        type=float,
+        required=False,
+        choices=[1, 0.25, 0.1],
+    )
+    parser.add_argument(
+        "-i",
+        "--iteration",
+        help="Number of iterations",
+        type=int,
+        required=False,
+        default=10,
+    )
+    parser.add_argument(
+        "-g",
+        "--gpu",
+        help="GPU option",
+        type=str,
+        required=False,
+        default="auto",
+        choices=[
+            "auto",
+            "cpu",
+            "cuda",
+            "cuda:1",
+            "cuda:0",
+            "cuda:2",
+            "cuda:3",
+            "cuda:4",
+            "cuda:5",
+            "cuda:6",
+            "cuda:7",
+        ],
+    )
+
+    args = parser.parse_args()
+
+    return args
 
 if __name__ == '__main__':
-    main()
+    args = parse_arguments()
+    main(args)
