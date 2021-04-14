@@ -90,7 +90,8 @@ class PrimalDualProgram(LearningBasedProgram):
         c_freq_increase_freq=1,
         c_lr_decay=0,  # strategy
         c_lr_decay_beta=1,
-        c_session={}):
+        c_session={},
+        **kwargs):
         assert c_session
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
@@ -172,6 +173,6 @@ class PrimalDualProgram(LearningBasedProgram):
         if callable(callback):
             callback()
 
-    def test_epoch(self, dataset, callback, **kwargs):
+    def test_epoch(self, dataset, callback=None, **kwargs):
         # just to consum kwargs
         return super().test_epoch(dataset, callback=callback)

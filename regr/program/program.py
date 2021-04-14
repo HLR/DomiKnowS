@@ -38,6 +38,26 @@ class LearningBasedProgram():
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
 
+    def call_epoch(self, name, dataset, epoch_fn, callbacks, callback_storage, **kwargs):
+        if dataset is not None:
+            self.logger.info(f'{name}:')
+            if callbacks:
+                def callback():
+                    for key, callback in callbacks.items():
+                        storage = callback_storage.setdefault(key, tuple())
+                        callback_storage[key] = callback(self, *entuple(storage))
+            else:
+                callback = None
+            consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
+            if self.model.loss:
+                self.logger.info(' - loss:')
+                self.logger.info(self.model.loss)
+            if self.model.metric:
+                self.logger.info(' - metric:')
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
+
     def train(
         self,
         training_set,
@@ -66,33 +86,12 @@ class LearningBasedProgram():
         while self.epoch < self.train_epoch_num:
             self.epoch += 1
             self.logger.info('Epoch: %d', self.epoch)
-
-            def epoch(name, dataset, epoch_fn, callbacks, callback_storage):
-                if dataset is not None:
-                    self.logger.info(f'{name}:')
-                    if callbacks:
-                        def callback():
-                            for key, callback in callbacks.items():
-                                storage = callback_storage.setdefault(key, tuple())
-                                callback_storage[key] = callback(self, *entuple(storage))
-                    else:
-                        callback = None
-                    consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
-                    if self.model.loss:
-                        self.logger.info(' - loss:')
-                        self.logger.info(self.model.loss)
-                    if self.model.metric:
-                        self.logger.info(' - metric:')
-                        for key, metric in self.model.metric.items():
-                            self.logger.info(f' - - {key}')
-                            self.logger.info(metric)
-
-            epoch('Training', training_set, self.train_epoch, train_callbacks, train_callback_storage)
-            epoch('Validation', valid_set, self.test_epoch, valid_callbacks, valid_callback_storage)
+            self.call_epoch('Training', training_set, self.train_epoch, train_callbacks, train_callback_storage, **kwargs)
+            self.call_epoch('Validation', valid_set, self.test_epoch, valid_callbacks, valid_callback_storage, **kwargs)
             if test_every_epoch:
-                epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage)
+                self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
         if not test_every_epoch:
-            epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage)
+            self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
 
             
     def train_epoch(self, dataset, callback=None):
@@ -109,17 +108,11 @@ class LearningBasedProgram():
         if callable(callback):
             callback()
 
-    def test(self, dataset, device=None):
+    def test(self, dataset, device=None, callbacks={}, **kwargs):
         if device is not None:
             self.to(device)
-        self.logger.info('Testing:')
-        consume(tqdm(self.test_epoch(dataset), total=get_len(dataset), desc='Testing'))
-        self.logger.info(' - loss:')
-        self.logger.info(self.model.loss)
-        self.logger.info(' - metric:')
-        for key, metric in self.model.metric.items():
-                    self.logger.info(f' - - {key}')
-                    self.logger.info(metric)
+        callback_storage = {}
+        self.call_epoch('Testing', dataset, self.test_epoch, callbacks, callback_storage, **kwargs)
 
     def test_epoch(self, dataset, callback=None):
         self.model.mode(Mode.TEST)
