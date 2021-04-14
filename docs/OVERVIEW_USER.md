@@ -27,7 +27,7 @@ with Graph('WIQA_graph') as graph:
 
 ```
 
-In the same graph we also define the constraints that we wish to apply on these concepts in addition to the constraints that are inherently defined with regards to the Concepts definition. in the follwing code we assert that the labels for is_more, is_less and disjoint must be True one at a time. the next line asserts that if the label for a question is is_more, the label for a questions is has a symmertic relation with it, should be is_less.
+In the same graph we also define the logical constraints that we wish to apply on these concepts in addition to the constraints that are inherently defined based on the structure of the concept graph. In the follwing code we assert that the labels for is_more, is_less and disjoint must be True one at a time. the next line asserts that if the label for a question is is_more, the label for a questions is has a symmertic relation with it, should be is_less.
 
 ```python
 with Graph('WIQA_graph') as graph:
