@@ -21,6 +21,7 @@ class LearningBasedProgram():
         self.graph = graph
         self.model = Model(graph, **kwargs)
         self.opt = None
+        self.epoch = None
 
     def update_nominals(self, dataset):
         pass
@@ -48,7 +49,8 @@ class LearningBasedProgram():
                         callback_storage[key] = callback(self, *entuple(storage))
             else:
                 callback = None
-            consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=f'Epoch {self.epoch} {name}'))
+            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+            consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=desc))
             if self.model.loss:
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
@@ -92,8 +94,9 @@ class LearningBasedProgram():
                 self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
         if not test_every_epoch:
             self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
+        # reset epoch after everything
+        self.epoch = None
 
-            
     def train_epoch(self, dataset, callback=None):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
