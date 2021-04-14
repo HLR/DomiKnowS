@@ -225,6 +225,7 @@ def main(args):
     program, program1 = model()
 
     split_id = args.split
+    print(args.number)
     if args.number == 1:
         train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     else:
@@ -253,7 +254,7 @@ def main(args):
         return epoch + 1, best_epoch, best_loss
     
     if not args.load:
-        program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+        program.train(list(train_reader)[0:20], test_set=list(test_reader)[0:10], train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
     else:
         program1.load(args.path)
         
@@ -286,6 +287,7 @@ def parse_arguments():
         required=False,
         default=1,
         choices=[1, 0.25, 0.1],
+        default=1,
     )
     parser.add_argument(
         "-i",
