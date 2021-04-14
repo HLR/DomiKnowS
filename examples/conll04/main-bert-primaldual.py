@@ -184,7 +184,7 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     lbp = PrimalDualProgram(
-        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'], beta=0,
+        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -204,7 +204,7 @@ def main(args):
         
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
     
-    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, c_warmup_iters=999999999)
+    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
