@@ -285,6 +285,7 @@ def parse_arguments():
         help="Number of examples",
         type=float,
         required=False,
+        default=1,
         choices=[1, 0.25, 0.1],
         default=1,
     )
