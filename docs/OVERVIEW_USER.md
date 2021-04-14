@@ -75,7 +75,7 @@ program = LearningBasedProgram(graph,...,loss=MacroAverageTracker(NBCrossEntropy
 program.train(reader_train_aug, train_epoch_num=10)
 
 ```
-After our program is trained we can do inferece by creating datanodes. In the code below we get the result for the `is_more` property before and after `ILP` inference.
+Step 6: After our program is trained we can do inferece by creating datanodes. In the code below we get the result for the `is_more` property before and after `ILP` inference. Underlying DomiKnowS computations, integer linear programmig tools are used for considering the declared logical constraint in training and global inferecne. 
 ```python
 for paragraph_ in program.populate(reader):
         paragraph_.inferILPResults(is_more)
