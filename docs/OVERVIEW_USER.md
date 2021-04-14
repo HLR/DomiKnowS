@@ -14,9 +14,9 @@ Please refer to each page for details and usages of the components.
 
 ## How it works
 
-In DomiKnowS, we start with a graph represetnation of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
+In DomiKnowS, we start with a graph declaration of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
 
-First, a graph of concepts must be defined. this graph contains the concepts, their relationship with each other, and logical constraints defined on them. so far the graph is merely conceptual and it doesn't have actual data.
+Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data assotiated to it. The below example shows a graph including pargraph and question concepts. Each paragraph is connected to a number of questions, we show the connection with `contains`: 
 
 ```python
 with Graph('WIQA_graph') as graph:
