@@ -160,6 +160,8 @@ class PoiModel(TorchModel):
         if not self.loss:
             return 0
         outs = [sensor(data_item) for sensor in sensors]
+        if len(outs[0]) == 0:
+            return None
         local_loss = self.loss[(*sensors,)](*outs)
         return local_loss
 
@@ -167,6 +169,8 @@ class PoiModel(TorchModel):
         if not self.metric:
             return None
         outs = [sensor(data_item) for sensor in sensors]
+        if len(outs[0]) == 0:
+            return None
         local_metric = {}
         for key, metric in self.metric.items():
             local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
@@ -186,9 +190,13 @@ class PoiModel(TorchModel):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
                     if self.loss:
-                        loss += self.poi_loss(builder, prop, sensors)
+                        local_loss = self.poi_loss(builder, prop, sensors)
+                        if local_loss is not None:
+                            loss += local_loss
                     if self.metric:
-                        metric[(*sensors,)] = self.poi_metric(builder, prop, sensors)
+                        local_metric = self.poi_metric(builder, prop, sensors)
+                        if local_metric is not None:
+                            metric[(*sensors,)] = local_metric
         return loss, metric
 
 
@@ -231,6 +239,8 @@ class IMLModel(SolverModel):
         output_sensor, target_sensor = sensors
         logit = output_sensor(data_item)
         labels = target_sensor(data_item)
+        if len(logit) == 0:
+            return None
 
         builder = data_item
         datanode = builder.getDataNode()

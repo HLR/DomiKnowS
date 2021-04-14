@@ -14,9 +14,9 @@ Please refer to each page for details and usages of the components.
 
 ## How it works
 
-In DomiKnowS, we start with a graph represetnation of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
+In DomiKnowS, we start with a graph declaration of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
 
-First, a graph of concepts must be defined. this graph contains the concepts, their relationship with each other, and logical constraints defined on them. so far the graph is merely conceptual and it doesn't have actual data.
+Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data assotiated to it. The below example shows a graph including pargraph and question concepts. Each paragraph is connected to a number of questions, we show the connection with `contains`: 
 
 ```python
 with Graph('WIQA_graph') as graph:
@@ -27,7 +27,7 @@ with Graph('WIQA_graph') as graph:
 
 ```
 
-In the same graph we also define the constraints that we wish to apply on these concepts in addition to the constraints that are inherently defined with regards to the Concepts definition. in the follwing code we assert that the labels for is_more, is_less and disjoint must be True one at a time. the next line asserts that if the label for a question is is_more, the label for a questions is has a symmertic relation with it, should be is_less.
+In the same graph we also define the logical constraints that we wish to apply on these concepts in addition to the constraints that are inherently defined based on the structure of the concept graph. In the follwing code we assert that the labels for is_more, is_less and disjoint must be True one at a time. the next line asserts that if the label for a question is is_more, the label for a questions is has a symmertic relation with it, should be is_less.
 
 ```python
 with Graph('WIQA_graph') as graph:
