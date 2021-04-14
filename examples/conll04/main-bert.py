@@ -251,8 +251,12 @@ def main(args):
             else:
                 program.save(f'conll04-bert-{split_id}-size-{args.number}-best.pt')
         return epoch + 1, best_epoch, best_loss
-
-    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+    
+    if not args.load:
+        program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
+    else:
+        program1.load(args.path)
+        
     program1.test(test_reader, device=args.gpu)
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
@@ -290,6 +294,24 @@ def parse_arguments():
         required=False,
         default=10,
     )
+    parser.add_argument(
+        "-l",
+        "--load",
+        help="Load?",
+        type=bool,
+        required=False,
+        default=False,
+    )
+    
+    parser.add_argument(
+        "-p",
+        "--path",
+        help="Loading path",
+        type=str,
+        required=False,
+        default=None,
+    )
+    
     parser.add_argument(
         "-g",
         "--gpu",

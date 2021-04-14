@@ -184,7 +184,7 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
     lbp = PrimalDualProgram(
-        graph,Model=SolverModel ,poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'], beta=0,
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -192,15 +192,28 @@ def model():
     return lbp
 
 
-def main():
+def main(args):
     from graph import graph, sentence, word, phrase, pair
     program = model()
 
-    split_id = 1
-    train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
+    split_id = args.split
+    if args.number == 1:
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
+    else:
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp_subsample_{args.number}.corp')
+        
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
-    program.train(train_reader, test_set=test_reader, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001), device='cuda:0')
-    program.test(test_reader, device='cuda:0')
+    
+    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, c_warmup_iters=999999999)
+    
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    if args.number == 1:
+        program.save(f'conll04-bert-pd-{split_id}-{now}.pt')
+    else:
+        program.save(f'conll04-bert-pd-{split_id}-{now}_size_{args.number}.pt')
+        
+    program.test(test_reader, device=args.gpu)
 #     for datanode, data_item in program.populate(train_reader, device="cuda:0"):
 #         print(datanode)
 #         ph = len(datanode.getChildDataNodes(conceptName=phrase))
@@ -216,11 +229,80 @@ def main():
 #             print(datanode.findDatanodes(select = pair))
 #             print("this example is wrong")
 #         print(data_item)
-        
-    from datetime import datetime
-    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-pd-{split_id}-{now}.pt')
 
+import argparse
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Getting the arguments passed")
+    parser.add_argument(
+        "-s",
+        "--split",
+        help="The split",
+        required=False,
+        type=int,
+        default=1,
+        choices=[1, 2, 3, 4, 5],
+    )
+    parser.add_argument(
+        "-n",
+        "--number",
+        help="Number of examples",
+        type=float,
+        required=False,
+        choices=[1, 0.25, 0.1],
+    )
+    parser.add_argument(
+        "-i",
+        "--iteration",
+        help="Number of iterations",
+        type=int,
+        required=False,
+        default=10,
+    )
+    parser.add_argument(
+        "-l",
+        "--load",
+        help="Load?",
+        type=bool,
+        required=False,
+        default=False,
+    )
+    
+    parser.add_argument(
+        "-p",
+        "--path",
+        help="Loading path",
+        type=str,
+        required=False,
+        default=None,
+    )
+    
+    parser.add_argument(
+        "-g",
+        "--gpu",
+        help="GPU option",
+        type=str,
+        required=False,
+        default="auto",
+        choices=[
+            "auto",
+            "cpu",
+            "cuda",
+            "cuda:1",
+            "cuda:0",
+            "cuda:2",
+            "cuda:3",
+            "cuda:4",
+            "cuda:5",
+            "cuda:6",
+            "cuda:7",
+        ],
+    )
+
+    args = parser.parse_args()
+
+    return args
 
 if __name__ == '__main__':
-    main()
+    args = parse_arguments()
+    main(args)

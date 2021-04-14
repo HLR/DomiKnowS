@@ -200,7 +200,29 @@ def main(args):
     else:
         train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp_subsample_{args.number}.corp')
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
-    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+    
+    def save_epoch(program, epoch=1):
+        if args.number == 1:
+            program.save(f'conll04-bert-iml-{split_id}-{epoch}.pt')
+        else:
+            program.save(f'conll04-bert-iml-{split_id}-{epoch}-size-{args.number}.pt')
+        return epoch + 1
+
+    def save_best(program, epoch=1, best_epoch=-1, best_loss=np.inf):
+        import logging
+        logger = logging.getLogger(__name__)
+        loss = sum(program.model.loss.value().values())
+        if loss < best_loss:
+            logger.info(f'New Best loss {loss} achieved at Epoch {epoch}.')
+            best_epoch = epoch
+            best_loss = loss
+            if args.number == 1:
+                program.save(f'conll04-bert-iml-{split_id}-best.pt')
+            else:
+                program.save(f'conll04-bert-iml-{split_id}-size-{args.number}-best.pt')
+        return epoch + 1, best_epoch, best_loss
+    
+    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch, 'Save Best': save_best})
     program.test(test_reader, device=args.gpu)
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
