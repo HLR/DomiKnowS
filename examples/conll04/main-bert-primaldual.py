@@ -203,8 +203,82 @@ def main(args):
         train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp_subsample_{args.number}.corp')
         
     test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
+    valid_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_valid.corp')
     
-    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+    def save_epoch(program, epoch=1):
+        if args.number == 1:
+            program.save(f'conll04-bert-pd-{split_id}-{epoch}.pt')
+        else:
+            program.save(f'conll04-bert-pd-{split_id}-{epoch}-size-{args.number}.pt')
+        return epoch + 1
+
+    def compute_scores(item, criteria="P"):
+        entities = ["location", "people", "organization", "other"]
+        relations = ["work_for", "located_in", "live_in", "orgbase_on", "kill"]
+        instances = {"location": 931, "people": 793, "organization": 523, "other": 572, "work_for": 94, "located_in": 107, "live_in": 108, "orgbase_on": 93, "kill": 53}
+        sum_entity = 0
+        sum_relations = 0
+        precision_entity = 0
+        precision_relations = 0
+        normal_precision_entity = 0
+        normal_precision_relations = 0
+        sum_all = 0
+        precision_all = 0
+        normal_precision_all = 0
+        for key in entities:
+            sum_entity += instances[key]
+            precision_entity += instances[key] * item[key][criteria]
+            normal_precision_entity += item[key][criteria]
+
+        for key in relations:
+            sum_relations += instances[key]
+            precision_relations += instances[key] * item[key][criteria]
+            normal_precision_relations += item[key][criteria]
+
+        sum_all = sum_relations + sum_entity
+        precision_all = precision_entity + precision_relations
+        normal_precision_all = normal_precision_relations + normal_precision_entity
+
+        outputs = {}
+        
+        if criteria == "P":
+            outputs["micro_" + str(criteria) + "_entities"] = precision_entity / sum_entity
+            outputs["micro_" + str(criteria) + "_relations"] = precision_relations / sum_relations
+            outputs["micro_" + str(criteria) + "_all"] = precision_all / sum_all
+
+        outputs["macro_" + str(criteria) + "_entities"] = normal_precision_entity / len(entities)
+        outputs["macro_" + str(criteria) + "_relations"] = normal_precision_relations / len(relations)
+        outputs["macro_" + str(criteria) + "_all"] = normal_precision_all / (len(entities) + len(relations))
+        
+        return outputs
+    
+    def save_best(program, epoch=1, best_epoch=-1, best_macro_f1=0):
+        import logging
+        logger = logging.getLogger(__name__)
+        metrics = program.model.metric['argmax'].value()
+        results = compute_scores(metrics, criteria="F1")
+        score = results["macro_F1_all"]
+        if score > best_macro_f1:
+            logger.info(f'New Best Score {score} achieved at Epoch {epoch}.')
+            best_epoch = epoch
+            best_macro_f1 = score
+            if args.number == 1:
+                program.save(f'conll04-bert-pd-{split_id}-best-macro-f1.pt')
+            else:
+                program.save(f'conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
+        return epoch + 1, best_epoch, best_macro_f1
+    
+    if not args.load:
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch}, valid_callbacks={'Save Best': save_best})
+    else:
+        program.load(args.path)
+        
+    if args.number == 1:
+        program.load(f'conll04-bert-pd-{split_id}-best-macro-f1.pt')
+    else:
+        program.load(f'conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
+        
+    program.test(test_reader, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
@@ -213,22 +287,6 @@ def main(args):
     else:
         program.save(f'conll04-bert-pd-{split_id}-{now}_size_{args.number}.pt')
         
-    program.test(test_reader, device=args.gpu)
-#     for datanode, data_item in program.populate(train_reader, device="cuda:0"):
-#         print(datanode)
-#         ph = len(datanode.getChildDataNodes(conceptName=phrase))
-#         t = len(data_item['tokens'])
-#         if ph != t:
-#             print("this example is wrong")
-            
-#         if len(data_item['relation']):
-#             print("I have relations")
-            
-#         if len(data_item['relation']) != len(datanode.findDatanodes(select = pair)):
-#             print(data_item['relation'])
-#             print(datanode.findDatanodes(select = pair))
-#             print("this example is wrong")
-#         print(data_item)
 
 import argparse
 
