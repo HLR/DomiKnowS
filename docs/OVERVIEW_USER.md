@@ -14,7 +14,7 @@ Please refer to each page for details and usages of the components.
 
 ## How it works
 
-In DomiKnowS, the program connects concepts' properties in the knowledge with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
+In DomiKnowS, we start with a graph represetnation of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
 
 First, a graph of concepts must be defined. this graph contains the concepts, their relationship with each other, and logical constraints defined on them. so far the graph is merely conceptual and it doesn't have actual data.
 
