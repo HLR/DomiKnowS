@@ -35,7 +35,7 @@ with Graph('WIQA_graph') as graph:
     ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
 ```
 
-Here enters the reader. the reader is a python iterable and each instance of it is a dictionary with the preliminary information for a single datapoint (preliminary means that these initial properties will be used later to produce other properties).
+Step 3: Here enters the reader. The reader is a python iterable and each instance of it is a dictionary with the preliminary information for a single datapoint (preliminary means that these initial properties will be used later to produce other properties).
 ```python
 reader = make_reader(file_address="data/WIQA_AUG/train.jsonl")
 >>> print(reader[0])
@@ -45,19 +45,19 @@ reader = make_reader(file_address="data/WIQA_AUG/train.jsonl")
 ```
 
 
-Then we define sensors. initially sensors will read the properties from the reader.
+Step 4: Then we define sensors. Initially sensors will read the properties from the reader.
 ```python
 paragraph['paragraph_intext'] = ReaderSensor(keyword='paragraph_intext')
 paragraph['question_list'] = ReaderSensor(keyword='question_list')
 ...
 ```
 
-Then some others sensors will use this properties to calculate other properties. in the code below, the program uses the question_paragraph and the text property of the question to create token_ids and Mask by feeding the input to a RobertaTokenizer.
+Some sensors will use this properties to calculate other properties. In the code below, the program uses the question_paragraph and the text property of the question to create token_ids and Mask by feeding the input to a RobertaTokenizer.
 ```python
 question["token_ids", "Mask"] = JointSensor(para_quest_contains, "question_paragraph", 'text',forward=RobertaTokenizer())
 question[is_more] = FunctionalSensor("is_more_", forward=label_reader, label=True)
 ```
-The learner is a type of sensor. while it does use the properties of a concept to calculate a new property, it changes itself and improves its calculation.
+The learner is a type of sensor. While it does use the properties of a concept to calculate a new property, it changes itself and improves its calculation.
 ```python
 question["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 ```
@@ -68,14 +68,14 @@ question[is_more] = ModuleLearner("robert_emb", module=RobertaClassificationHead
 
 The program, later when we define it, starts from the `properties of interest` and it recursively calls all the needed sensors until the final `property of interest` is inferred.
 
-In the end, we define and train our program.
+Step 5: At this stage, we can define and train our program.
 
 ```python
 program = LearningBasedProgram(graph,...,loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 program.train(reader_train_aug, train_epoch_num=10)
 
 ```
-After our program is trained we can do inferece by creating datanodes. in the code below we get the result for the `is_more` property before and after `ILP` inference.
+After our program is trained we can do inferece by creating datanodes. In the code below we get the result for the `is_more` property before and after `ILP` inference.
 ```python
 for paragraph_ in program.populate(reader):
         paragraph_.inferILPResults(is_more)
@@ -111,7 +111,7 @@ Class reference:
 - `regr.sensor.Learner`
 
 In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
-`Sensors` are procedures that access external resources and other sensors. For example, reading from raw data, feature engineering staffs, and preprocessing procedures.
+`Sensors` are procedures that access external resources and other sensors. For example, reading from raw data, feature engineering, and preprocessing procedures.
 `Learners` are computational modules that predict the unknown representations or probabilities of properties based on learning. `Learners` are differentiable components and come with parameters that can be tuned by gradient-based methods.
 
 ### Program
