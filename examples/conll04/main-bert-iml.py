@@ -195,16 +195,19 @@ def main(args):
     program = model()
 
     split_id = args.split
-    train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
-    test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
-    if args.number == -1:
-        program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+    if args.number == 1:
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp')
     else:
-        program.train(list(train_reader)[0:args.number], test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+        train_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_train.corp_subsample_{args.number}.corp')
+    test_reader = SingletonDataLoader(f'data/conll04.corp_{split_id}_test.corp')
+    program.train(train_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
     program.test(test_reader, device=args.gpu)
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
+    if args.number == 1:
+        program.save(f'conll04-bert-iml-{split_id}-{now}.pt')
+    else:
+        program.save(f'conll04-bert-iml-{split_id}-{now}_size_{args.number}.pt')
 
 import argparse
 
@@ -223,9 +226,9 @@ def parse_arguments():
         "-n",
         "--number",
         help="Number of examples",
-        type=int,
+        type=float,
         required=False,
-        default=-1,
+        choices=[1, 0.25, 0.1],
     )
     parser.add_argument(
         "-i",
