@@ -58,7 +58,7 @@ class PrimalDualProgram(LearningBasedProgram):
         c_freq_increase=5,  # d
         c_freq_increase_freq=1,
         c_lr_decay=4,  # strategy
-        c_lr_decay_beta=1,  # beta or param in the strategy
+        c_lr_decay_param=1,  # param in the strategy
         **kwargs):
         # if COptim is None:
         #     COptim = Optim
@@ -78,7 +78,7 @@ class PrimalDualProgram(LearningBasedProgram):
             c_freq_increase=c_freq_increase,
             c_freq_increase_freq=c_freq_increase_freq,
             c_lr_decay=c_lr_decay,
-            c_lr_decay_beta=c_lr_decay_beta,
+            c_lr_decay_param=c_lr_decay_param,
             c_session=c_session,
             **kwargs)
 
@@ -89,8 +89,9 @@ class PrimalDualProgram(LearningBasedProgram):
         c_freq_increase=1,  # d
         c_freq_increase_freq=1,
         c_lr_decay=0,  # strategy
-        c_lr_decay_beta=1,
-        c_session={}):
+        c_lr_decay_param=1,
+        c_session={},
+        **kwargs):
         assert c_session
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
@@ -111,9 +112,8 @@ class PrimalDualProgram(LearningBasedProgram):
             else:
                 closs, *_ = self.cmodel(output[1])
                 loss = mloss + self.beta * closs
-            if self.opt is not None or self.copt is not None and loss:
+            if self.opt is not None and loss:
                 loss.backward()
-            if self.opt is not None:
                 self.opt.step()
             iter += 1
             if (
@@ -137,24 +137,25 @@ class PrimalDualProgram(LearningBasedProgram):
                 # update c_lr
                 if c_lr_decay == 0:
                     # on the paper
+                    # c_lr_decay_param = beta
                     def update_lr(lr):
-                        return c_lr * 1. / (1 + c_lr_decay_beta * c_update)
+                        return c_lr * 1. / (1 + c_lr_decay_param * c_update)
                 elif c_lr_decay == 1:
                     # in pd code / srl strategy 1
-                    # c_lr_decay_beta = lr_decay_after
+                    # c_lr_decay_param = lr_decay_after
                     def update_lr(lr):
-                        return lr * np.sqrt(((c_update-1.) / c_lr_decay_beta + 1.) / (c_update / c_lr_decay_beta + 1.))
+                        return lr * np.sqrt(((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
                 elif c_lr_decay == 2:
                     # in pd code / srl strategy 2
-                    # c_lr_decay_beta = lr_decay_after
+                    # c_lr_decay_param = lr_decay_after
                     def update_lr(lr):
-                        return lr * (((c_update-1.) / c_lr_decay_beta + 1.) / (c_update / c_lr_decay_beta + 1.))
+                        return lr * (((c_update-1.) / c_lr_decay_param + 1.) / (c_update / c_lr_decay_param + 1.))
                 elif c_lr_decay == 3:
                     # in pd code / srl strategy 3
-                    # c_lr_decay_beta = lr_decay_after
-                    assert c_lr_decay_beta <= 1.
+                    # c_lr_decay_param = lr_decay_after
+                    assert c_lr_decay_param <= 1.
                     def update_lr(lr):
-                        return lr * c_lr_decay_beta
+                        return lr * c_lr_decay_param
                 elif c_lr_decay == 4:
                     # in pd code / ner strategy 1
                     def update_lr(lr):
@@ -172,6 +173,6 @@ class PrimalDualProgram(LearningBasedProgram):
         if callable(callback):
             callback()
 
-    def test_epoch(self, dataset, callback, **kwargs):
+    def test_epoch(self, dataset, callback=None, **kwargs):
         # just to consum kwargs
         return super().test_epoch(dataset, callback=callback)
