@@ -164,7 +164,7 @@ class PrimalDualProgram(LearningBasedProgram):
                     raise ValueError(f'c_lr_decay={c_lr_decay} not supported.')
                 for param_group in self.copt.param_groups:
                     param_group['lr'] = update_lr(param_group['lr'])
-            yield (loss, metric, *output)
+            yield (loss, metric, *output[:1])
 
         c_session['iter'] = iter
         c_session['c_update_iter'] = c_update_iter
