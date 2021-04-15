@@ -1,15 +1,15 @@
 # CIFAR10 Tutorial
-This tutorial is created to show the ability of the framework to do inference on problems. 
+This tutorial is created to show the ability of the framework to do inference image classification problem. 
 ## Problem
-We address image classification problem on CIFAR10 data using our framework. CIFAR10 is a dataset consists of 60000 32x32 colour images in 10 classes, with 6000 images per class. There are 50000 training images and 10000 test images.
+We applied our framework for the simple image classification task on CIFAR10 dataset. CIFAR10 is a dataset consists of 60,000 32x32 colour images with ten class labels (6000 images per class). There are 50,000 images for training and 10,000 images for test.
 Class labels are `airplane`, `automobile`, `bird`,`cat`, `deer`, `dog`, `frog`, `horse`, `ship`, and `truck`.
  
 [Here](https://www.cs.toronto.edu/~kriz/cifar.html) is more information about CIFAR10 dataset.
 
 ## Framework Modeling
 ### Define the Graph
-Each program in the Domiknows framework starts with a concept graph which defines the concepts interacting inside the problem world. 
-Here we have an `image` as a concept, each class label `Is_A` `image` concept. Basically, we define the parent concept `image`,
+Each program in the Domiknows framework starts with a concept graph, which defines the concepts interacting inside the problem world. 
+Here we have an `image` as a concept, each class label `Is_A` `image`. Basically, we define the parent concept `image`,
  and all of the class labels as the children of `image`. For example, `ariplane` is an `image`.
  
  The graph declration for CIFAR10 problem is:
@@ -30,10 +30,10 @@ with Graph('CIFAR10') as graph:
     frog = image(name='frog')
     horse = image(name='horse')
     ship = image(name='ship')
-    nandL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
+    disjoint(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)
 ```
 
-Notice the last line in the graph declaration; we defined a constraint that we want to apply on the inference. `nandL` constraint enforces that only one
+Notice the last line in the graph declaration; we defined a constraint that we want to apply on the inference. `disjoint` constraint enforces that only one
 concept among all its arguments should be selected. In particular, it means each image should be only one object (`airplane`, `dog`, `truck`, etc.).
  Please refer to [here](/docs/KNOWLEDGE.md) for more information about how you can define rules and constraints.
 
@@ -42,7 +42,7 @@ In [User Pipeline](/docs/PIPELINE.md#1-knowledge-declaration) and [Knowledge Dec
 
 
 ### Model Declaration
-The next step toward solving a problem in our framework is to define a model flow or declaration for each example of the data.
+The next step toward solving a problem in our framework is defining a model flow or declaration for each example of the data.
 
 Before jumping to the model declaration, we could first define the network. For example, for image classification task,
 we defined a simple convolutional neural network as follows:
@@ -78,6 +78,11 @@ from regr.program import LearningBasedProgram
 from torch import nn
 from graph import graph
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program import SolverPOIProgram, IMLProgram
+from regr.program.model.pytorch import SolverModel
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 
 def model_declaration():
     graph.detach()
@@ -117,7 +122,15 @@ def model_declaration():
     image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
     image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2))
 
-    program = LearningBasedProgram(graph, PoiModel, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    #ILP inference
+    program = SolverPOIProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
+    #IML inference and training 
+    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
+    #Primal-Dual inference and training
+    program = PrimalDualProgram(graph, SolverModel, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
     return program
 ```
 First we link `ReaderSensor` to the concepts and properties of the graph. Basically, we are connecting the readers to
@@ -125,10 +138,12 @@ the the graph we declared for this problem.
  
  
 Next, we define learners and connect them to the concepts. Specifically, the pixel of each image passes through the convolutional
-neural network we defined as `ImageNetwork`; this CNN networked shared among all of the concepts. Each class labeld concept has its own
+neural network we defined as `ImageNetwork`; this CNN network is shared among all of the concepts. Each class label concept has its own
 linear layer. The dimension of these linear layers are desinged such that they are consistent with the lasy CNN layer in our `ImageNetwork`.
 
-By defining `LearningBasedProgram`, we have an executable instance from the declaration of the graph attached to the sensors and learners.
+After we connect all the sensors and learners to the graph, we can train and test our model by defining *programs*.
+Notice as an example, we listed three programs in above panel according to three types of inference. You only need to define one program (*ILP*, *IML*, *PrimalDual*) based on your inference preferences.
+By defining `program`, we have an executable instance from the declaration of the graph attached to the sensors and learners.
 Basically, we make an executable version of our declared graph that is able to trace the dependencies of the sensors and fill the data from
  the reader to run examples on the declared model.
 
@@ -137,12 +152,19 @@ In order to loaded the CIFAR10 dataset be consistent with this framework, we inh
 class and change the `__getitem__` function:
  
 ```python
+from torchvision import datasets
+import os
+import pickle
+import sys
+import numpy as np
+from PIL import Image
+
 class CIFAR10_DomiKnows(datasets.CIFAR10):
 
     def __init__(self, root, train=True, transform=None, target_transform=None,
                  download=False):
 
-        super(CIFAR10_1, self).__init__(root, transform=transform,
+        super(CIFAR10_DomiKnows, self).__init__(root, transform=transform,
                                       target_transform=target_transform, download=download)
 
         self.train = train  # training set or test set
@@ -213,8 +235,8 @@ and ten keys (class labels) with the value to be zero or one. It is really impor
 
 After constructing the class, we could load CIFAR10 data:
 
-
 ```python
+from torchvision import transforms
 def load_cifar10(train=True, root='./data/', size=32):
     CIFAR100_TRAIN_MEAN = (0.5071, 0.4867, 0.4408)
     CIFAR100_TRAIN_STD = (0.2675, 0.2565, 0.2761)
@@ -246,38 +268,21 @@ program = model_declaration()
 
 Then, you will load the data:
 ```python
+from torch.utils.data import random_split
+val_size = 5000
 trainset = load_cifar10(train=True)
+testset = load_cifar10(train=False)
+train_size = len(trainset) - val_size
+train_ds, val_ds = random_split(trainset, [train_size, val_size])
 ```
     
 And then run the model for training:
 ```python
-program.train(trainset, train_epoch_num=10, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
 ```
-
-Then, we populate datanode and call inference on each image.
-
+During training, loss values and all metrics we specified such as precision, recall, and F1 before and after the inference for each epoch is presented. 
 ```python
-label_list = ['airplane', 'automobile','bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-testset = load_cifar10(train=False)
-for datanode in program.populate(dataset=testset):
-    print('----------before ILP---------')
-    for label in label_list:
-        print(label, datanode.getAttribute(eval(label)).softmax(-1))
-
-    datanode.inferILPConstrains('dog', 'truck', 'airplane',
-                                'automobile', 'bird', 'cat',
-                                'deer', 'frog', 'horse', 'ship',fun=None)
-    print('----------after ILP---------')
-    prediction = ' '
-    for label in label_list:
-        predt_label = datanode.getAttribute(eval(label), 'ILP').item()
-        if predt_label == 1.0:
-            prediction = label
-        print('inference ',label, predt_label )
+program.test(testset)
 ```
-After `datanode.inferILPConstrains`, we enforces the constraint we defined in our graph, which was
-`nandL(truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship)`. With this inference constraint, we will have
-only one class label as prediction. 
-
 
 

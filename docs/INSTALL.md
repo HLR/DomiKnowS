@@ -17,6 +17,7 @@
 - [python](https://www.python.org) 3.7
 - [PyTorch](https://pytorch.org) 1.4.0
 - [Gurobi](https://gurobi.com) 8.0
+- [graphviz](https://graphviz.org/)
 - other dependencies specified in [`requirements.txt`](/requirements.txt), that are installed by `pip`.
 
 ```bash

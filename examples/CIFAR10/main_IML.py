@@ -17,13 +17,6 @@ import numpy as np
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from torch.utils.data import random_split
 
-
-
-# https://zhenye-na.github.io/2018/09/28/pytorch-cnn-cifar10.html
-def prediction_softmax(pr, gt):
-    return torch.softmax(pr.data, dim=-1)
-
-
 class ImageNetwork(torch.nn.Module):
     def __init__(self):
         super(ImageNetwork, self).__init__()
@@ -65,7 +58,6 @@ class ImageNetwork(torch.nn.Module):
 
         return x
 
-
 class LinearNetwork(torch.nn.Module):
     def __init__(self):
         super(LinearNetwork, self).__init__()
@@ -106,34 +98,31 @@ def model_declaration():
     horse = graph['horse']
     ship = graph['ship']
 
-    image['pixels'] = ReaderSensor(keyword='pixels', device="cuda:1")
-    image[airplane] = ReaderSensor(keyword='airplane',label=True, device="cuda:1")
-    image[dog] = ReaderSensor(keyword='dog',label=True, device="cuda:1")
-    image[truck] = ReaderSensor(keyword='truck',label=True, device="cuda:1")
-    image[automobile] = ReaderSensor(keyword='automobile',label=True, device="cuda:1")
-    image[bird] = ReaderSensor(keyword='bird',label=True, device="cuda:1")
-    image[cat] = ReaderSensor(keyword='cat',label=True, device="cuda:1")
-    image[deer] = ReaderSensor(keyword='deer',label=True, device="cuda:1")
-    image[frog] = ReaderSensor(keyword='frog',label=True, device="cuda:1")
-    image[horse] = ReaderSensor(keyword='horse',label=True, device="cuda:1")
-    image[ship] = ReaderSensor(keyword='ship',label=True, device="cuda:1")
+    image['pixels'] = ReaderSensor(keyword='pixels')
+    image[airplane] = ReaderSensor(keyword='airplane',label=True)
+    image[dog] = ReaderSensor(keyword='dog',label=True)
+    image[truck] = ReaderSensor(keyword='truck',label=True)
+    image[automobile] = ReaderSensor(keyword='automobile',label=True)
+    image[bird] = ReaderSensor(keyword='bird',label=True)
+    image[cat] = ReaderSensor(keyword='cat',label=True)
+    image[deer] = ReaderSensor(keyword='deer',label=True)
+    image[frog] = ReaderSensor(keyword='frog',label=True)
+    image[horse] = ReaderSensor(keyword='horse',label=True)
+    image[ship] = ReaderSensor(keyword='ship',label=True)
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device="cuda:1")
-    image[airplane] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[dog] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[truck] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[automobile] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[bird] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[cat] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[deer] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[frog] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[horse] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
-    image[ship] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork())
+    image[airplane] = ModuleLearner('emb', module=LinearNetwork())
+    image[dog] = ModuleLearner('emb', module=LinearNetwork())
+    image[truck] = ModuleLearner('emb', module=LinearNetwork())
+    image[automobile] = ModuleLearner('emb', module=LinearNetwork())
+    image[bird] = ModuleLearner('emb', module=LinearNetwork())
+    image[cat] = ModuleLearner('emb', module=LinearNetwork())
+    image[deer] = ModuleLearner('emb', module=LinearNetwork())
+    image[frog] = ModuleLearner('emb', module=LinearNetwork())
+    image[horse] = ModuleLearner('emb', module=LinearNetwork())
+    image[ship] = ModuleLearner('emb', module=LinearNetwork())
 
-
-
-    program = SolverPOIProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-
+    program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program
 
@@ -168,7 +157,6 @@ class CIFAR10_1(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-#                 self.data.append(entry['data'][:100])
                 self.data.append(entry['data'])
 
                 if 'labels' in entry:
@@ -231,20 +219,21 @@ def main():
     program = model_declaration()
 
     ### load data
-#     val_size = 50
     val_size = 5000
 
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
     train_size = len(trainset) - val_size
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
-    print(len(train_ds), len(val_ds))
 
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
-    
-    program.save("/egr/research-hlr/elaheh/DomiKnowS/models/cifar_ILP")
-    
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+
+    program.save("./cifar_ILP")
+
     program.test(testset)
+
+
+
         
 
 if __name__ == '__main__':
