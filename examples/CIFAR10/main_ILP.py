@@ -4,8 +4,7 @@ sys.path.append('.')
 sys.path.append('../..')
 
 from regr.program import SolverPOIProgram, POIProgram, IMLProgram
-from regr.program.model.pytorch import PoiModel, IMLModel, SolverModel
-
+from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.model.primaldual import PrimalDualModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
@@ -17,13 +16,6 @@ import os,pickle
 import numpy as np
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from torch.utils.data import random_split
-from regr.program.primaldualprogram import PrimalDualProgram
-
-
-
-# https://zhenye-na.github.io/2018/09/28/pytorch-cnn-cifar10.html
-def prediction_softmax(pr, gt):
-    return torch.softmax(pr.data, dim=-1)
 
 
 class ImageNetwork(torch.nn.Module):
@@ -67,7 +59,6 @@ class ImageNetwork(torch.nn.Module):
 
         return x
 
-
 class LinearNetwork(torch.nn.Module):
     def __init__(self):
         super(LinearNetwork, self).__init__()
@@ -108,35 +99,31 @@ def model_declaration():
     horse = graph['horse']
     ship = graph['ship']
 
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    image['pixels'] = ReaderSensor(keyword='pixels', device="cuda:1")
+    image[airplane] = ReaderSensor(keyword='airplane',label=True, device="cuda:1")
+    image[dog] = ReaderSensor(keyword='dog',label=True, device="cuda:1")
+    image[truck] = ReaderSensor(keyword='truck',label=True, device="cuda:1")
+    image[automobile] = ReaderSensor(keyword='automobile',label=True, device="cuda:1")
+    image[bird] = ReaderSensor(keyword='bird',label=True, device="cuda:1")
+    image[cat] = ReaderSensor(keyword='cat',label=True, device="cuda:1")
+    image[deer] = ReaderSensor(keyword='deer',label=True, device="cuda:1")
+    image[frog] = ReaderSensor(keyword='frog',label=True, device="cuda:1")
+    image[horse] = ReaderSensor(keyword='horse',label=True, device="cuda:1")
+    image[ship] = ReaderSensor(keyword='ship',label=True, device="cuda:1")
 
-    image['pixels'] = ReaderSensor(keyword='pixels', device=device)
-    image[airplane] = ReaderSensor(keyword='airplane',label=True, device=device)
-    image[dog] = ReaderSensor(keyword='dog',label=True, device=device)
-    image[truck] = ReaderSensor(keyword='truck',label=True, device=device)
-    image[automobile] = ReaderSensor(keyword='automobile',label=True, device=device)
-    image[bird] = ReaderSensor(keyword='bird',label=True, device=device)
-    image[cat] = ReaderSensor(keyword='cat',label=True, device=device)
-    image[deer] = ReaderSensor(keyword='deer',label=True, device=device)
-    image[frog] = ReaderSensor(keyword='frog',label=True, device=device)
-    image[horse] = ReaderSensor(keyword='horse',label=True, device=device)
-    image[ship] = ReaderSensor(keyword='ship',label=True, device=device)
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device="cuda:1")
+    image[airplane] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[dog] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[truck] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[automobile] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[bird] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[cat] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[deer] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[frog] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[horse] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
+    image[ship] = ModuleLearner('emb', module=LinearNetwork(), device="cuda:1")
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[airplane] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[dog] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[truck] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[automobile] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[bird] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[cat] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[deer] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[frog] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[horse] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-    image[ship] = ModuleLearner('emb', module=LinearNetwork(), device=device)
-
-
-
-    program = PrimalDualProgram(graph, SolverModel, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    program = SolverPOIProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program
 
@@ -171,7 +158,6 @@ class CIFAR10_1(datasets.CIFAR10):
                 else:
                     entry = pickle.load(f, encoding='latin1')
 
-#                 self.data.append(entry['data'][:100])
                 self.data.append(entry['data'])
 
                 if 'labels' in entry:
@@ -232,21 +218,17 @@ def load_cifar10(train=True, root='./data/', size=32):
 def main():
 
     program = model_declaration()
-
     ### load data
-#     val_size = 50
     val_size = 5000
 
     trainset = load_cifar10(train=True)
     testset = load_cifar10(train=False)
     train_size = len(trainset) - val_size
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
-    print(len(train_ds), len(val_ds))
 
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device=device, train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
-    program.save("/egr/research-hlr/elaheh/DomiKnowS/models/cifar_PD")
+    program.save("./cifar_ILP")
     
     program.test(testset)
         
