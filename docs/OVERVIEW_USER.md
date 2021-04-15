@@ -16,7 +16,7 @@ Please refer to each page for details and usages of the components.
 
 In DomiKnowS, we start with a graph declaration of the concepts involved in our problem domain. Then in the program, we declare the connections between concepts' properties in the conceptual graph with sensors (data accessing procedure) and learners (statistical models), which handles the process of training, testing, and inference.
 
-Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data associated with it. The below example shows a graph including paragraph and question concepts. Each paragraph is connected to some questions, we show the connection with `contains`: 
+Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data associated with it. The example below shows a graph including paragraph and question concepts. Each paragraph is connected to some questions, we show the connection with `contains`: 
 
 ```python
 with Graph('WIQA_graph') as graph:
@@ -27,7 +27,7 @@ with Graph('WIQA_graph') as graph:
 
 ```
 
-Step 2: In the same graph we also define the logical constraints that we wish to apply to these concepts in addition to the constraints that are implicitly inferred based on the structure of the concept graph. In the following code, we declare that the labels is_more, is_less, and no-effect are disjoint and must be True one at a time. The next line declares that if the label for a question is is_more, the label for a question that has a symmetric relation with it should be is_less.
+Step 2: In the same graph we also define the logical constraints that we wish to apply to these concepts in addition to the constraints that are implicitly inferred based on the structure of the concept graph. In the following code, we declare that the labels `is_more`, `is_less`, and `no_effect` are disjoint and must be True one at a time. The next line declares that if the label for a question is `is_more`, the label for a question that has a `symmetric` relation with it should be `is_less`.
 
 ```python
 with Graph('WIQA_graph') as graph:
@@ -52,7 +52,7 @@ paragraph['question_list'] = ReaderSensor(keyword='question_list')
 ...
 ```
 
-Some sensors will use these properties to calculate other properties. In the code below, the program uses the question_paragraph and the text property of the question to create token_ids and Mask by feeding the input to a RobertaTokenizer. afterward, the sensor saves the newly created properties to be used later. JointSensor can calculate multiple (here two) properties at once.
+Some sensors will use these properties to calculate other properties. In the code below, the program uses the `question_paragraph` and the `text` properties of the question to create `token_ids` and `Mask` by feeding the input to a RobertaTokenizer. afterward, the sensor saves the newly created properties to be used later. `JointSensor` can calculate multiple (here two) properties at once.
 ```python
 question["token_ids", "Mask"] = JointSensor( "question_paragraph", 'text',forward=RobertaTokenizer())
 question[is_more] = FunctionalSensor("is_more_", forward=label_reader, label=True)
@@ -61,7 +61,7 @@ The learner is a type of sensor. While it does use the properties of a concept t
 ```python
 question["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 ```
-Now another learner can use this predicted property of robert_emb infre another property.
+Now another learner can use this predicted property of `robert_emb` to infer another property.
 ```python
 question[is_more] = ModuleLearner("robert_emb", module=RobertaClassificationHead(roberta_model.last_layer_size))
 ```
