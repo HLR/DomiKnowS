@@ -14,6 +14,14 @@ Run the following code to prepare the required splits for the task. The splits a
 ```
 python scripts/split.py data/conll04.corp
 ```
+
+After preparing the data run the following code on your specific split to get the statistics of that.
+```
+python scripts/stat.py {Filepath} 
+```
+This will give you the number of true examples for each concept class. Before running the training and test models, check your split`_valid.corp` file for statistics and replace the `instances` variable inside the `compute_scores` in the following files with the appropriate number.
+`main-bert.py`, `main-bert-iml.py`, `main-bert-primaldual.py`
+This numbers are used to compute `micrro_avg` scores. 
 ## Models
 The model uses `Bert` + `Spacy W2V` to represent tokens(phrases) in a sentence. We use the pretrained parameters and do not further train those representations for this task.
 For each concept such as `People`, `Organization`, .. we use a linear layer on top of the token representations with a boolean(2 logits) classifier at the end.
