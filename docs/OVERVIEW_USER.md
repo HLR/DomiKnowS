@@ -14,9 +14,9 @@ Please refer to each page for details and usages of the components.
 
 ## How it works
 
-In DomiKnowS, we start with a graph declaration of the concepts invlolved in our problem domain. Then in the program we declare the connections between concepts' properties in the coneptual graph with sensors (data accessing procedure) and learners (statistical models), handles the process of training, testing and inference.
+In DomiKnowS, we start with a graph declaration of the concepts involved in our problem domain. Then in the program, we declare the connections between concepts' properties in the conceptual graph with sensors (data accessing procedure) and learners (statistical models), which handles the process of training, testing, and inference.
 
-Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data assotiated to it. The below example shows a graph including pargraph and question concepts. Each paragraph is connected to a number of questions, we show the connection with `contains`: 
+Step 1: Declaring the concept graph of the problem domain: The graph contains the concepts, their relationship with each other, and logical constraints defined on them. So far the graph is merely conceptual and it doesn't have any actual data associated with it. The below example shows a graph including paragraph and question concepts. Each paragraph is connected to some questions, we show the connection with `contains`: 
 
 ```python
 with Graph('WIQA_graph') as graph:
@@ -27,7 +27,7 @@ with Graph('WIQA_graph') as graph:
 
 ```
 
-Step 2: In the same graph we also define the logical constraints that we wish to apply on these concepts in addition to the constraints that are implicitly inferred based on the structure of the concept graph. In the follwing code we declare that the labels is_more, is_less and no-effect are disjoint and must be True one at a time. The next line declares  that if the label for a question is is_more, the label for a questions is has a symmertic relation with it, should be is_less.
+Step 2: In the same graph we also define the logical constraints that we wish to apply to these concepts in addition to the constraints that are implicitly inferred based on the structure of the concept graph. In the following code, we declare that the labels is_more, is_less, and no-effect are disjoint and must be True one at a time. The next line declares that if the label for a question is is_more, the label for a question that has a symmetric relation with it should be is_less.
 
 ```python
 with Graph('WIQA_graph') as graph:
@@ -35,7 +35,7 @@ with Graph('WIQA_graph') as graph:
     ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
 ```
 
-Step 3: Here enters the reader. The reader is a python iterable and each instance of it is a dictionary with the preliminary information for a single datapoint (preliminary means that these initial properties will be used later to produce other properties).
+Step 3: Here enters the reader. The reader is a python iterable and each instance of it is a dictionary with the preliminary information for a single datapoint (preliminary means that these initial properties will be used later to produce other properties). the reader can be optionally created using the reader tools in DomiKnows for convenience.
 ```python
 reader = make_reader(file_address="data/WIQA_AUG/train.jsonl")
 >>> print(reader[0])
@@ -52,9 +52,9 @@ paragraph['question_list'] = ReaderSensor(keyword='question_list')
 ...
 ```
 
-Some sensors will use this properties to calculate other properties. In the code below, the program uses the question_paragraph and the text property of the question to create token_ids and Mask by feeding the input to a RobertaTokenizer.
+Some sensors will use these properties to calculate other properties. In the code below, the program uses the question_paragraph and the text property of the question to create token_ids and Mask by feeding the input to a RobertaTokenizer. afterward, the sensor saves the newly created properties to be used later. JointSensor can calculate multiple (here two) properties at once.
 ```python
-question["token_ids", "Mask"] = JointSensor(para_quest_contains, "question_paragraph", 'text',forward=RobertaTokenizer())
+question["token_ids", "Mask"] = JointSensor( "question_paragraph", 'text',forward=RobertaTokenizer())
 question[is_more] = FunctionalSensor("is_more_", forward=label_reader, label=True)
 ```
 The learner is a type of sensor. While it does use the properties of a concept to calculate a new property, it changes itself and improves its calculation.
@@ -75,13 +75,13 @@ program = LearningBasedProgram(graph,...,loss=MacroAverageTracker(NBCrossEntropy
 program.train(reader_train_aug, train_epoch_num=10)
 
 ```
-Step 6: After our program is trained we can do inferece by creating datanodes. In the code below we get the result for the `is_more` property before and after `ILP` inference. Underlying DomiKnowS computations, integer linear programmig tools are used for considering the declared logical constraint in training and global inferecne. 
+Step 6: After our program is trained we can do inference by creating data nodes. data nodes are data graphs with the concepts that we defined earlier in our conceptual graph and populated with data read from our reader and our sensors. In the code below we get the result for the `is_more` property before and after `ILP` inference. Underlying DomiKnowS computations, integer linear programming tools are used for considering the declared logical constraint in training and global inference. 
 ```python
-for paragraph_ in program.populate(reader):
-        paragraph_.inferILPResults(is_more)
-        for question_ in paragraph_.getChildDataNodes():
-            print(question_.getAttribute(is_more))
-            print(question_.getAttribute(is_more, "ILP"))
+for paragraph_datanode in program.populate(reader):
+        paragraph_datanode.inferILPResults(is_more)
+        for question_datanode in paragraph_datanode.getChildDataNodes():
+            print(question_datanode.getAttribute(is_more))
+            print(question_datanode.getAttribute(is_more, "ILP"))
 ```
 
 ## How to program
@@ -128,7 +128,7 @@ Class reference:
 
 - `regr.graph.DataNode`
 
-The program uses and returns a data structure known as the datanode. They are an instance of the conceptual graph and are created using sensor inputs and learner predictions.
+The program uses and returns a data structure known as the data node. They are an instance of the conceptual graph and are created using sensor inputs and learner predictions.
 
 ### Inference
 

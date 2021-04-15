@@ -55,7 +55,7 @@ first, we define paragraph, then we define questions and add a contains relation
 In the graph, there are `Concepts`s named `'paragraph'`, `'question'`, `'symmetric'` and `'transitive'` as python variables with the same name. 
 `symmetric` has two arguments named `arg1` and `arg2`, which are both `question`.
 `transitive` on the other hand has three arguments named `arg11`, `arg22` and `arg33`, all of which are `question` as well.
-`is_more` , `is_less` and `no_effect` are concepts that have IsA relation with `question`. we will use these three concepts as labels of questions as in the answer to these questions can be one of these three.
+`is_more` , `is_less` and `no_effect` are concepts that have IsA relation with `question`. we will use these three concepts as labels of questions as the answer to these questions can be one of these three.
 
 further, in the graph, we define our constraints.
 
