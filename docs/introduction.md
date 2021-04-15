@@ -101,47 +101,31 @@ with Graph('global') as graph:
         organization = entity(name='organization', auto_constraint=False)
         assert organization.relate_to(entity)[0].auto_constraint == False
         location = entity(name='location', auto_constraint=None)
-        # auto_constraint->True due to its graph
-        assert location.relate_to(entity)[0].auto_constraint == True
         other = entity(name='other')
         o = entity(name='O')
 
-        #atMostL(people, organization, location, other, o)
-        # exactL(people, organization, location, other, o, 1)
         disjoint(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
         work_for.has_a(people, organization, auto_constraint=True)
-        assert work_for.relate_to(people)[0].auto_constraint == True
-        assert work_for.relate_to(organization)[0].auto_constraint == True
         
         located_in = pair(name='located_in')
         located_in.has_a(location, location, auto_constraint=False)
-        assert located_in.relate_to(location)[0].auto_constraint == False
-        assert located_in.relate_to(location)[1].auto_constraint == False
 
         live_in = pair(name='live_in')
         live_in.has_a(people, location, auto_constraint=None)
-        # auto_constraint->True due to its graph
-        assert live_in.relate_to(people)[0].auto_constraint == True
-        assert live_in.relate_to(location)[0].auto_constraint == True
 
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
-        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
 
-        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
         ifL(located_in, V(name='x'), andL(location, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
         
-        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
         ifL(live_in, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
 
-        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
         ifL(orgbase_on, V(name='x'), andL(organization, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
         
-        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
         ifL(kill, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), people, V(v=('x', rel_pair_phrase2.name))))
 
 ```
