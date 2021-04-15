@@ -302,10 +302,11 @@ def main(args):
     else:
         program1.load(args.path)
     
-    if args.number == 1:
-        program1.load(f'conll04-bert-{split_id}-best-macro-f1.pt')
-    else:
-        program1.load(f'conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
+    if not args.load:
+        if args.number == 1:
+            program1.load(f'conll04-bert-{split_id}-best-macro-f1.pt')
+        else:
+            program1.load(f'conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
     
