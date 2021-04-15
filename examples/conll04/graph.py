@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, atMostL, V, exactL
+from regr.graph.logicalConstrain import ifL, andL, atMostL, V, exactL, orL
 from regr.graph.relation import disjoint
 
 
@@ -31,9 +31,8 @@ with Graph('global') as graph:
         other = entity(name='other')
         o = entity(name='O')
 
-        #atMostL(people, organization, location, other, o)
-        # exactL(people, organization, location, other, o, 1)
         disjoint(people, organization, location, other, o)
+        orL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
         work_for.has_a(people, organization, auto_constraint=True)

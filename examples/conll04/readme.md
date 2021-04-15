@@ -14,6 +14,7 @@ Run the following code to prepare the required splits for the task. The splits a
 ```
 python scripts/split.py data/conll04.corp
 ```
+To generate the version including the validation set pass `-v` to the above command.
 
 After preparing the data run the following code on your specific split to get the statistics of that.
 ```

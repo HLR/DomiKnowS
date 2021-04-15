@@ -272,9 +272,9 @@ def main(args):
         program.load(args.path)
         
     if args.number == 1:
-        program.load(f'conll04-bert-iml-{split_id}-best-macro-f1.pt')
+        program.load(f'conll04-bert-{split_id}-iml-best-macro-f1.pt')
     else:
-        program.load(f'conll04-bert-iml-{split_id}-size-{args.number}-best_macro-f1.pt')
+        program.load(f'conll04-bert-{split_id}-iml-size-{args.number}-best_macro-f1.pt')
         
     program.test(test_reader, device=args.gpu)
     
