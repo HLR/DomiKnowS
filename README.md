@@ -7,6 +7,9 @@ This project is under heavy development and not yet ready to use.
 
 Please refer to our [documentation](docs) for further details.
 
+Please visit the DomiKnows Webpage for more information and getting to start documentations. 
+[Link to the DomiKnows Website](https://hlr.github.io/domiknows-nlp/)
+
 ## Related
 
 The project is inspired by [DeLBP (Declarative Learning based Programming)](http://www.cs.tulane.edu/~pkordjam/delbp.htm),
