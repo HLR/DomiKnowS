@@ -1,3 +1,8 @@
+import sys
+
+sys.path.append('.')
+sys.path.append('../..')
+
 from regr.data.reader import RegrReader
 
 
