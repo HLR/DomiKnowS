@@ -49,20 +49,20 @@ class EmailSpamReader(RegrReader):
         return final_data
 
     def getSubjectval(self, item):
-        return [item['subject']]
+        return item['subject']
 
     def getBodyval(self, item):
-        return [item['body']]
+        return item['body']
 
     def getForwardSubjectval(self, item):
         if 'forward_subject' in item:
-            return [item['forward_subject']]
+            return item['forward_subject']
         else:
             return None
 
     def getForwardBodyval(self, item):
         if 'forward_body' in item:
-            return [item['forward_body']]
+            return item['forward_body']
         else:
             return None
 

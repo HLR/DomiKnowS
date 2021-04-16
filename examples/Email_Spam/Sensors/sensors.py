@@ -1,17 +1,16 @@
-from regr.sensor.pytorch.sensors import FunctionalSensor
+from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor
 import spacy
 from typing import Any
 import torch
 
-
 class SentenceRepSensor(FunctionalSensor):
-    def __init__(self, *pres, edges=None, label=False):
-        super().__init__(*pres, edges=None, label=False)
-        self.nlp = spacy.load('en_core_web_sm')
+    def __init__(self, *pres, **kwarg):
+        super().__init__(*pres, **kwarg)
+        self.nlp = spacy.load('en_core_web_lg')
 
-    def forward(self, text) -> Any:
-        email = list(self.nlp.pipe(text))
-        return torch.tensor([it.vector for it in email], device=self.device)
+    def forward(self, *inputs) -> Any:
+        email = self.nlp(inputs[0])
+        return torch.from_numpy(email.vector).to(device=self.device).unsqueeze(0)
 
 
 class ForwardPresenceSensor(FunctionalSensor):
