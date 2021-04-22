@@ -86,7 +86,7 @@ class LinearNetwork(torch.nn.Module):
         x = self.fc_layer(x)
         return x
         
-from graph_bin_hierarchical import graph, Image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship,animal, vehicle
+from graph_binomial import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship,animal, vehicle
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -252,7 +252,7 @@ def main():
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
 
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, train_epoch_num=50, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr=.001))
     
     # program.save("/egr/research-hlr/elaheh/DomiKnowS/models/cifar_ILP")
     
