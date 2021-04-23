@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import V, orL, andL, existsL, notL, atLeastL, atMostL
+from regr.graph.logicalConstrain import V, orL, existsL
 
 
 Graph.clear()

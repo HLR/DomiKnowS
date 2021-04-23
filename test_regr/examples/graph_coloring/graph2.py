@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, eqL, atLeastL, atMostL, exactL, V
+from regr.graph.logicalConstrain import orL, andL, existsL, eqL, atMostL, atLeastI, exactI, atMostI, V
 
 
 Graph.clear()
@@ -19,15 +19,14 @@ with Graph('global') as graph2:
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
         orL(firestationCity, V(name='x'), existsL(firestationCity, V(v=('x', eqL(cityLink, 'neighbor', {True}),  city2))))
         
-        
         # No less then 1 firestationCity
-        atLeastL(firestationCity, p=90)
+        atLeastI(firestationCity, p=90)
         
-        # At most 1 firestationCity
-        atMostL(firestationCity, p=80)
+        # At most 3 firestationCity
+        atMostI(firestationCity, 3, p=80)
         
         # Each city has no more then 4 neighbors which are firestationCity
         atMostL(andL(city, V(name='x'), firestationCity, V(v=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4, p=60)
 
         # Exactly 2 firestationCity
-        exactL(firestationCity, 2, p=55)
+        exactI(firestationCity, 2, p=55)
