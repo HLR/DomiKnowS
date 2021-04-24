@@ -68,3 +68,7 @@ Running the PrimalDual program
 ```bash
 python main-bert-primaldual.py
 ```
+
+### Results
+
+To see the results please look at the `statistics.ipynb` file.
