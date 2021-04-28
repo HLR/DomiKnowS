@@ -4,7 +4,6 @@ import numpy
 import torch
 from  collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
-from future.builtins.misc import isinstance
    
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
@@ -167,43 +166,41 @@ class LogicalConstrain:
         return rVars
     
     def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
-        if len(v) != 1:
-            myLogger.error("%s Logical Constrain created with %i sets of logical variables which is not equal to one"%(lcMethodName, len(v)))
-            return None
-        
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        lcVariableName0 = lcVariableNames[0] # First and only one LC variable
+        lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
         zVars = [] # Output variables
         
         # Loop through input ILP variables sets in the list of the first input LC variable
-        for var in lcVariableSet0:
+        for i, _ in enumerate(lcVariableSet0):
             
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
+                
             if len(var) == 0:
                 zVars.append([None])
                 continue
                          
             zVars.append([myIlpBooleanProcessor.countVar(model, *var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
        
-        model.update()
+        if model is not None:
+            model.update()
+            
         return zVars
         
     def createILPCountI(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
-        if len(v) != 1:
-            myLogger.error("%s Logical Constrain created with %i sets of logical variables which is not equal to one"%(lcMethodName, len(v)))
-            return None
-        
         try:
             lcVariableNames = [e for e in iter(v)]
         except StopIteration:
             pass
         
-        lcVariableName0 = lcVariableNames[0] # First and only one LC variable
+        lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
         zVars = [] # Output variables
@@ -211,8 +208,12 @@ class LogicalConstrain:
         # Loop through input ILP variables sets in the list of the first input LC variable
         _var = []
         
-        for var in lcVariableSet0:
+        for i, _ in enumerate(lcVariableSet0):
             
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
+                
             if len(var) == 0:
                 continue
                          
@@ -220,7 +221,9 @@ class LogicalConstrain:
             
         zVars.append([myIlpBooleanProcessor.countVar(model, *_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
        
-        model.update()
+        if model is not None:
+            model.update()
+            
         return zVars
     
 class andL(LogicalConstrain):

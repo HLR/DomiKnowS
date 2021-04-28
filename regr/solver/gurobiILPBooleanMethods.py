@@ -5,7 +5,6 @@ from regr.solver.ilpBooleanMethods import ilpBooleanProcessor
 from regr.solver.ilpConfig import ilpConfig 
 
 from gurobipy import Var, GRB, LinExpr
-from future.builtins.misc import isinstance
 
 class gurobiILPBooleanProcessor(ilpBooleanProcessor):
     

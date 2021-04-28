@@ -153,7 +153,7 @@ class NotA(OTORelation):
 def disjoint(*concepts):
     rels = []
     for c1, c2 in permutations(concepts, r=2):
-         rels.extend(c1.not_a(c2))
+        rels.extend(c1.not_a(c2))
     return rels
 
 

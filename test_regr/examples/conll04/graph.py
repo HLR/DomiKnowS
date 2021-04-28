@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL, nandL, V
+from regr.graph.logicalConstrain import ifL, andL, nandL, V, atMostL
 
 
 Graph.clear()
@@ -30,7 +30,7 @@ with Graph('global') as graph:
         other = word(name='other')
         o = word(name='O')
 
-        disjoint(people, organization, location, other, o)
+        #disjoint(people, organization, location, other, o)
 
         # LC0
         nandL(people, organization)
@@ -47,6 +47,9 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
-        # LC1
+        # LC2
         ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_word1.name)), organization, V(name='z', v=('x', rel_pair_word2.name))), V(name='v'))
+        
+        # LC3
+        atMostL(people, organization, location, other, o)
         

@@ -1,9 +1,6 @@
-from itertools import product
 from datetime import datetime
 from collections import OrderedDict
 from collections.abc import Mapping
-from torch import tensor
-from  torch.nn.functional import softmax
 
 # ontology
 from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
@@ -22,7 +19,6 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.graph import LogicalConstrain, V
-from torch import tensor
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -806,6 +802,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
+                if not solved:
+                    import sys
+                    so = sys.stdout 
+                    logFileName = self.myLogger.handlers[0].baseFilename
+                    log = open(logFileName, "a")
+                    sys.stdout = log
+                    mP.display() 
+                    sys.stdout = so
+
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}
 

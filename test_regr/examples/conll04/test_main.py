@@ -359,14 +359,18 @@ def test_main_conll04(case):
         for i in range(3):
             assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
 
+        ifLLCid = 'LC22'
+        if ifLLCid not in lcResult:
+            ifLLCid = 'LC2'
+            
         for i in range(15):  
-            if lcResult['LC22']['lossTensor'][i] != lcResult['LC22']['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                if lcResult['LC22']['lossTensor'][i] != lcResult['LC22']['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+            if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
+                if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
                     assert True
                 else:
                     assert False
             else:
-                assert round(lcResult['LC22']['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
+                assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
 
         # ------------ Call the ILP Solver
         datanode.inferILPResults(*conceptsRelations, fun=None)
