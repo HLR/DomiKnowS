@@ -4,4 +4,3 @@ pandas==1.1.0
 ordered-set
 setuptools
 graphviz
-ordered-set

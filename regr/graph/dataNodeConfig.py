@@ -1,8 +1,7 @@
-import os
 import logging
 
 dnConfig = {
-    # Logging configuration forDataNode and DataNoteBuilder
+    # Logging configuration for DataNode and DataNoteBuilder
     'ifLog': True,
     'log_name' : 'dataNode', 
     'log_level' : logging.ERROR,
