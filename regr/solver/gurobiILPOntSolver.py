@@ -518,7 +518,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         for lc in lcs:   
             self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  headLC = True)
+            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
             
             if result != None and isinstance(result, list):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
@@ -562,6 +562,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     resultVariableNames.append(newvVariableName)
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
+                    if None in lcVariablesDns:
+                        pass
+  
                     lcVariables[newvVariableName] = lcVariables[variableName]
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
@@ -650,6 +653,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     resultVariableNames.append(variableName)
                     lcVariablesDns[variable.name] = dnsList
+                    
+                    if None in lcVariablesDns:
+                        pass
+                    
                     lcVariables[variableName] = vDns
                 
                 elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively 
@@ -852,7 +859,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnAtt = cDn.getAttributes()
                         if xPkey not in dnAtt:
                             dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
-                            self.myLogger.error('Error returning solutions for %s'%(c[1]))
+                            self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
                             continue
                         
                         solution = dnAtt[xPkey][maxP][index].X

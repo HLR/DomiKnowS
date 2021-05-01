@@ -48,10 +48,26 @@ class Concept(BaseGraphTree):
         from .relation import IsA, HasA
         if ConceptClass is None:
             ConceptClass = Concept
-        if len(args) and isinstance(args[0], str):
+            
+        if name is None and len(args) and isinstance(args[0], str):
             name = args[0]
-            args = args[1:]
+            #args = args[1:]
 
+            from regr.graph.logicalConstrain import V
+            
+            if "path" in kwargs:
+                path = kwargs['path']
+                
+                return [self, V(name=name, v=path)]
+            else:
+                return [self, V(name=name)]
+        elif "path" in kwargs:
+            path = kwargs['path']
+                                    
+            from regr.graph.logicalConstrain import V
+
+            return [self, V(name=None, v=path)]
+            
         if (not args and not kwargs) or name is not None:
             new_concept = ConceptClass(name=name, *args, **kwargs)
             new_concept.is_a(self, auto_constraint=auto_constraint)

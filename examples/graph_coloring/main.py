@@ -1,5 +1,4 @@
 import sys
-import pytest
 
 sys.path.append('.')
 sys.path.append('../..')

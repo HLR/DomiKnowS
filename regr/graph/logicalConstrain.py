@@ -18,10 +18,19 @@ class LogicalConstrain:
             myLogger.error("Logical Constrain initialized is empty")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
           
+        updatedE = []
+        for _, eItem in enumerate(e):
+            if isinstance(eItem, list):
+                updatedE.extend(eItem)
+            else:
+                updatedE.append(eItem)
+                
+        self.e = updatedE
+        
         from regr.graph import Concept
         
         updatedE = []
-        for i, eItem in enumerate(e):
+        for i, eItem in enumerate(self.e):
             if isinstance(eItem, V):
                 updatedE.append(eItem)
             elif isinstance(eItem, Concept):

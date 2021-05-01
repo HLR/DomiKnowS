@@ -64,7 +64,13 @@ class BERT(torch.nn.Module):
 
     def forward(self, input):
         input = input.unsqueeze(0)
-        out, *_ = self.module(input)
+        _out = self.module(input)
+        
+        out, *_ = _out
+        
+        if (isinstance(out, str)): # Update for new transformers
+            out = _out.last_hidden_state
+        
         assert out.shape[0] == 1
         out = out.squeeze(0)
         return out

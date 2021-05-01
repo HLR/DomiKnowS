@@ -48,7 +48,7 @@ with Graph('global') as graph:
         kill.has_a(people, people)
 
         # LC2
-        ifL(work_for, V(name='x'), andL(people, V(name='y', v=('x', rel_pair_word1.name)), organization, V(name='z', v=('x', rel_pair_word2.name))), V(name='v'))
+        ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         
         # LC3
         atMostL(people, organization, location, other, o)

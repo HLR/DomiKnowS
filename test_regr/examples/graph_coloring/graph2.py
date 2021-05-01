@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, notL, existsL, eqL, existsI, atMostL, atLeastI, exactI, atMostI, V
+from regr.graph.logicalConstrain import orL, andL, ifL, notL, existsL, eqL, existsI, atMostL, atLeastI, exactI, atMostI
 
 
 Graph.clear()
@@ -17,7 +17,7 @@ with Graph('global') as graph2:
         firestationCity = city(name='firestationCity')
         
         # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal True to city x and y is a firestationCity
-        orL(firestationCity, V(name='x'), existsL(firestationCity, V(v=('x', eqL(cityLink, 'neighbor', {True}),  city2))))
+        orL(firestationCity('x'), existsL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}),  city2))))
         
         # No less then 1 firestationCity in the world
         atLeastI(firestationCity, p=90)
@@ -26,7 +26,7 @@ with Graph('global') as graph2:
         atMostI(firestationCity, 3, p=80)
         
         # Each city has no more then 4 neighbors which are not firestationCity
-        andL(city, V(name='x'), atMostL(notL(firestationCity), V(v=('x', eqL(cityLink, 'neighbor', {True}), city2)), 5), p=60)
+        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2)), 1)), p=100)
 
         # Exactly 2 firestationCity in the world 
         exactI(firestationCity, 2, p=55)

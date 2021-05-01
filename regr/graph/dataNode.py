@@ -4,7 +4,8 @@ import time
 import re
 from .dataNodeConfig import dnConfig 
 from torch.tensor import Tensor
-import graphviz
+
+from ordered_set import OrderedSet 
 
 from regr.graph.logicalConstrain import eqL
 from regr.solver import ilpOntSolverFactory
@@ -13,7 +14,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 from .property import Property
 from .concept import Concept, EnumConcept
-# from _pytest.reports import _R
 
 import graphviz
 
@@ -489,7 +489,7 @@ class DataNode:
                     returnDns.append(dn) 
                             
             if not visitedDns:
-                visitedDns = set()
+                visitedDns = OrderedSet()
                              
             visitedDns.add(dn)
                     
@@ -500,7 +500,7 @@ class DataNode:
             for r, rValue in dn.getRelationLinks().items():            
                
                 # Check if the nodes already visited
-                dnsToVisit = set()
+                dnsToVisit = OrderedSet()
                 for rDn in rValue:
                     if rDn not in visitedDns:
                         dnsToVisit.add(rDn)
