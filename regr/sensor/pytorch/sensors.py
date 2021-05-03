@@ -32,8 +32,8 @@ class TorchSensor(Sensor):
         self.context_helper = data_item
         try:
             self.update_context(data_item)
-        except:
-            print('Error during updating data item with sensor {}'.format(self.fullname))
+        except Exception as ex:
+            print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
             raise
         return data_item[self]
 

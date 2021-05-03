@@ -514,10 +514,16 @@ class gurobiILPOntSolver(ilpOntSolver):
     def addLogicalConstrains(self, m, dn, lcs, p):
         self.myLogger.info('Starting method')
         
-        key = "/ILP/xP"
+        key = "/ILP/xP" # to get ILP variable from datanodes
         
         for lc in lcs:   
-            self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+            
+            if lc.active:
+                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+            else:
+                self.myLogger.info('Skipping not active Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                continue
+
             result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
             
             if result != None and isinstance(result, list):
@@ -526,7 +532,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
     def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
-        resultVariableNames = []
         lcVariables = {}
         vNo = 0
         firstV = True
@@ -560,7 +565,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     newvVariableName = "_x" + str(vNo)
                     vNo += 1
                     
-                    resultVariableNames.append(newvVariableName)
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
                     if None in lcVariablesDns:
                         pass
@@ -651,7 +655,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         vDns.append(_vDns)
                         
-                    resultVariableNames.append(variableName)
                     lcVariablesDns[variable.name] = dnsList
                     
                     if None in lcVariablesDns:
@@ -667,7 +670,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constrain'%(e.lcName,e,lc.lcName,lc))
                         return None
                         
-                    resultVariableNames.append(variableName)
                     lcVariables[variableName] = vDns   
             # Int - limit 
             elif isinstance(e, int): 
@@ -684,7 +686,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lc,e))
                 return None
         
-        return lc(m, booleanProcesor, lcVariables, resultVariableNames=resultVariableNames, headConstrain = headLC)
+        return lc(m, booleanProcesor, lcVariables, headConstrain = headLC)
                 
     # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
     def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):

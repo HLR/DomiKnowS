@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, exactL
+from regr.graph.logicalConstrain import ifL, andL, exactL, orL
 
 Graph.clear()
 Concept.clear()
@@ -28,9 +28,8 @@ with Graph('global') as graph:
         assert location.relate_to(entity)[0].auto_constraint == True
         other = entity(name='other')
         o = entity(name='O')
-
-        #disjoint(people, organization, location, other, o)
-        #orL(people, organization, location, other, o)
+        
+        # Have exactly one label
         exactL(people, organization, location, other, o)
 
         work_for = pair(name='work_for')
@@ -52,22 +51,45 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
-        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        #ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
-        ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))))
-
-        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        #ifL(located_in, V(name='x'), andL(location, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
-        ifL(located_in('x'), andL(location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))))
+        # Control which logical constrains sets are used
+        LC_SET_BASED = True
+        LC_SET_REL = True
         
-        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        #ifL(live_in, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
-        ifL(live_in('x'), andL(people(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))))
+        # work_for  -> people, organization
+        ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))), active = LC_SET_BASED)
+        #ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))), work_for(path=('x')))
+        
+        #  rel_pair_phrase2 is organization - > pair is  work_for
+        ifL(andL(pair('x'), organization(path=('x', rel_pair_phrase2))), work_for(path=('x')), active = LC_SET_REL)
 
-        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        #ifL(orgbase_on, V(name='x'), andL(organization, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
-        ifL(orgbase_on('x'), andL(organization(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))))
+        # located_in -> location, location
+        ifL(located_in('x'), andL(location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), active = LC_SET_BASED)
+        #ifL(andL(pair('x'), location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), located_in(path=('x')))
+        
+        # rel_pair_phrase1 is location -> pair is located_in
+        ifL(andL(pair('x'), location(path=('x', rel_pair_phrase1))), located_in(path=('x')), active = LC_SET_REL)
 
-        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
-        #ifL(kill, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), people, V(v=('x', rel_pair_phrase2.name))))
-        ifL(kill('x'), andL(people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))))
+        # live_in <-> people, location
+        ifL(live_in('x'), andL(people(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), active = LC_SET_BASED)
+        ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), live_in(path=('x')), active = LC_SET_REL)
+
+        # orgbase_on <-> organization, location
+        ifL(orgbase_on('x'), andL(organization(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), active = LC_SET_BASED)
+        #ifL(andL(pair('x'), organization(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), orgbase_on(path=('x')))
+        
+        # rel_pair_phrase1 is organization -> pair is orgbase_on
+        ifL(andL(pair('x'), organization(path=('x', rel_pair_phrase1))), orgbase_on(path=('x')), active = LC_SET_REL)
+       
+        # kill -> people, people
+        ifL(kill('x'), andL(people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))), active = LC_SET_BASED)
+        #ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))), kill(path=('x')))
+        
+        # rel_pair_phrase2 is  people -> pair is kill
+        ifL(andL(pair('x'), people(path=('x', rel_pair_phrase2))), kill(path=('x')), active = LC_SET_REL)
+
+        
+        # rel_pair_phrase1 is people -> pair is work_for or kill or live_in
+        ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)) ), orL(work_for(path=('x')), kill(path=('x')), live_in(path=('x'))), active = LC_SET_REL)
+        
+        # rel_pair_phrase2 is location -> pair is live_in or orgbase_on or located_in
+        ifL(andL(pair('x'), location(path=('x', rel_pair_phrase2))), orL(live_in(path=('x')), orgbase_on(path=('x')), located_in(path=('x'))), active = LC_SET_REL)
