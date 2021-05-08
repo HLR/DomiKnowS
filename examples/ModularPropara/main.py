@@ -5,6 +5,7 @@ import torch
 
 sys.path.append(".")
 sys.path.append("../..")
+sys.path.append("../Popara")
 
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import EdgeSensor

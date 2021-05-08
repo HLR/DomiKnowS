@@ -381,6 +381,8 @@ def test_main_conll04(case):
         #assert tokenResult['people'][0] == 1
         assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
         
+        test = datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})
+        
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})[0].getAttribute(people, 'ILP').item() == 1
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'h')})[0].getAttribute(people, 'ILP').item() == 1
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'I')})[0].getAttribute(people, 'ILP').item() == 0
@@ -397,7 +399,7 @@ def test_main_conll04(case):
         
         # Get value of attribute organization/ILP for word 3
         #assert tokenResult['organization'][3] == 1
-        datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
+        assert datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
         
         # Sum value of attribute organization/ILP for all words
         #assert sum(tokenResult['organization']) == 1

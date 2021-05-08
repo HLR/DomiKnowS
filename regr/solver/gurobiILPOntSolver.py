@@ -594,27 +594,54 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if len(variable.v) == 0:
                             self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(conceptName, lc.lcName))
                             return None
-                            
-                        referredVariableName = variable.v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
-                    
-                        if referredVariableName not in lcVariablesDns:
-                            self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
-                            return None
-                       
-                        referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
-                        for rDn in referredDns:
-                            eDns = []
-                            for _rDn in rDn:
-                                _eDns = _rDn.getEdgeDataNode(variable.v[1:]) # Get Datanodes for the edge defined by the path part of the v
+                          
+                        path = variable.v
+  
+                        paths = []
+                        lo = None
+                        
+                        if isinstance(path[0], str) and len(path) == 1:
+                            paths.append(path)
+                        elif isinstance(path[0], str) and not isinstance(path[1], tuple):
+                            paths.append(path)
+                        else:
+                            for i, vE in enumerate(variable.v):
+                                if i == 0 and isinstance(vE, str):
+                                    lo = vE 
+                                    continue
                                 
-                                if _eDns and _eDns[0]:
-                                    eDns.extend(_eDns)
-                                else:
-                                    self.myLogger.error('The element %s of logical constrain %s has v referring to not valid path %s'%(conceptName, lc.lcName, variable.v[1:]))
-                                    eDns.extend([None])
+                                paths.append(vE)
+                                
+                        _dnsList = []
+                        for i, v in enumerate(paths):
+                            _dnsList.append([])
+                            referredVariableName = v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
+                        
+                            if referredVariableName not in lcVariablesDns:
+                                self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
+                                return None
+                           
+                            referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
+                            for rDn in referredDns:
+                                eDns = []
+                                for _rDn in rDn:
+                                    _eDns = _rDn.getEdgeDataNode(v[1:]) # Get Datanodes for the edge defined by the path part of the v
                                     
-                            dnsList.append(eDns)
+                                    if _eDns and _eDns[0]:
+                                        eDns.extend(_eDns)
+                                    else:
+                                        self.myLogger.error('The element %s of logical constrain %s has v referring to not valid path %s'%(conceptName, lc.lcName, v[1:]))
+                                        eDns.extend([None])
+                                        
+                                _dnsList[i].append(eDns)
                                 
+                        dnsList = _dnsList[0]
+                            
+                        for l in _dnsList[1:]:
+                            # Intersection - use lo if defined to determine if different set operation
+                            _d = [x if x in l else [None] for x in dnsList]
+                            dnsList = _d
+                            
                     # Get ILP variables from collected Datanodes for the given element of logical constrain
                     for dns in dnsList:
                         _vDns = []

@@ -387,6 +387,33 @@ class DataNode:
 
     # --- Query methods
     
+    # Find the root parent of relation of the given relation
+    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+        
+        if isinstance(relationConcept, str):
+            _relationConcepts = self.findConcept(relationConcept)
+            
+            if _relationConcepts:
+                relationConcept = _relationConcepts[0]
+            else:
+                return relationConcept 
+
+        # Does this concept or relation has parent (through _isA)
+        try:
+            isAs = relationConcept.is_a()
+        except AttributeError:
+            isAs = []
+        
+        for _isA in isAs:
+            _relationConcept = _isA.dst
+            
+            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
+        
+        # If the provided concept or relation is root (has not parents)
+        return relationConcept 
+
     def __testDataNode(self, dn, test):
         if test is None:
             return False
@@ -462,6 +489,26 @@ class DataNode:
             
         return conceptNames, relationNames
     
+    def getDnsForRelation(self, rel):
+        relRoot = self.findRootConceptOrRelation(rel)
+            
+        if relRoot is None:
+            return [None]
+        
+        if not isinstance(relRoot, str):
+            relRoot = relRoot.name     
+        
+        if relRoot.endswith(".reversed"):
+            relRoot = relRoot[:-len(".reversed")]
+            if relRoot in self.impactLinks: 
+                return self.impactLinks[relRoot]
+            else:
+                return [None]
+        elif relRoot in self.relationLinks:
+            return self.relationLinks[relRoot]
+        else:
+            return [None]
+            
     # Find dataNodes in data graph for the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
         # If no DataNodes provided use self
@@ -526,12 +573,15 @@ class DataNode:
             for dn in returnDns:
                 fit = True       
                 for indexName, indexValue in indexes.items():
-                    if indexName not in dn.relationLinks:
+                    
+                    relDns = dn.getDnsForRelation(indexName)
+                    
+                    if relDns is None or len(relDns) == 0 or relDns[0] is None:
                         fit = False
                         break
                     
                     found = False
-                    for _dn in dn.relationLinks[indexName]:
+                    for _dn in relDns:
                         if isinstance(indexValue, tuple):
                             _test = []
                             for t in indexValue:
@@ -653,23 +703,6 @@ class DataNode:
         
         return None 
     
-    # Find the root parent of relation of the given relation
-    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
-        if usedGraph is None:
-            usedGraph = self.ontologyNode.getOntologyGraph()
-        
-        if isinstance(relationConcept, str):
-            relationConcept = self.findConcept(relationConcept)[0]
-            
-        # Does this concept or relation has parent (through _isA)
-        for _isA in relationConcept.is_a():
-            _relationConcept = _isA.dst
-            
-            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
-        
-        # If the provided concept or relation is root (has not parents)
-        return relationConcept 
-
     # Find Datanodes starting from the given Datanode following provided path
     # path can contain eqL statement selecting Datanodes from the datanodes collecting on the path
     def getEdgeDataNode(self, path):
@@ -679,36 +712,27 @@ class DataNode:
 
         # Path has single element
         if len(path) == 1:
-            if isinstance(path[0], str):
-                path0 = path[0]
-            else:
-                path0 = path[0].name
-                
-            if path0 in self.relationLinks:
-                return self.relationLinks[path0]
-            else:
+            relDns = self.getDnsForRelation(path[0])
+                    
+            if relDns is None or len(relDns) == 0 or relDns[0] is None:
                 return [None]
         
-        # Path has at least 2 elements - will perfomr recursion
+        # Path has at least 2 elements - will perform recursion
         if isinstance(path[0], eqL): # check if eqL
-            concept = path[0].e[0][0]
-        elif path[0] in self.relationLinks:
-            concept = path[0]
+            path0 = path[0].e[0][0]
         else:
-            return [None]
+            path0 = path[0]
 
-        if isinstance(concept, Concept):
-            concept = concept.name
-            
-        if concept in self.relationLinks:
-            cDns = self.relationLinks[concept]
-        else:
-            cDns = []
+        relDns = self.getDnsForRelation(path0)
+                    
+        if relDns is None or len(relDns) == 0 or relDns[0] is None:
+            return [None]
+            relDns = []
             
         # Filter DataNoded through eqL
         if isinstance(path[0], eqL):
             _cDns = []
-            for cDn in cDns:
+            for cDn in relDns:
                 if isinstance(path[0].e[1], str):
                     path0e1 = path[0].e[1]
                 else:
@@ -717,11 +741,11 @@ class DataNode:
                 if path0e1 in cDn.attributes and cDn.attributes[path0e1].item() in path[0].e[2]:
                     _cDns.append(cDn)
                     
-            cDns = _cDns
+            relDns = _cDns
         
         # recursion
         rDNS = []
-        for cDn in cDns:
+        for cDn in relDns:
             rDn = cDn.getEdgeDataNode(path[1:])
             
             if rDn:

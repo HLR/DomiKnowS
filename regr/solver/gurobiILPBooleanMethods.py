@@ -243,7 +243,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.__varIsNumber(currentVar):
                 varsNames.append(currentVar)
             else:
-                varsNames.append(currentVar.VarName)
+                try:
+                    varsNames.append(currentVar.VarName)
+                except AttributeError:
+                    pass
+                
                 noOfVars = noOfVars + 1
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, varsNames))
