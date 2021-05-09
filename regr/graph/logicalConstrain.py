@@ -15,17 +15,23 @@ class LogicalConstrain:
         if not e:
             myLogger.error("Logical Constrain initialized is empty")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
-          
+        
+        from regr.graph import Concept
+
         updatedE = []
         for _, eItem in enumerate(e):
-            if isinstance(eItem, list):
+            if isinstance(eItem, (LogicalConstrain, Concept)):
+                updatedE.append(eItem)
+            elif callable(eItem):
+                newEItem = eItem.__call__()
+                updatedE.extend(newEItem)
+            elif isinstance(eItem, list):
                 updatedE.extend(eItem)
             else:
                 updatedE.append(eItem)
                 
         self.e = updatedE
         
-        from regr.graph import Concept
         
         updatedE = []
         for _, eItem in enumerate(self.e):
@@ -33,7 +39,7 @@ class LogicalConstrain:
                 updatedE.append(eItem)
             elif isinstance(eItem, Concept):
                 updatedE.append((eItem, 1, 0))
-            elif isinstance(eItem, tuple):
+            elif isinstance(eItem, tuple) and (len(eItem) <= 2):
                 updatedE.append((eItem[0], eItem[1], eItem[1]))
             else:
                 updatedE.append(eItem)

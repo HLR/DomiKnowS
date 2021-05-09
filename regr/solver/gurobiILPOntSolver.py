@@ -874,7 +874,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if c[2] is None:
                         index = 0
                     else:
-                        index = c[2]
+                        index = c[2] # multiclass
                          
                     c_root = dn.findRootConceptOrRelation(c[0])
                     c_root_dns = dn.findDatanodes(select = c_root)
@@ -902,13 +902,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         if xkey not in dnAtt:
                             dnAtt[xkey] = torch.empty(c[3], dtype=torch.float)
-                            
-                        if xNotPkey not in dnAtt:
-                            dnAtt[xNotPkey] = torch.empty(c[3], dtype=torch.float)
                        
                         dnAtt[ILPkey][index] = solution
                         dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                        dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
+                        if xNotPkey in dnAtt:
+                            dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
 
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
