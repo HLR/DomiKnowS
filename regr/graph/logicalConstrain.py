@@ -187,9 +187,9 @@ class LogicalConstrain:
         lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
-        zVars = [] # Output variables
+        zVars = [] # Output ILP variables
         
-        # Loop through input ILP variables sets in the list of the first input LC variable
+        varsSetup = []
         for i, _ in enumerate(lcVariableSet0):
             
             var = []
@@ -197,10 +197,14 @@ class LogicalConstrain:
                 var.extend(v[currentV][i])
                 
             if len(var) == 0:
-                zVars.append([None])
+                varsSetup.append([None])
                 continue
-                         
-            zVars.append([myIlpBooleanProcessor.countVar(model, *var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
+            
+            varsSetup.append(var)
+             
+        # -- use ILP variable setup to create constrains            
+        for current_var in varsSetup:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
        
         if model is not None:
             model.update()
@@ -216,11 +220,9 @@ class LogicalConstrain:
         lcVariableName0 = lcVariableNames[0] # First variable
         lcVariableSet0 =  v[lcVariableName0]
 
-        zVars = [] # Output variables
+        zVars = [] # Output ILP variables
         
-        # Loop through input ILP variables sets in the list of the first input LC variable
-        _var = []
-        
+        varsSetup = []
         for i, _ in enumerate(lcVariableSet0):
             
             var = []
@@ -230,9 +232,10 @@ class LogicalConstrain:
             if len(var) == 0:
                 continue
                          
-            _var.extend(var)
-            
-        zVars.append([myIlpBooleanProcessor.countVar(model, *_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
+            varsSetup.extend(var)
+        
+        # -- use ILP variable setup to create constrains            
+        zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
        
         if model is not None:
             model.update()
@@ -302,22 +305,21 @@ class notL(LogicalConstrain):
               
         notV = []
                     
-        if len(v) > 1:
-            myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(v)))
+        if len(v) != 1:
+            myLogger.error("Not Logical Constrain created with %i sets of variables which is not  one"%(len(v)))
             return notV
     
-        for currentILPVars in v.values():
+        v1 = list(v.values())[0]
+        for currentILPVars in v1:
             if not currentILPVars:
                 notV.append([None])
                 
-            if len(currentILPVars) > 1:
-                myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(currentILPVars)))
-                return notV
+            cNonVar = []
+            for cv in currentILPVars:
+                notVar = myIlpBooleanProcessor.notVar(model, cv, onlyConstrains = headConstrain)
+                cNonVar.append(notVar)
                 
-            currentILPVar = currentILPVars[0]
-            
-            notVar = myIlpBooleanProcessor.notVar(model, *currentILPVar, onlyConstrains = headConstrain)
-            notV.append([notVar])
+            notV.append(cNonVar)
         
         if headConstrain:
             if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
