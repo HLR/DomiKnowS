@@ -1,17 +1,16 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, exactL
-from regr.graph.concept import EnumConcept
+from regr.graph.logicalConstrain import ifL, orL, andL, existsL, notL, exactL
 
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
 with Graph('global') as graph:
-    procedure = Concept("procedure")
     
     context = Concept("context")
     entities = Concept("entities")
-    
+        
+    procedure = Concept("procedure")
     (procedure_context, procedure_entities) = procedure.has_a(context, entities)
     
     entity = Concept('entity')
@@ -34,8 +33,36 @@ with Graph('global') as graph:
     
     exactL(create, destroy, move, nochange)
 
-    # if action a1 is destroy and i is a1's step then either step j which is before step i can not be associated with destroy action a2 or if step j1 which is before step i is associated with destroy action a2 then exists step k which is between step i and j associated with create action a3
-    ifL(andL(destroy('a1'), step('i', path=('x', action_step))), orL(andL(step('j', path=('i', before_arg1)), notL(destroy('a2', path=('j', action_step.reversed)))), ifL(andL(step('j1', path=('i', before_arg1)), destroy('a2', path=('j', action_step.reversed))), andL(step('k', path=(('j1', before_arg2), ('i', before_arg1))), existsL(create('a3', path=('k', action_step.reversed))))))) 
+    # if 
+    ifL(
+        # action a1 is destroy, i is a1's step and e is action entity
+        andL(
+            destroy('a1'), 
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity))
+            ), 
+        # then either
+        orL(
+            # step j associated with entity e, which is before step i cannot be associated with destroy action a2
+            andL(
+                step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1))), 
+                notL(destroy('a2', path=('j', action_step.reversed)))
+                ), 
+            # or if  
+            ifL(
+                # step j1 which is before step i is associated with destroy action a2
+                andL(
+                    step('j1', path=('i', before_arg1)), 
+                    destroy('a2', path=('j', action_step.reversed))
+                    ), 
+                # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
+                andL(
+                    step('k', path=(('e', action_entity.reversed, action_step), ('j1', before_arg2), ('i', before_arg1))), 
+                    existsL(create('a3', path=('k', action_step.reversed)))
+                    )
+                )
+            )
+        ) 
 
     # ----------------------------
     
