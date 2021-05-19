@@ -1015,7 +1015,7 @@ class DataNode:
                 dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
+    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1036,7 +1036,7 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)    
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def verifySelection(self, *_conceptsRelations):
         

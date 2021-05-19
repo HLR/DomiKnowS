@@ -25,7 +25,6 @@ with Graph('global') as graph:
     action = Concept(name='action')
     (action_step, action_entity) = action.has_a(step, entity)
     
-    #action_label = (name="action_label", ConceptClass=EnumConcept, values=["nochange", "destroy", "create", "move"])
     create = action(name="create")
     destroy = action(name="destroy")
     move = action(name="move")

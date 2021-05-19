@@ -716,7 +716,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         return lc(m, booleanProcesor, lcVariables, headConstrain = headLC)
                 
     # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
-    def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
+    def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
             return 
@@ -753,11 +753,16 @@ class gurobiILPOntSolver(ilpOntSolver):
             _lcP[100] = []
             for graph in self.myGraph:
                 for _, lc in graph.logicalConstrains.items():
-                    if lc.headLC:                        
-                        if lc.p not in _lcP:
-                            _lcP[lc.p] = []
+                    if lc.headLC:     
+                        if not ignorePinLCs:
+                            lcP = lc.p
+                        else:
+                            lcP = 100   
+                                            
+                        if lcP not in _lcP:
+                            _lcP[lcP] = []
                         
-                        _lcP[lc.p].append(lc) # Keep constrain with the same p in the list 
+                        _lcP[lcP].append(lc) # Keep constrain with the same p in the list 
             
             # Sort constraints according to their p
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
