@@ -7,6 +7,16 @@ from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
 
+class ProgramStorageCallback():
+    def __init__(self, program, fn) -> None:
+        self.program = program
+        self.fn = fn
+        self.storage = tuple()
+
+    def __call__(self):
+        self.storage = self.fn(self.program, *entuple(self.storage))
+
+
 def get_len(dataset, default=None):
     try:
         return len(dataset)
@@ -22,6 +32,7 @@ class LearningBasedProgram():
         self.model = Model(graph, **kwargs)
         self.opt = None
         self.epoch = None
+        self.stop = None
 
     def update_nominals(self, dataset):
         pass
@@ -39,18 +50,13 @@ class LearningBasedProgram():
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
 
-    def call_epoch(self, name, dataset, epoch_fn, callbacks, callback_storage, **kwargs):
+    def call_epoch(self, name, dataset, epoch_fn, epoch_callbacks=None, step_callbacks=None, **kwargs):
         if dataset is not None:
             self.logger.info(f'{name}:')
-            if callbacks:
-                def callback():
-                    for key, callback in callbacks.items():
-                        storage = callback_storage.setdefault(key, tuple())
-                        callback_storage[key] = callback(self, *entuple(storage))
-            else:
-                callback = None
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
-            consume(tqdm(epoch_fn(dataset, callback, **kwargs), total=get_len(dataset), desc=desc))
+            for _ in tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc):
+                if step_callbacks: consume(callback() for callback in step_callbacks)
+            if epoch_callbacks: consume(callback() for callback in epoch_callbacks)
             if self.model.loss:
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
@@ -69,9 +75,12 @@ class LearningBasedProgram():
         train_epoch_num=1,
         test_every_epoch=False,
         Optim=None,
-        train_callbacks={},
-        valid_callbacks={},
-        test_callbacks={},
+        train_epoch_callbacks=None,
+        valid_epoch_callbacks=None,
+        test_epoch_callbacks=None,
+        train_step_callbacks=None,
+        valid_step_callbacks=None,
+        test_step_callbacks=None,
         **kwargs):
         if device is not None:
             self.to(device)
@@ -79,25 +88,23 @@ class LearningBasedProgram():
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
-        train_callback_storage = {}
-        valid_callback_storage = {}
-        test_callback_storage = {}
-        self.stop = False
         self.train_epoch_num = train_epoch_num
         self.epoch = 0
-        while self.epoch < self.train_epoch_num:
+        self.stop = False
+        while self.epoch < self.train_epoch_num and not self.stop:
             self.epoch += 1
             self.logger.info('Epoch: %d', self.epoch)
-            self.call_epoch('Training', training_set, self.train_epoch, train_callbacks, train_callback_storage, **kwargs)
-            self.call_epoch('Validation', valid_set, self.test_epoch, valid_callbacks, valid_callback_storage, **kwargs)
+            self.call_epoch('Training', training_set, self.train_epoch, train_epoch_callbacks, train_step_callbacks, **kwargs)
+            self.call_epoch('Validation', valid_set, self.test_epoch, valid_epoch_callbacks, valid_step_callbacks, **kwargs)
             if test_every_epoch:
-                self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
+                self.call_epoch('Testing', test_set, self.test_epoch, test_epoch_callbacks, test_step_callbacks, **kwargs)
         if not test_every_epoch:
-            self.call_epoch('Testing', test_set, self.test_epoch, test_callbacks, test_callback_storage, **kwargs)
+            self.call_epoch('Testing', test_set, self.test_epoch, test_epoch_callbacks, test_step_callbacks, **kwargs)
         # reset epoch after everything
         self.epoch = None
+        self.stop = None
 
-    def train_epoch(self, dataset, callback=None):
+    def train_epoch(self, dataset):
         self.model.mode(Mode.TRAIN)
         self.model.reset()
         for data_item in dataset:
@@ -108,8 +115,6 @@ class LearningBasedProgram():
                 loss.backward()
                 self.opt.step()
             yield (loss, metric, *output[:1])
-        if callable(callback):
-            callback()
 
     def test(self, dataset, device=None, callbacks={}, **kwargs):
         if device is not None:
@@ -117,30 +122,27 @@ class LearningBasedProgram():
         callback_storage = {}
         self.call_epoch('Testing', dataset, self.test_epoch, callbacks, callback_storage, **kwargs)
 
-    def test_epoch(self, dataset, callback=None):
+    def test_epoch(self, dataset):
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
                 loss, metric, *output = self.model(data_item)
                 yield (loss, metric, *output[:1])
-        if callable(callback):
-            callback()
 
     def populate(self, dataset, device=None):
         if device is not None:
             self.to(device)
         yield from self.populate_epoch(dataset, device)
 
-    def populate_epoch(self, dataset, callback=None):
+    def populate_epoch(self, dataset):
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
-        if callable(callback):
-            callback()
+
 
     def populate_one(self, data_item):
         return next(self.populate_epoch([data_item]))
