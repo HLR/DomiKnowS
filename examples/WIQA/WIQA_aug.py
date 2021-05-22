@@ -171,7 +171,29 @@ logging.basicConfig(level=logging.INFO)
 
 # at the end we run our program for each epoch and test the results each time
 for i in range(args.cur_epoch):
-    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
+    class SchCB():
+        def __init__(self, program) -> None:
+            self.program = program
+            self._sch = None
+        @property
+        def sch(self):
+            if self._sch is None:
+                # This will be call when self.sch is used.
+
+                # This implement a singleton pattern with delay construction of
+                # the scheduler, since optimizer is not available in the context of
+                # this declaration, but is expected to be available when self.sch is
+                # needed.
+
+                # self._sch = XXXScheduler(self.program.opt, xxx, xxx)
+                pass
+            return self._sch
+        def __call__(self) -> None:
+            # this will be call after every step
+            # self.sch.update()
+            pass
+
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
     if args.primaldual:
