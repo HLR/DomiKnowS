@@ -7,6 +7,7 @@ sys.path.append('../..')
 import numpy as np
 
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
+from regr.program.program import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
@@ -304,7 +305,8 @@ def main(args):
         return epoch + 1, best_epoch, best_macro_f1
     
     if not args.load:
-        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu, train_callbacks={'Save Epoch': save_epoch}, valid_callbacks={'Save Best': save_best})
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu,
+                      train_epoch_callbacks=[ProgramStorageCallback(program, save_epoch)], valid_epoch_callbacks=[ProgramStorageCallback(program, save_best)])
     else:
         program1.load(args.path)
     
