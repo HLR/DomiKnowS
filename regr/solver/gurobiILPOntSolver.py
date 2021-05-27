@@ -822,7 +822,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 mP.optimize()
                 mP.update()
                 
-                #mP.display()    
+                mP.display()    
                 
                 endOptimize = datetime.now()
                 elapsedOptimize = endOptimize - startOptimize

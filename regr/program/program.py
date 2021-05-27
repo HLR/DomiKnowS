@@ -133,7 +133,7 @@ class LearningBasedProgram():
     def populate(self, dataset, device=None):
         if device is not None:
             self.to(device)
-        yield from self.populate_epoch(dataset, device)
+        yield from self.populate_epoch(dataset)
 
     def populate_epoch(self, dataset):
         self.model.mode(Mode.POPULATE)
