@@ -150,9 +150,11 @@ with Graph('global') as graph:
             active = LC_SET_REL
             )
         
-        # people - at most 1 live in relation with for people
+        # people - at most 1 live in relation with people
         ifL(
             people('p'), 
             atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
             active = LC_SET_ADDITIONAL
             )
+        
+        

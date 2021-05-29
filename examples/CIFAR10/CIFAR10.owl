@@ -1,0 +1,125 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:mlgraph="http://ontology.ihmc.us/ML/MLGraph.owl#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:emr="http://ontology.ihmc.us/ML/CIFAR10.owl#"
+  xml:base="http://ontology.ihmc.us/ML/CIFAR10.owl">
+  <owl:Ontology rdf:about="">
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/PhraseGraph.owl"/>
+    <owl:imports rdf:resource="http://ontology.ihmc.us/ML/MLGraph.owl"/>
+    <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string"
+    >This ontology contains CIFAR10 concepts. Created by Andrzej Uszok (auszok@ihmc.us).</rdfs:comment>
+  </owl:Ontology>
+   
+  <owl:Class rdf:ID="image"/>
+    
+  <owl:Class rdf:ID="animal">
+    <rdfs:subClassOf rdf:resource="#image"/>
+    
+    <owl:disjointWith rdf:resource="#vehicle"/> 
+  </owl:Class>
+  
+  <owl:Class rdf:ID="vehicle">
+    <rdfs:subClassOf rdf:resource="#image"/>
+    
+    <owl:disjointWith rdf:resource="#animal"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="airplane">
+    <rdfs:subClassOf rdf:resource="#vehicle"/>
+    
+    <owl:disjointWith rdf:resource="#truck"/>
+    <owl:disjointWith rdf:resource="#automobile"/>
+    <owl:disjointWith rdf:resource="#ship"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="truck">
+    <rdfs:subClassOf rdf:resource="#vehicle"/>
+    
+	<owl:disjointWith rdf:resource="#airplane"/>
+    <owl:disjointWith rdf:resource="#automobile"/>
+    <owl:disjointWith rdf:resource="#ship"/>  
+  </owl:Class>
+  
+  <owl:Class rdf:ID="automobile">
+    <rdfs:subClassOf rdf:resource="#vehicle"/>
+    
+    <owl:disjointWith rdf:resource="#airplane"/>
+    <owl:disjointWith rdf:resource="#truck"/>
+    <owl:disjointWith rdf:resource="#ship"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="ship">
+    <rdfs:subClassOf rdf:resource="#vehicle"/>
+    
+    <owl:disjointWith rdf:resource="#airplane"/>
+    <owl:disjointWith rdf:resource="#truck"/>
+    <owl:disjointWith rdf:resource="#automobile"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="dog">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+    
+    <owl:disjointWith rdf:resource="#bird"/>
+    <owl:disjointWith rdf:resource="#cat"/>
+    <owl:disjointWith rdf:resource="#deer"/>
+    <owl:disjointWith rdf:resource="#frog"/>
+    <owl:disjointWith rdf:resource="#horse"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="bird">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+    
+    <owl:disjointWith rdf:resource="#dog"/>
+    <owl:disjointWith rdf:resource="#cat"/>
+    <owl:disjointWith rdf:resource="#deer"/>
+    <owl:disjointWith rdf:resource="#frog"/>
+    <owl:disjointWith rdf:resource="#horse"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="cat">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+
+	<owl:disjointWith rdf:resource="#dog"/>
+    <owl:disjointWith rdf:resource="#bird"/>
+    <owl:disjointWith rdf:resource="#deer"/>
+    <owl:disjointWith rdf:resource="#frog"/>
+    <owl:disjointWith rdf:resource="#horse"/>
+  </owl:Class>
+  
+  
+ <owl:Class rdf:ID="deer">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+    
+    <owl:disjointWith rdf:resource="#dog"/>
+    <owl:disjointWith rdf:resource="#bird"/>
+    <owl:disjointWith rdf:resource="#cat"/>
+    <owl:disjointWith rdf:resource="#frog"/>
+    <owl:disjointWith rdf:resource="#horse"/>
+  </owl:Class>
+  
+    <owl:Class rdf:ID="frog">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+    
+  	<owl:disjointWith rdf:resource="#dog"/>
+    <owl:disjointWith rdf:resource="#bird"/>
+    <owl:disjointWith rdf:resource="#cat"/>
+    <owl:disjointWith rdf:resource="#deer"/>
+    <owl:disjointWith rdf:resource="#horse"/>
+  </owl:Class>
+  
+  <owl:Class rdf:ID="horse">
+    <rdfs:subClassOf rdf:resource="#animal"/>
+    
+    <owl:disjointWith rdf:resource="#dog"/>
+    <owl:disjointWith rdf:resource="#bird"/>
+    <owl:disjointWith rdf:resource="#cat"/>
+    <owl:disjointWith rdf:resource="#deer"/>
+    <owl:disjointWith rdf:resource="#frog"/>
+  </owl:Class>    
+</rdf:RDF>
+
+<!-- Created with TopBraid -->

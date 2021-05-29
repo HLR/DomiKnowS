@@ -403,7 +403,7 @@ class DataNode:
         # Does this concept or relation has parent (through _isA)
         try:
             isAs = relationConcept.is_a()
-        except AttributeError:
+        except (AttributeError, TypeError):
             isAs = []
         
         for _isA in isAs:

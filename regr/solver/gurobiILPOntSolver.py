@@ -1,7 +1,7 @@
 from datetime import datetime
 from collections import OrderedDict
 from collections.abc import Mapping
-
+import logging
 # ontology
 from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
 
@@ -287,7 +287,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 conceptName = rel.dst.name
                 rootConcept = rootDn.findRootConceptOrRelation(conceptName)
-                dnsC = rootDn.findDatanodes(select = rootConcept)
                 
                 rxkey = '<' + relationName + '>/ILP/x'
                 cxkey = '<' + conceptName + '>/ILP/x'
@@ -381,22 +380,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue
                 
             for equivalentConcept in currentConcept.equivalent_to:
-                if equivalentConcept.name not in conceptsRelations:
+                equivalentConceptName = equivalentConcept.name
+                if equivalentConceptName not in conceptsRelations:
                     continue
                         
                 if conceptName in foundEquivalent:
-                    if equivalentConcept.name in foundEquivalent[conceptName]:
+                    if equivalentConceptName in foundEquivalent[conceptName]:
                         continue
                 
-                if equivalentConcept.name in foundEquivalent:
-                    if conceptName in foundEquivalent[equivalentConcept.name]:
+                if equivalentConceptName in foundEquivalent:
+                    if conceptName in foundEquivalent[equivalentConceptName]:
                         continue
                             
-                rootEquivalentConcept = rootDn.findRootConceptOrRelation(equivalentConcept)
+                rootEquivalentConcept = rootDn.findRootConceptOrRelation(equivalentConceptName)
                 dnsEC = rootDn.findDatanodes(select = rootEquivalentConcept)           
                         
                 cxkey = '<' + conceptName + '>/ILP/x'
-                exkey = '<' + equivalentConcept + '>/ILP/x'
+                exkey = '<' + equivalentConceptName + '>/ILP/x'
                 
                 for dn in zip(dns,dnsEC):
                     if cxkey not in dn[0].attributes:
@@ -408,9 +408,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myIlpBooleanProcessor.andVar(m, dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(exkey)[0], onlyConstrains = True)
                     
                 if not (conceptName in foundEquivalent):
-                    foundEquivalent[conceptName] = {equivalentConcept.name}
+                    foundEquivalent[conceptName] = {equivalentConceptName}
                 else:
-                    foundEquivalent[conceptName].add(equivalentConcept.name)
+                    foundEquivalent[conceptName].add(equivalentConceptName)
            
             if conceptName in foundEquivalent:
                 self.myLogger.info("Created - equivalent - constraints between concept \"%s\" and concepts %s"%(conceptName,foundEquivalent[conceptName]))
@@ -424,25 +424,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue
                 
             for ancestorConcept in currentConcept.ancestors(include_self = False):
-                if ancestorConcept.name not in conceptsRelations:
+                ancestorConceptName = ancestorConcept.name
+                if ancestorConceptName not in conceptsRelations:
                     continue
                 
-                rootAncestorConcept = rootDn.findRootConceptOrRelation(ancestorConcept)
+                rootAncestorConcept = rootDn.findRootConceptOrRelation(ancestorConceptName)
                 dnsAC = rootDn.findDatanodes(select = rootAncestorConcept)           
                         
                 cxkey = '<' + conceptName + '>/ILP/x'
-                axkey = '<' + ancestorConcept + '>/ILP/x'
+                axkey = '<' + ancestorConceptName + '>/ILP/x'
                 
                 for dn in zip(dns,dnsAC):
                     if cxkey not in dn[0].attributes:
                         continue
                     
-                    if exkey not in dn[1].attributes:
+                    if axkey not in dn[1].attributes:
                         continue
                         
                     self.myIlpBooleanProcessor.ifVar(m,  dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(axkey)[0], onlyConstrains = True)
                         
-                self.myLogger.info("Created - subClassOf - constraints between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConcept.name))
+                self.myLogger.info("Created - subClassOf - constraints between concept \"%s\" and concept \"%s\""%(conceptName,ancestorConceptName))
     
         # ---- ------No supported yet ontology concept constraints --------
         
@@ -475,17 +476,17 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             cxkey = '<' + currentRelation.name + '>/ILP/x'
 
-            for domain in currentRelationDomain:
-                if domain._name not in conceptsRelations:
+            for rel_domain in currentRelationDomain:
+                if rel_domain._name not in conceptsRelations:
                     continue
                         
-                dxkey = '<' + domain._name + '>/ILP/x'
+                dxkey = '<' + rel_domain._name + '>/ILP/x'
 
-                for range in currentRelationRange:
-                    if range.name not in conceptsRelations:
+                for rel_range in currentRelationRange:
+                    if rel_range.name not in conceptsRelations:
                         continue
                          
-                    rxkey = '<' + range._name + '>/ILP/x'
+                    rxkey = '<' + rel_range._name + '>/ILP/x'
                     
                     for dn in dnsR:
                         if cxkey not in dn.attributes:
@@ -505,9 +506,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         self.myIlpBooleanProcessor.ifVar(m, dn.getAttribute(cxkey)[0], rdn[0].getAttribute(rxkey)[0], onlyConstrains = True)
                         
-                
-                self.myLogger.info("Created - domain-range - constraints for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,domain._name,range._name))
-        
+                self.myLogger.info("Created - domain-range - constraints for relation \"%s\" for domain \"%s\" and range \"%s\""%(relationName,rel_domain._name,rel_range._name))
         
         m.update()
         
@@ -714,8 +713,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 return None
         
         return lc(m, booleanProcesor, lcVariables, headConstrain = headLC)
+    
+    # ---------------
                 
-    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
+    # -- Main method of the solver - creating ILP constraints plus objective, invoking the ILP solver and returning the result of the ILP solver classification  
     def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
@@ -822,7 +823,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 mP.optimize()
                 mP.update()
                 
-                mP.display()    
+                #mP.display()    
                 
                 endOptimize = datetime.now()
                 elapsedOptimize = endOptimize - startOptimize
@@ -843,7 +844,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
-                if not solved:
+                # Print ILP model to log file if model is not solved or logger level is DEBUG
+                if not solved or logging.DEBUG >= self.myLogger.level:
                     import sys
                     so = sys.stdout 
                     logFileName = self.myLogger.handlers[0].baseFilename
@@ -931,79 +933,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Return
         return
-    
-    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
-    def verifySelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
-        tokenResult, relationResult, tripleRelationResult = self.calculateILPSelection(phrase, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation, minimizeObjective, hardConstrains)
-        concepts = [k for k in graphResultsForPhraseToken.keys()]
-        self.__checkIfContainNegativeProbability(concepts, tokenResult, relationResult, tripleRelationResult)
-
-        if graphResultsForPhraseToken:
-            for key in graphResultsForPhraseToken:
-                if key not in tokenResult:
-                    return False
                 
-                if not np.array_equal(graphResultsForPhraseToken[key], tokenResult[key]):
-                    return False
-                
-        if graphResultsForPhraseRelation:
-            for key in graphResultsForPhraseRelation:
-                if key not in relationResult:
-                    return False
-                
-                if not np.array_equal(graphResultsForPhraseRelation[key], relationResult[key]):
-                    return False
-                
-        if graphResultsForPhraseTripleRelation:
-            for key in graphResultsForPhraseTripleRelation:
-                if key not in tripleRelationResult:
-                    return False
-                
-                if not np.array_equal(graphResultsForPhraseTripleRelation[key], tripleRelationResult[key]):
-                    return False
-                
-        return True
-    
-    # -- Main method of the solver - creating ILP constraints and objective and invoking ILP solver, returning the result of the ILP solver classification  
-    def verifySelectionLC(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
-        if not graphResultsForPhraseToken:
-            self.myLogger.warning('graphResultsForPhraseToken is None or empty - returning False')
-            return False
-            
-        concepts = [k for k in graphResultsForPhraseToken.keys()]
-        relations = [k for k in graphResultsForPhraseRelation.keys()]
-        
-        graphResultsForPhraseToken1 = next(iter(graphResultsForPhraseToken.values()))
-        tokens = [i for i ,_ in enumerate(graphResultsForPhraseToken1)]
-        
-        self.__checkIfContainNegativeProbability(concepts, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation)
-
-        hardConstrainsN = concepts + relations
-        
-        hardConstrains = {}
-        for c in hardConstrainsN:
-            if c in graphResultsForPhraseToken:
-                hardConstrains[c] = graphResultsForPhraseToken[c]
-            elif c in graphResultsForPhraseRelation:
-                hardConstrains[c] = graphResultsForPhraseRelation[c]
-            elif c in graphResultsForPhraseTripleRelation:
-                hardConstrains[c] = graphResultsForPhraseTripleRelation[c]
-            else:
-                pass
-            
-        m = None 
-        x = {}
-        y = {}
-        z = {} 
-        for graph in self.myGraph:
-            for _, lc in graph.logicalConstrains.items():
-                if not lc.headLC:
-                    continue
-                    
-                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
-                self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, concepts, tokens, x, y, z, hardConstrains=hardConstrains, headLC = True)
-                
-    # -- Calculated values for logical constraints
+    # -- Calculated loss values for logical constraints
     def calculateLcLoss(self, dn):
         m = None 
                 
