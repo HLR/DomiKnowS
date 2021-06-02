@@ -86,8 +86,7 @@ from graph_ont import graph_ont, image, truck, dog, airplane, automobile, bird, 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.program import LearningBasedProgram
-    from torch import nn
+    
     graph_ont.detach()
 
     image['pixels'] = ReaderSensor(keyword='pixels')
@@ -117,14 +116,6 @@ def model_declaration():
     image[frog] = ModuleLearner('emb', module=LinearNetwork())
     image[horse] = ModuleLearner('emb', module=LinearNetwork())
     image[ship] = ModuleLearner('emb', module=LinearNetwork())
-
-    program = SolverPOIProgram(graph_ont, poi=(image, ), 
-                               inferTypes=['ILP', 'local/argmax'], 
-                               loss=MacroAverageTracker(NBCrossEntropyLoss()), 
-                               metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))}
-                               )
-
-    return program
 
 class CIFAR10_1(datasets.CIFAR10):
 
@@ -224,9 +215,51 @@ def load_cifar10(train=True, root='./data/', size=32):
 
     return CIFAR10_1(root=root, train=train, transform=transform,download=True)
 
+def setup_result_logger():
+    import logging
+    from logging.handlers import RotatingFileHandler
+ 
+    logName = "CIFAR10"
+    logLevel = logging.INFO
+    import pathlib
+    pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
+    logFilename='logs/cifar10Results.log'
+    logFilesize=5*1024*1024
+    logBackupCount=1
+    logFileMode='a'
+
+    logger = logging.getLogger(logName)
+
+    # Create file handler and set level to info
+    ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
+    logger.setLevel(logLevel)
+
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+
+    # Add formatter to ch
+    ch.setFormatter(formatter)
+
+    # Add ch to logger
+    logger.addHandler(ch)
+
+    # Don't propagate
+    logger.propagate = False
+    print("Log file for %s is in: %s"%(logName,ch.baseFilename))
+    
+    return logger
+        
 def main():
 
-    program = model_declaration()
+    model_declaration()
+    
+    program = SolverPOIProgram(graph_ont, 
+                               poi=(image, ), 
+                               inferTypes=['ILP', 'local/argmax'], 
+                               loss=MacroAverageTracker(NBCrossEntropyLoss()), 
+                               metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'softmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                               logger=setup_result_logger()
+                               )
 
     ### load data
     val_size = 50

@@ -193,7 +193,10 @@ class ConstantSensor(FunctionalSensor):
     def forward(self, *_, **__) -> Any:
         try:
             if self.as_tensor:
-                return torch.tensor(self.data, device=self.device)
+                if torch.is_tensor(self.data):
+                    return self.data.clone().detach()
+                else:
+                    return torch.tensor(self.data, device=self.device)
             else:
                 return self.data
         except (TypeError, RuntimeError, ValueError):

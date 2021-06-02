@@ -5,3 +5,5 @@ ordered-set
 setuptools
 graphviz
 ordered_set
+pymongo[tls]
+dnspython

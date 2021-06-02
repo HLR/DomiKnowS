@@ -19,6 +19,7 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.graph import LogicalConstrain, V
+from pickle import FALSE
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -268,11 +269,15 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Skip if multiclass
             if concept[2] is not None:
                 continue
-                        
+            
+            isConstrainCreated = False
+            
             for arg_id, rel in enumerate(concept[0].has_a()): 
                 
                 if  not rel.auto_constraint:
                     continue
+                
+                isConstrainCreated = True
                 
                 # TODO: need to include indirect ones like sp_tr is a tr while tr has a lm
                 # A has_a B : A(x,y,...) <= B(x)
@@ -301,8 +306,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                         continue
                     
                     self.myIlpBooleanProcessor.ifVar(m,dn.getAttribute(rxkey)[0], cdn[0].getAttribute(cxkey)[0], onlyConstrains = True)
-                            
-            self.myLogger.info("Created - doman/range constraints for concepts %s"%(concept[2]))
+               
+            if isConstrainCreated:             
+                self.myLogger.info("Created - doman/range constraints for concepts %s"%(concept[1]))
                     
         m.update()
         
@@ -327,45 +333,49 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             #self.myLogger.debug("Concept \"%s\" from data set mapped to \"%s\" concept in ontology"%(currentConcept.name, conceptName))
                 
-            for d in currentConcept.disjoints():
-                disjointConcept = d.entities[1]._name
-                    
-                if currentConcept._name == disjointConcept:
-                    disjointConcept = d.entities[0]._name
-                        
-                    if currentConcept._name == disjointConcept:
-                        continue
-                        
-                if disjointConcept not in conceptsRelations:
-                    continue
-                        
-                if conceptName in foundDisjoint:
-                    if disjointConcept in foundDisjoint[conceptName]:
-                        continue
+            for currentD in currentConcept.disjoints():
+                currentDisjoints = []
                 
-                if disjointConcept in foundDisjoint:
-                    if conceptName in foundDisjoint[disjointConcept]:
-                        continue
-                 
-                rootDisjointConcept = rootDn.findRootConceptOrRelation(disjointConcept)
-                dnsDC = rootDn.findDatanodes(select = rootDisjointConcept)           
+                for e in currentD.entities:
+                    if e != currentConcept:
+                        currentDisjoints.append(e)
+                                    
+                for currentDisjoint in currentDisjoints:
+                    extendedCurrentDisjoints = currentDisjoint.descendants()
+            
+                    for d in extendedCurrentDisjoints:
+                        disjointConcept = d._name
+                                
+                        if disjointConcept not in conceptsRelations:
+                            continue
+                                
+                        if conceptName in foundDisjoint:
+                            if disjointConcept in foundDisjoint[conceptName]:
+                                continue
+                        
+                        if disjointConcept in foundDisjoint:
+                            if conceptName in foundDisjoint[disjointConcept]:
+                                continue
+                         
+                        rootDisjointConcept = rootDn.findRootConceptOrRelation(disjointConcept)
+                        dnsDC = rootDn.findDatanodes(select = rootDisjointConcept)           
+                                    
+                        cxkey = '<' + conceptName + '>/ILP/x'
+                        dxkey = '<' + disjointConcept + '>/ILP/x'
+                        
+                        for dn in zip(dns,dnsDC):
+                            if cxkey not in dn[0].attributes:
+                                continue
                             
-                cxkey = '<' + conceptName + '>/ILP/x'
-                dxkey = '<' + disjointConcept + '>/ILP/x'
-                
-                for dn in zip(dns,dnsDC):
-                    if cxkey not in dn[0].attributes:
-                        continue
-                    
-                    if dxkey not in dn[1].attributes:
-                        continue
-                        
-                    self.myIlpBooleanProcessor.nandVar(m, dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(dxkey)[0], onlyConstrains = True)
-                    
-                if not (conceptName in foundDisjoint):
-                    foundDisjoint[conceptName] = {disjointConcept}
-                else:
-                    foundDisjoint[conceptName].add(disjointConcept)
+                            if dxkey not in dn[1].attributes:
+                                continue
+                                
+                            self.myIlpBooleanProcessor.nandVar(m, dn[0].getAttribute(cxkey)[0], dn[1].getAttribute(dxkey)[0], onlyConstrains = True)
+                            
+                        if not (conceptName in foundDisjoint):
+                            foundDisjoint[conceptName] = {disjointConcept}
+                        else:
+                            foundDisjoint[conceptName].add(disjointConcept)
                            
             if conceptName in foundDisjoint:
                 self.myLogger.info("Created - disjoint - constraints between concept \"%s\" and concepts %s"%(conceptName,foundDisjoint[conceptName]))
@@ -845,7 +855,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Print ILP model to log file if model is not solved or logger level is DEBUG
-                if not solved or logging.DEBUG >= self.myLogger.level:
+                if not solved or self.myLogger.level <= logging.INFO:
                     import sys
                     so = sys.stdout 
                     logFileName = self.myLogger.handlers[0].baseFilename
