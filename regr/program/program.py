@@ -45,7 +45,32 @@ class dbUpdate():
         if self.programName.index('.') >= 0:
             self.programName = self.programName[:self.programName.index('.')]
         
-        self.dbClient = MongoClient("mongodb+srv://DomiKnowS:DomiKwarc34678@cluster0.us5bm.mongodb.net/Cluster0?retryWrites=true&w=majority")
+        try:
+            import os
+            from pathlib import Path 
+            
+            _dir_path = Path(os.path.realpath(__file__))
+            dir_path = _dir_path.parent.parent.parent
+            
+            mongoDBPermFile = 'MongoDB-DK.pem'
+            mongoDBPermPath = None
+            
+            for root, dir, files in os.walk(dir_path):
+                if mongoDBPermFile in files:
+                    mongoDBPermPath= os.path.join(root, mongoDBPermFile)
+              
+            if mongoDBPermPath is None:
+                self.dbClient = None
+                return
+              
+            uri = "mongodb+srv://cluster0.us5bm.mongodb.net/Cluster0?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority"
+            self.dbClient = MongoClient(uri,
+                                        tls=True,
+                                        tlsCertificateKeyFile=mongoDBPermPath)
+        except Exception as ex:
+            self.dbClient = None
+            return
+               
         self.db = self.dbClient.mlResults
         self.results = self.db.results
         
@@ -88,6 +113,9 @@ class dbUpdate():
         return total
                 
     def __call__(self, stepName, metricName, metricResult):
+        
+        if self.dbClient is None:
+            return
         
         upatedmetricResult = {}
         for k, r in metricResult.value().items():
@@ -169,6 +197,15 @@ class LearningBasedProgram():
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
 
+    def calculateMetricDelta(self, metric1, metric2):
+        metricDelta = {}
+        for k, v in metric1.value().items():
+            metricDelta[k] = {}
+            for m, _ in v.items():     
+                metricDelta[k][m] = v[m] - metric2.value()[k][m]
+            
+        return metricDelta
+    
     def call_epoch(self, name, dataset, epoch_fn, epoch_callbacks=None, step_callbacks=None, **kwargs):
         if dataset is not None:
             self.logger.info(f'{name}:')
@@ -189,6 +226,9 @@ class LearningBasedProgram():
                 if self.dbUpdate is not None:
                     self.dbUpdate(desc, metricName, metricResult)
             
+            ilpMetric = None
+            softmaxMetric = None
+                
             if self.model.metric:
                 self.logger.info(' - metric:')
                 for key, metric in self.model.metric.items():
@@ -199,7 +239,20 @@ class LearningBasedProgram():
                     metricResult = metric
                     if self.dbUpdate is not None:
                         self.dbUpdate(desc, metricName, metricResult)
-
+                        
+                    if key == 'ILP':
+                        ilpMetric = metric
+                        
+                    if key == 'softmax':
+                        softmaxMetric = metric
+                    
+            if ilpMetric is not None and softmaxMetric is not None:
+                metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
+                metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
+                
+                self.logger.info(f' - - {metricDeltaKey}')
+                self.logger.info(metricDelta)
+                 
     def train(
         self,
         training_set,
