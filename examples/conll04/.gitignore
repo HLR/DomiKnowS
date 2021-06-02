@@ -2,3 +2,4 @@ data
 cache
 saved_models
 new_saved_models
+/logs/
