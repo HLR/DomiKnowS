@@ -1,7 +1,7 @@
 acls==1.0.2
 Owlready2==0.30
-pandas==1.2.4
-torch==1.7.0
+pandas=>1.1.5
+torch==1.8.1
 transformers==4.0.0
 ordered-set
 setuptools
