@@ -1,12 +1,16 @@
 import torch
 import torch.nn as nn
 
+from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.loss import NBCrossEntropyLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
 
+from regr.sensor.pytorch.sensors import ReaderSensor
+from regr.sensor.pytorch.learners import ModuleLearner
 
-class MyModel(PoiModel):
+
+class Model(PoiModel):
     def __init__(self, graph):
         super().__init__(
             graph, 
@@ -29,3 +33,16 @@ class Net(torch.nn.Module):
                       )
     def forward(self, x):
         return self.recognition(x)
+
+
+def model_declaration(config):
+    from graph import graph, image, digit
+
+    graph.detach()
+
+    image['pixels'] = ReaderSensor(keyword=0)
+    image[digit] = ReaderSensor(keyword=1, label=True)
+    image[digit] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.output_size))
+
+    program = LearningBasedProgram(graph, Model)
+    return program
