@@ -1,27 +1,22 @@
 import logging
 import torch
-# from graph import x
 from regr.program import LearningBasedProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.graph import Property
-from graph import graph
 from model import MyModel, Net
-from config import HYPER_PARAMETER
-import torchvision
+import config
 from time import time
 from torchvision import datasets, transforms
-from torch import nn, optim
 
-def model_declaration(hp):
+
+def model_declaration(config):
+    from graph import graph, image, digit
+
     graph.detach()
 
-    x = graph['x']
-    y0 = graph['y0']
-
-    x['x'] = ReaderSensor(keyword='x')
-    x[y0] = ReaderSensor(keyword='y0', label=True)
-    x[y0] = ModuleLearner('x', module=Net(hp['input_size'], hp['hidden_sizes'], hp['output_size']).cuda())
+    image['pixels'] = ReaderSensor(keyword=0)
+    image[digit] = ReaderSensor(keyword=1, label=True)
+    image[digit] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.output_size))
 
     program = LearningBasedProgram(graph, MyModel)
     return program
@@ -30,40 +25,34 @@ def model_declaration(hp):
 def main():
     logging.basicConfig(level=logging.INFO)
 
-    program = model_declaration(HYPER_PARAMETER)
+    program = model_declaration(config)
     
     ### load data
     transform = transforms.Compose([transforms.ToTensor(),
                               transforms.Normalize((0.5,), (0.5,)),
+                              torch.nn.Flatten(0)
                               ])
     trainset = datasets.MNIST('PATH_TO_STORE_TRAINSET', download=True, train=True, transform=transform)
-    valset = datasets.MNIST('PATH_TO_STORE_TESTSET', download=True, train=False, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=512, shuffle=True)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=512, shuffle=True)
-    # trainloader = torch.utils.data.DataLoader(trainset, shuffle=True)
-    # valloader = torch.utils.data.DataLoader(valset, shuffle=True)
-    
-    dataiter = iter(trainloader)
-    images, labels = dataiter.next()
+    testset = datasets.MNIST('PATH_TO_STORE_TESTSET', download=True, train=False, transform=transform)
+    import random
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=1,
+        # sampler=random.sample(range(60000),600),
+        shuffle=True,
+        )
+    testloader = torch.utils.data.DataLoader(testset, batch_size=1,
+        # sampler=random.sample(range(10000),100),
+        shuffle=True,
+        )
 
-    print(images.shape)
-    print(labels.shape)
-    # import sys
-    # sys.exit()
+    trainreader = trainloader
+    testreader = testloader
 
-    data = [{
-        'x': images.view(-1, 784),
-        'y0': labels,
-        }]
-
-    print(data)
-
-    program.train(data, train_epoch_num=HYPER_PARAMETER['epochs'], Optim=lambda param: torch.optim.SGD(param, lr=1))
-    for loss, metric, x_node in program.test(data):
-        print('loss:', loss)
-        print(metric)
-        # print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
-        # print('y0:', x_node.getAttribute('<y0>/ILP'))
+    program.train(trainreader, test_set=testreader, train_epoch_num=config.epochs, Optim=lambda param: torch.optim.SGD(param, lr=0.01))
+    # for loss, metric, x_node in program.test(data):
+    #     print('loss:', loss)
+    #     print(metric)
+    #     # print('y0:', torch.softmax(x_node.getAttribute('<y0>'), dim=-1))
+    #     # print('y0:', x_node.getAttribute('<y0>/ILP'))
 
 if __name__ == '__main__':
     main()
