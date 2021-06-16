@@ -14,7 +14,7 @@ def main():
     
     trainreader, testreader = get_readers()
 
-    program.train(trainreader, test_set=testreader, train_epoch_num=config.epochs, Optim=partial(torch.optim.SGD, lr=0.01))
+    program.train(trainreader, test_set=testreader, train_epoch_num=config.epochs, Optim=partial(torch.optim.SGD, lr=config.lr))
 
 
 if __name__ == '__main__':
