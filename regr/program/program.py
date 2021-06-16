@@ -20,9 +20,8 @@ def get_len(dataset, default=None):
         return len(dataset)
     except TypeError:  # `generator` does not have __len__
         return default
-   
-from pymongo import MongoClient
- 
+
+
 class dbUpdate():
     def getTimeStamp(self):
         from datetime import datetime, timezone, timedelta
@@ -62,7 +61,8 @@ class dbUpdate():
             if mongoDBPermPath is None:
                 self.dbClient = None
                 return
-              
+
+            from pymongo import MongoClient
             uri = "mongodb+srv://cluster0.us5bm.mongodb.net/Cluster0?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority"
             self.dbClient = MongoClient(uri,
                                         tls=True,
@@ -157,25 +157,12 @@ class dbUpdate():
             pass
             
 class LearningBasedProgram():
-    def __init__(self, graph, Model, **kwargs):
+    def __init__(self, graph, Model, logger=None, db=False, **kwargs):
         self.graph = graph
         
-        if "logger" in kwargs:
-            self.logger = kwargs["logger"]
-            del kwargs["logger"]
-        else:
-            self.logger = logging.getLogger(__name__)
-            
-        if "db" in kwargs:
-            if kwargs['db']:
-                self.dbUpdate = None
-            else:
-                self.dbUpdate = dbUpdate(graph)
-            
-            del kwargs['db']
-        else:
-            self.dbUpdate = dbUpdate(graph)
-        
+        self.logger = logger or logging.getLogger(__name__)
+        self.dbUpdate = None if db else dbUpdate(graph)
+
         self.model = Model(graph, **kwargs)
         self.opt = None
         self.epoch = None
