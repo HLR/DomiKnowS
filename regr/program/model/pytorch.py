@@ -1,6 +1,7 @@
 from itertools import combinations, product
 import hashlib
 import pickle
+from typing import Iterable
 import warnings
 
 import torch
@@ -76,6 +77,11 @@ class TorchModel(torch.nn.Module):
         if build is None:
             build = self.build
         data_hash = None
+        if not isinstance(data_item, dict):
+            if isinstance(data_item, Iterable):
+                data_item = dict((k, v) for k, v in enumerate(data_item))
+            else:
+                data_item = {None: data_item}
         data_item = self.move(data_item)
 
         for sensor in self.graph.get_sensors(CacheSensor, lambda s: s.cache):

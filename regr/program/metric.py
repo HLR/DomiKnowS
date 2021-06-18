@@ -12,6 +12,8 @@ class CMWithLogitsMetric(torch.nn.Module):
     def forward(self, input, target, data_item, prop, weight=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
+        else:
+            weight = weight.to(input.device)
         preds = input.argmax(dim=-1).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
         tp = (preds * labels * weight).sum()
@@ -20,9 +22,26 @@ class CMWithLogitsMetric(torch.nn.Module):
         fn = ((1 - preds) * labels * weight).sum()
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
+
 class BinaryCMWithLogitsMetric(CMWithLogitsMetric):
     def forward(self, input, target, data_item, prop, weight=None):
         target = target.argmax(dim=-1)
+        return super().forward(input, target, data_item, prop, weight)
+
+
+class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
+    def __init__(self, num_classes, weight=None):
+        super().__init__()
+        self.num_classes = num_classes
+        self.weight = weight
+
+    def forward(self, input, target, data_item, prop, weight=None):
+        from torch.nn import functional
+        target = functional.one_hot(target, num_classes=self.num_classes)
+        input = functional.one_hot(input.argmax(dim=-1), num_classes=self.num_classes)
+        input = torch.stack((-input, input), dim=-1)
+        if weight is None:
+            weight = self.weight
         return super().forward(input, target, data_item, prop, weight)
 
 class DatanodeCMMetric(torch.nn.Module):
