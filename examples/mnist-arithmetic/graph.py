@@ -13,7 +13,7 @@ with Graph(name='global') as graph:
 
     addition = Concept(name='addition')
     (operand1, operand2) = addition.has_a(operand1=digit, operand2=digit)
-    summation = addition(name='sumation', ConceptClass=EnumConcept, values=list(map(lambda v: f'_{v}', range(19))))
+    summation = addition(name='summation', ConceptClass=EnumConcept, values=list(map(lambda v: f'_{v}', range(19))))
 
     for i, j in product(range(10), repeat=2):
         # rule: x is i and y is j => z is i+j
