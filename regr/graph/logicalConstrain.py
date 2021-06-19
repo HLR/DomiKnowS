@@ -65,6 +65,8 @@ class LogicalConstrain:
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
                 self.graph = self.__getContext(conceptOrLc)[-1]
+        elif isinstance(conceptOrLc, str):
+            self.graph = None
         else:
             self.graph = conceptOrLc.graph
                 

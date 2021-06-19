@@ -153,7 +153,7 @@ class Concept(BaseGraphTree):
             Rel = cls._rels[rel]
         except KeyError as e:
             if  isinstance(self, EnumConcept):
-                if rel in self.values:
+                if rel in self.enum:
                     def ecHandle(*args, **kwargs):
                         return self.processLCArgs(*args, index=self.get_index(rel), index2=self.get_index(rel),  **kwargs)
                     
@@ -324,27 +324,27 @@ class Concept(BaseGraphTree):
 class EnumConcept(Concept):
     def __init__(self, name=None, values=[]):
         super().__init__(name=name)
-        self.values = values
+        self.enum = values
 
     @property
-    def values(self):
-        return [e.name for e in self.enum]
+    def enum(self):
+        return [e.name for e in self._enum]
     
     @property
     def attributes(self):
-        return [(self, self.get_index(e.name)) for e in self.enum]
+        return [(self, self.get_index(e.name)) for e in self._enum]
 
-    @values.setter
-    def values(self, values):
+    @enum.setter
+    def enum(self, values):
         from enum import Enum
-        self.enum = Enum(self.name, values, start=0)
+        self._enum = Enum(self.name, values, start=0)
 
     def get_index(self, value):
-        return self.enum[value].value
+        return self._enum[value].value
 
     def get_value(self, index):
         try:
-            t = self.enum(index) 
+            t = self._enum(index) 
             return t.name
         except ValueError:
             return None
