@@ -656,9 +656,9 @@ class DataNode:
                     
                     return (concept, concept.name, None, 1)
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
-                    vlen = len(subGraph.concepts[conceptNameItem].values)
+                    vlen = len(subGraph.concepts[conceptNameItem].enum)
                     
-                    if _conceptName in subGraph.concepts[conceptNameItem].values:
+                    if _conceptName in subGraph.concepts[conceptNameItem].enum:
                         concept = subGraph.concepts[conceptNameItem]
                         
                         return (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
@@ -803,12 +803,12 @@ class DataNode:
                 _concept = _concept[0]
             
             if isinstance(_concept, EnumConcept):
-                for i, a in enumerate(_concept.values):
+                for i, a in enumerate(_concept.enum):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
                         continue
                     
-                    returnCandR.append((_concept, a, i, len(_concept.values)))
+                    returnCandR.append((_concept, a, i, len(_concept.enum)))
             else:
                 if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
@@ -859,7 +859,7 @@ class DataNode:
                     return torch.tensor(collectAttributeList)
                 
             if isinstance(concept, EnumConcept):
-                concept = (concept, concept.name, None, len(concept.values))
+                concept = (concept, concept.name, None, len(concept.enum))
             else:
                 concept = (concept, concept.name, None, 1)
 
@@ -1086,7 +1086,7 @@ class DataNode:
                         continue
                 
                 if isinstance(cr, EnumConcept):
-                    cr = (cr, cr.name, None, len(cr.values))
+                    cr = (cr, cr.name, None, len(cr.enum))
                 else:
                     cr = (cr, cr.name, None, 1)
             
