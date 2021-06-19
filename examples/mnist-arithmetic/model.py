@@ -1,3 +1,5 @@
+from functools import partial
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
 import torch
 import torch.nn as nn
 
@@ -5,18 +7,18 @@ from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.loss import NBCrossEntropyLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
-from regr.sensor.pytorch.sensors import FunctionalReaderSensor, FunctionalSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import ConstantSensor, FunctionalReaderSensor, FunctionalSensor, ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 
-from graph import graph, image, digit, addition, operand1, operand2, summation
+from graph import graph, T1, image, digit, addition, summation, operand1, operand2, tci
 
 class Model(PoiModel):
     def __init__(self, graph):
         super().__init__(
             graph,
-            poi=(image, addition),
+            poi=(T1, image, addition),
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
-            metric=PRF1Tracker(MultiClassCMWithLogitsMetric(10)))
+            metric=PRF1Tracker(MultiClassCMWithLogitsMetric(19)))
 
 
 class Net(torch.nn.Module):
@@ -37,16 +39,21 @@ class Net(torch.nn.Module):
 
 
 def model_declaration(config):
+    class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
     graph.detach()
 
     image['pixels'] = ReaderSensor(keyword='pixels')
-    image[digit] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.output_size))
+    addition[summation] = ReaderSensor(keyword='summation', label=True)
 
-    addition[operand1.reversed, operand2.reversed] = FunctionalSensor(forward=lambda : ([1,0],[0,1]))
+    T1[tci.reversed] = ConstantEdgeSensor(image['pixels'], data=[[1,1]], relation=tci.reversed)
+    addition[operand1.reversed] = ConstantEdgeSensor(image['pixels'], data=[[1,0]], relation=operand1.reversed)
+    addition[operand2.reversed] = ConstantEdgeSensor(image['pixels'], data=[[0,1]], relation=operand2.reversed)
+
+    image[digit] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, len(digit.enum)))
     addition['pixels'] = FunctionalSensor(
         operand1.reversed('pixels'), operand2.reversed('pixels'),
-        forward=lambda op1, op2: torch.cat((op1, op2), dim=-1))
-    addition[summation] = ModuleLearner('pixel', module=Net(config.input_size*2, config.hidden_sizes*2, 18))
-    addition[summation] = ReaderSensor(keyword='summation', label=True)
+        forward=lambda operand1, operand2: torch.cat((operand1, operand2), dim=-1))
+    addition[summation] = ModuleLearner('pixels', module=Net(config.input_size*2, config.hidden_sizes, len(summation.enum)))
+
     program = LearningBasedProgram(graph, Model)
     return program
