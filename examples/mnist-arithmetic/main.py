@@ -17,9 +17,11 @@ def validate(program, reader):
         addition, = image1.impactLinks['operand1']
         assert addition is image2.impactLinks['operand2'][0]
 
-        print(image1.getAttribute(digit, 'ILP'))
-        print(image2.getAttribute(digit, 'ILP'))
-        print(addition.getAttribute(summation, 'ILP'))
+        x = image1.getAttribute(digit, 'ILP').argmax()
+        y = image2.getAttribute(digit, 'ILP').argmax()
+        z = addition.getAttribute(summation, 'ILP').argmax()
+        print(f'{x}+{y}={z}')
+        assert x + y == z
 
 
 def main():
