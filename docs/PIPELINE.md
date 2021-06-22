@@ -65,14 +65,14 @@ with Graph('WIQA_graph') as graph:
     disjoint(is_more, is_less, no_effect)
     orL(is_more, is_less, no_effect)
     
-    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
-    ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+    ifL(is_more('x'), is_less('y', path=('x', symmetric.name, s_arg2.name)))
+    ifL(is_less('x'), is_more('y', path=('x', symmetric.name, s_arg2.name)))
 
-    ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
+    ifL(andL(is_more('x'), is_more('z', path=('x', transitive.name, t_arg2.name))),
+        is_more('y', path=('x', transitive.name, t_arg3.name)))
 
-    ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+    ifL(andL(is_more('x'), is_less('z', path=('x', transitive.name, t_arg2.name))),
+        is_less('y', path=('x', transitive.name, t_arg3.name)))
 ```
 
 some constraints are inherent in the graph such as the relations that are defined in them. but other constraints must be defined explicitly. 

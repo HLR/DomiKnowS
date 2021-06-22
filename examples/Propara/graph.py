@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V
+from regr.graph.logicalConstrain import orL, andL, atMostL, ifL, nandL
 
 Graph.clear()
 Concept.clear()
@@ -24,10 +24,10 @@ with Graph('global') as graph:
     nandL(create, destroy, other)
     nandL(known_loc, unknown_loc, non_existence)
     
-    ifL(create, V(name="x"), andL(non_existence, V(v=("x", "arg1")), orL(known_loc,  V(v=("x", "arg2")), unknown_loc,  V(v=("x", "arg2")))))
-    ifL(destroy, V(name=("x")), andL(orL(known_loc, V(v=("x", "arg1")), unknown_loc, V(v=("x", "arg1"))), non_existence, V(v=("x", "arg2"))))
+    ifL(create("x"), andL(non_existence(path=("x", "arg1")), orL(known_loc(path=("x", "arg2")), unknown_loc(path=("x", "arg2")))))
+    ifL(destroy("x")), andL(orL(known_loc(path=("x", "arg1")), unknown_loc(path=("x", "arg1"))), non_existence(path=("x", "arg2")))
 
-#   atMostL(1, ("x"), andL(entity, "y", create()))
+#   atMostL(andL(entity, create))
     # No entity_step
 
 

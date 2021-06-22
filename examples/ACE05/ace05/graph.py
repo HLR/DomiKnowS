@@ -269,7 +269,7 @@ with Graph('global') as graph:
             located = physical(name='Located')
             # located.has_a(arg1=person, arg2=entity)
             # arg2 is one of FAC, LOC, GPE
-            ifL(located, ('x', 'y'), andL(PER, ('x',), orL(FAC, LOC, GPE, ('y',))))
+            ifL(located('x'), andL(PER, ('x',), orL(FAC, LOC, GPE, ('y',))))
             # Physical.Near - Near indicates that an entity is explicitly near another entity, but neither entity is a part of the other or located in/at the other.
             near = physical(name='Near')
             # near.has_a(arg1=entity, arg2=entity)

@@ -19,3 +19,5 @@ PATH_TO_STORE_TESTSET/
 PATH_TO_STORE_TRAINSET/
 mnist_re*
 *.pt
+/data/
+/logs/

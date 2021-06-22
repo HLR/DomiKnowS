@@ -180,7 +180,7 @@ The graph can specify constrains:
   
 - **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)` is mapped to logical expressions-
 
-  *ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))*
+  *ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1.name)), organization(path=('x', rel_pair_phrase2.name))))*
 
 *Logical Constrains*
 
@@ -216,7 +216,7 @@ These basic blocks are combined using the following logical functions to build l
 
 - `atMostL()`,  e.g.:
 
-*atMostL(andL(city, V(name='x'), firestationCity, V(v=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - each city has no more then 4 *neighbors*.
+*atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - each city has no more then 4 *neighbors*.
 
 The logical constrain can use variables to associate related objects of the logical expression.
 The expressions use concepts defined in the graph and set additional constrains on them.
