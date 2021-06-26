@@ -175,6 +175,7 @@ logging.basicConfig(level=logging.INFO)
 
 # at the end we run our program for each epoch and test the results each time
 for i in range(args.cur_epoch):
+    print("this epoch is number:",i,"&"*10)
     class SchCB():
         def __init__(self, program) -> None:
             self.program = program
