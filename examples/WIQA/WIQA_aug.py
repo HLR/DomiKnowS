@@ -10,6 +10,7 @@ from regr.graph.relation import disjoint
 from regr.program.loss import NBCrossEntropyLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
 import logging
+from transformers import get_linear_schedule_with_warmup
 
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -28,11 +29,14 @@ from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_tripl
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
-parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser',type=float)
-parser.add_argument('--pd', dest='primaldual', default=True, help='whether or not to use primaldual constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=20, help='number of samples to train the model on',type=int)
+parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
+parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
+parser.add_argument('--samplenum', dest='samplenum', default=50, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
+parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
+parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
+parser.add_argument('--verbose', dest='verbose', default=1, help='print the errors',type=int)
 args = parser.parse_args()
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
@@ -178,31 +182,25 @@ for i in range(args.cur_epoch):
         @property
         def sch(self):
             if self._sch is None:
-                # This will be call when self.sch is used.
-
-                # This implement a singleton pattern with delay construction of
-                # the scheduler, since optimizer is not available in the context of
-                # this declaration, but is expected to be available when self.sch is
-                # needed.
-
-                # self._sch = XXXScheduler(self.program.opt, xxx, xxx)
-                pass
+                self._sch = get_linear_schedule_with_warmup(self.program.opt, num_warmup_steps = args.num_warmup_steps, num_training_steps = args.num_training_steps)
             return self._sch
+
         def __call__(self) -> None:
-            # this will be call after every step
-            # self.sch.update()
-            pass
+            self.sch.step()
 
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
     if args.primaldual:
         print(program.cmodel.loss)
-    test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
+    print("***** dev aug *****")
+    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    print("***** test aug *****")
+    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    print("***** dev *****")
+    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect,args.verbose)
+    print("***** test *****")
+    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect,args.verbose)
 
 
 
