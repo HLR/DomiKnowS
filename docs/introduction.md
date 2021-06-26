@@ -118,14 +118,14 @@ with Graph('global') as graph:
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
 
-        ifL(work_for, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), organization, V(v=('x', rel_pair_phrase2.name))))
+        ifL(work_for'x'), andL(people(path=('x', rel_pair_phrase1.name)), organization(path=('x', rel_pair_phrase2.name))))
 
-        ifL(located_in, V(name='x'), andL(location, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+        ifL(located_in'x'), andL(location(path=('x', rel_pair_phrase1.name)), location(path=('x', rel_pair_phrase2.name))))
         
-        ifL(live_in, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+        ifL(live_in'x'), andL(people(path=('x', rel_pair_phrase1.name)), location(path=('x', rel_pair_phrase2.name))))
 
-        ifL(orgbase_on, V(name='x'), andL(organization, V(v=('x', rel_pair_phrase1.name)), location, V(v=('x', rel_pair_phrase2.name))))
+        ifL(orgbase_on'x'), andL(organization(path=('x', rel_pair_phrase1.name)), location(path=('x', rel_pair_phrase2.name))))
         
-        ifL(kill, V(name='x'), andL(people, V(v=('x', rel_pair_phrase1.name)), people, V(v=('x', rel_pair_phrase2.name))))
+        ifL(kill'x'), andL(people(path=('x', rel_pair_phrase1.name)), people(path=('x', rel_pair_phrase2.name))))
 
 ```

@@ -108,7 +108,7 @@ def test_case():
         'lc0LossTensor' : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
         #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
-        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
+        # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM
         'lc2LossTensor' : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
                                         float("nan"),   float("nan"),  0.4502,  0.3971, # works
