@@ -16,9 +16,9 @@ We provide a graph language based on python for knowledge declaration with notat
         - [Inherit declaration](#inherit-declaration)
     - [Access the nodes](#access-the-nodes)
   - [Constraints](#constraints)
-    - [Graph with logical Constrains](#graph-with-logical-constrains)
-    - [Ontology file as a source of constrains](#ontology-file-as-a-source-of-constrains)
-      - [No supported yet](#no-supported-yet)
+    - [Logical Constrains](#logical-constrains)
+    - [Graph Constrains](#graph-constrains)
+    - [Ontology Cconstrains](#ontology-constrain)
 
 ## Class Overview
 
@@ -162,31 +162,42 @@ organization.is_a(word)
 
 The constrains are collected from three sources:
 
-- **knowledge graph** definition, 
-- **logical constrains** defined in the graph,
-- **ontology (OWL file)** provided as url in the ontology graph.
+- **logical constrains** - basic form of constrain in the ystem,
+- **knowledge graph** special definitions in the graph, 
+- **ontology (OWL file)** provided as url to OWL file in the ontology graph.
 
-*Graph Constrains*
+### Logical Constrains
 
-The graph can specify constrains:
+They express constrains between concepts defined in the graph using logical and counting methods (e.g. `ifL`, see below for the full list of logical methods).
 
-- **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
+The basic building block of the logical constrain is the classification concept called with two optional attributes:
+- variable name 
+- `path` argument which provide information how candidates will be selected for the concept during computing of logical constrains. 
+  It can specify an previously defined variable and the path from this variable through graph edges to candidates selected for this concept.
 
-  *IF(people, word)*
+	 ifL(
+		 work_for('x'), 
+	     andL(
+	     	  people(path=('x', rel_pair_phrase1)), 
+	     	  organization(path=('x', rel_pair_phrase2))
+	     	  )
+	     )
 
-- **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
+This example above show shows the constrain which defines variable `x` representing candidates for `'work_for'` concept. 
 
-  *atMostL(people, organization, location, other, o, 1)*
-  
-- **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)` is mapped to logical expressions-
+This variable is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively `'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
 
-  *ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1.name)), organization(path=('x', rel_pair_phrase2.name))))*
+	LC_SET_ADDITIONAL = True
+	
+	ifL(
+            people('p'), 
+            atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
+            active = LC_SET_ADDITIONAL
+            )
 
-*Logical Constrains*
+This example above defines defines variable `x` representing candidates for `'people'` concept. This variable is then used to define candidates for `'live_in'` by specifying `path` to them using names of graph edge respectively `'rel_pair_phrase1'`. This edge is decorated with  `reversed` to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
 
-They express constrains between concepts defined in the graph using logical and counting constructs.
-
-The basic building block  of the logical constrain contain the `name` of the concept followed by the optional instance of `V` class which can either have a variable assigning to this concept through attribute `name` and can also provide information how elements will be selected for the concept during logical constrain  computing, trough the `v` attribute. This attribute can specify an previously defined variable and the path from this  variable through relation links to elements selected for this concept.
+Additionally this constrain shows optional attribute `active` which if set to false will disable usage of this constrain in the ILP model.  
 
 These basic blocks are combined using the following logical functions to build logical expression:
 
@@ -218,12 +229,25 @@ These basic blocks are combined using the following logical functions to build l
 
 *atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - each city has no more then 4 *neighbors*.
 
-The logical constrain can use variables to associate related objects of the logical expression.
-The expressions use concepts defined in the graph and set additional constrains on them.
 
-The constrains are regular Python instructions thus they have to follow definition of tuple in Python.
 
-*Ontology*
+### Graph Constrains
+
+The graph can specify constrains:
+
+- **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
+
+  *IF(people, word)*
+
+- **Disjointment between concepts**: e.g. `disjoint(people, organization, location, other, o)` is mapped to logical expression -
+
+  *atMostL(people, organization, location, other, o, 1)*
+  
+- **Domain and ranges for relations**: e.g. `work_for.has_a(people, organization)` is mapped to logical expressions-
+
+  *ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1.name)), organization(path=('x', rel_pair_phrase2.name))))*
+
+### Ontology Constrain
 
 The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
 
