@@ -200,8 +200,8 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
-    if len(problem_list)>0:
-        return problem_list
+        if len(problem_list)>0:
+            return problem_list
     print("accuracy:", ac_ / counter,counter)
     print("ILP accuracy:", ILPac_ / counter)
     print("ILP test accuracy:", ac_test / counter)
