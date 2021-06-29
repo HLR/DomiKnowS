@@ -104,7 +104,8 @@ def guess_triple(quest_id, arg11, arg22,arg33):
 import gurobipy as gp
 from gurobipy import GRB
 
-def is_ILP_consistant(questions_id,results,verbose,probabilities):
+def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
+    #print(questions_id,results,verbose,probabilities)
     n=len(questions_id)
 
     m = gp.Model("whatever")
@@ -149,7 +150,8 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities):
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 if verbose:
-                    print("Transivity is violated")
+                    print(para_num,end=",")
+                    #print("Transivity is violated")
     m.setObjective(obj, GRB.MAXIMIZE)
     m.optimize()
     vars_=list(m.getVars())
@@ -161,7 +163,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
     ac_ = 0
     ILPac_ = 0
     ac_test=0
-    for paragraph_ in program.populate(reader, device=cur_device):
+    for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
         #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
@@ -187,7 +189,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
                 ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
                 ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
-        _vars=is_ILP_consistant(questions_id, results , verbose,sresult)
+        _vars=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
@@ -196,3 +198,19 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
     print("accuracy:", ac_ / counter,counter)
     print("ILP accuracy:", ILPac_ / counter)
     print("ILP test accuracy:", ac_test / counter)
+
+import os
+
+def join_model(fromdir, tofile):
+    output = open(tofile, 'wb')
+    parts  = os.listdir(fromdir)
+    parts.sort(  )
+    for filename in parts:
+        filepath = os.path.join(fromdir, filename)
+        fileobj  = open(filepath, 'rb')
+        while 1:
+            filebytes = fileobj.read(int(90*1000*1024))
+            if not filebytes: break
+            output.write(filebytes)
+        fileobj.close(  )
+    output.close(  )

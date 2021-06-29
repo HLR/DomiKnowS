@@ -21,7 +21,7 @@ from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
-from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results
+from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead,WIQAModel
 import argparse
 from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_triple_with_labels, guess_pair, guess_triple
@@ -31,7 +31,7 @@ parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number t
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=50, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=5000000000, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
@@ -44,11 +44,11 @@ cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
-reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -172,7 +172,9 @@ else:
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=args.beta)
 
 logging.basicConfig(level=logging.INFO)
-
+from os import path
+if not path.exists("domi_7"):
+    join_model("domi_comp","domi_7")
 # at the end we run our program for each epoch and test the results each time
 for i in range(args.cur_epoch):
     print("this epoch is number:",i,"&"*10)
@@ -188,20 +190,21 @@ for i in range(args.cur_epoch):
 
         def __call__(self) -> None:
             self.sch.step()
-
-    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    program.load("domi_7")
+    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    #program.save("domi_"+str(i))
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
     if args.primaldual:
         print(program.cmodel.loss)
     print("***** dev aug *****")
     test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose)
-    print("***** test aug *****")
-    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
-    print("***** dev *****")
-    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect,args.verbose)
-    print("***** test *****")
-    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect,args.verbose)
+    #print("***** test aug *****")
+    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    #print("***** dev *****")
+    #test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect,args.verbose)
+    #print("***** test *****")
+    #test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect,args.verbose)
 
 
 
