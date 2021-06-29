@@ -107,7 +107,7 @@ from gurobipy import GRB
 def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     #print(questions_id,results,verbose,probabilities)
     n=len(questions_id)
-
+    tran_violated=False
     m = gp.Model("whatever")
     m.setParam(GRB.Param.OutputFlag, 0)
     obj = gp.LinExpr()
@@ -150,20 +150,24 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 if verbose:
-                    print(para_num,end=",")
-                    #print("Transivity is violated")
+                    #print(para_num,end=",")
+                    print("Transivity is violated")
+                    tran_violated=True
     m.setObjective(obj, GRB.MAXIMIZE)
     m.optimize()
     vars_=list(m.getVars())
-    return [i.x for i in vars_]
+    return [i.x for i in vars_],tran_violated
 
 
-def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose):
+def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose,problem_list):
     counter = 0
     ac_ = 0
     ILPac_ = 0
     ac_test=0
     for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
+        print(para_num)
+        if not len(problem_list)==0 and not para_num in problem_list:
+            continue
         #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
@@ -189,12 +193,15 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
                 ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
                 ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
-        _vars=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
+        _vars,tran_violated=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
+        if tran_violated and len(problem_list)==0:
+            return [para_num]
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
-
+    if len(problem_list)>0:
+        return problem_list
     print("accuracy:", ac_ / counter,counter)
     print("ILP accuracy:", ILPac_ / counter)
     print("ILP test accuracy:", ac_test / counter)
