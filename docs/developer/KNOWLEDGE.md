@@ -190,16 +190,23 @@ This variable is then used to define candidates for `'people'` and `'organizatio
 	LC_SET_ADDITIONAL = True
 	
 	ifL(
-            people('p'), 
-            atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
-            active = LC_SET_ADDITIONAL
-            )
+        people('p'), 
+        atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
+        active = LC_SET_ADDITIONAL
+        )
 
 This example above defines defines variable `x` representing candidates for `'people'` concept. This variable is then used to define candidates for `'live_in'` by specifying `path` to them using names of graph edge respectively `'rel_pair_phrase1'`. This edge is decorated with  `reversed` to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
 
 Additionally this constrain shows optional attribute `active` which if set to false will disable usage of this constrain in the ILP model.  
 
-These basic blocks are combined using the following logical functions to build logical expression:
+	ifL(
+		city('x'), 
+		atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3),
+		p=90
+		)
+	
+The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of teh constrain.   
+The basic blocks are combined using the following logical functions to build logical expression:
 
 - `notL()`,
 - `andL()`,

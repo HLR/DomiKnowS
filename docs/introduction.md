@@ -93,7 +93,7 @@ ifL(kill('x'), andL(people(path=('x', rel_pair_phrase1)), people(path=('x', rel_
 Each of this constrain is built in the same way. The first argument of the `ifL` is a constrain concept type of `pair`. 
 The concept has a name of the variable `x` which represent instances of `pair` in the example. 
 The second argument of the `ifL` method is a call to another DomiKnows constrain sub language method - `andL`.
-This method required that both its argument must hold. 
+This method required that both its arguments must hold. 
 It is used here to ensure that both first and second of the constrain relation instances have required concepts assigned. 
 The first related instance is obtain by provided path in the graph starting from the current `x` instance. It is reach by following the edge `rel_pair_phrase1`.
 Respectively the second instance is reach by following the edge `rel_pair_phrase2` from the instance `x`,
