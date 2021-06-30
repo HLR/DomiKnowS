@@ -33,5 +33,14 @@ with Graph(name='global') as graph:
                 getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
                 getattr(digit, f'd_{j}')(path=('a', operand2)),
             ),
+            active = False
+        )
+        
+        ifL(
+            getattr(digit, f'd_{i}')('i'),
+            ifL(
+                getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
+                getattr(digit, f'd_{j}')(path=('a', operand2)),
+            ),
             active = True
         )
