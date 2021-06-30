@@ -150,7 +150,7 @@ def main():
     # now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     # program.save(f'conll04-{now}.pt')
 
-    reader = SingletonDataLoader('data/conll04.corp')
+    reader = SingletonDataLoader('data/conll04-washington.corp')
 
     for i, node in enumerate(program.populate(reader, device='auto')):
         if i == 0:
