@@ -8,7 +8,7 @@ Concept.clear()
 Relation.clear()
 
 with Graph(name='global') as graph:
-    digitRange = 2
+    digitRange = 10
     summationRange = 2 * digitRange - 1
     
     T1 = Concept(name='t1')
@@ -41,6 +41,15 @@ with Graph(name='global') as graph:
             ifL(
                 getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
                 getattr(digit, f'd_{j}')(path=('a', operand2)),
+            ),
+            active = True
+        )
+        
+        ifL(
+            getattr(digit, f'd_{i}')('i'),
+            ifL(
+                getattr(summation, f's_{i+j}')('a', path=('i', operand2.reversed)),
+                getattr(digit, f'd_{j}')(path=('a', operand1)),
             ),
             active = True
         )
