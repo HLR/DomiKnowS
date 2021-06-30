@@ -63,7 +63,7 @@ class CallbackProgram(LearningBasedProgram):
 
     def train_epoch(self, dataset):
         hook(self.before_train_epoch)
-        for _, output, _ in zip(
+        for _, output in zip(
             map(hook, repeat(self.before_train_step)),
             self.train_pure_epoch(dataset),
             ):
@@ -78,7 +78,7 @@ class CallbackProgram(LearningBasedProgram):
 
     def test_epoch(self, dataset):
         hook(self.before_test_epoch)
-        for _, output, _ in zip(
+        for _, output in zip(
             map(hook, repeat(self.before_test_step)),
             super().test_epoch(dataset),
             ):
