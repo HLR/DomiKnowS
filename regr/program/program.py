@@ -6,14 +6,6 @@ from ..utils import consume, entuple, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
-class ProgramStorageCallback():
-    def __init__(self, program, fn) -> None:
-        self.program = program
-        self.fn = fn
-        self.storage = tuple()
-
-    def __call__(self):
-        self.storage = self.fn(self.program, *entuple(self.storage))
 
 def get_len(dataset, default=None):
     try:
@@ -155,11 +147,12 @@ class dbUpdate():
         
         if result.inserted_id:
             pass
-            
+
+
 class LearningBasedProgram():
     def __init__(self, graph, Model, logger=None, db=False, **kwargs):
         self.graph = graph
-        
+
         self.logger = logger or logging.getLogger(__name__)
         self.dbUpdate = None if db else dbUpdate(graph)
 
@@ -167,9 +160,6 @@ class LearningBasedProgram():
         self.opt = None
         self.epoch = None
         self.stop = None
-            
-    def update_nominals(self, dataset):
-        pass
 
     def to(self, device='auto'):
         if device == 'auto':
@@ -192,17 +182,14 @@ class LearningBasedProgram():
                 metricDelta[k][m] = v[m] - metric2.value()[k][m]
             
         return metricDelta
-    
-    def call_epoch(self, name, dataset, epoch_fn, epoch_callbacks=None, step_callbacks=None, **kwargs):
+
+    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
         if dataset is not None:
             self.logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
-            
-            for _ in tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc):
-                if step_callbacks: consume(callback() for callback in step_callbacks)
-                
-            if epoch_callbacks: consume(callback() for callback in epoch_callbacks)
-                
+
+            consume(tqdm(epoch_fn(dataset), total=get_len(dataset), desc=desc))
+
             if self.model.loss:
                 self.logger.info(' - loss:')
                 self.logger.info(self.model.loss)
@@ -239,7 +226,7 @@ class LearningBasedProgram():
                 
                 self.logger.info(f' - - {metricDeltaKey}')
                 self.logger.info(metricDelta)
-                 
+
     def train(
         self,
         training_set,
@@ -249,12 +236,6 @@ class LearningBasedProgram():
         train_epoch_num=1,
         test_every_epoch=False,
         Optim=None,
-        train_epoch_callbacks=None,
-        valid_epoch_callbacks=None,
-        test_epoch_callbacks=None,
-        train_step_callbacks=None,
-        valid_step_callbacks=None,
-        test_step_callbacks=None,
         **kwargs):
         if device is not None:
             self.to(device)
@@ -268,12 +249,12 @@ class LearningBasedProgram():
         while self.epoch < self.train_epoch_num and not self.stop:
             self.epoch += 1
             self.logger.info('Epoch: %d', self.epoch)
-            self.call_epoch('Training', training_set, self.train_epoch, train_epoch_callbacks, train_step_callbacks, **kwargs)
-            self.call_epoch('Validation', valid_set, self.test_epoch, valid_epoch_callbacks, valid_step_callbacks, **kwargs)
+            self.call_epoch('Training', training_set, self.train_epoch, **kwargs)
+            self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
             if test_every_epoch:
-                self.call_epoch('Testing', test_set, self.test_epoch, test_epoch_callbacks, test_step_callbacks, **kwargs)
+                self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
         if not test_every_epoch:
-            self.call_epoch('Testing', test_set, self.test_epoch, test_epoch_callbacks, test_step_callbacks, **kwargs)
+            self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
         # reset epoch after everything
         self.epoch = None
         self.stop = None
@@ -290,11 +271,10 @@ class LearningBasedProgram():
                 self.opt.step()
             yield (loss, metric, *output[:1])
 
-    def test(self, dataset, device=None, callbacks={}, **kwargs):
+    def test(self, dataset, device=None, **kwargs):
         if device is not None:
             self.to(device)
-        callback_storage = {}
-        self.call_epoch('Testing', dataset, self.test_epoch, callbacks, callback_storage, **kwargs)
+        self.call_epoch('Testing', dataset, self.test_epoch, **kwargs)
 
     def test_epoch(self, dataset):
         self.model.mode(Mode.TEST)
