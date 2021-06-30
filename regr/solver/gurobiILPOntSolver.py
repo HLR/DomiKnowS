@@ -100,7 +100,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
     
                 # Create variable
-                xNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_%s"%(dn.getInstanceID(), _conceptRelation[1])) 
+                xVarName = "x_%s_is_%s"%(dn.getInstanceID(), _conceptRelation[1])
+                xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
                 xkey = '<' + _conceptRelation[0].name + '>/ILP/x'
                 
                 if xkey not in dn.attributes:
@@ -634,12 +635,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                             for rDn in referredDns:
                                 eDns = []
                                 for _rDn in rDn:
+                                    if _rDn is None:
+                                        continue
                                     _eDns = _rDn.getEdgeDataNode(v[1:]) # Get Datanodes for the edge defined by the path part of the v
                                     
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
                                     else:
-                                        self.myLogger.error('The element %s of logical constrain %s has v referring to not valid path %s'%(conceptName, lc.lcName, v[1:]))
+                                        self.myLogger.info('The element %s of logical constrain %s has not exiting path %s in the current graph'%(conceptName, lc.lcName, v[1:]))
                                         eDns.extend([None])
                                         
                                 _dnsList[i].append(eDns)
@@ -691,7 +694,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                         vDns.append(_vDns)
                         
-                    lcVariablesDns[variable.name] = dnsList
+                    lcVariablesDns[variableName] = dnsList
                     
                     if None in lcVariablesDns:
                         pass
