@@ -179,7 +179,7 @@ if args.primaldual:
 if args.IML:
     print("IML program")
     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric=PRF1Tracker())
+                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
 
 logging.basicConfig(level=logging.INFO)
 from os import path
