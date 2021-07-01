@@ -28,10 +28,10 @@ from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_tripl
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=5000000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=10, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
@@ -44,9 +44,8 @@ cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
-#reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-
 reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #print(reader_test_aug)
 #reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
