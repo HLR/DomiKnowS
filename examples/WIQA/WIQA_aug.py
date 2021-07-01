@@ -49,7 +49,8 @@ reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-
+#for t in reader_dev_aug:
+#    print(t["question_list"])
 print("Graph Declaration:")
 # reseting the graph
 Graph.clear()
