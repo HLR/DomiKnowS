@@ -32,7 +32,7 @@ parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epoc
 parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--samplenum', dest='samplenum', default=5000000000, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training',type=int)
+parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)

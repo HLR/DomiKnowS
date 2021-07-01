@@ -199,6 +199,8 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
         #    return [para_num]
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
+                if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax():
+                    print(len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
         if len(problem_list)>0:
