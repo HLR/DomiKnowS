@@ -196,8 +196,8 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
             sresult.append([predict_is_more_value,predict_is_less_value,predict_no_effect_value])
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 counter += 1
-                ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
-                ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
+                ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
+                ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
 
         _vars,tran_violated=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
         #if tran_violated and len(problem_list)==0:
@@ -206,7 +206,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax():
                     print(para_num,len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
-                ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
+                ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
 
         if len(problem_list)>0:
             return problem_list

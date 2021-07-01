@@ -143,7 +143,10 @@ class dbUpdate():
             mlResult['metricTotal'] = metricTotal
 
         #Step 3: Insert business object directly into MongoDB via isnert_one
-        result = self.results.insert_one(mlResult)
+        try:
+            result = self.results.insert_one(mlResult)
+        except :
+            return
         
         if result.inserted_id:
             pass

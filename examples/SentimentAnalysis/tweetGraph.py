@@ -1,6 +1,7 @@
 import sys
 sys.path.append("../..")
-
+sys.path.append("..")
+sys.path.append(".")
 import torch
 
 from regr.graph import Graph, Concept, Relation

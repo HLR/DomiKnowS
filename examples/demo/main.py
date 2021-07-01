@@ -34,7 +34,7 @@ with Graph('example') as graph:
     work_for = pair(name='work_for')
 
     nandL(people, organization)
-    ifL(work_for, V(name='x'), andL(people, V(v=('x', arg1)), organization, V(v=('x', arg2))))
+    ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
 
 SAMPLE = {
     'text': ['John works for IBM'],
@@ -125,7 +125,7 @@ for node in program.populate(reader, device=device):
         print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
-    
+
     
     print("\nILP results for people - %s"%(node.collectInferedResults(people, "ILP")))
     print("SofMax results for people - %s"%(node.collectInferedResults(people, "softmax")))
@@ -135,5 +135,3 @@ for node in program.populate(reader, device=device):
     print("\nILP results for organization - %s"%(node.collectInferedResults(organization, "ILP")))
     print("SofMax results for organization - %s"%(node.collectInferedResults(organization, "softmax")))
     print("ArgMax results for organization - %s"%(node.collectInferedResults(organization, "argmax")))
-
-

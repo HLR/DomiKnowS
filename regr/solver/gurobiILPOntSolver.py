@@ -534,15 +534,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Skipping not active Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 continue
 
-            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
+            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, lcVariablesDns = {}, headLC = True)
             
             if result != None and isinstance(result, list):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, firstPass = False):
         lcVariables = {}
+        
+        if not firstPass and headLC:
+            self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = True, firstPass = True)
+        
         vNo = 0
         firstV = True
         
@@ -582,78 +586,90 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariables[newvVariableName] = lcVariables[variableName]
 
                 elif isinstance(e, (Concept, tuple)): # -- Concept 
+                    
                     if isinstance(e, Concept):
                         conceptName = e.name
                     else:
                         conceptName = e[0].name
                         
+                    if variableName not in lcVariablesDns:    
+                        dnsList = [] # Stores lists of dataNode for each corresponding dataNode 
+                        
+                        if variable.v == None:
+                            if variable.name == None:
+                                self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(conceptName, lc.lcName))
+                                return None
+                                                     
+                            rootConcept = dn.findRootConceptOrRelation(conceptName)
+                            _dns = dn.findDatanodes(select = rootConcept)
+                            dnsList = [[dn] for dn in _dns]
+                        else:
+                            if len(variable.v) == 0:
+                                self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(conceptName, lc.lcName))
+                                return None
+                              
+                            path = variable.v
+      
+                            paths = []
+                            lo = None
+                            
+                            if isinstance(path[0], str) and len(path) == 1:
+                                paths.append(path)
+                            elif isinstance(path[0], str) and not isinstance(path[1], tuple):
+                                paths.append(path)
+                            else:
+                                for i, vE in enumerate(variable.v):
+                                    if i == 0 and isinstance(vE, str):
+                                        lo = vE 
+                                        continue
+                                    
+                                    paths.append(vE)
+                                    
+                            _dnsList = []
+                            for i, v in enumerate(paths):
+                                _dnsList.append([])
+                                referredVariableName = v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
+                            
+                                if referredVariableName not in lcVariablesDns:
+                                    self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
+                                    return None
+                               
+                                referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
+                                for rDn in referredDns:
+                                    eDns = []
+                                    for _rDn in rDn:
+                                        if _rDn is None:
+                                            continue
+                                        _eDns = _rDn.getEdgeDataNode(v[1:]) # Get Datanodes for the edge defined by the path part of the v
+                                        
+                                        if _eDns and _eDns[0]:
+                                            eDns.extend(_eDns)
+                                        else:
+                                            self.myLogger.info('The element %s of logical constrain %s has not exiting path %s in the current graph'%(conceptName, lc.lcName, v[1:]))
+                                            eDns.extend([None])
+                                            
+                                    _dnsList[i].append(eDns)
+                                    
+                            dnsList = _dnsList[0]
+                                
+                            for l in _dnsList[1:]:
+                                # Intersection - use lo if defined to determine if different set operation
+                                _d = [x if x in l else [None] for x in dnsList]
+                                dnsList = _d
+                                
+                        lcVariablesDns[variableName] = dnsList 
+                    else:
+                        dnsList = lcVariablesDns[variableName]
+                    
+                    if firstPass:
+                        lcVariables[variableName] = []
+                        continue
+                      
+                    # --- Collect ILP variables  
+                    
+                    vDns = [] # Stores ILP variables
                     xPkey = '<' + conceptName + ">" + key
 
-                    dnsList = [] # Stores lists of dataNode for each corresponding dataNode 
-                    vDns = [] # Stores ILP variables
-                    
-                    if variable.v == None:
-                        if variable.name == None:
-                            self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(conceptName, lc.lcName))
-                            return None
-                                                 
-                        rootConcept = dn.findRootConceptOrRelation(conceptName)
-                        _dns = dn.findDatanodes(select = rootConcept)
-                        dnsList = [[dn] for dn in _dns]
-                    else:
-                        if len(variable.v) == 0:
-                            self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(conceptName, lc.lcName))
-                            return None
-                          
-                        path = variable.v
-  
-                        paths = []
-                        lo = None
-                        
-                        if isinstance(path[0], str) and len(path) == 1:
-                            paths.append(path)
-                        elif isinstance(path[0], str) and not isinstance(path[1], tuple):
-                            paths.append(path)
-                        else:
-                            for i, vE in enumerate(variable.v):
-                                if i == 0 and isinstance(vE, str):
-                                    lo = vE 
-                                    continue
-                                
-                                paths.append(vE)
-                                
-                        _dnsList = []
-                        for i, v in enumerate(paths):
-                            _dnsList.append([])
-                            referredVariableName = v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
-                        
-                            if referredVariableName not in lcVariablesDns:
-                                self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
-                                return None
-                           
-                            referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
-                            for rDn in referredDns:
-                                eDns = []
-                                for _rDn in rDn:
-                                    if _rDn is None:
-                                        continue
-                                    _eDns = _rDn.getEdgeDataNode(v[1:]) # Get Datanodes for the edge defined by the path part of the v
-                                    
-                                    if _eDns and _eDns[0]:
-                                        eDns.extend(_eDns)
-                                    else:
-                                        self.myLogger.info('The element %s of logical constrain %s has not exiting path %s in the current graph'%(conceptName, lc.lcName, v[1:]))
-                                        eDns.extend([None])
-                                        
-                                _dnsList[i].append(eDns)
-                                
-                        dnsList = _dnsList[0]
-                            
-                        for l in _dnsList[1:]:
-                            # Intersection - use lo if defined to determine if different set operation
-                            _d = [x if x in l else [None] for x in dnsList]
-                            dnsList = _d
-                            
                     # Get ILP variables from collected Datanodes for the given element of logical constrain
                     for dns in dnsList:
                         _vDns = []
@@ -693,17 +709,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                             _vDns.append(vDn)
                         
                         vDns.append(_vDns)
-                        
-                    lcVariablesDns[variableName] = dnsList
-                    
-                    if None in lcVariablesDns:
-                        pass
                     
                     lcVariables[variableName] = vDns
                 
                 elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(e.lcName, e, [str(e1) for e1 in e.e]))
-                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False)
+                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, firstPass = firstPass)
+                    
+                    if firstPass:
+                        lcVariables[variableName] = []
+                        continue
                     
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constrain'%(e.lcName,e,lc.lcName,lc))
@@ -724,6 +739,9 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lc,e))
                 return None
+        
+        if firstPass:
+            return
         
         return lc(m, booleanProcesor, lcVariables, headConstrain = headLC)
     

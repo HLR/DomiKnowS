@@ -32,6 +32,7 @@ For the relation extraction, we only use the known pairs from the `Conll` and us
 ## Running the model
 ### Arguments
 To run the model of each program you can use and specify the following arguments.
+
 ```text
 "-s"	"--split"		default=1		choices=[1, 2, 3, 4, 5]	
 help="The split", required=False, type=int
@@ -55,16 +56,19 @@ help="GPU option",	type=str,	required=False,
 
 ### Programs
 Running the Normal + ILP inference program
+
 ```bash
 python main-bert.py
 ```
 
 Running the IML program
+
 ```bash
 python main-bert-iml.py
 ```
 
 Running the PrimalDual program
+
 ```bash
 python main-bert-primaldual.py
 ```

@@ -22,11 +22,19 @@ with Graph(name='global') as graph:
     
     summation = addition(name='summation', ConceptClass=EnumConcept, values=list(map(lambda v: f's_{v}', range(summationRange))))
 
-    atMostL(*digit.attributes)
-    atMostL(*summation.attributes)
+    atMostL(*digit.attributes, active = True)
+    atMostL(*summation.attributes, active = True)
    
     for i, j in product(range(digitRange), repeat=2):
-        # rule:image is digit i => a addition on operand1.reversed is summation i+j  and image on operand2 is digit j
+        ifL(
+            andL(
+                getattr(digit, f'd_{i}')('i'),
+                getattr(digit, f'd_{j}')(path=('a', operand2)),
+            ),
+            getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
+            active = True
+        )
+        
         ifL(
             getattr(digit, f'd_{i}')('i'),
             andL(
@@ -42,7 +50,7 @@ with Graph(name='global') as graph:
                 getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
                 getattr(digit, f'd_{j}')(path=('a', operand2)),
             ),
-            active = True
+            active = False
         )
         
         ifL(
@@ -51,5 +59,5 @@ with Graph(name='global') as graph:
                 getattr(summation, f's_{i+j}')('a', path=('i', operand2.reversed)),
                 getattr(digit, f'd_{j}')(path=('a', operand1)),
             ),
-            active = True
+            active = False
         )

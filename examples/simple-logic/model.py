@@ -4,7 +4,7 @@ from regr.program.model.pytorch import PoiModel, IMLModel
 from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, ValueTracker
 
-def prediction_softmax(pr, gt):
+def prediction_softmax(pr, g, data_item=None, prop=None):
     return torch.softmax(pr.data, dim=-1)
 
 class MyIMLModel(IMLModel):
