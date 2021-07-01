@@ -87,17 +87,21 @@ def guess_pair(quest_id, arg1, arg2):
     if len(quest_id)<2 or arg1==arg2:
         return False
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
-    if quest1 in quest2 and "_symmetric" in quest2:
+    if (quest1 in quest2 and "_symmetric" in quest2) or (quest2 in quest1 and "_symmetric" in quest1):
         return True
     else:
         return False
 
 def guess_triple(quest_id, arg11, arg22,arg33):
 
-    if len(quest_id)<3 or arg11==arg22 or arg22==arg33:
+    if len(quest_id)<3 or arg11==arg22 or arg22==arg33 or arg11==arg33:
         return False
     quest1, quest2,quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
     if quest1 in quest3 and quest2 in quest3 and "_transit" in quest3:
+        return True
+    if quest1 in quest2 and quest3 in quest2 and "_transit" in quest2:
+        return True
+    if quest2 in quest1 and quest3 in quest1 and "_transit" in quest1:
         return True
     return False
 
