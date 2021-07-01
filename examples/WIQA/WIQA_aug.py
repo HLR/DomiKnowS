@@ -193,8 +193,8 @@ for i in range(args.cur_epoch):
 
         def __call__(self) -> None:
             self.sch.step()
-    program.load("domi_7")
-    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    #program.load("domi_7")
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     #program.save("domi_"+str(i))
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
@@ -202,7 +202,7 @@ for i in range(args.cur_epoch):
         print(program.cmodel.loss)
     print("***** dev aug *****")
     #problem_list=test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
-    #test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
+    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
     print("***** test aug *****")
     test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
     #print("***** dev *****")
