@@ -88,6 +88,7 @@ def guess_pair(quest_id, arg1, arg2):
         return False
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
     if (quest1 in quest2 and "_symmetric" in quest2) or (quest2 in quest1 and "_symmetric" in quest1):
+        #print(arg1, arg2)
         return True
     else:
         return False
@@ -96,13 +97,14 @@ def guess_triple(quest_id, arg11, arg22,arg33):
 
     if len(quest_id)<3 or arg11==arg22 or arg22==arg33 or arg11==arg33:
         return False
-    quest1, quest2,quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
-    if quest1 in quest3 and quest2 in quest3 and "_transit" in quest3:
+    quest1, quest2, quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
+    if quest1 +"@" + quest2 in quest3 and "_transit" in quest3:
+        #print(arg11, arg22,arg33)
         return True
-    if quest1 in quest2 and quest3 in quest2 and "_transit" in quest2:
-        return True
-    if quest2 in quest1 and quest3 in quest1 and "_transit" in quest1:
-        return True
+    #if quest1 in quest2 and quest3 in quest2 and "_transit" in quest2:
+    #    return True
+    #if quest2 in quest1 and quest3 in quest1 and "_transit" in quest1:
+    #    return True
     return False
 
 import gurobipy as gp
@@ -146,8 +148,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     for arg1, arg2, arg3 in product(range(n), repeat=3):
         if arg1 == arg2 or arg2 == arg3 or arg1 == arg3:
             continue
-        if questions_id[arg1] in questions_id[arg3] and \
-           questions_id[arg2] in questions_id[arg3] and \
+        if questions_id[arg1] +"@" + questions_id[arg2] in questions_id[arg3] and \
                 "_transit" in questions_id[arg3]:
             m.addConstr(g_vars[arg3][0]+1 >= g_vars[arg1][0]+ g_vars[arg2][0],str(arg1)+" "+str(arg2)+" "+ str(arg3)+" tran 1")
             m.addConstr(g_vars[arg3][1]+1 >= g_vars[arg1][0]+ g_vars[arg2][1],str(arg1)+" "+str(arg2)+" "+ str(arg3)+" tran 2")
@@ -204,7 +205,7 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax():
-                    print(len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
+                    print(para_num,len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
         if len(problem_list)>0:
