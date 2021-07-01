@@ -7,7 +7,7 @@ from transformers import AdamW
 from torch import nn
 
 from regr.graph.relation import disjoint
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
@@ -19,7 +19,7 @@ from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL,
 from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram
+from regr.program import LearningBasedProgram, IMLProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead,WIQAModel
@@ -31,13 +31,15 @@ parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number t
 parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
+parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--samplenum', dest='samplenum', default=10, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
+parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
 parser.add_argument('--verbose', dest='verbose', default=1, help='print the errors',type=int)
 args = parser.parse_args()
+
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 cuda_number= args.cuda_number
@@ -166,12 +168,18 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
-if not args.primaldual:
+if not args.primaldual and not args.IML:
+    print("simple program")
     program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
-else:
-    program = PrimalDualProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
+if args.primaldual:
+    print("primal dual program")
+    program = PrimalDualProgram(graph, model_helper(SolverModel,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=args.beta)
+if args.IML:
+    print("IML program")
+    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)), metric=PRF1Tracker())
 
 logging.basicConfig(level=logging.INFO)
 from os import path
