@@ -199,8 +199,8 @@ for i in range(args.cur_epoch):
     if args.primaldual:
         print(program.cmodel.loss)
     print("***** dev aug *****")
-    problem_list=test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
-    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,problem_list)
+    #problem_list=test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
+    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
     print("***** test aug *****")
     test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
     #print("***** dev *****")

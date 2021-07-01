@@ -153,6 +153,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
                     #print(para_num,end=",")
                     print("Transivity is violated")
                     tran_violated=True
+                    print(para_num)
     m.setObjective(obj, GRB.MAXIMIZE)
     m.optimize()
     vars_=list(m.getVars())
@@ -165,9 +166,9 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
     ILPac_ = 0
     ac_test=0
     for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
-        print(para_num)
-        if not len(problem_list)==0 and not para_num in problem_list:
-            continue
+        #print(para_num)
+        #if not len(problem_list)==0 and not para_num in problem_list:
+        #    continue
         #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
@@ -194,8 +195,8 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
                 ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
         _vars,tran_violated=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
-        if tran_violated and len(problem_list)==0:
-            return [para_num]
+        #if tran_violated and len(problem_list)==0:
+        #    return [para_num]
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
