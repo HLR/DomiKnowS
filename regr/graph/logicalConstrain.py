@@ -125,7 +125,9 @@ class LogicalConstrain:
         
         if len(cLcVariableSet) == 0: # No ILP variables for a given logical variable
             lcVars.append(None)
-            self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
+            
+            if lcVariableNames:
+                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
             
             return
                                        
@@ -176,8 +178,8 @@ class LogicalConstrain:
             zVars.append(sVars)
         
         for z in zVars:
+            tVars = []
             for t in z:
-                tVars = []
                 tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
                 
             rVars.append(tVars)
