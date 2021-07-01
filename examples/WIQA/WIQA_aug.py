@@ -46,7 +46,7 @@ cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 #reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #for t in reader_dev_aug:
@@ -201,8 +201,8 @@ for i in range(args.cur_epoch):
     print("***** dev aug *****")
     problem_list=test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,[])
     test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose,problem_list)
-    #print("***** test aug *****")
-    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    print("***** test aug *****")
+    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
     #print("***** dev *****")
     #test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect,args.verbose)
     #print("***** test *****")
