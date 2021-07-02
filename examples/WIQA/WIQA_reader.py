@@ -51,13 +51,11 @@ def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000,b
             break
 
     comp_size=[len(i) for i in nx.connected_components(G)]
-    #print(comp_size[:100])
     comps=[i for i in nx.connected_components(G)]
     zipped_lists = zip(comp_size, comps)
     sorted_pairs = sorted(zipped_lists,reverse=True)
     tuples = zip(*sorted_pairs)
     comp_size, comps = [ list(tuple) for tuple in  tuples]
-    print(comp_size[-10:],comps[-10:])
     for i in range(len(comp_size)):
         if comp_size[i]>=batch_size or comp_size[i]==0:
             continue
@@ -72,7 +70,6 @@ def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000,b
                 break
 
     final_list=[]
-    print(len(list(nx.connected_components(G))))
     for i in sorted(list(nx.connected_components(G))):
         if len(i)<=batch_size:
             final_list.append(sorted(list(i)))

@@ -88,7 +88,6 @@ def guess_pair(quest_id, arg1, arg2):
         return False
     quest1, quest2 = arg1.getAttribute('quest_id'), arg2.getAttribute('quest_id')
     if (quest1 in quest2 and "_symmetric" in quest2) or (quest2 in quest1 and "_symmetric" in quest1):
-        #print(arg1, arg2)
         return True
     else:
         return False
@@ -99,19 +98,15 @@ def guess_triple(quest_id, arg11, arg22,arg33):
         return False
     quest1, quest2, quest3 = arg11.getAttribute('quest_id'), arg22.getAttribute('quest_id'), arg33.getAttribute('quest_id')
     if quest1 +"@" + quest2 in quest3 and "_transit" in quest3:
-        #print(arg11, arg22,arg33)
         return True
-    #if quest1 in quest2 and quest3 in quest2 and "_transit" in quest2:
-    #    return True
-    #if quest2 in quest1 and quest3 in quest1 and "_transit" in quest1:
-    #    return True
+
     return False
 
 import gurobipy as gp
 from gurobipy import GRB
 
 def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
-    #print(questions_id,results,verbose,probabilities)
+
     n=len(questions_id)
     tran_violated=False
     m = gp.Model("whatever")
@@ -155,7 +150,6 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 if verbose:
-                    #print(para_num,end=",")
                     print("Transivity is violated")
                     tran_violated=True
                     print(para_num)
@@ -165,16 +159,13 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     return [i.x for i in vars_],tran_violated
 
 
-def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose,problem_list):
+def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose):
     counter = 0
     ac_ = 0
     ILPac_ = 0
     ac_test=0
     for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
-        #print(para_num)
-        #if not len(problem_list)==0 and not para_num in problem_list:
-        #    continue
-        #print("paragraph:", paragraph_.getAttribute('paragraph_intext'))
+
         paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
         questions_id, results = [], []
         sresult=[]
@@ -200,19 +191,16 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
                 ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
         _vars,tran_violated=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
-        #if tran_violated and len(problem_list)==0:
-        #    return [para_num]
+
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
-                if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax():
+                if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax() and verbose:
                     print(para_num,len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
                 ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_"),question_.getAttribute("is_less_"),question_.getAttribute("no_effect_")]).argmax()
 
-        if len(problem_list)>0:
-            return problem_list
-    print("accuracy:", ac_ / counter,counter)
+    print("accuracy:", ac_ / counter)
     print("ILP accuracy:", ILPac_ / counter)
-    print("ILP test accuracy:", ac_test / counter)
+    #print("ILP test accuracy:", ac_test / counter)
 
 import os
 
