@@ -6,8 +6,8 @@ sys.path.append('../..')
 
 import numpy as np
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram
-from regr.program.program import ProgramStorageCallback
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
@@ -212,14 +212,17 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
-    lbp1 = SolverPOIProgram(
+    class Program(CallbackProgram, SolverPOIProgram):
+        pass
+
+    lbp1 = Program(
         graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
-    lbp = SolverPOIProgram(
+    lbp = Program(
         graph, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
@@ -305,8 +308,9 @@ def main(args):
         return epoch + 1, best_epoch, best_macro_f1
     
     if not args.load:
-        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu,
-                      train_epoch_callbacks=[ProgramStorageCallback(program, save_epoch)], valid_epoch_callbacks=[ProgramStorageCallback(program, save_best)])
+        program.after_train_epoch = [ProgramStorageCallback(program, save_epoch)]
+        program.after_test_epoch = [ProgramStorageCallback(program, save_best)]
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
     else:
         program1.load(args.path)
     
