@@ -88,6 +88,7 @@ def model_declaration(solver='iml'):
     image[dandelion] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[rose] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[sunflower] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
+    image[tulip] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
 
     if solver == 'iml':
         print("IMLProgram selected as solver")
