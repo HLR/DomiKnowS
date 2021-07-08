@@ -1,21 +1,17 @@
 import sys
 import torch
-from torch.utils.data import random_split
+from torch.utils.data import random_split, DataLoader
 import argparse
 from dataset import load_animals_and_flowers
 from model import model_declaration
 
-
-
 sys.path.append('.')
 sys.path.append('../..')
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 parser = argparse.ArgumentParser()
-parser.add_argument('--solver', help='the model solver')
+parser.add_argument('--solver', help='the model solver', default='iml')
 args = parser.parse_args()
 
 

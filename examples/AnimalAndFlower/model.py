@@ -9,10 +9,11 @@ from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss
 from graph import graph
-from regr.program.model.pytorch import SolverModel
+from regr.program.model.pytorch import SolverModel, IMLModel
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 output_size = 45
 
@@ -39,6 +40,7 @@ class ImageNetwork(torch.nn.Module):
         x = self.pool(x)
         x = x.view(-1, output_size)
         return x
+
 
 def model_declaration(solver='iml'):
     solver = solver.lower()
@@ -87,23 +89,18 @@ def model_declaration(solver='iml'):
     image[rose] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[sunflower] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
 
-
     if solver == 'iml':
+        print("IMLProgram selected as solver")
         program = IMLProgram(graph, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                              loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
                              metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                      'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif solver == 'primal_dual':
-        program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
-                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        print("PrimalDualProgram + IML selected as solver")
+        program = PrimalDualProgram(graph, IMLModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
+                                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-
-    elif solver == 'ilp':
-        program = SolverPOIProgram(graph, poi=(image,), inferTypes=['ILP', 'local/argmax'],
-                                   loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
-                                   metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                           'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     return program
 

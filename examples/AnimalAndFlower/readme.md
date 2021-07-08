@@ -90,10 +90,16 @@ if we run our mode without the constraint we get the following result
 (0.6514909090909091, {'animal': {'P': 1, 'R': 0.466, 'F1': 0.6357}, 'cat': {'P': 1, 'R': 0.566, 'F1': 0.7229}, 'dog': {'P': 1, 'R': 0.512, 'F1': 0.6772}, 'monkey': {'P': 1, 'R': 0.532, 'F1': 0.6945}, 'squirrel': {'P': 1, 'R': 0.444, 'F1': 0.615}, 'flower': {'P': 1, 'R': 0.762, 'F1': 0.8649}, 'daisy': {'P': 1, 'R': 0.822, 'F1': 0.9023}, 'dandelion': {'P': 1, 'R': 0.442, 'F1': 0.613}, 'rose': {'P': 1, 'R': 0.698, 'F1': 0.8221}, 'sunflower': {'P': 1, 'R': 0.448, 'F1': 0.6188}})
 ```
 
-### with constraints
+### with constraints using IMLProgram
 ```python
  (0.905, {'animal': {'P': 1, 'R': 0.956, 'F1': 0.9775}, 'cat': {'P': 1, 'R': 1, 'F1': 1}, 'dog': {'P': 1, 'R': 1, 'F1': 1}, 'monkey': {'P': 1, 'R': 1, 'F1': 1}, 'squirrel': {'P': 1, 'R': 1, 'F1': 1}, 'flower': {'P': 1, 'R': 0.956, 'F1': 0.9775}, 'daisy': {'P': 1, 'R': 1, 'F1': 1}, 'dandelion': {'P': 1, 'R': 1, 'F1': 1}, 'rose': {'P': 1, 'R': 1, 'F1': 1}, 'sunflower': {'P': 1, 'R': 1, 'F1': 1}})
 ```
 
 The `Macro-Averaged F1` score of our mode without constraints is `0.651`. while its score in the constrained mode is `0.905`.
 It shows a great improvement in the performance of our model
+
+### with constraints using PrimeDealProgram with IML
+```python
+ (0.8712, {'animal': {'P': 1, 'R': 0.792, 'F1': 0.8839}, 'cat': {'P': 1, 'R': 0.844, 'F1': 0.9154}, 'dog': {'P': 1, 'R': 0.972, 'F1': 0.9858}, 'monkey': {'P': 1, 'R': 0.988, 'F1': 0.994}, 'squirrel': {'P': 1, 'R': 0.97, 'F1': 0.9848}, 'flower': {'P': 1, 'R': 0.796, 'F1': 0.8864}, 'daisy': {'P': 1, 'R': 0.894, 'F1': 0.944}, 'dandelion': {'P': 1, 'R': 1, 'F1': 1}, 'rose': {'P': 1, 'R': 0.998, 'F1': 0.999}, 'sunflower': {'P': 1, 'R': 0.98, 'F1': 0.9899}})
+ ```
+
