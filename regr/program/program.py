@@ -191,7 +191,7 @@ class LearningBasedProgram():
             self.logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
 
-            consume(tqdm(epoch_fn(dataset), total=get_len(dataset), desc=desc))
+            consume(tqdm(epoch_fn(dataset,**kwargs), total=get_len(dataset), desc=desc)) # I made this change because my and other examples with PrimalDual were not working without it
 
             if self.model.loss:
                 self.logger.info(' - loss:')
