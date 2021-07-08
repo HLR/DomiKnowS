@@ -20,7 +20,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     trainset = load_animals_and_flowers()
     train_ds, val_ds = random_split(trainset, [4021, 500])
-    solver = args.solver if args.solver is not None else 'iml'
+    solver = args.solver
     program = model_declaration(solver=solver)
     program.train(train_ds, valid_set=val_ds, train_epoch_num=10, Optim=lambda param: torch.optim.Adam(param, lr=.0001),
                   device=device)
