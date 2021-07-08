@@ -32,9 +32,12 @@ class dbUpdate():
         self.cwd = os.path.basename(self.cwd)
 
         import __main__
-        self.programName = os.path.basename(__main__.__file__)
-        if self.programName.index('.') >= 0:
-            self.programName = self.programName[:self.programName.index('.')]
+        if hasattr(__main__, '__file__'):
+            self.programName = os.path.basename(__main__.__file__)
+            if self.programName.index('.') >= 0:
+                self.programName = self.programName[:self.programName.index('.')]
+        else:
+            self.programName = ''
 
         try:
             import os
