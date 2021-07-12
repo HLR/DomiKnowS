@@ -100,7 +100,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
     
                 # Create variable
-                xVarName = "x_%s_is_%s"%(dn.getInstanceID(), _conceptRelation[1])
+                xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), _conceptRelation[1])
                 xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
                 xkey = '<' + _conceptRelation[0].name + '>/ILP/x'
                 

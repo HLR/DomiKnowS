@@ -26,30 +26,22 @@ with Graph(name='global') as graph:
     atMostL(*summation.attributes)
    
     for i, j in product(range(digitRange), repeat=2):
-        # rule:image is digit i => a addition on operand1.reversed is summation i+j  and image on operand2 is digit j
-        ifL(
-            getattr(digit, f'd_{i}')('i'),
-            andL(
-                getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
-                getattr(digit, f'd_{j}')(path=('a', operand2)),
-            ),
-            active = False
-        )
-        
+       
         ifL(
             getattr(digit, f'd_{i}')('i'),
             ifL(
                 getattr(summation, f's_{i+j}')('a', path=('i', operand1.reversed)),
-                getattr(digit, f'd_{j}')(path=('a', operand2)),
+                getattr(digit, f'd_{j}')('j', path=('a', operand2)),
             ),
             active = True
         )
         
+        n = (summationRange + i - j) % summationRange
+        
+        if n == i+j:
+            continue
+        
         ifL(
             getattr(digit, f'd_{i}')('i'),
-            ifL(
-                getattr(summation, f's_{i+j}')('a', path=('i', operand2.reversed)),
-                getattr(digit, f'd_{j}')(path=('a', operand1)),
-            ),
-            active = True
+            notL(getattr(summation, f's_{n}')('a', path=('i', operand1.reversed)))
         )
