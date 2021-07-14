@@ -191,7 +191,7 @@ class LearningBasedProgram():
             self.logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
 
-            consume(tqdm(epoch_fn(dataset), total=get_len(dataset), desc=desc))
+            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
 
             if self.model.loss:
                 self.logger.info(' - loss:')
