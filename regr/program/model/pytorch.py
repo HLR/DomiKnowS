@@ -1,6 +1,7 @@
 from itertools import combinations, product
 import hashlib
 import pickle
+from regr.graph.concept import EnumConcept
 from typing import Iterable
 import warnings
 
@@ -255,7 +256,11 @@ class IMLModel(SolverModel):
         try:
             for cdn in datanode.findDatanodes(select=concept):
                 value = cdn.getAttribute(f'<{prop.name}>/ILP')
-                values.append(torch.cat((1-value, value), dim=-1))
+                if isinstance(prop.name, EnumConcept):
+                    # if multi-class
+                    values.append(value)
+                else:
+                    values.append(torch.cat((1-value, value), dim=-1))
             if values:
                 inference = torch.stack(values)
             else:
