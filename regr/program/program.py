@@ -303,8 +303,8 @@ class LearningBasedProgram():
     def populate_one(self, data_item):
         return next(self.populate_epoch([data_item]))
 
-    def save(self, path):
-        torch.save(self.model.state_dict(), path)
+    def save(self, path, **kwargs):
+        torch.save(self.model.state_dict(), path, **kwargs)
 
-    def load(self, path):
-        self.model.load_state_dict(torch.load(path))
+    def load(self, path, **kwargs):
+        self.model.load_state_dict(torch.load(path, **kwargs))
