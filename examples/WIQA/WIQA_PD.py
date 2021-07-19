@@ -167,7 +167,7 @@ if not args.primaldual and not args.IML:
 if args.primaldual:
     print("primal dual program")
     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),beta=args.beta)
+                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=args.beta)
 if args.IML:
     print("IML program")
     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
