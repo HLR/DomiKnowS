@@ -7,7 +7,7 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph(name='global') as graph:
+with Graph(name='global', reuse_model=True) as graph:
     digitRange = 10
     summationRange = 2 * digitRange - 1
     

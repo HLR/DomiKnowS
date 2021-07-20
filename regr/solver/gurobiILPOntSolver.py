@@ -19,15 +19,16 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.graph import LogicalConstrain, V
-from pickle import FALSE
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
 
-    def __init__(self, graph, ontologiesTuple, _ilpConfig) -> None:
+    def __init__(self, graph, ontologiesTuple, _ilpConfig, reuse_model=False) -> None:
         super().__init__(graph, ontologiesTuple, _ilpConfig)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
+        self.reuse_model = reuse_model
+        self.model = None
         
     def valueToBeSkipped(self, x):
         return ( 
@@ -77,8 +78,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return value # Return probability
     
-    def createILPVariables(self, m, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
-        x = {}
+    def createILPVariables(self, m, x, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
         Q = None
         
         # Create ILP variables 
@@ -99,21 +99,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],_conceptRelation[1],dn.getInstanceID()))
                     continue
     
-                # Create variable
-                xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), _conceptRelation[1])
-                xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
-                xkey = '<' + _conceptRelation[0].name + '>/ILP/x'
+                xNew = None
+                if _conceptRelation[2] is not None:
+                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
+                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                else:
+                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0) in x:
+                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
                 
+                xkey = '<' + _conceptRelation[0].name + '>/ILP/x'  
                 if xkey not in dn.attributes:
                     dn.attributes[xkey] = [None] * _conceptRelation[3]
+                        
+                if xNew is None:
+                    # Create variable
+                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), _conceptRelation[1])
+                    xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
                     
+                    if _conceptRelation[2] is not None:
+                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNew
+                    else:
+                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
+
                 if _conceptRelation[2] is not None:
                     dn.attributes[xkey][_conceptRelation[2]] = xNew
-                    x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNew
                 else:
                     dn.attributes[xkey][0] = xNew
-                    x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
-
+                    
                 Q += currentProbability[1] * xNew       
     
                 # Check if probability is NaN or if and has to be created based on positive value
@@ -123,18 +135,31 @@ class gurobiILPOntSolver(ilpOntSolver):
     
                 # Create negative variable for binary concept
                 if _conceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
-                    xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  _conceptRelation[1]))
+                    xNotNew  = None
+                    
+                    if _conceptRelation[2] is not None:
+                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
+                            xNotNew= x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                    else:
+                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0) in x:
+                            xNotNew = x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0]
+                    
                     notxkey = '<' + _conceptRelation[0].name + '>/ILP/notx'
                 
                     if notxkey not in dn.attributes:
                         dn.attributes[notxkey] = [None] * _conceptRelation[3]
-                    
+                        
+                    if xNotNew is None:
+                        xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  _conceptRelation[1]))
+                        if _conceptRelation[2] is not None:
+                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNotNew
+                        else:
+                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0] = xNotNew
+                        
                     if _conceptRelation[2] is not None:
                         dn.attributes[notxkey][_conceptRelation[2]] = xNotNew
-                        x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNotNew
                     else:
                         dn.attributes[notxkey][0] = xNotNew
-                        x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0] = xNotNew
                                         
                     Q += currentProbability[0] * xNotNew    
 
@@ -148,7 +173,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             self.myLogger.warning("No ILP variables created")
             
-        return Q, x     
+        return Q
     
     def addGraphConstrains(self, m, rootDn, *conceptsRelations):
         # Add constrain based on probability 
@@ -738,22 +763,28 @@ class gurobiILPOntSolver(ilpOntSolver):
         start = datetime.now()
         
         try:
-            # Create a new Gurobi model
-            self.myIlpBooleanProcessor.resetCaches()
-            m = Model("decideOnClassificationResult" + str(start))
-            m.params.outputflag = 0
-            
+            if self.reuse_model and self.model:
+                m = self.model['m']
+                x = self.model['x']
+            else:
+                # Create a new Gurobi model
+                self.myIlpBooleanProcessor.resetCaches()
+                m = Model("decideOnClassificationResult" + str(start))
+                m.params.outputflag = 0
+                x = {}
+                
             # Create ILP Variables for concepts and objective
-            Q, x = self.createILPVariables(m, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
-            
-            # Add constraints based on ontology and graph definition
-            self.addOntologyConstrains(m, dn, *conceptsRelations)
-            self.addGraphConstrains(m, dn, *conceptsRelations)
-        
+            Q = self.createILPVariables(m, x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
+                
+            if self.model is None:
+                # Add constraints based on ontology and graph definition
+                self.addOntologyConstrains(m, dn, *conceptsRelations)
+                self.addGraphConstrains(m, dn, *conceptsRelations)
+                
             # ILP Model objective setup
             if Q is None:
                 Q = 0
-                self.myLogger.error("No data provided to create any ILP varibale - not ILP result reurn")
+                self.myLogger.error("No data provided to create any ILP variable - not ILP result returned")
                 
             if minimizeObjective:
                 m.setObjective(Q, GRB.MINIMIZE)
@@ -765,6 +796,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Collect head logical constraints
             _lcP = {}
             _lcP[100] = []
+            pUsed = False
             for graph in self.myGraph:
                 for _, lc in graph.logicalConstrains.items():
                     if lc.headLC:     
@@ -775,6 +807,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                             
                         if lcP not in _lcP:
                             _lcP[lcP] = []
+                            pUsed = True
                         
                         _lcP[lcP].append(lc) # Keep constrain with the same p in the list 
             
@@ -788,11 +821,16 @@ class gurobiILPOntSolver(ilpOntSolver):
             ps = [] # List with processed p 
             for p in lcP:
                 ps.append(p)
-                mP = m.copy() # Copy model for this run
                 
-                # Map variables to the new copy model
-                xP = {}
+                if pUsed:
+                    mP = m.copy() # Copy model for this run                    
+                    xP = {}
+                else:
+                    mP = m
+                    xP = x
+                    
                 for _x in x:
+                    # Map variables to the new copy model
                     xP[_x] = mP.getVarByName(x[_x].VarName)
                     
                     rootConcept = dn.findRootConceptOrRelation(_x[0])
@@ -817,7 +855,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                             dns[0].attributes[xPkey][p] = [None] * xLen
                             
                         dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
-                                    
+                   
+                    
                 # Prepare set with logical constraints for this run
                 lcs = []
                 for _p in lcP:
@@ -827,7 +866,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                         break     
     
                 # Add LC constraints to the copy model
-                self.addLogicalConstrains(mP, dn, lcs, p)
+                
+                if pUsed or self.model is None:
+                    self.addLogicalConstrains(mP, dn, lcs, p)
+                    
+                    if self.reuse_model:
+                        self.model = {}
+                        self.model['m'] = mP
+                        self.model['x'] = xP
+                
+                    
                 self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
@@ -849,16 +897,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
-                    self.myLogger.warning('Model was proven to be infeasible for p - %i.'%(p))
+                    self.myLogger.error('Model was proven to be infeasible for p - %i.'%(p))
                 elif mP.status == GRB.Status.INF_OR_UNBD:
-                    self.myLogger.warning('Model was proven to be infeasible or unbound for p - %i.'%(p))
+                    self.myLogger.error('Model was proven to be infeasible or unbound for p - %i.'%(p))
                 elif mP.status == GRB.Status.UNBOUNDED:
-                    self.myLogger.warning('Model was proven to be unbound.')
+                    self.myLogger.error('Model was proven to be unbound.')
                 else:
-                    self.myLogger.warning('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
+                    self.myLogger.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Print ILP model to log file if model is not solved or logger level is DEBUG
-                if not solved or self.myLogger.level <= logging.INFO:
+                if (not solved or self.myLogger.level <= logging.INFO) and self.myLogger.filter(""):
                     import sys
                     so = sys.stdout 
                     logFileName = self.myLogger.handlers[0].baseFilename

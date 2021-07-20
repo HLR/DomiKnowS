@@ -6,6 +6,7 @@ import config
 from model import model_declaration
 from data import get_readers
 
+from regr.utils import setProductionLogMode
 
 def validate(program, reader):
     from graph import digit, summation
@@ -25,7 +26,10 @@ def validate(program, reader):
             print("False\n")
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+   
+    setProductionLogMode()
+
+    #logging.basicConfig(level=logging.ERROR)
 
     program = model_declaration(config)
     
