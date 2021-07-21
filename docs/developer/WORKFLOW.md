@@ -70,7 +70,7 @@ However, Domiknows can leverage the defined constraints in the graph to teach th
 
 ### IML [[1]](#1)
 
-In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `SolverPOIProgram` and shares most of the same input arguments.
+In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `LearningBasedProgram` and shares most of the same input arguments.
 
 ```python
 program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=..., metric=...})
