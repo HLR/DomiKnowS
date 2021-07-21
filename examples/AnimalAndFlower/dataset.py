@@ -7,15 +7,20 @@ import numpy as np
 
 class AnimalAndFlowers(Dataset):
 
-    def __init__(self, root, transform=None):
+    def __init__(self,args, root, transform=None):
 
         self.root = root
         self.data = []
         self.targets = []
         self.transform = transform
         index = 0
+        if args.verbose:
+            print("current directory",os.getcwd())
         for folder_name in os.listdir(root):
+            if "." in folder_name or "food" in folder_name:
+                continue
             for category_name in os.listdir(f"{root}/{folder_name}"):
+                print(category_name)
                 for file_name in os.listdir(f"{root}/{folder_name}/{category_name}/"):
                     file_path = os.path.join(self.root, folder_name, category_name, file_name)
                     with open(file_path, 'rb') as f:
@@ -59,7 +64,7 @@ class AnimalAndFlowers(Dataset):
         return {**target, **{'pixels': img}}
 
 
-def load_animals_and_flowers(root='./data/', size=100):
+def load_animals_and_flowers(args,root='./data/', size=100,):
     transform = transforms.Compose(
         [
             transforms.Resize(size),
@@ -69,5 +74,7 @@ def load_animals_and_flowers(root='./data/', size=100):
             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
         ]
     )
+    data_set=AnimalAndFlowers(args,root=root, transform=transform)
 
-    return AnimalAndFlowers(root=root, transform=transform)
+    #print(list(data_set)[0])
+    return data_set

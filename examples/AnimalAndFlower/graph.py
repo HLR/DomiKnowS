@@ -37,6 +37,7 @@ with Graph('AnimalAndFlower') as graph:
     disjoint(cat, dog, monkey, squirrel, daisy, dandelion, rose, sunflower, tulip)
 
     for l1, l2 in combinations([daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel], 2):
+        #TODO isn't this the same as disjoint?
         nandL(l1, l2)
 
     for l1, l2 in combinations([animal, flower], 2):
