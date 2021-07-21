@@ -12,7 +12,7 @@
 ## Class Overview
 
 - package `regr.program`:
-- `LearningBasedProgram`:
+- `SolverPOIProgram`:
 
 ## Workflows
 
@@ -64,13 +64,13 @@ Takes a reader object as input. Labels will be ignored. Loss and metric are also
 
 ## Programs
 
-There are diffrent types of programs that can be used to train the data. `LearningBasedProgram` is the simplest program that uses only the input and label of given data to learn its parameters.
+There are diffrent types of programs that can be used to train the data. `SolverPOIProgram` is the simplest program that uses only the input and label of given data to learn its parameters.
 
 However, Domiknows can leverage the defined constraints in the graph to teach the model not to violate those constraints and in the process imrove the overall performance of the mdoel.
 
 ### IML [[1]](#1)
 
-In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `SolverPOIProgram` and shares most of the same input arguments.
+In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `LearningBasedProgram` and shares most of the same input arguments.
 
 ```python
 program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=..., metric=...})
