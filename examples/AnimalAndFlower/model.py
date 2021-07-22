@@ -42,7 +42,7 @@ class ImageNetwork(torch.nn.Module):
         return x
 
 
-def model_declaration(solver='iml'):
+def model_declaration(solver='iml',lambdaValue=0.5):
     solver = solver.lower()
     """
     this function creates and defines the structure of our graph model
@@ -93,15 +93,18 @@ def model_declaration(solver='iml'):
     if solver == 'iml':
         print("IMLProgram selected as solver")
         program = IMLProgram(graph, poi=(image,), inferTypes=['ILP', 'local/argmax'],
-                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
+                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=lambdaValue)),
                              metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                      'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif solver == 'primal_dual':
         print("PrimalDualProgram + IML selected as solver")
         program = PrimalDualProgram(graph, IMLModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
-                                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=0.5)),
+                                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=lambdaValue)),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    elif solver == 'poi':
+        program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                   metric=PRF1Tracker(DatanodeCMMetric()))
 
     return program
 

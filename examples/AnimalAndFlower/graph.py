@@ -23,16 +23,16 @@ with Graph('AnimalAndFlower') as graph:
     sunflower = flower(name='sunflower')
     tulip = flower(name='tulip')
 
-    # ifL(cat('x'), animal('x'))
-    # ifL(dog('x'), animal('x'))
-    # ifL(monkey('x'), animal('x'))
-    # ifL(squirrel('x'), animal('x'))
-    #
-    # ifL(daisy('x'), flower('x'))
-    # ifL(dandelion('x'), flower('x'))
-    # ifL(rose('x'), flower('x'))
-    # ifL(sunflower('x'), flower('x'))
-    # ifL(tulip('x'), flower('x'))
+    ifL(cat('x'), animal('x'))
+    ifL(dog('x'), animal('x'))
+    ifL(monkey('x'), animal('x'))
+    ifL(squirrel('x'), animal('x'))
+
+    ifL(daisy('x'), flower('x'))
+    ifL(dandelion('x'), flower('x'))
+    ifL(rose('x'), flower('x'))
+    ifL(sunflower('x'), flower('x'))
+    ifL(tulip('x'), flower('x'))
 
     disjoint(cat, dog, monkey, squirrel, daisy, dandelion, rose, sunflower, tulip)
 
