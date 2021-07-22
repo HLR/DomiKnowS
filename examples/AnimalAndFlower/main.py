@@ -19,7 +19,7 @@ parser.add_argument('--samplenum', dest='samplenum', default=4521, help='number 
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors', type=int)
 parser.add_argument('--debugmode', dest='debugmode', default=0, help='different debugging setting to test the code',
                     type=int)
-parser.add_argument('--epochs', dest='epochs', default=1, help='number of training epoch', type=int)
+parser.add_argument('--epochs', dest='epochs', default=10, help='number of training epoch', type=int)
 parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='number of training epoch', type=float)
 # TODO add  model size and other things here
 args = parser.parse_args()
@@ -40,8 +40,8 @@ def main():
     solver = args.solver
     program = model_declaration(solver=solver, lambdaValue=args.lambdaValue)
     program.load("./checkpoint")
-    # program.train(train_ds, valid_set=val_ds, train_epoch_num=args.epochs,
-    #               Optim=lambda param: torch.optim.Adam(param, lr=.0001), device=device)
+    program.train(train_ds, valid_set=val_ds, train_epoch_num=args.epochs,
+                  Optim=lambda param: torch.optim.Adam(param, lr=.0001), device=device)
     # program.save("./checkpoint")
     program.test(val_ds)
     pic_list = [animal, flower, daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel]

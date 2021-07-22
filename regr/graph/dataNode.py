@@ -890,7 +890,7 @@ class DataNode:
                     collectAttributeList.append(rTensor[concept[2]])
                 elif (concept[2] is None) and concept[3] > 1:
                     return rTensor
-            elif len(rTensor) == 1: ## this is the change that corrects it.
+            elif isinstance(rTensor,(list,tuple)) and len(rTensor) == 1: ## this is the change that corrects it.
                 collectAttributeList.append(rTensor[0])
             elif rTensor:
                 collectAttributeList.append(1)
