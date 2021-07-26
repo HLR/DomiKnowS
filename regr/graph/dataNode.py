@@ -862,8 +862,7 @@ class DataNode:
                 concept = (concept, concept.name, None, len(concept.enum))
             else:
                 concept = (concept, concept.name, None, 1)
-
-            
+    
         rootConcept = self.findRootConceptOrRelation(concept[0])
         
         if not rootConcept:
@@ -890,6 +889,8 @@ class DataNode:
                     collectAttributeList.append(rTensor[concept[2]])
                 elif (concept[2] is None) and concept[3] > 1:
                     return rTensor
+            elif isinstance(rTensor, (list,tuple)) and len(rTensor) == 1:
+                collectAttributeList.append(rTensor[0])
             elif rTensor:
                 collectAttributeList.append(1)
             else:
