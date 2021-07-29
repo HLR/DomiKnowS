@@ -7,7 +7,7 @@ import torch.optim as optim
 import regr
 from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss
+from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from graph import graph
 from regr.program.model.pytorch import SolverModel, IMLModel
 from regr.program.primaldualprogram import PrimalDualProgram
@@ -103,8 +103,10 @@ def model_declaration(solver='iml',lambdaValue=0.5):
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif solver == 'poi':
+        print("POI Solver selected as solver")
+
         program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                                   metric=PRF1Tracker(DatanodeCMMetric()))
+                                   metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
 
     return program
 

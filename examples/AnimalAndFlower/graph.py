@@ -33,7 +33,8 @@ with Graph('AnimalAndFlower') as graph:
     ifL(rose('x'), flower('x'))
     ifL(sunflower('x'), flower('x'))
     ifL(tulip('x'), flower('x'))
-
+    ifL(flower,orL(daisy, dandelion, rose, sunflower, tulip))
+    ifL(animal,orL(cat, dog, monkey, squirrel))
     disjoint(cat, dog, monkey, squirrel, daisy, dandelion, rose, sunflower, tulip)
 
     for l1, l2 in combinations([daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel], 2):
