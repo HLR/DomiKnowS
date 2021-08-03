@@ -159,14 +159,15 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     return [i.x for i in vars_],tran_violated
 
 
-def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose):
+def test_inference_results(program, reader, cur_device, is_more, is_less, no_effect, transitive, symmetric, verbose):
     counter = 0
     ac_ = 0
     ILPac_ = 0
     ac_test=0
     for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
 
-        paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
+        conceptsRelations = [is_more, is_less, no_effect, transitive, symmetric]
+        paragraph_.inferILPResults(*conceptsRelations, fun=None)
         questions_id, results = [], []
         sresult=[]
         for question_ in paragraph_.getChildDataNodes():
