@@ -19,14 +19,14 @@ output_size = 45
 
 
 class ImageNetwork(torch.nn.Module):
-    def __init__(self, n_outputs=2):
+    def __init__(self, n_outputs=2,model_size=10):
         super(ImageNetwork, self).__init__()
         self.num_outputs = n_outputs
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.conv1 = nn.Conv2d(3, model_size, 5)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.conv3 = nn.Conv2d(16, 5, 5)
-        self.conv4 = nn.Conv2d(5, 5, 3)
+        self.conv2 = nn.Conv2d(model_size, model_size*2, 5)
+        self.conv3 = nn.Conv2d(model_size*2, model_size, 5)
+        self.conv4 = nn.Conv2d(model_size, 5, 3)
         self.bn = nn.BatchNorm2d(5)
 
     def forward(self, x):
@@ -42,7 +42,7 @@ class ImageNetwork(torch.nn.Module):
         return x
 
 
-def model_declaration(solver='iml',lambdaValue=0.5):
+def model_declaration(solver='iml',lambdaValue=0.5,model_size=10):
     solver = solver.lower()
     """
     this function creates and defines the structure of our graph model
@@ -77,7 +77,7 @@ def model_declaration(solver='iml',lambdaValue=0.5):
     image[sunflower] = ReaderSensor(keyword='sunflower', label=True, device=device)
     image[tulip] = ReaderSensor(keyword='tulip', label=True, device=device)
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(model_size), device=device)
     image[animal] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[cat] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[dog] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
