@@ -14,13 +14,13 @@ from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 output_size = 45
 
 
 class ImageNetwork(torch.nn.Module):
     def __init__(self, n_outputs=2,model_size=10):
         super(ImageNetwork, self).__init__()
+        print("size of the model is: ",model_size)
         self.num_outputs = n_outputs
         self.conv1 = nn.Conv2d(3, model_size, 5)
         self.pool = nn.MaxPool2d(2, 2)
@@ -42,7 +42,7 @@ class ImageNetwork(torch.nn.Module):
         return x
 
 
-def model_declaration(solver='iml',lambdaValue=0.5,model_size=10):
+def model_declaration(device,solver='iml',lambdaValue=0.5,model_size=10):
     solver = solver.lower()
     """
     this function creates and defines the structure of our graph model
@@ -77,7 +77,7 @@ def model_declaration(solver='iml',lambdaValue=0.5,model_size=10):
     image[sunflower] = ReaderSensor(keyword='sunflower', label=True, device=device)
     image[tulip] = ReaderSensor(keyword='tulip', label=True, device=device)
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(model_size), device=device)
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(n_outputs=2,model_size=model_size), device=device)
     image[animal] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[cat] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
     image[dog] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)

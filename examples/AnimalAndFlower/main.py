@@ -1,4 +1,8 @@
 import sys
+
+sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/')
+sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/regr')
+
 import torch
 from torch.utils.data import random_split, DataLoader
 import argparse
@@ -7,10 +11,6 @@ from model import model_declaration
 from graph import graph, daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel, animal, flower
 import logging, random
 
-sys.path.append('.')
-sys.path.append('../..')
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
@@ -31,9 +31,10 @@ args = parser.parse_args()
 
 def main():
     if torch.cuda.is_available():
-        device="cuda"+str(args.cuda)
+        device="cuda:"+str(args.cuda_number)
     else:
         device='cpu'
+    print("selected device is:",device)
 
     torch.manual_seed(777)
     random.seed(777)
@@ -45,11 +46,11 @@ def main():
     train_ds, test_ds = random_split(trainset, [args.samplenum // 5 * 4, args.samplenum - args.samplenum // 5 * 4])
     train_ds, val_ds = random_split(train_ds, [len(train_ds) // 5 * 4, len(train_ds) - len(train_ds) // 5 * 4])
     solver = args.solver
-    program = model_declaration(solver=solver, lambdaValue=args.lambdaValue,model_size=args.model_size)
+    program = model_declaration(device=device,solver=solver, lambdaValue=args.lambdaValue,model_size=args.model_size)
     # program.load("./checkpoint")
     program.train(train_ds, valid_set=val_ds,test_set=test_ds, train_epoch_num=args.epochs,
                   Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate), device=device)
-    program.save("./checkpoint")
+    #program.save("./checkpoint")
     # program.test(val_ds)
     # pic_list = [animal, flower, daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel]
     # for key in ["local/argmax", "ILP"]:
