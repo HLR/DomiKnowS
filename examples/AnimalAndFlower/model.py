@@ -13,11 +13,11 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
+from torchvision.models.resnet import resnet50
 
 output_size = 45
 
-
-class ImageNetwork(torch.nn.Module):
+class ImageNetworkNormal(torch.nn.Module):
     def __init__(self, n_outputs=2,model_size=10):
         super(ImageNetwork, self).__init__()
         print("size of the model is: ",model_size)
@@ -38,6 +38,18 @@ class ImageNetwork(torch.nn.Module):
         x = self.pool(x)
         x = self.bn(F.relu(self.conv4(x)))
         x = self.pool(x)
+        x = x.view(-1, output_size)
+        return x
+
+output_size = 1000
+class ImageNetwork(torch.nn.Module):
+    def __init__(self, n_outputs=2,model_size=10):
+        super(ImageNetwork, self).__init__()
+        print("size of the model is: ",model_size)
+        self.num_outputs = n_outputs
+        self.conv = resnet50()
+    def forward(self, x):
+        x = self.conv(x)
         x = x.view(-1, output_size)
         return x
 
