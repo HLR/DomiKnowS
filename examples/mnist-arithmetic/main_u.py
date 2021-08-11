@@ -25,7 +25,7 @@ def validate(program, reader):
             print("False\n")
 
 def main():
-   
+
     setProductionLogMode()
 
     logging.basicConfig(level=logging.INFO)
