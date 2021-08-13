@@ -196,7 +196,7 @@ for i in range(args.cur_epoch):
         def __call__(self) -> None:
             self.sch.step()
 
-    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
+    program.load("new_domi_1", map_location={'cuda:5':'cuda:0'})# in case we want to load the model instead of training
     #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     #program.save("domi_"+str(i)) in case of saving the parameters of the model
 
