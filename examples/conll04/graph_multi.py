@@ -7,7 +7,7 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph('global') as graph:
+with Graph('global') as graph_multi:
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
        

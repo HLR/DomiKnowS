@@ -849,7 +849,7 @@ class DataNode:
     #----------------- Solver methods
 
     # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
-    def collectInferedResults(self, concept, inferKey):
+    def collectInferredResults(self, concept, inferKey):
         collectAttributeList = []
         
         if not isinstance(concept, tuple):
@@ -881,22 +881,25 @@ class DataNode:
                 continue
             
             if torch.is_tensor(rTensor):
-                if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
+                if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and rTensor.shape[0] == 1:
                     collectAttributeList.append(rTensor.item())
-                elif (concept[2] is None) and concept[3] == 1:
+                elif (concept[2] is None) and concept[3] == 1: # local/argmax, rTensor.shape[0] == 2
                     collectAttributeList.append(rTensor[1])
-                elif concept[2] is not None:
+                elif concept[2] is not None: # multiclass given index(concept[2]) of the multiclass category
                     collectAttributeList.append(rTensor[concept[2]])
-                elif (concept[2] is None) and concept[3] > 1:
-                    return rTensor
+                elif (concept[2] is None) and concept[3] > 1: # multiclass as whole thus no index
+                    collectAttributeList.append(rTensor)
             elif isinstance(rTensor, (list,tuple)) and len(rTensor) == 1:
                 collectAttributeList.append(rTensor[0])
             elif rTensor:
                 collectAttributeList.append(1)
             else:
                 collectAttributeList.append(0)
+                
+        if collectAttributeList and torch.is_tensor(collectAttributeList[0]):
+            return torch.stack(tuple(collectAttributeList), dim=0)
         
-        return torch.tensor(collectAttributeList)        
+        return torch.as_tensor(collectAttributeList)        
     
     # Calculate argMax and softMax
     def infer(self):
@@ -1092,26 +1095,31 @@ class DataNode:
                     cr = (cr, cr.name, None, 1)
             
             
-            preds = self.collectInferedResults(cr, inferType)
-            labelsR = self.collectInferedResults(cr, 'label')
+            preds = self.collectInferredResults(cr, inferType)
+            labelsR = self.collectInferredResults(cr, 'label')
             
             labels = torch.clone(labelsR)
             
-            if cr[2] is not None:
-                for i, l in enumerate(labelsR):
+            # If Multiclass process label
+            if cr[2] is not None: # multiclass given multiclass index (cr[2]) 
+                for i, l in enumerate(labelsR): # Translate labels to 0/1
                     if labelsR[i] == cr[2]:
                         labels[i] = 1
                     else:
                         labels[i] = 0
-            elif (cr[2] is None) and cr[3] > 1:
-                labels = torch.clone(preds)
-                l = labelsR.item()
-                for i, _ in enumerate(preds):
-                    if i == l:
-                        labels[i] = 1
-                    else:
-                        labels[i] = 0
-            
+            elif (cr[2] is None) and cr[3] > 1: # multiclass general without index (cr[2]) - called by IML model forward
+                if preds.shape[0] == len(labelsR):
+                    for i, p in enumerate(preds): 
+                        l = labelsR[i].item()
+                        if p[l] == 1:
+                            labels[i] = 1
+                        else:
+                            labels[i] = 0
+                    
+                    preds = torch.ones(preds.shape[0])
+                else:
+                    raise Exception("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[2], len(preds), len(labelsR)))
+
             result[cr[1]] = {'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
             
             if preds is None or labels is None:
@@ -1125,6 +1133,9 @@ class DataNode:
             
             if  preds.size()[0] != labels.size()[0]:
                 continue
+            
+            if preds.is_cuda: preds = preds.cpu()
+            if labels.is_cuda: labels = labels.cpu
             
             labels = labels.long()
             # calculate confusion matrix
