@@ -121,10 +121,10 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     for i in results:
         if i[0]==None or i[1]==None or i[2]==None:
             if verbose:
-                print("There is a None")
+                print("Error: There is a None in paragraph : ",para_num)
         if not i[0]+i[1]+i[2]==1:
             if verbose:
-                print("There more than one correct label")
+                print("Error: There more than one correct label in paragraph : ",para_num)
 
     for arg1, arg2 in product(range(n), repeat=2):
         if arg1 == arg2:
@@ -132,7 +132,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
         if questions_id[arg1] in questions_id[arg2] and "_symmetric" in questions_id[arg2]:
             if (results[arg1][0] and not results[arg2][1]) or (results[arg1][1] and not results[arg2][0]):
                 if verbose:
-                    print("Symmetry is violated")
+                    print("Symmetry is violated in paragraph : ",para_num)
             m.addConstr(g_vars[arg1][0]+g_vars[arg2][0]<= 1, str(arg1)+" "+str(arg2)+" s1")
             m.addConstr(g_vars[arg1][0]+g_vars[arg2][2]<= 1, str(arg1)+" "+str(arg2)+" s2")
             m.addConstr(g_vars[arg1][1]+g_vars[arg2][1]<= 1, str(arg1)+" "+str(arg2)+" s3")
@@ -150,7 +150,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 if verbose:
-                    print("Transivity is violated")
+                    print("Transivity is violated in paragraph : ",para_num)
                     tran_violated=True
                     print(para_num)
     m.setObjective(obj, GRB.MAXIMIZE)
