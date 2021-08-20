@@ -1,6 +1,7 @@
-from  collections import namedtuple
+from collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
-   
+from regr.graph import Concept
+
 import logging
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
@@ -16,8 +17,6 @@ class LogicalConstrain:
             myLogger.error("Logical Constrain initialized is empty")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
         
-        from regr.graph import Concept
-
         updatedE = []
         for _, eItem in enumerate(e):
             if isinstance(eItem, (LogicalConstrain, Concept)):
@@ -118,6 +117,25 @@ class LogicalConstrain:
         else:
             return e._context
        
+    def strEs(self):
+        strsE = []
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, V):
+                new_V = []
+                if eItem[0] is not None:
+                    new_V.append(eItem[0])
+                    if eItem[1] is not None: new_V.append(',')
+                if eItem[1]:
+                    new_v = [v if isinstance(v, str) else v.name for v in eItem[1]]
+                    new_V.append("path = {}".format(tuple(new_v)))
+                strsE.append("{}".format(tuple(new_V)))
+            elif isinstance(eItem, Concept):
+                strsE.append(eItem.name)
+            elif isinstance(eItem, tuple) and (len(eItem) == 3):
+                strsE.append(eItem[0].name)
+        
+        return strsE
+    
     # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
     # sVars - returned list of ILP variables setups
     def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):

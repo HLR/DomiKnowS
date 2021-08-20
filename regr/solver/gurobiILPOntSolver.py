@@ -554,7 +554,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         for lc in lcs:   
             
             if lc.active:
-                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
             else:
                 self.myLogger.info('Skipping not active Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 continue
@@ -667,7 +667,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
                                     else:
-                                        self.myLogger.info('The element %s of logical constrain %s has not exiting path %s in the current graph'%(conceptName, lc.lcName, v[1:]))
+                                        vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
+                                        self.myLogger.info('The graph node %s has no path %s requested by logical constrain %s for concept %s '%(_rDn, vNames, lc.lcName, conceptName))
                                         eDns.extend([None])
                                         
                                 _dnsList[i].append(eDns)
@@ -727,7 +728,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariables[variableName] = vDns
                 
                 elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively 
-                    self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(e.lcName, e, [str(e1) for e1 in e.e]))
+                    self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False)
                     
                     if vDns == None:
@@ -1009,7 +1010,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if not lc.headLC:
                     continue
                     
-                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
                 lossList = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True)
                 
                 if not lossList:

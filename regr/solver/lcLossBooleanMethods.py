@@ -51,7 +51,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         methodName = "and2Var"
         logicMethodName = "AND"
             
-        if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
         
         if not self._isNumber(var1):
             var1 = 0

@@ -40,7 +40,7 @@ cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 #reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[21:22]
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[20:22]
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
@@ -60,36 +60,30 @@ with Graph('WIQA_graph') as graph:
     is_less = question(name='is_less')
     no_effect = question(name='no_effect')
 
-    # we want only one of the labels to be true
-    nandL( is_less, no_effect)
-    nandL(is_more,  no_effect)
-    nandL(is_more, is_less)
-    orL(is_more, is_less, no_effect)
+    # Only one of the labels to be true
+    atMostL(is_more, is_less, no_effect)
+    
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
-    # here we define that if a question is is_more or is_less and it has a symmetric relation with another
-    # question, then the second question should be is_less and is_more respectively
-    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
-    ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+    # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
+    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)))
+    
+    # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
+    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)))
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
-    # third question si made of the cause of the first and the effect of the second question
+    # third question is made of the cause of the first and the effect of the second question
     transitive = Concept(name='transitive')
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
+    # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
+    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)))
 
-    # the transitive relation implies that if the first and the second question are is_more, so should be the
-    # third question. but if the first question is is_more and the second question is is_less, then the third
-    # question should also be is_less
-
-    ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
-
-    ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+    # If the first question is is_more and the second question is is_less, then the third question should also be is_less
+    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)))
 
 from IPython.display import Image
 #graph.visualize("./image")
@@ -196,7 +190,7 @@ for i in range(args.cur_epoch):
         def __call__(self) -> None:
             self.sch.step()
 
-    program.load("new_domi_1", map_location={'cuda:5':'cuda:0'})# in case we want to load the model instead of training
+    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
     #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     #program.save("domi_"+str(i)) in case of saving the parameters of the model
 
@@ -209,7 +203,3 @@ for i in range(args.cur_epoch):
     test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
     print("***** test aug *****")
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
-
-
-
-

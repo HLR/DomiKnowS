@@ -1,9 +1,7 @@
 from itertools import combinations, product
 import hashlib
 import pickle
-from regr.graph.concept import EnumConcept
 from typing import Iterable
-import warnings
 
 import torch
 import torch.nn.functional as F
@@ -241,42 +239,6 @@ class SolverModel(PoiModel):
         return super().populate(builder, run=False)
 
 
-class IMLModel(SolverModel):
-    def poi_loss(self, data_item, prop, sensors):
-        output_sensor, target_sensor = sensors
-        logit = output_sensor(data_item)
-        labels = target_sensor(data_item)
-        if len(logit) == 0:
-            return None
-
-        builder = data_item
-        datanode = builder.getDataNode()
-        concept = prop.sup
-        values = []
-        try:
-            for cdn in datanode.findDatanodes(select=concept):
-                value = cdn.getAttribute(f'<{prop.name}>/ILP')
-                if isinstance(prop.name, EnumConcept):
-                    # if multi-class
-                    values.append(value)
-                else:
-                    values.append(torch.cat((1-value, value), dim=-1))
-            if values:
-                inference = torch.stack(values)
-            else:
-                assert logit.shape == (0, 2)
-                inference = torch.zeros_like(logit)
-        except TypeError:
-            message = (f'Failed to get inference result for {prop}. '
-                       'Is it included in the inference (with `inference_with` attribute)? '
-                       'Continue with predicted value.')
-            warnings.warn(message)
-            inference = logit.softmax(dim=-1).detach()
-
-        if self.loss:
-            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
-            return local_loss
-
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def __init__(self, graph, poi=None):
         super().__init__(graph)
@@ -335,3 +297,6 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def metric(self):
         # return self.metrics_tracker
         pass
+
+from .iml import IMLModel
+from .ilpu import ILPUModel
