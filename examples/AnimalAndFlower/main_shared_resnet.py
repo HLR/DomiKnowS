@@ -42,6 +42,7 @@ def main():
     random.seed(777)
     logging.basicConfig(level=logging.INFO)
     trainset = load_animals_and_flowers(args, root='./data/', size=100, )
+    #trainset=trainset[:4]
 
     train_ds, val_ds = trainset[:math.floor(len(trainset)*0.8)], trainset[math.floor(len(trainset)*0.8):]
     solver = args.solver
@@ -53,7 +54,7 @@ def main():
 
     pic_list = [ daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel]
     parent_list=[animal, flower]
-    for key in ["local/argmax", "ILP"]:
+    for key in ["local/softmax", "ILP"]:
          print(f"#################################{key}######################")
          accuracy=0
          inaccuracy=0
@@ -67,10 +68,15 @@ def main():
                 real_labels=[]
 
                 for class_number, image_class in enumerate(pic_list):
-                     guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     #print(image_.getAttribute(image_class, key),image_.getAttribute(image_class, "label"))
+                     if key=="ILP":
+                         guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     else:
+                         guessed_labels.append(float(image_.getAttribute(image_class, key)[1].item()))
                      real_labels.append(int(image_.getAttribute(image_class, "label")[0]))
                 f = lambda i: guessed_labels[i]
-                chosen_class=max(range(len(l)), key=f)
+                chosen_class=max(range(len(guessed_labels)), key=f)
+                print("check ",guessed_labels,real_labels,chosen_class)
                 if real_labels[chosen_class]:
                     accuracy+=1
                 else:
@@ -80,17 +86,20 @@ def main():
                 real_labels=[]
 
                 for class_number, image_class in enumerate(parent_list):
-                     guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     if key=="ILP":
+                         guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     else:
+                         guessed_labels.append(float(image_.getAttribute(image_class, key)[1].item()))
                      real_labels.append(int(image_.getAttribute(image_class, "label")[0]))
                 f = lambda i: guessed_labels[i]
-                chosen_class=max(range(len(l)), key=f)
+                chosen_class=max(range(len(guessed_labels)), key=f)
                 if real_labels[chosen_class]:
                     accuracy_parent+=1
                 else:
                     inaccuracy_parent+=1
 
-    print("accuracy:",accuracy/(accuracy+inaccuracy))
-    print("parent accuracy:",accuracy_parent/(accuracy_parent+inaccuracy_parent))
+         print(key," accuracy:",accuracy/(accuracy+inaccuracy))
+         print(key," parent accuracy:",accuracy_parent/(accuracy_parent+inaccuracy_parent))
 
 if __name__ == '__main__':
     main()
