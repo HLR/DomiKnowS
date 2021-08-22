@@ -177,7 +177,7 @@ def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
                                      'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif solver == 'primal_dual':
         print("PrimalDualProgram + IML selected as solver")
-        program = PrimalDualProgram(graph, IMLModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
+        program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
