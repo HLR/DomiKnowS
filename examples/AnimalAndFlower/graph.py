@@ -8,7 +8,9 @@ Concept.clear()
 Relation.clear()
 
 with Graph('AnimalAndFlower') as graph:
+    image_group = Concept(name='image_group')
     image = Concept(name='image')
+    image_group_contains, = image_group.contains(image)
 
     animal = image(name='animal')
     cat = animal(name='cat')
@@ -33,12 +35,12 @@ with Graph('AnimalAndFlower') as graph:
     ifL(rose('x'), flower('x'))
     ifL(sunflower('x'), flower('x'))
     ifL(tulip('x'), flower('x'))
-    ifL(flower,orL(daisy, dandelion, rose, sunflower, tulip))
-    ifL(animal,orL(cat, dog, monkey, squirrel))
+    ifL(flower, orL(daisy, dandelion, rose, sunflower, tulip))
+    ifL(animal, orL(cat, dog, monkey, squirrel))
     disjoint(cat, dog, monkey, squirrel, daisy, dandelion, rose, sunflower, tulip)
 
     for l1, l2 in combinations([daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel], 2):
-        #TODO isn't this the same as disjoint?
+        # TODO isn't this the same as disjoint?
         nandL(l1, l2)
 
     for l1, l2 in combinations([animal, flower], 2):

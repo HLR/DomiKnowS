@@ -65,7 +65,6 @@ class ImageNetwork(torch.nn.Module):
     def forward(self, x):
         x = self.conv(x)
         x = x.view(-1, output_size)
-        x = self.dense(x)
         return x
 
 
@@ -73,12 +72,12 @@ class DenseNetwork(torch.nn.Module):
     def __init__(self, n_outputs=2):
         super(DenseNetwork, self).__init__()
 
-        # self.dense1 = nn.Linear(output_size,output_size//2)
+        self.dense1  = nn.Linear(output_size, 2)
         # self.dense2 = nn.Linear(output_size//2,output_size//4)
         # self.dense3 = nn.Linear(output_size//3,n_outputs)
 
     def forward(self, x):
-        x = self.dense(x)
+        x = self.dense1(x)
         return x
 
 
@@ -157,17 +156,22 @@ def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
     image[sunflower] = FunctionalSensor(image_group_contains, "sunflower_", forward=label_reader, label=True)
     image[tulip] = FunctionalSensor(image_group_contains, "tulip_", forward=label_reader, label=True)
 
-    image[animal] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[cat] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[dog] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[monkey] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[squirrel] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[flower] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[daisy] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[dandelion] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[rose] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[sunflower] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
-    image[tulip] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
+    res=ImageNetwork(n_outputs=2, model_size=model_size)
+    res.cuda(device)
+    res.requires_grad_(True)
+    image['emb'] = ModuleLearner('pixels', module=res,device=device)
+
+    image[animal] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[cat] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[dog] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[monkey] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[squirrel] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[flower] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[daisy] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[dandelion] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[rose] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[sunflower] = ModuleLearner('emb', module=DenseNetwork(), device=device)
+    image[tulip] = ModuleLearner('emb', module=DenseNetwork(), device=device)
 
     if solver == 'iml':
         print("IMLProgram selected as solver")
