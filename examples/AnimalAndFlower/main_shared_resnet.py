@@ -51,6 +51,46 @@ def main():
                   Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate), device=device)
     #program.save("./checkpoint")
 
+    pic_list = [ daisy, dandelion, rose, sunflower, tulip, cat, dog, monkey, squirrel]
+    parent_list=[animal, flower]
+    for key in ["local/argmax", "ILP"]:
+         print(f"#################################{key}######################")
+         accuracy=0
+         inaccuracy=0
+
+         accuracy_parent=0
+         inaccuracy_parent=0
+
+         for pic_num, picture_group in enumerate(program.populate(val_ds, device=device)):
+             for image_ in picture_group.getChildDataNodes():
+                guessed_labels=[]
+                real_labels=[]
+
+                for class_number, image_class in enumerate(pic_list):
+                     guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     real_labels.append(int(image_.getAttribute(image_class, "label")[0]))
+                f = lambda i: guessed_labels[i]
+                chosen_class=max(range(len(l)), key=f)
+                if real_labels[chosen_class]:
+                    accuracy+=1
+                else:
+                    inaccuracy+=1
+
+                guessed_labels=[]
+                real_labels=[]
+
+                for class_number, image_class in enumerate(parent_list):
+                     guessed_labels.append(int(image_.getAttribute(image_class, key).item()))
+                     real_labels.append(int(image_.getAttribute(image_class, "label")[0]))
+                f = lambda i: guessed_labels[i]
+                chosen_class=max(range(len(l)), key=f)
+                if real_labels[chosen_class]:
+                    accuracy_parent+=1
+                else:
+                    inaccuracy_parent+=1
+
+    print("accuracy:",accuracy/(accuracy+inaccuracy))
+    print("parent accuracy:",accuracy_parent/(accuracy_parent+inaccuracy_parent))
 
 if __name__ == '__main__':
     main()
