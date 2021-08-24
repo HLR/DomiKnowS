@@ -4,7 +4,7 @@ import numpy as np
 
 from .program import LearningBasedProgram
 from .model.primaldual import PrimalDualModel
-
+from ..graph import DataNode
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -28,15 +28,22 @@ def reverse_sign_grad(parameters, factor=-1.):
             parameter.grad = factor * parameter.grad
 
 class PrimalDualProgram(LearningBasedProgram):
-    DEFAULTCMODEL = PrimalDualModel
-
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
+    def __init__(self, graph, Model, CModel=PrimalDualModel, beta=1, **kwargs):
+        if 'tnorm' in kwargs and kwargs['tnorm'] in DataNode.tnorms:
+            tnorm = kwargs['tnorm']
+        else:
+            tnorm = 'L'
+            
+        if 'tnorm' in kwargs: del kwargs['tnorm']
+            
         super().__init__(graph, Model, **kwargs)
-        if CModel is None:
-            CModel = self.DEFAULTCMODEL
-        self.cmodel = CModel(graph)
+        if CModel is PrimalDualModel:
+            self.cmodel = CModel(graph, tnorm = tnorm)
+        else:
+            self.cmodel = CModel(graph)
+            
         self.copt = None
         self.beta = beta
 

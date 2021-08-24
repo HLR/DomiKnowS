@@ -12,10 +12,11 @@ from ..metric import MetricTracker, MacroAverageTracker
 class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph):
+    def __init__(self, graph, tnorm="L"):
         super().__init__()
         self.graph = graph
         self.build = True
+        self.tnorm = tnorm
         constr = OrderedDict(graph.logicalConstrainsRecursive)
         nconstr = len(constr)
         if nconstr == 0:
@@ -51,7 +52,7 @@ class PrimalDualModel(torch.nn.Module):
         datanode = builder.getDataNode()
         # call the loss calculation
         # returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss()
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm)
         lmbd_loss = []
         for key, loss in constr_loss.items():
             loss_value = loss['lossTensor'].clamp(min=0)

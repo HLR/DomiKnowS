@@ -1062,6 +1062,7 @@ class DataNode:
         return verifyResult
     
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
+    tnorms = ['L', 'G', 'P']
     def calculateLcLoss(self, tnorm="L"):
         
         myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
