@@ -63,7 +63,7 @@ def main():
     tag = graph['tag']
     category = graph['category']
     real_category = []
-    for pic_num, picture_group in enumerate(program.populate(train_ds, device=device)):
+    for pic_num, picture_group in enumerate(program.populate(val_ds, device=device)):
         for image_ in picture_group.getChildDataNodes():
             for key in ["local/softmax", "ILP"]:
                 if key == "ILP":
@@ -74,7 +74,7 @@ def main():
                 if key == "ILP":
                     guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
                 else:
-                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key)[1:])))
+                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key)[:-1])))
             real_tag.append(int(image_.getAttribute(tag, "label")[0]))
             real_category.append(int(image_.getAttribute(category, "label")[0]))
 
