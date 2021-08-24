@@ -74,7 +74,7 @@ def main():
                 if key == "ILP":
                     guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
                 else:
-                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key)[:-1])))
+                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
             real_tag.append(int(image_.getAttribute(tag, "label")[0]))
             real_category.append(int(image_.getAttribute(category, "label")[0]))
 
