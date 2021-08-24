@@ -77,6 +77,7 @@ class DenseNetwork(torch.nn.Module):
         # self.dense3 = nn.Linear(output_size//3,n_outputs)
 
     def forward(self, x):
+        x=F.dropout(x,0.5)
         x = self.dense1(x)
         return x
 
