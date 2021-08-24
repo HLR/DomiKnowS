@@ -1061,12 +1061,13 @@ class DataNode:
         
         return verifyResult
     
-    def calculateLcLoss(self):
+    # T-norms: L - Lukasiewicz, G - Godel, P - Product
+    def calculateLcLoss(self, tnorm="L"):
         
         myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm)
         
         return lcResult
 

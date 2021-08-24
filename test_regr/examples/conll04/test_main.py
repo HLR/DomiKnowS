@@ -105,20 +105,33 @@ def test_case():
         
         # nandL(people,organization)
         #                               John    works   for     IBM
-        'lc0LossTensor' : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
+        'lc0LossTensor' : {"L" : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
+                           "G" : torch.tensor([0.5000, 0.3100, 0.2769, 0.5498],  device=device),
+                           "P" : torch.tensor([0.2993, 0.1099, 0.0778, 0.3817],  device=device)
+                        },
         #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
         # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM
-        'lc2LossTensor' : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
-                                        float("nan"),   float("nan"),  0.4502,  0.3971, # works
-                                        0.2769,         0.3385,        0.2891,  0.3100, # for
-                                        0.5246,         0.3543,        0.3100,  0.1572], # IBM
+        'lc2LossTensor' : {"L" : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
+                                               0,              0,             0.4502,  0.3971, # works
+                                               0.2769,         0.3385,        0.2891,  0.3100, # for
+                                               0.5246,         0.3543,        0.3100,  0.1572], # IBM
                          # torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
                          #             float("nan"),   float("nan"),  0.4000,  0.2900,  # works
                          #              0.0200,         0.0300,        0.0500,  0.1000,  # for
                          #               0.5500,         0.2000,        0.1000,  0.2000], # IBM
-                                        device=device)
+                                        device=device),
+                           "G" : torch.tensor([0.0000,          0.6457,       0.7191,   0.0000, 
+                                               0.6900,          0.6900,       0.7191,   0.6900, 
+                                               0.7231,          0.7231,       0.7231,   0.7231, 
+                                               0.5000,          0.6457,       0.7191,   0.0000], device=device),
+                           
+                           "P" : torch.tensor([0.3350,          0.4013,       0.5254,   0.2639, 
+                                               0.0000,          0.0000,       0.8065,   0.4637, 
+                                               0.5000,          0.7102,       0.7309,   0.3800, 
+                                               0.5214,          0.4502,       0.5018,  0.0488], device=device)
+                           }
     
     }
     case = Namespace(case)
@@ -222,7 +235,6 @@ def model_declaration(config, case):
         'emb',
         expected_inputs=(case.phrase.emb,),
         expected_outputs=case.phrase.people)
-
 
     pair[work_for] = TestSensor(
         label=True,
@@ -354,23 +366,24 @@ def test_main_conll04(case):
     for conceptsRelations in conceptsRelationsVariants:
         
         # ------------ Calculate logical constraints losses 
-        lcResult = datanode.calculateLcLoss()
+        for tnorm in ['L', 'G', "P"]:
+            lcResult = datanode.calculateLcLoss(tnorm=tnorm)
+                    
+            for i in range(3):
+                assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
+    
+            ifLLCid = 'LC22'
+            if ifLLCid not in lcResult:
+                ifLLCid = 'LC2'
                 
-        for i in range(3):
-            assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[i].item(), 4)
-
-        ifLLCid = 'LC22'
-        if ifLLCid not in lcResult:
-            ifLLCid = 'LC2'
-            
-        for i in range(15):  
-            if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[i] != case.lc2LossTensor[i]:
-                    assert True
+            for i in range(15):  
+                if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
+                    if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
+                        assert True
+                    else:
+                        assert False
                 else:
-                    assert False
-            else:
-                assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[i].item(), 4)
+                    assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
 
         # ------------ Call the ILP Solver
         datanode.inferILPResults(*conceptsRelations, fun=None)

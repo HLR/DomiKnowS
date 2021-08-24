@@ -8,7 +8,7 @@ from transformers import get_linear_schedule_with_warmup
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL
+from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
 from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
@@ -61,7 +61,8 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     # Only one of the labels to be true
-    atMostL(is_more, is_less, no_effect)
+    atMostL(is_more, is_less, no_effect, active=False) # breakpoint in WIQA line 126
+    exactL(is_more, is_less, no_effect)
     
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')

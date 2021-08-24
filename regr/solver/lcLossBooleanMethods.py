@@ -11,6 +11,19 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
 
+    def setTNorm(self, tnorm='L'):
+        if tnorm =='L':
+            if self.ifLog: self.myLogger.info("Using Lukasiewicz t-norms Formulation")
+        elif tnorm =='G':
+            if self.ifLog: self.myLogger.info("Using Godel t-norms Formulation")
+        elif tnorm =='P':
+            if self.ifLog: self.myLogger.info("Using Product t-norms Formulation")
+        else:
+            raise Exception('Unknown type of t-norms formulation - %s'%(tnorm))
+
+        self.tnorm = tnorm
+        
+    
     def _isNumber(self, v):
         if v is None:
             return  False
@@ -29,7 +42,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         return varFixed
             
-    def notVar(self, _, var, onlyConstrains = False):
+    def notVar(self, _, var, onlyConstrains = False, tnome = 'L'):
         methodName = "notVar"
         logicMethodName = "NOT"
                 
@@ -59,7 +72,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if not self._isNumber(var2):
             var2 = 0
             
-        and2Success = max(var1 + var2 - 1, 0)
+        if self.tnorm =='L':
+            and2Success = max(0, var1 + var2 - 1)
+        elif self.tnorm =='G':
+            and2Success = min(var1, var2)
+        elif self.tnorm =='P':
+            and2Success = var1*var2
          
         if onlyConstrains:
             and2Loss = 1 - and2Success
@@ -80,9 +98,15 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         varSum = 0
         for currentVar in var:
-            varSum += currentVar
+            varSum += currentVar 
             
-        andSuccess = max(varSum - N + 1, 0)
+        if self.tnorm =='L':
+            andSuccess = max(varSum - N + 1, 0)
+        elif self.tnorm =='G':
+            andSuccess = min(var)
+        elif self.tnorm =='P':
+            import math
+            andSuccess = math.prod(var)
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
@@ -103,7 +127,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if not self._isNumber(var2):
             var2 = 0
             
-        or2Success = min(var1 + var2, 1)
+        if self.tnorm =='L':
+            or2Success = min(var1 + var2, 1)
+        elif self.tnorm =='G':
+            or2Success = max(var1, var2)
+        elif self.tnorm =='P':
+            or2Success = var1+var2 - var1*var2
 
         if onlyConstrains:
             or2Loss = 1 - or2Success
@@ -126,8 +155,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         for currentVar in var:            
             varSum += currentVar
            
-        orSuccess = min(varSum, 1)
-
+        if self.tnorm =='L':
+            orSuccess = min(varSum, 1)
+        elif self.tnorm =='G':
+            orSuccess = max(var)
+        elif self.tnorm =='P':
+            import math
+            orSuccess = varSum - math.prod(var)
+            
         if onlyConstrains:
             orLoss = 1 - orSuccess
                 
@@ -194,9 +229,23 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if not self._isNumber(var2):
             var2 = 0
-            
+          
+        if self.tnorm =='L':
+            ifSuccess = min(1, 1 - var1 + var2)
+        elif self.tnorm =='G':
+            if var2 > var1: 
+                ifSuccess = 1
+            else: 
+                ifSuccess = var2
+        elif self.tnorm =='P':
+            if var1 != 0:
+                ifSuccess = min(1, var2/var1)
+            else:
+                ifSuccess = 1
+
+              
         # if(var1, var2) = or(not(var1), var2)
-        ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
+        #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
 
         if onlyConstrains:
             ifLoss = 1 - ifSuccess

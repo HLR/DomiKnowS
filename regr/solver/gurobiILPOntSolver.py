@@ -997,7 +997,10 @@ class gurobiILPOntSolver(ilpOntSolver):
         return
                 
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn):
+    def calculateLcLoss(self, dn, tnorm='L'):
+        
+        self.myLcLossBooleanMethods.setTNorm(tnorm)
+        
         m = None 
                 
         p = 0
