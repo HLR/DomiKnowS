@@ -123,7 +123,7 @@ def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
     image['emb'] = ModuleLearner('pixels', module=res, device=device)
 
     image[category] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
-    image[tag] = ModuleLearner('emb', module=nn.Linear(output_size, 10), device=device)
+    image[tag] = ModuleLearner('emb', module=nn.Linear(output_size, 9), device=device)
     if solver == 'iml':
         print("IMLProgram selected as solver")
         program = IMLProgram(graph, poi=(image,), inferTypes=['ILP', 'local/argmax'],
