@@ -60,19 +60,25 @@ with Graph('WIQA_graph') as graph:
     is_less = question(name='is_less')
     no_effect = question(name='no_effect')
 
+    USE_LC_exactL = True
+    USE_LC_atMostL = False
+
+    USE_LC_symmetric  = True
+    USE_LC_transitive  = True
+
     # Only one of the labels to be true
-    atMostL(is_more, is_less, no_effect, active=False) # breakpoint in WIQA line 126
-    exactL(is_more, is_less, no_effect)
-    
+    exactL(is_more, is_less, no_effect, active=USE_LC_exactL)
+    atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL) # breakpoint in WIQA line 126
+
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
     # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
-    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)))
+    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
     
     # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
-    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)))
+    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
@@ -81,10 +87,10 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
-    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)))
+    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
-    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)))
+    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
 
 from IPython.display import Image
 #graph.visualize("./image")

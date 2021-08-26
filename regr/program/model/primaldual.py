@@ -5,14 +5,14 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ...graph import DataNodeBuilder
+from ...graph import DataNodeBuilder, DataNode
 from ..metric import MetricTracker, MacroAverageTracker
 
 
 class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm="L"):
+    def __init__(self, graph, tnorm=DataNode.tnormsDefault):
         super().__init__()
         self.graph = graph
         self.build = True
