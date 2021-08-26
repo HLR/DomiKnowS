@@ -29,7 +29,7 @@ def set_parameter_requires_grad(model, feature_extracting):
 class ImageNetworkNormal(torch.nn.Module):
     def __init__(self, n_outputs=2, model_size=10):
         super(ImageNetwork, self).__init__()
-        print("size of the model is: ", model_size)
+        #print("size of the model is: ", model_size)
         self.num_outputs = n_outputs
         self.conv1 = nn.Conv2d(3, model_size, 5)
         self.pool = nn.MaxPool2d(2, 2)
@@ -51,7 +51,7 @@ class ImageNetworkNormal(torch.nn.Module):
         return x
 
 
-output_size = 1000
+output_size = 2048 * 4 * 4
 
 
 class ImageNetwork(torch.nn.Module):
@@ -60,11 +60,16 @@ class ImageNetwork(torch.nn.Module):
         self.num_outputs = n_outputs
         self.conv = resnet50(pretrained=True)
         set_parameter_requires_grad(self.conv, True)
+        self.conv = nn.Sequential(*list(self.conv.children())[:-2])
+
         self.dense = nn.Linear(output_size, n_outputs)
 
     def forward(self, x):
+        #print("ImageNetwork1", x.shape)
         x = self.conv(x)
-        x = x.view(-1, output_size)
+        #print("ImageNetwork2",x.shape)
+        x = x.view(x.shape[0], output_size)
+        #print("ImageNetwork3",x.shape)
         return x
 
 
@@ -72,13 +77,15 @@ class DenseNetwork(torch.nn.Module):
     def __init__(self, n_outputs=2):
         super(DenseNetwork, self).__init__()
 
-        self.dense1 = nn.Linear(output_size, 2)
+        self.dense1 = nn.Linear(output_size, n_outputs)
         # self.dense2 = nn.Linear(output_size//2,output_size//4)
         # self.dense3 = nn.Linear(output_size//3,n_outputs)
 
     def forward(self, x):
+        #print("DenseNetwork1", x.shape)
         x=F.dropout(x,0.5)
         x = self.dense1(x)
+        #print("DenseNetwork2", x.shape)
         return x
 
 
@@ -122,8 +129,9 @@ def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
     res.requires_grad_(True)
     image['emb'] = ModuleLearner('pixels', module=res, device=device)
 
-    image[category] = ModuleLearner('emb', module=nn.Linear(output_size, 2), device=device)
-    image[tag] = ModuleLearner('emb', module=nn.Linear(output_size, 9), device=device)
+    image[category] = ModuleLearner('emb', module=DenseNetwork(n_outputs= 2), device=device)
+    image[tag] = ModuleLearner('emb', module=DenseNetwork(n_outputs= 9), device=device)
+
     if solver == 'iml':
         print("IMLProgram selected as solver")
         program = IMLProgram(graph, poi=(image,), inferTypes=['ILP', 'local/argmax'],
