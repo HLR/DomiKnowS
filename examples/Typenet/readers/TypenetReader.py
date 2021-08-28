@@ -198,7 +198,7 @@ def filter_fb_types(type_dict, entity_type_dict, typenet_matrix_orig):
         fb_entity_type_dict[ent] = set(curr) # easy to search
 
 
-    return type2idx, fb_entity_type_dict, len(fb_types), typenet_matrix, orig2new
+    return type2idx, fb_entity_type_dict, len(fb_types), typenet_matrix, orig2new, fb_types
 
 def underscore_to_slash(orig):
     res = orig.replace('__', '/')
@@ -237,7 +237,15 @@ class WikiReader(RegrReader):
     def make_object(self, item):
         self.subsample_ids = np.random.choice(len(item['context']), self.bag_size, replace=False)
 
-        return super().make_object(item)
+        result = super().make_object(item)
+
+        for lbl in self.all_types:
+            if lbl in item['gold_types_pos']:
+                result[lbl] = [1]
+            else:
+                result[lbl] = [0]
+
+        return result
     
     def add_to_dict(self, dict_result, new_item):
         for key, val in new_item.items():
@@ -251,33 +259,37 @@ class WikiReader(RegrReader):
 
         # process
         print('WikiReader: processing data')
-        type_dict, entity_type_dict, fb_type_size, typenet_matrix, map_old_to_new = filter_fb_types(self.type_dict, self.entity_type_dict, self.typenet_matrix_orig)
+        type_dict, entity_type_dict, fb_type_size, typenet_matrix, map_old_to_new, fb_types = filter_fb_types(self.type_dict, self.entity_type_dict, self.typenet_matrix_orig)
         
         print('num fb types: ', fb_type_size)
-        assert config.num_types == fb_type_size
+        assert config.num_types + 1 == fb_type_size # one of the types is NO_TYPES, so add 1 to config
+
+        # get list of all types use for prediction
+        self.all_types = []
+        for tp in fb_types:
+            if not tp == 'NO_TYPES':
+                self.all_types.append(fix_name(tp))
 
         self.dataset_all = []
 
+        # get total for tqdm
         total = None
         if self.limit_size == None:
             total = len(train_entities)
         else:
             total = self.limit_size
 
+        # process bag of mention contexts per entity
+        # each training iteration uses one entity (one bag of mention contexts contexts)
         for i, ent in tqdm(enumerate(train_entities), total=total):
             if i == self.limit_size:
                 break
 
             if ent in self.train_bags:
                 all_mentions = self.train_bags[ent]
-                #print(ent, len(all_mentions))
-                #print(arll_mentions)
 
                 if len(all_mentions) >= self.bag_size:
-                    #subsampled_ids = np.random.choice(len(all_mentions), self.bag_size, replace=False)
-                    #subsampled_bag = [all_mentions[idx] for idx in subsampled_ids]
-
-                    # process each selected mention
+                    # process each selected mention in bag
                     all_mention_data = {}
                     for curr_data in all_mentions:
                         data = {}
@@ -285,15 +297,7 @@ class WikiReader(RegrReader):
                         gold_ent     = gold_ent[7:-4]
                         gold_mention = " ".join(gold_mention[9:].split("_"))
 
-                        #print(curr_sentence, gold_mention, gold_ent)
-
                         sentence, sfm_mention, position_embedding, st_id, en_id = process(self.vocab_dict, curr_sentence, flag_wiki=True, encoder='basic')
-
-                        #all_candidates, priors, gold_id = get_candidates(getLnrm(gold_mention, pattern), entity_dict, gold_ent, None, True, None)
-
-                        #print(all_candidates)
-                        #print(priors)
-                        #print(gold_id)
 
                         mention_representation = np.array([self.embeddings[_id] for _id in sfm_mention]).mean(axis = 0)
 
@@ -305,6 +309,7 @@ class WikiReader(RegrReader):
                         #data['entity_candidates'] = all_candidates
                         #data['priors'] = priors
                         #data['gold_ids'] = gold_id
+
                         assert(len(position_embedding) == len(sentence))
 
                         self.add_to_dict(all_mention_data, data)
@@ -319,42 +324,10 @@ class WikiReader(RegrReader):
                         gt = fix_name(gt)
                         gold_types.append(gt)
 
-                    #print(gold_types)
-
-                    used_labels = 0
-
-                    # todo: reduce code repitition
-                    for i, depth_classes in enumerate(classes):
-                        all_mention_data['tag_%d' % i] = [0]
-                        #print(depth_classes)
-                        for gt in gold_types:
-                            if gt in depth_classes:
-                                gt_idx = depth_classes.index(gt)
-                                #assert all_mention_data['tag_%d' % i] == [0]
-                                all_mention_data['tag_%d' % i] = [gt_idx]
-                                used_labels += 1
-                        #print(all_mention_data['tag_%d' % i])
-
-                    all_mention_data['tag_other'] = [0]
-                    for gt in gold_types:
-                        if gt in config.missing_types:
-                            gt_idx = config.missing_types.index(gt)
-                            #assert all_mention_data['tag_other'] == [0]
-                            all_mention_data['tag_other'] = [gt_idx]
-                            used_labels += 1
-                    #print(all_mention_data['tag_other'])
-
-                    assert used_labels == len(gold_types) or (gold_types[0] == 'NO_TYPES' and len(gold_types) == 1)
-
-                    #print(labels)
-
-                    #all_mention_data['gold_types'] = [bit_vec] #[[x] for x in labels] #[labels[0]]
-
-                    #all_mention_data['ent'] = [ent] * self.bag_size
-
-                    #print(all_mention_data)
+                    all_mention_data['gold_types_pos'] = set(gold_types)
 
                     self.dataset_all.append(all_mention_data)
+
         print('WikiReader: finished processing data')
         return self.dataset_all
 
@@ -375,47 +348,3 @@ class WikiReader(RegrReader):
         
     def geten_idsval(self, item):
         return self.subsample(item['en_ids'])
-    
-    def gettag_0val(self, item):
-        return item['tag_0']
-    def gettag_1val(self, item):
-        return item['tag_1']
-    def gettag_2val(self, item):
-        return item['tag_2']
-    def gettag_3val(self, item):
-        return item['tag_3']
-    def gettag_4val(self, item):
-        return item['tag_4']
-    def gettag_5val(self, item):
-        return item['tag_5']
-    def gettag_6val(self, item):
-        return item['tag_6']
-    def gettag_7val(self, item):
-        return item['tag_7']
-    def gettag_8val(self, item):
-        return item['tag_8']
-    def gettag_9val(self, item):
-        return item['tag_9']
-    def gettag_10val(self, item):
-        return item['tag_10']
-    def gettag_11val(self, item):
-        return item['tag_11']
-    
-    def gettag_otherval(self, item):
-        return item['tag_other']
-
-
-    '''def getEntityCandidatesval(self, item):
-                    return self.subsample(item['entity_candidates'])
-                    
-                def getPriorsval(self, item):
-                    return self.subsample(item['priors'])
-                    
-                def getGoldIdsval(self, item):
-                    return self.subsample(item['gold_ids'])'''
-
-    '''def getGoldTypesval(self, item):
-                    return item['gold_types']'''
-
-    #def getEntityval(self, item):
-    #    return item['ent']

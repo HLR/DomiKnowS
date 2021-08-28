@@ -20,30 +20,10 @@ class TypeComparison(nn.Module):
 
     def forward(self, encoded):
         #type_matrix = self.type_embeddings.weight
-
         #dot_compare = torch.matmul(encoded, torch.transpose(type_matrix, 0, 1)) # (bag_size x embed_dim) * (embed_dim x num_types)
-        
         #logits = self.log_sum_exp(dot_compare.unsqueeze(0).transpose(1,2))
 
-        #print(logits)
-
-        #print(self.type_embeddings.weight.shape)
-
-        #t1 = time.time()
-
-        #logits = self.log_sum_exp(encoded.permute(1, 0).unsqueeze(0))
-        #logits = encoded[0].unsqueeze(0)
-        #print(encoded.shape)
-
-        logits = self.lin(encoded)[0].unsqueeze(0)
-        #logits = self.log_sum_exp(logits.unsqueeze(0).transpose(1,2))
-        
-        #print(logits.shape)
-
-        #print(logits)
-
-        #print('time TypeComparison', time.time() - t1)
-
-        #print(logits.shape)
+        logits = self.lin(encoded)
+        logits = self.log_sum_exp(logits.unsqueeze(0).transpose(1,2))
 
         return logits

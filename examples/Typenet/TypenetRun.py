@@ -19,8 +19,8 @@ from regr.program import SolverPOIProgram, IMLProgram, POIProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
 
-from TypenetGraphDepth import app_graph
-import TypenetGraphDepth as TypenetGraph
+import TypenetGraph
+from TypenetGraph import app_graph
 
 from sensors.MLPEncoder import MLPEncoder
 from sensors.TypeComparison import TypeComparison
@@ -43,6 +43,7 @@ file_data = {}
 file_data['type_dict'] = joblib.load(os.path.join('resources/MIL_data/TypeNet_type2idx.joblib'))
 
 file_data['train_bags'] = h5py.File(os.path.join("resources/MIL_data/entity_bags.hdf5"), "r")
+
 #file_data['embeddings'] = np.zeros(shape=(2196018, 300))
 file_data['embeddings'] = np.load(os.path.join('resources/data/pretrained_embeddings.npz'))["embeddings"]
 
@@ -60,17 +61,10 @@ with open(os.path.join('resources/MIL_data/entity_type_dict_orig.joblib'), "rb")
 wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
 wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
 
-'''i = 0
-for w in wiki_train:
-    if i == 10:
-        break
-    print('num labels:', w['GoldTypes'][0])'''
-
-for w in wiki_train:
-    print(w['tag_0'])
-    break
+print(list(wiki_train)[0])
 
 print('building graph')
+
 # get graph attributes
 app_graph.detach()
 mention = app_graph['mention']
@@ -78,12 +72,6 @@ mention = app_graph['mention']
 # text data sensors
 mention['MentionRepresentation'] = ReaderSensor(keyword='MentionRepresentation')
 mention['Context'] = ReaderSensor(keyword='Context')
-
-# label data sensors
-for i, l_depth in enumerate(TypenetGraph.labels):
-    mention[l_depth] = ReaderSensor(keyword='tag_%d' % i, label=True)
-
-mention[TypenetGraph.label_other] = ReaderSensor(keyword='tag_other', label=True)
 
 # module learners
 mention['encoded'] = ModuleLearner(
@@ -96,17 +84,13 @@ mention['encoded'] = ModuleLearner(
         )
     )
 
-for i, l_depth in enumerate(TypenetGraph.labels):
-    mention[l_depth] = ModuleLearner('encoded', module=TypeComparison(128, len(l_depth.attributes)))
-
-mention[TypenetGraph.label_other] = ModuleLearner('encoded', module=TypeComparison(128, len(TypenetGraph.label_other.attributes)))
+# module learner predictions
+for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
+    if i > 10:
+        break
+    mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(128, 2))
 
 # create program
-def multilabel_metric(pr, gt, data_item, prop):
-    #print(data_item)
-
-    return 0
-
 program = POIProgram(
     app_graph,
     loss=MacroAverageTracker(NBCrossEntropyLoss())
