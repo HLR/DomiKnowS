@@ -1,5 +1,7 @@
 import logging
 
+from regr.graph import DataNode
+
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from regr.solver.ilpConfig import ilpConfig 
 
@@ -7,7 +9,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-                
+        self.tnorm = DataNode.tnormsDefault
+        
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
 
@@ -23,7 +26,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         self.tnorm = tnorm
         
-    
     def _isNumber(self, v):
         if v is None:
             return  False

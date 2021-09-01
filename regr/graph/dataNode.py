@@ -758,6 +758,7 @@ class DataNode:
         else:
             return [None]
 
+    # Recursively search for concepts and relations
     def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
         
         # Find concepts in dataNode - concept are in attributes from learning sensors
@@ -787,12 +788,13 @@ class DataNode:
                 self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations)
 
         return conceptsAndRelations
-                                
-    def collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
-        candR = self.__collectConceptsAndRelations(self)
+             
+    def collectConceptsAndRelations(self, conceptsAndRelations = set()):
+        candR = self.__collectConceptsAndRelations(self) # Search the graph starting from self for concepts and relations
         
         returnCandR = []
         
+        # Process founded concepts 
         for c in candR:
             _concept = self.findConcept(c)[0]
             
@@ -802,18 +804,19 @@ class DataNode:
             if isinstance(_concept, tuple):
                 _concept = _concept[0]
             
+            # Check if this is multiclass concept
             if isinstance(_concept, EnumConcept):
                 for i, a in enumerate(_concept.enum):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
                         continue
                     
-                    returnCandR.append((_concept, a, i, len(_concept.enum)))
+                    returnCandR.append((_concept, a, i, len(_concept.enum))) # Create tuple representation for multiclass concept
             else:
                 if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
                 
-                returnCandR.append((_concept, _concept.name, None, 1))
+                returnCandR.append((_concept, _concept.name, None, 1)) # Create tuple representation for binary concept
         
         return returnCandR
         
@@ -903,7 +906,7 @@ class DataNode:
     
     # Calculate argMax and softMax
     def infer(self):
-        conceptsRelations = self.collectConceptsAndRelations(self) 
+        conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
@@ -966,7 +969,7 @@ class DataNode:
 
     # Calculate local for datanote argMax and softMax
     def inferLocal(self):
-        conceptsRelations = self.collectConceptsAndRelations(self) 
+        conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
@@ -1027,8 +1030,8 @@ class DataNode:
         else:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
-        # Check if concepts and/or relations have been provided for inference
-        _conceptsRelations = self.collectConceptsAndRelations(self, _conceptsRelations) # Collect all concepts and relation from graph as default set
+        # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relation from graph as default set
 
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
@@ -1064,12 +1067,12 @@ class DataNode:
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
     tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
-    def calculateLcLoss(self, tnorm=tnormsDefault):
+    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
         
-        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
+        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize)
         
         return lcResult
 
@@ -1079,7 +1082,7 @@ class DataNode:
             weight = torch.tensor(1)
                  
         if not conceptsRelations:
-            conceptsRelations = self.collectConceptsAndRelations(self, conceptsRelations) # Collect all concepts and relation from graph as default set
+            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
         
         result = {}
         tp, fp, tn, fn  = [], [], [], []
