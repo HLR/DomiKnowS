@@ -12,7 +12,7 @@ from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL,
 from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram, IMLProgram
+from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead
@@ -25,7 +25,7 @@ parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epoc
 parser.add_argument('--lr', dest='learning_rate', default=2e-6, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=100, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=10, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
@@ -39,8 +39,8 @@ cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
-#reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[20:22]
+reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
@@ -163,8 +163,8 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 if not args.primaldual and not args.IML:
     print("simple program")
-    program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 if args.primaldual:
     print("primal dual program")
     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
@@ -197,8 +197,8 @@ for i in range(args.cur_epoch):
         def __call__(self) -> None:
             self.sch.step()
 
-    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
-    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    #program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)#, train_step_callbacks=[SchCB(program)])
     #program.save("domi_"+str(i)) in case of saving the parameters of the model
 
     print('-' * 40,"\n",'Training result:')
