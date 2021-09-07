@@ -18,6 +18,8 @@ from regr.graph.concept import Concept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
+from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
+
 from regr.graph import LogicalConstrain, V
 
 class gurobiILPOntSolver(ilpOntSolver):
@@ -27,6 +29,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         super().__init__(graph, ontologiesTuple, _ilpConfig)
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
+        self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
+
         self.reuse_model = reuse_model
         self.model = None
         
@@ -566,7 +570,63 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False):
+    def getMLResult(self, dn, conceptName, xPkey, e, p, loss = False, sample = False):
+        if dn == None:
+            raise Exception("No datanode provided")
+        
+        if sample and 'sample' not in dn.getAttributes():
+            sampleKey = '<' + conceptName + ">/sample" 
+            dn.getAttributes()[sampleKey] = {}
+            
+        if dn.ontologyNode.name == conceptName:
+            if not sample:
+                return 1
+            else:
+                sampleSize = p
+                dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize)
+                return dn.getAttributes()[sampleKey][sampleSize]
+        
+        if xPkey not in dn.attributes:
+            if not sample:
+                return None
+            else:
+                sampleSize = p
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize)
+                for i in range(sampleSize):
+                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
+                    
+                return dn.getAttributes()[sampleKey][sampleSize]
+        
+        if loss: # Loss calculation
+            try:
+                vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
+            except IndexError: 
+                vDn = None
+        else:
+            vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
+    
+        if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
+            vDn = vDn.item()  
+                   
+        if sample:
+            sampleSize = p
+
+            if vDn == None or vDn != vDn:
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize)
+                for i in range(sampleSize):
+                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
+            else:
+                t = torch.full((sampleSize,), vDn)
+                try:
+                    dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
+                except RuntimeError as e:
+                    pass
+            
+            return dn.getAttributes()[sampleKey][sampleSize]
+                      
+        return vDn
+    
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, loss = False, sample = False):
         lcVariables = {}
         vNo = 0
         firstV = True
@@ -684,38 +744,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for dns in dnsList:
                         _vDns = []
                         for _dn in dns:
-                            if _dn == None:
-                                _vDns.append(None)
-                                continue
-                            
-                            if _dn.ontologyNode.name == conceptName:
-                                _vDns.append(1)
-                                continue
-                            
-                            if xPkey not in _dn.attributes:
-                                _vDns.append(None)
-                                continue
-                            
-                            if isinstance(e, Concept):
-                                ilpVs = _dn.getAttribute(xPkey) # Get ILP variable for the concept 
-                                
-                                if isinstance(ilpVs, Mapping) and p not in ilpVs:
-                                    _vDns.append(None)
-                                    continue
-                                
-                                vDn = ilpVs[p]
-                            else:
-                                if p == 0:
-                                    try:
-                                        vDn = _dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concept 
-                                    except IndexError: 
-                                        vDn = None
-                                else:
-                                    vDn = _dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
-                        
-                            if torch.is_tensor(vDn):
-                                vDn = vDn.item()  
-                                                              
+                            vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
+
                             _vDns.append(vDn)
                         
                         vDns.append(_vDns)
@@ -729,7 +759,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 elif isinstance(e, LogicalConstrain): # LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
-                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False)
+                    vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constrain'%(e.lcName,e,lc.lcName,lc))
@@ -995,17 +1025,24 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         # Return
         return
-                
+
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L'):
-        
-        self.myLcLossBooleanMethods.setTNorm(tnorm)
+    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0):
         
         m = None 
-                
         p = 0
+        
+        if sample: 
+            if sampleSize <= 0: 
+                raise Exception("Sample size is not incorrect - %i"%(sampleSize))
+            p = sampleSize
+            
+            myBooleanMethods = self.myLcLossSampleBooleanMethods
+        else:
+            myBooleanMethods = self.myLcLossBooleanMethods
+            self.myLcLossBooleanMethods.setTNorm(tnorm)
+
         key = "/local/softmax"
-        #key = ""
         
         lcLosses = {}
         for graph in self.myGraph:
@@ -1014,22 +1051,29 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
-                lossList = self.__constructLogicalConstrains(lc, self.myLcLossBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True)
+                lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
                 
                 if not lossList:
                     continue
                 
-                lossTensor = torch.zeros(len(lossList))
-                
-                for i, l in enumerate(lossList):
-                    l = l[0]
-                    if l is not None:
-                        lossTensor[i] = l
-                    else:
-                        lossTensor[i] = float("nan")
-               
                 lcLosses[lc.lcName] = {}
-                
+                lossTensor = torch.zeros(len(lossList))
+
+                if not sample:
+                    for i, l in enumerate(lossList):
+                        if l[0] is not None:
+                            lossTensor[i] = l[0]
+                        else:
+                            lossTensor[i] = float("nan")
+                else:
+                    lossTensorData = []
+                    for i, l in enumerate(lossList):
+                        lossTensorData.append(l[0])
+                        lossTensor[i] = torch.sum(l[0]).item()/len(l[0])
+                      
+                    lossData = torch.stack(lossTensorData, dim = 0)
+                    lcLosses[lc.lcName]['lossData'] = lossData
+
                 lcLosses[lc.lcName]['lossTensor'] = lossTensor
                 
         return lcLosses
