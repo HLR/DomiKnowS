@@ -16,7 +16,10 @@ Concept.clear()
 Relation.clear()
 
 with Graph('application') as app_graph:
+    mention_group = Concept(name='mention_group')
     mention = Concept(name='mention')
+
+    mention_group_contains, = mention_group.contains(mention)
 
     onto_path.append("./")
     onto = get_ontology('typenet.owl').load()

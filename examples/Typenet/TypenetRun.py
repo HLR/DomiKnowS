@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram
+from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
 
@@ -34,7 +34,7 @@ print('current device: ', config.device)
 parser = argparse.ArgumentParser()
 parser.add_argument('--limit', dest='limit', type=int, default=None)
 parser.add_argument('--epochs', dest='epochs', type=int, default=10)
-
+parser.add_argument('--limit_classes', dest='limit_classes', type=int, default=None)
 args = parser.parse_args()
 
 # load data
@@ -61,13 +61,14 @@ with open(os.path.join('resources/MIL_data/entity_type_dict_orig.joblib'), "rb")
 wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
 wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
 
-print(list(wiki_train)[0])
+first_iter = list(wiki_train)[0]
 
 print('building graph')
 
 # get graph attributes
 app_graph.detach()
 mention = app_graph['mention']
+mention_group = app_graph['mention_group']
 
 # text data sensors
 mention['MentionRepresentation'] = ReaderSensor(keyword='MentionRepresentation')
@@ -86,17 +87,38 @@ mention['encoded'] = ModuleLearner(
 
 # module learner predictions
 for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
-    if i > 10:
+    if not args.limit_classes == None and i >= args.limit_classes:
+        print('stopped after adding %d classe(s)' % args.limit_classes)
         break
     mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(128, 2))
 
+def test(input, target, data_item, prop, weight=None):
+    print(prop)
+
+class LossCallback():
+    def __init__(self, program):
+        self.program = program
+
+    def __call__(self):
+        vals = self.program.model.loss.value()
+
+        print("averaged loss:", torch.tensor(list(vals.values())).mean())
+
+class Program(CallbackProgram, POIProgram):
+        pass
+
 # create program
-program = POIProgram(
+program = Program(
     app_graph,
-    loss=MacroAverageTracker(NBCrossEntropyLoss())
+    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    metric=PRF1Tracker(DatanodeCMMetric())
     )
+
+program.after_train_epoch = [LossCallback(program)]
 
 print('training')
 # train
-program.train(wiki_train, valid_set=wiki_dev, train_epoch_num=args.epochs, Optim=torch.optim.Adam, device=config.device)
+program.train(wiki_train, train_epoch_num=args.epochs, Optim=torch.optim.Adam, device=config.device)
 
+
+print(program.model.loss)

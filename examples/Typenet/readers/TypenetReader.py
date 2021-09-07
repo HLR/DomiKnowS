@@ -233,17 +233,27 @@ class WikiReader(RegrReader):
         self.entity_type_dict = file_data['entity_type_dict']
 
         super().__init__(file=file, type=type)
-    
+
     def make_object(self, item):
-        self.subsample_ids = np.random.choice(len(item['context']), self.bag_size, replace=False)
+        self.subsample_ids = []
+        for i in range(config.batch_size):
+            self.subsample_ids.append(np.random.choice(len(item['context'][i]), self.bag_size, replace=False))
 
         result = super().make_object(item)
 
         for lbl in self.all_types:
-            if lbl in item['gold_types_pos']:
-                result[lbl] = [1]
-            else:
-                result[lbl] = [0]
+            result[lbl] = []
+
+        #print(item)
+
+        for data_types in item['gold_types_pos']:
+            for lbl in self.all_types:
+                if lbl in data_types:
+                    result[lbl].append([1])
+                else:
+                    result[lbl].append([0])
+
+        #print(result)
 
         return result
     
@@ -277,7 +287,9 @@ class WikiReader(RegrReader):
         if self.limit_size == None:
             total = len(train_entities)
         else:
-            total = self.limit_size
+            total = min(self.limit_size, len(train_entities))
+
+        batch = []
 
         # process bag of mention contexts per entity
         # each training iteration uses one entity (one bag of mention contexts contexts)
@@ -289,6 +301,7 @@ class WikiReader(RegrReader):
                 all_mentions = self.train_bags[ent]
 
                 if len(all_mentions) >= self.bag_size:
+
                     # process each selected mention in bag
                     all_mention_data = {}
                     for curr_data in all_mentions:
@@ -302,7 +315,7 @@ class WikiReader(RegrReader):
                         mention_representation = np.array([self.embeddings[_id] for _id in sfm_mention]).mean(axis = 0)
 
                         data['mention_representation'] = mention_representation
-                        data['context'] = sentence
+                        data['context'] = np.array(sentence)
                         data['position_embeddings'] = position_embedding
                         data['st_ids'] = st_id
                         data['en_ids'] = en_id
@@ -326,25 +339,33 @@ class WikiReader(RegrReader):
 
                     all_mention_data['gold_types_pos'] = set(gold_types)
 
-                    self.dataset_all.append(all_mention_data)
+                    batch.append(all_mention_data)
+
+                    if len(batch) == config.batch_size:
+                        batch_combined = {}
+                        batch_combined['mention_representation'] = [item['mention_representation'] for item in batch]
+                        batch_combined['context'] = [item['context'] for item in batch]
+                        batch_combined['gold_types_pos'] = [item['gold_types_pos'] for item in batch]
+
+                        self.dataset_all.append(batch_combined)
+
+                        batch = []
 
         print('WikiReader: finished processing data')
         return self.dataset_all
 
-    def subsample(self, item_list):
-        return [item_list[idx] for idx in self.subsample_ids]
+    def subsample(self, item_list, batch_idx):
+        return [item_list[idx] for idx in self.subsample_ids[batch_idx]]
     
+    def subsample_batch(self, item_batch):
+        subsampled_batch = []
+        for i, item in enumerate(item_batch):
+            subsampled_batch.append(self.subsample(item, i))
+        return subsampled_batch
+
     def getMentionRepresentationval(self, item):
-        return self.subsample(item['mention_representation'])
+        subsampled = self.subsample_batch(item['mention_representation'])
+        return np.concatenate(np.array(subsampled), axis=0)
     
     def getContextval(self, item):
-        return self.subsample(item['context'])
-        
-    def getPositionEmbeddingsval(self, item):
-        return self.subsample(item['position_embeddings'])
-        
-    def getst_idsval(self, item):
-        return self.subsample(item['st_ids'])
-        
-    def geten_idsval(self, item):
-        return self.subsample(item['en_ids'])
+        return self.subsample_batch(item['context'])

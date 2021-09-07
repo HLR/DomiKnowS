@@ -20,16 +20,21 @@ class MLPEncoder(nn.Module):
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, sentences, mention_rep):
+        # mention_rep: (batch_size * bag_size, embedding_dim)
         mention_rep = mention_rep.to(device=config.device)
 
-        embed_bag = torch.empty((len(sentences), self.embedding_shape[-1]))
-                        
-        for i, sent in enumerate(sentences):
-            sent_tensor = torch.tensor(sent, dtype=int).to(device=config.device)
+        bag_size = len(sentences[0])
 
-            sentence_embed = self.embeddings(sent_tensor)
+        # sentences: (batch_size, bag_size, sentence_length [variable])
+        embed_bag = torch.empty((len(sentences) * bag_size, self.embedding_shape[-1]), device=config.device)
 
-            embed_bag[i] = torch.mean(sentence_embed, dim=0)
+        for batch_idx, item in enumerate(sentences): # iter through batch
+            for sent_idx, sent in enumerate(item): # iter through bag
+                sent_tensor = torch.tensor(sent, dtype=int, device=config.device)
+
+                sentence_embed = self.embeddings(sent_tensor)
+
+                embed_bag[(batch_idx * bag_size) + sent_idx] = torch.mean(sentence_embed, dim=0)
 
         #t1 = time.time()
         lin1_out = self.lin1(torch.cat((embed_bag, mention_rep), dim=1).float())
