@@ -1,16 +1,10 @@
-import sys
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/DomiKnowS/regr')
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/DomiKnowS/')
+
 import torch
-import numpy as np
 from transformers import AdamW
-from torch import nn
-
-from regr.graph.relation import disjoint
-from regr.program.loss import NBCrossEntropyLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
-
+from transformers import get_linear_schedule_with_warmup
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
@@ -18,22 +12,27 @@ from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL,
 from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram
+from regr.program import LearningBasedProgram, IMLProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
-from WIQA_utils import RobertaTokenizer,is_ILP_consistant,test_inference_results
-from WIQA_models import WIQA_Robert, RobertaClassificationHead,WIQAModel
+from WIQA_utils import RobertaTokenizer,test_inference_results,join_model
+from WIQA_models import WIQA_Robert, RobertaClassificationHead
 import argparse
-from WIQA_utils import make_pair, make_pair_with_labels, make_triple, make_triple_with_labels, guess_pair, guess_triple
+from WIQA_utils import guess_pair, guess_triple
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
-parser.add_argument('--lr', dest='learning_rate', default=2e-7, help='learning rate of the adamW optimiser',type=float)
-parser.add_argument('--pd', dest='primaldual', default=True, help='whether or not to use primaldual constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=20, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=13, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual multiplier',type=float)
+parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
+parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
+parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
+parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
+parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
+parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
+parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
 args = parser.parse_args()
+
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 cuda_number= args.cuda_number
@@ -43,8 +42,6 @@ cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev = make_reader(file_address="data/WIQA/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test = make_reader(file_address="data/WIQA/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -93,6 +90,7 @@ with Graph('WIQA_graph') as graph:
 
     ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
         is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
 from IPython.display import Image
 #graph.visualize("./image")
 #Image(filename='image.png')
@@ -148,6 +146,7 @@ roberta_model = WIQA_Robert()
 question["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 
 # the CompositionCandidateSensor takes two or three questions and return True or false if they are symmetric or transitive respectively
+
 symmetric[s_arg1.reversed, s_arg2.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(s_arg1.reversed, s_arg2.reversed),forward=guess_pair)
 transitive[t_arg1.reversed, t_arg2.reversed, t_arg3.reversed] = CompositionCandidateSensor(question['quest_id'],relations=(t_arg1.reversed,t_arg2.reversed,t_arg3.reversed),forward=guess_triple)
 
@@ -160,27 +159,56 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
-if not args.primaldual:
+
+if not args.primaldual and not args.IML:
+    print("simple program")
     program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
-else:
-    program = PrimalDualProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()),beta=args.beta)
+if args.primaldual:
+    print("primal dual program")
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),beta=args.beta)
+if args.IML:
+    print("IML program")
+    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
 
 logging.basicConfig(level=logging.INFO)
 
+from os import path
+if not path.exists("domi_7"):
+    join_model("domi_comp","domi_7")
+
 # at the end we run our program for each epoch and test the results each time
+
 for i in range(args.cur_epoch):
-    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
+    print("this epoch is number:",i,"&"*10)
+    class SchCB():
+        def __init__(self, program) -> None:
+            self.program = program
+            self._sch = None
+        @property
+        def sch(self):
+            if self._sch is None:
+                self._sch = get_linear_schedule_with_warmup(self.program.opt, num_warmup_steps = args.num_warmup_steps, num_training_steps = args.num_training_steps)
+            return self._sch
+
+        def __call__(self) -> None:
+            self.sch.step()
+
+    #program.load("domi_7") in case we want to load the model instead of training
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    #program.save("domi_"+str(i)) in case of saving the parameters of the model
+
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
     if args.primaldual:
         print(program.cmodel.loss)
-    test_inference_results(program,reader_train_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_dev,cur_device,is_more,is_less,no_effect)
-    test_inference_results(program,reader_test,cur_device,is_more,is_less,no_effect)
+
+    print("***** dev aug *****")
+    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    print("***** test aug *****")
+    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
 
 
 

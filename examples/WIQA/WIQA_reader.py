@@ -61,20 +61,20 @@ def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000,b
             continue
         for j in range(i+1,len(comp_size)):
             if comp_size[j]==0 or comp_size[j]+comp_size[i]>batch_size or \
-                    not quest_id_to_datum[list(comps[j])[0]]["paragraph"]==quest_id_to_datum[list(comps[i])[0]]["paragraph"]:
+                    not quest_id_to_datum[sorted(list(comps[j]))[0]]["paragraph"]==quest_id_to_datum[sorted(list(comps[i]))[0]]["paragraph"]:
                 continue
-            G.add_edge(list(comps[j])[0],list(comps[i])[0])
+            G.add_edge(sorted(list(comps[j]))[0],sorted(list(comps[i]))[0])
             comp_size[i]+=comp_size[j]
             comp_size[j]=0
             if comp_size[i]>=batch_size:
                 break
 
     final_list=[]
-    for i in list(nx.connected_components(G)):
+    for i in sorted(list(nx.connected_components(G))):
         if len(i)<=batch_size:
-            final_list.append(list(i))
+            final_list.append(sorted(list(i)))
             continue
-        cur_list=list(i)
+        cur_list=sorted(list(i))
         for j in range(0,len(i),batch_size):
             final_list.append(cur_list[j:j+batch_size])
 

@@ -56,6 +56,8 @@ class ilpOntSolver(object):
         logger = logging.getLogger(logName)
     
         # Create file handler and set level to info
+        import pathlib
+        pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
         ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
         logger.setLevel(logLevel)
 
