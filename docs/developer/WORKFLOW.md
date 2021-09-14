@@ -7,8 +7,7 @@
     - [Train: `train()`](#train-train)
     - [Test: `test()`](#test-test)
     - [Eval: `eval()`](#eval-eval)
-  - [Programs](#Programs)
-    - [IML](#IML)
+
 ## Class Overview
 
 - package `regr.program`:
@@ -61,41 +60,3 @@ print(program.model.metric)
 ### Eval: `eval()`
 
 Takes a reader object as input. Labels will be ignored. Loss and metric are also ignored. Just return the updated root `DataNode`.
-
-## Programs
-
-There are diffrent types of programs that can be used to train the data. `LearningBasedProgram` is the simplest program that uses only the input and label of given data to learn its parameters.
-
-However, Domiknows can leverage the defined constraints in the graph to teach the model not to violate those constraints and in the process imrove the overall performance of the mdoel.
-
-### IML [[1]](#1)
-
-In order to use IML, the program should be initialized by `IMLProgram`. IMLProgram extends `LearningBasedProgram` and shares most of the same input arguments.
-
-```python
-program = IMLProgram(graph, poi=(image, ), inferTypes=['ILP', 'local/argmax'], loss=..., metric=...})
-```
-
-The only new parameter here is `inferTypes` that is set to `['ILP', 'local/argmax']`. These parameter is optional and can be used to calcualte metric.
-
-### Priaml Dual[[2]](#2)
-
-Primal Dual model can also be easily defined by:
-
-```python
-prgram = PrimalDualProgram( graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],loss=..., metric=...)
-            
-```
-
-Here instead of `POImodel` we use `SolverModel`.
-
-
-## References
-
-
-<a id="1">[1] https://hlr.github.io/publications/Inference-Masked-Loss </a> 
-Inference-Masked Loss for Deep Structured Output Learning, Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence (IJCAI 2020).
-
-
-<a id="2">[2] https://papers.nips.cc/paper/2019/file/cf708fc1decf0337aded484f8f4519ae-Paper.pdf </a> 
-A Primal-Dual Formulation for Deep Learning with Constraints, 33rd Conference on Neural Information Processing Systems (NeurIPS 2019), Vancouver, Canada.

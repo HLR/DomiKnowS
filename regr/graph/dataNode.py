@@ -39,8 +39,6 @@ if dnConfig and (isinstance(dnConfig, dict)):
         logFileMode = dnConfig['log_fileMode']
         
 # Create file handler and set level to info
-import pathlib
-pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
 ch = RotatingFileHandler(logFilename, mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
 ch.doRollover()
 # Create formatter
@@ -389,33 +387,6 @@ class DataNode:
 
     # --- Query methods
     
-    # Find the root parent of relation of the given relation
-    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
-        if usedGraph is None:
-            usedGraph = self.ontologyNode.getOntologyGraph()
-        
-        if isinstance(relationConcept, str):
-            _relationConcepts = self.findConcept(relationConcept)
-            
-            if _relationConcepts:
-                relationConcept = _relationConcepts[0]
-            else:
-                return relationConcept 
-
-        # Does this concept or relation has parent (through _isA)
-        try:
-            isAs = relationConcept.is_a()
-        except (AttributeError, TypeError):
-            isAs = []
-        
-        for _isA in isAs:
-            _relationConcept = _isA.dst
-            
-            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
-        
-        # If the provided concept or relation is root (has not parents)
-        return relationConcept 
-
     def __testDataNode(self, dn, test):
         if test is None:
             return False
@@ -491,26 +462,6 @@ class DataNode:
             
         return conceptNames, relationNames
     
-    def getDnsForRelation(self, rel):
-        relRoot = self.findRootConceptOrRelation(rel)
-            
-        if relRoot is None:
-            return [None]
-        
-        if not isinstance(relRoot, str):
-            relRoot = relRoot.name     
-        
-        if relRoot.endswith(".reversed"):
-            relRoot = relRoot[:-len(".reversed")]
-            if relRoot in self.impactLinks: 
-                return self.impactLinks[relRoot]
-            else:
-                return [None]
-        elif relRoot in self.relationLinks:
-            return self.relationLinks[relRoot]
-        else:
-            return [None]
-            
     # Find dataNodes in data graph for the given concept 
     def findDatanodes(self, dns = None, select = None, indexes = None, visitedDns = None, depth = 0):
         # If no DataNodes provided use self
@@ -575,15 +526,12 @@ class DataNode:
             for dn in returnDns:
                 fit = True       
                 for indexName, indexValue in indexes.items():
-                    
-                    relDns = dn.getDnsForRelation(indexName)
-                    
-                    if relDns is None or len(relDns) == 0 or relDns[0] is None:
+                    if indexName not in dn.relationLinks:
                         fit = False
                         break
                     
                     found = False
-                    for _dn in relDns:
+                    for _dn in dn.relationLinks[indexName]:
                         if isinstance(indexValue, tuple):
                             _test = []
                             for t in indexValue:
@@ -656,9 +604,9 @@ class DataNode:
                     
                     return (concept, concept.name, None, 1)
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
-                    vlen = len(subGraph.concepts[conceptNameItem].enum)
+                    vlen = len(subGraph.concepts[conceptNameItem].values)
                     
-                    if _conceptName in subGraph.concepts[conceptNameItem].enum:
+                    if _conceptName in subGraph.concepts[conceptNameItem].values:
                         concept = subGraph.concepts[conceptNameItem]
                         
                         return (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
@@ -705,6 +653,23 @@ class DataNode:
         
         return None 
     
+    # Find the root parent of relation of the given relation
+    def findRootConceptOrRelation(self, relationConcept, usedGraph = None):
+        if usedGraph is None:
+            usedGraph = self.ontologyNode.getOntologyGraph()
+        
+        if isinstance(relationConcept, str):
+            relationConcept = self.findConcept(relationConcept)[0]
+            
+        # Does this concept or relation has parent (through _isA)
+        for _isA in relationConcept.is_a():
+            _relationConcept = _isA.dst
+            
+            return  self.findRootConceptOrRelation(_relationConcept, usedGraph)
+        
+        # If the provided concept or relation is root (has not parents)
+        return relationConcept 
+
     # Find Datanodes starting from the given Datanode following provided path
     # path can contain eqL statement selecting Datanodes from the datanodes collecting on the path
     def getEdgeDataNode(self, path):
@@ -714,27 +679,36 @@ class DataNode:
 
         # Path has single element
         if len(path) == 1:
-            relDns = self.getDnsForRelation(path[0])
-                    
-            if relDns is None or len(relDns) == 0 or relDns[0] is None:
+            if isinstance(path[0], str):
+                path0 = path[0]
+            else:
+                path0 = path[0].name
+                
+            if path0 in self.relationLinks:
+                return self.relationLinks[path0]
+            else:
                 return [None]
         
-        # Path has at least 2 elements - will perform recursion
+        # Path has at least 2 elements - will perfomr recursion
         if isinstance(path[0], eqL): # check if eqL
-            path0 = path[0].e[0][0]
+            concept = path[0].e[0][0]
+        elif path[0] in self.relationLinks:
+            concept = path[0]
         else:
-            path0 = path[0]
-
-        relDns = self.getDnsForRelation(path0)
-                    
-        if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
-            relDns = []
+
+        if isinstance(concept, Concept):
+            concept = concept.name
+            
+        if concept in self.relationLinks:
+            cDns = self.relationLinks[concept]
+        else:
+            cDns = []
             
         # Filter DataNoded through eqL
         if isinstance(path[0], eqL):
             _cDns = []
-            for cDn in relDns:
+            for cDn in cDns:
                 if isinstance(path[0].e[1], str):
                     path0e1 = path[0].e[1]
                 else:
@@ -743,11 +717,11 @@ class DataNode:
                 if path0e1 in cDn.attributes and cDn.attributes[path0e1].item() in path[0].e[2]:
                     _cDns.append(cDn)
                     
-            relDns = _cDns
+            cDns = _cDns
         
         # recursion
         rDNS = []
-        for cDn in relDns:
+        for cDn in cDns:
             rDn = cDn.getEdgeDataNode(path[1:])
             
             if rDn:
@@ -803,12 +777,12 @@ class DataNode:
                 _concept = _concept[0]
             
             if isinstance(_concept, EnumConcept):
-                for i, a in enumerate(_concept.enum):
+                for i, a in enumerate(_concept.values):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
                         continue
                     
-                    returnCandR.append((_concept, a, i, len(_concept.enum)))
+                    returnCandR.append((_concept, a, i, len(_concept.values)))
             else:
                 if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
@@ -859,7 +833,7 @@ class DataNode:
                     return torch.tensor(collectAttributeList)
                 
             if isinstance(concept, EnumConcept):
-                concept = (concept, concept.name, None, len(concept.enum))
+                concept = (concept, concept.name, None, len(concept.values))
             else:
                 concept = (concept, concept.name, None, 1)
 
@@ -1017,7 +991,7 @@ class DataNode:
                 dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
+    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1038,7 +1012,7 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective)    
         
     def verifySelection(self, *_conceptsRelations):
         
@@ -1086,7 +1060,7 @@ class DataNode:
                         continue
                 
                 if isinstance(cr, EnumConcept):
-                    cr = (cr, cr.name, None, len(cr.enum))
+                    cr = (cr, cr.name, None, len(cr.values))
                 else:
                     cr = (cr, cr.name, None, 1)
             

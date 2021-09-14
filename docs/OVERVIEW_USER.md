@@ -32,7 +32,7 @@ Step 2: In the same graph we also define the logical constraints that we wish to
 ```python
 with Graph('WIQA_graph') as graph:
     disjoint( is_more, is_less, no_effect)
-    ifL(is_more('x'), is_less('y', path=('x', symmetric.name, s_arg2.name)))
+    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
 ```
 
 Step 3: Here enters the reader. The reader is a python iterable and each instance of it is a dictionary with the preliminary information for a single datapoint (preliminary means that these initial properties will be used later to produce other properties). the reader can be optionally created using the reader tools in DomiKnows for convenience.

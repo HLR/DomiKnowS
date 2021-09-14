@@ -1,7 +1,9 @@
 # DomiKnowS
 
-This library provides a language interface integrate Domain Knowldge in Deep Learning. It helps specify a problem domain with a conceptual graph including declarations of edges and nodes, as well as any global logical constraints on the graph, against which neural network outputs bounded to the graph can be evaluated.
+This library provides a language interface to create a graph by declarations of edges and nodes, as well as any constraints on the graph, against which neural network outputs bound to the graph can be evaluated.
 This adds a relational overlay over elements in a network that relates physical concepts in applications.
+
+This project is under heavy development and not yet ready to use.
 
 Please refer to our [documentation](docs) for further details.
 

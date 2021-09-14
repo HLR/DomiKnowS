@@ -9,8 +9,8 @@ ilpConfig = {
     # Logging configuration for ilpOntSolver
     'ifLog': True,
     'log_name' : 'ilpOntSolver', 
-    'log_level' : logging.INFO,
-    'log_filename' : 'logs/ilpOntSolver.log',
+    'log_level' : logging.ERROR,
+    'log_filename' : 'ilpOntSolver.log',
     'log_filesize' : 5*1024*1024*1024,
     'log_backupCount' : 5,
     'log_fileMode' : 'a'

@@ -108,7 +108,7 @@ def test_case():
         'lc0LossTensor' : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
         #                 torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
-        # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
+        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
         #                                 John           works          for      IBM
         'lc2LossTensor' : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
                                         float("nan"),   float("nan"),  0.4502,  0.3971, # works
@@ -381,8 +381,6 @@ def test_main_conll04(case):
         #assert tokenResult['people'][0] == 1
         assert datanode.findDatanodes(select = word)[0].getAttribute(people, 'ILP').item() == 1
         
-        test = datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})
-        
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'J')})[0].getAttribute(people, 'ILP').item() == 1
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'h')})[0].getAttribute(people, 'ILP').item() == 1
         assert datanode.findDatanodes(select = word,  indexes = {"contains" : (char, 'raw', 'I')})[0].getAttribute(people, 'ILP').item() == 0
@@ -399,7 +397,7 @@ def test_main_conll04(case):
         
         # Get value of attribute organization/ILP for word 3
         #assert tokenResult['organization'][3] == 1
-        assert datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
+        datanode.findDatanodes(select = word)[3].getAttribute(organization, 'ILP').item() == 1
         
         # Sum value of attribute organization/ILP for all words
         #assert sum(tokenResult['organization']) == 1

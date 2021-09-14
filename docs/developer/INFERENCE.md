@@ -51,9 +51,9 @@ If this collection is empty then the methods will use all concepts and relations
 - `epsilon` is a value by which  the original probability in the Data Graph are modify before they are used in the ILP model.
 
 
-- `minimizeObjective` by default objective is maximized however if this variable is set to True then the ILP model will minimize the objective.
+- `minimizeObjective` if set to True then the ILP model will minimize the objective.
 
-The solver [implementation using Gurobi](/regr/solver/gurobiILPOntSolver.py) is called with classification probabilities obtained from learned model. 
+The solver [implementation using Gurobi](/regr/solver/gurobiILPOntSolver.py) is called with probabilities for token classification obtained from learned model. 
 
 The method retrieves the probabilities from Data Graph nodes attributes. The key use to retrieve it has a pattern:
 
@@ -73,7 +73,7 @@ where `conceptRelation` is the name of the concept or relation for which the har
 The value of this attribute can be 0 or 1.
 
 The method retrieves the constrains from the knowledge graph associated with the Data Graph.
-The solver translates constrains defined in the graph to the equivalent logical expressions.
+The solver encodes mapping from constrains to the appropriate equivalent logical expression for the given graph and the provided probabilities.
 The `regr.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported logical operations are:
 
 - "NOT": `notVar()`,
@@ -86,7 +86,7 @@ The `regr.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical ex
 - "NOR": `nor2Var()`, `norVar()`,
 - "COUNT": `countVar()`.
 
-The solver ILP model is solved by Gurobi and the found solutions for optimal classification of variables and relations is returned.
+The solver ILP model is solved by Gurobi and the found solutions for optimal classification of tokens and relations is returned.
 
 ### ILP Loss for Logical Constrains 
 
@@ -104,7 +104,7 @@ Example of loss calculation:
  #                               John    works   for     IBM
  'lc0LossTensor' : torch.tensor([0.2000, 0.0000, 0.0000, 0.5100], device=device),
         
- # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
+ # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
  #                                 John           works          for      IBM
  'lc2LossTensor' : torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
                                  float("nan"),  float("nan"),  0.4000,  0.2900,  # works
@@ -188,5 +188,26 @@ ILP metrics work_for {'TP': tensor(0.), 'FP': tensor(0.), 'TN': tensor(4.), 'FN'
 ILP metrics people {'TP': tensor(1.), 'FP': tensor(1.), 'TN': tensor(0.), 'FN': tensor(0.), 'P': tensor(0.5000), 'R': tensor(1.), 'F1': tensor(0.6667)}
 ```
 
+### Verification of Logical Constrain Consistency 
+
+The solver can also verify if the constrains and the ground truth for the given DataNode are consistent, with the method:
+
+```python
+verifySelection(*_conceptsRelations)
+```
+It has arguments:
+
+- `_conceptsRelations` is a collection of concepts and relations for which the ILP model should be solved.
+They can be provide as Concepts (nodes in the knowledge graph) or strings representing concepts or relations names.
+If this collection is empty then the methods will use all concepts and relations in the Data Graph.
+
+The method retrieves the ground truth from Data Graph nodes attributes. The key use to retrieve it has a pattern:
+
+```python
+'<' + conceptRelation + '>/label'
+```
+where `conceptRelation` is the name of the concept or relation for which the ground truth is being retrieved.
+
+The result of the verification is either True or False.
 
 

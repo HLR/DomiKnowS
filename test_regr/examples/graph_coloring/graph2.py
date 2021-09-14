@@ -26,7 +26,7 @@ with Graph('global') as graph2:
         atMostI(firestationCity, 3, p=80)
         
         # Each city has no more then 4 neighbors which are not firestationCity
-        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3), p=90)
+        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2)), 1)), p=100)
 
         # Exactly 2 firestationCity in the world 
         exactI(firestationCity, 2, p=55)

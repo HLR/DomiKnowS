@@ -139,7 +139,7 @@ class FunctionalSensor(TorchSensor):
                 for sensor in pre.find(self.non_label_sensor):
                     sensor(data_item)
             elif isinstance(pre, Transformed):
-                pre(data_item, device=self.device)
+                self.concept[pre.relation](data_item)
                 for sensor in pre.property.find(self.non_label_sensor):
                     sensor(data_item)
 
@@ -193,10 +193,7 @@ class ConstantSensor(FunctionalSensor):
     def forward(self, *_, **__) -> Any:
         try:
             if self.as_tensor:
-                if torch.is_tensor(self.data):
-                    return self.data.clone().detach()
-                else:
-                    return torch.tensor(self.data, device=self.device)
+                return torch.tensor(self.data, device=self.device)
             else:
                 return self.data
         except (TypeError, RuntimeError, ValueError):
@@ -721,14 +718,9 @@ class SpacyTokenizorSensor(FunctionalSensor):
 
 
 class BertTokenizorSensor(FunctionalSensor):
+    from transformers import BertTokenizer
     TRANSFORMER_MODEL = 'bert-base-uncased'
-
-    @property
-    def tokenizer(self):
-        if self._tokenizer is None:
-            from transformers import BertTokenizer
-            self._tokenizer = BertTokenizer.from_pretrained(self.TRANSFORMER_MODEL)
-        return self._tokenizer
+    tokenizer = BertTokenizer.from_pretrained(TRANSFORMER_MODEL)
 
     def forward(self, sentences):
         tokens = self.tokenizer.batch_encode_plus(

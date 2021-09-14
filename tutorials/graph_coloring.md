@@ -30,7 +30,7 @@ In addition to the concepts, we have to introduce the relationships between conc
 on last thing that we have to introduce inside our graph declaration is the set of rules we want to apply on the inference.
 We add the following line to the previous code.
 ``` python 
-orL(firestationCity('x'), existsL(firestationCity('y', path=('x', neighbor.name, city2.name))))
+orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
 ```
 This constraint is expressing that each city is either of type `firestationcity` or `has_a` `neighbor` that is a `firestationCity`.
 More constraint notion usage can be find in [Constraint](docs/KNOWLEDGE.md#constraints) section of the documentation.

@@ -78,9 +78,9 @@ class TestGraph(object):
                 ifL(andL(existsL(people), existsL(organization)), existsL(work_for))
                 
                 # Example with variables
-                w  = andL(people, organization)
-                w2 = orL(w, location)
-                w3 = ifL(w2, work_for)
+                w  = andL(people, ('x',), organization, ('y',))
+                w2 = orL(w, location, ('x',))
+                w3 = ifL(w2, work_for, ('x', 'y'))
 
         target = \
         "Graph(name='global', what={'concepts': {},\n 'subs': {'application': Graph(name='application', what={'concepts': {'organization': Concept(name='organization', what={'relations': {'is_a': [IsA(name='organization-is_a-0-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='organization')})],\n               'not_a': [NotA(name='organization-not_a-1-people', what={'dst': Concept(name='people'),\n 'src': Concept(name='organization')})]},\n 'subs': {},\n 'sup': Graph(name='application')}),\n              'people': Concept(name='people', what={'relations': {'is_a': [IsA(name='people-is_a-0-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='people')})],\n               'not_a': [NotA(name='people-not_a-1-organization', what={'dst': Concept(name='organization'),\n 'src': Concept(name='people')})]},\n 'subs': {},\n 'sup': Graph(name='application')}),\n              'work_for': Concept(name='work_for', what={'relations': {'has_a': [HasA(name='work_for-has_a-employee-people', what={'dst': Concept(name='people'),\n 'src': Concept(name='work_for')}),\n                         HasA(name='work_for-has_a-employer-organization', what={'dst': Concept(name='organization'),\n 'src': Concept(name='work_for')})],\n               'is_a': [IsA(name='work_for-is_a-0-pair', what={'dst': Concept(name='pair'),\n 'src': Concept(name='work_for')})]},\n 'subs': {},\n 'sup': Graph(name='application')})},\n 'subs': {},\n 'sup': Graph(name='global')}),\n          'linguistic': Graph(name='linguistic', what={'concepts': {'pair': Concept(name='pair', what={'relations': {'has_a': [HasA(name='pair-has_a-0-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='pair')}),\n                         HasA(name='pair-has_a-1-phrase', what={'dst': Concept(name='phrase'),\n 'src': Concept(name='pair')})]},\n 'subs': {},\n 'sup': Graph(name='linguistic')}),\n              'phrase': Concept(name='phrase', what={'relations': {},\n 'subs': {},\n 'sup': Graph(name='linguistic')})},\n 'subs': {},\n 'sup': Graph(name='global')})},\n 'sup': None})"

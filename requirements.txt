@@ -1,11 +1,6 @@
 acls==1.0.2
 Owlready2==0.30
-gurobipy
-pandas>=1.1.5
-torch==1.8.1
-transformers==4.6
+pandas==1.1.0
 ordered-set
 setuptools
 graphviz
-pymongo[tls]
-dnspython

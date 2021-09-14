@@ -12,7 +12,7 @@ with Graph('CIFAR10') as graph:
     Category = Image(name="category", ConceptClass=EnumConcept, values=["animal", "vehicle"])
     Label = Image(name="tag", ConceptClass=EnumConcept, values=["airplane", "dog", "truck", "automobile", "bird", "cat", "deer", "frog", "horse", "ship"])
 
-    nandL(Category.animal('x'), Label.airplane)
+    nandL(Category.animal, Label.airplane)
     nandL(Category.animal, Label.truck)
     nandL(Category.animal, Label.automobile)
     nandL(Category.animal, Label.ship)

@@ -4,8 +4,10 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
+from torch.utils import data
 
 from ...graph import DataNodeBuilder
+from ..model.pytorch import TorchModel
 from ..metric import MetricTracker, MacroAverageTracker
 
 
@@ -27,8 +29,6 @@ class PrimalDualModel(torch.nn.Module):
         for i, (key, lc) in enumerate(constr.items()):
             self.lmbd_index[key] = i
             p = float(lc.p) / 100.
-            if p == 1:
-                p = 0.999999999999999
             self.lmbd_p[i] = -np.log(1 - p)  # range: [0, inf)
         self.reset_parameters()
         self.loss = MacroAverageTracker(lambda x:x)

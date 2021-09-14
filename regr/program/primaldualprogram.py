@@ -83,7 +83,7 @@ class PrimalDualProgram(LearningBasedProgram):
             **kwargs)
 
     def train_epoch(
-        self, dataset,
+        self, dataset, callback=None,
         c_lr=1,
         c_warmup_iters=100,  # warmup
         c_freq_increase=1,  # d
@@ -171,7 +171,9 @@ class PrimalDualProgram(LearningBasedProgram):
         c_session['c_update_iter'] = c_update_iter
         c_session['c_update_freq'] = c_update_freq
         c_session['c_update'] = c_update
+        if callable(callback):
+            callback()
 
-    def test_epoch(self, dataset, **kwargs):
+    def test_epoch(self, dataset, callback=None, **kwargs):
         # just to consum kwargs
-        yield from super().test_epoch(dataset)
+        return super().test_epoch(dataset, callback=callback)

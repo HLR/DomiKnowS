@@ -21,7 +21,7 @@ class Transformed():
         self.property = property
         self.fn = fn
 
-    def __call__(self, data_item, device=None):
+    def __call__(self, data_item, device=-1):
         value = self.property(data_item)
         try:
             mapping = self.relation.dst[self.relation](data_item)
