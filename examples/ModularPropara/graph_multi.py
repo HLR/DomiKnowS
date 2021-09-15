@@ -8,23 +8,25 @@ Relation.clear()
 
 with Graph('global') as graph:
     
+    procedure = Concept("procedure")
+    
     context = Concept("context")
     entities = Concept("entities")
-        
-    procedure = Concept("procedure")
+    
     (procedure_context, procedure_entities) = procedure.has_a(context, entities)
     
     entity = Concept('entity')
     (entity_rel, ) = entities.contains(entity)
     
     step = Concept("step")
-    (procedure_contain_step, ) = procedure.contains(step)
+    (context_step, ) = context.contains(step)
     
     before = Concept("before")
     (before_arg1, before_arg2) = before.has_a(arg1=step, arg2=step)
     
     action = Concept(name='action')
     (action_step, action_entity) = action.has_a(step, entity)
+    
     
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "destroy", "create", "move"])
     
@@ -63,14 +65,14 @@ with Graph('global') as graph:
 
     # ----------------------------
     
-    Tcreate = action(name="trips_create")
-    Tdestroy = action(name="trips_destroy")
-    Tmove = action(name="trips_move")
-    Tnochange = action('trips_none')
+#     Tcreate = action(name="trips_create")
+#     Tdestroy = action(name="trips_destroy")
+#     Tmove = action(name="trips_move")
+#     Tnochange = action('trips_none')
     
     #trips_action_label = (name="trips_action_label", ConceptClass=EnumConcept, values=["trips_none", "trips_destroy", "trips_create", "trips_move"])
     
-    exactL(Tcreate, Tdestroy, Tmove, Tnochange)
+#     exactL(Tcreate, Tdestroy, Tmove, Tnochange)
     
     #ifL(trips_action_label.trips_create, action_label.create)
     #ifL(trips_action_label.trips_destroy, action_label.destroy)
