@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL, nandL, V, atMostL
+from regr.graph.logicalConstrain import ifL, andL, nandL, V, atMostL, notL
 
 
 Graph.clear()

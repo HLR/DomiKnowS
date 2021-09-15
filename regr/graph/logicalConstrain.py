@@ -350,7 +350,8 @@ class notL(LogicalConstrain):
         if headConstrain:
             if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
         
-        model.update()
+        if model is not None:
+            model.update()
         
         return notV
 
