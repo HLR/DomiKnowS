@@ -1349,9 +1349,23 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if not dnE.impactLinks: 
-                if dnE not in newDnsRoots:
-                    newDnsRoots.append(dnE)    
+            if not dnE.impactLinks:
+                newDnsRoots.append(dnE)    
+                continue 
+            
+            impactDns = set()
+            for  k in dnE.impactLinks:
+                for v in dnE.impactLinks[k]:
+                    impactDns.add(v) 
+                  
+            stillRoot = True
+            for n in newDnsRoots:
+                if n in impactDns:
+                    stillRoot = False
+                    break
+                
+            if stillRoot and dnE not in newDnsRoots:
+                newDnsRoots.append(dnE)    
 
         # Add new dataNodes which are not connected to other dataNodes to the root list
         flattenDns = [] # first flatten the list of new dataNodes
@@ -1930,7 +1944,11 @@ class DataNodeBuilder(dict):
             
     def findDataNodesInBuilder(self, select = None, indexes = None):
         existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-        foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
+        
+        if not existingRootDns:
+            foundDns = []
+        else:
+            foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
         
         return foundDns
     
@@ -1948,8 +1966,11 @@ class DataNodeBuilder(dict):
                     _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:
                     typesInDNs = set()
-                    for d in _dataNode:
-                        typesInDNs.add(returnDn.getOntologyNode().name)
+                    for i, d in enumerate(_dataNode):
+                        if i == 0:
+                            continue
+                        
+                        typesInDNs.add(d.getOntologyNode().name)
                         
                     _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'%(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
 

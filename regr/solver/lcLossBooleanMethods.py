@@ -44,7 +44,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         return varFixed
             
-    def notVar(self, _, var, onlyConstrains = False, tnome = 'L'):
+    def notVar(self, _, var, onlyConstrains = False):
         methodName = "notVar"
         logicMethodName = "NOT"
                 
@@ -322,7 +322,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return epqSuccess
      
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '=', limit = 1, logicMethodName = "COUNT"):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         methodName = "countVar"
         logicMethodName = "COUNT"
         

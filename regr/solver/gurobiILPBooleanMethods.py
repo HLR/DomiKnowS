@@ -1032,8 +1032,5 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 m.addConstr(varSumLinExpr == limit - countOnes, name='Count %s:'%(logicMethodName))
                 if self.ifLog: self.myLogger.debug("%s created constrain: %s - varCOUNT %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('=')],limitOp,limit,countOnes))
 
-                         
-        
-             
         if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varCOUNT.VarName))
         return varCOUNT

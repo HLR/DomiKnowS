@@ -104,7 +104,7 @@ def test_case():
         }, 
         
         # nandL(people,organization)
-        #                               John    works   for     IBM
+        #                                       John    works   for     IBM
         'lc0LossTensor' : {"L" : torch.tensor([0.0987, 0.0000, 0.0000, 0.2441], device=device),
                            "G" : torch.tensor([0.5000, 0.3100, 0.2769, 0.5498],  device=device),
                            "P" : torch.tensor([0.2993, 0.1099, 0.0778, 0.3817],  device=device)
@@ -353,8 +353,8 @@ def test_main_conll04(case):
         else:
             assert False, 'There should be only word and phrases. {} is unexpected.'.format(child_node.ontologyNode.name)
 
-    assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentance
-    #assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentance
+    assert len(datanode.getChildDataNodes(conceptName=word)) == 4 # There are 4 words in sentence
+    #assert len(datanode.getChildDataNodes(conceptName=phrase)) == 3 # There are 3 phrases build of the words in the sentence
 
     conceptsRelationsStrings = ['people', 'organization', 'location', 'other', 'O', 'work_for']
     conceptsRelationsConcepts = [people, organization, location, other, o, work_for]

@@ -612,13 +612,16 @@ class gurobiILPOntSolver(ilpOntSolver):
             sampleSize = p
 
             if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize)
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
                 for i in range(sampleSize):
+                    if i== 0:
+                        continue
                     dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
             else:
-                t = torch.full((sampleSize,), vDn)
+                t = torch.full((sampleSize+1,), vDn)
                 try:
                     dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
+                    dn.getAttributes()[sampleKey][sampleSize][0] = vDn
                 except RuntimeError as e:
                     pass
             
@@ -1058,7 +1061,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 lcLosses[lc.lcName] = {}
                 lossTensor = torch.zeros(len(lossList))
-
+                lossMeanTensor = torch.zeros(len(lossList))
+                
                 if not sample:
                     for i, l in enumerate(lossList):
                         if l[0] is not None:
@@ -1066,14 +1070,20 @@ class gurobiILPOntSolver(ilpOntSolver):
                         else:
                             lossTensor[i] = float("nan")
                 else:
-                    lossTensorData = []
+                    lossTensorData = []                    
+
                     for i, l in enumerate(lossList):
                         lossTensorData.append(l[0])
-                        lossTensor[i] = torch.sum(l[0]).item()/len(l[0])
-                      
+                        
+                        lossTensor[i] = torch.sum(l[0]).item()
+                        lossMeanTensor[i] = lossTensor[i] / len(l[0])
+                        
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData
+                    
 
                 lcLosses[lc.lcName]['lossTensor'] = lossTensor
+                lcLosses[lc.lcName]['lossMeanTensor'] = lossMeanTensor
+
                 
         return lcLosses
