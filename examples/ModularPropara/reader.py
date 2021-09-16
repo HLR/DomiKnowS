@@ -7,13 +7,13 @@ class ProparaReader(RegrReader):
         return [item["para_id"]]
 
     def getEntitiesval(self, item):
-        return ' '.join(item['participants'])
+        return [' '.join(item['participants'])]
         
     def getEntityval(self, item):
         return item["participants"]
     
     def getContextval(self, item):
-        return item['sentence_paragraph']
+        return [item['sentence_paragraph']]
 
     def getStepval(self, item):
         sentences = item["sentence_texts"]
@@ -42,12 +42,3 @@ class ProparaReader(RegrReader):
             for step1 in range(step + 1, len(item["sentence_texts"])):
                 values[(step * num_steps) + step1] = 1
         return values
-    
-#     def getTActionval(self, item):
-#         actions = []
-#         for step, step_text in enumerate(item['sentence_texts']):
-#             actions.append([])
-#             for eid, entity in enumerate(item['participants']):
-#                 actions[-1].append(item['Taction_probs'])
-
-#         return torch.tensor(actions)

@@ -65,18 +65,19 @@ def model_declaration():
 
     procedure[procedure_context.reversed, procedure_entities.reversed] = JointFunctionalReaderSensor(context['text'], entities['text'], keyword="ProcedureID", forward=make_procedure)
 
-    
     def read_initials(*prev, data):
         number = len(data)
         rel_links = torch.ones(number, 1)
         indexes = [i for i in range(number)]
+        print(rel_links, data, indexes)
         return rel_links, data, indexes
 
     entity[entity_rel, 'text', 'index'] = JointFunctionalReaderSensor(entities['text'], keyword='Entity', forward=read_initials)
 
     step[context_step, 'text', 'index'] = JointFunctionalReaderSensor(context['text'], keyword='Step', forward=read_initials)
 
-    def make_actions(steps, entities):
+    def make_actions(r1, r2, entities, steps):
+        print(r1, r2)
         all_actions = len(steps) * len(entities)
         link1 = torch.zeros(all_actions, len(steps))
         link2 = torch.zeros(all_actions, len(entities))
@@ -86,9 +87,22 @@ def model_declaration():
         for j in range(all_actions):
             link2[j, j%len(entities)] = 1
 
+    #     print(link1, link2)
+    #     print("steps: ", len(steps))
+    #     print("entities: ", len(entities))
         return link1, link2
 
-    action[action_step.reversed, action_entity.reversed] = JointSensor(step['index'], entity['index'], forward=make_actions)
+    action[action_step.reversed, action_entity.reversed] = JointSensor(entity[entity_rel], step[context_step], entity['index'], step['index'], forward=make_actions)
+
+    def read_labels(*prevs, data):
+        print(prevs[0].shape, prevs[1].shape)
+        c = data.view(1, -1, *(data.size()[2:]))
+        print(c.squeeze(0).shape)
+        return c.squeeze(0)
+    #     pass
+
+    action[action_label] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="Action", forward=read_labels)
+
 
 
     before[before_arg1.reversed, before_arg2.reversed] = JointReaderSensor(step["text"], keyword="before")
@@ -96,7 +110,7 @@ def model_declaration():
     before["check"] = ReaderSensor(before_arg1.reversed, before_arg2.reversed, keyword="before_true")
     before["check"] = ReaderSensor(keyword="before_true", label=True)
 
-    program = SolverPOIProgram(graph, poi=(action, action_label), 
+    program = SolverPOIProgram(graph, poi=(procedure, action, action_label), 
                                inferTypes=['ILP', 'local/argmax'], 
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                                metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
