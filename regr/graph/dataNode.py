@@ -1944,7 +1944,11 @@ class DataNodeBuilder(dict):
             
     def findDataNodesInBuilder(self, select = None, indexes = None):
         existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-        foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
+        
+        if not existingRootDns:
+            foundDns = []
+        else:
+            foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
         
         return foundDns
     
