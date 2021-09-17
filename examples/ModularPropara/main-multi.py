@@ -152,7 +152,7 @@ def main():
     #     lbp.test(dataset, device='auto')
     all_updates = []
     for datanode in lbp.populate(dataset, device="cpu"):
-        datanode.inferILPResults(action_label, fun=None)
+        datanode.inferILPResults(*action_label.enum, fun=None)
         
         final_output = {
             "id": datanode.getAttribute("id"),

@@ -747,7 +747,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for dns in dnsList:
                         _vDns = []
                         for _dn in dns:
-                            vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
+                            if not _dn:
+                                vDn = None
+                            else:    
+                                vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
 
                             _vDns.append(vDn)
                         
