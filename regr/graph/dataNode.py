@@ -16,6 +16,7 @@ from .property import Property
 from .concept import Concept, EnumConcept
 
 import graphviz
+from dns.flags import RD
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -759,7 +760,7 @@ class DataNode:
             return [None]
 
     # Recursively search for concepts and relations
-    def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
+    def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set(), visitedDns = set()):
         
         # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
@@ -780,12 +781,30 @@ class DataNode:
                             conceptsAndRelations.add(att[1:-1])
                             _DataNode__Logger.info('Found relation %s in dataNode %s'%(att[1:-1],dn))
 
+        visitedDns.add(dn)
+        
         dnChildren = dn.getChildDataNodes()
         
         # Recursively find concepts and relations in children dataNodes 
-        if dnChildren != None:
+        if dnChildren:
             for child in dnChildren:
-                self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations)
+                if child in visitedDns:
+                    continue
+                        
+                visitedDns.add(child)
+
+                self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
+
+        # Recursively find concepts and relations in related dataNodes 
+        relationLinks = dn.getRelationLinks()
+        if relationLinks:
+            for rLink in relationLinks:
+                for rDn in relationLinks[rLink]:
+                    if rDn in visitedDns:
+                        continue
+                    
+                    visitedDns.add(rDn)
+                    self.__collectConceptsAndRelations(rDn, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
 
         return conceptsAndRelations
              

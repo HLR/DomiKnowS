@@ -126,7 +126,7 @@ class LogicalConstrain:
                     new_V.append(eItem[0])
                     if eItem[1] is not None: new_V.append(',')
                 if eItem[1]:
-                    new_v = [v if isinstance(v, str) else v.name for v in eItem[1]]
+                    new_v = [v if isinstance(v, (str, tuple)) else v.name for v in eItem[1]]
                     new_V.append("path = {}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
