@@ -4,7 +4,6 @@ import numpy as np
 
 from .program import LearningBasedProgram
 from .model.primaldual import PrimalDualModel
-from ..graph import DataNode
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -30,27 +29,16 @@ def reverse_sign_grad(parameters, factor=-1.):
 class PrimalDualProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=PrimalDualModel, beta=1, **kwargs):
-        if 'tnorm' in kwargs and kwargs['tnorm'] in DataNode.tnorms:
-            tnorm = kwargs['tnorm']
-        else:
-            tnorm = 'L'
-            
-        if 'tnorm' in kwargs: del kwargs['tnorm']
-            
+    def __init__(self, graph, Model=PrimalDualModel, beta=1, **kwargs):
         super().__init__(graph, Model, **kwargs)
-        if CModel is PrimalDualModel:
-            self.cmodel = CModel(graph, tnorm = tnorm)
-        else:
-            self.cmodel = CModel(graph)
-            
+        
         self.copt = None
         self.beta = beta
 
     def to(self, device):
         super().to(device=device)
         if self.device is not None:
-            self.cmodel.to(self.device)
+            self.model.to(self.device)
 
     def train(
         self,
@@ -67,15 +55,19 @@ class PrimalDualProgram(LearningBasedProgram):
         c_lr_decay=4,  # strategy
         c_lr_decay_param=1,  # param in the strategy
         **kwargs):
+        
         # if COptim is None:
         #     COptim = Optim
-        # if COptim is not None and list(self.cmodel.parameters()):
-        #     self.copt = COptim(self.cmodel.parameters())
-        if list(self.cmodel.parameters()):
-            self.copt = torch.optim.SGD(self.cmodel.parameters(), lr=c_lr, momentum=c_momentum)
+        # if COptim is not None and list(self.model.parameters()):
+        #     self.copt = COptim(self.model.parameters())
+        if list(self.model.parameters()):
+            self.copt = torch.optim.SGD(self.model.parameters(), lr=c_lr, momentum=c_momentum)
         else:
             self.copt = None
-        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  # to provide a session cache for cross-epoch variables like iter-count
+            
+        # To provide a session cache for cross-epoch variables like iter-count
+        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  
+        
         return super().train(
             training_set,
             valid_set=valid_set,
@@ -106,8 +98,8 @@ class PrimalDualProgram(LearningBasedProgram):
         c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
-        self.cmodel.train()
-        self.cmodel.reset()
+        self.model.train()
+        self.model.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
@@ -117,7 +109,7 @@ class PrimalDualProgram(LearningBasedProgram):
             if iter < c_warmup_iters:
                 loss = mloss
             else:
-                closs, *_ = self.cmodel(output[1])
+                closs, *_ = self.model(output[1])
                 loss = mloss + self.beta * closs
             if self.opt is not None and loss:
                 loss.backward()
@@ -134,7 +126,7 @@ class PrimalDualProgram(LearningBasedProgram):
                 #       we avoid a repeated backward (and also pytorch's
                 #       retain_graph problem), we simply reverse the sign
                 #       for the dual. Don't zero_grad() here!
-                reverse_sign_grad(self.cmodel.parameters())
+                reverse_sign_grad(self.model.parameters())
                 self.copt.step()
                 # update counting
                 c_update_iter = iter

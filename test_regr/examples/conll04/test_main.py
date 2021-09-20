@@ -365,7 +365,6 @@ def test_main_conll04(case):
     
     sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 100)
     
-    
     for conceptsRelations in conceptsRelationsVariants:
         
         # ------------ Calculate logical constraints losses 

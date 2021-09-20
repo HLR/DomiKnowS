@@ -7,40 +7,40 @@ from regr.solver.ilpBooleanMethods import ilpBooleanProcessor
 from regr.solver.ilpConfig import ilpConfig 
 
 class booleanMethods(ilpBooleanProcessor):
-    def notVar(self, _, var, _):
+    def notVar(self, _, var, onlyConstrains = False):
         results = 1 - var
         
         return results
     
-    def and2Var(self, _, var1, var2, _):
+    def and2Var(self, _, var1, var2, onlyConstrains = False):
         results = 0
         if var1 + var2 == 2:
             results = 1
             
         return results
         
-    def andVar(self, _, *var, _):
+    def andVar(self, _, *var, onlyConstrains = False):
         results = 0
         if sum(var) == len(var):
             results = 1
             
         return results
     
-    def or2Var(self, _, var1, var2, _):
+    def or2Var(self, _, var1, var2, onlyConstrains = False):
         results = 0
         if var1 + var2 > 0:
             results = 1
             
         return results
     
-    def orVar(self, _, *var, _):
+    def orVar(self, _, *var, onlyConstrains = False):
         results = 0
         if sum(var) > 0:
             results = 1
             
         return results
             
-    def nand2Var(self, _, var1, var2, _):
+    def nand2Var(self, _, var1, var2, onlyConstrains = False):
         #results = self.notVar(_, self.and2Var(_, var1, var2,))
             
         results = 1
@@ -48,7 +48,7 @@ class booleanMethods(ilpBooleanProcessor):
             results = 0
             
         return results        
-    def nandVar(self, _, *var, _):
+    def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
             
         results = 1
@@ -57,7 +57,7 @@ class booleanMethods(ilpBooleanProcessor):
             
         return results 
        
-    def ifVar(self, _, var1, var2, _):
+    def ifVar(self, _, var1, var2, onlyConstrains = False):
         #results = self.and2Var(_, self.andVar(_, var1), var2)
         results = 1
         if var1 - var2 == 1:
@@ -65,7 +65,7 @@ class booleanMethods(ilpBooleanProcessor):
             
         return results
     
-    def norVar(self, _, *var, _):
+    def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
             
         results = 1
@@ -74,21 +74,21 @@ class booleanMethods(ilpBooleanProcessor):
             
         return results     
   
-    def xorVar(self, _, var1, var2, _):
+    def xorVar(self, _, var1, var2, onlyConstrains = False):
         results = 0
         if var1 + var2 == 1:
             results = 1
             
         return results
     
-    def epqVar(self, _, var1, var2, _):
+    def epqVar(self, _, var1, var2, onlyConstrains = False):
         results = 0
         if var1 - var2 == 0:
             results = 1
             
         return results
     
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, _):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         var = var[0]
         results = 0
 
@@ -107,11 +107,11 @@ class booleanMethods(ilpBooleanProcessor):
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-        self.myBooleanMethods = booleanMethods()
+        self.myBooleanMethods = booleanMethods() #gurobiILPBooleanProcessor() #lcLossBooleanMethods()
 
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
-
+    
     def logicMany(self, _, var, onlyConstrains = False, logicMethod=None):
         for currentVar in var:
             if not torch.is_tensor(currentVar):
@@ -139,8 +139,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                     if v[i] > 0:
                         results[i] = results[i] * v[i]
                     else:
-                        results[i] = results[i] * (1- v[0])
-
+                        results[i] = results[i] * (1- v[0])   
+                             
         return results
     
     def notVar(self, _, var, onlyConstrains = False):
@@ -149,7 +149,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
         
         return self.logicMany(_, [var], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.notVar)
-    
+        
     def and2Var(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "AND"
             
@@ -176,7 +176,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
-        return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.ordVar)
+        return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.orVar)
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "NAND"
