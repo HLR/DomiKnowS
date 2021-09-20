@@ -107,10 +107,10 @@ def model_declaration():
 
     before[before_arg1.reversed, before_arg2.reversed] = JointReaderSensor(step["text"], keyword="before")
 
-    before["check"] = ReaderSensor(before_arg1.reversed, before_arg2.reversed, keyword="before_true")
-    before["check"] = ReaderSensor(keyword="before_true", label=True)
+#     before["check"] = ReaderSensor(before_arg1.reversed, before_arg2.reversed, keyword="before_true")
+#     before["check"] = ReaderSensor(keyword="before_true", label=True)
 
-    program = SolverPOIProgram(graph, poi=(procedure, action, action_label), 
+    program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label), 
                                inferTypes=['ILP', 'local/argmax'], 
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                                metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})

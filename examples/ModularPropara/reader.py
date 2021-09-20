@@ -25,14 +25,26 @@ class ProparaReader(RegrReader):
     def getbeforeval(self, item):
         b1s = []
         b2s = []
-        for step in range(len(item["sentence_texts"])):
-            b1 = torch.zeros(len(item["sentence_texts"]))
-            b1[step] = 1
-            for step1 in range(len(item["sentence_texts"])):
-                b2 = torch.zeros(len(item["sentence_texts"]))
-                b2[step1] = 1
-                b1s.append(b1)
-                b2s.append(b2)
+#         for step in range(len(item["sentence_texts"])):
+#             b1 = torch.zeros(len(item["sentence_texts"]))
+#             b1[step] = 1
+#             for step1 in range(len(item["sentence_texts"])):
+#                 b2 = torch.zeros(len(item["sentence_texts"]))
+#                 b2[step1] = 1
+#                 b1s.append(b1)
+#                 b2s.append(b2)
+#         return torch.stack(b1s), torch.stack(b2s)
+        for step in range(len(item['sentence_texts'])):
+            for step1 in range(len(item['sentence_texts'])):
+                if step < step1:
+                    b1 = torch.zeros(len(item["sentence_texts"]))
+                    b1[step] = 1
+                    b2 = torch.zeros(len(item["sentence_texts"]))
+                    b2[step1] = 1
+                    b1s.append(b1)
+                    b2s.append(b2)
+                    
+                    
         return torch.stack(b1s), torch.stack(b2s)
 
     def getbefore_trueval(self, item):

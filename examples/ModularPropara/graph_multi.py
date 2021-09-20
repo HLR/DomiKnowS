@@ -43,21 +43,24 @@ with Graph('global') as graph:
         # then either
         orL(
             # step j associated with entity e, which is before step i cannot be associated with destroy action a2
-            andL(
-                step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1))), 
-                notL(action_label.destroy('a2', path=('j', action_step.reversed)))
+            ifL(
+                step('j', path=(('i', before_arg1.reversed, before_arg2))), 
+                notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
                 ), 
             # or if  
             ifL(
                 # step j1 which is before step i is associated with destroy action a2
                 andL(
-                    step('j1', path=('i', before_arg1)), 
-                    action_label.destroy('a2', path=('j', action_step.reversed))
+                    step('j1', path=('i', before_arg1.reversed, before_arg2)), 
+                    action_label.destroy('a2', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
                     ), 
                 # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
-                andL(
-                    step('k', path=(('e', action_entity.reversed, action_step), ('j1', before_arg2), ('i', before_arg1))), 
-                    existsL(action_label.create('a3', path=('k', action_step.reversed)))
+                existsL(
+                    andL(
+                        step('k', path=(('j1', before_arg2.reversed, before_arg1), ('i', before_arg1.reversed, before_arg2))), 
+                        action_label.create('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                    )
+                    
                     )
                 )
             )
