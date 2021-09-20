@@ -4,7 +4,6 @@ import pickle
 from typing import Iterable
 
 import torch
-import torch.nn.functional as F
 
 from regr.graph import Property, Concept, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, CacheSensor
@@ -181,16 +180,19 @@ class PoiModel(TorchModel):
             local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
         if len(local_metric) == 1:
             local_metric = list(local_metric.values())[0]
+            
         return local_metric
 
     def populate(self, builder, run=True):
         loss = 0
         metric = {}
+        
         for prop in self.poi:
             # make sure the sensors are evaluated
             if run:
                 for sensor in prop.find(TorchSensor):
-                        sensor(builder)
+                    sensor(builder)
+                    
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
@@ -202,8 +204,8 @@ class PoiModel(TorchModel):
                         local_metric = self.poi_metric(builder, prop, sensors)
                         if local_metric is not None:
                             metric[(*sensors,)] = local_metric
+                            
         return loss, metric
-
 
 class SolverModel(PoiModel):
     def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP']):
@@ -275,7 +277,7 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
                 else:
                     predictors.append(sensor)
             for predictor in predictors:
-                # TODO: any loss or metric or genaral function apply to just prediction?
+                # TODO: any loss or metric or general function apply to just prediction?
                 pass
             for target, predictor in product(targets, predictors):
                 if predictor._loss is not None:

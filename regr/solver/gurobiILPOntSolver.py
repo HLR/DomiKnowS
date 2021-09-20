@@ -1064,7 +1064,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 lcLosses[lc.lcName] = {}
                 lossTensor = torch.zeros(len(lossList))
-                lossMeanTensor = torch.zeros(len(lossList))
                 
                 if not sample:
                     for i, l in enumerate(lossList):
@@ -1078,15 +1077,22 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for i, l in enumerate(lossList):
                         lossTensorData.append(l[0])
                         
-                        lossTensor[i] = torch.sum(l[0]).item()
-                        lossMeanTensor[i] = lossTensor[i] / len(l[0])
+                        lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
                         
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData
-                    
 
                 lcLosses[lc.lcName]['lossTensor'] = lossTensor
-                lcLosses[lc.lcName]['lossMeanTensor'] = lossMeanTensor
-
-                
+              
+        if sample: # calculate global
+            for i in range(1,sampleSize+1):
+                isGlobal = True
+                for lc in lcLosses:
+                    if not lcLosses[lc]['lossData'][0, i]:
+                        isGlobal = False
+                        break
+                    
+                if isGlobal:
+                    pass
+                    
         return lcLosses

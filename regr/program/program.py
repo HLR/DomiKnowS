@@ -182,7 +182,10 @@ class LearningBasedProgram():
         for k, v in metric1.value().items():
             metricDelta[k] = {}
             for m, _ in v.items():
-                metricDelta[k][m] = v[m] - metric2.value()[k][m]
+                if k in metric2.value() and m in metric2.value()[k]:
+                    metricDelta[k][m] = v[m] - metric2.value()[k][m]
+                else:
+                    metricDelta[k][m] = None
 
         return metricDelta
 
