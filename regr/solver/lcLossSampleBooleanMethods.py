@@ -139,7 +139,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                     if v[i] > 0:
                         results[i] = results[i] * v[i]
                     else:
-                        results[i] = results[i] * (1- v[0])   
+                        results[i] = results[i] * (1 - v[0])   
                              
         return results
     

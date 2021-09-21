@@ -1071,28 +1071,56 @@ class gurobiILPOntSolver(ilpOntSolver):
                             lossTensor[i] = l[0]
                         else:
                             lossTensor[i] = float("nan")
-                else:
+                else: # sample
                     lossTensorData = []                    
 
                     for i, l in enumerate(lossList):
                         lossTensorData.append(l[0])
                         
-                        lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
+                        if torch.count_nonzero(l[0]):
+                            lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
+                        else:
+                            lossTensor[i] = None
                         
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData
 
                 lcLosses[lc.lcName]['lossTensor'] = lossTensor
               
-        if sample: # calculate global
+        if sample: # calculate global sample loss
+            lossGlobalCountTensor = torch.zeros(sampleSize)
+            lossGlobalTensor = torch.zeros(sampleSize)
+            
             for i in range(1,sampleSize+1):
                 isGlobal = True
+                iSum = 0
+                g = 0
+                
                 for lc in lcLosses:
-                    if not lcLosses[lc]['lossData'][0, i]:
-                        isGlobal = False
-                        break
+                    for t in lcLosses[lc]['lossData']:
+                        if not t[i]:
+                            isGlobal = False
+                            #break
+                        else:
+                            iSum += t[i] 
+                            g +=1
+                        
+                    if not isGlobal:
+                        #break
+                        pass
                     
+                lossGlobalCountTensor[i-1] = g
+                
                 if isGlobal:
-                    pass
-                    
+                    lossGlobalTensor[i-1] = iSum
+            
+            lcLosses['lossGlobalCountTensor'] = lossGlobalCountTensor
+            lcLosses['lossGlobalCountTensor_Max'] = torch.max(lossGlobalCountTensor).item()
+            
+            lcLosses['lossGlobalTensorData'] = lossGlobalTensor
+            if torch.count_nonzero(lossGlobalTensor):
+                lcLosses['lossGlobalTensor'] = torch.sum(lossGlobalTensor) / torch.count_nonzero(lossGlobalTensor)
+            else:
+                lcLosses['lossGlobalTensor'] = None
+                
         return lcLosses
