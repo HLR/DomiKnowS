@@ -42,7 +42,8 @@ def model_declaration():
                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
                 },
         sample = True,
-        sampleSize=100)
+        sampleSize=100, 
+        sampleGlobalLoss = True)
    
     return program
 

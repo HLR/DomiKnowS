@@ -363,7 +363,7 @@ def test_main_conll04(case):
     
     conceptsRelationsVariants = [conceptsRelationsEmpty, conceptsRelationsStrings, conceptsRelationsConcepts, conceptsRelationsMix]
     
-    sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 100)
+    sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
     
     for conceptsRelations in conceptsRelationsVariants:
         
