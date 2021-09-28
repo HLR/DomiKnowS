@@ -280,7 +280,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if onlyConstrains:
             varSumLinExpr = LinExpr()
             for currentVar in var:
-                if self.__varIsNumber(var):
+                if self.__varIsNumber(currentVar):
                     continue
                 
                 varSumLinExpr.addTerms(1.0, currentVar)
@@ -293,18 +293,46 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         # ------- If creating variables representing value of AND build of provided variables
 
-        varAND = m.addVar(vtype=GRB.BINARY)
+        # Build new variables name and add it to model
+        noOfOnes = 0
+        andVarName = ""
+        for currentVar in var:
+            andVarName = andVarName + "and"
+            if self.__varIsNumber(currentVar):
+                #orVarName += "_%s_" % (currentVar)
+                if currentVar == 1:
+                    noOfOnes = noOfOnes + 1
+                elif currentVar == 0:
+                    if self.ifLog: self.myLogger.debug("%s created no new variable method value is 0 - returning 1"%(logicMethodName))
+                    return 0
+                else:
+                    if self.ifLog: self.myLogger.warning("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
+            else:
+                andVarName += "_%s_" % (currentVar.VarName)
+
+        andVarName = '{:.200}'.format(andVarName)
+        
+        # If only single variable; rest is zeros 
+        if (N - noOfOnes == 1) and noOfOnes == 1:
+            for currentVar in var:
+                if not self.__varIsNumber(currentVar):
+                    if self.ifLog: self.myLogger.debug("%s has ones and only single variable: %s, it is returned"%(logicMethodName,currentVar))
+                    return currentVar
+                
+        # Create new variable
+        varAND = m.addVar(vtype=GRB.BINARY, name=andVarName)
         if m: m.update()
 
+        # Build constraints 
         for currentVar in var:
-            if self.__varIsNumber(var):
+            if self.__varIsNumber(currentVar):
                 continue
             
             m.addConstr(varAND - currentVar <= 0, name='And:') # varAND <= currentVar
 
         varSumLinExpr = LinExpr()
         for currentVar in var:
-            if self.__varIsNumber(var):
+            if self.__varIsNumber(currentVar):
                 continue
                 
             varSumLinExpr.addTerms(1.0, currentVar)
@@ -485,6 +513,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     if self.ifLog: self.myLogger.warning("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
             else:
                 orVarName += "_%s_" % (currentVar.VarName)
+
+        orVarName = '{:.200}'.format(orVarName)
 
         # If only single variable; rest is zeros 
         if (N - noOfZeros == 1) and noOfVars == 1:

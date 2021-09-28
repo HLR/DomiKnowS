@@ -4,7 +4,7 @@ sys.path.append("../..")
 def model_declaration():
     import torch
     from regr.program import LearningBasedProgram, IMLProgram
-    from regr.program.lossprogram import SampleLossProgram
+    from regr.program.lossprogram import PrimalDualProgram
     from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
     from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.learners import ModuleLearner
@@ -32,7 +32,7 @@ def model_declaration():
     x[y1] = ModuleLearner(world_contains_x('x'), module=Net())
 
     # program = LearningBasedProgram(graph, MyIMLModel)
-    program = SampleLossProgram(
+    program = PrimalDualProgram(
         graph, 
         poi=(world, x,),
         metric={ 'softmax' : ValueTracker(prediction_softmax),
@@ -40,9 +40,7 @@ def model_declaration():
                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
                 },
         loss=MacroAverageTracker(BCEWithLogitsLoss()),
-        sample = True,
-        sampleSize=100, 
-        sampleGlobalLoss = True
+        tnorm='P'
         )
    
     return program

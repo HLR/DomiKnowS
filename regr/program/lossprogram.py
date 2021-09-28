@@ -3,8 +3,7 @@ import torch
 import numpy as np
 
 from .program import LearningBasedProgram
-from .model.primaldual import PrimalDualModel
-
+from .model.lossModel import PrimalDualModel, SampleLosslModel
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -27,23 +26,19 @@ def reverse_sign_grad(parameters, factor=-1.):
         if parameter.grad is not None:
             parameter.grad = factor * parameter.grad
 
-class PrimalDualProgram(LearningBasedProgram):
-    DEFAULTCMODEL = PrimalDualModel
-
+class LossProgram(LearningBasedProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
+    def __init__(self, graph, Model=PrimalDualModel, beta=1, **kwargs):
         super().__init__(graph, Model, **kwargs)
-        if CModel is None:
-            CModel = self.DEFAULTCMODEL
-        self.cmodel = CModel(graph)
+        
         self.copt = None
         self.beta = beta
 
     def to(self, device):
         super().to(device=device)
         if self.device is not None:
-            self.cmodel.to(self.device)
+            self.model.to(self.device)
 
     def train(
         self,
@@ -60,15 +55,19 @@ class PrimalDualProgram(LearningBasedProgram):
         c_lr_decay=4,  # strategy
         c_lr_decay_param=1,  # param in the strategy
         **kwargs):
+        
         # if COptim is None:
         #     COptim = Optim
-        # if COptim is not None and list(self.cmodel.parameters()):
-        #     self.copt = COptim(self.cmodel.parameters())
-        if list(self.cmodel.parameters()):
-            self.copt = torch.optim.SGD(self.cmodel.parameters(), lr=c_lr, momentum=c_momentum)
+        # if COptim is not None and list(self.model.parameters()):
+        #     self.copt = COptim(self.model.parameters())
+        if list(self.model.parameters()):
+            self.copt = torch.optim.SGD(self.model.parameters(), lr=c_lr, momentum=c_momentum)
         else:
             self.copt = None
-        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  # to provide a session cache for cross-epoch variables like iter-count
+            
+        # To provide a session cache for cross-epoch variables like iter-count
+        c_session = {'iter':0, 'c_update_iter':0, 'c_update_freq':c_freq, 'c_update':0}  
+        
         return super().train(
             training_set,
             valid_set=valid_set,
@@ -99,8 +98,8 @@ class PrimalDualProgram(LearningBasedProgram):
         c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
-        self.cmodel.train()
-        self.cmodel.reset()
+        self.model.train()
+        self.model.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
@@ -110,7 +109,7 @@ class PrimalDualProgram(LearningBasedProgram):
             if iter < c_warmup_iters:
                 loss = mloss
             else:
-                closs, *_ = self.cmodel(output[1])
+                closs, *_ = self.model(output[1])
                 loss = mloss + self.beta * closs
             if self.opt is not None and loss:
                 loss.backward()
@@ -127,7 +126,7 @@ class PrimalDualProgram(LearningBasedProgram):
                 #       we avoid a repeated backward (and also pytorch's
                 #       retain_graph problem), we simply reverse the sign
                 #       for the dual. Don't zero_grad() here!
-                reverse_sign_grad(self.cmodel.parameters())
+                reverse_sign_grad(self.model.parameters())
                 self.copt.step()
                 # update counting
                 c_update_iter = iter
@@ -175,3 +174,15 @@ class PrimalDualProgram(LearningBasedProgram):
     def test_epoch(self, dataset, **kwargs):
         # just to consum kwargs
         yield from super().test_epoch(dataset)
+        
+class PrimalDualProgram(LossProgram):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, beta=1, **kwargs):
+        super().__init__(graph, Model=PrimalDualModel, **kwargs)
+        
+class SampleLossProgram(LossProgram):
+    logger = logging.getLogger(__name__)
+
+    def __init__(self, graph, beta=1, **kwargs):
+        super().__init__(graph, Model = SampleLosslModel, **kwargs)
