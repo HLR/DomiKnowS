@@ -11,11 +11,11 @@ blah blahvvblah blahv
 blah blah
 vvvblah blahblah blahblah blahblah blahvblah blah
 blah blah
-# Complex Example TODO chnage the links
+# Complex Example TODO change the links
 
 The following are the user's steps to using our framework.
 
-- [Complex Example](#Complex Example)
+- [Complex Example](#Complex-Example)
   - [Knowledge Declaration](#knowledge-declaration)
   - [Model Declaration](#model-declaration)
   - [Training and Testing](#training-and-testing)
