@@ -1,4 +1,4 @@
-# Getting Started
+# Install DomiKnows
 
 Clone the repository and cd into Domiknows folder. Install the requirements by running:
 
