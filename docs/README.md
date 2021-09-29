@@ -1,6 +1,6 @@
 # DomiKnows
 
-Table Of Content:
+### Table Of Content:
 
 - Introduction
 - Install DomiKnows
@@ -12,7 +12,7 @@ Table Of Content:
 
 
 
-Main Components:
+### Main Components:
 
 - Data (remove)
 - Graph
@@ -29,7 +29,7 @@ Main Components:
 
 
 
-Technical API:
+### Technical API:
 
 - Graph
   - Class Graph
