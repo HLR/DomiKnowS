@@ -5,8 +5,8 @@
 - [Introduction](introduction.md)
 - [Install DomiKnows](Install%20DomiKnows.md)
 - [Getting Started](Getting%20Started.md)
-  - [Simple Example](Getting%20Started.md#Simple%20Example)
-  - [Complex Example](Getting%20Started.md#Complex%20Example)
+  - [Simple Example](Getting%20Started.md#Simple-Example)
+  - [Complex Example](Getting%20Started.md#Complex-Example)
 - [Run With Jupyter](Run%20With%20Jupyter.md)
 - [Datasets and Their Results](Datasets%20and%20Their%20Results.md)
 
