@@ -1,16 +1,7 @@
 ### Simple Example
-blah blah
-blah blah
-blah blah
-blah blah
-blah blah
-blah blahblah blahvblah blahv
-v
-blah blahblah blahblah blahv
-blah blahvvblah blahv
-blah blah
-vvvblah blahblah blahblah blahblah blahvblah blah
-blah blah
+
+TODO
+
 # Complex Example TODO change the links
 
 The following are the user's steps to using our framework.
@@ -22,8 +13,6 @@ The following are the user's steps to using our framework.
   - [Inference](#inference)
 
 ## Knowledge Declaration
-
-Class reference:
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge for a task.
 We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
