@@ -3,7 +3,7 @@
 ### Table Of Content:
 
 - [Introduction](introduction.md)
-- [Install DomiKnows](InstallDomiKnows.md)
+- [Install DomiKnows](Install_DomiKnows.md)
 - [Getting Started](Getting Started.md)
   - [Simple Example](Getting Started.md#Simple Example)
   - [Complex Example](Getting Started.md#Complex Example)
