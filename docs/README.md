@@ -3,29 +3,29 @@
 ### Table Of Content:
 
 - [Introduction](introduction.md)
-- Install DomiKnows
-- Getting Started
-  - Simple Example
-  - Complex Example
-- Run With Jupyter
-- Datasets and Their Results
+- [Install DomiKnows](Install DomiKnows.md)
+- [Getting Started](Getting Started.md)
+  - [Simple Example](Getting Started.md#Simple Example)
+  - [Complex Example](Getting Started.mdComplex Example)
+- [Run With Jupyter](Run With Jupyter.md)
+- [Datasets and Their Results](Datasets and Their Results.md)
 
 
 
 ### Main Components:
 
-- Data (remove)
-- Graph
-- Reader
-- Sensor
-  - preprocess
-  - Learner
-- Program
-  - pytorch
-  - ILP
-  - IML
-  - Primal-Dual
-- Datanode
+- [Data]()
+- [Graph]()
+- [Reader]()
+- [Sensor]()
+  - [preprocess]()
+  - [Learner]()
+- [Program]()
+  - [pytorch]()
+  - [ILP]()
+  - [IML]()
+  - [Primal-Dual]()
+- [Datanode]()
 
 
 
