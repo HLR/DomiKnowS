@@ -3,10 +3,10 @@
 ### Table Of Content:
 
 - [Introduction](introduction.md)
-- [Install DomiKnows](Install DomiKnows.md)
+- [Install DomiKnows](InstallDomiKnows.md)
 - [Getting Started](Getting Started.md)
   - [Simple Example](Getting Started.md#Simple Example)
-  - [Complex Example](Getting Started.mdComplex Example)
+  - [Complex Example](Getting Started.md#Complex Example)
 - [Run With Jupyter](Run With Jupyter.md)
 - [Datasets and Their Results](Datasets and Their Results.md)
 
