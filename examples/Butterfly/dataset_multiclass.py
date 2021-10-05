@@ -73,7 +73,7 @@ class Butterfly(Dataset):
 
         return {**target, **{'pixels': img}}
 
-def loadDataset(size=224, mode="train"):
+def loadDataset(size=100, mode="train"):
     transform = transforms.Compose(
         [
             transforms.Resize(size),
@@ -98,7 +98,7 @@ def loadDataset(size=224, mode="train"):
     data_set = list(data_set)
     random.shuffle(data_set)
     final_reader = []
-    batch_size = 5
+    batch_size = 16
     tmp = 0
     cur_dict = {'pixels': [], 'family': [], 'subFamily': []}
     for i in data_set:

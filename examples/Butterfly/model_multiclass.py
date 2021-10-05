@@ -16,40 +16,50 @@ from regr.sensor.pytorch.learners import ModuleLearner
 from torchvision.models.resnet import resnet50
 from graph_multiclass import image_group_contains
 
-output_size = 1000
+output_size = 1024
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 
+DROPOUT = 0.4
+class SampleCNN(nn.Module):
+    def __init__(self):
+        super(SampleCNN, self).__init__()
 
-def set_parameter_requires_grad(model, feature_extracting):
-    if feature_extracting:
-        for param in model.parameters():
-            param.requires_grad = False
-
-
-class ImageNetwork(torch.nn.Module):
-    def __init__(self, n_outputs=2, model_size=10):
-        super(ImageNetwork, self).__init__()
-        self.num_outputs = n_outputs
-        self.conv = resnet50(pretrained=True)
-        set_parameter_requires_grad(self.conv, True)
-        self.dense = nn.Linear(output_size, n_outputs)
+        # 59049 x 1
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU())
+        # 19683 x 128
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(3, stride=3))
+        # 6561 x 128
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(3, stride=3))
+        # 2187 x 128
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(3, stride=3),
+            nn.Dropout(DROPOUT))
+        # 1 x 512
+        # self.fc = nn.Linear(256 * 3 * 3, 21)
+        # self.fc1 = nn.Linear(256 * 3 * 3, 9)
+        self.activation = nn.Sigmoid()
 
     def forward(self, x):
-        x = self.conv(x)
-        x = x.view(-1, output_size)
-        # x = self.dense(x)
-        return x
-
-
-class DenseNetwork(torch.nn.Module):
-    def __init__(self, n_outputs=2):
-        super(DenseNetwork, self).__init__()
-
-        self.dense = nn.Linear(output_size, n_outputs)
-
-    def forward(self, x):
-        x = self.dense(x)
-        return x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        out = self.conv4(out)
+        out = torch.flatten(out, 1)
+        return out
 
 
 def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
@@ -87,13 +97,13 @@ def model_declaration(device, solver='iml', lambdaValue=0.5, model_size=10):
     image[family] = FunctionalSensor(image_group_contains, "family_", forward=label_reader, label=True)
     image[subFamily] = FunctionalSensor(image_group_contains, "subFamily_", forward=label_reader, label=True)
 
-    res = ImageNetwork(n_outputs=2, model_size=model_size)
+    res = SampleCNN()
     res.cuda(device)
     res.requires_grad_(True)
     image['emb'] = ModuleLearner('pixels', module=res, device=device)
 
-    image[family] = ModuleLearner('emb', module=DenseNetwork(n_outputs=6), device=device)
-    image[subFamily] = ModuleLearner('emb', module=DenseNetwork(n_outputs=21), device=device)
+    image[family] = ModuleLearner('emb', module=nn.Linear(256 * 3 * 3, 6), device=device)
+    image[subFamily] = ModuleLearner('emb', module=nn.Linear(256 * 3 * 3, 21), device=device)
 
     if solver == 'iml':
         print("IMLProgram selected as solver")
