@@ -1,5 +1,7 @@
 # Intro to DomiKnows
 
+We demonstrate a library for the integration of domain knowledge in deep learning architectures. Using this library, the structure of the data is expressed symbolically via graph declarations and the logical constraints over outputs or latent variables can be seamlessly added to the deep models. The domain knowledge can be defined explicitly, which improves the models’ explainability in addition to the performance and generalizability in the low-data regime. Several approaches for such an integration of symbolic and sub-symbolic models have been introduced; however, there is no library to facilitate the programming for such an integration in a generic way while various underlying algorithms can be used. Our library aims to simplify programming for such an integration in both training and inference phases while separating the knowledge representation from learning algorithms. 
+
 DomiKnows framework generates a systematic process to write declarative code to define learning problems. The framework includes many different algorithms to integrate domain knowledge into the learning problems or optimize the predictions with respect to a set of rules and constraints. The flow of writing a program in DomiKnows includes `Graph Declaration`, `Model Declaration`, `Program Initialization`, `Program composition and execution`.
 
 ## Graph Declaration
