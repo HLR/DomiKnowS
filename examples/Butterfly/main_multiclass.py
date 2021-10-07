@@ -7,8 +7,8 @@ sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS'
 
 import argparse
 from dataset_multiclass import loadDataset
-from model_multiclass import model_declaration,graph
-from graph_multiclass import family,subFamily
+from model_multiclass import model_declaration, graph
+from graph_multiclass import family, subFamily
 import logging, random
 import torch
 
@@ -20,10 +20,12 @@ parser.add_argument('--samplenum', dest='samplenum', default=4521, help='number 
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors', type=int)
 parser.add_argument('--debugmode', dest='debugmode', default=0, help='different debugging setting to test the code',
                     type=int)
-parser.add_argument('--epochs', dest='epochs', default=7, help='number of training epoch', type=int)
+parser.add_argument('--epochs', dest='epochs', default=1, help='number of training epoch', type=int)
+parser.add_argument('--batch_size', dest='batch_size', default=16, help='size of batches', type=int)
 parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.1, help='value of learning rate', type=float)
 parser.add_argument('--model_size', dest='model_size', default=10, help='size of the model', type=int)
-parser.add_argument('--lr', dest='learning_rate', default=0.0001, help='learning rate of the adam optimiser', type=float)
+parser.add_argument('--lr', dest='learning_rate', default=0.0001, help='learning rate of the adam optimiser',
+                    type=float)
 
 # TODO add  model size and other things here
 args = parser.parse_args()
@@ -42,16 +44,17 @@ def main():
     torch.manual_seed(777)
     random.seed(777)
     logging.basicConfig(level=logging.INFO)
-    # trainset = loadDataset(mode="train")
-    train_ds = loadDataset(mode="test")
+    train_ds = loadDataset(mode="train", batch_size=args.batch_size)
+    val_ds = loadDataset(mode="val", batch_size=args.batch_size)
     import gc
     gc.collect()
     print("Data Loaded")
     solver = args.solver
     program = model_declaration(device=device, solver=solver, lambdaValue=args.lambdaValue, model_size=args.model_size)
-    program.train(train_ds, train_epoch_num=args.epochs,
+    program.train(train_ds, train_epoch_num=args.epochs, valid_set=val_ds,
                   Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate), device=device)
-    
+    test_ds = loadDataset(mode="test", batch_size=args.batch_size)
+
     guessed_subFamily = {
         "local/softmax": [],
         "ILP": []
@@ -64,7 +67,7 @@ def main():
     subFamily = graph['subFamily']
     family = graph['family']
     real_family = []
-    for pic_num, picture_group in enumerate(program.populate(train_ds, device=device)):
+    for pic_num, picture_group in enumerate(program.populate(test_ds, device=device)):
         for image_ in picture_group.getChildDataNodes():
             for key in ["local/softmax", "ILP"]:
                 if key == "ILP":
@@ -95,7 +98,6 @@ def main():
         correct = sum(1 if x == y else 0 for x, y in zip(real_labels, guessed_labels))
         total = len(real_labels)
         print("family accuracy", correct / total)
-
 
 
 if __name__ == '__main__':
