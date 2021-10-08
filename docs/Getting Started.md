@@ -1,6 +1,225 @@
-### Simple Example
+- [Simple Example](#Complex-Example)
+  - [Knowledge Declaration](#knowledge-declaration)
+  - [Model Declaration](#model-declaration)
+  - [Training and Testing](#training-and-testing)
+  - [Inference](#inference)
+# Simple Example
 
-TODO
+
+The following are the user's steps to using our framework.
+
+## Knowledge Declaration
+
+In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge for a task.
+We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
+
+The output of the Knowledge Declaration step is a `Graph`, within which there are `Concept`s, `Relation`s, and `LogicalConstrain`s. `Graph` instances are a basic container of the `Concept`s, `Relation`s, `LogicalConstrain`s and other instances in the framework. The `Graph` is a *"partial program"*, and there is no behavior associated. It is only a data structure to express domain knowledge.
+
+
+Follows is a hierarchical image classification example showing how to declare a graph. in this example, we have the image concept, each image is either a vehicle or an animal. An animal can be a bird, dog, car, deer or a frog, and a vehicle can be a truck, airplane, automobile or a ship.
+
+```python
+with Graph('CIFAR10') as graph:
+    Image = Concept(name='image')
+    
+    vehicle = Image(name="vehicle")
+    
+    truck = Image(name='truck')
+    automobile = Image(name='automobile')
+    ship = Image(name='ship')
+    airplane = Image(name='airplane')
+    
+    
+    animal = Image(name="animal")
+    
+    dog = Image(name='dog')
+    bird = Image(name='bird')
+    cat = Image(name='cat')
+    deer = Image(name='deer')
+    frog = Image(name='frog')
+    horse = Image(name='horse')
+
+    ...
+
+```
+
+The above code shows the declaration of a `Graph` named `'CIFAR10'` as variable `graph`.
+
+first, we define paragraph, then we define questions and add a contains relation from paragraph to question
+
+In the graph, there is `'image'' `Concept` as python variables with the same name. All of the image classes are an `Image`. 
+
+further, in the graph, we define our constraints.
+
+```python
+with Graph('WIQA_graph') as graph:
+    ...
+    airplane.is_a(vehicle)
+    truck.is_a(vehicle)
+    ship.is_a(vehicle)
+    automobile.is_a(vehicle)
+    
+    dog.is_a(animal)
+    bird.is_a(animal)
+    cat.is_a(animal)
+    deer.is_a(animal)
+    frog.is_a(animal)
+    horse.is_a(animal)
+
+
+    disjoint(dog, bird, cat, deer, frog, horse)
+    disjoint(airplane, truck, automobile, ship)
+
+    ifL(vehicle,orL(airplane, truck, automobile, ship))
+
+    ifL(animal,orL(dog, bird, cat, deer, frog, horse))
+
+
+
+
+```
+
+some constraints are inherent in the graph such as the relations that are defined in them, but other constraints must be defined explicitly. 
+The first constraint used here is `is_a` constraint between a subclass and it's super-class. these constraints help in the classification of the super-class.
+The other constraint used is the `disjoint` constraint. this constraint declares sparsity between all of its arguments. it means that only one of the mentioned classes can be true at a time. 
+Here the `orL` constraint means that at least of the classes should be true at a time. The last constraint is the `ifL` constraint.
+It is a logical constraint stating that if image has the first label it should have the second logical constraint too. which here means that if an image is a super-class it must be classified as one of its sub-classes. 
+The following figure illustrates the graph for this task:
+# TODO draw graph!
+![plot](WIQA.png)
+
+
+See [here](developer/KNOWLEDGE.md) for more details about declaring graph and constraints.
+
+
+## Model Declaration
+
+
+In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
+We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaration to create a *"full program"* as `Program`.
+
+To create a program, the user needs to first assign `Sensor`s and `Learner`s to `Property`s of `Concept`s in the graph. Then initiate a `Program` with the graph.
+
+There are different [pre-defined sensors](./apis/sensor/PYTORCH.md) for basic data operation with PyTorch. Users can also extend [base `Sensor`](./apis/SENSORS.md) to customize for their task [by overriding `forward()` method](developer/MODEL.md#overriding-forward).
+
+```python
+image['pixels'] = ReaderSensor(keyword='pixels')
+image[animal] = ReaderSensor(keyword='animal',label=True)
+image[vehicle] = ReaderSensor(keyword='vehicle',label=True)
+image[airplane] = ReaderSensor(keyword='airplane',label=True)
+image[dog] = ReaderSensor(keyword='dog',label=True)
+image[truck] = ReaderSensor(keyword='truck',label=True)
+image[automobile] = ReaderSensor(keyword='automobile',label=True)
+image[bird] = ReaderSensor(keyword='bird',label=True)
+image[cat] = ReaderSensor(keyword='cat',label=True)
+image[deer] = ReaderSensor(keyword='deer',label=True)
+image[frog] = ReaderSensor(keyword='frog',label=True)
+image[horse] = ReaderSensor(keyword='horse',label=True)
+image[ship] = ReaderSensor(keyword='ship',label=True)
+
+
+```
+
+In the example above, the first `ReaderSensor` is assigned to the property `'pixels'`.
+is the following reader sensors, the images labels get loaded.
+the properties that we want to train our program on must be calculated in a sensor with `label=True`. 
+
+`Learner`s, are similar to `Sensor`s. The only difference is that `Learner`s have trainable parameters. The `Program` will update the parameters in `Learner`s based on model performance. we can assign `Learner`s to `Property`s of `Concept`s. `ModuleLearner` is specifically useful to plugin PyTorch modules.
+
+
+```python
+image['embedding'] = ModuleLearner('pixels', module=ImageNetwork())
+image[animal] = ModuleLearner('embedding', module=LinearNetwork())
+image[vehicle] = ModuleLearner('embedding', module=LinearNetwork())
+image[airplane] = ModuleLearner('embedding', module=LinearNetwork())
+image[dog] = ModuleLearner('embedding', module=LinearNetwork())
+image[truck] = ModuleLearner('embedding', module=LinearNetwork())
+image[automobile] = ModuleLearner('embedding', module=LinearNetwork())
+image[bird] = ModuleLearner('embedding', module=LinearNetwork())
+image[cat] = ModuleLearner('embedding', module=LinearNetwork())
+image[deer] = ModuleLearner('embedding', module=LinearNetwork())
+image[frog] = ModuleLearner('embedding', module=LinearNetwork())
+image[horse] = ModuleLearner('embedding', module=LinearNetwork())
+image[ship] = ModuleLearner('embedding', module=LinearNetwork())
+
+```
+
+The first `ModuleLearner` in the above code is used first to calculate an embedding for an image given its pixels. being a Learner, this sensor's parameters will change and update itself during training later.
+in the following three lines, this `embedding` property is being used to calculate the binary labels for each class. these learners will also learn from predictions after calculating loss given the actual values of these properties.
+
+It should be noted that we have assigned `ReaderSensor`s to the same `Property`s of `Image`.
+This is the ["Multiple Assignment" semantic](MODEL.md#multiple-assigment-convention) of the framework.
+Instead of overwriting the assignment, "Multiple Assignment" indicates the consistency of the `Sensor`s and `Learner`s assigned to a single `Property`.
+
+Now that the `graph`, the `Property`s of `Concept`s are assigned with different types of `Sensor`s and `Learner`s, We can create a `Program` from the `graph`.
+
+```python
+program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[image[animal], image[vehicle], image[airplane],\
+                                    image[dog], image[truck],image[automobile],image[bird],image[cat],image[deer],image[frog],image[horse],image[ship]],
+                                                   loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+```
+the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the image classes. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch. one can find explanations about different `loss` function [here](../regr/program/loss.py), and explanations about different `metrics` [here](../regr/program/metric.py).
+
+## Training and Testing
+
+With `Reader` and `Program` prepared by modeling step, the user can train the program now.
+Simply do 
+
+```python
+program.train(reader, train_epoch_num=10, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device='cuda:0')
+print(program.model.loss)  # last training loss will be printed
+print(program.model.metric)  # last training metrics will be printed
+```
+
+Here, `program` will check for "Multiple Assignment" of `Property` and generate a loss between each two `Sensor`s and/or `Learner`s where one has `label=True` and the other has `label=False`. The default total loss will be the sum of all "Multiple Assignment" losses, and optimization will be used with `Optim`. Parameters in direct and indirect `Learner`s will be updated towards a lower total loss.
+
+After training, we can test our trained program with another dataset
+
+```python
+program.test(test_reader)
+print(program.model.loss)  
+print(program.model.metric)  
+```
+
+Checkout for more details about [workflows in the program](developer/WORKFLOW.md)
+
+## Inference
+
+One feature of our framework is an automatic inference based on domain knowledge.
+To try this out, the user must first create `Datanode`.
+
+```python
+for image in program.populate(dataset=testset):
+    image.inferILPResults(animal, vehicle, dog, bird, cat, deer, frog, horse,airplane, truck, automobile, ship, fun=None)
+    for question_ in datanode.getChildDataNodes():
+        if image.getAttribute(animal, "label").item():
+            print("Label:     animal")
+            for subLabel in [dog, bird, cat, deer, frog, horse]:
+                if image.getAttribute(subLabel, "label").item(): 
+                    print(f"Sub-Label:     {subLabel}")
+
+        elif datanode.getAttribute(vehicle, "label").item():
+            print("Label:     vehicle")
+            for subLabel in [airplane, truck, automobile, ship]:
+                if image.getAttribute(subLabel, "label").item(): 
+                    print(f"Sub-Label:     {subLabel}")
+        if image.getAttribute(animal, "ILP").item():
+            print("Inference: animal")
+            for subLabel in [dog, bird, cat, deer, frog, horse]:
+                if image.getAttribute(subLabel, "ILP").item(): 
+                    print(f"Sub-Label:     {subLabel}")
+        elif image.getAttribute(vehicle, "ILP").item():
+            print("Inference: vehicle")
+            for subLabel in [airplane, truck, automobile, ship]:
+                if image.getAttribute(subLabel, "ILP").item(): 
+                    print(f"Sub-Label:     {subLabel}")
+```
+`program.populate` given the reader, will create a datagraph of `Datanode`s and returns a list of "Root" concepts. the "Root" concept here is the `image` concept. each `image` is an instance of `Datanode` class. `image_.inferILPResults(animal)` tells the datagraph to calculates the "ILP" inference for the property `animal`.
+
+we can use `getChildDataNodes` method of a `image` to access its classes. each `image` we can access this way, is also a `Datanode` class. one can use the `getAttribute` method of this `Datanode` to access the calculated result for its `animal` property or as it is shown in the next line of the code, to access this property after "ILP" inference that enforces the constraints. here, unlike in sensors, the questions and their properties are accessed individually. we can use created datagraph here to do inference and calculate the metric with or without "ILP" however we wish.
+
+Please find in a specific topic for more information about [how to query a `Datanode`](developer/QUERY.md) and [how inference works](developer/INFERENCE.md).
+
 
 # Complex Example TODO change the links
 
