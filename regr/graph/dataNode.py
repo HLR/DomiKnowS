@@ -3,7 +3,6 @@ from collections import OrderedDict, namedtuple
 import time
 import re
 from .dataNodeConfig import dnConfig 
-from torch.tensor import Tensor
 
 from ordered_set import OrderedSet 
 
@@ -16,7 +15,6 @@ from .property import Property
 from .concept import Concept, EnumConcept
 
 import graphviz
-from dns.flags import RD
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -194,7 +192,7 @@ class DataNode:
                 
                 # Format attribute
                 attr_str = str(attribute)
-                if isinstance(attribute, Tensor):
+                if isinstance(attribute, torch.Tensor):
                     attr_str = f'<tensor of shape {list(attribute.shape)}>'
 
                 g.node(attr_node_id, f'{attribute_name}: {attr_str}')
@@ -1662,7 +1660,7 @@ class DataNodeBuilder(dict):
                     
                 if vInfo.dim == 0:
                     if i == 0:
-                        if isinstance(vInfo.value, Tensor):
+                        if isinstance(vInfo.value, torch.Tensor):
                             _dn.attributes[keyDataName] =  vInfo.value.item()
                         else:
                             _dn.attributes[keyDataName] =  vInfo.value
@@ -1698,7 +1696,7 @@ class DataNodeBuilder(dict):
                 if len(existingDnsForConcept) == 0:
                     return
                 elif vInfo.dim == 0:
-                    if isinstance(vInfo.value, Tensor):
+                    if isinstance(vInfo.value, torch.Tensor):
                         if keyDataName[0] == '<' and keyDataName[-1] == '>':
                             existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
                         else:
@@ -1772,7 +1770,7 @@ class DataNodeBuilder(dict):
     def __processAttributeValue(self, value, keyDataName):
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
-        if isinstance(value, Tensor):
+        if isinstance(value, torch.Tensor):
             dimV = value.dim()
             if dimV:
                 lenV = len(value)
@@ -1781,36 +1779,36 @@ class DataNodeBuilder(dict):
         else:
             lenV = len(value)
             
-        if not isinstance(value, (Tensor, list)): # It is scalar value
+        if not isinstance(value, (torch.Tensor, list)): # It is scalar value
             return ValueInfo(len = 1, value = value, dim=0) 
             
-        if isinstance(value, Tensor) and dimV == 0: # It is a Tensor but also scalar value
+        if isinstance(value, torch.Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
         
         if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
-            if isinstance(value, list) and not isinstance(value[0], (Tensor, list)) : # Unpack the value
+            if isinstance(value, list) and not isinstance(value[0], (torch.Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
-            elif isinstance(value, Tensor) and dimV < 2:
+            elif isinstance(value, torch.Tensor) and dimV < 2:
                 return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
         if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<': 
             return ValueInfo(lenV = 1, value = value, dim=0)
-        elif isinstance(value, Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
+        elif isinstance(value, torch.Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
 
         if isinstance(value, list): 
-            if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
+            if not isinstance(value[0], (torch.Tensor, list)) or (isinstance(value[0], torch.Tensor) and value[0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=1)
-            elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
+            elif not isinstance(value[0][0], (torch.Tensor, list)) or (isinstance(value[0][0], torch.Tensor) and value[0][0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=2)
-            elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
+            elif not isinstance(value[0][0][0], (torch.Tensor, list)) or (isinstance(value[0][0][0], torch.Tensor) and value[0][0][0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))
                 return ValueInfo(len = lenV, value = value, dim=4)
 
-        elif isinstance(value, Tensor):
+        elif isinstance(value, torch.Tensor):
             return ValueInfo(len = lenV, value = value, dim=dimV)
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
@@ -1823,7 +1821,7 @@ class DataNodeBuilder(dict):
         if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
             if  isinstance(_key, Sensor) and not _key.build:
-                if isinstance(value, Tensor):
+                if isinstance(value, torch.Tensor):
                     _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
                 elif isinstance(value, list):
                     _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1833,7 +1831,7 @@ class DataNodeBuilder(dict):
                 return dict.__setitem__(self, _key, value)
             
             if  isinstance(_key, Property):
-                if isinstance(value, Tensor):
+                if isinstance(value, torch.Tensor):
                     _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
                 elif isinstance(value, list):
                     _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1855,7 +1853,7 @@ class DataNodeBuilder(dict):
         if self.__addSensorCounters(skey, value):
             return # Stop __setitem__ for repeated key value combination
         
-        if isinstance(value, Tensor):
+        if isinstance(value, torch.Tensor):
             _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
         elif isinstance(value, list):
             _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1971,6 +1969,62 @@ class DataNodeBuilder(dict):
         
         return foundDns
     
+    def needsBatchRootDN(self):
+        if dict.__contains__(self, 'dataNode'):
+            _dataNode = dict.__getitem__(self, 'dataNode')
+            
+            if len(_dataNode) == 1:
+                return False
+            else:
+                typesInDNs = set()
+                for i, d in enumerate(_dataNode):
+                    if i == 0:
+                        continue
+                    
+                    typesInDNs.add(d.getOntologyNode().name)
+                
+                if len(typesInDNs) > 1:
+                    return False
+                
+            return True
+        else:
+            raise ValueError('DataNode Builder has no DataNode started yet')  
+    
+    def addBatchRootDN(self):
+        if dict.__contains__(self, 'dataNode'):
+            _dataNode = dict.__getitem__(self, 'dataNode')
+
+            if len(_dataNode) == 1:
+                rootDn = _dataNode[0]
+                _DataNodeBulder__Logger.warning('No new Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'%(rootDn.instanceID,rootDn.getOntologyNode().name))
+            else:
+                typesInDNs = set()
+                for i, d in enumerate(_dataNode):
+                    if i == 0:
+                        continue
+                    
+                    typesInDNs.add(d.getOntologyNode().name)
+                
+                if len(typesInDNs) > 1:
+                    raise ValueError('Not able to create Batch Root DataNode - DataNode Builder has DataNodes of different types: %s'%(typesInDNs))  
+                
+                batchRootDNValue = ""
+                batchRootDNID = 0
+                batchRootDNOntologyNode = Concept(name='batch')
+                
+                batchRootDN= DataNode(instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
+            
+                for i, d in enumerate(_dataNode):
+                    batchRootDN.addChildDataNode(d)  
+                  
+                dns = []
+                dns.append(batchRootDN)  
+                self.__updateRootDataNodeList(dns)
+
+                _DataNodeBulder__Logger.info('Created single dataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
+        else:
+            raise ValueError('DataNode Builder has no DataNode started yet')   
+        
     # Method returning constructed dataNode - the fist in the list
     def getDataNode(self):
         self.__addGetDataNodeCounter()
