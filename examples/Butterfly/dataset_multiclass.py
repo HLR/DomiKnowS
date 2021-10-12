@@ -7,6 +7,7 @@ from torchvision.transforms import transforms
 import numpy as np
 import torch
 import random
+from download_dataset import download
 
 
 class Butterfly(Dataset):
@@ -33,12 +34,12 @@ class Butterfly(Dataset):
             self.data.append(np.array(Image.open(file_path)))
             self.targets.append({
                 'subFamily': ['dismorphiinae', 'pierinae', 'coliadinae', 'polyommatinae', 'theclinae', 'aphnaeinae',
-                               'lycaeninae',
-                               'limenitidinae', 'apaturinae', 'danainae', 'satyrinae', 'nymphalinae', 'libytheinae',
-                               'heliconiinae',
-                               'charaxinae', 'heteropterinae', 'pyrginae', 'hesperiinae', 'parnassiinae',
-                               'papilioninae',
-                               'nemeobiinae'].index(subfamily),
+                              'lycaeninae',
+                              'limenitidinae', 'apaturinae', 'danainae', 'satyrinae', 'nymphalinae', 'libytheinae',
+                              'heliconiinae',
+                              'charaxinae', 'heteropterinae', 'pyrginae', 'hesperiinae', 'parnassiinae',
+                              'papilioninae',
+                              'nemeobiinae'].index(subfamily),
                 'family': ['pieridae', 'lycaenidae', 'nymphalidae', 'hesperiidae', 'papilionidae', "riodinidae"].index(
                     family)
             })
@@ -73,7 +74,9 @@ class Butterfly(Dataset):
 
         return {**target, **{'pixels': img}}
 
-def loadDataset(size=100, mode="train",batch_size=32):
+
+def loadDataset(size=100, mode="train", batch_size=32):
+    download(root="./")
     transform = transforms.Compose(
         [
             transforms.Resize(size),
