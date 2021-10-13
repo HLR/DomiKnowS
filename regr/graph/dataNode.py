@@ -1414,7 +1414,7 @@ class DataNodeBuilder(dict):
         relationName = conceptInfo['concept'].name
          
         # Check if data graph started
-        existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
+        existingRootDns = dict.__getitem__(self, 'dataNode') # DataNodes roots
         
         if not existingRootDns:
             _DataNodeBulder__Logger.error('No dataNode created yet - abandon processing relation link dataNode value for %s and attribute %s'%(relationName,keyDataName))
@@ -1429,7 +1429,7 @@ class DataNodeBuilder(dict):
                 
         existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
             
-        # This is an infromation about relation attributes
+        # This is an information about relation attributes
         if conceptInfo['relationAttrData']:
             index = keyDataName.index('.')
             attrName = keyDataName[0:index]
@@ -1442,7 +1442,8 @@ class DataNodeBuilder(dict):
             relationAttrsCache =  dict.__getitem__(self, relationAttrsCacheName)
             relationAttrsCache[attrName] = vInfo.value
                 
-            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
+            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'
+                                         %(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
             
             # Find if all the needed attribute were initialized
             allAttrInit = True
@@ -1563,7 +1564,9 @@ class DataNodeBuilder(dict):
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         
-        dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
+        # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode 
+        # (identified by the index in the master list)
+        dns = [] 
                 
         _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
@@ -1598,10 +1601,12 @@ class DataNodeBuilder(dict):
                     requiredLenOFReltedDns = 0
                     
                 if requiredLenOFReltedDns != len(relatedDns):
-                    _DataNodeBulder__Logger.warning('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    _DataNodeBulder__Logger.warning('Value of %s expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
+                                                    %(conceptInfo['relationName'],requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
-                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
+                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'
+                                             %(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
 
                 for i in range(0,vInfo.len):
                     instanceValue = ""
@@ -1652,7 +1657,8 @@ class DataNodeBuilder(dict):
                 requiredLenOFReltedDns = len(vInfo.item())
             
             if requiredLenOFReltedDns != len(relatedDns):
-                _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
+                                              %(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                 return
                 
             for i in range(0,vInfo.len):
@@ -1996,7 +2002,8 @@ class DataNodeBuilder(dict):
 
             if len(_dataNode) == 1:
                 rootDn = _dataNode[0]
-                _DataNodeBulder__Logger.warning('No new Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'%(rootDn.instanceID,rootDn.getOntologyNode().name))
+                _DataNodeBulder__Logger.warning('No new Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'
+                                                %(rootDn.instanceID,rootDn.getOntologyNode().name))
             else:
                 typesInDNs = set()
                 for i, d in enumerate(_dataNode):
@@ -2045,7 +2052,8 @@ class DataNodeBuilder(dict):
                         
                         typesInDNs.add(d.getOntologyNode().name)
                         
-                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'%(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
+                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'
+                                                    %(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
 
                 return returnDn
         

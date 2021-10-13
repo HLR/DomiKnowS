@@ -1,6 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor, ReaderSensor
 from regr.sensor.pytorch.learners import TorchLearner
-from typing import Any
 import torch
 
 #  --- City
