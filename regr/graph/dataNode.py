@@ -16,6 +16,8 @@ from .concept import Concept, EnumConcept
 
 import graphviz
 
+from sklearn import metrics
+
 logName = __name__
 logLevel = logging.CRITICAL
 logFilename='datanode.log'
@@ -1093,18 +1095,29 @@ class DataNode:
         
         return lcResult
 
-    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = None):
-               
+    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = None, average='macro'):
+        if not conceptsRelations:
+            _DataNode__Logger.info("Calling %s metric with empty conceptsRelations"%(inferType))
+            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
+            _DataNode__Logger.info("Found conceptsRelations in DataNode- %s"%(conceptsRelations))
+        else:
+            _DataNode__Logger.info("Calling %s metric with conceptsRelations - %s"%(inferType, conceptsRelations))
+        
+        _DataNode__Logger.info("Using average %s"%(average))
+        
         if weight is None:
             weight = torch.tensor(1)
-                 
-        if not conceptsRelations:
-            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
+        else:
+            _DataNode__Logger.info("Using weight %s"%(weight))
+         
+        # Will store calculated metrics an related data   
+        result = {}   
+        tp, fp, tn, fn  = [], [], [], []    
+        isMulticlass = False
         
-        result = {}
-        tp, fp, tn, fn  = [], [], [], []
-
+        # Calculate metric for each provided concept
         for cr in conceptsRelations:
+            # Check format of concepts and translate them to tuple in order to accomodate multiclass concepts
             if not isinstance(cr, tuple):
                 if not isinstance(cr, Concept):
                     cr = self.findConcept(cr)
@@ -1117,103 +1130,134 @@ class DataNode:
                 else:
                     cr = (cr, cr.name, None, 1)
             
-            
+            # Collect date for metric from DataNode
             preds = self.collectInferredResults(cr, inferType)
             labelsR = self.collectInferredResults(cr, 'label')
+
+            _DataNode__Logger.info("Concept %s found labels %s"%(cr[1], labelsR))
+            _DataNode__Logger.info("Concept %s found predictions %s"%(cr[1], preds))
+
+            # Check if not empty
+            if preds is None or labelsR is None:
+                continue
             
+            if not torch.is_tensor(preds) or not torch.is_tensor(labelsR):
+                continue
+            
+            # Move to CPU
+            if preds.is_cuda: preds = preds.cpu()
+            if labelsR.is_cuda: labelsR = labelsR.cpu()
+            
+            # Translate labels - if provided as True/False to long
             labels = torch.clone(labelsR)
+            labels = labels.long()
+            # -- Multiclass processing
             
-            # If Multiclass process label
-            if cr[2] is not None: # multiclass given multiclass index (cr[2]) 
+            # Check if concept is a label from Multiclass
+            if cr[2] is not None: # Multiclass label given multiclass index (cr[2]) 
                 for i, l in enumerate(labelsR): # Translate labels to 0/1
                     if labelsR[i] == cr[2]:
                         labels[i] = 1
                     else:
                         labels[i] = 0
-            elif (cr[2] is None) and cr[3] > 1: # multiclass general without index (cr[2]) - called by IML model forward
-                if preds.shape[0] == len(labelsR):
-                    for i, p in enumerate(preds): 
-                        l = labelsR[i].item()
-                        if p[l] == 1:
-                            labels[i] = 1
-                        else:
-                            labels[i] = 0
                     
-                    preds = torch.ones(preds.shape[0])
-                else:
-                    raise Exception("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[2], len(preds), len(labelsR)))
+            # Check if concept is a  Multiclass
+            elif (cr[2] is None) and cr[3] > 1: # Multiclass general without index (cr[2]) - called by the IML model forward method
+                if preds.shape[0] == len(labelsR):
+                    preds = torch.nonzero(preds, as_tuple=True)[1]
+                    isMulticlass = True
+                    _DataNode__Logger.info("Concept %s Multiclass "%(cr[1]))
 
-            result[cr[1]] = {'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
+                else:
+                    raise Exception("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[1], len(preds), len(labelsR)))
             
-            if preds is None or labels is None:
-                continue
+            # ---
             
-            if not torch.is_tensor(preds) or not torch.is_tensor(labels):
-                continue
-            
+            # Check if date prepared correctly
             if preds.dim() != 1 or labels.dim() != 1:
                 continue
             
             if  preds.size()[0] != labels.size()[0]:
                 continue
             
-            if preds.is_cuda: preds = preds.cpu()
-            if labels.is_cuda: labels = labels.cpu
+            # Prepare the metric result storage
+            result[cr[1]] = {'cr': cr, 'inferType' : inferType, 'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
             
-            labels = labels.long()
-            # calculate confusion matrix
-            _tp = (preds * labels * weight).sum() # true positive
-            tp.append(_tp)
-            result[cr[1]]['TP'] = _tp 
-            _fp = (preds * (1 - labels) * weight).sum() # false positive
-            fp.append(_fp)
-            result[cr[1]]['FP'] = _fp
-            _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
-            tn.append(_tn)
-            result[cr[1]]['TN'] = _tn
-            _fn = ((1 - preds) * labels * weight).sum() # false positive
-            fn.append(_fn)
-            result[cr[1]]['FN'] = _fn
+            # To numpy for sklearn
+            labels = labels.numpy() 
+            preds = preds.numpy()
             
-            _p, _r  = 0, 0
-            
-            if _tp + _fp:
-                _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                result[cr[1]]['P'] = _p
-            if _tp + _fn:
-                _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                result[cr[1]]['R'] = _r
+            _DataNode__Logger.info("Concept %s used labels %s"%(cr[1], labels))
+            result[cr[1]]['labels'] = labels
+            _DataNode__Logger.info("Concept %s used predictions %s"%(cr[1], preds))
+            result[cr[1]]['preds'] = preds
+
+            # Calculate confusion matrix
+            result[cr[1]]['confusion_matrix'] = metrics.confusion_matrix(labels, preds)
+
+            # If only binary conceptS get tp, fp, tn and fn
+            if not isMulticlass:
+                try:
+                    _tn, _fp, _fn, _tp = metrics.confusion_matrix(labels, preds).ravel()
+                    
+                    tp.append(_tp) 
+                    result[cr[1]]['TP'] = _tp # true positive 
+    
+                    fp.append(_fp)
+                    result[cr[1]]['FP'] = _fp # false positive
+    
+                    tn.append(_tn)
+                    result[cr[1]]['TN'] = _tn # true negative
+    
+                    fn.append(_fn)
+                    result[cr[1]]['FN'] = _fn # false positive
                 
-            if _p + _r:
-                _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                result[cr[1]]['F1'] = _f1
-            elif _tp + (_fp + _fn)/2: 
-                _f1 = _tp/(_tp + (_fp + _fn)/2)
-                result[cr[1]]['F1'] = _f1
-                      
-        result['Total'] = {}  
-        tpT = (torch.tensor(tp)).sum()
-        result['Total']['TP'] = tpT 
-        fpT = (torch.tensor(fp)).sum() 
-        result['Total']['FP'] = fpT
-        tnT = (torch.tensor(tn)).sum() 
-        result['Total']['TN'] = tnT
-        fnT = (torch.tensor(fn)).sum() 
-        result['Total']['FN'] = fnT
-        
-        if tpT + fpT:
-            pT = tpT / (tpT + fpT)
-            result['Total']['P'] = pT
-            rT = tpT / (tpT + fnT)
-            result['Total']['R'] = rT
+                except ValueError: # Error when both labels and preds as zeros
+                    pass
             
-            if pT + rT:
-                f1T = 2 * pT * rT / (pT + rT)
-                result['Total']['F1'] = f1T
-            elif tpT + (fpT + fnT)/2:
-                f1T = tpT/(tpT + (fpT + fnT)/2)
-                result['Total']['F1'] = f1T
+            # Calculate P, R and F1
+            _p = metrics.precision_score(labels, preds, average=average) # precision or positive predictive value (PPV)
+            result[cr[1]]['P'] = _p
+            _DataNode__Logger.info("Concept %s precision %s"%(cr[1], _p))
+
+            _r = metrics.recall_score(labels, preds, average=average) # recall, sensitivity, hit rate, or true positive rate (TPR)
+            result[cr[1]]['R'] = _r
+            _DataNode__Logger.info("Concept %s recall %s"%(cr[1], _r))
+
+            _f1 = metrics.f1_score(labels, preds, average=average) # f1
+            result[cr[1]]['F1'] = _f1
+            _DataNode__Logger.info("Concept %s f1 %s"%(cr[1], _f1))
+
+        # If only binary conceptS calculate Total for all 
+        if not isMulticlass:  
+            result['Total'] = {}  
+            tpT = (torch.tensor(tp)).sum()
+            result['Total']['TP'] = tpT 
+            fpT = (torch.tensor(fp)).sum() 
+            result['Total']['FP'] = fpT
+            tnT = (torch.tensor(tn)).sum() 
+            result['Total']['TN'] = tnT
+            fnT = (torch.tensor(fn)).sum() 
+            result['Total']['FN'] = fnT
+            
+            if tpT + fpT:
+                pT = tpT / (tpT + fpT)
+                result['Total']['P'] = pT
+                _DataNode__Logger.info("Total precision %s"%(pT))
+
+                rT = tpT / (tpT + fnT)
+                result['Total']['R'] = rT
+                _DataNode__Logger.info("Total recall %s"%(rT))
+
+                if pT + rT:
+                    f1T = 2 * pT * rT / (pT + rT)
+                    result['Total']['F1'] = f1T
+                elif tpT + (fpT + fnT)/2:
+                    f1T = tpT/(tpT + (fpT + fnT)/2)
+                    result['Total']['F1'] = f1T
                 
+                _DataNode__Logger.info("Total f1 %s"%(f1T))
+
         return result
     
 # Class constructing the data graph based on the sensors data during the model execution
@@ -1366,23 +1410,9 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if not dnE.impactLinks:
-                newDnsRoots.append(dnE)    
-                continue 
-            
-            impactDns = set()
-            for  k in dnE.impactLinks:
-                for v in dnE.impactLinks[k]:
-                    impactDns.add(v) 
-                  
-            stillRoot = True
-            for n in newDnsRoots:
-                if n in impactDns:
-                    stillRoot = False
-                    break
-                
-            if stillRoot and dnE not in newDnsRoots:
-                newDnsRoots.append(dnE)    
+            if not dnE.impactLinks: 
+                if dnE not in newDnsRoots:
+                    newDnsRoots.append(dnE)    
 
         # Add new dataNodes which are not connected to other dataNodes to the root list
         flattenDns = [] # first flatten the list of new dataNodes
@@ -1403,11 +1433,40 @@ class DataNodeBuilder(dict):
         for dnE in flattenDns: # review them if they got connected
             if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
-                    newDnsRoots.append(dnE)   
-                         
+                    newDnsRoots.append(dnE) 
+                   
         # Set the updated root list 
         _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
-        dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
+        dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict 
+    
+        return
+    
+        # ----------   
+        newDnsRootsFiltered = []
+              
+        # Update list of existing root dataNotes     
+        for dnE in dnsRoots: # review them if they got connected
+            if not dnE.impactLinks:
+                newDnsRootsFiltered.append(dnE)    
+                continue 
+            
+            impactDns = set()
+            for  k in dnE.impactLinks:
+                for v in dnE.impactLinks[k]:
+                    impactDns.add(v) 
+                  
+            stillRoot = True
+            for n in newDnsRootsFiltered:
+                if n in impactDns:
+                    stillRoot = False
+                    break
+                
+            if stillRoot and dnE not in newDnsRootsFiltered:
+                newDnsRootsFiltered.append(dnE)    
+                         
+        # Set the updated root list 
+        _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRootsFiltered))
+        dict.__setitem__(self, 'dataNode', newDnsRootsFiltered) # Updated the dict
     
     # Build or update relation dataNode in the data graph for a given key
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
