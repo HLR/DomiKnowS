@@ -39,11 +39,11 @@ class TorchModel(torch.nn.Module):
         pass
 
     def move(self, value, device=None):
-        parameters = list(self.parameters())
-        if parameters:
-            device = device or next(self.parameters()).device
-        else:
-            device = device
+        if device is None:
+            try:
+                device = next(self.parameters()).device
+            except StopIteration:  # no parameters
+                pass
         if isinstance(value, torch.Tensor):
             return value.to(device)
         elif isinstance(value, list):
