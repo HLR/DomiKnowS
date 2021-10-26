@@ -36,7 +36,7 @@ def create_reader_and_vocuabulary(samplenum,top_pos):
     tag_counter = Counter()
 
     for num, i in data.iterrows():
-        if not len(i["tokenized_pos"].split(" ")) ==len(i["tokenized_pos"].split(" ")):
+        if not len(i["tokenized_text"].split(" ")) ==len(i["tokenized_pos"].split(" ")):
             continue
         reader.append({"sentecne": [i["tokenized_text"]], "tags": [i["tokenized_pos"]]})
         for j in i["tokenized_pos"].split(" "):
