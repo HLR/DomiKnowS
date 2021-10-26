@@ -15,14 +15,15 @@ args = Namespace(
 cuda_number=0,
 epoch=10,
 learning_rate=2e-3,
-samplenum=10,
+samplenum=10000,
 batch_size=14,
 beta=0.1,
 embedding_dim=300,
 hidden_dim=300,
-top_pos=2,
+top_pos=1000,
 )
-
+import warnings
+warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
 args.device="cuda:"+str(args.cuda_number) if torch.cuda.is_available() else 'cpu'
 print("device is :",args.device)
@@ -51,6 +52,7 @@ Word[Tag] = FunctionalSensor(sent_word_contains, "pos", forward=LabelReader(devi
 Word[Tag] = ModuleLearner("hidden_layer", module=HeadLayer( hidden_dim=args.hidden_dim, target_size=len(tag_list)))
 
 program = SolverPOIProgram(graph,inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+
 program.train(reader[:len(reader)//10*8],valid_set=reader[len(reader)//10*8:], train_epoch_num=args.epoch, Optim=lambda param: SGD(param, lr=args.learning_rate),device=args.device)
 program.train(reader[:len(reader)//10*8])
 
