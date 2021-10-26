@@ -180,7 +180,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         return Q
     
     def addGraphConstrains(self, m, rootDn, *conceptsRelations):
-        # Add constrain based on probability 
+        # Add constraint based on probability 
         for _conceptRelation in conceptsRelations: 
             rootConcept = rootDn.findRootConceptOrRelation(_conceptRelation[0])
             dns = rootDn.findDatanodes(select = rootConcept)
@@ -204,7 +204,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 currentConstrLinExpr = x + notx 
                 
                 m.addConstr(currentConstrLinExpr == 1, name='Disjoint: %s and %s'%(_conceptRelation[1], 'Not_'+_conceptRelation[1]))
-                self.myLogger.debug("Disjoint constrain between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
+                self.myLogger.debug("Disjoint constraint between variable %s is  %s and variable %s is not - %s == %i"%(dn.getInstanceID(),_conceptRelation[1],dn.getInstanceID(),'Not_'+_conceptRelation[1],1))
 
         m.update()
         
@@ -639,7 +639,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 continue # already processed in the previous Concept 
             
             if isinstance(e, (Concept,  LogicalConstrain, tuple)): 
-                # Look one step ahead in the parsed logical constrain and get variables names (if present) after the current concept
+                # Look one step ahead in the parsed logical constraint and get variables names (if present) after the current concept
                 if eIndex + 1 < len(lc.e) and isinstance(lc.e[eIndex+1], V):
                     variable = lc.e[eIndex+1]
                 else:
@@ -677,12 +677,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     xPkey = '<' + conceptName + ">" + key
 
-                    dnsList = [] # Stores lists of dataNode for each corresponding dataNode 
+                    dnsList = [] # Stores lists of dataNodes for each corresponding dataNode 
                     vDns = [] # Stores ILP variables
                     
                     if variable.v == None:
                         if variable.name == None:
-                            self.myLogger.error('The element %s of logical constrain %s has no name for variable'%(conceptName, lc.lcName))
+                            self.myLogger.error('The element %s of logical constraint %s has no name for variable'%(conceptName, lc.lcName))
                             return None
                                                  
                         rootConcept = dn.findRootConceptOrRelation(conceptName)
@@ -690,13 +690,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dnsList = [[dn] for dn in _dns]
                     else:
                         if len(variable.v) == 0:
-                            self.myLogger.error('The element %s of logical constrain %s has no empty part v of the variable'%(conceptName, lc.lcName))
+                            self.myLogger.error('The element %s of logical constraint %s has no empty part v of the variable'%(conceptName, lc.lcName))
                             return None
                           
                         path = variable.v
-  
                         paths = []
-                        lo = None
                         
                         if isinstance(path[0], str) and len(path) == 1:
                             paths.append(path)
@@ -705,45 +703,44 @@ class gurobiILPOntSolver(ilpOntSolver):
                         else:
                             for i, vE in enumerate(variable.v):
                                 if i == 0 and isinstance(vE, str):
-                                    lo = vE 
                                     continue
                                 
                                 paths.append(vE)
                                 
-                        _dnsList = []
+                        dnsListForPaths = []
                         for i, v in enumerate(paths):
-                            _dnsList.append([])
-                            referredVariableName = v[0] # Get name of the referred variable already defined in the logical constrain from the v part 
+                            dnsListForPaths.append([])
+                            referredVariableName = v[0] # Get name of the referred variable already defined in the logical constraint from the v part 
                         
                             if referredVariableName not in lcVariablesDns:
-                                self.myLogger.error('The element %s of logical constrain %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
+                                self.myLogger.error('The element %s of logical constraint %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
                                 return None
                            
-                            referredDns = lcVariablesDns[referredVariableName] # Get Datanodes for referred variables already defined in the logical constrain
+                            referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
                             for rDn in referredDns:
                                 eDns = []
                                 for _rDn in rDn:
                                     if _rDn is None:
                                         continue
-                                    _eDns = _rDn.getEdgeDataNode(v[1:]) # Get Datanodes for the edge defined by the path part of the v
+                                    _eDns = _rDn.getEdgeDataNode(v[1:]) # Get DataNodes for the edge defined by the path part of the v
                                     
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
                                     else:
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
-                                        self.myLogger.info('The graph node %s has no path %s requested by logical constrain %s for concept %s '%(_rDn, vNames, lc.lcName, conceptName))
+                                        self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%(_rDn, vNames, lc.lcName, conceptName))
                                         eDns.extend([None])
                                         
-                                _dnsList[i].append(eDns)
+                                dnsListForPaths[i].append(eDns)
                                 
-                        dnsList = _dnsList[0]
+                        dnsList = dnsListForPaths[0]
                             
-                        for l in _dnsList[1:]:
+                        for l in dnsListForPaths[1:]:
                             # Intersection - use lo if defined to determine if different set operation
                             _d = [x if x in l else [None] for x in dnsList]
                             dnsList = _d
                             
-                    # Get ILP variables from collected Datanodes for the given element of logical constrain
+                    # Get ILP variables from collected Datanodes for the given element of logical constraint
                     for dns in dnsList:
                         _vDns = []
                         for _dn in dns:
@@ -768,7 +765,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
                     if vDns == None:
-                        self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constrain'%(e.lcName,e,lc.lcName,lc))
+                        self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constraint'%(e.lcName,e,lc.lcName,lc))
                         return None
                         
                     lcVariables[variableName] = vDns   
@@ -846,7 +843,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             _lcP[lcP] = []
                             pUsed = True
                         
-                        _lcP[lcP].append(lc) # Keep constrain with the same p in the list 
+                        _lcP[lcP].append(lc) # Keep constraint with the same p in the list 
             
             # Sort constraints according to their p
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))

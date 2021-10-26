@@ -125,9 +125,14 @@ def main():
             #assert phrase_node.getAttribute(entity_label, 'softmax') > 0
             node.inferILPResults(fun=None)
             
+            ILPmetricsEntity = node.getInferMetric(entity_label)
+            
+            print("ILP metrics for Entity Label F1 %s"%(ILPmetricsEntity['entity_label']['F1']))
+
             ILPmetrics = node.getInferMetric()
             
             print("ILP metrics Total %s"%(ILPmetrics['Total']))
+            
             
             #assert phrase_node.getAttribute(entity_label, 'ILP') >= 0
         else:

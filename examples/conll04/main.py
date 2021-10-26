@@ -126,10 +126,10 @@ def model(use_ont):
 def main():
     
     val = 'n'
-    while True:
-        val = input("Use ontology constraint (y/n):")
-        if val == 'y' or val == 'n':
-            break
+    #while True:
+    #    val = input("Use ontology constraint (y/n):")
+    #   if val == 'y' or val == 'n':
+    #break
         
     if val == 'y':
         use_ont = True
