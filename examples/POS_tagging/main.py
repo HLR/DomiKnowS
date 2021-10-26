@@ -18,16 +18,19 @@ learning_rate=2e-3,
 samplenum=10000,
 batch_size=14,
 beta=0.1,
-embedding_dim=300,
-hidden_dim=300,
+embedding_dim=2000,
+hidden_dim=2000,
 top_pos=1000,
+max_sentence_length=30,
 )
 import warnings
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
+
 args.device="cuda:"+str(args.cuda_number) if torch.cuda.is_available() else 'cpu'
+
 print("device is :",args.device)
-vocabulary,tag_list,reader=create_reader_and_vocuabulary(samplenum=args.samplenum,top_pos=args.top_pos)
+vocabulary,tag_list,reader=create_reader_and_vocuabulary(samplenum=args.samplenum,top_pos=args.top_pos,max_sentence_length=args.max_sentence_length)
 
 random.seed(2021)
 random.shuffle(reader)

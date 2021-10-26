@@ -20,7 +20,7 @@ class LabelReader():
 def make_words( tokenized_text, tokenized_pos):
     return torch.ones((len(tokenized_text[0].split(" ")), 1)), tokenized_text[0].split(" "),tokenized_pos[0].split(" ")
 
-def create_reader_and_vocuabulary(samplenum,top_pos):
+def create_reader_and_vocuabulary(samplenum,top_pos,max_sentence_length):
     vocabulary = {"<UNK>": 0, "<begin>": 1, "<end>": 2}
     reader = []
 
@@ -36,7 +36,7 @@ def create_reader_and_vocuabulary(samplenum,top_pos):
     tag_counter = Counter()
 
     for num, i in data.iterrows():
-        if not len(i["tokenized_text"].split(" ")) ==len(i["tokenized_pos"].split(" ")):
+        if not len(i["tokenized_text"].split(" ")) ==len(i["tokenized_pos"].split(" ")) or len(i["tokenized_text"].split(" "))>max_sentence_length:
             continue
         reader.append({"sentecne": [i["tokenized_text"]], "tags": [i["tokenized_pos"]]})
         for j in i["tokenized_pos"].split(" "):
