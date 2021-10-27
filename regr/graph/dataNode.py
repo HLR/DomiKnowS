@@ -2064,6 +2064,7 @@ class DataNodeBuilder(dict):
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
 
+            supGraph = None
             if len(_dataNode) == 1:
                 rootDn = _dataNode[0]
                 _DataNodeBulder__Logger.warning('No new Batch Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'
@@ -2075,13 +2076,18 @@ class DataNodeBuilder(dict):
                         continue
                     
                     typesInDNs.add(d.getOntologyNode().name)
+                    supGraph = d.getOntologyNode().sup
                 
                 if len(typesInDNs) > 1:
                     raise ValueError('Not able to create Batch Root DataNode - DataNode Builder has DataNodes of different types: %s'%(typesInDNs))  
                 
+                if supGraph == None:
+                    raise ValueError('Not able to create Batch Root DataNode - existing DataNodes in the Builder have concept type %s not connected to any graph: %s'%(typesInDNs))  
+
                 batchRootDNValue = ""
                 batchRootDNID = 0
                 batchRootDNOntologyNode = Concept(name='batch')
+                supGraph.attach(batchRootDNOntologyNode)
                 
                 batchRootDN= DataNode(instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
             

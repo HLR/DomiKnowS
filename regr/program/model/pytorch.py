@@ -224,6 +224,11 @@ class SolverModel(PoiModel):
 #                 output = output_sensor(builder)
 #                 target = target_sensor(builder)
 #         print("Done with the computation")
+
+        # Check if this is batch
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
+            
         datanode = builder.getDataNode()
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
