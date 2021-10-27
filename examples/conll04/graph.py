@@ -1,16 +1,16 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, exactL, orL, atMostL, atMostI
+from regr.graph.logicalConstrain import ifL, andL, exactL, orL, atMostL
 
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
 # Control which logical constrains sets are used
-LC_SET_BASED = False
-LC_SET_REL = False
+LC_SET_BASED = True
+LC_SET_REL = True
 LC_SET_ADDITIONAL = True
         
-GRAPH_CONSTRAIN = LC_SET_BASED
+GRAPH_CONSTRAIN = False
  
 with Graph('global') as graph:
     with Graph('linguistic') as ling_graph:

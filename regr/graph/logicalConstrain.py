@@ -136,6 +136,35 @@ class LogicalConstrain:
         
         return strsE
     
+    #------------
+    
+    def createSingleVarILPConstrains(self, lcName, lcFun, model, v, headConstrain = False):  
+        singleV = []
+                    
+        if len(v) != 1:
+            myLogger.error("%s Logical Constrain created with %i sets of variables which is not  one"%(lcName,len(v)))
+            return singleV
+    
+        v1 = list(v.values())[0]
+        for currentILPVars in v1:
+            if not currentILPVars:
+                singleV.append([None])
+                
+            cSingleVar = []
+            for cv in currentILPVars:
+                singleVar = lcFun(model, cv, onlyConstrains = headConstrain)
+                cSingleVar.append(singleVar)
+                
+            singleV.append(cSingleVar)
+        
+        if headConstrain:
+            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+        
+        if model is not None:
+            model.update()
+        
+        return singleV
+    
     # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
     # sVars - returned list of ILP variables setups
     def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
@@ -326,35 +355,16 @@ class notL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
-        lcName = 'notL'
-              
-        notV = []
-                    
-        if len(v) != 1:
-            myLogger.error("Not Logical Constrain created with %i sets of variables which is not  one"%(len(v)))
-            return notV
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
+        return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
     
-        v1 = list(v.values())[0]
-        for currentILPVars in v1:
-            if not currentILPVars:
-                notV.append([None])
-                
-            cNonVar = []
-            for cv in currentILPVars:
-                notVar = myIlpBooleanProcessor.notVar(model, cv, onlyConstrains = headConstrain)
-                cNonVar.append(notVar)
-                
-            notV.append(cNonVar)
+class FixedL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
-        if headConstrain:
-            if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
-        
-        if model is not None:
-            model.update()
-        
-        return notV
-
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
+        return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.FixedVar, model, v, headConstrain)
+    
 # ----------------- Class Count
 
 class exactL(LogicalConstrain):

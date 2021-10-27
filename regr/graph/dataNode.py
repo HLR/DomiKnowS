@@ -1127,8 +1127,10 @@ class DataNode:
                 
                 if isinstance(cr, EnumConcept):
                     cr = (cr, cr.name, None, len(cr.enum))
-                else:
+                elif isinstance(cr, Concept):
                     cr = (cr, cr.name, None, 1)
+                else:
+                    pass
             
             # Collect date for metric from DataNode
             preds = self.collectInferredResults(cr, inferType)
@@ -1151,6 +1153,7 @@ class DataNode:
             # Translate labels - if provided as True/False to long
             labels = torch.clone(labelsR)
             labels = labels.long()
+           
             # -- Multiclass processing
             
             # Check if concept is a label from Multiclass
@@ -1171,6 +1174,8 @@ class DataNode:
                 else:
                     raise Exception("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[1], len(preds), len(labelsR)))
             
+                multiclassLabels = cr[0].enum
+                result = self.getInferMetric(*multiclassLabels, inferType=inferType, weight = weight, average=average)
             # ---
             
             # Check if date prepared correctly
@@ -1212,7 +1217,7 @@ class DataNode:
                     fn.append(_fn)
                     result[cr[1]]['FN'] = _fn # false positive
                 
-                except ValueError: # Error when both labels and preds as zeros
+                except ValueError as ve: # Error when both labels and preds as zeros
                     pass
             
             # Calculate P, R and F1
@@ -2053,7 +2058,7 @@ class DataNodeBuilder(dict):
                 
             return True
         else:
-            raise ValueError('DataNode Builder has no DataNode started yet')  
+            return False 
     
     def addBatchRootDN(self):
         if dict.__contains__(self, 'dataNode'):
@@ -2061,7 +2066,7 @@ class DataNodeBuilder(dict):
 
             if len(_dataNode) == 1:
                 rootDn = _dataNode[0]
-                _DataNodeBulder__Logger.warning('No new Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'
+                _DataNodeBulder__Logger.warning('No new Batch Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'
                                                 %(rootDn.instanceID,rootDn.getOntologyNode().name))
             else:
                 typesInDNs = set()
@@ -2087,7 +2092,7 @@ class DataNodeBuilder(dict):
                 dns.append(batchRootDN)  
                 self.__updateRootDataNodeList(dns)
 
-                _DataNodeBulder__Logger.info('Created single dataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
+                _DataNodeBulder__Logger.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
         else:
             raise ValueError('DataNode Builder has no DataNode started yet')   
         

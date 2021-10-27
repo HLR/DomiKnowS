@@ -105,9 +105,9 @@ def model():
 
     def merge_phrase(phrase_text):
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
-    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
+    #sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
+    #word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
     word['bert'] = ModuleSensor('ids', module=BERT())
 
     def match_phrase(phrase, word_offset):
@@ -206,30 +206,34 @@ def model():
                     label[i] = True
             return label # torch.stack((~label, label), dim=1)
         return find
-    pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Work_For'), label=True)
-    pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Located_In'), label=True)
-    pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Live_In'), label=True)
-    pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
-    pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
-
+    pair[work_for] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                            forward=find_relation('Work_For'), label=True)
+    pair[located_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                              forward=find_relation('Located_In'), label=True)
+    pair[live_in] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                           forward=find_relation('Live_In'), label=True)
+    pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                              forward=find_relation('OrgBased_In'), label=True)
+    pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                        forward=find_relation('Kill'), label=True)
+    
     class Program(CallbackProgram, SolverPOIProgram):
         pass
 
     lbp1 = Program(
-        graph, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
+        graph, poi=(phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
     lbp = Program(
-        graph, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+        graph, poi=(phrase, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp, lbp1
-
 
 def main(args):
     program, program1 = model()
@@ -254,7 +258,8 @@ def main(args):
     def compute_scores(item, criteria="P"):
         entities = ["location", "people", "organization", "other"]
         relations = ["work_for", "located_in", "live_in", "orgbase_on", "kill"]
-        instances = {"location": 931, "people": 793, "organization": 523, "other": 572, "work_for": 94, "located_in": 107, "live_in": 108, "orgbase_on": 93, "kill": 53}
+        instances = {"location": 931, "people": 793, "organization": 523, "other": 572, "work_for": 94, "located_in": 107, "live_in": 108, 
+                     "orgbase_on": 93, "kill": 53}
         sum_entity = 0
         sum_relations = 0
         precision_entity = 0
@@ -310,7 +315,8 @@ def main(args):
     if not args.load:
         program.after_train_epoch = [ProgramStorageCallback(program, save_epoch)]
         program.after_test_epoch = [ProgramStorageCallback(program, save_best)]
-        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: 
+                      torch.optim.SGD(param, lr=.001), device=args.gpu)
     else:
         program1.load(args.path)
     

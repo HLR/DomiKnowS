@@ -35,10 +35,10 @@ def model_declaration():
     program = SampleLossProgram(
         graph, 
         poi=(world, x,),
-        metric={ 'softmax' : ValueTracker(prediction_softmax),
-                'ILP': PRF1Tracker(DatanodeCMMetric()),
-                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
-                },
+        #metric={ 'softmax' : ValueTracker(prediction_softmax),
+        #       'ILP': PRF1Tracker(DatanodeCMMetric()),
+        #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
+        #       },
         loss=MacroAverageTracker(BCEWithLogitsLoss()),
         sample = True,
         sampleSize=100, 

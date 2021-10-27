@@ -227,3 +227,6 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
 
         countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains, limitOp=limitOp, limit=limit, )
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)
+    
+    def FixedVar(self, m, _var, onlyConstrains = False): 
+        return 0

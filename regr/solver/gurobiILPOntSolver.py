@@ -749,6 +749,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                             else:    
                                 vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
 
+                            if lc.__str__() == "FixedL":
+                                vDn.VarHintVal = self.__getLabel(dn, conceptName)
+
                             _vDns.append(vDn)
                         
                         vDns.append(_vDns)
