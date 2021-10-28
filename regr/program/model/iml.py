@@ -15,6 +15,8 @@ class IMLModel(SolverModel):
             return None
 
         builder = data_item
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         concept = prop.sup
         values = []

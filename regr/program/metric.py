@@ -50,8 +50,10 @@ class DatanodeCMMetric(torch.nn.Module):
         self.inferType = inferType
 
     def forward(self, input, target, data_item, prop, weight=None):
+        if (data_item.needsBatchRootDN()):
+            data_item.addBatchRootDN()
         datanode = data_item.getDataNode()
-        result = datanode.getInferMetric(prop.name, inferType=self.inferType)
+        result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
         val =  result[str(prop.name)]
         return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
 

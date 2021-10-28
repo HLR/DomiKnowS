@@ -238,11 +238,11 @@ def main():
         #plt.savefig(str(counter)+'.png')
         #plt.show()
         
-        ILPmetrics = datanode.getInferMetric()
+        ILPmetrics = datanode.getInferMetrics()
         print("\nILP metrics Total %s"%(ILPmetrics['Total']))
         print("ILP metrics animal %s"%(ILPmetrics['animal']))
         print("ILP metrics vehicle %s"%(ILPmetrics['vehicle']))
-        ILPmetrics = datanode.getInferMetric(tag)
+        ILPmetrics = datanode.getInferMetrics(tag)
         print("ILP metrics tag %s"%(ILPmetrics['tag']))
 
         #counter += 1

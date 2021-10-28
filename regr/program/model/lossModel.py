@@ -70,6 +70,8 @@ class LossModel(PoiModel):
                 for sensor in prop.find(TorchSensor):
                     sensor(builder)
 
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
