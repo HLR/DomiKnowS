@@ -105,9 +105,9 @@ def model():
 
     def merge_phrase(phrase_text):
         return [' '.join(phrase_text)], torch.ones((1, len(phrase_text)))
-    #sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
+    sentence['text', rel_sentence_contains_phrase.reversed] = JointSensor(phrase['text'], forward=merge_phrase)
 
-    #word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
+    word[rel_sentence_contains_word, 'ids', 'offset', 'text'] = JointSensor(sentence['text'], forward=Tokenizer())
     word['bert'] = ModuleSensor('ids', module=BERT())
 
     def match_phrase(phrase, word_offset):
