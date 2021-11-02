@@ -6,10 +6,10 @@ sys.path.append('../..')
 
 import numpy as np
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
 from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
@@ -217,19 +217,20 @@ def model():
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
                                         forward=find_relation('Kill'), label=True)
     
-    class Program(CallbackProgram, SolverPOIProgram):
+    class Program(CallbackProgram, SolverPOIDictLossProgram):
         pass
 
-    lbp1 = Program(
-        graph, poi=(phrase, pair), inferTypes=['ILP', 'local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    lbp1 = SolverPOIDictLossProgram(
+        graph, poi=(phrase, ), inferTypes=['ILP', 'local/argmax'],
+#         dictloss={str(people.name): NBCrossEntropyDictLoss(), str(location.name): NBCrossEntropyDictLoss() },
+        dictloss={"default": NBCrossEntropyDictLoss()},
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
-    lbp = Program(
-        graph, poi=(phrase, pair), inferTypes=['local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    lbp = SolverPOIDictLossProgram(
+        graph, poi=(phrase, ), inferTypes=['local/argmax'],
+        dictloss={"default": NBCrossEntropyDictLoss()},
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
