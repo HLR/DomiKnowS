@@ -222,8 +222,7 @@ def model():
 
     lbp1 = SolverPOIDictLossProgram(
         graph, poi=(phrase, ), inferTypes=['ILP', 'local/argmax'],
-#         dictloss={str(people.name): NBCrossEntropyDictLoss(), str(location.name): NBCrossEntropyDictLoss() },
-        dictloss={"default": NBCrossEntropyDictLoss()},
+        dictloss={str(people.name): NBCrossEntropyDictLoss(), str(location.name): NBCrossEntropyDictLoss(), "default": NBCrossEntropyDictLoss()},
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
