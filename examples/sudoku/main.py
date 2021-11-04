@@ -162,9 +162,11 @@ class SudokuCNN(nn.Module):
                                          Conv2dSame(512,512,3))#15
         self.last_conv = nn.Conv2d(512, 9, 1)
     def forward(self, x):
+        x = x.view(1, 1,9, 9)
         x = self.conv_layers(x)
         x = self.last_conv(x)
         x = x.permute(0,2,3,1)
+        x = x.view(81, 9)
         return x
     
     
@@ -225,13 +227,7 @@ sudoku['index'] = FunctionalReaderSensor(keyword='size', forward=createSudoku)
 empty_entry['rows', 'cols', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
 empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_rel, keyword='whole_sudoku', forward=getfixed)
 
-class FunctionalModuleLearner(ModuleLearner):
-    def forward(self, *inputs):
-        inputs = list(inputs)
-        inputs[0] = inputs[0].view(1, 1,9, 9)
-        return self.module(*inputs)
-
-empty_entry[empty_entry_label] = FunctionalModuleLearner('val', module=SudokuCNN())
+empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuCNN())
 empty_entry[empty_entry_label] = FunctionalReaderSensor(keyword='whole_sudoku', label=True, forward=getlabel)
 # fixed_entries['rows1', 'cols'] = JointFunctionalReaderSensor(keyword='whole_sudoku', forward=getfixed)
 
@@ -250,18 +246,18 @@ program = SolverPOIProgram(
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-program = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric={
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-
 # program = SolverPOIProgram(
-#         graph, poi=(sudoku, empty_entry, ), inferTypes=['ILP', 'local/argmax'],
+#         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
-#             'ILP': PRF1Tracker(DatanodeCMMetric()),
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
+program = SolverPOIProgram(
+        graph, poi=(sudoku, empty_entry, ), inferTypes=['ILP', 'local/argmax'],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 for datanode in program.populate(trainreader):
     print(datanode)
