@@ -328,6 +328,13 @@ class PoiModelDictLoss(PoiModel):
         if self.metric_tracker is not None:
             self.metric_tracker.reset()
             
+        if isinstance(self.loss, MetricTracker):
+            self.loss.reset()
+        if self.metric is not None:
+            for metric in self.metric.values():
+                if isinstance(metric, MetricTracker):
+                    metric.reset()
+            
     def poi_loss(self, data_item, prop, sensors):
         if self.dictloss:
             if not self.loss:
