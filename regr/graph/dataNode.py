@@ -714,7 +714,7 @@ class DataNode:
             return [self]
 
         # Path has single element
-        if len(path) == 1:
+        if not isinstance(path[0], eqL) and len(path) == 1:
             relDns = self.getDnsForRelation(path[0])
                     
             if relDns is None or len(relDns) == 0 or relDns[0] is None:
@@ -726,7 +726,18 @@ class DataNode:
         else:
             path0 = path[0]
 
-        relDns = self.getDnsForRelation(path0)
+        if self.isRelation(path0):
+            relDns = self.getDnsForRelation(path0)
+        else:
+            attributeValue = self.getAttribute(path[0].e[1]).item()
+            if attributeValue == 1:
+                attributeValue = True
+            else:
+                attributeValue = False
+            if attributeValue in  path[0].e[2]:
+                return [self]
+            else:
+                return [None]
                     
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]

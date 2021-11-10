@@ -14,7 +14,7 @@ import torch
 # Gurobi
 from gurobipy import GRB, Model
 
-from regr.graph.concept import Concept
+from regr.graph.concept import Concept, EnumConcept
 from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
@@ -167,8 +167,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         
                     Q += currentProbability[0] * xNotNew    
 
-                else:
-                    self.myLogger.info("No ILP negative variable for concept %s and dataNode %s created"%( _conceptRelation[1], dn.getInstanceID()))
+            if _conceptRelation[2] is not None:
+                self.myLogger.info("No ILP negative variable for multiclass concept %s created"%( _conceptRelation[1]))
 
         m.update()
 
@@ -713,10 +713,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                             referredVariableName = v[0] # Get name of the referred variable already defined in the logical constraint from the v part 
                         
                             if referredVariableName not in lcVariablesDns:
-                                self.myLogger.error('The element %s of logical constraint %s has v referring to undefined variable %s'%(conceptName, lc.lcName, referredVariableName))
-                                return None
-                           
-                            referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
+                                rootConcept = dn.findRootConceptOrRelation(conceptName)
+                                _dns = dn.findDatanodes(select = rootConcept)
+                                referredDns = [[dn] for dn in _dns]
+                            else:
+                                referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
+                                
                             for rDn in referredDns:
                                 eDns = []
                                 for _rDn in rDn:
@@ -728,7 +730,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         eDns.extend(_eDns)
                                     else:
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
-                                        self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%(_rDn, vNames, lc.lcName, conceptName))
+                                        if lc.__str__() != "FixedL":
+                                            self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%(_rDn, vNames, lc.lcName, conceptName))
                                         eDns.extend([None])
                                         
                                 dnsListForPaths[i].append(eDns)
@@ -746,13 +749,29 @@ class gurobiILPOntSolver(ilpOntSolver):
                         for _dn in dns:
                             if not _dn:
                                 vDn = None
-                            else:    
-                                vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
-
-                            if lc.__str__() == "FixedL":
-                                vDn.VarHintVal = self.__getLabel(dn, conceptName)
-
-                            _vDns.append(vDn)
+                            else:   
+                                if isinstance(e[0], EnumConcept):
+                                    eList = e[0].enum
+                                    for i, eC in enumerate(eList):
+                                        eT = (e[0], 0, i)
+                                        vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                        
+                                        if lc.__str__() == "FixedL":
+                                            vDnLabel = self.__getLabel(_dn, conceptName).item()
+                                            
+                                            if vDnLabel == -100:
+                                                vDn.VTag = "None" + vDn.VarName
+                                            elif vDnLabel == i:
+                                                vDn.VTag = "True" + vDn.VarName
+                                            else:
+                                                vDn.VTag = "False" + vDn.VarName
+                                                
+                                            m.update()
+                                            
+                                        _vDns.append(vDn)
+                                else:
+                                    vDn = self.getMLResult(_dn, conceptName, xPkey, e, p, loss = loss, sample=sample)
+                                    _vDns.append(vDn)
                         
                         vDns.append(_vDns)
                         
