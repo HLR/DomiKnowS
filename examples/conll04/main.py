@@ -126,10 +126,10 @@ def model(use_ont):
 def main():
     
     val = 'n'
-    while True:
-        val = input("Use ontology constraint (y/n):")
-        if val == 'y' or val == 'n':
-            break
+    #while True:
+    #    val = input("Use ontology constraint (y/n):")
+    #   if val == 'y' or val == 'n':
+    #break
         
     if val == 'y':
         use_ont = True
@@ -161,7 +161,7 @@ def main():
 
         node.infer()
         node.inferLocal()
-        argmax_metrics = node.getInferMetric(inferType='local/argmax')
+        argmax_metrics = node.getInferMetrics(inferType='local/argmax')
         print("\nArgmax metrics Total %s"%(argmax_metrics['Total']))
         print("\nArgmax metrics work_for %s"%(argmax_metrics['work_for']))
         print("\nArgmax metrics people %s"%(argmax_metrics['people']))
@@ -170,11 +170,11 @@ def main():
             assert phrase_node.getAttribute(people, 'softmax') > 0
             node.inferILPResults(fun=None)
             
-            ILPmetrics = node.getInferMetric()
+            ILPmetrics = node.getInferMetrics()
             
             print("\nILP metrics Total %s"%(ILPmetrics['Total']))
             print("ILP metrics work_for %s"%(ILPmetrics['work_for']))
-            ILPmetrics = node.getInferMetric(people)
+            ILPmetrics = node.getInferMetrics(people)
             print("ILP metrics people %s"%(ILPmetrics['people']))
 
             assert phrase_node.getAttribute(people, 'ILP') >= 0

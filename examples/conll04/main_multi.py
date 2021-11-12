@@ -1,6 +1,6 @@
 import torch
 
-from regr.program import POIProgram, IMLProgram
+from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
@@ -10,11 +10,10 @@ from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
 
-
 import spacy
+
 # from spacy.lang.en import English
 nlp = spacy.load('en_core_web_sm') #English()
-
 
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features, out_features) -> None:
@@ -25,7 +24,6 @@ class Classifier(torch.nn.Sequential):
     
     def forward(self, input):
         return super().forward(input)
-
 
 def model():
     from graph_multi import graph_multi, sentence, word, phrase, pair
@@ -84,9 +82,10 @@ def model():
         return find
     
     #TODO change the reader
-    pair[pair_label] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation(), label=True)
+    pair[pair_label] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                              forward=find_relation(), label=True)
 
-    lbp = POIProgram(
+    lbp = SolverPOIProgram(
         graph_multi,
         poi=(phrase, sentence, pair),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -97,7 +96,6 @@ def model():
     #     metric=PRF1Tracker())
 
     return lbp
-
 
 def main():
     from graph_multi import graph_multi, sentence, word, phrase, pair
@@ -115,6 +113,7 @@ def main():
     reader = SingletonDataLoader('data/conll04.corp')
 
     for node in program.populate(reader, device='auto'):
+        #program.test(reader, device='auto')
         assert node.ontologyNode is sentence
         phrase_node = node.getChildDataNodes()[0]
         assert phrase_node.ontologyNode is phrase
@@ -125,15 +124,19 @@ def main():
             #assert phrase_node.getAttribute(entity_label, 'softmax') > 0
             node.inferILPResults(fun=None)
             
-            ILPmetrics = node.getInferMetric()
+            ILPmetricsEntity = node.getInferMetrics(entity_label)
+            
+            print("ILP metrics for Entity Label F1 %s"%(ILPmetricsEntity['entity_label']['F1']))
+
+            ILPmetrics = node.getInferMetrics()
             
             print("ILP metrics Total %s"%(ILPmetrics['Total']))
+            
             
             #assert phrase_node.getAttribute(entity_label, 'ILP') >= 0
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
             break
-
 
 if __name__ == '__main__':
     main()

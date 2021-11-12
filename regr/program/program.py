@@ -145,7 +145,7 @@ class dbUpdate():
         #Step 3: Insert business object directly into MongoDB via isnert_one
         try:
             result = self.results.insert_one(mlResult)
-        except :
+        except Exception as e:
             return
 
         if result.inserted_id:
@@ -159,7 +159,16 @@ class LearningBasedProgram():
         self.logger = logger or logging.getLogger(__name__)
         self.dbUpdate = None if db else dbUpdate(graph)
 
-        self.model = Model(graph, **kwargs)
+        from inspect import signature
+        modelSignature = signature(Model.__init__)
+        
+        modelKwargs = {}
+        for param in modelSignature.parameters.values():
+            paramName = param.name
+            if paramName in kwargs:
+                modelKwargs[paramName] = kwargs[paramName]
+                
+        self.model = Model(graph, **modelKwargs)
         self.opt = None
         self.epoch = None
         self.stop = None

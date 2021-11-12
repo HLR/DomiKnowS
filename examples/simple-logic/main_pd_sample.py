@@ -5,6 +5,7 @@ def model_declaration():
     import torch
     from regr.program import LearningBasedProgram, IMLProgram
     from regr.program.lossprogram import SampleLossProgram
+    from regr.program.model.pytorch import SolverModel
     from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
     from regr.sensor.pytorch.relation_sensors import EdgeSensor
     from regr.sensor.pytorch.learners import ModuleLearner
@@ -33,13 +34,18 @@ def model_declaration():
 
     # program = LearningBasedProgram(graph, MyIMLModel)
     program = SampleLossProgram(
-        graph, 
+        graph, SolverModel,
         poi=(world, x,),
-        metric={ 'softmax' : ValueTracker(prediction_softmax),
-                'ILP': PRF1Tracker(DatanodeCMMetric()),
-                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
-                },
+        # inferTypes=['ILP', 'local/argmax'],
+        
+        metric=ValueTracker(prediction_softmax),
+
+        #metric={ 'softmax' : ValueTracker(prediction_softmax),
+        #       'ILP': PRF1Tracker(DatanodeCMMetric()),
+        #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
+        #       },
         loss=MacroAverageTracker(BCEWithLogitsLoss()),
+        
         sample = True,
         sampleSize=100, 
         sampleGlobalLoss = True
@@ -61,7 +67,7 @@ def main():
         'y0': [[1.,0.]],
         'y1': [[0.,1.]]
         }]
-    program.train(data, train_epoch_num=20, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+    program.train(data, train_epoch_num=20, c_warmup_iters=2, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
     print('Train loss:', program.model.loss)
 
     program.test(data)

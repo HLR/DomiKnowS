@@ -49,6 +49,8 @@ class PrimalDualModel(torch.nn.Module):
             build = self.build
         if not build or not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on.')
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         # call the loss calculation
         # returns a dictionary, keys are matching the constraints
