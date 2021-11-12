@@ -670,7 +670,11 @@ class DataNode:
     def isRelation(self, conceptRelation, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
-            
+        
+        from  regr.graph.relation import Relation
+        if isinstance(conceptRelation, Relation):
+            return True
+        
         if len(conceptRelation.has_a()) > 0:  
             return True
         
