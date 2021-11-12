@@ -139,9 +139,22 @@ class PRF1Tracker(MetricTracker):
 
     def forward(self, values):
         CM = wrap_batch(values)
-        tp = CM['TP'].sum().float()
-        fp = CM['FP'].sum().float()
-        fn = CM['FN'].sum().float()
+        
+        if isinstance(CM['TP'], list):
+            tp = sum(CM['TP'])
+        else:
+            tp = CM['TP'].sum().float()
+            
+        if isinstance(CM['FP'], list):
+            fp = sum(CM['FP'])
+        else:
+            fp = CM['FP'].sum().float()
+            
+        if isinstance(CM['FN'], list):
+            fn = sum(CM['FN'])
+        else:
+            fn = CM['FN'].sum().float()
+            
         if tp:
             p = tp / (tp + fp)
             r = tp / (tp + fn)
@@ -151,7 +164,6 @@ class PRF1Tracker(MetricTracker):
             r = torch.zeros_like(tp)
             f1 = torch.zeros_like(tp)
         return {'P': p, 'R': r, 'F1': f1}
-
 
 class BinaryPRF1Tracker(PRF1Tracker):
     def __init__(self, metric=BinaryCMWithLogitsMetric()):

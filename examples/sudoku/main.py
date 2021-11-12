@@ -58,7 +58,7 @@ trainreader = SudokuReader("randn", type="raw")
 
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, FixedL, eqL
 from regr.graph import EnumConcept
 
 
@@ -96,30 +96,45 @@ with Graph('global') as graph:
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
 
 
-    ### Constriants
+    ### Constraints
+    # entry = concept(name="entry")
+    # entry["given"] = ReaderSensor(keyword="given")
+    # entry_label= entry(name="label")
+    # FixedL(entry_label("x", eqL(entry, "given", {True})))
+    
+    FixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})))
+    
+    #FixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
+
     
     for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
         ### No same number in the same row between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), notL(
-            existsL(
-                andL(
-                    same_row('z', path=("x", same_row_arg1.reversed)), getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            notL(
+                existsL(
+                    andL(
+                        same_row('z', path=("x", same_row_arg1.reversed)), 
+                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
                 ))
         ))
         
         ### No same number in the same column between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), notL(
-            existsL(
-                andL(
-                    same_col('z', path=("x", same_col_arg1.reversed)), getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            notL(
+                existsL(
+                    andL(
+                        same_col('z', path=("x", same_col_arg1.reversed)), 
+                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
                 ))
         ))
         
         ### No same number in the same table between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), notL(
-            existsL(
-                andL(
-                    same_table('z', path=("x", same_table_arg1.reversed)), getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            notL(
+                existsL(
+                    andL(
+                        same_table('z', path=("x", same_table_arg1.reversed)), 
+                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
                 ))
         ))
 
@@ -162,9 +177,11 @@ class SudokuCNN(nn.Module):
                                          Conv2dSame(512,512,3))#15
         self.last_conv = nn.Conv2d(512, 9, 1)
     def forward(self, x):
+        x = x.view(1, 1,9, 9)
         x = self.conv_layers(x)
         x = self.last_conv(x)
         x = x.permute(0,2,3,1)
+        x = x.view(81, 9)
         return x
     
     
@@ -225,13 +242,7 @@ sudoku['index'] = FunctionalReaderSensor(keyword='size', forward=createSudoku)
 empty_entry['rows', 'cols', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
 empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_rel, keyword='whole_sudoku', forward=getfixed)
 
-class FunctionalModuleLearner(ModuleLearner):
-    def forward(self, *inputs):
-        inputs = list(inputs)
-        inputs[0] = inputs[0].view(1, 1,9, 9)
-        return self.module(*inputs)
-
-empty_entry[empty_entry_label] = FunctionalModuleLearner('val', module=SudokuCNN())
+empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuCNN())
 empty_entry[empty_entry_label] = FunctionalReaderSensor(keyword='whole_sudoku', label=True, forward=getlabel)
 # fixed_entries['rows1', 'cols'] = JointFunctionalReaderSensor(keyword='whole_sudoku', forward=getfixed)
 
@@ -250,18 +261,18 @@ program = SolverPOIProgram(
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-program = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric={
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-
 # program = SolverPOIProgram(
-#         graph, poi=(sudoku, empty_entry, ), inferTypes=['ILP', 'local/argmax'],
+#         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
-#             'ILP': PRF1Tracker(DatanodeCMMetric()),
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
+program = SolverPOIProgram(
+        graph, poi=(sudoku, empty_entry, ), inferTypes=['ILP', 'local/argmax'],
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 for datanode in program.populate(trainreader):
     print(datanode)
