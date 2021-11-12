@@ -87,11 +87,12 @@ with Graph('global') as graph:
     
     same_col = Concept(name="same_col")
 #     same_col_mixed = Concept(name="same_col_mixed")
-    (same_col_arg1, same_col_arg2) = same_col.has_a(arg1=empty_entry, arg2=empty_entry)
+    (same_col_arg1, same_col_arg2) = same_col.has_a(col1=empty_entry, col2=empty_entry)
+    print(same_col_arg1)
 #     (same_col_mixed_arg1, same_col_mixed_arg2) = same_col_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
 
     same_table = Concept(name="same_table")
-    (same_table_arg1, same_table_arg2) = same_col.has_a(arg1=empty_entry, arg2=empty_entry)
+    (same_table_arg1, same_table_arg2) = same_col.has_a(entry1=empty_entry, entry2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
 
@@ -244,6 +245,39 @@ empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_
 
 empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuCNN())
 empty_entry[empty_entry_label] = FunctionalReaderSensor(keyword='whole_sudoku', label=True, forward=getlabel)
+
+def filter_col(*inputs, col1, col2):
+    if col1.getAttribute('cols').item() == col2.getAttribute('cols').item() and col1.instanceID != col2.instanceID:
+        return True
+    return False
+    
+same_col[same_col_arg1.reversed, same_col_arg2.reversed] = CompositionCandidateSensor(
+    empty_entry['cols'],
+    relations=(same_col_arg1.reversed, same_col_arg2.reversed),
+    forward=filter_col)
+
+def filter_row(*inputs, arg1, arg2):
+    if arg1.getAttribute('rows').item() == arg2.getAttribute('rows').item() and arg1.instanceID != arg2.instanceID:
+        return True
+    return False
+    
+same_row[same_row_arg1.reversed, same_row_arg2.reversed] = CompositionCandidateSensor(
+    empty_entry['rows'],
+    relations=(same_row_arg1.reversed, same_row_arg2.reversed),
+    forward=filter_row)
+
+
+def filter_table(*inputs, entry1, entry2):
+    if entry1.instanceID != entry2.instanceID:
+        if int(entry1.getAttribute('rows').item() / 3) == int(entry2.getAttribute('rows').item() / 3) and int(entry1.getAttribute('cols').item() / 3) == int(entry2.getAttribute('cols').item() / 3):
+            return True
+    return False
+    
+same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCandidateSensor(
+    empty_entry['rows'], empty_entry['cols'],
+    relations=(same_table_arg1.reversed, same_table_arg2.reversed),
+    forward=filter_table)
+
 # fixed_entries['rows1', 'cols'] = JointFunctionalReaderSensor(keyword='whole_sudoku', forward=getfixed)
 
 
@@ -268,7 +302,7 @@ program = SolverPOIProgram(
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 program = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, ), inferTypes=['ILP', 'local/argmax'],
+        graph, poi=(sudoku, empty_entry, same_col, same_row, same_table), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
