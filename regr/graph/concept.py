@@ -46,11 +46,15 @@ class Concept(BaseGraphTree):
         return type(self) + ":" + self.name
     
     def processLCArgs(self, *args, index=1, index2= 0, **kwargs):
-        if len(args) and isinstance(args[0], str):
+        from regr.graph.logicalConstrain import eqL, V
+        if len(args) > 1 and isinstance(args[1], eqL):
+            nameX= args[0]
+            path = (nameX, args[1])
+                                    
+            return [(self, index, index2), V(name=nameX, v=path)]
+        elif len(args) and isinstance(args[0], str):
             name = args[0]
             #args = args[1:]
-
-            from regr.graph.logicalConstrain import V
             
             if "path" in kwargs:
                 path = kwargs['path']
@@ -61,8 +65,6 @@ class Concept(BaseGraphTree):
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            from regr.graph.logicalConstrain import V
-
             return [(self, index, index2), V(name=None, v=path)]
         else:
             return [(self, index, index2)]

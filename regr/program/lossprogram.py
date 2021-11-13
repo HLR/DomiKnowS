@@ -27,11 +27,24 @@ def reverse_sign_grad(parameters, factor=-1.):
             parameter.grad = factor * parameter.grad
 
 class LossProgram(LearningBasedProgram):
+    DEFAULTCMODEL = PrimalDualModel
+
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, Model=PrimalDualModel, beta=1, **kwargs):
+    def __init__(self, graph, Model, CModel=None, beta=1, **kwargs):
         super().__init__(graph, Model, **kwargs)
+        if CModel is None:
+            CModel = self.DEFAULTCMODEL
+            
+        from inspect import signature
+        cmodelSignature = signature(CModel.__init__)
         
+        cmodelKwargs = {}
+        for param in cmodelSignature.parameters.values():
+            paramName = param.name
+            if paramName in kwargs:
+                cmodelKwargs[paramName] = kwargs[paramName]
+        self.cmodel = CModel(graph, **cmodelKwargs)
         self.copt = None
         self.beta = beta
 
@@ -109,7 +122,7 @@ class LossProgram(LearningBasedProgram):
             if iter < c_warmup_iters:
                 loss = mloss
             else:
-                closs, *_ = self.model(output[1])
+                closs, *_ = self.cmodel(output[1])
                 loss = mloss + self.beta * closs
             if self.opt is not None and loss:
                 loss.backward()
@@ -178,11 +191,11 @@ class LossProgram(LearningBasedProgram):
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, beta=1, **kwargs):
-        super().__init__(graph, Model=PrimalDualModel, **kwargs)
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=PrimalDualModel, beta=beta, **kwargs)
         
 class SampleLossProgram(LossProgram):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, beta=1, **kwargs):
-        super().__init__(graph, Model = SampleLosslModel, **kwargs)
+    def __init__(self, graph, Model, beta=1, **kwargs):
+        super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)

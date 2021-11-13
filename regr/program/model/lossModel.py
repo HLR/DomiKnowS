@@ -8,14 +8,18 @@ import torch
 from ...graph import DataNodeBuilder, DataNode
 from ..metric import MetricTracker, MacroAverageTracker
 
-from regr.program.model.pytorch import PoiModel
-
-class LossModel(PoiModel):
+class LossModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, poi = (), loss=None, metric=None, tnorm=DataNode.tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-        super().__init__(graph, poi=poi, loss=loss, metric=metric)
+    def __init__(self, graph, 
+                 tnorm=DataNode.tnormsDefault, 
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False):
+        super().__init__()
+        self.graph = graph
+        self.build = True
+        
         self.tnorm = tnorm
+        
         self.sample = sample
         self.sampleSize = sampleSize
         self.sampleGlobalLoss = sampleGlobalLoss
@@ -38,7 +42,7 @@ class LossModel(PoiModel):
             self.lmbd_p[i] = -np.log(1 - p)  # range: [0, inf)
             
         self.reset_parameters()
-        #self.loss = MacroAverageTracker(lambda x:x)
+        self.loss = MacroAverageTracker(lambda x:x)
 
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 1.)
@@ -50,60 +54,46 @@ class LossModel(PoiModel):
     def get_lmbd(self, key):
         return self.lmbd[self.lmbd_index[key]].clamp(max=self.lmbd_p[self.lmbd_index[key]])
 
-    def forward(self, builderOrData, build=None):
-        loss, metric, datanode, builder = super().forward(builderOrData, build) 
-        
+    def forward(self, builder, build=None):
         if build is None:
             build = self.build
             
-        if not build and not isinstance(builderOrData, DataNodeBuilder):
+        if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
-        if isinstance(builderOrData, DataNodeBuilder):
-            builder = builderOrData
-        else:       
-            builderOrData.update({"graph": self.graph, 'READER': 0})
-            
-            builder = DataNodeBuilder(builderOrData)
-            from regr.sensor.pytorch.sensors import TorchSensor
-            for prop in self.poi:
-                for sensor in prop.find(TorchSensor):
-                    sensor(builder)
-
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
+        lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['lossGlobalTensor']:
             globalLoss = constr_loss['lossGlobalTensor'].item()
             lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
         else:
-            lmbd_loss = []
             for key, loss in constr_loss.items():
                 if key not in self.constr:
                     continue
                 loss_value = loss['lossTensor'].clamp(min=0)
                 loss_nansum = loss_value[loss_value==loss_value].sum()
                 loss_ = self.get_lmbd(key) * loss_nansum
-                #self.loss[key](loss_)
+                self.loss[key](loss_)
                 lmbd_loss.append(loss_)
             lmbd_loss = torch.tensor(sum(lmbd_loss), requires_grad=True)
         
         # (*out, datanode, builder)
-        return lmbd_loss, metric, datanode, builder
-    
-    def populate(self, builder, run=True):
-        return super().populate(builder, run=False)
+        return lmbd_loss, datanode, builder
     
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, poi = (), loss=None, metric=None, tnorm=DataNode.tnormsDefault):
-        super().__init__(graph, poi=poi, loss=loss, metric=metric, tnorm=tnorm)
+    def __init__(self, graph, tnorm=DataNode.tnormsDefault):
+        super().__init__(graph, tnorm=tnorm)
         
 class SampleLosslModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, poi = (), loss=None, metric=None, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-        super().__init__(graph, poi=poi, loss=loss, metric=metric, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+    def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
+        super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
