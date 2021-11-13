@@ -122,7 +122,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,0))
                 return 0
             
-        varNOT = m.addVar(vtype=GRB.BINARY, name="not_%s"%(varName))
+        varNOTName = "not_%s"%(varName)
+        varNOTName = varNOTName[:254]
+        varNOT = m.addVar(vtype=GRB.BINARY, name=varNOTName)
         if m: m.update()
 
         m.addConstr(1 - var == varNOT, name='Not:')
@@ -217,7 +219,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var1Name))
                 return var1
         else:
-            varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1Name, var2Name))
+            varANDName = "and_%s_%s"%(var1Name, var2Name)
+            varANDName = varANDName[:254]
+            varAND = m.addVar(vtype=GRB.BINARY, name=varANDName)
             if m: m.update()
 
             m.addConstr(varAND - var1 <= 0, name='And:') # varAND <= var1
@@ -320,6 +324,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return currentVar
                 
         # Create new variable
+        andVarName = andVarName[:254]
         varAND = m.addVar(vtype=GRB.BINARY, name=andVarName)
         if m: m.update()
 
@@ -414,7 +419,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var1Name))
                 return var1
         else: # Both variables are ILP variables
-            varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1Name, var2Name))
+            varORName = "or_%s_%s"%(var1Name, var2Name)
+            varORName = varORName[:254]
+            varOR=m.addVar(vtype=GRB.BINARY, name=varORName)
             if m: m.update()
 
             m.addConstr(var1 - varOR <= 0, name='Or:') # var1 <= varOR
@@ -524,6 +531,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return currentVar
                 
         # Create new variable
+        orVarName = orVarName[:254]
         varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
         if m: m.update()
 
@@ -632,7 +640,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
                 return var1
         else:
-            varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
+            varNANDName = "nand_%s_%s"%(var1, var2)
+            varNANDName = varNANDName[:254]
+            varNAND = m.addVar(vtype=GRB.BINARY, name=varNANDName)
             if m: m.update()
 
             m.addConstr(self.notVar(m, varNAND) <= var1, name='Nand:')
@@ -709,6 +719,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             nandVarName += "_%s"%(currentVar)
             
+        nandVarName = nandVarName[:254]
         varNAND = m.addVar(vtype=GRB.BINARY, name=nandVarName)
         for currentVar in var:
             m.addConstr(self.notVar(m, varNAND) <= currentVar, name='Nand:')
@@ -728,7 +739,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             m.addConstr(var1 + var2 <= 0)
             return
         
-        varNOR = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(var1, var2))
+        varNORName = "nor_%s_%s"%(var1, var2)
+        varNORName = varNORName[:254]
+        varNOR = m.addVar(vtype=GRB.BINARY, name=varNORName)
             
         m.addConstr(var1 <= self.notVar(m, varNOR))
         m.addConstr(var2 <= self.notVar(m, varNOR))
@@ -758,6 +771,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             _norVarName += "_%s"%(currentVar)
            
+        _norVarName = _norVarName [:254]
         varNOR = m.addVar(vtype=GRB.BINARY, name=_norVarName)
         for currentVar in var:
             m.addConstr(currentVar <= self.notVar(m, varNOR))
@@ -798,7 +812,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
             return
         
-        varXOR = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(var1, var2))
+        varXORName = "xor_%s_%s"%(var1, var2)
+        varXORName = varXORName[:254]
+        varXOR = m.addVar(vtype=GRB.BINARY, name=varXORName)
             
         m.addConstr(var1 + var2 + varXOR <= 2)
         m.addConstr(-var1 - var2 + varXOR <= 0)
@@ -863,7 +879,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %s"%(logicMethodName,var1Name,var2Name))
                 return
     
-        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_then_%s"%(var1Name, var2Name))
+        varIFName = "if_%s_then_%s"%(var1Name, var2Name)
+        varIFName = varIFName[:254]
+        varIF = m.addVar(vtype=GRB.BINARY, name=varIFName)
             
         m.addConstr(1 - var1 <= varIF, name='If:')
         m.addConstr(var2 <= varIF, name='If:')
@@ -908,7 +926,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             self.__addToConstrainCaches('eqVar', onlyConstrains, (var1, var2), None)
             return
         
-        varEQ = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(var1, var2))
+        varEQName = "epq_%s_%s"%(var1, var2)
+        varEQName = varEQName[:254]
+        varEQ = m.addVar(vtype=GRB.BINARY, name=varEQName)
             
         m.addConstr(var1 + var2 - varEQ <= 1)
         m.addConstr(var1 + var2 + varEQ >= 1)
@@ -1024,6 +1044,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 countVarName += "_%s_"%(currentVar.VarName)
             
         countVarName = countVarName[:-1]
+        countVarName = countVarName[:254]
         # Create new variable
         varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
         if m: m.update()
