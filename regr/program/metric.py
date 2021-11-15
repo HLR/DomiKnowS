@@ -160,9 +160,9 @@ class PRF1Tracker(MetricTracker):
             r = tp / (tp + fn)
             f1 = 2 * p * r / (p + r)
         else:
-            p = torch.zeros_like(tp)
-            r = torch.zeros_like(tp)
-            f1 = torch.zeros_like(tp)
+            p = torch.zeros_like(torch.tensor(tp))
+            r = torch.zeros_like(torch.tensor(tp))
+            f1 = torch.zeros_like(torch.tensor(tp))
         return {'P': p, 'R': r, 'F1': f1}
 
 class BinaryPRF1Tracker(PRF1Tracker):
