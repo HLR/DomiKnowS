@@ -168,7 +168,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     Q += currentProbability[0] * xNotNew    
 
             if _conceptRelation[2] is not None:
-                self.myLogger.info("No ILP negative variable for multiclass concept %s created"%( _conceptRelation[1]))
+                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( _conceptRelation[1]))
 
         m.update()
 
@@ -932,7 +932,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.model['x'] = xP
                 
                     
-                self.myLogger.info('Optimizing model for logical constraints with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLogger.info('Optimizing model for lCs with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 startOptimize = datetime.now()
 
@@ -949,7 +949,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
-                    self.myLogger.info('%s optimal solution was found for p - %i with value %f - solver time: %ims'%('Min' if minimizeObjective else 'Max', p, mP.ObjVal,elapsedOptimize.microseconds/1000))
+                    self.myLogger.info('%s solution was found in %ims for p - %i with optimal value: %.2f'
+                                       %('Min' if minimizeObjective else 'Max', elapsedOptimize.microseconds/1000, p, mP.ObjVal))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:

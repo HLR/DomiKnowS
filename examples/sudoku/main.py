@@ -92,7 +92,7 @@ with Graph('global') as graph:
 #     (same_col_mixed_arg1, same_col_mixed_arg2) = same_col_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
 
     same_table = Concept(name="same_table")
-    (same_table_arg1, same_table_arg2) = same_col.has_a(entry1=empty_entry, entry2=empty_entry)
+    (same_table_arg1, same_table_arg2) = same_table.has_a(entry1=empty_entry, entry2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
 

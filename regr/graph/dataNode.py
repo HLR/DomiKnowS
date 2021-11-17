@@ -1058,7 +1058,7 @@ class DataNode:
                 dn.attributes[keyArgmax] = vArgmax
         
     # Calculate ILP prediction for data graph with this instance as a root based on the provided list of concepts and relations
-    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False, reuseModel = False):
+    def inferILPResults(self, *_conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.info('Called with empty list of concepts and relations for inference')
         else:
@@ -1071,7 +1071,7 @@ class DataNode:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
         else:        
-            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[0].name if isinstance(x, tuple) else x for x in _conceptsRelations]))
+            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]))
                 
         myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
@@ -1079,7 +1079,7 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def verifySelection(self, *_conceptsRelations):
         
@@ -1099,7 +1099,7 @@ class DataNode:
         return verifyResult
     
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
-    tnorms = ['L', 'G', 'P']
+    #tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
     def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
         
@@ -1196,7 +1196,12 @@ class DataNode:
             # Check if concept is a  Multiclass
             elif (cr[2] is None) and cr[3] > 1: # Multiclass general without index (cr[2]) - called by the IML model forward method
                 if preds.shape[0] == len(labelsR):
+                    predsOriginal = preds
                     preds = torch.nonzero(preds, as_tuple=True)[1]
+                    
+                    if preds.shape[0] != len(labelsR):
+                        _DataNode__Logger.warning("Concept %s predictions tensor has some predictions not calculated - %s"%(cr[1], predsOriginal))
+                    
                     isMulticlass = True
                     _DataNode__Logger.info("Concept %s is Multiclass "%(cr[1]))
                     _DataNode__Logger.info("Using average %s for Multiclass metrics calculation"%(average))
@@ -1211,15 +1216,15 @@ class DataNode:
             
             # Check if date prepared correctly
             if preds.dim() != 1:
-                _DataNode__Logger.warning("Concept %s predictions is Tensor with dimension %s- not able to calculate metrics"%(cr[1], preds.dim()))
+                _DataNode__Logger.warning("Concept %s predictions is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], preds.dim()))
                 continue
             
             if labels.dim() != 1:
-                _DataNode__Logger.warning("Concept %s labels is Tensor with dimension %s- not able to calculate metrics"%(cr[1], labels.dim()))
+                _DataNode__Logger.warning("Concept %s labels is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], labels.dim()))
                 continue
             
             if  preds.size()[0] != labels.size()[0]:
-                _DataNode__Logger.warning("Concept %s labels size %s is not equal to prediction size %s- not able to calculate metrics"%(cr[1], labels.size()[0], preds.size()[0]))
+                _DataNode__Logger.warning("Concept %s labels size %s is not equal to prediction size %s - not able to calculate metrics"%(cr[1], labels.size()[0], preds.size()[0]))
                 continue
             
             # Prepare the metrics result storage
@@ -1496,7 +1501,7 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if not dnE.impactLinks: 
+            if not dnE.impactLinks: #or (dnE.ontologyNode.name in dnE.impactLinks): 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)    
 
@@ -1715,24 +1720,31 @@ class DataNodeBuilder(dict):
                 
         _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
+        # --- Create dataNodes
+        
+        # Check the type of sensor data
         if vInfo.dim == 0: 
             _DataNodeBulder__Logger.warning('Provided value is empty %s - abandon the update'%(vInfo.value))
             return
-        elif vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
+        elif vInfo.dim == 1: # List with indexes for new DataNodes and data for attribute
             _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
             for vIndex, v in enumerate(vInfo.value):
                 instanceValue = ""
                 instanceID = vIndex
+                
+                # Create new DataNode
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
+                # add attribute
                 _dn.attributes[keyDataName] = v
                 
                 dns1.append(_dn)
-                                    
+                      
+            # Single list of new DateNodes              
             dns.append(dns1)              
-        elif vInfo.dim == 2:
+        elif vInfo.dim == 2: # Two dimensional realtion information
             if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
@@ -1750,8 +1762,14 @@ class DataNodeBuilder(dict):
                                                     %(conceptInfo['relationName'],requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
-                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'
-                                             %(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
+                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
+                
+                if not conceptInfo['relation']:
+                    _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+                    if conceptInfo["relationMode"] == "forward":
+                        _DataNodeBulder__Logger.info('%s is contain in %s'%(conceptInfo["relationMode"], relatedDnsType))
+                    else:
+                        _DataNodeBulder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptInfo["relationMode"]))
 
                 for i in range(0,vInfo.len):
                     instanceValue = ""
@@ -1761,7 +1779,7 @@ class DataNodeBuilder(dict):
                     _dn.attributes[keyDataName] = vInfo.value[i]
                     dns.append(_dn)
                     
-                    # Create contain relation between the new datanode and existing datanodes
+                    # If it is not a regular relation  but (Create contain relation between the new datanode and existing datanodes
                     if not conceptInfo['relation']:
                         if conceptInfo["relationMode"] == "forward":
                             for index, isRelated in enumerate(vInfo.value[i]):
@@ -1780,7 +1798,7 @@ class DataNodeBuilder(dict):
                         
                     dns.append(_dn)
         else:
-            _DataNodeBulder__Logger.warning('It is a unsupported sensor ipnut - %s'%(vInfo))
+            _DataNodeBulder__Logger.warning('It is an unsupported sensor input - %s'%(vInfo))
                 
         self.__updateRootDataNodeList(dns)   
         return dns
@@ -1791,9 +1809,14 @@ class DataNodeBuilder(dict):
 
         # Check if this is the contain relation update or attribute update
         if "relationMode" in conceptInfo:
-            _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
-
             relatedDnsType = conceptInfo["relationAttrs"]['src']
+
+            _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+            if conceptInfo["relationMode"] == "forward":
+                _DataNodeBulder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
+            else:
+                _DataNodeBulder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
+
             relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
 
             if vInfo.dim:
@@ -1820,7 +1843,7 @@ class DataNodeBuilder(dict):
                 else:
                     _dn.attributes[keyDataName] = vInfo.value[i]
                 
-                # Create contain relation between existings datanodes
+                # Create contain relation between existing dataNodes
                 if not conceptInfo["relation"]:
                     if conceptInfo["relationMode"] == "forward":
                         for index, isRelated in enumerate(vInfo.value[i]):

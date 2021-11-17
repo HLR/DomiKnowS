@@ -129,11 +129,13 @@ class LogicalConstrain:
                     if isinstance(eItem[1], eqL):
                         strsE.append("eql")
                     else:
-                        new_v = [v if isinstance(v, (str, tuple)) else v.name for v in eItem[1]]
+                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
                         new_V.append("path = {}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
                 strsE.append(eItem.name)
+            elif isinstance(eItem, LogicalConstrain):
+                strsE.append(eItem)
             elif isinstance(eItem, tuple) and (len(eItem) == 3):
                 strsE.append(eItem[0].name)
         

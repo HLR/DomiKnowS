@@ -44,6 +44,7 @@ class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
             weight = self.weight
         return super().forward(input, target, data_item, prop, weight)
 
+
 class DatanodeCMMetric(torch.nn.Module):
     def __init__(self, inferType='ILP'):
         super().__init__()
@@ -55,7 +56,11 @@ class DatanodeCMMetric(torch.nn.Module):
         datanode = data_item.getDataNode()
         result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
         val =  result[str(prop.name)]
-        return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+        if str(prop.name) in result:
+            val =  result[str(prop.name)]
+            return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+        else:
+            return None
 
 
 class MetricTracker(torch.nn.Module):
@@ -164,6 +169,7 @@ class PRF1Tracker(MetricTracker):
             r = torch.zeros_like(torch.tensor(tp))
             f1 = torch.zeros_like(torch.tensor(tp))
         return {'P': p, 'R': r, 'F1': f1}
+
 
 class BinaryPRF1Tracker(PRF1Tracker):
     def __init__(self, metric=BinaryCMWithLogitsMetric()):
