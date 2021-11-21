@@ -55,7 +55,6 @@ class DatanodeCMMetric(torch.nn.Module):
             data_item.addBatchRootDN()
         datanode = data_item.getDataNode()
         result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
-        val =  result[str(prop.name)]
         if str(prop.name) in result:
             val =  result[str(prop.name)]
             return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}

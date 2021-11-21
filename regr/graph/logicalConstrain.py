@@ -33,12 +33,8 @@ class LogicalConstrain:
         
         updatedE = []
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, V):
-                updatedE.append(eItem)
-            elif isinstance(eItem, Concept):
-                updatedE.append((eItem, 1, 0))
-            elif isinstance(eItem, tuple) and (len(eItem) <= 2):
-                updatedE.append((eItem[0], eItem[1], eItem[1]))
+            if isinstance(eItem, Concept):
+                updatedE.append((eItem, eItem.name, None, 1))
             else:
                 updatedE.append(eItem)
                 
@@ -172,29 +168,29 @@ class LogicalConstrain:
     
     # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
     # sVars - returned list of ILP variables setups
-    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
-        cLcVariableSet = v[lcVariableName][index] # Current logical variable (lcVariableName) sets of ILP variables
+    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, i, j, v, lcVars):        
         
-        if len(cLcVariableSet) == 0: # No ILP variables for a given logical variable
+        if len(v[lcVariableName][i]) <= j: # No ILP variables for a given logical variable
             lcVars.append(None)
             
             if lcVariableNames:
-                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
-            
-            return
-                                       
-        for ilvV in cLcVariableSet:
-            newLcVars = lcVars[:] # clone
-            
-            if ilvV is None:
-                newLcVars.append(None) # alternative code: sVars.append([None]), continue
+                return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], i, j, v, lcVars)
             else:
-                newLcVars.append(ilvV)
+                return lcVars
+        
+        cLcVariable = v[lcVariableName][i][j] # Current logical variable (lcVariableName)  of ILP variables
+                                
+        newLcVars = lcVars[:] # clone
+        
+        if cLcVariable is None:
+            newLcVars.append(None) # alternative code: sVars.append([None]), continue
+        else:
+            newLcVars.append(cLcVariable)
 
-            if lcVariableNames: # There still remaining lc variables
-                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, newLcVars, sVars)
-            else:
-                sVars.append(newLcVars) # This is the last logical variable  - setup of ILP variables finish - collect it
+        if lcVariableNames: # There still remaining lc variables
+            return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], i, j, v, newLcVars, )
+        else:
+            return  newLcVars # This is the last logical variable  - setup of ILP variables finish - collect it
 
     # Method building ILP constraints
     def createILPConstrains(self, lcName, lcFun, model, v, headConstrain = False):
@@ -226,7 +222,11 @@ class LogicalConstrain:
         zVars = []
         for i in range(len(lcVariableSet0)):
             sVars = []
-            self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], i, v, [], sVars)
+            cLcVariable0Set = v[lcVariableName0][i]
+            for j in range(len(cLcVariable0Set)):
+                sVar= self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], i, j, v, [])
+                sVars.append(sVar)
+                
             zVars.append(sVars)
         
         for z in zVars:

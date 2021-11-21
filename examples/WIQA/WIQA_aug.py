@@ -61,11 +61,12 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     USE_LC_exactL = True
-    USE_LC_atMostL = False
+    USE_LC_atMostL = True
 
     USE_LC_symmetric  = True
-    USE_LC_transitive  = True
-
+    USE_LC_transitiveIsMore  = True
+    USE_LC_transitiveIsLess = True
+    
     # Only one of the labels to be true
     exactL(is_more, is_less, no_effect, active=USE_LC_exactL)
     atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL) # breakpoint in WIQA line 126
@@ -87,10 +88,10 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
-    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
+    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore)
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
-    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
+    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess)
 
 from IPython.display import Image
 #graph.visualize("./image")

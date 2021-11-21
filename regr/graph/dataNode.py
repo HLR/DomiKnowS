@@ -671,6 +671,14 @@ class DataNode:
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
         
+        if isinstance(conceptRelation, str):
+            conceptRelation = self.findConcept(conceptRelation)
+            
+            if conceptRelation == None:
+                return False
+            
+            conceptRelation = conceptRelation[0]
+            
         from  regr.graph.relation import Relation
         if isinstance(conceptRelation, Relation):
             return True
@@ -718,13 +726,16 @@ class DataNode:
             return [self]
 
         # Path has single element
-        if not isinstance(path[0], eqL) and len(path) == 1:
+        if (not isinstance(path[0], eqL)) and len(path) == 1:
             relDns = self.getDnsForRelation(path[0])
                     
             if relDns is None or len(relDns) == 0 or relDns[0] is None:
                 return [None]
-        
+            
+            return relDns
+                
         # Path has at least 2 elements - will perform recursion
+
         if isinstance(path[0], eqL): # check if eqL
             path0 = path[0].e[0][0]
         else:
@@ -1133,7 +1144,7 @@ class DataNode:
         for cr in conceptsRelations:
             _DataNode__Logger.info("Calculating metrics for concept %s"%(cr))
 
-            # Check format of concepts and translate them to tuple in order to accomodate multiclass concepts
+            # Check format of concepts and translate them to tuple in order to accommodate multiclass concepts
             if not isinstance(cr, tuple):
                 if not isinstance(cr, Concept):
                     cr = self.findConcept(cr)
@@ -1166,11 +1177,11 @@ class DataNode:
                 _DataNode__Logger.info("Concept %s labels from DataNode %s"%(cr[1], labelsR))
             
             if not torch.is_tensor(preds):
-                _DataNode__Logger.warning("Concept %s labels is not a Tensor - not able to calculate metrics"%(cr[1]))
+                _DataNode__Logger.error("Concept %s labels is not a Tensor - not able to calculate metrics"%(cr[1]))
                 continue
             
             if not torch.is_tensor(labelsR):
-                _DataNode__Logger.warning("Concept %s predictions is not a Tensor - not able to calculate metrics"%(cr[1]))
+                _DataNode__Logger.error("Concept %s predictions is not a Tensor - not able to calculate metrics"%(cr[1]))
                 continue
             
             # Move to CPU
@@ -1207,8 +1218,9 @@ class DataNode:
                     _DataNode__Logger.info("Using average %s for Multiclass metrics calculation"%(average))
 
                 else:
-                    raise ValueError("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[1], len(preds), len(labelsR)))
-            
+                    _DataNode__Logger.error("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[1], len(preds), len(labelsR)))
+                    continue
+                
                 _DataNode__Logger.info("Calculating metrics for all class Labels of  %s "%(cr[1]))
                 multiclassLabels = cr[0].enum
                 result = self.getInferMetrics(*multiclassLabels, inferType=inferType, weight = weightOriginal, average=average)
@@ -1216,15 +1228,15 @@ class DataNode:
             
             # Check if date prepared correctly
             if preds.dim() != 1:
-                _DataNode__Logger.warning("Concept %s predictions is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], preds.dim()))
+                _DataNode__Logger.error("Concept %s predictions is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], preds.dim()))
                 continue
             
             if labels.dim() != 1:
-                _DataNode__Logger.warning("Concept %s labels is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], labels.dim()))
+                _DataNode__Logger.error("Concept %s labels is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], labels.dim()))
                 continue
             
             if  preds.size()[0] != labels.size()[0]:
-                _DataNode__Logger.warning("Concept %s labels size %s is not equal to prediction size %s - not able to calculate metrics"%(cr[1], labels.size()[0], preds.size()[0]))
+                _DataNode__Logger.error("Concept %s labels size %s is not equal to prediction size %s - not able to calculate metrics"%(cr[1], labels.size()[0], preds.size()[0]))
                 continue
             
             # Prepare the metrics result storage

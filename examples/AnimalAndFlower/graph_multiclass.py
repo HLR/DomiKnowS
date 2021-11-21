@@ -19,22 +19,22 @@ with Graph('AnimalAndFlower') as graph:
         values=["cat", "dog", "monkey", "squirrel", "daisy", "dandelion", "rose", "sunflower", "tulip"]
     )
 
-    nandL(category.animal, tag.daisy)
-    nandL(category.animal, tag.dandelion)
-    nandL(category.animal, tag.rose)
-    nandL(category.animal, tag.sunflower)
-    nandL(category.animal, tag.tulip)
+    nandL(category.animal, tag.daisy, active=True)
+    nandL(category.animal, tag.dandelion, active=True)
+    nandL(category.animal, tag.rose, active=True)
+    nandL(category.animal, tag.sunflower, active=True)
+    nandL(category.animal, tag.tulip, active=True)
 
-    nandL(category.flower, tag.cat)
-    nandL(category.flower, tag.dog)
-    nandL(category.flower, tag.monkey)
-    nandL(category.flower, tag.squirrel)
+    nandL(category.flower, tag.cat, active=True)
+    nandL(category.flower, tag.dog, active=True)
+    nandL(category.flower, tag.monkeyv, active=True)
+    nandL(category.flower, tag.squirrel, active=True)
 
     for l1, l2 in combinations(category.attributes, 2):
-        nandL(l1, l2)
+        nandL(l1, l2, active=True)
 
     for l1, l2 in combinations(tag.attributes, 2):
-        nandL(l1, l2)
+        nandL(l1, l2, active=True)
 
-    ifL(category.flower, orL(tag.daisy, tag.dandelion, tag.rose, tag.sunflower, tag.tulip))
-    ifL(category.animal, orL(tag.cat, tag.dog, tag.monkey, tag.squirrel))
+    ifL(category.flower, orL(tag.daisy, tag.dandelion, tag.rose, tag.sunflower, tag.tulip), active=True)
+    ifL(category.animal, orL(tag.cat, tag.dog, tag.monkey, tag.squirrel), active=True)

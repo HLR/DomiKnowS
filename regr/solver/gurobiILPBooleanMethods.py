@@ -1110,6 +1110,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         methodName = "FixedVar"
         logicMethodName = "FIXED"
         
+        if var is None: # not create Fixed constraint for None
+            return
+        
         var = self.__fixVar(var)
         
         varName = var
