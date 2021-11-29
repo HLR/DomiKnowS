@@ -44,16 +44,22 @@ class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
             weight = self.weight
         return super().forward(input, target, data_item, prop, weight)
 
+
 class DatanodeCMMetric(torch.nn.Module):
     def __init__(self, inferType='ILP'):
         super().__init__()
         self.inferType = inferType
 
     def forward(self, input, target, data_item, prop, weight=None):
+        if (data_item.needsBatchRootDN()):
+            data_item.addBatchRootDN()
         datanode = data_item.getDataNode()
-        result = datanode.getInferMetric(prop.name, inferType=self.inferType)
-        val =  result[str(prop.name)]
-        return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+        result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
+        if str(prop.name) in result:
+            val =  result[str(prop.name)]
+            return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+        else:
+            return None
 
 
 class MetricTracker(torch.nn.Module):
@@ -137,17 +143,30 @@ class PRF1Tracker(MetricTracker):
 
     def forward(self, values):
         CM = wrap_batch(values)
-        tp = CM['TP'].sum().float()
-        fp = CM['FP'].sum().float()
-        fn = CM['FN'].sum().float()
+        
+        if isinstance(CM['TP'], list):
+            tp = sum(CM['TP'])
+        else:
+            tp = CM['TP'].sum().float()
+            
+        if isinstance(CM['FP'], list):
+            fp = sum(CM['FP'])
+        else:
+            fp = CM['FP'].sum().float()
+            
+        if isinstance(CM['FN'], list):
+            fn = sum(CM['FN'])
+        else:
+            fn = CM['FN'].sum().float()
+            
         if tp:
             p = tp / (tp + fp)
             r = tp / (tp + fn)
             f1 = 2 * p * r / (p + r)
         else:
-            p = torch.zeros_like(tp)
-            r = torch.zeros_like(tp)
-            f1 = torch.zeros_like(tp)
+            p = torch.zeros_like(torch.tensor(tp))
+            r = torch.zeros_like(torch.tensor(tp))
+            f1 = torch.zeros_like(torch.tensor(tp))
         return {'P': p, 'R': r, 'F1': f1}
 
 

@@ -1,6 +1,7 @@
-from  collections import namedtuple
+from collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
-   
+from regr.graph import Concept
+
 import logging
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
@@ -16,8 +17,6 @@ class LogicalConstrain:
             myLogger.error("Logical Constrain initialized is empty")
             raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
         
-        from regr.graph import Concept
-
         updatedE = []
         for _, eItem in enumerate(e):
             if isinstance(eItem, (LogicalConstrain, Concept)):
@@ -34,12 +33,8 @@ class LogicalConstrain:
         
         updatedE = []
         for _, eItem in enumerate(self.e):
-            if isinstance(eItem, V):
-                updatedE.append(eItem)
-            elif isinstance(eItem, Concept):
-                updatedE.append((eItem, 1, 0))
-            elif isinstance(eItem, tuple) and (len(eItem) <= 2):
-                updatedE.append((eItem[0], eItem[1], eItem[1]))
+            if isinstance(eItem, Concept):
+                updatedE.append((eItem, eItem.name, None, 1))
             else:
                 updatedE.append(eItem)
                 
@@ -118,31 +113,84 @@ class LogicalConstrain:
         else:
             return e._context
        
+    def strEs(self):
+        strsE = []
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, V):
+                new_V = []
+                if eItem[0] is not None:
+                    new_V.append(eItem[0])
+                    if eItem[1] is not None: new_V.append(',')
+                if eItem[1]:
+                    if isinstance(eItem[1], eqL):
+                        strsE.append("eql")
+                    else:
+                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
+                        new_V.append("path = {}".format(tuple(new_v)))
+                strsE.append("{}".format(tuple(new_V)))
+            elif isinstance(eItem, Concept):
+                strsE.append(eItem.name)
+            elif isinstance(eItem, LogicalConstrain):
+                strsE.append(eItem)
+            elif isinstance(eItem, tuple) and (len(eItem) == 3):
+                strsE.append(eItem[0].name)
+        
+        return strsE
+    
+    #------------
+    
+    def createSingleVarILPConstrains(self, lcName, lcFun, model, v, headConstrain = False):  
+        singleV = []
+                    
+        if len(v) != 1:
+            myLogger.error("%s Logical Constrain created with %i sets of variables which is not  one"%(lcName,len(v)))
+            return singleV
+    
+        v1 = list(v.values())[0]
+        for currentILPVars in v1:
+            if not currentILPVars:
+                singleV.append([None])
+                
+            cSingleVar = []
+            for cv in currentILPVars:
+                singleVar = lcFun(model, cv, onlyConstrains = headConstrain)
+                cSingleVar.append(singleVar)
+                
+            singleV.append(cSingleVar)
+        
+        if headConstrain:
+            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+        
+        if model is not None:
+            model.update()
+        
+        return singleV
+    
     # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
     # sVars - returned list of ILP variables setups
-    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, index, v, lcVars, sVars):
-        cLcVariableSet = v[lcVariableName][index] # Current logical variable (lcVariableName) sets of ILP variables
+    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, i, j, v, lcVars):        
         
-        if len(cLcVariableSet) == 0: # No ILP variables for a given logical variable
+        if len(v[lcVariableName][i]) <= j: # No ILP variables for a given logical variable
             lcVars.append(None)
             
             if lcVariableNames:
-                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, lcVars, sVars)
-            
-            return
-                                       
-        for ilvV in cLcVariableSet:
-            newLcVars = lcVars[:] # clone
-            
-            if ilvV is None:
-                newLcVars.append(None) # alternative code: sVars.append([None]), continue
+                return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], i, j, v, lcVars)
             else:
-                newLcVars.append(ilvV)
+                return lcVars
+        
+        cLcVariable = v[lcVariableName][i][j] # Current logical variable (lcVariableName)  of ILP variables
+                                
+        newLcVars = lcVars[:] # clone
+        
+        if cLcVariable is None:
+            newLcVars.append(None) # alternative code: sVars.append([None]), continue
+        else:
+            newLcVars.append(cLcVariable)
 
-            if lcVariableNames: # There still remaining lc variables
-                self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], index, v, newLcVars, sVars)
-            else:
-                sVars.append(newLcVars) # This is the last logical variable  - setup of ILP variables finish - collect it
+        if lcVariableNames: # There still remaining lc variables
+            return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], i, j, v, newLcVars, )
+        else:
+            return  newLcVars # This is the last logical variable  - setup of ILP variables finish - collect it
 
     # Method building ILP constraints
     def createILPConstrains(self, lcName, lcFun, model, v, headConstrain = False):
@@ -174,7 +222,11 @@ class LogicalConstrain:
         zVars = []
         for i in range(len(lcVariableSet0)):
             sVars = []
-            self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], i, v, [], sVars)
+            cLcVariable0Set = v[lcVariableName0][i]
+            for j in range(len(cLcVariable0Set)):
+                sVar= self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], i, j, v, [])
+                sVars.append(sVar)
+                
             zVars.append(sVars)
         
         for z in zVars:
@@ -308,34 +360,16 @@ class notL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
-        lcName = 'notL'
-              
-        notV = []
-                    
-        if len(v) != 1:
-            myLogger.error("Not Logical Constrain created with %i sets of variables which is not  one"%(len(v)))
-            return notV
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
+        return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
     
-        v1 = list(v.values())[0]
-        for currentILPVars in v1:
-            if not currentILPVars:
-                notV.append([None])
-                
-            cNonVar = []
-            for cv in currentILPVars:
-                notVar = myIlpBooleanProcessor.notVar(model, cv, onlyConstrains = headConstrain)
-                cNonVar.append(notVar)
-                
-            notV.append(cNonVar)
+class FixedL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
-        if headConstrain:
-            if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
-        
-        model.update()
-        
-        return notV
-
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
+        return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.FixedVar, model, v, headConstrain)
+    
 # ----------------- Class Count
 
 class exactL(LogicalConstrain):

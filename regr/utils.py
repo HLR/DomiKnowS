@@ -7,7 +7,7 @@ from collections import OrderedDict, Counter
 from typing import Iterable
 from contextlib import contextmanager
 import warnings
-
+import logging
 
 def extract_args(*args, **kwargs):
     if '_stack_back_level_' in kwargs and kwargs['_stack_back_level_']:
@@ -38,6 +38,13 @@ def log(*args, **kwargs):
         else:
             print('{}: {}'.format(k, v))
 
+def setProductionLogMode():
+    ilpOntSolverLog = logging.getLogger("ilpOntSolver")
+    ilpOntSolverLog.addFilter(lambda record: False)
+    dataNodeLog = logging.getLogger("dataNode")
+    dataNodeLog.addFilter(lambda record: False)
+    dataNodeBuilderLog = logging.getLogger("dataNodeBuilder")
+    dataNodeBuilderLog.addFilter(lambda record: False)
 
 def printablesize(ni):
     if hasattr(ni, 'shape'):

@@ -30,6 +30,22 @@ class RobertaClassificationHead(nn.Module):
         x = self.out_proj(x)
         return x
 
+class RobertaClassificationHeadMultiClass(nn.Module):
+
+    def __init__(self,last_layer_size):
+        super(RobertaClassificationHeadMultiClass, self).__init__()
+        self.dense = nn.Linear(last_layer_size, last_layer_size)
+        self.dropout = nn.Dropout(0.2)
+        self.out_proj = nn.Linear(last_layer_size, 3)
+
+    def forward(self, x):
+        x = self.dropout(x)
+        x = self.dense(x)
+        x = torch.tanh(x)
+        x = self.dropout(x)
+        x = self.out_proj(x)
+        return x
+
 class WIQAModel(PrimalDualModel):
     def __init__(self, graph, poi, loss, metric):
         super().__init__(

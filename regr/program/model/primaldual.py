@@ -5,17 +5,18 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ...graph import DataNodeBuilder
+from ...graph import DataNodeBuilder, DataNode
 from ..metric import MetricTracker, MacroAverageTracker
 
 
 class PrimalDualModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph):
+    def __init__(self, graph, tnorm=DataNode.tnormsDefault):
         super().__init__()
         self.graph = graph
         self.build = True
+        self.tnorm = tnorm
         constr = OrderedDict(graph.logicalConstrainsRecursive)
         nconstr = len(constr)
         if nconstr == 0:
@@ -48,10 +49,12 @@ class PrimalDualModel(torch.nn.Module):
             build = self.build
         if not build or not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on.')
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         # call the loss calculation
         # returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss()
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm)
         lmbd_loss = []
         for key, loss in constr_loss.items():
             loss_value = loss['lossTensor'].clamp(min=0)

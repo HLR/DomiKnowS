@@ -2,10 +2,8 @@ from itertools import combinations, product
 import hashlib
 import pickle
 from typing import Iterable
-import warnings
 
 import torch
-import torch.nn.functional as F
 
 from regr.graph import Property, Concept, DataNodeBuilder
 from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, CacheSensor
@@ -92,6 +90,8 @@ class TorchModel(torch.nn.Module):
         if build:
             data_item.update({"graph": self.graph, 'READER': 0})
             builder = DataNodeBuilder(data_item)
+            if (builder.needsBatchRootDN()):
+                builder.addBatchRootDN()
             *out, = self.populate(builder)
             datanode = builder.getDataNode()
             return (*out, datanode, builder)
@@ -182,16 +182,19 @@ class PoiModel(TorchModel):
             local_metric[key] = metric[(*sensors,)](*outs, data_item=data_item, prop=prop)
         if len(local_metric) == 1:
             local_metric = list(local_metric.values())[0]
+            
         return local_metric
 
     def populate(self, builder, run=True):
         loss = 0
         metric = {}
+        
         for prop in self.poi:
             # make sure the sensors are evaluated
             if run:
                 for sensor in prop.find(TorchSensor):
-                        sensor(builder)
+                    sensor(builder)
+                    
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
@@ -203,8 +206,8 @@ class PoiModel(TorchModel):
                         local_metric = self.poi_metric(builder, prop, sensors)
                         if local_metric is not None:
                             metric[(*sensors,)] = local_metric
+                            
         return loss, metric
-
 
 class SolverModel(PoiModel):
     def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP']):
@@ -221,6 +224,10 @@ class SolverModel(PoiModel):
 #                 output = output_sensor(builder)
 #                 target = target_sensor(builder)
 #         print("Done with the computation")
+
+        # Check if this is batch
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
         datanode = builder.getDataNode()
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
@@ -239,38 +246,6 @@ class SolverModel(PoiModel):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
 
-
-class IMLModel(SolverModel):
-    def poi_loss(self, data_item, prop, sensors):
-        output_sensor, target_sensor = sensors
-        logit = output_sensor(data_item)
-        labels = target_sensor(data_item)
-        if len(logit) == 0:
-            return None
-
-        builder = data_item
-        datanode = builder.getDataNode()
-        concept = prop.sup
-        values = []
-        try:
-            for cdn in datanode.findDatanodes(select=concept):
-                value = cdn.getAttribute(f'<{prop.name}>/ILP')
-                values.append(torch.cat((1-value, value), dim=-1))
-            if values:
-                inference = torch.stack(values)
-            else:
-                assert logit.shape == (0, 2)
-                inference = torch.zeros_like(logit)
-        except TypeError:
-            message = (f'Failed to get inference result for {prop}. '
-                       'Is it included in the inference (with `inference_with` attribute)? '
-                       'Continue with predicted value.')
-            warnings.warn(message)
-            inference = logit.softmax(dim=-1).detach()
-
-        if self.loss:
-            local_loss = self.loss[output_sensor, target_sensor](logit, inference, labels)
-            return local_loss
 
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def __init__(self, graph, poi=None):
@@ -308,7 +283,7 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
                 else:
                     predictors.append(sensor)
             for predictor in predictors:
-                # TODO: any loss or metric or genaral function apply to just prediction?
+                # TODO: any loss or metric or general function apply to just prediction?
                 pass
             for target, predictor in product(targets, predictors):
                 if predictor._loss is not None:
@@ -330,3 +305,6 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def metric(self):
         # return self.metrics_tracker
         pass
+
+from .iml import IMLModel
+from .ilpu import ILPUModel

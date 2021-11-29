@@ -107,7 +107,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 return 
             
             m.addConstr(1 - var >= 1, name='Not:')
-            if self.ifLog: self.myLogger.debug("%s created constrain only: not %s > %i"%(logicMethodName,var.VarName,1))
+            if self.ifLog: self.myLogger.debug("%s created constrain only: not %s > %i"%(logicMethodName,varName,1))
 
             #self.__addToConstrainCaches(methodName, onlyConstrains, (var, ), None)
             return
@@ -122,7 +122,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,0))
                 return 0
             
-        varNOT = m.addVar(vtype=GRB.BINARY, name="not_%s"%(var.VarName))
+        varNOTName = "not_%s"%(varName)
+        varNOTName = varNOTName[:254]
+        varNOT = m.addVar(vtype=GRB.BINARY, name=varNOTName)
         if m: m.update()
 
         m.addConstr(1 - var == varNOT, name='Not:')
@@ -188,7 +190,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                     return 0
             else: # Both variables are ILP variables
                 m.addConstr(var1 + var2 >= 2, name='And:') 
-                if self.ifLog: self.myLogger.debug("% created constrain only: and %s %s >= 2"%(logicMethodName,var1.VarName,var2.Name))
+                if self.ifLog: self.myLogger.debug("% created constrain only: and %s %s >= 2"%(logicMethodName,var1Name,var2.Name))
     
                 #self.__addToConstrainCaches(methodName, onlyConstrains, (var1, var2), None)
                 return
@@ -217,7 +219,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var1Name))
                 return var1
         else:
-            varAND = m.addVar(vtype=GRB.BINARY, name="and_%s_%s"%(var1Name, var2Name))
+            varANDName = "and_%s_%s"%(var1Name, var2Name)
+            varANDName = varANDName[:254]
+            varAND = m.addVar(vtype=GRB.BINARY, name=varANDName)
             if m: m.update()
 
             m.addConstr(varAND - var1 <= 0, name='And:') # varAND <= var1
@@ -280,7 +284,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if onlyConstrains:
             varSumLinExpr = LinExpr()
             for currentVar in var:
-                if self.__varIsNumber(var):
+                if self.__varIsNumber(currentVar):
                     continue
                 
                 varSumLinExpr.addTerms(1.0, currentVar)
@@ -293,18 +297,47 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             
         # ------- If creating variables representing value of AND build of provided variables
 
-        varAND = m.addVar(vtype=GRB.BINARY)
+        # Build new variables name and add it to model
+        noOfOnes = 0
+        andVarName = ""
+        for currentVar in var:
+            andVarName = andVarName + "and"
+            if self.__varIsNumber(currentVar):
+                #orVarName += "_%s_" % (currentVar)
+                if currentVar == 1:
+                    noOfOnes = noOfOnes + 1
+                elif currentVar == 0:
+                    if self.ifLog: self.myLogger.debug("%s created no new variable method value is 0 - returning 1"%(logicMethodName))
+                    return 0
+                else:
+                    if self.ifLog: self.myLogger.warning("%s ignoring %f - incorrect"%(logicMethodName,currentVar)) 
+            else:
+                andVarName += "_%s_" % (currentVar.VarName)
+
+        andVarName = '{:.200}'.format(andVarName)
+        
+        # If only single variable; rest is zeros 
+        if (N - noOfOnes == 1) and noOfOnes == 1:
+            for currentVar in var:
+                if not self.__varIsNumber(currentVar):
+                    if self.ifLog: self.myLogger.debug("%s has ones and only single variable: %s, it is returned"%(logicMethodName,currentVar))
+                    return currentVar
+                
+        # Create new variable
+        andVarName = andVarName[:254]
+        varAND = m.addVar(vtype=GRB.BINARY, name=andVarName)
         if m: m.update()
 
+        # Build constraints 
         for currentVar in var:
-            if self.__varIsNumber(var):
+            if self.__varIsNumber(currentVar):
                 continue
             
             m.addConstr(varAND - currentVar <= 0, name='And:') # varAND <= currentVar
 
         varSumLinExpr = LinExpr()
         for currentVar in var:
-            if self.__varIsNumber(var):
+            if self.__varIsNumber(currentVar):
                 continue
                 
             varSumLinExpr.addTerms(1.0, currentVar)
@@ -386,7 +419,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var1Name))
                 return var1
         else: # Both variables are ILP variables
-            varOR=m.addVar(vtype=GRB.BINARY, name="or_%s_%s"%(var1Name, var2Name))
+            varORName = "or_%s_%s"%(var1Name, var2Name)
+            varORName = varORName[:254]
+            varOR=m.addVar(vtype=GRB.BINARY, name=varORName)
             if m: m.update()
 
             m.addConstr(var1 - varOR <= 0, name='Or:') # var1 <= varOR
@@ -486,14 +521,17 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             else:
                 orVarName += "_%s_" % (currentVar.VarName)
 
+        orVarName = '{:.200}'.format(orVarName)
+
         # If only single variable; rest is zeros 
         if (N - noOfZeros == 1) and noOfVars == 1:
             for currentVar in var:
                 if not self.__varIsNumber(currentVar):
-                    if self.ifLog: self.myLogger.debug("%s has zeros and only single variable: %s, it is returned"%(logicMethodName,currentVar.VarName))
+                    if self.ifLog: self.myLogger.debug("%s has zeros and only single variable: %s, it is returned"%(logicMethodName,currentVar))
                     return currentVar
                 
         # Create new variable
+        orVarName = orVarName[:254]
         varOR = m.addVar(vtype=GRB.BINARY, name=orVarName)
         if m: m.update()
 
@@ -602,7 +640,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
                 return var1
         else:
-            varNAND = m.addVar(vtype=GRB.BINARY, name="nand_%s_%s"%(var1, var2))
+            varNANDName = "nand_%s_%s"%(var1, var2)
+            varNANDName = varNANDName[:254]
+            varNAND = m.addVar(vtype=GRB.BINARY, name=varNANDName)
             if m: m.update()
 
             m.addConstr(self.notVar(m, varNAND) <= var1, name='Nand:')
@@ -634,7 +674,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             if self.__varIsNumber(currentVar):
                 varsNames.append(currentVar)
             else:
-                varsNames.append(currentVar.VarName)
+                varsNames.append(currentVar)
                 noOfVars = noOfVars + 1
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, varsNames))
@@ -679,6 +719,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             nandVarName += "_%s"%(currentVar)
             
+        nandVarName = nandVarName[:254]
         varNAND = m.addVar(vtype=GRB.BINARY, name=nandVarName)
         for currentVar in var:
             m.addConstr(self.notVar(m, varNAND) <= currentVar, name='Nand:')
@@ -698,7 +739,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             m.addConstr(var1 + var2 <= 0)
             return
         
-        varNOR = m.addVar(vtype=GRB.BINARY, name="nor_%s_%s"%(var1, var2))
+        varNORName = "nor_%s_%s"%(var1, var2)
+        varNORName = varNORName[:254]
+        varNOR = m.addVar(vtype=GRB.BINARY, name=varNORName)
             
         m.addConstr(var1 <= self.notVar(m, varNOR))
         m.addConstr(var2 <= self.notVar(m, varNOR))
@@ -728,6 +771,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         for currentVar in var:
             _norVarName += "_%s"%(currentVar)
            
+        _norVarName = _norVarName [:254]
         varNOR = m.addVar(vtype=GRB.BINARY, name=_norVarName)
         for currentVar in var:
             m.addConstr(currentVar <= self.notVar(m, varNOR))
@@ -749,16 +793,28 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         var1 = self.__fixVar(var1)
         var2 = self.__fixVar(var2)
-        
+        if (not var1) or (not var2):
+            return
+    
+        # Get names of ILP variables
+        var1Name = var1
+        var2Name = var2
+        if not self.__varIsNumber(var1):
+            var1Name = var1.VarName
+        if not self.__varIsNumber(var2):
+            var2Name = var2.VarName
+            
         if onlyConstrains:
             m.addConstr(var1 + var2 <= 1)
             m.addConstr(var1 + var2 >= 1)
-            if self.ifLog: self.myLogger.debug("IF created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+            if self.ifLog: self.myLogger.debug("IF created constrain only: %s <= %s"%(var1Name, var2Name))
 
             self.__addToConstrainCaches('ifVar', onlyConstrains, (var1, var2), None)
             return
         
-        varXOR = m.addVar(vtype=GRB.BINARY, name="xor_%s_%s"%(var1, var2))
+        varXORName = "xor_%s_%s"%(var1, var2)
+        varXORName = varXORName[:254]
+        varXOR = m.addVar(vtype=GRB.BINARY, name=varXORName)
             
         m.addConstr(var1 + var2 + varXOR <= 2)
         m.addConstr(-var1 - var2 + varXOR <= 0)
@@ -823,7 +879,9 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s created constrain only: %s <= %s"%(logicMethodName,var1Name,var2Name))
                 return
     
-        varIF = m.addVar(vtype=GRB.BINARY, name="if_%s_then_%s"%(var1.VarName, var2.VarName))
+        varIFName = "if_%s_then_%s"%(var1Name, var2Name)
+        varIFName = varIFName[:254]
+        varIF = m.addVar(vtype=GRB.BINARY, name=varIFName)
             
         m.addConstr(1 - var1 <= varIF, name='If:')
         m.addConstr(var2 <= varIF, name='If:')
@@ -847,18 +905,30 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         
         var1 = self.__fixVar(var1)
         var2 = self.__fixVar(var2)
-        
+        if (not var1) or (not var2):
+            return
+    
+        # Get names of ILP variables
+        var1Name = var1
+        var2Name = var2
+        if not self.__varIsNumber(var1):
+            var1Name = var1.VarName
+        if not self.__varIsNumber(var2):
+            var2Name = var2.VarName
+            
         if onlyConstrains:
             m.addConstr(var1 >= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constrain only: %s => %s"%(var1.VarName, var2.VarName))
+            if self.ifLog: self.myLogger.debug("EQ created constrain only: %s => %s"%(var1Name, var2Name))
             
             m.addConstr(var1 <= var2)
-            if self.ifLog: self.myLogger.debug("EQ created constrain only: %s <= %s"%(var1.VarName, var2.VarName))
+            if self.ifLog: self.myLogger.debug("EQ created constrain only: %s <= %s"%(var1Name, var2Name))
 
             self.__addToConstrainCaches('eqVar', onlyConstrains, (var1, var2), None)
             return
         
-        varEQ = m.addVar(vtype=GRB.BINARY, name="epq_%s_%s"%(var1, var2))
+        varEQName = "epq_%s_%s"%(var1, var2)
+        varEQName = varEQName[:254]
+        varEQ = m.addVar(vtype=GRB.BINARY, name=varEQName)
             
         m.addConstr(var1 + var2 - varEQ <= 1)
         m.addConstr(var1 + var2 + varEQ >= 1)
@@ -974,6 +1044,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 countVarName += "_%s_"%(currentVar.VarName)
             
         countVarName = countVarName[:-1]
+        countVarName = countVarName[:254]
         # Create new variable
         varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
         if m: m.update()
@@ -1032,8 +1103,52 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 m.addConstr(varSumLinExpr == limit - countOnes, name='Count %s:'%(logicMethodName))
                 if self.ifLog: self.myLogger.debug("%s created constrain: %s - varCOUNT %s= %i - 1 - %i"%(logicMethodName,varSumLinExprStr[varSumLinExprStr.index(':') + 1 : varSumLinExprStr.index('=')],limitOp,limit,countOnes))
 
-                         
-        
-             
         if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varCOUNT.VarName))
         return varCOUNT
+    
+    def FixedVar(self, m, var, onlyConstrains = False): 
+        methodName = "FixedVar"
+        logicMethodName = "FIXED"
+        
+        if var is None: # not create Fixed constraint for None
+            return
+        
+        var = self.__fixVar(var)
+        
+        varName = var
+        if not self.__varIsNumber(var):
+            varName = var.VarName
+            
+        if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,varName))
+
+        # If only constructing constrains 
+       
+        if self.__varIsNumber(var):
+            self.myLogger.warning("%s has set value: %s - do nothing"%(logicMethodName,varName))
+            return 
+        
+        fixedTag = None
+        if var.VTag.startswith("True"):
+            fixedTag = True
+        elif var.VTag.startswith("False"):
+            fixedTag = False
+        
+        if fixedTag == None: # Label in datanode was -100 
+            return 1
+        
+        if fixedTag:    
+            m.addConstr(var == 1, name='Fixed:')
+            if self.ifLog: self.myLogger.debug("%s created constrain: Fixed %s == %i"%(logicMethodName,varName,1))
+
+        elif not fixedTag:    
+            m.addConstr(var == 0, name='Fixed:')
+            if self.ifLog: self.myLogger.debug("%s created constrain: Fixed %s == %i"%(logicMethodName,varName,0))
+
+        else:
+            return # error
+        
+        if onlyConstrains:
+            return
+        
+        if self.ifLog: self.myLogger.debug("%s returns: %i"%(logicMethodName,1))
+        return 1

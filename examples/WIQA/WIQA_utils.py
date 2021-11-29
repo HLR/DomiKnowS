@@ -121,10 +121,10 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     for i in results:
         if i[0]==None or i[1]==None or i[2]==None:
             if verbose:
-                print("There is a None")
+                print("Error: There is a None in paragraph : ",para_num)
         if not i[0]+i[1]+i[2]==1:
             if verbose:
-                print("There more than one correct label")
+                print("Error: There more than one correct label in paragraph : ",para_num)
 
     for arg1, arg2 in product(range(n), repeat=2):
         if arg1 == arg2:
@@ -132,7 +132,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
         if questions_id[arg1] in questions_id[arg2] and "_symmetric" in questions_id[arg2]:
             if (results[arg1][0] and not results[arg2][1]) or (results[arg1][1] and not results[arg2][0]):
                 if verbose:
-                    print("Symmetry is violated")
+                    print("Symmetry is violated in paragraph : ",para_num)
             m.addConstr(g_vars[arg1][0]+g_vars[arg2][0]<= 1, str(arg1)+" "+str(arg2)+" s1")
             m.addConstr(g_vars[arg1][0]+g_vars[arg2][2]<= 1, str(arg1)+" "+str(arg2)+" s2")
             m.addConstr(g_vars[arg1][1]+g_vars[arg2][1]<= 1, str(arg1)+" "+str(arg2)+" s3")
@@ -150,7 +150,7 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
             if (results[arg1][0] and results[arg2][0] and not results[arg3][0]) or\
                     (results[arg1][0] and results[arg2][1] and not results[arg3][1]):
                 if verbose:
-                    print("Transivity is violated")
+                    print("Transivity is violated in paragraph : ",para_num)
                     tran_violated=True
                     print(para_num)
     m.setObjective(obj, GRB.MAXIMIZE)
@@ -159,14 +159,15 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
     return [i.x for i in vars_],tran_violated
 
 
-def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,verbose):
+def test_inference_results(program, reader, cur_device, is_more, is_less, no_effect, transitive, symmetric, verbose):
     counter = 0
     ac_ = 0
     ILPac_ = 0
     ac_test=0
     for para_num,paragraph_ in enumerate(program.populate(reader, device=cur_device)):
 
-        paragraph_.inferILPResults(is_more,is_less,no_effect,fun=None)
+        conceptsRelations = [is_more, is_less, no_effect, transitive, symmetric]
+        paragraph_.inferILPResults(*conceptsRelations, fun=None)
         questions_id, results = [], []
         sresult=[]
         for question_ in paragraph_.getChildDataNodes():
@@ -187,17 +188,20 @@ def test_inference_results(program, reader,cur_device,is_more,is_less,no_effect,
             sresult.append([predict_is_more_value,predict_is_less_value,predict_no_effect_value])
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 counter += 1
-                ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
-                ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
+                ac_+=np.array([predict_is_more_value,predict_is_less_value,predict_no_effect_value]).argmax()==np.array([question_.getAttribute("is_more_").cpu().numpy()[0],question_.getAttribute("is_less_").cpu().numpy()[0],question_.getAttribute("no_effect_").cpu().numpy()[0]]).argmax()
+                ILPac_+=np.array(list(results[-1])).argmax()==np.array([question_.getAttribute("is_more_").cpu().numpy()[0],question_.getAttribute("is_less_").cpu().numpy()[0],question_.getAttribute("no_effect_").cpu().numpy()[0]]).argmax()
 
         _vars,tran_violated=is_ILP_consistant(questions_id, results , verbose,sresult,para_num)
 
         for num,question_ in enumerate(paragraph_.getChildDataNodes()):
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax() and verbose:
-                    print(para_num,len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
-                ac_test+=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()==np.array([question_.getAttribute("is_more_").cpu(),question_.getAttribute("is_less_").cpu(),question_.getAttribute("no_effect_").cpu()]).argmax()
-
+                    print(para_num," This question in paragraph number {} is Incorrect".format(para_num),len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
+                elif verbose:
+                    print(para_num," This question in paragraph number {} is Correct".format(para_num))
+                fb=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()
+                sb=np.array([question_.getAttribute("is_more_").cpu().numpy()[0],question_.getAttribute("is_less_").cpu().numpy()[0],question_.getAttribute("no_effect_").cpu().numpy()[0]]).argmax()
+                ac_test+=fb==sb
     print("accuracy:", ac_ / counter)
     print("ILP accuracy:", ILPac_ / counter)
     #print("ILP test accuracy:", ac_test / counter)
@@ -217,3 +221,24 @@ def join_model(fromdir, tofile):
             output.write(filebytes)
         fileobj.close(  )
     output.close(  )
+
+
+def split(fromfile, todir, chunksize=int(90*1000*1024)):
+    if not os.path.exists(todir):                  # caller handles errors
+        os.mkdir(todir)                            # make dir, read/write parts
+    else:
+        for fname in os.listdir(todir):            # delete any existing files
+            os.remove(os.path.join(todir, fname))
+    partnum = 0
+    input = open(fromfile, 'rb')                   # use binary mode on Windows
+    while 1:                                       # eof=empty string from read
+        chunk = input.read(chunksize)              # get next part <= chunksize
+        if not chunk: break
+        partnum  = partnum+1
+        filename = os.path.join(todir, ('part%04d' % partnum))
+        fileobj  = open(filename, 'wb')
+        fileobj.write(chunk)
+        fileobj.close()                            # or simply open(  ).write(  )
+    input.close(  )
+    assert partnum <= 9999                         # join sort fails if 5 digits
+    return partnum
