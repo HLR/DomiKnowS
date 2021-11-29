@@ -221,3 +221,6 @@ dmypy.json
 # End of https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
 /MongoDB-DK.pem
 /logs/
+
+# typeset example resources
+/examples/Typenet/resources/*
