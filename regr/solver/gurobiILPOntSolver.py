@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 # Gurobi
-from gurobipy import GRB, Model
+from gurobipy import GRB, Model, Var
 
 from regr.graph.concept import Concept, EnumConcept
 from regr.solver.ilpOntSolver import ilpOntSolver
@@ -21,6 +21,7 @@ from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 
 from regr.graph import LogicalConstrain, V
+from torch import tensor
 
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -613,24 +614,52 @@ class gurobiILPOntSolver(ilpOntSolver):
         if sample:
             sampleSize = p
 
-            if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
-                for i in range(sampleSize):
-                    if i== 0:
-                        continue
-                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
-            else:
-                t = torch.full((sampleSize+1,), vDn)
-                try:
+            if sampleSize not in dn.getAttributes()[sampleKey]:
+                # Create sample for this concept and sample size
+                if vDn == None or vDn != vDn:
+                    dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
+                    for i in range(sampleSize):
+                        if i== 0:
+                            continue
+                        
+                        dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
+                else:
+                    t = torch.full((sampleSize+1,), vDn)
                     dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
                     dn.getAttributes()[sampleKey][sampleSize][0] = vDn
-                except RuntimeError as ex:
-                    pass
-            
+                   
             return dn.getAttributes()[sampleKey][sampleSize]
                       
         return vDn
     
+    def fixedLSupport(self, _dn, conceptName, vDn, i, m):
+        vDnLabel = self.__getLabel(_dn, conceptName).item()
+
+        if isinstance(vDn, Var):                                 
+            if vDnLabel == -100:
+                vDn.VTag = "None" + vDn.VarName
+            elif vDnLabel == i:
+                vDn.VTag = "True" + vDn.VarName
+            else:
+                vDn.VTag = "False" + vDn.VarName
+                
+            m.update()
+        elif torch.is_tensor(vDn):
+            if vDnLabel != i and vDnLabel != -100: # False
+                zeros = torch.zeros(vDn.shape[0])
+                ones = torch.ones(vDn.shape[0])
+                
+                newVDn = torch.where(vDn > 0, zeros, ones)
+                newVDn[0] = vDn[0]
+                
+                vDn = newVDn
+        else:
+            if vDnLabel != i and vDnLabel != -100: # False
+                if vDn == 1:
+                    vDn = 0
+                else:
+                    vDn = 1
+        
     def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, loss = False, sample = False):
         lcVariables = {}
         vNo = 0
@@ -736,7 +765,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         eDns.extend(_eDns)
                                     else:
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
-                                        if lc.__str__() != "FixedL":
+                                        if lc.__str__() != "fixedL":
                                             self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%
                                                                (_rDn, vNames, lc.lcName, conceptName))
                                         eDns.extend([None])
@@ -771,50 +800,24 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     eT = (e[0], i, i)
                                     vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
                                     
-                                    if lc.__str__() == "FixedL":
-                                        vDnLabel = self.__getLabel(_dn, conceptName).item()
-                                        
-                                        if vDnLabel == -100:
-                                            vDn.VTag = "None" + vDn.VarName
-                                        elif vDnLabel == i:
-                                            vDn.VTag = "True" + vDn.VarName
-                                        else:
-                                            vDn.VTag = "False" + vDn.VarName
-                                            
-                                        m.update()
+                                    if lc.__str__() == "fixedL":
+                                        self.fixedLSupport(_dn, conceptName, vDn, i, m)
                                         
                                     _vDns.append(vDn)
                             elif isinstance(e[0], EnumConcept) and e[2] != None: # Multiclass concept label
                                 eT = (e[0], e[2], e[2])
                                 vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
                                 
-                                if lc.__str__() == "FixedL":
-                                    vDnLabel = self.__getLabel(_dn, conceptName).item()
-                                    
-                                    if vDnLabel == -100:
-                                        vDn.VTag = "None" + vDn.VarName
-                                    elif vDnLabel == e[2]:
-                                        vDn.VTag = "True" + vDn.VarName
-                                    else:
-                                        vDn.VTag = "False" + vDn.VarName
-                                        
-                                    m.update()
+                                if lc.__str__() == "fixedL":
+                                    self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
                                     
                                 _vDns.append(vDn)
                             else: # Binary concept
                                 eT = (conceptName, 1, 0)
                                 vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
-                                if lc.__str__() == "FixedL":
-                                    vDnLabel = self.__getLabel(_dn, conceptName).item()
-                                    
-                                    if vDnLabel == -100:
-                                        vDn.VTag = "None" + vDn.VarName
-                                    elif vDnLabel == 1:
-                                        vDn.VTag = "True" + vDn.VarName
-                                    else:
-                                        vDn.VTag = "False" + vDn.VarName
-                                        
-                                    m.update()
+                                
+                                if lc.__str__() == "fixedL":
+                                    self.fixedLSupport(_dn, conceptName, vDn, 1, m)
                                         
                                 _vDns.append(vDn)
                         
@@ -1148,7 +1151,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if torch.count_nonzero(l[0]):
                             lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
                         else:
-                            lossTensor[i] = None
+                            lossTensor[i] = float("nan")
                         
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData

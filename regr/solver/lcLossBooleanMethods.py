@@ -352,5 +352,5 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return countSuccess
         
-    def FixedVar(self, m, _var, onlyConstrains = False): 
+    def fixedVar(self, m, _var, onlyConstrains = False): 
         return 0

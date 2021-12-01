@@ -9,9 +9,10 @@ ifLog =  ilpConfig['ifLog']
 V = namedtuple("V", ['name', 'v'], defaults= [None, None])
 
 class LogicalConstrain:
-    def __init__(self, *e, p=100, active = True, name = None):
+    def __init__(self, *e, p=100, active = True, name = None, lossDefault=None):
         self.headLC = True # Indicate that it is head constrain and should be process individually
         self.active = active
+        self.lossDefault = lossDefault
         
         if not e:
             myLogger.error("Logical Constrain initialized is empty")
@@ -363,12 +364,12 @@ class notL(LogicalConstrain):
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
         return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
     
-class FixedL(LogicalConstrain):
-    def __init__(self, *e, p=100, active = True, name = None):
+class fixedL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, name = None, lossDefault=0):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.FixedVar, model, v, headConstrain)
+        return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
     
 # ----------------- Class Count
 

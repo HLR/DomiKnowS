@@ -58,7 +58,7 @@ trainreader = SudokuReader("randn", type="raw")
 
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, FixedL, eqL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL
 from regr.graph import EnumConcept
 
 
@@ -101,11 +101,11 @@ with Graph('global') as graph:
     # entry = concept(name="entry")
     # entry["given"] = ReaderSensor(keyword="given")
     # entry_label= entry(name="label")
-    # FixedL(entry_label("x", eqL(entry, "given", {True})))
+    # fixedL(entry_label("x", eqL(entry, "given", {True})))
     
-    FixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})))
+    fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})))
     
-    #FixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
+    #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
 
     
     for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
@@ -312,3 +312,7 @@ for datanode in program.populate(trainreader):
     print(datanode)
     
     print(datanode.getChildDataNodes(conceptName=empty_entry))
+    
+#    sudokuLoss = datanode.calculateLcLoss(sample = True, sampleSize = 100)
+    
+    print("sudokuLoss - %s"%(sudokuLoss))
