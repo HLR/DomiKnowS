@@ -114,9 +114,15 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     
     def logicMany(self, _, var, onlyConstrains = False, logicMethod=None):
         for currentVar in var:
+            if currentVar is None:
+                continue
             if not torch.is_tensor(currentVar):
                 raise Exception("Provided variable is not tensor %s"%(type(currentVar)))
                 
+        if var[0] is None:
+            results = None
+            return results
+        
         results = torch.clone(var[0])
         
         for i, _ in enumerate(var[0]):
@@ -220,7 +226,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
 
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.epqVar)
      
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1):
         logicMethodName = "COUNT"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
@@ -228,5 +234,10 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains, limitOp=limitOp, limit=limit, )
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)
     
-    def FixedVar(self, m, _var, onlyConstrains = False): 
-        return 0
+    def fixedVar(self, _, *var, onlyConstrains = False):
+        logicMethodName = "FIXED"
+        
+        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+
+        countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains)
+        return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)

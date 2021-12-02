@@ -147,4 +147,4 @@ class ilpBooleanProcessor(object):
     
     # Create constrain var == label, return 1
     @abc.abstractmethod
-    def FixedVar(self, m, _var, onlyConstrains = False): pass
+    def fixedVar(self, m, _var, onlyConstrains = False): pass

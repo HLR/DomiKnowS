@@ -1106,8 +1106,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varCOUNT.VarName))
         return varCOUNT
     
-    def FixedVar(self, m, var, onlyConstrains = False): 
-        methodName = "FixedVar"
+    def fixedVar(self, m, var, onlyConstrains = False): 
+        methodName = "fixedVar"
         logicMethodName = "FIXED"
         
         if var is None: # not create Fixed constraint for None
