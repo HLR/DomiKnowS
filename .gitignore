@@ -222,5 +222,9 @@ dmypy.json
 /MongoDB-DK.pem
 /logs/
 
+# IMDB Dataset
+examples/IMDB/data/*
+examples/IMDB/logs/*
+examples/IMDB/.vector_cache/*
 # typeset example resources
 /examples/Typenet/resources/*
