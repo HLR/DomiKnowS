@@ -199,11 +199,23 @@ class PRF1Tracker(MetricTracker):
                 output[str(names)]=matrix
             for name in names:
                 TP,TN,FP,FN=frp_from_matrix(names.index(name),matrix)
-                output[name+" Precision"]=TP/(TP+FP)
-                output[name + " Recall"] =TP/(TP+FN)
-                output[name + " F1"] =2*(output[name+" Precision"]*output[name + " Recall"])/((output[name+" Precision"]+output[name + " Recall"]))
-                output[name + " Accuracy"] =(TP+TN)/(TP+TN+FP+FN)
-            output["Total Accuracy of All Classes"]=sum(matrix[i][i] for i in range(n))/sum([sum(matrix[i]) for i in range(n)])
+                if (TP+FP):
+                    output[name+" Precision"]=TP/(TP+FP)
+                else:
+                    output[name + " Precision"] = 0
+                if (TP+FN):
+                    output[name + " Recall"] =TP/(TP+FN)
+                else:
+                    output[name + " Recall"]=0
+                if (output[name+" Precision"]+output[name + " Recall"]):
+                    output[name + " F1"] =2*(output[name+" Precision"]*output[name + " Recall"])/(output[name+" Precision"]+output[name + " Recall"])
+                else:
+                    output[name + " F1"]=0
+                if (TP+TN+FP+FN):
+                    output[name + " Accuracy"] =(TP+TN)/(TP+TN+FP+FN)
+                else:
+                    output[name + " Accuracy"]=0
+            output["Total Accuracy of All Classes"]=sum([matrix[i][i] for i in range(n)])/sum([sum(matrix[i]) for i in range(n)])
             return output
 
 
