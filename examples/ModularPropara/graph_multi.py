@@ -8,17 +8,18 @@ Relation.clear()
 
 with Graph('global') as graph:
     
+    procedure = Concept("procedure")
+    
     context = Concept("context")
     entities = Concept("entities")
-        
-    procedure = Concept("procedure")
+    
     (procedure_context, procedure_entities) = procedure.has_a(context, entities)
     
     entity = Concept('entity')
     (entity_rel, ) = entities.contains(entity)
     
     step = Concept("step")
-    (procedure_contain_step, ) = procedure.contains(step)
+    (context_step, ) = context.contains(step)
     
     before = Concept("before")
     (before_arg1, before_arg2) = before.has_a(arg1=step, arg2=step)
@@ -28,7 +29,7 @@ with Graph('global') as graph:
     
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "destroy", "create", "move"])
     
-    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange)
+    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange, active = False)
 
     # if 
     ifL(
@@ -41,36 +42,55 @@ with Graph('global') as graph:
         # then either
         orL(
             # step j associated with entity e, which is before step i cannot be associated with destroy action a2
-            andL(
-                step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1))), 
-                notL(action_label.destroy('a2', path=('j', action_step.reversed)))
+            ifL(
+                step('j', path=(('i', before_arg1.reversed, before_arg2))), 
+                notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
                 ), 
             # or if  
             ifL(
                 # step j1 which is before step i is associated with destroy action a2
                 andL(
-                    step('j1', path=('i', before_arg1)), 
-                    action_label.destroy('a2', path=('j', action_step.reversed))
+                    step('j1', path=('i', before_arg1.reversed, before_arg2)), 
+                    action_label.destroy('a2', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
                     ), 
                 # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
-                andL(
-                    step('k', path=(('e', action_entity.reversed, action_step), ('j1', before_arg2), ('i', before_arg1))), 
-                    existsL(action_label.create('a3', path=('k', action_step.reversed)))
+                existsL(
+                    andL(
+                        step('k', path=(('j1', before_arg2.reversed, before_arg1), ('i', before_arg1.reversed, before_arg2))), 
+                        action_label.create('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
+                        )
                     )
                 )
-            )
+            ), active = False
         ) 
 
     # ----------------------------
     
-    Tcreate = action(name="trips_create")
-    Tdestroy = action(name="trips_destroy")
-    Tmove = action(name="trips_move")
-    Tnochange = action('trips_none')
+    # if 
+    ifL(
+        # action a1 is destroy, i is a1's step and e is action entity
+        andL(
+            action_label.destroy('a1'), 
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity))
+            ), 
+        
+        # step j associated with entity e, which is before step i cannot be associated with destroy action a2
+        andL(
+            step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1.reversed, before_arg2))), 
+            notL(action_label.destroy('a2', path=('j', action_step.reversed)))
+            ), 
+        active = True
+        ) 
+
+#     Tcreate = action(name="trips_create")
+#     Tdestroy = action(name="trips_destroy")
+#     Tmove = action(name="trips_move")
+#     Tnochange = action('trips_none')
     
     #trips_action_label = (name="trips_action_label", ConceptClass=EnumConcept, values=["trips_none", "trips_destroy", "trips_create", "trips_move"])
     
-    exactL(Tcreate, Tdestroy, Tmove, Tnochange)
+#     exactL(Tcreate, Tdestroy, Tmove, Tnochange)
     
     #ifL(trips_action_label.trips_create, action_label.create)
     #ifL(trips_action_label.trips_destroy, action_label.destroy)

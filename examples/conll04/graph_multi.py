@@ -1,13 +1,13 @@
 from regr.graph import Graph, Concept, Relation
 from regr.graph.logicalConstrain import ifL, andL, nandL
 from regr.graph import EnumConcept
-
+from itertools import combinations
 
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph('global') as graph:
+with Graph('global') as graph_multi:
     with Graph('linguistic') as ling_graph:
         ling_graph.ontology = ('http://ontology.ihmc.us/ML/PhraseGraph.owl', './')
        
@@ -22,33 +22,18 @@ with Graph('global') as graph:
         (rel_pair_phrase1, rel_pair_phrase2, ) = pair.has_a(arg1=phrase, arg2=phrase)
 
     with Graph('application') as app_graph:
-#         app_graph.ontology = ('http://ontology.ihmc.us/ML/EMR.owl', './')
-
         entity = phrase(name='entity')
         entity_label = entity(name="entity_label", ConceptClass=EnumConcept, values=["people", "organization", 'location', 'other', 'O'])
-#         people = entity(name='people')
-#         organization = entity(name='organization')
-#         location = entity(name='location')
-#         other = entity(name='other')
-#         o = entity(name='O')
-
-        # nandL(people, organization, location, other, o)
         pair_label = pair(name="pair_label", ConceptClass=EnumConcept, values=["work_for", "located_in", 'live_in', 'orgbase_on', 'kill'])
-#         work_for = pair(name='work_for')
-#         work_for.has_a(people, organization)
+#        
+        for l1, l2 in combinations(entity_label.attributes, 2):
+            nandL(l1, l2)
+
+        for l1, l2 in combinations(pair_label.attributes, 2):
+            nandL(l1, l2)
         
-#         located_in = pair(name='located_in')
-#         located_in.has_a(location, location)
-
-#         live_in = pair(name='live_in')
-#         live_in.has_a(people, location)
-
-#         orgbase_on = pair(name='orgbase_on')
-#         kill = pair(name='kill')
-        
-
-        # ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        # ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        # ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        # ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        # ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        ifL(pair_label.work_for('x', 'y'), andL(entity_label.people('x'), entity_label.organization('y')))
+        ifL(pair_label.located_in('x', 'y'), andL(entity_label.location('x'), entity_label.location('y')))
+        ifL(pair_label.live_in('x', 'y'), andL(entity_label.people('x'), entity_label.location('y')))
+        ifL(pair_label.orgbase_on('x', 'y'), andL(entity_label.organization('x'), entity_label.location('y')))
+        ifL(pair_label.kill('x', 'y'), andL(entity_label.people('x'), entity_label.people('y')))

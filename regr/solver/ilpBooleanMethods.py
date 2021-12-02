@@ -144,3 +144,7 @@ class ilpBooleanProcessor(object):
     # if onlyConstrains then only construct constrain var1 >= var2 and var1 <= var2
     @abc.abstractmethod
     def epqVar(self, m, _var1, _var2,  onlyConstrains = False): pass
+    
+    # Create constrain var == label, return 1
+    @abc.abstractmethod
+    def fixedVar(self, m, _var, onlyConstrains = False): pass

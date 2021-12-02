@@ -1,27 +1,25 @@
 import sys
+import torch
 
 sys.path.append('.')
 sys.path.append('../..')
 
+from regr.sensor.pytorch.sensors import ReaderSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
+from regr.program import LearningBasedProgram
+from regr.program.model.pytorch import model_helper, PoiModel
+
+from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
+from sensors import DummyCityLearner
+
+graph.detach()
 
 def model_declaration():
-    import torch
-
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
-    from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import model_helper, PoiModel
-
-    from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
-    from sensors import DummyCityLearner
-
-    graph.detach()
 
     # --- City
     world['index'] = ReaderSensor(keyword='world')
     city['index'] = ReaderSensor(keyword='city')
     city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
-
 
     def readNeighbors(index, data, arg1, arg2):
         city1, city2 = arg1, arg2

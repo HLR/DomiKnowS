@@ -25,6 +25,7 @@ class ilpOntSolverFactory:
             graph = {graph}
             
         ontologies = []
+        reuse_model = False
         
         graphOntologyError = set()
         for currentGraph in graph:
@@ -34,16 +35,25 @@ class ilpOntSolverFactory:
             else:
                 graphOntologyError.add(currentGraph)
                 
+            if currentGraph.reuse_model:
+                reuse_model = True
+                
         ontologiesTuple = (*ontologies, )
         
         if _ilpConfig is not None:
             if _ilpConfig['ilpSolver'] == "Gurobi":
+                if reuse_model:
+                    kwargs['reuse_model'] = True
+
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobiILPOntSolver import gurobiILPOntSolver
                 else:
                     from .gurobiILPOntSolver import gurobiILPOntSolver
                 SolverClass = cls.getClass(gurobiILPOntSolver, *SupplementalClasses)
             elif _ilpConfig['ilpSolver'] == "Gurobi1":
+                if reuse_model:
+                    kwargs['reuse_model'] = True
+
                 if __package__ is None or __package__ == '':
                     from regr.solver.gurobiILPOntSolver1 import gurobiILPOntSolver
                 else:

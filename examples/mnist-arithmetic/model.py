@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from regr.program import LearningBasedProgram
 from regr.program.model.pytorch import PoiModel, IMLModel
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyIMLoss, NBCrossEntropyLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
 from regr.sensor.pytorch.sensors import ConstantSensor, FunctionalReaderSensor, FunctionalSensor, ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -19,6 +19,18 @@ class Model(PoiModel):
             poi=(T1, image, addition),
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             metric=PRF1Tracker(MultiClassCMWithLogitsMetric(19)))
+
+
+class IMLModel(IMLModel):
+    def __init__(self, graph):
+        super().__init__(
+            graph,
+            poi=(T1, image, addition),
+            loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
+            metric={
+                'ILP': PRF1Tracker(DatanodeCMMetric()),
+                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+            inferTypes=['ILP', 'local/argmax'])
 
 
 class Net(torch.nn.Module):
@@ -55,5 +67,6 @@ def model_declaration(config):
         forward=lambda operand1, operand2: torch.cat((operand1, operand2), dim=-1))
     addition[summation] = ModuleLearner('pixels', module=Net(config.input_size*2, config.hidden_sizes, len(summation.enum)))
 
-    program = LearningBasedProgram(graph, Model)
+    program = LearningBasedProgram(graph, IMLModel)
+
     return program

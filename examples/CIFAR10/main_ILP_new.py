@@ -57,6 +57,7 @@ class ImageModel(PrimalDualModel):
             metric=PRF1Tracker(DatanodeCMMetric()))
 
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def model_declaration():
     from regr.sensor.pytorch.sensors import ReaderSensor
@@ -76,29 +77,29 @@ def model_declaration():
     horse = graph['horse']
     ship = graph['ship']
 
-    image['pixels'] = ReaderSensor(keyword='pixels', device="cuda:1")
-    image[airplane] = ReaderSensor(keyword='airplane',label=True, device="cuda:1")
-    image[dog] = ReaderSensor(keyword='dog',label=True, device="cuda:1")
-    image[truck] = ReaderSensor(keyword='truck',label=True, device="cuda:1")
-    image[automobile] = ReaderSensor(keyword='automobile',label=True, device="cuda:1")
-    image[bird] = ReaderSensor(keyword='bird',label=True, device="cuda:1")
-    image[cat] = ReaderSensor(keyword='cat',label=True, device="cuda:1")
-    image[deer] = ReaderSensor(keyword='deer',label=True, device="cuda:1")
-    image[frog] = ReaderSensor(keyword='frog',label=True, device="cuda:1")
-    image[horse] = ReaderSensor(keyword='horse',label=True, device="cuda:1")
-    image[ship] = ReaderSensor(keyword='ship',label=True, device="cuda:1")
+    image['pixels'] = ReaderSensor(keyword='pixels', device=device)
+    image[airplane] = ReaderSensor(keyword='airplane',label=True, device=device)
+    image[dog] = ReaderSensor(keyword='dog',label=True, device=device)
+    image[truck] = ReaderSensor(keyword='truck',label=True, device=device)
+    image[automobile] = ReaderSensor(keyword='automobile',label=True, device=device)
+    image[bird] = ReaderSensor(keyword='bird',label=True, device=device)
+    image[cat] = ReaderSensor(keyword='cat',label=True, device=device)
+    image[deer] = ReaderSensor(keyword='deer',label=True, device=device)
+    image[frog] = ReaderSensor(keyword='frog',label=True, device=device)
+    image[horse] = ReaderSensor(keyword='horse',label=True, device=device)
+    image[ship] = ReaderSensor(keyword='ship',label=True, device=device)
 
-    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device="cuda:1")
-    image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[automobile] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[bird] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[cat] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[deer] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[frog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
-    image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device="cuda:1")
+    image['emb'] = ModuleLearner('pixels', module=ImageNetwork(), device=device)
+    image[airplane] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[dog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[truck] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[automobile] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[bird] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[cat] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[deer] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[frog] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[horse] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
+    image[ship] = ModuleLearner('emb', module=nn.Linear(16 * 5 * 5, 2), device=device)
     
 
 #     program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric()))
@@ -230,7 +231,7 @@ def main():
     train_ds, val_ds = random_split(trainset, [train_size, val_size])
     print(len(train_ds), len(val_ds))
 
-    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device="cuda:1", train_epoch_num=30, Optim=lambda param: torch.optim.SGD(param, lr=.001))
+    program.train(training_set=train_ds, valid_set=val_ds, test_set=testset, device=device, train_epoch_num=30, Optim=lambda param: torch.optim.SGD(param, lr=.001))
 
   
     program.test(testset)

@@ -1,6 +1,6 @@
 import torch
 
-from regr.program import POIProgram, IMLProgram
+from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
@@ -10,11 +10,10 @@ from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
 
-
 import spacy
+
 # from spacy.lang.en import English
 nlp = spacy.load('en_core_web_sm') #English()
-
 
 class Classifier(torch.nn.Sequential):
     def __init__(self, in_features, out_features) -> None:
@@ -26,13 +25,12 @@ class Classifier(torch.nn.Sequential):
     def forward(self, input):
         return super().forward(input)
 
-
 def model():
-    from graph_multi import graph, sentence, word, phrase, pair
+    from graph_multi import graph_multi, sentence, word, phrase, pair
     from graph_multi import entity_label, pair_label
     from graph_multi import rel_sentence_contains_word, rel_phrase_contains_word, rel_pair_phrase1, rel_pair_phrase2, rel_sentence_contains_phrase
 
-    graph.detach()
+    graph_multi.detach()
 
     phrase['text'] = ReaderSensor(keyword='tokens')
     phrase['postag'] = ReaderSensor(keyword='postag')
@@ -84,25 +82,25 @@ def model():
         return find
     
     #TODO change the reader
-    pair[pair_label] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation(), label=True)
+    pair[pair_label] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', 
+                                              forward=find_relation(), label=True)
 
-    lbp = POIProgram(
-        graph,
+    lbp = SolverPOIProgram(
+        graph_multi,
         poi=(phrase, sentence, pair),
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric=PRF1Tracker())
     # lbp = IMLProgram(
-    #     graph,
+    #     graph_multi,
     #     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
     #     metric=PRF1Tracker())
 
     return lbp
 
-
 def main():
-    from graph import graph, sentence, word, phrase, pair
-    from graph import entity_label
-    from graph import pair_label
+    from graph_multi import graph_multi, sentence, word, phrase, pair
+    from graph_multi import entity_label
+    from graph_multi import pair_label
 
     program = model()
 
@@ -115,25 +113,30 @@ def main():
     reader = SingletonDataLoader('data/conll04.corp')
 
     for node in program.populate(reader, device='auto'):
+        #program.test(reader, device='auto')
         assert node.ontologyNode is sentence
         phrase_node = node.getChildDataNodes()[0]
         assert phrase_node.ontologyNode is phrase
 
         node.infer()
 
-        if phrase_node.getAttribute(people) is not None:
-            assert phrase_node.getAttribute(entity_label, 'softmax') > 0
+        if phrase_node.getAttribute(entity_label) is not None:
+            #assert phrase_node.getAttribute(entity_label, 'softmax') > 0
             node.inferILPResults(fun=None)
             
-            ILPmetrics = node.getInferMetric()
+            ILPmetricsEntity = node.getInferMetrics(entity_label)
+            
+            print("ILP metrics for Entity Label F1 %s"%(ILPmetricsEntity['entity_label']['F1']))
+
+            ILPmetrics = node.getInferMetrics()
             
             print("ILP metrics Total %s"%(ILPmetrics['Total']))
             
-            assert phrase_node.getAttribute(people, 'ILP') >= 0
+            
+            #assert phrase_node.getAttribute(entity_label, 'ILP') >= 0
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
             break
-
 
 if __name__ == '__main__':
     main()

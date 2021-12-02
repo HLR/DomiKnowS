@@ -8,11 +8,11 @@ from transformers import get_linear_schedule_with_warmup
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL
+from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
 from regr.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram, IMLProgram
+from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
 from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead
@@ -21,16 +21,16 @@ from WIQA_utils import guess_pair, guess_triple
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs you want your model to train on',type=int)
-parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning rate of the adamW optimiser',type=float)
+parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--lr', dest='learning_rate', default=2e-6, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
-parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
-parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
-parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=100000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--batch', dest='batch_size', default=10, help='batch size for neural network training',type=int)
+parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
+parser.add_argument('--num_training_steps', dest='num_training_steps', default=20000, help='total number of training steps for the transformer',type=int)
+parser.add_argument('--verbose', dest='verbose', default=1, help='print the errors',type=int)
 args = parser.parse_args()
 
 
@@ -39,9 +39,9 @@ cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
-reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+#reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[20:22]
+#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -60,36 +60,38 @@ with Graph('WIQA_graph') as graph:
     is_less = question(name='is_less')
     no_effect = question(name='no_effect')
 
-    # we want only one of the labels to be true
-    nandL( is_less, no_effect)
-    nandL(is_more,  no_effect)
-    nandL(is_more, is_less)
-    orL(is_more, is_less, no_effect)
+    USE_LC_exactL = True
+    USE_LC_atMostL = True
+
+    USE_LC_symmetric  = True
+    USE_LC_transitiveIsMore  = True
+    USE_LC_transitiveIsLess = True
+    
+    # Only one of the labels to be true
+    exactL(is_more, is_less, no_effect, active=USE_LC_exactL)
+    atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL) # breakpoint in WIQA line 126
+
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
-    # here we define that if a question is is_more or is_less and it has a symmetric relation with another
-    # question, then the second question should be is_less and is_more respectively
-    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
-    ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+    # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
+    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
+    
+    # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
+    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
-    # third question si made of the cause of the first and the effect of the second question
+    # third question is made of the cause of the first and the effect of the second question
     transitive = Concept(name='transitive')
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
+    # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
+    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore)
 
-    # the transitive relation implies that if the first and the second question are is_more, so should be the
-    # third question. but if the first question is is_more and the second question is is_less, then the third
-    # question should also be is_less
-
-    ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
-
-    ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+    # If the first question is is_more and the second question is is_less, then the third question should also be is_less
+    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess)
 
 from IPython.display import Image
 #graph.visualize("./image")
@@ -162,8 +164,8 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 
 if not args.primaldual and not args.IML:
     print("simple program")
-    program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 if args.primaldual:
     print("primal dual program")
     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
@@ -176,8 +178,8 @@ if args.IML:
 logging.basicConfig(level=logging.INFO)
 
 from os import path
-if not path.exists("domi_7"):
-    join_model("domi_comp","domi_7")
+if not path.exists("new_domi_1"):
+    join_model("domi_1_20","new_domi_1")
 
 # at the end we run our program for each epoch and test the results each time
 
@@ -196,8 +198,8 @@ for i in range(args.cur_epoch):
         def __call__(self) -> None:
             self.sch.step()
 
-    #program.load("domi_7") in case we want to load the model instead of training
-    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
+    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)#, train_step_callbacks=[SchCB(program)])
     #program.save("domi_"+str(i)) in case of saving the parameters of the model
 
     print('-' * 40,"\n",'Training result:')
@@ -206,10 +208,6 @@ for i in range(args.cur_epoch):
         print(program.cmodel.loss)
 
     print("***** dev aug *****")
-    test_inference_results(program,reader_dev_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+    test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
     print("***** test aug *****")
-    test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
-
-
-
-
+    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)

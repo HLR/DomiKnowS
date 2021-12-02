@@ -223,7 +223,7 @@ def main():
 #             print(label, datanode.getAttribute(eval(label)).softmax(-1))
 
 #         datanode.inferILPResults('dog', 'truck', 'airplane','automobile', 'bird', 'cat','deer', 'frog', 'horse', 'ship',fun=None)
-#         ILPmetrics = datanode.getInferMetric()
+#         ILPmetrics = datanode.getInferMetrics()
 #         print("ILP metrics Total %s"%(ILPmetrics['Total']))
 #         print('----------after ILP---------')
 #         prediction = ' '
