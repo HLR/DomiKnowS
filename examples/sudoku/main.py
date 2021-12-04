@@ -313,6 +313,6 @@ for datanode in program.populate(trainreader):
     
     print(datanode.getChildDataNodes(conceptName=empty_entry))
     
-#    sudokuLoss = datanode.calculateLcLoss(sample = True, sampleSize = 100)
+    sudokuLoss = datanode.calculateLcLoss(sample = True, sampleSize = 100)
     
     print("sudokuLoss - %s"%(sudokuLoss))

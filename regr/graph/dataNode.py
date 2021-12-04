@@ -638,15 +638,26 @@ class DataNode:
             return self.impactLinks["contains"][0].getRootDataNode()
         else:
             return self
-                
+    
+    # Keeps hashMap of concept name queries in findConcept to results
+    conceptsMap = {}
+    
     # Find concept in the graph based on concept name
     def findConcept(self, _conceptName, usedGraph = None):
-        if isinstance(_conceptName, Concept):
-            _conceptName = _conceptName.name()
-            
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
+        if usedGraph not in self.conceptsMap:
+            self.conceptsMap[usedGraph] = {}
+            
+        usedGraphConceptsMap = self.conceptsMap[usedGraph]
+        
+        if isinstance(_conceptName, Concept):
+            _conceptName = _conceptName.name()
+            
+        if _conceptName in usedGraphConceptsMap:
+            return usedGraphConceptsMap[_conceptName]
+        
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
             subGraph = usedGraph._objs[subGraphKey]
@@ -655,17 +666,22 @@ class DataNode:
                 if _conceptName == conceptNameItem:
                     concept = subGraph.concepts[conceptNameItem]
                     
-                    return (concept, concept.name, None, 1)
+                    usedGraphConceptsMap[_conceptName] =  (concept, concept.name, None, 1)
+                    return usedGraphConceptsMap[_conceptName]
+                
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
                     vlen = len(subGraph.concepts[conceptNameItem].enum)
                     
                     if _conceptName in subGraph.concepts[conceptNameItem].enum:
                         concept = subGraph.concepts[conceptNameItem]
                         
-                        return (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
+                        usedGraphConceptsMap[_conceptName] = (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
+                        return usedGraphConceptsMap[_conceptName]
+
+        usedGraphConceptsMap[_conceptName] = None
         
-        return None 
-    
+        return usedGraphConceptsMap[_conceptName]
+
     # Check if concept is relation
     def isRelation(self, conceptRelation, usedGraph = None):
         if usedGraph is None:
