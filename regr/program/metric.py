@@ -46,6 +46,22 @@ class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
         return super().forward(input, target, data_item, prop, weight)
 
 
+def calc_TP_FP_TN_FN_for_single_class(val):
+    y = val["labels"]
+    p = val["preds"]
+    TP,FP,TN,FN=0,0,0,0
+    for i,j in zip(y,p):
+        if i==j and i==1:
+            TP+=1
+        elif i==j and i==0:
+            TN+=1
+        elif not i==j and i==1:
+            FN+=1
+        elif not i == j and i == 0:
+            FP += 1
+    return {"TP": TP, 'FP': FP, 'TN': TN, 'FN': FN}
+
+
 class DatanodeCMMetric(torch.nn.Module):
     def __init__(self, inferType='ILP'):
         super().__init__()
@@ -59,7 +75,7 @@ class DatanodeCMMetric(torch.nn.Module):
         if len(result.keys())==2:
             if str(prop.name) in result:
                 val =  result[str(prop.name)]
-                return {"TP": val["TP"], 'FP': val["FP"], 'TN': val["TN"], 'FN': val["FN"]}
+                return calc_TP_FP_TN_FN_for_single_class(val)
             else:
                 return None
         else:
@@ -177,6 +193,11 @@ class PRF1Tracker(MetricTracker):
             else:
                 fn = CM['FN'].sum().float()
 
+            if isinstance(CM['TN'], list):
+                tn = sum(CM['TN'])
+            else:
+                tn = CM['TN'].sum().float()
+
             if tp:
                 p = tp / (tp + fp)
                 r = tp / (tp + fn)
@@ -185,7 +206,9 @@ class PRF1Tracker(MetricTracker):
                 p = torch.zeros_like(torch.tensor(tp))
                 r = torch.zeros_like(torch.tensor(tp))
                 f1 = torch.zeros_like(torch.tensor(tp))
-            return {'P': p, 'R': r, 'F1': f1}
+            if (tp + fp + fn + tn):
+                accuracy=(tp + tn) / (tp + fp + fn + tn)
+            return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}
         else:
             output={}
             names=values[0]["class_names"][:]
