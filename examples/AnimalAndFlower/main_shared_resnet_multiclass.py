@@ -44,7 +44,7 @@ def main():
     random.seed(777)
     logging.basicConfig(level=logging.INFO)
     trainset = load_animals_and_flowers(args, root='./data/', size=100, )
-    #trainset=trainset[:4]
+    trainset=trainset[:4]
     train_ds, val_ds = trainset[:math.floor(len(trainset) * 0.8)], trainset[math.floor(len(trainset) * 0.8):]
     solver = args.solver
     program = model_declaration(device=device, solver=solver, lambdaValue=args.lambdaValue, model_size=args.model_size)
