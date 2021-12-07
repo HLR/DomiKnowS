@@ -585,7 +585,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             if not sample:
                 return 1
             else:
-                sampleSize = p
+                sampleSize = p+1
                 dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize)
                 return dn.getAttributes()[sampleKey][sampleSize]
         
@@ -593,7 +593,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             if not sample:
                 return None
             else:
-                sampleSize = p
+                sampleSize = p+1
                 dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize)
                 for i in range(sampleSize):
                     dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
@@ -610,28 +610,29 @@ class gurobiILPOntSolver(ilpOntSolver):
     
         if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
             vDn = vDn.item()  
-                   
-        if sample:
-            sampleSize = p
+             
+        if not sample:
+            return vDn # Finish if not sample 
+        
+        # Generate sample 
+        sampleSize = p
 
-            if sampleSize not in dn.getAttributes()[sampleKey]:
-                # Create sample for this concept and sample size
-                if vDn == None or vDn != vDn:
-                    dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
-                    for i in range(sampleSize):
-                        if i== 0:
-                            continue
-                        
-                        dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
-                else:
-                    t = torch.full((sampleSize+1,), vDn)
-                    dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
-                    dn.getAttributes()[sampleKey][sampleSize][0] = vDn
-                   
-            return dn.getAttributes()[sampleKey][sampleSize]
+        if sampleSize not in dn.getAttributes()[sampleKey]:
+            # Create sample for this concept and sample size
+            if vDn == None or vDn != vDn:
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
+                for i in range(sampleSize):
+                    if i== 0:
+                        continue
+                    
+                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
+            else:
+                t = torch.full((sampleSize+1,), vDn)
+                dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
+                dn.getAttributes()[sampleKey][sampleSize][0] = vDn
+               
+        return dn.getAttributes()[sampleKey][sampleSize]
                       
-        return vDn
-    
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
         vDnLabel = self.__getLabel(_dn, conceptName).item()
 
@@ -644,21 +645,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                 vDn.VTag = "False" + vDn.VarName
                 
             m.update()
+            return vDn
         elif torch.is_tensor(vDn):
-            if vDnLabel != i and vDnLabel != -100: # False
-                zeros = torch.zeros(vDn.shape[0])
+            if vDnLabel == -100:
+                return None
+            elif vDnLabel == i:
                 ones = torch.ones(vDn.shape[0])
-                
-                newVDn = torch.where(vDn > 0, zeros, ones)
-                newVDn[0] = vDn[0]
-                
-                vDn = newVDn
+                return ones
+            else:
+                zeros = torch.zeros(vDn.shape[0])
+                return zeros
         else:
-            if vDnLabel != i and vDnLabel != -100: # False
-                if vDn == 1:
-                    vDn = 0
-                else:
-                    vDn = 1
+            if vDnLabel == -100:
+                return None
+            elif vDnLabel == i:
+                return 1
+            else:
+                return 0
         
     def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, loss = False, sample = False):
         lcVariables = {}
@@ -801,7 +804,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
                                     
                                     if lc.__str__() == "fixedL":
-                                        self.fixedLSupport(_dn, conceptName, vDn, i, m)
+                                        vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
                                         
                                     _vDns.append(vDn)
                             elif isinstance(e[0], EnumConcept) and e[2] != None: # Multiclass concept label
@@ -811,7 +814,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
                                     
-                                _vDns.append(vDn)
+                                vDn = _vDns.append(vDn)
                             else: # Binary concept
                                 eT = (conceptName, 1, 0)
                                 vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
@@ -819,7 +822,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, 1, m)
                                         
-                                _vDns.append(vDn)
+                                vDn = _vDns.append(vDn)
                         
                         vDns.append(_vDns)
                         
@@ -1146,12 +1149,17 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensorData = []                    
 
                     for i, l in enumerate(lossList):
-                        lossTensorData.append(l[0])
-                        
-                        if torch.count_nonzero(l[0]):
+                        if l[0] == None:
+                            lossTensor[i] = float("nan")
+                            lt = torch.empty(1)
+                            lt[0] = float("nan")
+                            lossTensorData.append(lt)
+                        elif torch.count_nonzero(l[0]):
                             lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
+                            lossTensorData.append(l[0])
                         else:
                             lossTensor[i] = float("nan")
+                            lossTensorData.append(l[0])
                         
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData
@@ -1169,9 +1177,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 for lc in lcLosses:
                     for t in lcLosses[lc]['lossData']:
-                        if not t[i]:
-                            isGlobal = False
+                        if not t[0] or t[0] != t[0]:
+                            #isGlobal = False
+                            continue
+                        
+                        if not t[i] or t[i] != t[i]:
+                            #isGlobal = False
                             #break
+                            pass
                         else:
                             iSum += t[i] 
                             g +=1

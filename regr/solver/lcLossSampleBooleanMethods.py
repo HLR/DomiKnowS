@@ -226,12 +226,12 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
 
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.epqVar)
      
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1):
+    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         logicMethodName = "COUNT"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
-        countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains, limitOp=limitOp, limit=limit, )
+        countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains, limitOp=limitOp, limit=limit, logicMethodName = "COUNT")
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)
     
     def fixedVar(self, _, *var, onlyConstrains = False):
@@ -239,5 +239,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
-        countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains)
-        return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)
+        if var[0] == None:
+            return None
+        else:
+            zeros = torch.zeros(len(var))
+            return zeros
