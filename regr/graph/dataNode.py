@@ -1137,7 +1137,7 @@ class DataNode:
         
         return lcResult
 
-    def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='macro'):
+    def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         if not conceptsRelations:
             _DataNode__Logger.info("Calling %s metrics with empty conceptsRelations"%(inferType))
             conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
@@ -1153,28 +1153,31 @@ class DataNode:
          
         # Will store calculated metrics an related data   
         result = {}   
-        tp, fp, tn, fn  = [], [], [], []    
+        tp, fp, tn, fn  = [], [], [], []  
+        isBinary = False  
         isMulticlass = False
+        isMulticlassLabel = False
         
         # Calculate metrics for each provided concept
         for cr in conceptsRelations:
-            _DataNode__Logger.info("Calculating metrics for concept %s"%(cr))
-
             # Check format of concepts and translate them to tuple in order to accommodate multiclass concepts
-            if not isinstance(cr, tuple):
-                if not isinstance(cr, Concept):
+            if not isinstance(cr, tuple): # Not tuple concept form yet
+                if not isinstance(cr, Concept): # If string find the corresponding concept
                     cr = self.findConcept(cr)
                     
-                    if cr is None:
+                    if cr is None: # Sting mapping to concept is not found
+                        _DataNode__Logger.error("% string is not a concept - not able to calculate metrics"%(cr))
                         continue
-                
-                if isinstance(cr, EnumConcept):
+                elif isinstance(cr, EnumConcept): # Multiclass mapping to concept tuple form
                     cr = (cr, cr.name, None, len(cr.enum))
-                elif isinstance(cr, Concept):
+                elif isinstance(cr, Concept): # Binary mapping to tuple concept form
                     cr = (cr, cr.name, None, 1)
                 else:
-                    pass
+                    _DataNode__Logger.error("% string is not a concept - not able to calculate metrics"%(cr))
+                    continue
             
+            _DataNode__Logger.info("Calculating metrics for concept %s"%(cr[0]))
+
             # Collect date for metrics from DataNode
             preds = self.collectInferredResults(cr, inferType)
             labelsR = self.collectInferredResults(cr, 'label')
@@ -1213,15 +1216,15 @@ class DataNode:
             
             # Check if concept is a label from Multiclass
             if cr[2] is not None: # Multiclass label given multiclass index (cr[2]) 
+                isMulticlassLabel = True
+                average = None
+                labelsList = [i for i in range(cr[3])]
                 _DataNode__Logger.info("Index of class Labels %s is %s"%(cr[1], cr[2]))
-                for i, l in enumerate(labelsR): # Translate labels to 0/1
-                    if labelsR[i] == cr[2]:
-                        labels[i] = 1
-                    else:
-                        labels[i] = 0
-                    
             # Check if concept is a  Multiclass
             elif (cr[2] is None) and cr[3] > 1: # Multiclass general without index (cr[2]) - called by the IML model forward method
+                isMulticlass = True
+                average = "micro"
+                labelsList = [i for i in range(cr[3])]
                 if preds.shape[0] == len(labelsR):
                     predsOriginal = preds
                     preds = torch.nonzero(preds, as_tuple=True)[1]
@@ -1229,7 +1232,6 @@ class DataNode:
                     if preds.shape[0] != len(labelsR):
                         _DataNode__Logger.warning("Concept %s predictions tensor has some predictions not calculated - %s"%(cr[1], predsOriginal))
                     
-                    isMulticlass = True
                     _DataNode__Logger.info("Concept %s is Multiclass "%(cr[1]))
                     _DataNode__Logger.info("Using average %s for Multiclass metrics calculation"%(average))
 
@@ -1240,6 +1242,10 @@ class DataNode:
                 _DataNode__Logger.info("Calculating metrics for all class Labels of  %s "%(cr[1]))
                 multiclassLabels = cr[0].enum
                 result = self.getInferMetrics(*multiclassLabels, inferType=inferType, weight = weightOriginal, average=average)
+            else:
+                isBinary = True
+                labelsList = None
+
             # ---
             
             # Check if date prepared correctly
@@ -1276,41 +1282,39 @@ class DataNode:
             result[cr[1]]['preds'] = preds
 
             # Calculate confusion matrix
-            cm = metrics.confusion_matrix(labels, preds)
-            result[cr[1]]['confusion_matrix'] = cm
-            _DataNode__Logger.info("Concept %s confusion matrix %s"%(cr[1], result[cr[1]]['confusion_matrix']))
-            
             try:
-                if not isMulticlass: 
-                    _tn, _fp, _fn, _tp = metrics.confusion_matrix(labels, preds).ravel()
-                if isMulticlass and len(multiclassLabels) == 2:
-                    _tn, _fp, _fn, _tp = metrics.confusion_matrix(labels, preds).ravel()
+                if isMulticlass:
+                    cm = metrics.confusion_matrix(labels, preds)
+                elif isMulticlassLabel:
+                    cm = metrics.multilabel_confusion_matrix(labels, preds, labels=labelsList)
+                    cm = cm[cr[2]]
+                elif isBinary:
+                    cm = metrics.confusion_matrix(labels, preds)
+                    _tn, _fp, _fn, _tp = cm.ravel()
+        
+                    tp.append(_tp) 
+                    result[cr[1]]['TP'] = _tp # true positive 
+        
+                    fp.append(_fp)
+                    result[cr[1]]['FP'] = _fp # false positive
+        
+                    tn.append(_tn)
+                    result[cr[1]]['TN'] = _tn # true negative
+        
+                    fn.append(_fn)
+                    result[cr[1]]['FN'] = _fn # false positive
                 else:
-                    mcm = metrics.multilabel_confusion_matrix(labels, preds)
-                    _tn, _fp, _fn, _tp  = (0, 0, 0, 0)
-                    for mcmI in mcm:
-                        _tnI, _fpI, _fnI, _tpI = mcmI.ravel()
-                        _tn += _tnI
-                        _fp += _fpI
-                        _fn += _fnI
-                        _tp += _tpI
+                    pass
                     
-                tp.append(_tp) 
-                result[cr[1]]['TP'] = _tp # true positive 
-    
-                fp.append(_fp)
-                result[cr[1]]['FP'] = _fp # false positive
-    
-                tn.append(_tn)
-                result[cr[1]]['TN'] = _tn # true negative
-    
-                fn.append(_fn)
-                result[cr[1]]['FN'] = _fn # false positive
+                result[cr[1]]['confusion_matrix'] = cm
+                _DataNode__Logger.info("Concept %s confusion matrix %s"%(cr[1], result[cr[1]]['confusion_matrix']))
             except ValueError as ve: # Error when both labels and preds as zeros
                 _DataNode__Logger.warning("Concept %s - both labels and predictions are all zeros - not able to calculate confusion metrics"%(cr[1]))
             
             # Calculate precision P - tp/(tp + fp)
-            _p = metrics.precision_score(labels, preds, average=average, zero_division=0) # precision or positive predictive value (PPV)
+            _p = metrics.precision_score(labels, preds, average=average, labels=labelsList, zero_division=0) # precision or positive predictive value (PPV)
+            if isMulticlassLabel:
+                _p = _p[cr[2]]
             result[cr[1]]['P'] = _p
             if _p == 0:
                 _DataNode__Logger.warning("Concept %s precision %s"%(cr[1], _p))
@@ -1318,7 +1322,9 @@ class DataNode:
                 _DataNode__Logger.info("Concept %s precision %s"%(cr[1], _p))
 
             # Calculate recall R - tp/(tp + fn)
-            _r = metrics.recall_score(labels, preds, average=average, zero_division=0) # recall, sensitivity, hit rate, or true positive rate (TPR)
+            _r = metrics.recall_score(labels, preds, average=average, labels=labelsList, zero_division=0) # recall, sensitivity, hit rate, or true positive rate (TPR)
+            if isMulticlassLabel:
+                _r = _r[cr[2]]
             result[cr[1]]['R'] = _r
             if _r == 0:
                 _DataNode__Logger.warning("Concept %s recall %s"%(cr[1], _r))
@@ -1326,56 +1332,61 @@ class DataNode:
                 _DataNode__Logger.info("Concept %s recall %s"%(cr[1], _r))
              
             # Calculate F1 score - (P X R)/(P + R)
-            _f1 = metrics.f1_score(labels, preds, average=average, zero_division=0) # f1
+            _f1 = metrics.f1_score(labels, preds, average=average, labels=labelsList, zero_division=0) # f1
+            if isMulticlassLabel:
+                _f1 = _f1[cr[2]]
             result[cr[1]]['F1'] = _f1
             if _f1 == 0:
                 _DataNode__Logger.warn("Concept %s f1 %s"%(cr[1], _f1))
             else:
                 _DataNode__Logger.info("Concept %s f1 %s"%(cr[1], _f1))
 
-        
-        result['Total'] = {}  
-        tpT = (torch.tensor(tp)).sum()
-        result['Total']['TP'] = tpT 
-        fpT = (torch.tensor(fp)).sum() 
-        result['Total']['FP'] = fpT
-        tnT = (torch.tensor(tn)).sum() 
-        result['Total']['TN'] = tnT
-        fnT = (torch.tensor(fn)).sum() 
-        result['Total']['FN'] = fnT
-        
-        if tpT + fpT:
-            pT = tpT / (tpT + fpT)                
-            result['Total']['P'] = pT
-            if pT == 0:
-                _DataNode__Logger.warning("Total precision is %s"%(pT))
-            else:
-                _DataNode__Logger.info("Total precision is %s"%(pT))
-                
-            rT = tpT / (tpT + fnT)
-            result['Total']['R'] = rT
-            if rT == 0:
-                _DataNode__Logger.warning("Total recall is %s"%(rT))
-            else:
-                _DataNode__Logger.info("Total recall is %s"%(rT))
+        # --- Calculate Total metrics for binary concept
+        if isBinary:
+            result['Total'] = {}  
+            tpT = (torch.tensor(tp)).sum()
+            result['Total']['TP'] = tpT 
+            fpT = (torch.tensor(fp)).sum() 
+            result['Total']['FP'] = fpT
+            tnT = (torch.tensor(tn)).sum() 
+            result['Total']['TN'] = tnT
+            fnT = (torch.tensor(fn)).sum() 
+            result['Total']['FN'] = fnT
             
-            if pT + rT:
-                f1T = 2 * pT * rT / (pT + rT)
-                result['Total']['F1'] = f1T
-                if f1T == 0:
-                    _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+            if tpT + fpT:
+                pT = tpT / (tpT + fpT)                
+                result['Total']['P'] = pT
+                if pT == 0:
+                    _DataNode__Logger.warning("Total precision is %s"%(pT))
                 else:
-                    _DataNode__Logger.info("Total F1 is %s"%(f1T))
+                    _DataNode__Logger.info("Total precision is %s"%(pT))
                     
-            elif tpT + (fpT + fnT)/2:
-                f1T = tpT/(tpT + (fpT + fnT)/2)
-                result['Total']['F1'] = f1T
-                if f1T == 0:
-                    _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+                rT = tpT / (tpT + fnT)
+                result['Total']['R'] = rT
+                if rT == 0:
+                    _DataNode__Logger.warning("Total recall is %s"%(rT))
                 else:
-                    _DataNode__Logger.info("Total F1 is %s"%(f1T))
-            else:
-                _DataNode__Logger.warning("No able to calculate F1 for Total") 
+                    _DataNode__Logger.info("Total recall is %s"%(rT))
+                
+                if pT + rT:
+                    f1T = 2 * pT * rT / (pT + rT)
+                    result['Total']['F1'] = f1T
+                    if f1T == 0:
+                        _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+                    else:
+                        _DataNode__Logger.info("Total F1 is %s"%(f1T))
+                        
+                elif tpT + (fpT + fnT)/2:
+                    f1T = tpT/(tpT + (fpT + fnT)/2)
+                    result['Total']['F1'] = f1T
+                    if f1T == 0:
+                        _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+                    else:
+                        _DataNode__Logger.info("Total F1 is %s"%(f1T))
+                else:
+                    _DataNode__Logger.warning("No able to calculate F1 for Total") 
+        else:
+            result['Total'] = {"No Total metrics for multiclass concept"}
 
         return result
     
