@@ -352,5 +352,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return countSuccess
         
-    def FixedVar(self, m, _var, onlyConstrains = False): 
-        return 0
+    def fixedVar(self, _, _var, onlyConstrains = False):
+        logicMethodName = "FIXED"
+        
+        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,_var))
+        if _var != None: 
+            return 1 - _var
+        else:
+            return None

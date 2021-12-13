@@ -15,12 +15,12 @@ args = Namespace(
 cuda_number=0,
 epoch=10,
 learning_rate=2e-3,
-samplenum=10000,
+samplenum=20,
 batch_size=14,
 beta=0.1,
 embedding_dim=2000,
 hidden_dim=2000,
-top_pos=1000,
+top_pos=10,
 max_sentence_length=30,
 )
 import warnings
@@ -28,7 +28,7 @@ warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
 
 args.device="cuda:"+str(args.cuda_number) if torch.cuda.is_available() else 'cpu'
-
+args.device='cpu'
 print("device is :",args.device)
 vocabulary,tag_list,reader=create_reader_and_vocuabulary(samplenum=args.samplenum,top_pos=args.top_pos,max_sentence_length=args.max_sentence_length)
 
@@ -54,7 +54,7 @@ Word["hidden_layer"]=ModuleLearner("token", module=POSLSTM(embedding_dim=args.em
 Word[Tag] = FunctionalSensor(sent_word_contains, "pos", forward=LabelReader(device=args.device,tag_list=tag_list), label=True)
 Word[Tag] = ModuleLearner("hidden_layer", module=HeadLayer( hidden_dim=args.hidden_dim, target_size=len(tag_list)))
 
-program = SolverPOIProgram(graph,inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+program = SolverPOIProgram(graph,inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker(metric=DatanodeCMMetric('local/argmax')))
 
 program.train(reader[:len(reader)//10*8],valid_set=reader[len(reader)//10*8:], train_epoch_num=args.epoch, Optim=lambda param: SGD(param, lr=args.learning_rate),device=args.device)
 program.train(reader[:len(reader)//10*8])

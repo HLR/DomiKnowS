@@ -32,9 +32,12 @@ class dbUpdate():
         self.cwd = os.path.basename(self.cwd)
 
         import __main__
-        self.programName = os.path.basename(__main__.__file__)
-        if self.programName.index('.') >= 0:
-            self.programName = self.programName[:self.programName.index('.')]
+        if hasattr(__main__, '__file__'):
+            self.programName = os.path.basename(__main__.__file__)
+            if self.programName.index('.') >= 0:
+                self.programName = self.programName[:self.programName.index('.')]
+        else:
+            self.programName = ''
 
         try:
             import os
@@ -235,12 +238,12 @@ class LearningBasedProgram():
                     if key == 'softmax':
                         softmaxMetric = metric
 
-            if ilpMetric is not None and softmaxMetric is not None:
+            """if ilpMetric is not None and softmaxMetric is not None:
                 metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
                 metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
 
                 self.logger.info(f' - - {metricDeltaKey}')
-                self.logger.info(metricDelta)
+                self.logger.info(metricDelta)"""
 
     def train(
         self,

@@ -163,7 +163,8 @@ def main():
         node.inferLocal()
         argmax_metrics = node.getInferMetrics(inferType='local/argmax')
         print("\nArgmax metrics Total %s"%(argmax_metrics['Total']))
-        print("\nArgmax metrics work_for %s"%(argmax_metrics['work_for']))
+        if 'work_for' in argmax_metrics:
+            print("\nArgmax metrics work_for %s"%(argmax_metrics['work_for']))
         print("\nArgmax metrics people %s"%(argmax_metrics['people']))
 
         if phrase_node.getAttribute(people) is not None:
@@ -173,7 +174,8 @@ def main():
             ILPmetrics = node.getInferMetrics()
             
             print("\nILP metrics Total %s"%(ILPmetrics['Total']))
-            print("ILP metrics work_for %s"%(ILPmetrics['work_for']))
+            if 'work_for' in ILPmetrics:
+                print("ILP metrics work_for %s"%(ILPmetrics['work_for']))
             ILPmetrics = node.getInferMetrics(people)
             print("ILP metrics people %s"%(ILPmetrics['people']))
 

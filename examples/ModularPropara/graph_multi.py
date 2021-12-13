@@ -27,10 +27,9 @@ with Graph('global') as graph:
     action = Concept(name='action')
     (action_step, action_entity) = action.has_a(step, entity)
     
-    
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "destroy", "create", "move"])
     
-    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange)
+    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange, active = False)
 
     # if 
     ifL(
@@ -59,15 +58,31 @@ with Graph('global') as graph:
                     andL(
                         step('k', path=(('j1', before_arg2.reversed, before_arg1), ('i', before_arg1.reversed, before_arg2))), 
                         action_label.create('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
-                    )
-                    
+                        )
                     )
                 )
-            )
+            ), active = False
         ) 
 
     # ----------------------------
     
+    # if 
+    ifL(
+        # action a1 is destroy, i is a1's step and e is action entity
+        andL(
+            action_label.destroy('a1'), 
+            step('i', path=('a1', action_step)),
+            entity('e', path=('a1', action_entity))
+            ), 
+        
+        # step j associated with entity e, which is before step i cannot be associated with destroy action a2
+        andL(
+            step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1.reversed, before_arg2))), 
+            notL(action_label.destroy('a2', path=('j', action_step.reversed)))
+            ), 
+        active = True
+        ) 
+
 #     Tcreate = action(name="trips_create")
 #     Tdestroy = action(name="trips_destroy")
 #     Tmove = action(name="trips_move")

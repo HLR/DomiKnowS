@@ -39,8 +39,8 @@ cuda_number= args.cuda_number
 cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
-#reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[20:22]
+reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[:1]
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
@@ -61,24 +61,25 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     USE_LC_exactL = True
-    USE_LC_atMostL = False
+    USE_LC_atMostL = True
 
     USE_LC_symmetric  = True
-    USE_LC_transitive  = True
-
+    USE_LC_transitiveIsMore  = True
+    USE_LC_transitiveIsLess = True
+    
     # Only one of the labels to be true
-    exactL(is_more, is_less, no_effect, active=USE_LC_exactL)
-    atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL) # breakpoint in WIQA line 126
+    exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
+    atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL") # breakpoint in WIQA line 126
 
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
     # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
-    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
+    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
     
     # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
-    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric)
+    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
@@ -87,10 +88,10 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
-    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
+    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
-    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitive)
+    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
 
 from IPython.display import Image
 #graph.visualize("./image")
@@ -208,5 +209,6 @@ for i in range(args.cur_epoch):
 
     print("***** dev aug *****")
     test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+    #test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
     print("***** test aug *****")
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)

@@ -45,29 +45,28 @@ class Concept(BaseGraphTree):
     def __rept__(self):
         return type(self) + ":" + self.name
     
-    def processLCArgs(self, *args, index=1, index2= 0, **kwargs):
+    def processLCArgs(self, *args, conceptT=None, **kwargs):
         from regr.graph.logicalConstrain import eqL, V
         if len(args) > 1 and isinstance(args[1], eqL):
-            nameX= args[0]
+            nameX = args[0]
             path = (nameX, args[1])
                                     
-            return [(self, index, index2), V(name=nameX, v=path)]
+            return [conceptT, V(name=nameX, v=path)]
         elif len(args) and isinstance(args[0], str):
             name = args[0]
-            #args = args[1:]
             
             if "path" in kwargs:
                 path = kwargs['path']
                 
-                return [(self, index, index2), V(name=name, v=path)]
+                return [conceptT, V(name=name, v=path)]
             else:
-                return [(self, index, index2), V(name=name)]
+                return [conceptT, V(name=name)]
         elif "path" in kwargs:
             path = kwargs['path']
                                     
-            return [(self, index, index2), V(name=None, v=path)]
+            return [conceptT, V(name=None, v=path)]
         else:
-            return [(self, index, index2)]
+            return [conceptT]
 
     def __call__(self, *args, name=None, ConceptClass=None, auto_constraint=None, **kwargs):
         from .relation import IsA, HasA
@@ -75,7 +74,12 @@ class Concept(BaseGraphTree):
             ConceptClass = Concept
             
         if (name is None and len(args) and isinstance(args[0], str)) or ("path" in kwargs):
-            return self.processLCArgs(*args, **kwargs)
+            if isinstance(self, EnumConcept):
+                conceptT = (self, self.name, None, len(self.enum))
+            else:
+                conceptT = (self, self.name, None, 1)
+
+            return self.processLCArgs(*args, conceptT=conceptT, **kwargs)
             
         if (not args and not kwargs) or name is not None:
             new_concept = ConceptClass(name=name, *args, **kwargs)
@@ -157,7 +161,8 @@ class Concept(BaseGraphTree):
             if  isinstance(self, EnumConcept):
                 if rel in self.enum:
                     def ecHandle(*args, **kwargs):
-                        return self.processLCArgs(*args, index=self.get_index(rel), index2=self.get_index(rel),  **kwargs)
+                        conceptT = (self, rel, self.get_index(rel), len(self.enum))
+                        return self.processLCArgs(*args, conceptT=conceptT, **kwargs)
                     
                     return ecHandle
             else:
@@ -334,7 +339,7 @@ class EnumConcept(Concept):
     
     @property
     def attributes(self):
-        return [(self, self.get_index(e.name)) for e in self._enum]
+        return [(self, e.name, self.get_index(e.name), len(self.enum)) for e in self._enum]
 
     @enum.setter
     def enum(self, values):
