@@ -209,6 +209,6 @@ for i in range(args.cur_epoch):
 
     print("***** dev aug *****")
     test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
-    #test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
+    test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
     print("***** test aug *****")
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
