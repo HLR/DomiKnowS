@@ -16,12 +16,12 @@ import torch.nn.functional as F
 
 # Import other modules
 import time
-import pickle
-import teacher
-import data_loader
-
-from comprehension_module import Comprehension_Module
-from transducer import Transducer as T
+# import pickle
+# import teacher
+# import data_loader
+#
+# from comprehension_module import Comprehension_Module
+# from transducer import Transducer as T
 
 # Import DomiKnows modules and functions
 from regr.sensor.pytorch.learners import ModuleLearner
@@ -49,148 +49,9 @@ from readers import InteractionReader
 device = 'cpu'
 
 # Functions to use.
-def index2word(word_probs, vocabulary):
-        
-        # Need to iterate through each element in the tensor for one dimension
-        
-        L = []
-        
-        for i in range(word_probs.size(0)):
-            
-            w_prop = F.log_softmax(word_probs[i], dim=1)
-            
-            # compute the argmax
-            index = torch.argmax(w_prop)
-            
-            # Get the word from the index
-            word = vocabulary[index]
-            
-            L.append(word)
-            
-        print("Conversion from index to string:", " ".join(L))
-        return L # use edges to generate words with indices 
-    
 
-
+from program import Prolog_Module
     
-def accuracy_similarity(model_sentence, truth_sentence, cat_map = None):
-    '''
-        This function evaluates if the model sentence is an exact match to the truth sentence.
-        If cat_map != None, then it means the similarity function converts the words of each sentence to its category.
-        
-        
-    '''
-    if cat_map != None:
-    
-        #Replace the similar words from the model sentence to their category word 
-        wordlist = model_sentence.split()
-        for index in range(len(wordlist)):
-            word = wordlist[index]
-            
-            # replace the word to the corresponding category
-            wordlist[index] = cat_map[word]
-         
-        model_sentence = " ".join(wordlist)
-        
-        #Replace the similar words from the model sentence to their category word 
-        wordlist = truth_sentence.split()
-        for index in range(len(wordlist)):
-            word = wordlist[index]
-            
-            # replace the word to the corresponding category
-            wordlist[index] = cat_map[word]
-         
-        truth_sentence = " ".join(wordlist)
-        
-        
-    # Accuracy (similarity)  
-    try:
-        if model_sentence == truth_sentence:
-            return 1
-        else:
-            return 0
-    except:
-        return 0    
-
-def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_map=None):
-    
-    count = 0 # number of correct words in the hypothesis compared to reference
-    
-    # Split the sentences into a list
-    reference = reference.split()
-    hypothesis = hypothesis.split()
-    
-    ref_len = len(reference)
-    hyp_len = len(hypothesis)
-    
-    min_len = min(len(reference), len(hypothesis))
-    max_len = max(len(reference), len(hypothesis))
-    
-    
-    if cat_map == None:
-        
-        # Need to iterate through the entire reference sentence and evaluate
-        # the total number of expected words.
-        for i in range(ref_len):
-        
-            # Update the count of corrects if the current index is valid
-            # for the reference and hypothesis
-            if i < hyp_len:
-                
-                if reference[i] == hypothesis[i]:
-                    count += 1
-                    
-                    if word_hist != None:
-                        # Update the histogram of the correct categories
-                        # Does this help determine if the model learned something?
-                        if reference[i] not in word_hist:
-                            word_hist[reference[i]] = 0
-                        
-                        word_hist[reference[i]] += 1
-                       
-            if total_hist != None:
-                # The number of times the current category appeared in the data
-                if reference[i] not in total_hist:
-                        total_hist[reference[i]] = 0
-                    
-                total_hist[reference[i]] += 1
-            
-            
-    
-    else:
-        # Need to iterate through the entire reference sentence and evaluate
-        # the total number of expected words.
-        for i in range(ref_len):
-        
-            # Update the count of corrects if the current index is valid
-            # for the reference and hypothesis
-            if i < hyp_len:
-                
-                if cat_map[reference[i]] == cat_map[hypothesis[i]]:
-                    count += 1
-                    
-                    # Update the histogram of the correct categories
-                    # Does this help determine if the model learned something?
-                    if cat_map[reference[i]] not in word_hist:
-                        word_hist[cat_map[reference[i]]] = 0
-                    
-                    word_hist[cat_map[reference[i]]] += 1
-                    
-            # The number of times the current category appeared in the data
-            if cat_map[reference[i]] not in total_hist:
-                    total_hist[cat_map[reference[i]]] = 0
-                
-            total_hist[cat_map[reference[i]]] += 1
-                
-            
-    # Get the score divided on the number of correct elements
-    try:
-        score = count / len(reference)
-    except:
-        # print("Error in reference")
-        score = 0.0
-        
-    return count, len(reference)
 
 def pad_utterance(utterance, length=12):
 
@@ -205,26 +66,13 @@ def pad_utterance(utterance, length=12):
                 
     return new_utterance # return the padded text out of the extra dimension
 
-def tokenize(s, padding = False, pad_size = 12):
-
-    content = s # This is the string sequence
-    print(content)
-
-    if padding:
-        diff = pad_size - len(content)
-
-        if diff > 0:
-            for k in range(diff):
-                content.append("<eos>")
-
-
-    return [content]
 
 def model_declaration():
     
     
     graph.detach()
-    
+
+
     max_length = 12
     
     # Adding Sensors and Learner modules
@@ -275,8 +123,7 @@ def model_declaration():
     
     # Compute the output of the Seq2Seq model
     word[word_label] = ModuleLearner(situation['situation_vectorized'], module=LearnerModel(vocabulary, predicates, encoder_dim, decoder_dim))
-    
-    
+
     program = SolverPOIProgram(graph, poi=(task, utterance,situation,word) ,inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLossCustom()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
     
     return program
@@ -305,6 +152,7 @@ def main():
     '''
     
     logging.basicConfig(level=logging.INFO)
+
     program = model_declaration()
     
     #graph.visualize("image")
@@ -312,8 +160,8 @@ def main():
     # Load the training file
     train_filename = "../data/training_set.txt"
     test_filename = "../data/test_set.txt"
-    train_size = 100 #10000
-    test_size = 5 #100
+    train_size = 2000 #10000
+    test_size = 200 #100
     
     
     # Get the list of predicates and words
@@ -510,9 +358,13 @@ def main():
     # print("Final model word accuracy is :",sum([i==j for i,j in zip(word_results,word_labels)])/len(word_results), file=out)
     
     
-    # print("\nSentence results:", sentence_results, file=out)
-    # print("Sentence Labels:", sentence_labels, file=out)
-    # print("Final model sentence accuracy is :",sum([i==j for i,j in zip(sentence_results,sentence_labels)])/len(sentence_results), file=out)
+    print("\nSentence results:", sentence_results, file=out)
+    print("Sentence Labels:", sentence_labels, file=out)
+    print("Final model sentence accuracy is :",sum([i==j for i,j in zip(sentence_results,sentence_labels)])/len(sentence_results), file=out)
+
+    print("\nSentence results:", sentence_results)
+    print("Sentence Labels:", sentence_labels)
+    print("Final model sentence accuracy is :",sum([i == j for i, j in zip(sentence_results, sentence_labels)]) / len(sentence_results))
 
     # Finish of run
     end = time.time()
@@ -607,6 +459,121 @@ def open_file(filename,option):
     return fp
 
 
+def accuracy_similarity(model_sentence, truth_sentence, cat_map=None):
+    '''
+        This function evaluates if the model sentence is an exact match to the truth sentence.
+        If cat_map != None, then it means the similarity function converts the words of each sentence to its category.
+
+
+    '''
+    if cat_map != None:
+
+        # Replace the similar words from the model sentence to their category word
+        wordlist = model_sentence.split()
+        for index in range(len(wordlist)):
+            word = wordlist[index]
+
+            # replace the word to the corresponding category
+            wordlist[index] = cat_map[word]
+
+        model_sentence = " ".join(wordlist)
+
+        # Replace the similar words from the model sentence to their category word
+        wordlist = truth_sentence.split()
+        for index in range(len(wordlist)):
+            word = wordlist[index]
+
+            # replace the word to the corresponding category
+            wordlist[index] = cat_map[word]
+
+        truth_sentence = " ".join(wordlist)
+
+    # Accuracy (similarity)
+    try:
+        if model_sentence == truth_sentence:
+            return 1
+        else:
+            return 0
+    except:
+        return 0
+
+
+def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_map=None):
+    count = 0  # number of correct words in the hypothesis compared to reference
+
+    # Split the sentences into a list
+    reference = reference.split()
+    hypothesis = hypothesis.split()
+
+    ref_len = len(reference)
+    hyp_len = len(hypothesis)
+
+    min_len = min(len(reference), len(hypothesis))
+    max_len = max(len(reference), len(hypothesis))
+
+    if cat_map == None:
+
+        # Need to iterate through the entire reference sentence and evaluate
+        # the total number of expected words.
+        for i in range(ref_len):
+
+            # Update the count of corrects if the current index is valid
+            # for the reference and hypothesis
+            if i < hyp_len:
+
+                if reference[i] == hypothesis[i]:
+                    count += 1
+
+                    if word_hist != None:
+                        # Update the histogram of the correct categories
+                        # Does this help determine if the model learned something?
+                        if reference[i] not in word_hist:
+                            word_hist[reference[i]] = 0
+
+                        word_hist[reference[i]] += 1
+
+            if total_hist != None:
+                # The number of times the current category appeared in the data
+                if reference[i] not in total_hist:
+                    total_hist[reference[i]] = 0
+
+                total_hist[reference[i]] += 1
+
+
+
+    else:
+        # Need to iterate through the entire reference sentence and evaluate
+        # the total number of expected words.
+        for i in range(ref_len):
+
+            # Update the count of corrects if the current index is valid
+            # for the reference and hypothesis
+            if i < hyp_len:
+
+                if cat_map[reference[i]] == cat_map[hypothesis[i]]:
+                    count += 1
+
+                    # Update the histogram of the correct categories
+                    # Does this help determine if the model learned something?
+                    if cat_map[reference[i]] not in word_hist:
+                        word_hist[cat_map[reference[i]]] = 0
+
+                    word_hist[cat_map[reference[i]]] += 1
+
+            # The number of times the current category appeared in the data
+            if cat_map[reference[i]] not in total_hist:
+                total_hist[cat_map[reference[i]]] = 0
+
+            total_hist[cat_map[reference[i]]] += 1
+
+    # Get the score divided on the number of correct elements
+    try:
+        score = count / len(reference)
+    except:
+        # print("Error in reference")
+        score = 0.0
+
+    return count, len(reference)
 
 
 if __name__ == "__main__":

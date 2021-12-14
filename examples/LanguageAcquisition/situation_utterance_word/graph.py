@@ -24,25 +24,18 @@ Relation.clear()
 # Build the vocabulary
 vocabulary = [x.strip() for x in open("../data/vocabulary.txt")]
 
-# with Graph('IL') as graph:
-#
-#     # Establish relation between situation and utterance
-#     situation = Concept(name='situation')
-#
-#     utterance = Concept(name='utterance')
-#     word = utterance(name='word')
-#
-#     (utterance_contains_word,) = utterance.contains(word)
-#
-#     word_label = word(name='word_label', ConceptClass=EnumConcept, values=vocabulary)
-
 with Graph('IL') as graph:
 
-    task = Concept(name='task')
+    task = Concept(name='task') # Concept that combines the situation (input) and utterance (output)
+
     situation = Concept(name='situation')
-    word = Concept(name='word')
     utterance = Concept(name='utterance')
+
+    # Relationship between situation and utterance.
     (task_sit, task_utt) = task.has_a(arg1=situation, arg2=utterance)
+
+    # Each utterance has multiple words
+    word = Concept(name='word')
     word_label = word(name='word_label', ConceptClass=EnumConcept, values=vocabulary)
 
     # Establish relationship one-to-many
