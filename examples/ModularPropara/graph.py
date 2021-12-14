@@ -17,7 +17,7 @@ with Graph('global') as graph:
     (entity_rel, ) = entities.contains(entity)
     
     step = Concept("step")
-    (procedure_contain_step, ) = procedure.contains(step)
+    (context_contain_step, ) = context.contains(step)
     
     before = Concept("before")
     (before_arg1, before_arg2) = before.has_a(arg1=step, arg2=step)
