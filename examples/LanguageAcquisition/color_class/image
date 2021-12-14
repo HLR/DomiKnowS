@@ -1,0 +1,16 @@
+digraph global {
+	label="Graph: global"
+	predicate
+	red
+	blue
+	yellow
+	purple
+	orange
+	green
+	red -> predicate [label=IsA]
+	blue -> predicate [label=IsA]
+	yellow -> predicate [label=IsA]
+	purple -> predicate [label=IsA]
+	orange -> predicate [label=IsA]
+	green -> predicate [label=IsA]
+}

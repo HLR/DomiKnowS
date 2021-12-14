@@ -1,0 +1,8 @@
+digraph global {
+	label="Graph: global"
+	predicate
+	category
+	word
+	category -> predicate [label=IsA]
+	word -> predicate [label=IsA]
+}

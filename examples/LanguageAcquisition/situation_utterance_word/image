@@ -1,0 +1,10 @@
+digraph IL {
+	label="Graph: IL"
+	situation
+	utterance
+	word
+	label
+	utterance -> situation [label=IsA]
+	utterance -> word [label=Contains]
+	label -> word [label=IsA]
+}
