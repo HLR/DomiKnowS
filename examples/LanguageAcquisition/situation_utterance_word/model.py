@@ -301,12 +301,34 @@ class LearnerModel(nn.Module):
                 # if not(topi.item() < len(self.predicates)):
                 #     print("Item results:", topi.item(), len(self.vocabulary), self.vocabulary)
                 
-                #if self.vocabulary[topi.item()] == "<eos>":
-                #    break
-                #else:
+                if self.vocabulary[topi.item()] == "<eos>":
+
+                   # Need to pad the decoder output with "<eos>" before stopping
+                   out_lst.append(decoder_output)
+
+
+
+                   diff = self.max_length - len(out_lst)
+
+
+                   for k in range(diff):
+                       # Add a zero vector when we break the loop.
+
+                       p = [0. for number in range(23)]
+
+                       #p = torch.zeros(1,23, requires_grad=True)
+                       p[22] = 3.0 # Magic number to determine that the last element is to be selected.
+
+                       out_p = torch.tensor(p, requires_grad=True)
+
+                       out_lst.append(out_p.unsqueeze(0))
+
+                   break
+
+                else:
                     # Append the probability distribution of the output data
                     # So that DomiKnows loss function does CE loss
-                out_lst.append(decoder_output)
+                    out_lst.append(decoder_output)
                     # out_lst.append(topi.item())
         
                 decoder_input = topi.squeeze().detach()

@@ -80,15 +80,15 @@ class UtteranceRepSensor(FunctionalSensor):
         # for i,w in enumerate(utterance):
         #     indices[i] = self.vocabulary.index(w)
         
-        tensor = torch.tensor(indices,dtype=torch.long, device='cpu')
+        tensor = torch.tensor(indices, dtype=torch.long, device='cpu')
         
         # print("Indices: ", indices)
         # print("Utterance Tensor: ", tensor)
         
-        return tensor.view(-1,1)
+        return tensor.view(-1, 1)
     
     
 # Define a function that combines inputs to form the relation
-def create_words(situation_text, utterance_text):
-    return torch.ones((len(situation_text[0]), 1)), [situation_text[0]], [utterance_text[0]]
+# def create_words(situation_text, utterance_text):
+#     return torch.ones((len(situation_text[0]), 1)), [situation_text[0]], [utterance_text[0]]
     

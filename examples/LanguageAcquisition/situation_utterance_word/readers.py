@@ -53,11 +53,11 @@ class InteractionReader(RegrReader):
             
             # Need to remove non-predicate words from the utterance
             # to aling with the predicates in the situation
-            
+
             item["situation"] = [" ".join(situation)] # 1 x 12
             item["utterance"] = [" ".join(utterance)] #[substring[1].split()]
-            
             object_list.append(item)
+
         return object_list
     
     

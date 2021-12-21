@@ -1,3 +1,6 @@
+# Check the initialization of weights.
+
+
 import sys
 
 # Add the DomiKnows main directory into the current system path
@@ -43,7 +46,7 @@ from graph import graph, situation, word, word_label, utterance_contains_words, 
 
 from model import LearnerModel, GenerateLabel 
 from sensors import SituationRepSensor 
-from sensors import create_words
+# from sensors import create_words
 from readers import InteractionReader
 
 device = 'cpu'
@@ -124,7 +127,7 @@ def model_declaration():
     # Compute the output of the Seq2Seq model
     word[word_label] = ModuleLearner(situation['situation_vectorized'], module=LearnerModel(vocabulary, predicates, encoder_dim, decoder_dim))
 
-    program = SolverPOIProgram(graph, poi=(task, utterance,situation,word) ,inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLossCustom()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+    program = SolverPOIProgram(graph, poi=(task, utterance, situation, word), inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLossCustom()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
     
     return program
 
@@ -158,25 +161,28 @@ def main():
     #graph.visualize("image")
     
     # Load the training file
-    train_filename = "../data/training_set.txt"
-    test_filename = "../data/test_set.txt"
-    train_size = 2000 #10000
-    test_size = 200 #100
+    train_filename = "../data/training_set_single.txt"
+    test_filename = "../data/test_set_single.txt"
+    train_size = 112 #10000
+    test_size = 56 #100
     
     
     # Get the list of predicates and words
     words = [x.strip() for x in open("../data/vocabulary.txt")]
     
-    train_dataset = list(iter(InteractionReader(train_filename,"txt")))[:train_size]
-    test_dataset = list(iter(InteractionReader(test_filename,"txt")))[:test_size]
+    # train_dataset = list(iter(InteractionReader(train_filename,"txt")))[:train_size]
+    # test_dataset = list(iter(InteractionReader(test_filename,"txt")))[:test_size]
+
+    train_dataset = list(iter(InteractionReader(train_filename, "txt")))
+    test_dataset = list(iter(InteractionReader(test_filename, "txt")))
    
     # Set the device to 'cpu' 
     device = 'cpu'
     learning_rate = 0.001
-    
+    train_epoch = 5
     
 
-    program.train(train_dataset, train_epoch_num=2, Optim=lambda param: torch.optim.SGD(param, lr = learning_rate) , device=device)
+    program.train(train_dataset, train_epoch_num=train_epoch, Optim=lambda param: torch.optim.SGD(param, lr = learning_rate) , device=device)
 
     
     sentence_results=[]
@@ -234,12 +240,12 @@ def main():
             w_prob = w.getAttribute(word_label)
             w_label = w.getAttribute("word_label","label")
             w_argmax_prob = w.getAttribute(word_label,"local/argmax")
+
             
-            
-            print("Word token:", w_token)
-            print("Word_probabilities:", w_prob)
-            print("Word Label (index):", w_label)
-            print("Word 'local/argmax' output:", w_argmax_prob)
+            # print("Word token:", w_token)
+            # print("Word_probabilities:", w_prob)
+            # print("Word Label (index):", w_label)
+            # print("Word 'local/argmax' output:", w_argmax_prob)
             
             try:
                 w_argmax = int(torch.argmax(w.getAttribute(word_label,"local/argmax"))) #int(torch.argmax(w.getAttribute(word_label)))
@@ -247,10 +253,10 @@ def main():
                 print("Error computing Argmax!")
                 w_argmax = None
             
-            print("Word 'local/argmax' index:", w_argmax)
+            # print("Word 'local/argmax' index:", w_argmax)
             
             # Only add words to the respective sets if the label is valid
-            if w_label != None:
+            if w_label != None and w_label != "<eos>":
                 
                 w_label = words[w_label.item()]
                 
@@ -278,18 +284,22 @@ def main():
                 
                 # Print the word text
                 print("Word output token:", word_text)
-                
+
                 # Append the model's argmax outputs in a temporary node to represent the utterance sequence
                 # Used to compute the sentence accuracy
-                # word_results.append(word_text)
-                temp_results.append(word_text) 
-                
+                word_results.append(word_text)
+                temp_results.append(word_text)
+
                 # Append the word's node output to compute the word accuracy
                 # word_labels.append(w.getAttribute("word_label","label").item())
                 # temp_labels.append(w.getAttribute("word_label","label").item())
-                # word_labels.append(word_text_lbl)
+                word_labels.append(word_text_lbl)
                 temp_labels.append(word_text_lbl)
-        
+
+        # # Clean the temp labels
+        # temp_results = [w for w in temp_results if w != "<eos>"]
+        # temp_labels = [w for w in temp_labels if w != "<eos>"]
+
         # Add the current index sequence into the sentence level candidates
         # to compute the sentence level accuracy
         sentence_results.append(temp_results)
@@ -313,58 +323,67 @@ def main():
         # print("Teacher Sentence:", teacher_sentence)
         # print("Teacher feedback:", teacher_feedback)
     
-    # Update: Use evaluation metrics like the previous experiment
+    # Remove "<eos>" from the lst
+
+    # word lst
+    # word_results = [w for w in word_results if w != "<eos>"]
+    # word_labels = [w for w in word_labels if w != "<eos>"]
     
-    sen_acc = 0.0
+    sen_acc, sen_tot = 0.0, 0
     w_acc = 0.0
     
     w_acc_num = 0
     w_acc_den = 0
     
-    for sentence,label in zip(sen_iter_results, sen_iter_labels):
-    
-        # print(" ".join(sentence), " ".join(label))
-        sen_acc += accuracy_similarity(" ".join(sentence), " ".join(label))
-    
-        # Need to count the number of correct utterances in the evaluation
-        result = word_accuracy(" ".join(sentence), " ".join(label))
+
+    print("Results\n")
+
+    count = 1
+    for s, sl in zip(sen_iter_results, sen_iter_labels):
+        print("Test example #", count, "\n")
+        print("\tPredicted sentence:", " ".join(s))
+        print("\tGround Truth:", " ".join(sl))
+        print()
+
+        count += 1
+
+        current_sentence_acc = accuracy_similarity(" ".join(s), " ".join(sl))
+        result = word_accuracy(" ".join(s), " ".join(sl))
         w_acc_num += result[0]
         w_acc_den += result[1]
-    
+
+        print("Current Word Accuracy: {}/{} = {}".format(result[0], result[1], (result[0]/result[1])))
+        print("Current Sentence Accuracy: {}".format(current_sentence_acc))
+
+        sen_tot += current_sentence_acc
+
+    # Tally the final results
     try:
-        w_acc = w_acc_num / w_acc_den # Number of words in the current reference
+        w_acc = w_acc_num / w_acc_den  # Number of words in the current reference
     except:
         w_acc = 0.0
-        
+
     try:
-        sen_acc /= len(sentence_results)
+        sen_acc = sen_tot / len(sentence_results)
     except:
         sen_acc = 0.0
-    
-    # Need to use the list of the 100 test examples
-    # Print the new results
-    # print("\nWord results:", word_results, file=out)
-    # print("Word Labels:", word_labels, file=out)
-    
-    
-    
-    # print("Final model word accuracy is :", w_acc)
-    # print("Final model sentence accuracy is :", sen_acc)
-    
-    
-    # Print the results
-    # print("\nWord results:", word_results, file=out)
-    # print("Word Labels:", word_labels, file=out)
-    # print("Final model word accuracy is :",sum([i==j for i,j in zip(word_results,word_labels)])/len(word_results), file=out)
-    
-    
-    print("\nSentence results:", sentence_results, file=out)
-    print("Sentence Labels:", sentence_labels, file=out)
-    print("Final model sentence accuracy is :",sum([i==j for i,j in zip(sentence_results,sentence_labels)])/len(sentence_results), file=out)
 
-    print("\nSentence results:", sentence_results)
-    print("Sentence Labels:", sentence_labels)
-    print("Final model sentence accuracy is :",sum([i == j for i, j in zip(sentence_results, sentence_labels)]) / len(sentence_results))
+    print("\nFinal Word Accuracy: {}/{} = {}".format(w_acc_num, w_acc_den, w_acc))
+    print("Final Sentence Accuracy: {}/{} = {}".format(sen_tot, len(sentence_results), sen_acc))
+
+    # print("\nWord results:", word_results)
+    # print("Word Labels:", word_labels)
+    # print("Number of words:", len(word_results), len(word_labels))
+    # print("Final model word accuracy is :",sum([i==j for i,j in zip(word_results,word_labels)])/len(word_results))
+
+    # print("\nSentence results:", sentence_results, file=out)
+    # print("Sentence Labels:", sentence_labels, file=out)
+    # print("Final model sentence accuracy is :",sum([i==j for i,j in zip(sentence_results,sentence_labels)])/len(sentence_results), file=out)
+    #
+    # print("\nSentence results:", sentence_results)
+    # print("Sentence Labels:", sentence_labels)
+    # print("Number of sentences:", len(sentence_results), len(sentence_labels))
+    # print("Final model sentence accuracy is :",sum([i == j for i, j in zip(sentence_results, sentence_labels)]) / len(sentence_results))
 
     # Finish of run
     end = time.time()
@@ -382,7 +401,8 @@ def main():
     
     
 def convert_time(seconds):
-    
+
+    print("Total seconds: ", seconds)
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int((seconds % 3600) % 60)
@@ -508,6 +528,8 @@ def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_ma
     ref_len = len(reference)
     hyp_len = len(hypothesis)
 
+    denom = 0
+
     min_len = min(len(reference), len(hypothesis))
     max_len = max(len(reference), len(hypothesis))
 
@@ -516,6 +538,11 @@ def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_ma
         # Need to iterate through the entire reference sentence and evaluate
         # the total number of expected words.
         for i in range(ref_len):
+
+            if reference[i] == "<eos>":
+                break
+
+            denom += 1
 
             # Update the count of corrects if the current index is valid
             # for the reference and hypothesis
@@ -546,6 +573,11 @@ def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_ma
         # the total number of expected words.
         for i in range(ref_len):
 
+            if reference[i] == "<eos>":
+                break
+
+            denom += 1
+
             # Update the count of corrects if the current index is valid
             # for the reference and hypothesis
             if i < hyp_len:
@@ -568,12 +600,12 @@ def word_accuracy(hypothesis, reference, word_hist=None, total_hist=None, cat_ma
 
     # Get the score divided on the number of correct elements
     try:
-        score = count / len(reference)
+        score = count / denom
     except:
         # print("Error in reference")
         score = 0.0
 
-    return count, len(reference)
+    return count, denom
 
 
 if __name__ == "__main__":

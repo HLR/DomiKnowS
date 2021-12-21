@@ -1,0 +1,56 @@
+re1(t1) tr1(t1)	the red triangle
+sm1(t1) gr1(t1) tr1(t1)	the small green triangle
+me1(t1) gr1(t1) tr1(t1)	the medium green triangle
+ci1(t1)	the circle
+bi1(t1) or1(t1) st1(t1)	the big orange star
+bi1(t1) ci1(t1)	the big circle
+bl1(t1) tr1(t1)	the blue triangle
+me1(t1) ye1(t1) sq1(t1)	the medium yellow square
+or1(t1) tr1(t1)	the orange triangle
+bi1(t1) ye1(t1) ci1(t1)	the big yellow circle
+bi1(t1) bl1(t1) el1(t1)	the big blue ellipse
+me1(t1) or1(t1) he1(t1)	the medium orange hexagon
+bi1(t1) or1(t1) tr1(t1)	the big orange triangle
+me1(t1) bl1(t1) tr1(t1)	the medium blue triangle
+bi1(t1) gr1(t1) sq1(t1)	the big green square
+me1(t1) gr1(t1) st1(t1)	the medium green star
+sm1(t1) bl1(t1) ci1(t1)	the small blue circle
+sm1(t1) sq1(t1)	the small square
+me1(t1) or1(t1) el1(t1)	the medium orange ellipse
+me1(t1) re1(t1) st1(t1)	the medium red star
+me1(t1) el1(t1)	the medium ellipse
+sm1(t1) or1(t1) he1(t1)	the small orange hexagon
+bi1(t1) ye1(t1) sq1(t1)	the big yellow square
+bi1(t1) gr1(t1) ci1(t1)	the big green circle
+bi1(t1) ye1(t1) tr1(t1)	the big yellow triangle
+sm1(t1) gr1(t1) sq1(t1)	the small green square
+me1(t1) or1(t1) st1(t1)	the medium orange star
+ye1(t1) he1(t1)	the yellow hexagon
+me1(t1) ye1(t1) tr1(t1)	the medium yellow triangle
+me1(t1) bl1(t1) he1(t1)	the medium blue hexagon
+gr1(t1) sq1(t1)	the green square
+bi1(t1) re1(t1) st1(t1)	the big red star
+re1(t1) el1(t1)	the red ellipse
+me1(t1) bl1(t1) sq1(t1)	the medium blue square
+sm1(t1) tr1(t1)	the small triangle
+bl1(t1) el1(t1)	the blue ellipse
+ye1(t1) st1(t1)	the yellow star
+me1(t1) tr1(t1)	the medium triangle
+bi1(t1) re1(t1) tr1(t1)	the big red triangle
+bi1(t1) ye1(t1) el1(t1)	the big yellow ellipse
+me1(t1) pu1(t1) sq1(t1)	the medium purple square
+me1(t1) pu1(t1) st1(t1)	the medium purple star
+sm1(t1) or1(t1) tr1(t1)	the small orange triangle
+me1(t1) or1(t1) ci1(t1)	the medium orange circle
+sm1(t1) re1(t1) he1(t1)	the small red hexagon
+me1(t1) ye1(t1) ci1(t1)	the medium yellow circle
+pu1(t1) st1(t1)	the purple star
+me1(t1) gr1(t1) ci1(t1)	the medium green circle
+bi1(t1) or1(t1) sq1(t1)	the big orange square
+bi1(t1) gr1(t1) tr1(t1)	the big green triangle
+el1(t1)	the ellipse
+me1(t1) re1(t1) sq1(t1)	the medium red square
+sm1(t1) or1(t1) st1(t1)	the small orange star
+ye1(t1) ci1(t1)	the yellow circle
+me1(t1) sq1(t1)	the medium square
+me1(t1) he1(t1)	the medium hexagon
