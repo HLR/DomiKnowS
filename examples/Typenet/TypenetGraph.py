@@ -33,8 +33,7 @@ with Graph('application') as app_graph:
     def dfs(parent, child, depth=1):
         global num_struct_types
         concepts[child.name] = Concept(name=child.name)
-        if not child.name[:6] == 'Synset':
-            mention[concepts[child.name]] = ReaderSensor(keyword=child.name, label=True)
+        if not child.name[:6] == 'Synset' or not config.freebase_only:
             num_struct_types += 1
 
         if not parent == None and config.use_constraints:
@@ -54,13 +53,10 @@ with Graph('application') as app_graph:
         if config.use_constraints:
             concepts[t].is_a(mention)
 
-        if not t[:6] == 'Synset':
-            mention[concepts[t]] = ReaderSensor(keyword=t, label=True)
-
     total_types = num_struct_types + len(config.missing_types)
 
     print('%d types in structure + %d other types = %d total types' % (num_struct_types, len(config.missing_types), total_types))
 
-    assert total_types == config.num_types
+    #assert total_types == config.num_types
 
 #app_graph.visualize("./image")

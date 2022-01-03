@@ -526,12 +526,12 @@
   <rdfs:subClassOf rdf:resource="#Synset__cognition__n__01"/>
 </owl:Class>
 
-<owl:Class rdf:about="#Synset__know-how__n__01">
+<owl:Class rdf:about="#Synset__know_how__n__01">
   <rdfs:subClassOf rdf:resource="#Synset__ability__n__02"/>
 </owl:Class>
 
 <owl:Class rdf:about="#Synset__method__n__01">
-  <rdfs:subClassOf rdf:resource="#Synset__know-how__n__01"/>
+  <rdfs:subClassOf rdf:resource="#Synset__know_how__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#__engineering__channel_access_method">
@@ -2998,12 +2998,12 @@
   <rdfs:subClassOf rdf:resource="#Synset__activity__n__01"/>
 </owl:Class>
 
-<owl:Class rdf:about="#Synset__self-defense__n__01">
+<owl:Class rdf:about="#Synset__self_defense__n__01">
   <rdfs:subClassOf rdf:resource="#Synset__protection__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#__martial_arts__martial_art">
-  <rdfs:subClassOf rdf:resource="#Synset__self-defense__n__01"/>
+  <rdfs:subClassOf rdf:resource="#Synset__self_defense__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#__engineering__piston_configuration">
@@ -5450,12 +5450,12 @@
   <rdfs:subClassOf rdf:resource="#Synset__song__n__01"/>
 </owl:Class>
 
-<owl:Class rdf:about="#Synset__self-propelled_vehicle__n__01">
+<owl:Class rdf:about="#Synset__self_propelled_vehicle__n__01">
   <rdfs:subClassOf rdf:resource="#Synset__wheeled_vehicle__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#Synset__motor_vehicle__n__01">
-  <rdfs:subClassOf rdf:resource="#Synset__self-propelled_vehicle__n__01"/>
+  <rdfs:subClassOf rdf:resource="#Synset__self_propelled_vehicle__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#Synset__car__n__01">
@@ -5638,12 +5638,12 @@
   <rdfs:subClassOf rdf:resource="#Synset__tournament__n__01"/>
 </owl:Class>
 
-<owl:Class rdf:about="#Synset__non-standard_speech__n__01">
+<owl:Class rdf:about="#Synset__non_standard_speech__n__01">
   <rdfs:subClassOf rdf:resource="#Synset__speech__n__02"/>
 </owl:Class>
 
 <owl:Class rdf:about="#__language__language_dialect">
-  <rdfs:subClassOf rdf:resource="#Synset__non-standard_speech__n__01"/>
+  <rdfs:subClassOf rdf:resource="#Synset__non_standard_speech__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#__location__uk_non_metropolitan_county">
@@ -6295,7 +6295,7 @@
 </owl:Class>
 
 <owl:Class rdf:about="#__rail__locomotive">
-  <rdfs:subClassOf rdf:resource="#Synset__self-propelled_vehicle__n__01"/>
+  <rdfs:subClassOf rdf:resource="#Synset__self_propelled_vehicle__n__01"/>
 </owl:Class>
 
 <owl:Class rdf:about="#Synset__electric_locomotive__n__01">

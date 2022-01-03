@@ -29,6 +29,7 @@ class TypeComparison(nn.Module):
         #logits = self.log_sum_exp(dot_compare.unsqueeze(0).transpose(1,2))
 
         # linear layer
+        t0 = time.time()
         # encoded: (batch_size * bag_size, encoded_dim)
         logits = self.lin(encoded)
         # logits: (batch_size * bag_size, num_types) -> (batch_size, bag_size, num_types)
@@ -38,6 +39,8 @@ class TypeComparison(nn.Module):
 
         logits = self.log_sum_exp(logits)
 
-        #print(logits)
+        if config.timing:
+            print('TypeComparison', time.time() - t0)
+            pass
 
         return logits

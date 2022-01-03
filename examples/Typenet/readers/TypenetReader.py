@@ -191,14 +191,15 @@ def filter_fb_types(type_dict, entity_type_dict, typenet_matrix_orig):
         curr = []
         for type_id in entity_type_dict[ent]:
             orig_type = orig_idx2type[type_id]
-            if not orig_type.startswith("Synset"):
+
+            if not orig_type.startswith("Synset") or not config.freebase_only:
                 curr.append(orig_type)
 
         assert(len(curr) != 0)
         fb_entity_type_dict[ent] = set(curr) # easy to search
 
 
-    return type2idx, fb_entity_type_dict, len(fb_types), typenet_matrix, orig2new, fb_types
+    return type2idx, fb_entity_type_dict, len(fb_types), typenet_matrix, orig2new, fb_types, all_types, len(all_types)
 
 def underscore_to_slash(orig):
     res = orig.replace('__', '/')
@@ -232,6 +233,9 @@ class WikiReader(RegrReader):
         self.type_dict = file_data['type_dict']
         self.entity_type_dict = file_data['entity_type_dict']
 
+        self.class_counts = {}
+        self.total_items = 0
+
         super().__init__(file=file, type=type)
 
     def make_object(self, item):
@@ -244,16 +248,12 @@ class WikiReader(RegrReader):
         for lbl in self.all_types:
             result[lbl] = []
 
-        #print(item)
-
         for data_types in item['gold_types_pos']:
             for lbl in self.all_types:
                 if lbl in data_types:
                     result[lbl].append([1])
                 else:
                     result[lbl].append([0])
-
-        #print(result)
 
         return result
     
@@ -262,21 +262,37 @@ class WikiReader(RegrReader):
             if not key in dict_result:
                 dict_result[key] = []
             dict_result[key].append(val)
-    
+
+    def get_class_weights(self):
+        # calculate class weights
+        class_weights = {}
+
+        for type, num in self.class_counts.items():
+            class_weights[type] = self.total_items/num
+
+        return class_weights
+
     def parse_file(self):
         # load entities
         train_entities = read_entities(self.file, end=0.05)
 
         # process
         print('WikiReader: processing data')
-        type_dict, entity_type_dict, fb_type_size, typenet_matrix, map_old_to_new, fb_types = filter_fb_types(self.type_dict, self.entity_type_dict, self.typenet_matrix_orig)
+        type_dict, entity_type_dict, fb_type_size, typenet_matrix, map_old_to_new, fb_types, typenet_types, typenet_types_size = filter_fb_types(self.type_dict, self.entity_type_dict, self.typenet_matrix_orig)
         
-        print('num fb types: ', fb_type_size)
-        assert config.num_types + 1 == fb_type_size # one of the types is NO_TYPES, so add 1 to config
+        print('num fb types:', fb_type_size)
+        print('num total types:', typenet_types_size)
+
+        if config.freebase_only:
+            types_used = fb_types
+        else:
+            types_used = typenet_types
+
+        assert config.num_types + 1 == len(types_used) # one of the types is NO_TYPES, so add 1 to config
 
         # get list of all types use for prediction
         self.all_types = []
-        for tp in fb_types:
+        for tp in types_used:
             if not tp == 'NO_TYPES':
                 self.all_types.append(fix_name(tp))
 
@@ -327,7 +343,8 @@ class WikiReader(RegrReader):
 
                         self.add_to_dict(all_mention_data, data)
 
-                    bit_vec = [0]*fb_type_size  # predictions are made only for freebase types
+                    #bit_vec = [0]*config.num_types  # predictions are made only for freebase types
+                    
                     labels = []
                     if entity_type_dict is not None:
                         labels = entity_type_dict[ent]
@@ -338,6 +355,13 @@ class WikiReader(RegrReader):
                         gold_types.append(gt)
 
                     all_mention_data['gold_types_pos'] = set(gold_types)
+
+                    for gt in gold_types:
+                        if not gt in self.class_counts:
+                            self.class_counts[gt] = 0
+                        self.class_counts[gt] += 1
+
+                    self.total_items += 1
 
                     batch.append(all_mention_data)
 
@@ -365,7 +389,7 @@ class WikiReader(RegrReader):
 
     def getMentionRepresentationval(self, item):
         subsampled = self.subsample_batch(item['mention_representation'])
-        return np.concatenate(np.array(subsampled), axis=0)
+        return [subsampled]
     
     def getContextval(self, item):
-        return self.subsample_batch(item['context'])
+        return [self.subsample_batch(item['context'])]

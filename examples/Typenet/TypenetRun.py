@@ -13,14 +13,17 @@ import torch
 import argparse
 from sklearn.metrics import accuracy_score, f1_score
 
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
+from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram, SolverPOIDictLossProgram
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker, CMWithLogitsMetric
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
+from regr.utils import setProductionLogMode
 
 import TypenetGraph
 from TypenetGraph import app_graph
+from TypenetGraph import mention_group_contains
+from TypenetGraph import concepts
 
 from sensors.MLPEncoder import MLPEncoder
 from sensors.TypeComparison import TypeComparison
@@ -58,26 +61,56 @@ with open(os.path.join('resources/MIL_data/entity_dict.joblib'), "rb") as file:
 with open(os.path.join('resources/MIL_data/entity_type_dict_orig.joblib'), "rb") as file:
     file_data['entity_type_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
 
-wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
-wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=20, limit_size=args.limit)
+wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit)
+wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit)
+
+train_class_weights = wiki_train.get_class_weights()
+
+print(train_class_weights)
 
 first_iter = list(wiki_train)[0]
+
+#print(first_iter)
 
 print('building graph')
 
 # get graph attributes
-app_graph.detach()
 mention = app_graph['mention']
 mention_group = app_graph['mention_group']
 
 # text data sensors
-mention['MentionRepresentation'] = ReaderSensor(keyword='MentionRepresentation')
-mention['Context'] = ReaderSensor(keyword='Context')
+mention_group['MentionRepresentation_group'] = ReaderSensor(keyword='MentionRepresentation')
+mention_group['Context_group'] = ReaderSensor(keyword='Context')
+
+for type_name in concepts:
+    if not type_name[:6] == 'Synset' or not config.freebase_only:
+        mention_group[type_name + '_group'] = ReaderSensor(keyword=type_name)
+
+#mention[mention_group_contains] = FunctionalSensor(mention_group['MentionRepresentation_group'], forward=lambda x:torch.ones((32, 1)))
+
+#mention['MentionRepresentation'] = FunctionalSensor(mention_group['MentionRepresentation_group'], forward=make_batch_list)
+#mention['Context'] = FunctionalSensor(mention_group['Context_group'], forward=make_batch_list)
+
+def make_mention_props(mentionrep_group, context_group, *labels):
+    result = [torch.ones((config.batch_size, 1)), mentionrep_group[0], context_group[0]]
+    for l in labels:
+        result.append(torch.LongTensor(l))
+    return result
+
+mention_type_names = []
+mention_group_concepts = []
+
+for type_name in concepts:
+    if not type_name[:6] == 'Synset' or not config.freebase_only:
+        mention_type_names.append(type_name + '_')
+        mention_group_concepts.append(mention_group[type_name + '_group'])
+
+mention[tuple([mention_group_contains, 'MentionRepresentation', 'Context'] + mention_type_names)] = JointSensor(mention_group['MentionRepresentation_group'], mention_group['Context_group'], *mention_group_concepts, forward=make_mention_props)
 
 # module learners
 mention['encoded'] = ModuleLearner(
     'Context',
-    'MentionRepresentation', 
+    'MentionRepresentation',
     module=MLPEncoder(
             pretrained_embeddings=file_data['embeddings'],
             mention_dim=file_data['embeddings'].shape[-1],
@@ -85,40 +118,56 @@ mention['encoded'] = ModuleLearner(
         )
     )
 
+class WeightedNBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
+    def __init__(self, class_weights):
+        super().__init__()
+        self.class_weights = class_weights
+
+    def forward(self, builder, prop, input, target, *args, **kwargs):
+        input = input.view(-1, input.shape[-1])
+        target = target.view(-1).to(dtype=torch.long, device=input.device)
+        self.weight = torch.tensor([1.0, self.class_weights[prop]])
+        return super().forward(input, target, *args, **kwargs)
+
 # module learner predictions
+loss_dict = {}
 for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
     if not args.limit_classes == None and i >= args.limit_classes:
         print('stopped after adding %d classe(s)' % args.limit_classes)
         break
-    mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(128, 2))
+    if not type_name[:6] == 'Synset' or not config.freebase_only:
+        mention[type_concept] = FunctionalSensor(mention_group_contains, type_name + '_', forward=lambda x, y: y, label=True)
+        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(128, 2))
 
-def test(input, target, data_item, prop, weight=None):
-    print(prop)
+        loss_dict[type_name] = WeightedNBCrossEntropyDictLoss(train_class_weights)
 
-class LossCallback():
-    def __init__(self, program):
-        self.program = program
-
-    def __call__(self):
-        vals = self.program.model.loss.value()
-
-        print("averaged loss:", torch.tensor(list(vals.values())).mean())
-
-class Program(CallbackProgram, POIProgram):
-        pass
+'''program = Program(app_graph,
+    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    metric=PRF1Tracker(DatanodeCMMetric()))'''
 
 # create program
-program = Program(
-    app_graph,
+'''program = SolverPOIProgram(app_graph,
+    inferTypes=['ILP', 'local/argmax'],
     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-    metric=PRF1Tracker(DatanodeCMMetric())
-    )
+    metric={'ILP':PRF1Tracker(DatanodeCMMetric()), 'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+'''
 
-program.after_train_epoch = [LossCallback(program)]
+program = SolverPOIDictLossProgram(app_graph,
+        inferTypes=['local/argmax'],
+        dictloss=loss_dict)
+
+'''program = POIProgram(app_graph,
+                    inferTypes=['local/argmax'],
+                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                    metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))'''
+
+'''program = IMLProgram(app_graph,
+                     inferTypes=['ILP', 'local/argmax'],
+                     loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)),
+                     metric={'ILP':PRF1Tracker(DatanodeCMMetric()),
+                             'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})'''
+#program.after_train_epoch = [LossCallback(program)]
 
 print('training')
 # train
-program.train(wiki_train, train_epoch_num=args.epochs, Optim=torch.optim.Adam, device=config.device)
-
-
-print(program.model.loss)
+program.train(wiki_train, valid_set=wiki_dev, train_epoch_num=10, Optim=torch.optim.Adam, device=config.device)

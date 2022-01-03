@@ -25,6 +25,7 @@ class MLPEncoder(nn.Module):
 
         bag_size = len(sentences[0])
 
+        t0 = time.time()
         # sentences: (batch_size, bag_size, sentence_length [variable])
         embed_bag = torch.empty((len(sentences) * bag_size, self.embedding_shape[-1]), device=config.device)
 
@@ -36,14 +37,15 @@ class MLPEncoder(nn.Module):
 
                 embed_bag[(batch_idx * bag_size) + sent_idx] = torch.mean(sentence_embed, dim=0)
 
-        #t1 = time.time()
-        lin1_out = self.lin1(torch.cat((embed_bag, mention_rep), dim=1).float())
+        t1 = time.time()
+        lin1_out = self.lin1(torch.cat((embed_bag, mention_rep.view(mention_rep.shape[0]*mention_rep.shape[1], -1)), dim=1).float())
         lin1_out = self.relu(lin1_out)
         lin1_out = self.dropout(lin1_out)
 
         lin2_out = self.lin2(lin1_out)
         lin2_out = self.relu(lin2_out)
 
-        #print('time MLPEncoder', time.time() - t1)
+        if config.timing:
+            print('MLPEncoder', time.time() - t1, t1 - t0)
 
         return lin2_out
