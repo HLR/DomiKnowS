@@ -152,14 +152,14 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
     metric={'ILP':PRF1Tracker(DatanodeCMMetric()), 'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 '''
 
-program = SolverPOIDictLossProgram(app_graph,
+'''program = SolverPOIDictLossProgram(app_graph,
         inferTypes=['local/argmax'],
-        dictloss=loss_dict)
+        dictloss=loss_dict)'''
 
-'''program = POIProgram(app_graph,
+program = POIProgram(app_graph,
                     inferTypes=['local/argmax'],
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                    metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))'''
+                    metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
 
 '''program = IMLProgram(app_graph,
                      inferTypes=['ILP', 'local/argmax'],
