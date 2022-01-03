@@ -17,7 +17,7 @@ from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSen
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker, CMWithLogitsMetric
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyIMLoss
 from regr.utils import setProductionLogMode
 
 import TypenetGraph
