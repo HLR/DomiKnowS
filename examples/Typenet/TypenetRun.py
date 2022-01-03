@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram, SolverPOIDictLossProgram
+from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker, CMWithLogitsMetric
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from regr.utils import setProductionLogMode
