@@ -7,6 +7,13 @@ class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
         input = input.view(-1, input.shape[-1])
         target = target.view(-1).to(dtype=torch.long, device=input.device)
         return super().forward(input, target, *args, **kwargs)
+    
+
+class NBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
+    def forward(self, builder, prop, input, target, *args, **kwargs):
+        input = input.view(-1, input.shape[-1])
+        target = target.view(-1).to(dtype=torch.long, device=input.device)
+        return super().forward(input, target, *args, **kwargs)
 
 
 class BCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
