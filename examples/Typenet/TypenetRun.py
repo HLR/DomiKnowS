@@ -94,7 +94,7 @@ for type_name in concepts:
 def make_mention_props(mentionrep_group, context_group, *labels):
     result = [torch.ones((config.batch_size, 1), device=config.device), mentionrep_group[0], context_group[0]]
     for l in labels:
-        result.append(torch.LongTensor(l, device=config.device))
+        result.append(torch.tensor(l, device=config.device))
     return result
 
 mention_type_names = []
