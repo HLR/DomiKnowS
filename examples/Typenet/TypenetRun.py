@@ -92,9 +92,9 @@ for type_name in concepts:
 #mention['Context'] = FunctionalSensor(mention_group['Context_group'], forward=make_batch_list)
 
 def make_mention_props(mentionrep_group, context_group, *labels):
-    result = [torch.ones((config.batch_size, 1)), mentionrep_group[0], context_group[0]]
+    result = [torch.ones((config.batch_size, 1), device=config.device), mentionrep_group[0], context_group[0]]
     for l in labels:
-        result.append(torch.LongTensor(l))
+        result.append(torch.LongTensor(l, device=config.device))
     return result
 
 mention_type_names = []
