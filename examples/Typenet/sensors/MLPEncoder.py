@@ -20,7 +20,7 @@ class MLPEncoder(nn.Module):
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, sentences, mention_rep):
-        # mention_rep: (batch_size * bag_size, embedding_dim)
+       # mention_rep: (batch_size * bag_size, embedding_dim)
         mention_rep = mention_rep.to(device=config.device)
 
         bag_size = len(sentences[0])

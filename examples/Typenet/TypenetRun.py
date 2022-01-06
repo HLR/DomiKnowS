@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
+from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram, SolverPOIDictLossProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker, CMWithLogitsMetric
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyIMLoss
 from regr.utils import setProductionLogMode
@@ -25,7 +25,7 @@ from TypenetGraph import app_graph
 from TypenetGraph import mention_group_contains
 from TypenetGraph import concepts
 
-from sensors.MLPEncoder import MLPEncoder
+from sensors.CNNEncoder import CNNEncoder
 from sensors.TypeComparison import TypeComparison
 from readers.TypenetReader import WikiReader
 
@@ -111,10 +111,8 @@ mention[tuple([mention_group_contains, 'MentionRepresentation', 'Context'] + men
 mention['encoded'] = ModuleLearner(
     'Context',
     'MentionRepresentation',
-    module=MLPEncoder(
-            pretrained_embeddings=file_data['embeddings'],
-            mention_dim=file_data['embeddings'].shape[-1],
-            hidden_dim=128
+    module=CNNEncoder(
+            pretrained_embeddings=file_data['embeddings']
         )
     )
 
@@ -137,7 +135,7 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
         break
     if not type_name[:6] == 'Synset' or not config.freebase_only:
         mention[type_concept] = FunctionalSensor(mention_group_contains, type_name + '_', forward=lambda x, y: y, label=True)
-        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(128, 2))
+        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(600, 2))
 
         loss_dict[type_name] = WeightedNBCrossEntropyDictLoss(train_class_weights)
 
@@ -152,14 +150,15 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
     metric={'ILP':PRF1Tracker(DatanodeCMMetric()), 'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 '''
 
-'''program = SolverPOIDictLossProgram(app_graph,
+program = SolverPOIDictLossProgram(app_graph,
         inferTypes=['local/argmax'],
-        dictloss=loss_dict)'''
+        dictloss=loss_dict,
+        metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
 
-program = POIProgram(app_graph,
+'''program = POIProgram(app_graph,
                     inferTypes=['local/argmax'],
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                    metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+                    metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))'''
 
 '''program = IMLProgram(app_graph,
                      inferTypes=['ILP', 'local/argmax'],
