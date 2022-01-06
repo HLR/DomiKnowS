@@ -152,8 +152,7 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
 
 program = SolverPOIDictLossProgram(app_graph,
         inferTypes=['local/argmax'],
-        dictloss=loss_dict,
-        metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+        dictloss=loss_dict)
 
 '''program = POIProgram(app_graph,
                     inferTypes=['local/argmax'],
