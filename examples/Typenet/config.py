@@ -2,7 +2,7 @@ device = 'cpu'
 use_constraints = True
 batch_size = 128
 
-test_interval = 5
+test_interval = 1
 
 timing = False
 

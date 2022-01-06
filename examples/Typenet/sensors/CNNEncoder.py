@@ -21,7 +21,12 @@ class CNNEncoder(nn.Module):
 
         self.pool = nn.AdaptiveMaxPool1d(1)
 
-        self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
+
+        self.dropout = nn.Dropout(0.5)
+
+        self.lin1 = nn.Linear(self.embedding_shape[-1], self.embedding_shape[-1])
+        self.lin2 = nn.Linear(self.embedding_shape[-1] * 2, self.embedding_shape[-1])
 
     def forward(self, sentences, mention_rep):
         # mention_rep: (batch_size * bag_size, embedding_dim)
@@ -53,11 +58,16 @@ class CNNEncoder(nn.Module):
 
         t1 = time.time()
 
+        sentences_embed = self.lin1(sentences_embed)
+
         cnn_out = self.cnn(sentences_embed.permute(0, 2, 1))
-        cnn_out = self.relu(cnn_out)
         cnn_out = torch.squeeze(self.pool(cnn_out)) # (batch_size * bag_size, embedding_dim)
 
-        concat_out = torch.cat((mention_rep, cnn_out), dim=-1).float() # (batch_size * bag_size, embedding_dim * 2)
+        mention_rep = self.dropout(mention_rep)
+
+        concat_out = torch.cat((cnn_out, mention_rep), dim=-1).float() # (batch_size * bag_size, embedding_dim * 2)
+
+        concat_out = self.tanh(self.lin2(concat_out))
 
         if config.timing:
             print('CNNEncoder', time.time() - t1, t1 - t0)

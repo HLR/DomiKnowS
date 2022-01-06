@@ -135,7 +135,7 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
         break
     if not type_name[:6] == 'Synset' or not config.freebase_only:
         mention[type_concept] = FunctionalSensor(mention_group_contains, type_name + '_', forward=lambda x, y: y, label=True)
-        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(600, 2))
+        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(300, 2))
 
         loss_dict[type_name] = WeightedNBCrossEntropyDictLoss(train_class_weights)
 
