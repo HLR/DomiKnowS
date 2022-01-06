@@ -168,4 +168,15 @@ program = SolverPOIDictLossProgram(app_graph,
 
 print('training')
 # train
-program.train(wiki_train, valid_set=wiki_dev, train_epoch_num=10, Optim=torch.optim.Adam, device=config.device)
+for epoch in range(1, args.epochs + 1):
+    print("Epoch %d" % epoch)
+
+    program.train(wiki_train, Optim=torch.optim.Adam, device=config.device)
+
+    if epoch % config.test_interval == 0:
+        program_test = SolverPOIDictLossProgram(app_graph,
+                                                inferTypes=['local/argmax'],
+                                                dictloss=loss_dict,
+                                                metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+
+        program_test.test(wiki_dev)
