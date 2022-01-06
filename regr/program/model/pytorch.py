@@ -245,6 +245,8 @@ class SolverModel(PoiModel):
     def populate(self, builder, run=True):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
+    
+    
 
 
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):
@@ -305,6 +307,188 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def metric(self):
         # return self.metrics_tracker
         pass
+    
+    
+class PoiModelDictLoss(PoiModel):
+    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None):
+        self.loss_tracker = MacroAverageTracker()
+        if dictloss:
+            super().__init__(graph, poi=poi, loss=self.loss_tracker, metric=metric)
+        else:
+            super().__init__(graph, poi=poi, loss=loss, metric=metric)
+        
+        self.metric_tracker = None
+        self.losses = dict()
+        self.dictloss = dictloss
+        
+    
+    def reset(self):
+        if self.loss_tracker is not None:
+            self.loss_tracker.reset()
+        if self.metric_tracker is not None:
+            self.metric_tracker.reset()
+            
+        if isinstance(self.loss, MetricTracker):
+            self.loss.reset()
+        if self.metric is not None:
+            for metric in self.metric.values():
+                if isinstance(metric, MetricTracker):
+                    metric.reset()
+            
+    def poi_loss(self, data_item, prop, sensors):
+        if self.dictloss:
+            if not self.loss:
+                return 0
+    #         outs = [sensor(data_item) for sensor in sensors]
+            target = None
+            pred = None
+            for sensor in sensors:
+                if sensor.label:
+                    target = sensor
+                else:
+                    pred = sensor
+            if target == None or pred == None:
+                return None
+            if not str(prop.name) in self.dictloss and not "default" in self.dictloss:
+                return None
+            elif not str(prop.name) in self.dictloss:
+                self.losses[pred, target] = self.dictloss["default"](data_item, prop, pred(data_item), target(data_item))
+                return self.losses[pred, target]
+            else:
+                self.losses[pred, target] = self.dictloss[str(prop.name)](data_item, prop, pred(data_item), target(data_item))
+                return self.losses[pred, target]
+        else:
+            super().poi_loss(data_item, prop, sensors)
+    
+    
+    def populate(self, builder, run=True):
+        if self.dictloss:
+            loss, metric = super().populate(builder, run=True)
+            self.loss_tracker.append(self.losses)
+#             print(loss, metric)
+            return loss, metric
+        else:
+            return super().populate(builder, run=True)
+        
+    
+    
+# class PoiModelDictLoss(TorchModel):
+#     def __init__(self, graph, poi=None, loss=None, metric=None):
+#         super().__init__(graph)
+#         if poi is None:
+#             self.poi = self.default_poi()
+#         else:
+#             properties = []
+#             for item in poi:
+#                 if isinstance(item, Property):
+#                     properties.append(item)
+#                 elif isinstance(item, Concept):
+#                     for prop in item.values():
+#                         properties.append(prop)
+#                 else:
+#                     raise ValueError(f'Unexpected type of POI item {type(item)}: Property or Concept expected.')
+#             self.poi = properties
+            
+#         self.loss = loss
+#         if metric is None:
+#             self.metric = None
+#         elif isinstance(metric, dict):
+#             self.metric = metric
+#         else:
+#             self.metric = {'': metric}
+            
+#         self.loss_tracker = MacroAverageTracker()
+#         self.metric_tracker = None
+
+#     def reset(self):
+#         if self.loss_tracker is not None:
+#             self.loss_tracker.reset()
+#         if self.metric_tracker is not None:
+#             self.metric_tracker.reset()
+
+#     def default_poi(self):
+#         poi = []
+#         for prop in self.graph.get_properties():
+#             if len(list(prop.find(TorchSensor))) > 1:
+#                 poi.append(prop)
+#         return poi
+
+#     def populate(self, builder, run=True):
+#         losses = {}
+#         metrics = {}
+        
+#         for prop in self.poi:
+#             # make sure the sensors are evaluated
+#             if run:
+#                 for sensor in prop.find(TorchSensor):
+#                     sensor(builder)
+                            
+#             targets = []
+#             predictors = []
+#             for sensor in prop.find(TorchSensor):
+#                 if self.mode() not in {Mode.POPULATE,}:
+#                     if sensor.label:
+#                         targets.append(sensor)
+#                     else:
+#                         predictors.append(sensor)
+#             for predictor in predictors:
+#                 # TODO: any loss or metric or general function apply to just prediction?
+#                 pass
+#             for target, predictor in product(targets, predictors):
+# #                 print(predictor, predictor(builder))
+#                 if str(predictor.prop.name) in self.loss.keys():
+#                     losses[predictor, target] = self.loss[str(predictor.prop.name)](builder, predictor.prop, predictor(builder), target(builder))
+#                 if predictor._metric is not None:
+#                     metrics[predictor, target] = predictor.metric(builder, target)
+
+#         loss = sum(losses.values())
+#         return loss, metrics
+#     @property
+#     def loss(self):
+#         return self.loss_tracker
+
+#     @property
+#     def metric(self):
+#         # return self.metrics_tracker
+#         pass
+    
+    
+class SolverModelDictLoss(PoiModelDictLoss):
+    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None, inferTypes=['ILP']):
+        super().__init__(graph, poi=poi, loss=loss, metric=metric, dictloss=dictloss)
+        self.inference_with = []
+        self.inferTypes = inferTypes
+
+    def inference(self, builder):
+        for prop in self.poi:
+            for sensor in prop.find(TorchSensor):
+                sensor(builder)
+#             for output_sensor, target_sensor in self.find_sensors(prop):
+#             # make sure the sensors are evaluated
+#                 output = output_sensor(builder)
+#                 target = target_sensor(builder)
+#         print("Done with the computation")
+
+        # Check if this is batch
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
+        datanode = builder.getDataNode()
+        # trigger inference
+#         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
+        for infertype in self.inferTypes:
+            {
+                'ILP': lambda :datanode.inferILPResults(*self.inference_with, fun=None, epsilon=None),
+                'local/argmax': lambda :datanode.inferLocal(),
+                'local/softmax': lambda :datanode.inferLocal(),
+                'argmax': lambda :datanode.infer(),
+                'softmax': lambda :datanode.infer(),
+            }[infertype]()
+#         print("Done with the inference")
+        return builder
+
+    def populate(self, builder, run=True):
+        data_item = self.inference(builder)
+        return super().populate(builder, run=False)
 
 from .iml import IMLModel
 from .ilpu import ILPUModel
