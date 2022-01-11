@@ -8,6 +8,11 @@ It does not use the prolog interpreter in the results.
 import sys
 import math
 
+
+# Add the system path with the local directory
+sys.path.append('/mnt/home/castrog4/.local/bin')
+
+
 # Add the DomiKnows main directory into the current system path
 if '../../..' not in sys.path:
     sys.path.append('../../..')
