@@ -1,0 +1,55 @@
+#!/bin/bash
+
+########## SBATCH Lines for Resource Request ##########
+ 
+#SBATCH --time=2:00:00             # limit of wall clock time - how long the job will run (same as -t)
+#SBATCH --verbose	# To show more details about the program execution and errors.
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4	# Make a dual core computer
+#SBATCH --mem-per-cpu=4G	# Set memory for each core  
+#SBATCH --job-name=model_baseline      # you can give your job a name for easier identification (same as -J)
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=castrog4@msu.edu
+#SBATCH --output=./results/%x-%j.SLURMout
+
+########## Command Lines for Job Running ##########
+
+echo "Job ID: $SLURM_JOB_ID"
+echo "Start Time: `date`"
+echo "Running on node: `hostname`"
+echo "Current Directory: `pwd`" 
+
+echo "Experiment 1: Baseline model without teacher feedback"
+
+
+# Need to rework the paths
+DomDir="./DomiKnowS/examples/LanguageAcquisition"
+
+# Move to the current directory
+#cd "${DomDir}/situation_utterance_word"
+
+# After epoch number, put the number of interactions, evaluation interval, and test size
+
+run_date=$(date "+%D_%T")
+epochs=1
+num_interaction=10000
+eval_interval=100
+test_size=1000
+train_len=1
+
+
+#learner_test_data_path="${DomDir}/data/test_set.txt"
+learner_test_data_path="../data/test_set.txt"
+#model_output_eval_file="interaction_logic_eval_$run_date.p"
+model_output_eval_file="interaction_logic_eval.p"
+corrective_feedback=False
+
+# Run the test across the number of epochs
+# Last element is the correction flag
+#python3 "${DomDir}/situation_utterance_word/main_base.py"
+python3 "main_base.py"
+
+
+echo "End Time: `date`"
+
+
