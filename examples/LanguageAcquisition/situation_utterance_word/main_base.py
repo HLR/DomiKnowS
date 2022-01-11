@@ -160,15 +160,15 @@ def main():
     # graph.visualize("image")
 
     # Load the training file
-    train_filename = "../data/training_set_single.txt"
-    test_filename = "../data/test_set_single.txt"
-    train_size = 112
-    test_size = 56
+    # train_filename = "../data/training_set_single.txt"
+    # test_filename = "../data/test_set_single.txt"
+    # train_size = 112
+    # test_size = 56
 
-    # train_filename = "../data/training_set.txt"
-    # test_filename = "../data/test_set.txt"
-    # train_size = 10000
-    # test_size = 1000
+    train_filename = "../data/training_set.txt"
+    test_filename = "../data/test_set.txt"
+    train_size = 10000
+    test_size = 1000
 
     # Get the list of predicates and words
     words = [x.strip() for x in open("../data/vocabulary.txt")]
@@ -182,7 +182,7 @@ def main():
     # Set the device to 'cpu'
     device = 'cpu'
     learning_rate = 0.001  # 10^-3 seems to be a great option for this setting
-    train_epoch = 3
+    train_epoch = 1
 
     # Training with Adam optimizer generates better performance for this task than SGD.
     program.train(train_dataset, train_epoch_num=train_epoch,
