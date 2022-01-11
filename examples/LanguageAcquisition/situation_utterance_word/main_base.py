@@ -59,7 +59,7 @@ device = 'cpu'
 
 # Functions to use.
 
-from program import Prolog_Module
+# from program import Prolog_Module
 
 
 def pad_utterance(utterance, length=12):
