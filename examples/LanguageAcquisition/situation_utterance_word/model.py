@@ -33,11 +33,21 @@ class GenerateLabel():
         print("Label:", label)
         
         # read the max number of words
+        c = 0
         for i in label:
             try:
-                label_list.append(self.vocabulary.index(i))
+
+                if i == "<eos>" and c != 0:
+                    label_list.append(self.vocabulary.index(i))
+                elif i == '<eos>' and c == 0:
+                    label_list.append(self.vocabulary.index(i))
+                    c += 1
+                else:
+                    label_list.append(self.vocabulary.index(i))
+
+
             except:
-                label_list.append(len(self.vocabulary)-1)
+                label_list.append(-100)
                 
         
         output = torch.LongTensor(label_list).to(self.device)

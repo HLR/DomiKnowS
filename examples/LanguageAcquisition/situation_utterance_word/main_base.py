@@ -1,5 +1,9 @@
-# Check the initialization of weights.
+'''
 
+This script runs the baseline of the model. The baseline is the learner model without using the entailment function as its loss value.
+It does not use the prolog interpreter in the results.
+
+'''
 
 import sys
 import math
@@ -7,11 +11,10 @@ import math
 # Add the DomiKnows main directory into the current system path
 if '../../..' not in sys.path:
     sys.path.append('../../..')
-print("sys.path - %s"%(sys.path))
+print("sys.path - %s" % (sys.path))
 
 if "../data/teacher_data" not in sys.path:
     sys.path.append("../data/teacher_data")
-    
 
 # Import Pytorch functionality
 import torch
@@ -34,19 +37,16 @@ from regr.program import SolverPOIProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss
 
-
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
-
 import logging
-
 
 # Graph declaration: Need to build a simple situation-utterance model
 from graph import graph, situation, word, word_label, utterance_contains_words, utterance, task_sit, task_utt, task
 
-from model import LearnerModel, GenerateLabel 
-from sensors import SituationRepSensor 
+from model import LearnerModel, GenerateLabel
+from sensors import SituationRepSensor
 # from sensors import create_words
 from readers import InteractionReader
 
@@ -55,11 +55,10 @@ device = 'cpu'
 # Functions to use.
 
 from program import Prolog_Module
-    
+
 
 def pad_utterance(utterance, length=12):
-
-    new_utterance = utterance # Copy the input of the utterance
+    new_utterance = utterance  # Copy the input of the utterance
 
     if len(new_utterance) < length:
         diff = length - len(new_utterance)
@@ -67,38 +66,34 @@ def pad_utterance(utterance, length=12):
         if diff > 0:
             for k in range(diff):
                 new_utterance.append("<eos>")
-                
-    return new_utterance # return the padded text out of the extra dimension
+
+    return new_utterance  # return the padded text out of the extra dimension
 
 
 def model_declaration():
-    
-    
     graph.detach()
 
-
     max_length = 12
-    
+
     # Adding Sensors and Learner modules
-    
+
     # Read the situation and utterance
     # text_situation is a list of one string
     # text_utterance is a list of one string
     situation['text_situation'] = ReaderSensor(keyword='situation')
-    utterance['text_utterance'] = ReaderSensor(keyword='utterance') # TODO: CHECK CREATE NEW CONCEPT FOR UTTERANCE
-
+    utterance['text_utterance'] = ReaderSensor(keyword='utterance')
 
     def create_has_a(a, b, arg1, arg2):
         return True
 
-    task[task_sit.reversed, task_utt.reversed] = CompositionCandidateSensor(situation['text_situation'], utterance['text_utterance'], relations=(task_sit.reversed, task_utt.reversed), forward=create_has_a)
+    task[task_sit.reversed, task_utt.reversed] = CompositionCandidateSensor(situation['text_situation'],
+                                                                            utterance['text_utterance'], relations=(
+        task_sit.reversed, task_utt.reversed), forward=create_has_a)
 
     # Need to vectorize the situation
-    situation['situation_vectorized'] = SituationRepSensor('text_situation') # 1 x predicate_length
-
+    situation['situation_vectorized'] = SituationRepSensor('text_situation')  # 1 x predicate_length
 
     def create_words(words):
-
         pad_lst = pad_utterance(words[0].split(), 12)
         return torch.ones((len(pad_lst), 1)), pad_lst
 
@@ -106,100 +101,96 @@ def model_declaration():
 
     # Combine the elements into the word concept
     word[utterance_contains_words, 'words'] = JointSensor(utterance['text_utterance'], forward=create_words)
-    
+
     # learning_rate = 0.001
     # max_length = 12
     vocabulary = [x.strip() for x in open("../data/vocabulary.txt")]
     predicates = [x.strip() for x in open("../data/predicates.txt")]
-    
+
     embedding_dim = 36
     hidden_dim = 100
     pred_size = len(predicates)
     vocab_size = len(vocabulary)
-    
-    encoder_dim = (pred_size,100)
-    decoder_dim = (100,vocab_size)
-    
-    
+
+    encoder_dim = (pred_size, 100)
+    decoder_dim = (100, vocab_size)
+
     # Assign the label to the word concept
     word[word_label] = FunctionalSensor('words', forward=GenerateLabel(device, vocabulary), label=True)
-    
-    
-    # Compute the output of the Seq2Seq model
-    word[word_label] = ModuleLearner(situation['situation_vectorized'], module=LearnerModel(vocabulary, predicates, encoder_dim, decoder_dim))
 
-    program = SolverPOIProgram(graph, poi=(task, utterance, situation, word), inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLossCustom()), metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
-    
+    # Compute the output of the Seq2Seq model
+    word[word_label] = ModuleLearner(situation['situation_vectorized'],
+                                     module=LearnerModel(vocabulary, predicates, encoder_dim, decoder_dim))
+
+    program = SolverPOIProgram(graph, poi=(task, utterance, situation, word), inferTypes=['local/argmax'],
+                               loss=MacroAverageTracker(NBCrossEntropyLossCustom()),
+                               metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+
     return program
 
 
 class NBCrossEntropyLossCustom(torch.nn.CrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
-        
         print("Input:", input.size())
         print("Target:", target.size())
-        
+
         input = input.view(-1, input.shape[-1])
         target = target.view(-1).to(dtype=torch.long, device=input.device)
         return super().forward(input, target, *args, **kwargs)
 
 
-
 def main():
-    
     '''
         Current run of the model.
-        
+
         Training Situation-Utterance pairs: 10,000
         Testing Situation-Utterance pairs: 1,000
-        
+
     '''
-    
+
     logging.basicConfig(level=logging.INFO)
 
     program = model_declaration()
-    
-    #graph.visualize("image")
-    
-    # Load the training file
-    # train_filename = "../data/training_set_single.txt"
-    # test_filename = "../data/test_set_single.txt"
-    # train_size = 112
-    # test_size = 56
 
-    train_filename = "../data/training_set.txt"
-    test_filename = "../data/test_set.txt"
-    train_size = 10000
-    test_size = 1000
-    
-    
+    # graph.visualize("image")
+
+    # Load the training file
+    train_filename = "../data/training_set_single.txt"
+    test_filename = "../data/test_set_single.txt"
+    train_size = 112
+    test_size = 56
+
+    # train_filename = "../data/training_set.txt"
+    # test_filename = "../data/test_set.txt"
+    # train_size = 10000
+    # test_size = 1000
+
     # Get the list of predicates and words
     words = [x.strip() for x in open("../data/vocabulary.txt")]
-    
+
     # train_dataset = list(iter(InteractionReader(train_filename,"txt")))[:train_size]
     # test_dataset = list(iter(InteractionReader(test_filename,"txt")))[:test_size]
 
     train_dataset = list(iter(InteractionReader(train_filename, "txt")))[:train_size]
     test_dataset = list(iter(InteractionReader(test_filename, "txt")))[:test_size]
-   
-    # Set the device to 'cpu' 
+
+    # Set the device to 'cpu'
     device = 'cpu'
     learning_rate = 0.001  # 10^-3 seems to be a great option for this setting
     train_epoch = 3
 
     # Training with Adam optimizer generates better performance for this task than SGD.
-    program.train(train_dataset, train_epoch_num=train_epoch, Optim=lambda param: torch.optim.Adam(param, lr = learning_rate) , device=device)
+    program.train(train_dataset, train_epoch_num=train_epoch,
+                  Optim=lambda param: torch.optim.Adam(param, lr=learning_rate), device=device)
 
-    sentence_results=[]
-    sentence_labels=[]
+    sentence_results = []
+    sentence_labels = []
 
-    word_results=[]
-    word_labels=[]
-
+    word_results = []
+    word_labels = []
 
     # Write the data to file
-    out = open("results.txt","w")
-
+    out = open("results.txt", "w")
 
     # Measure the procedure time
     start = time.time()
@@ -218,16 +209,14 @@ def main():
     for example, sentence in zip(list(iter(test_dataset)), program.populate(test_dataset, device=device)):
 
         # Interaction name
-        print("Element #",count)
-        count+=1
+        print("Element #", count)
+        count += 1
 
         print("\nSentence:", sentence)
         print("Sentence Child Node(s):", sentence.getChildDataNodes())
 
         # Use find Data Nodes
-        print("Found word data nodes:",sentence.findDatanodes(select="word"))
-
-
+        print("Found word data nodes:", sentence.findDatanodes(select="word"))
 
         print("Found situation data nodes:", sentence.findDatanodes(select="situation"))
 
@@ -235,21 +224,19 @@ def main():
         # print("Sentence 'text_situation' :", sentence.findDatanodes(select="situation")[0].getAttributes('text_situation'))
         print("Sentence 'text_utterance' :", sentence.getAttribute('text_utterance'))
 
-
         temp_results = []
         temp_labels = []
 
-        for w_value, w in zip(example['utterance'][0],sentence.findDatanodes(select="word")):
+        for w_value, w in zip(example['utterance'][0], sentence.findDatanodes(select="word")):
 
             w_token = w.getAttribute('words')
             w_prob = w.getAttribute(word_label)
-            w_label = w.getAttribute("word_label","label")
-            w_argmax_prob = w.getAttribute(word_label,"local/argmax")
+            w_label = w.getAttribute("word_label", "label")
+            w_argmax_prob = w.getAttribute(word_label, "local/argmax")
 
             # Move to the next label
             if w_label.item() == -100:
                 continue
-
 
             # print("Word token:", w_token)
             # print("Word_probabilities:", w_prob)
@@ -257,7 +244,8 @@ def main():
             # print("Word 'local/argmax' output:", w_argmax_prob)
 
             try:
-                w_argmax = int(torch.argmax(w.getAttribute(word_label,"local/argmax"))) #int(torch.argmax(w.getAttribute(word_label)))
+                w_argmax = int(torch.argmax(
+                    w.getAttribute(word_label, "local/argmax")))  # int(torch.argmax(w.getAttribute(word_label)))
             except:
                 print("Error computing Argmax!")
                 w_argmax = None
@@ -266,10 +254,9 @@ def main():
 
             # Only add words to the respective sets if the label is valid
             if w_label != None and w_label != "<eos>":
-
                 w_label = words[w_label.item()]
 
-                #w_label = w_label.item()
+                # w_label = w_label.item()
                 w_label = words.index(w_label)
 
                 word_text = words[w_argmax]
@@ -317,14 +304,12 @@ def main():
         sen_iter_results.append(temp_results)
         sen_iter_labels.append(temp_labels)
 
-
         # need to clean the sentence
         learner_sentence = " ".join(clean_sentence(temp_results[:]))
         situation = example['situation'][0]
 
         # print("Learner_sentence:",learner_sentence)
         # print("Situation:", situation)
-
 
         # Test the learner's utterance with the teacher
         # teacher_sentence, teacher_valid, teacher_feedback, same_predicates = teacher_model.evaluate(None, learner_sentence, None, situation)
@@ -344,7 +329,6 @@ def main():
     w_acc_num = 0
     w_acc_den = 0
 
-
     print("Results\n")
 
     count = 1
@@ -361,7 +345,7 @@ def main():
         w_acc_num += result[0]
         w_acc_den += result[1]
 
-        print("Current Word Accuracy: {}/{} = {}".format(result[0], result[1], (result[0]/result[1])))
+        print("Current Word Accuracy: {}/{} = {}".format(result[0], result[1], (result[0] / result[1])))
         print("Current Sentence Accuracy: {}".format(current_sentence_acc))
 
         sen_tot += current_sentence_acc
@@ -402,8 +386,6 @@ def main():
     # convert to hour, minutes, and seconds
     elapsed_time = convert_time(total_time)
 
-
-
     print("Procedure elapsed time:", elapsed_time)
 
     out.close()  # close the output file
@@ -412,85 +394,74 @@ def main():
     # program.test(test_dataset)
 
 
-    
 def convert_time(seconds):
-
     seconds = math.ceil(seconds)  # Set the math to the next largest integer
 
     print("Total seconds: ", seconds)
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int((seconds % 3600) % 60)
-    
-    return "{:02d}:{:02d}:{:02d} hh:mm:ss".format(h,m,s)
+
+    return "{:02d}:{:02d}:{:02d} hh:mm:ss".format(h, m, s)
 
 
 def clean_sentence(sentence):
-    
     # add the first 'the'
-    sentence.insert(0,"the")
-    
+    sentence.insert(0, "the")
+
     # Find any 'above' or 'below'
     if "above" in sentence:
-    
         ab_index = sentence.index("above")
-        
+
         # add 'the' after it
-        sentence.insert(ab_index+1,"the")
-        
+        sentence.insert(ab_index + 1, "the")
+
     if "below" in sentence:
-    
         ab_index = sentence.index("below")
-        
+
         # add 'the' after it
-        sentence.insert(ab_index+1,"the")
-        
-    
+        sentence.insert(ab_index + 1, "the")
+
     # Find left or right
     if "left" in sentence:
-    
         ab_index = sentence.index("left")
-        
-        
-        # add 'of' and 'the' after the word
-        
-        sentence.insert(ab_index+1,"the")
-        sentence.insert(ab_index+1,"of")
-        
-        # add 'the' after it
-        sentence.insert(ab_index,"the")
-        sentence.insert(ab_index,"to")
-        
-        
-    if "right" in sentence:
-    
-        ab_index = sentence.index("right")
-        
-        # add 'of' and 'the' after the word
-        sentence.insert(ab_index+1,"the")
-        sentence.insert(ab_index+1,"of")
-        
-        # add 'the' after it
-        sentence.insert(ab_index,"the")
-        sentence.insert(ab_index,"to")
-        
-    return sentence
-    
 
-def open_file(filename,option):
+        # add 'of' and 'the' after the word
+
+        sentence.insert(ab_index + 1, "the")
+        sentence.insert(ab_index + 1, "of")
+
+        # add 'the' after it
+        sentence.insert(ab_index, "the")
+        sentence.insert(ab_index, "to")
+
+    if "right" in sentence:
+        ab_index = sentence.index("right")
+
+        # add 'of' and 'the' after the word
+        sentence.insert(ab_index + 1, "the")
+        sentence.insert(ab_index + 1, "of")
+
+        # add 'the' after it
+        sentence.insert(ab_index, "the")
+        sentence.insert(ab_index, "to")
+
+    return sentence
+
+
+def open_file(filename, option):
     '''
         This function tries to open a file and returns the file pointer object.
         Returns None if the file is not opened successfully.
     '''
-    
+
     fp = None
-    
+
     try:
-        fp = open(filename,option)
+        fp = open(filename, option)
     except:
-        print("The file:", filename,"was not found!")
-        
-        
+        print("The file:", filename, "was not found!")
+
     return fp
 
 
