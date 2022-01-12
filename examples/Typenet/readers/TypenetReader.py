@@ -1,3 +1,4 @@
+import gc
 import sys
 sys.path.append('../../../')
 
@@ -218,7 +219,7 @@ with open('depth_classes.json', 'r') as class_file:
     classes = json.load(class_file)
 
 class WikiReader(RegrReader):
-    def __init__(self, file, type, file_data, bag_size=3, mode='train', limit_size=None):
+    def __init__(self, file, type, file_data, bag_size=3, mode='train', limit_size=None, vocab_map={}, prune=False):
         self.bag_size = bag_size
         
         self.mode = mode
@@ -235,6 +236,8 @@ class WikiReader(RegrReader):
 
         self.class_counts = {}
         self.total_items = 0
+        self.vocab_map = vocab_map
+        self.prune = prune
 
         super().__init__(file=file, type=type)
 
@@ -332,6 +335,14 @@ class WikiReader(RegrReader):
 
                         data['mention_representation'] = mention_representation
                         data['context'] = np.array(sentence)
+
+                        for word_idx in data['context']:
+                            if word_idx not in self.vocab_map:
+                                self.vocab_map[word_idx] = len(self.vocab_map)
+
+                        if self.prune:
+                            data['context'] = np.fromiter((self.vocab_map[x] for x in data['context']), data['context'].dtype)
+
                         data['position_embeddings'] = position_embedding
                         data['st_ids'] = st_id
                         data['en_ids'] = en_id
@@ -375,8 +386,30 @@ class WikiReader(RegrReader):
 
                         batch = []
 
+        del train_entities
+        gc.collect()
+
         print('WikiReader: finished processing data')
         return self.dataset_all
+
+    def save_cache(self, fp):
+        cache = {
+            'bag_size': self.bag_size,
+            'class_counts': self.class_counts,
+            'total_items': self.total_items,
+            'all_types': self.all_types,
+            'dataset_all': self.dataset_all
+        }
+
+        with open(fp, 'wb') as file_out:
+            pickle.dump(cache, file_out)
+
+        print('Saved wiki cache to', fp)
+
+    def get_pruned_embeddings(self):
+        sorted_word_idx = sorted(list(self.vocab_map), key=lambda idx: self.vocab_map[idx])
+
+        return self.embeddings[sorted_word_idx]
 
     def subsample(self, item_list, batch_idx):
         return [item_list[idx] for idx in self.subsample_ids[batch_idx]]
@@ -393,3 +426,24 @@ class WikiReader(RegrReader):
     
     def getContextval(self, item):
         return [self.subsample_batch(item['context'])]
+
+class CachedWikiReader(WikiReader):
+    def __init__(self, file, type, mode='train'):
+        self.mode = mode
+
+        RegrReader.__init__(self, file=file, type=type)
+
+    def parse_file(self):
+        with open(self.file, 'rb') as file_in:
+            self.cache_data = pickle.load(file_in)
+
+        self.bag_size = self.cache_data['bag_size']
+
+        self.class_counts = self.cache_data['class_counts']
+        self.total_items = self.cache_data['total_items']
+
+        self.all_types = self.cache_data['all_types']
+
+        print('WikiReader: finished loading cache')
+
+        return self.cache_data['dataset_all']

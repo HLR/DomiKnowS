@@ -10,8 +10,7 @@ class CNNEncoder(nn.Module):
         
         self.embedding_shape = pretrained_embeddings.shape
 
-        self.embeddings = nn.Embedding(*self.embedding_shape)
-        self.embeddings.weight.data.copy_(torch.from_numpy(pretrained_embeddings))
+        self.embeddings = nn.Embedding.from_pretrained(torch.from_numpy(pretrained_embeddings))
         self.embeddings.weight.requires_grad = False
 
         self.cnn = nn.Conv1d(self.embedding_shape[-1],
@@ -27,6 +26,7 @@ class CNNEncoder(nn.Module):
 
         self.lin1 = nn.Linear(self.embedding_shape[-1], self.embedding_shape[-1])
         self.lin2 = nn.Linear(self.embedding_shape[-1] * 2, self.embedding_shape[-1])
+        self.lin3 = nn.Linear(self.embedding_shape[-1], self.embedding_shape[-1])
 
     def forward(self, sentences, mention_rep):
         # mention_rep: (batch_size * bag_size, embedding_dim)
@@ -61,7 +61,7 @@ class CNNEncoder(nn.Module):
         sentences_embed = self.lin1(sentences_embed)
 
         cnn_out = self.cnn(sentences_embed.permute(0, 2, 1))
-        cnn_out = torch.squeeze(self.pool(cnn_out)) # (batch_size * bag_size, embedding_dim)
+        cnn_out, _ = cnn_out.max(dim=-1) # (batch_size * bag_size, embedding_dim)
 
         mention_rep = self.dropout(mention_rep)
 
@@ -69,7 +69,9 @@ class CNNEncoder(nn.Module):
 
         concat_out = self.tanh(self.lin2(concat_out))
 
+        out = self.dropout(self.lin3(concat_out))
+
         if config.timing:
             print('CNNEncoder', time.time() - t1, t1 - t0)
 
-        return concat_out
+        return out

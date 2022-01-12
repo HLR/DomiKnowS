@@ -11,6 +11,7 @@ import joblib
 import pickle
 import torch
 import argparse
+import gc
 from sklearn.metrics import accuracy_score, f1_score
 
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
@@ -27,9 +28,10 @@ from TypenetGraph import concepts
 
 from sensors.CNNEncoder import CNNEncoder
 from sensors.TypeComparison import TypeComparison
-from readers.TypenetReader import WikiReader
+from readers.TypenetReader import WikiReader, CachedWikiReader
 
 import config
+
 
 print('current device: ', config.device)
 
@@ -38,35 +40,62 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--limit', dest='limit', type=int, default=None)
 parser.add_argument('--epochs', dest='epochs', type=int, default=10)
 parser.add_argument('--limit_classes', dest='limit_classes', type=int, default=None)
+
+parser.add_argument('--use_cache', action='store_true')
+parser.add_argument('--use_cached_embed', action='store_true')
+parser.set_defaults(use_cache=False, use_cached_embed=False)
+
 args = parser.parse_args()
+
+print('use cache:', args.use_cache)
+print('use cached embeddings:', args.use_cached_embed)
 
 # load data
 file_data = {}
 
-file_data['type_dict'] = joblib.load(os.path.join('resources/MIL_data/TypeNet_type2idx.joblib'))
-
-file_data['train_bags'] = h5py.File(os.path.join("resources/MIL_data/entity_bags.hdf5"), "r")
-
 #file_data['embeddings'] = np.zeros(shape=(2196018, 300))
-file_data['embeddings'] = np.load(os.path.join('resources/data/pretrained_embeddings.npz'))["embeddings"]
 
-file_data['typenet_matrix_orig'] = joblib.load(os.path.join('resources/MIL_data/TypeNet_transitive_closure.joblib'))
+if args.use_cached_embed:
+    file_data['embeddings'] = np.load('resources/pruned_embed.npy')
+else:
+    file_data['embeddings'] = np.load('resources/data/pretrained_embeddings.npz')["embeddings"]
 
-with open(os.path.join('resources/data/vocab.joblib'), "rb") as file:
-    file_data['vocab_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+if not args.use_cache:
+    file_data['type_dict'] = joblib.load(os.path.join('resources/MIL_data/TypeNet_type2idx.joblib'))
 
-with open(os.path.join('resources/MIL_data/entity_dict.joblib'), "rb") as file:
-    file_data['entity_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+    file_data['train_bags'] = h5py.File(os.path.join("resources/MIL_data/entity_bags.hdf5"), "r")
 
-with open(os.path.join('resources/MIL_data/entity_type_dict_orig.joblib'), "rb") as file:
-    file_data['entity_type_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+    file_data['typenet_matrix_orig'] = joblib.load(os.path.join('resources/MIL_data/TypeNet_transitive_closure.joblib'))
 
-wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit)
-wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit)
+    with open(os.path.join('resources/data/vocab.joblib'), "rb") as file:
+        file_data['vocab_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+
+    with open(os.path.join('resources/MIL_data/entity_dict.joblib'), "rb") as file:
+        file_data['entity_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+
+    with open(os.path.join('resources/MIL_data/entity_type_dict_orig.joblib'), "rb") as file:
+        file_data['entity_type_dict'] = pickle.load(file, fix_imports=True, encoding="latin1")
+
+    prune_map = {}
+
+    wiki_train = WikiReader(file='resources/MIL_data/train.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit, vocab_map=prune_map, prune=True)
+
+    wiki_dev = WikiReader(file='resources/MIL_data/dev.entities', type='file', file_data=file_data, bag_size=10, limit_size=args.limit, vocab_map=prune_map, prune=True)
+
+    wiki_train.save_cache('resources/wiki_train_cache.pkl')
+    wiki_dev.save_cache('resources/wiki_dev_cache.pkl')
+
+    file_data['embeddings'] = wiki_dev.get_pruned_embeddings()
+
+    np.save('resources/pruned_embed', file_data['embeddings'])
+    print('Saved pruned embeddings')
+else:
+    wiki_train = CachedWikiReader(file='resources/wiki_train_cache.pkl', type='file')
+    wiki_dev = CachedWikiReader(file='resources/wiki_train_cache.pkl', type='file')
 
 train_class_weights = wiki_train.get_class_weights()
 
-print(train_class_weights)
+print(wiki_train.class_counts)
 
 first_iter = list(wiki_train)[0]
 
@@ -94,7 +123,9 @@ for type_name in concepts:
 def make_mention_props(mentionrep_group, context_group, *labels):
     result = [torch.ones((config.batch_size, 1), device=config.device), mentionrep_group[0], context_group[0]]
     for l in labels:
-        result.append(torch.tensor(l, device=config.device))
+        if not torch.is_tensor(l):
+            l = torch.tensor(l, device=config.device)
+        result.append(l)
     return result
 
 mention_type_names = []
@@ -124,8 +155,8 @@ class WeightedNBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
     def forward(self, builder, prop, input, target, *args, **kwargs):
         input = input.view(-1, input.shape[-1])
         target = target.view(-1).to(dtype=torch.long, device=input.device)
-        self.weight = torch.tensor([1.0, self.class_weights[prop]])
-        return super().forward(input, target, *args, **kwargs)
+        #self.weight = torch.tensor([1.0, self.class_weights[prop]])
+        return super().forward(input, target, *args, **kwargs) * self.class_weights[prop]
 
 # module learner predictions
 loss_dict = {}
