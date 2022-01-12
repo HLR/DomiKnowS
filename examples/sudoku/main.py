@@ -18,6 +18,9 @@ logging.basicConfig(level=logging.INFO)
 
 
 from regr.data.reader import RegrReader
+from regr.program.lossprogram import SampleLossProgram
+from regr.program.model.pytorch import SolverModel
+
 import torch
 
 
@@ -295,24 +298,45 @@ program = SolverPOIProgram(
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
+program = SampleLossProgram(
+        graph, SolverModel,
+        poi=(sudoku, empty_entry, ),
+        inferTypes=['local/argmax'],
+        # inferTypes=['ILP', 'local/argmax'],
+        metric={
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+
+        #metric={ 'softmax' : ValueTracker(prediction_softmax),
+        #       'ILP': PRF1Tracker(DatanodeCMMetric()),
+        #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
+        #       },
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        
+        sample = True,
+        sampleSize=300, 
+        sampleGlobalLoss = True
+        )
+
 # program = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-program = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, same_col, same_row, same_table), inferTypes=['ILP', 'local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric={
-            'ILP': PRF1Tracker(DatanodeCMMetric()),
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+# program = SolverPOIProgram(
+#         graph, poi=(sudoku, empty_entry, same_col, same_row, same_table), inferTypes=['ILP', 'local/argmax'],
+#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+#         metric={
+#             'ILP': PRF1Tracker(DatanodeCMMetric()),
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-for datanode in program.populate(trainreader):
-    print(datanode)
+# for datanode in program.populate(trainreader):
+#     print(datanode)
     
-    print(datanode.getChildDataNodes(conceptName=empty_entry))
+#     print(datanode.getChildDataNodes(conceptName=empty_entry))
     
-    sudokuLoss = datanode.calculateLcLoss(sample = True, sampleSize = 100)
+#     sudokuLoss = datanode.calculateLcLoss(sample = True, sampleSize = 100)
     
-    print("sudokuLoss - %s"%(sudokuLoss))
+#     print("sudokuLoss - %s"%(sudokuLoss))
+
+program.train(trainreader, train_epoch_num=20, c_warmup_iters=0, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
