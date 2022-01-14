@@ -10,7 +10,7 @@ import math
 
 
 # Add the system path with the local directory
-sys.path.append('/mnt/home/castrog4/.local/bin')
+# sys.path.append('/mnt/home/castrog4/.local/bin')
 
 
 # Add the DomiKnows main directory into the current system path
@@ -163,12 +163,14 @@ def main():
     # train_filename = "../data/training_set_single.txt"
     # test_filename = "../data/test_set_single.txt"
     # train_size = 112
-    # test_size = 56
+    # test_size = 10 #56
 
     train_filename = "../data/training_set.txt"
     test_filename = "../data/test_set.txt"
     train_size = 10000
     test_size = 1000
+
+    interval = 100 # Of times the model trains before being evaluated
 
     # Get the list of predicates and words
     words = [x.strip() for x in open("../data/vocabulary.txt")]
@@ -182,11 +184,13 @@ def main():
     # Set the device to 'cpu'
     device = 'cpu'
     learning_rate = 0.001  # 10^-3 seems to be a great option for this setting
-    train_epoch = 1
+    train_epoch = 3
+    epochs = train_epoch
 
     # Training with Adam optimizer generates better performance for this task than SGD.
-    program.train(train_dataset, train_epoch_num=train_epoch,
-                  Optim=lambda param: torch.optim.Adam(param, lr=learning_rate), device=device)
+    # program.train(train_dataset, train_epoch_num=train_epoch,
+    #               Optim=lambda param: torch.optim.Adam(param, lr=learning_rate), device=device)
+
 
     sentence_results = []
     sentence_labels = []
@@ -194,8 +198,11 @@ def main():
     word_results = []
     word_labels = []
 
+    sen_acc_inter = []
+    word_acc_inter = []
+
     # Write the data to file
-    out = open("results.txt", "w")
+    # out = open("results.txt", "w")
 
     # Measure the procedure time
     start = time.time()
@@ -207,181 +214,209 @@ def main():
     sen_iter_results = []
     sen_iter_labels = []
 
+    sen_acc_epoch = []
+    word_acc_epoch = []
+
     count = 0
 
-    print("Start populate test!!!")
+    # Training is done by parts, we evaluate the model after 100 interactions with the data
+    for e in range(1, epochs + 1):
+        # print("Epoch #", e, file=out)
+        print("Epoch #", e)
 
-    for example, sentence in zip(list(iter(test_dataset)), program.populate(test_dataset, device=device)):
+        temp_w_acc = 0.0
+        temp_sen_acc = 0.0
 
-        # Interaction name
-        print("Element #", count)
-        count += 1
+        inter_count = 0
+        for i in range(0, train_size, interval):
 
-        print("\nSentence:", sentence)
-        print("Sentence Child Node(s):", sentence.getChildDataNodes())
+            # Train the model for the number of interval
+            program.train(train_dataset[i:i+interval], train_epoch_num=1,
+                          Optim=lambda param: torch.optim.Adam(param, lr=learning_rate), device=device)
 
-        # Use find Data Nodes
-        print("Found word data nodes:", sentence.findDatanodes(select="word"))
+            inter_count += 1
 
-        print("Found situation data nodes:", sentence.findDatanodes(select="situation"))
+            # print("\nTraining Interval #", (i + 100), file=out)
+            print("\nTraining Interval #", (i + interval))
 
-        # Print the properties
-        # print("Sentence 'text_situation' :", sentence.findDatanodes(select="situation")[0].getAttributes('text_situation'))
-        print("Sentence 'text_utterance' :", sentence.getAttribute('text_utterance'))
+            # Add list of outputs and labels used during the evaluation period
+            word_iter_results = []
+            word_iter_labels = []
 
-        temp_results = []
-        temp_labels = []
+            sen_iter_results = []
+            sen_iter_labels = []
 
-        for w_value, w in zip(example['utterance'][0], sentence.findDatanodes(select="word")):
+            count = 1
+            for example, sentence in zip(list(iter(test_dataset)), program.populate(test_dataset, device=device)):
 
-            w_token = w.getAttribute('words')
-            w_prob = w.getAttribute(word_label)
-            w_label = w.getAttribute("word_label", "label")
-            w_argmax_prob = w.getAttribute(word_label, "local/argmax")
+                    # Interaction name
+                    print("Element #", count)
+                    count += 1
 
-            # Move to the next label
-            if w_label.item() == -100:
-                continue
+                    print("\nSentence:", sentence)
+                    print("Sentence Child Node(s):", sentence.getChildDataNodes())
 
-            # print("Word token:", w_token)
-            # print("Word_probabilities:", w_prob)
-            # print("Word Label (index):", w_label)
-            # print("Word 'local/argmax' output:", w_argmax_prob)
+                    # Use find Data Nodes
+                    print("Found word data nodes:", sentence.findDatanodes(select="word"))
+
+                    print("Found situation data nodes:", sentence.findDatanodes(select="situation"))
+
+                    # Print the properties
+                    # print("Sentence 'text_situation' :", sentence.findDatanodes(select="situation")[0].getAttributes('text_situation'))
+                    print("Sentence 'text_utterance' :", sentence.getAttribute('text_utterance'))
+
+                    temp_results = []
+                    temp_labels = []
+
+                    for w_value, w in zip(example['utterance'][0], sentence.findDatanodes(select="word")):
+
+                        w_token = w.getAttribute('words')
+                        w_prob = w.getAttribute(word_label)
+                        w_label = w.getAttribute("word_label", "label")
+                        w_argmax_prob = w.getAttribute(word_label, "local/argmax")
+
+                        # Move to the next label
+                        if w_label.item() == -100:
+                            continue
+
+                        # print("Word token:", w_token)
+                        # print("Word_probabilities:", w_prob)
+                        # print("Word Label (index):", w_label)
+                        # print("Word 'local/argmax' output:", w_argmax_prob)
+
+                        try:
+                            w_argmax = int(torch.argmax(
+                                w.getAttribute(word_label, "local/argmax")))  # int(torch.argmax(w.getAttribute(word_label)))
+                        except:
+                            print("Error computing Argmax!")
+                            w_argmax = None
+
+                        # print("Word 'local/argmax' index:", w_argmax)
+
+                        # Only add words to the respective sets if the label is valid
+                        if w_label != None and w_label != "<eos>":
+                            w_label = words[w_label.item()]
+
+                            # w_label = w_label.item()
+                            w_label = words.index(w_label)
+
+                            word_text = words[w_argmax]
+                            word_text_lbl = words[w_label]
+
+                            # Print the word node
+                            print("\nWord:", w)
+
+                            # Print the utterance token
+                            print("Word utterance token:", w_token)
+
+                            # Print the word node's word probabilities
+                            # print("Word (utterance['word_probabilities']):", w_prob, file=out)
+
+                            # Print the word's node word label (index)
+                            print("Word (word_label's label property):", w_label)
+
+                            # Print the word's node argmax value
+                            # print("Word attributes (local/argmax):", w_argmax_prob, file=out)
+                            print("Argmax:", w_argmax)
+
+                            # Print the word text
+                            print("Word output token:", word_text)
+
+                            # Append the model's argmax outputs in a temporary node to represent the utterance sequence
+                            # Used to compute the sentence accuracy
+                            word_results.append(word_text)
+                            temp_results.append(word_text)
+
+                            # Append the word's node output to compute the word accuracy
+                            # word_labels.append(w.getAttribute("word_label","label").item())
+                            # temp_labels.append(w.getAttribute("word_label","label").item())
+                            word_labels.append(word_text_lbl)
+                            temp_labels.append(word_text_lbl)
+
+                    # # Clean the temp labels
+                    temp_results = [w for w in temp_results if w != "<eos>"]
+                    temp_labels = [w for w in temp_labels if w != "<eos>"]
+
+                    # Add the current index sequence into the sentence level candidates
+                    # to compute the sentence level accuracy
+                    sentence_results.append(temp_results)
+                    sentence_labels.append(temp_labels)
+
+                    sen_iter_results.append(temp_results)
+                    sen_iter_labels.append(temp_labels)
+
+                    # need to clean the sentence
+                    # learner_sentence = " ".join(clean_sentence(temp_results[:]))
+                    # situation = example['situation'][0]
+
+                    # print("Learner_sentence:",learner_sentence)
+                    # print("Situation:", situation)
+
+                    # Test the learner's utterance with the teacher
+                    # teacher_sentence, teacher_valid, teacher_feedback, same_predicates = teacher_model.evaluate(None, learner_sentence, None, situation)
+
+                    # print("Teacher Sentence:", teacher_sentence)
+                    # print("Teacher feedback:", teacher_feedback)
+
+
+            # Need to compute the accuracy for each run with test set after every n interactions
+            sen_acc, sen_tot = 0.0, 0
+            w_acc = 0.0
+
+            w_acc_num = 0
+            w_acc_den = 0
+
+            print("Interval Results\n")
+
+            count = 1
+            for s, sl in zip(sen_iter_results, sen_iter_labels):
+                print("Test example #", count, "\n")
+                print("\tPredicted sentence:", " ".join(s))
+                print("\tGround Truth:", " ".join(sl))
+                print()
+
+                count += 1
+
+                current_sentence_acc = accuracy_similarity(" ".join(s), " ".join(sl))
+                result = word_accuracy(" ".join(s), " ".join(sl))
+                w_acc_num += result[0]
+                w_acc_den += result[1]
+
+                print("Current Word Accuracy: {}/{} = {}".format(result[0], result[1], (result[0] / result[1])))
+                print("Current Sentence Accuracy: {}".format(current_sentence_acc))
+
+                sen_tot += current_sentence_acc
+
+            # Tally the final results for the training interval
+            try:
+                w_acc = w_acc_num / w_acc_den  # Number of words in the current reference
+            except:
+                w_acc = 0.0
 
             try:
-                w_argmax = int(torch.argmax(
-                    w.getAttribute(word_label, "local/argmax")))  # int(torch.argmax(w.getAttribute(word_label)))
+                sen_acc = sen_tot / len(sen_iter_results)
             except:
-                print("Error computing Argmax!")
-                w_argmax = None
+                sen_acc = 0.0
 
-            # print("Word 'local/argmax' index:", w_argmax)
+            print("\nWord Accuracy: {}/{} = {}".format(w_acc_num, w_acc_den, w_acc))
+            print("Sentence Accuracy: {}/{} = {}".format(sen_tot, len(sen_iter_results), sen_acc))
 
-            # Only add words to the respective sets if the label is valid
-            if w_label != None and w_label != "<eos>":
-                w_label = words[w_label.item()]
+            # Append the current accuracy scores to their respective lists
+            word_acc_inter.append(w_acc)
+            sen_acc_inter.append(sen_acc)
 
-                # w_label = w_label.item()
-                w_label = words.index(w_label)
+            temp_w_acc += w_acc
+            temp_sen_acc += sen_acc
 
-                word_text = words[w_argmax]
-                word_text_lbl = words[w_label]
+        # Compute the epoch accuracy of the model
+        word_acc_epoch.append(temp_w_acc/inter_count)
+        sen_acc_epoch.append(temp_sen_acc/inter_count)
 
-                # Print the word node
-                print("\nWord:", w)
-
-                # Print the utterance token
-                print("Word utterance token:", w_token)
-
-                # Print the word node's word probabilities
-                # print("Word (utterance['word_probabilities']):", w_prob, file=out)
-
-                # Print the word's node word label (index)
-                print("Word (word_label's label property):", w_label)
-
-                # Print the word's node argmax value
-                # print("Word attributes (local/argmax):", w_argmax_prob, file=out)
-                print("Argmax:", w_argmax)
-
-                # Print the word text
-                print("Word output token:", word_text)
-
-                # Append the model's argmax outputs in a temporary node to represent the utterance sequence
-                # Used to compute the sentence accuracy
-                word_results.append(word_text)
-                temp_results.append(word_text)
-
-                # Append the word's node output to compute the word accuracy
-                # word_labels.append(w.getAttribute("word_label","label").item())
-                # temp_labels.append(w.getAttribute("word_label","label").item())
-                word_labels.append(word_text_lbl)
-                temp_labels.append(word_text_lbl)
-
-        # # Clean the temp labels
-        # temp_results = [w for w in temp_results if w != "<eos>"]
-        # temp_labels = [w for w in temp_labels if w != "<eos>"]
-
-        # Add the current index sequence into the sentence level candidates
-        # to compute the sentence level accuracy
-        sentence_results.append(temp_results)
-        sentence_labels.append(temp_labels)
-
-        sen_iter_results.append(temp_results)
-        sen_iter_labels.append(temp_labels)
-
-        # need to clean the sentence
-        learner_sentence = " ".join(clean_sentence(temp_results[:]))
-        situation = example['situation'][0]
-
-        # print("Learner_sentence:",learner_sentence)
-        # print("Situation:", situation)
-
-        # Test the learner's utterance with the teacher
-        # teacher_sentence, teacher_valid, teacher_feedback, same_predicates = teacher_model.evaluate(None, learner_sentence, None, situation)
-
-        # print("Teacher Sentence:", teacher_sentence)
-        # print("Teacher feedback:", teacher_feedback)
-
-    # Remove "<eos>" from the lst
-
-    # word lst
-    # word_results = [w for w in word_results if w != "<eos>"]
-    # word_labels = [w for w in word_labels if w != "<eos>"]
-
-    sen_acc, sen_tot = 0.0, 0
-    w_acc = 0.0
-
-    w_acc_num = 0
-    w_acc_den = 0
-
-    print("Results\n")
-
-    count = 1
-    for s, sl in zip(sen_iter_results, sen_iter_labels):
-        print("Test example #", count, "\n")
-        print("\tPredicted sentence:", " ".join(s))
-        print("\tGround Truth:", " ".join(sl))
-        print()
-
-        count += 1
-
-        current_sentence_acc = accuracy_similarity(" ".join(s), " ".join(sl))
-        result = word_accuracy(" ".join(s), " ".join(sl))
-        w_acc_num += result[0]
-        w_acc_den += result[1]
-
-        print("Current Word Accuracy: {}/{} = {}".format(result[0], result[1], (result[0] / result[1])))
-        print("Current Sentence Accuracy: {}".format(current_sentence_acc))
-
-        sen_tot += current_sentence_acc
-
-    # Tally the final results
-    try:
-        w_acc = w_acc_num / w_acc_den  # Number of words in the current reference
-    except:
-        w_acc = 0.0
-
-    try:
-        sen_acc = sen_tot / len(sentence_results)
-    except:
-        sen_acc = 0.0
-
-    print("\nFinal Word Accuracy: {}/{} = {}".format(w_acc_num, w_acc_den, w_acc))
-    print("Final Sentence Accuracy: {}/{} = {}".format(sen_tot, len(sentence_results), sen_acc))
-
-    # print("\nWord results:", word_results)
-    # print("Word Labels:", word_labels)
-    # print("Number of words:", len(word_results), len(word_labels))
-    # print("Final model word accuracy is :",sum([i==j for i,j in zip(word_results,word_labels)])/len(word_results))
-
-    # print("\nSentence results:", sentence_results, file=out)
-    # print("Sentence Labels:", sentence_labels, file=out)
-    # print("Final model sentence accuracy is :",sum([i==j for i,j in zip(sentence_results,sentence_labels)])/len(sentence_results), file=out)
-    #
-    # print("\nSentence results:", sentence_results)
-    # print("Sentence Labels:", sentence_labels)
-    # print("Number of sentences:", len(sentence_results), len(sentence_labels))
-    # print("Final model sentence accuracy is :",sum([i == j for i, j in zip(sentence_results, sentence_labels)]) / len(sentence_results))
+    # Print the final results
+    print("Word Accuracy Interaction:", word_acc_inter)
+    print("Sentence Accuracy Interaction:", sen_acc_inter)
+    print("Word Accuracy Epoch:", word_acc_epoch)
+    print("Sentence Accuracy Epoch:", sen_acc_epoch)
 
     # Finish of run
     end = time.time()
@@ -393,10 +428,8 @@ def main():
 
     print("Procedure elapsed time:", elapsed_time)
 
-    out.close()  # close the output file
+    # out.close()  # close the output file
 
-    # Run the test procedure with the score for each class
-    # program.test(test_dataset)
 
 
 def convert_time(seconds):

@@ -30,7 +30,7 @@ class GenerateLabel():
 
         label_list=[]
         
-        print("Label:", label)
+        # print("Label:", label)
         
         # read the max number of words
         c = 0
@@ -54,8 +54,8 @@ class GenerateLabel():
         
         # output = output.unsqueeze(0)
         
-        print("Output Labels:", output)
-        print("Output size:", output.size())
+        # print("Output Labels:", output)
+        # print("Output size:", output.size())
         return output
 
 class LearnerRNN(nn.Module):
@@ -265,10 +265,10 @@ class LearnerModel(nn.Module):
         encoder_input = input_seq[0]
         input_len = encoder_input.size()[0]
         
-        print("Encoder Input:", encoder_input)
-        print("Input length:", input_len)
+        # print("Encoder Input:", encoder_input)
+        # print("Input length:", input_len)
         
-        print("-"*40)
+        # print("-"*40)
         
         encoder_hidden = self.encoder.initHidden()
         encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=device)
@@ -371,7 +371,7 @@ class LearnerModel(nn.Module):
         
         # decoder_output = torch.tensor(out_lst)
         
-        print("ModuleLearner Output:", decoder_output)
+        # print("ModuleLearner Output:", decoder_output)
         
         return decoder_output #.unsqueeze(0) #, decoder_attention[:di+1]
     

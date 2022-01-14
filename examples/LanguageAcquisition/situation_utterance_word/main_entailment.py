@@ -75,6 +75,13 @@ def pad_utterance(utterance, length=12):
 
     return new_utterance  # return the padded text out of the extra dimension
 
+def entailment():
+    '''
+        Build the entailment function as a functional sensor
+
+    '''
+    pass
+
 
 def model_declaration():
     graph.detach()
@@ -127,6 +134,9 @@ def model_declaration():
     # Compute the output of the Seq2Seq model
     word[word_label] = ModuleLearner(situation['situation_vectorized'],
                                      module=LearnerModel(vocabulary, predicates, encoder_dim, decoder_dim))
+
+    # Need to generate the words sequence from the module's output to use in the entailment process
+
 
     program = SolverPOIProgram(graph, poi=(task, utterance, situation, word), inferTypes=['local/argmax'],
                                loss=MacroAverageTracker(NBCrossEntropyLossCustom()),

@@ -29,9 +29,9 @@ class SituationRepSensor(FunctionalSensor):
         indices = [self.predicates.index(logic) for logic in situation]
         tensor = torch.tensor(indices,dtype=torch.long, device='cpu')
         
-        print("Situation_Vector size:", tensor.size())
+        # print("Situation_Vector size:", tensor.size())
         tensor = tensor.unsqueeze(0)
-        print("Situation_Vector size (after adding dimensions):", tensor.size())
+        # print("Situation_Vector size (after adding dimensions):", tensor.size())
 
         # print("Indices:", indices)
         # print("Situation Tensor:", tensor)
