@@ -29,6 +29,7 @@ from TypenetGraph import concepts
 from sensors.CNNEncoder import CNNEncoder
 from sensors.TypeComparison import TypeComparison
 from readers.TypenetReader import WikiReader, CachedWikiReader
+from TotalTracker import PRF1SepTracker
 
 import config
 
@@ -95,7 +96,7 @@ else:
 
 train_class_weights = wiki_train.get_class_weights()
 
-print(wiki_train.class_counts)
+#print(wiki_train.class_counts)
 
 first_iter = list(wiki_train)[0]
 
@@ -208,6 +209,30 @@ for epoch in range(1, args.epochs + 1):
         program_test = SolverPOIDictLossProgram(app_graph,
                                                 inferTypes=['local/argmax'],
                                                 dictloss=loss_dict,
-                                                metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
+                                                metric=PRF1SepTracker(DatanodeCMMetric('local/argmax')))
 
         program_test.test(wiki_dev)
+
+        metric_all = program_test.model.metric[''].value()
+
+        total_f1 = 0.0
+        total_acc = 0.0
+        num_class = len(metric_all)
+
+        tp_total = 0.0
+        fp_total = 0.0
+
+        for type_name, metric in metric_all.items():
+            tp_total += metric['tp']
+            fp_total += metric['fp']
+
+            total_f1 += metric['F1']
+            total_acc += metric['accuracy']
+
+        macro_f1 = total_f1/num_class
+        micro_f1 = tp_total/(tp_total + fp_total)
+        avg_acc = total_acc/num_class
+
+        print("Macro-F1:", macro_f1)
+        print("Micro-F1:", micro_f1)
+        print("Average Accuracy:", avg_acc)
