@@ -4,32 +4,15 @@ agent:
   machine:
     type: e1-standard-2
     os_image: ubuntu1804
-global_job_config:
-  prologue:
-    commands:
-      - checkout
 blocks:
-  - name: gurabi tests
+  - name: examples
+    dependencies: []
     task:
       prologue:
         commands:
-          - sem-version python 3.7
-          - 'export PATH=$HOME/.local/bin:$PATH'
           - checkout
-          - mkdir .pip_cache
-          - 'cache restore pip-$SEMAPHORE_GIT_BRANCH-$(checksum requirements.txt),pip-$SEMAPHORE_GIT_BRANCH,pip-master'
-          - 'if [ -e requirements-dev.txt ]; then pip install --cache-dir .pip_cache -r requirements-dev.txt; fi'
-          - 'if [ -e requirements.txt ]; then pip install --cache-dir .pip_cache -r requirements.txt; fi'
-          - cache store pip-$SEMAPHORE_GIT_BRANCH-$(checksum requirements.txt) .pip_cache
-          - 'export PYTHONPATH=.:$PYTHONPATH'
-          - export REGR_SOLVER=
       jobs:
-        - name: Gurabi
+        - name: WIQA
           commands:
-            - echo "Gurabi tests"
-  - name: metrics
-    task:
-      jobs:
-        - name: confusion matrix
-          commands:
-            - echo "running metrics tests"
+            - cd examples/WIQA/
+            - python WIQA_aug.py
