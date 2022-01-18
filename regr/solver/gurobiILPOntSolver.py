@@ -781,7 +781,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                         # -- Combine the collected lists of dataNodes based on paths 
                         for l in dnsListForPaths[1:]:
                             # --- Assume Intersection - TODO: in future use lo if defined to determine if different  operation
-                            _d = [x if x in l else [None] for x in dnsList]
+                            _d = []
+                            for i in range(len(l)):
+                                di = []
+                                for x in dnsList[i]:
+                                    if x in l[i]:
+                                        di.append(x)
+                                        
+                                if not di:
+                                    di = [None]
+                                    
+                                _d.append(di)
+                                
                             dnsList = _d
                             
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint

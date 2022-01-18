@@ -132,9 +132,13 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 results[i] = 1
             else:
                 for v in var:
-                    currentV = v[i].item()
-                    if currentV > 0:
-                        currentV = 1
+                    if v is None:
+                        results = None
+                        return results
+                    else:
+                        currentV = v[i].item()
+                        if currentV > 0:
+                            currentV = 1
                         
                     _var.append(currentV)
                 
@@ -142,7 +146,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             
             if results[i] == 1:
                 for v in var: 
-                    if v[i] > 0:
+                    if v is None:
+                        pass
+                    elif v[i] > 0:
                         results[i] = results[i] * v[i]
                     else:
                         results[i] = results[i] * (1 - v[0])   
