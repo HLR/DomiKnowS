@@ -10,7 +10,16 @@ blocks:
     task:
       prologue:
         commands:
+          - sem-version python 3.7
+          - 'export PATH=$HOME/.local/bin:$PATH'
           - checkout
+          - mkdir .pip_cache
+          - 'cache restore pip-$SEMAPHORE_GIT_BRANCH-$(checksum requirements.txt),pip-$SEMAPHORE_GIT_BRANCH,pip-master'
+          - 'if [ -e requirements-dev.txt ]; then pip install --no-cache-dir -r requirements-dev.txt; fi'
+          - 'if [ -e requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi'
+          - cache store pip-$SEMAPHORE_GIT_BRANCH-$(checksum requirements.txt) .pip_cache
+          - 'export PYTHONPATH=.:$PYTHONPATH'
+          - export REGR_SOLVER=
       jobs:
         - name: WIQA
           commands:
