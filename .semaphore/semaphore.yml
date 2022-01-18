@@ -14,6 +14,7 @@ blocks:
     task:
       prologue:
         commands:
+          - echo "running WIQA"
           - checkout
       jobs:
         - name: WIQA
