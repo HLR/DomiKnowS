@@ -190,7 +190,7 @@ if not path.exists("new_domi_1"):
 for i in range(args.cur_epoch):
     print("this epoch is number:",i,"&"*10)
     class SchCB():
-        def __init__(self, program) -> None:
+        def __init__(self, program):
             self.program = program
             self._sch = None
         @property
@@ -199,7 +199,7 @@ for i in range(args.cur_epoch):
                 self._sch = get_linear_schedule_with_warmup(self.program.opt, num_warmup_steps = args.num_warmup_steps, num_training_steps = args.num_training_steps)
             return self._sch
 
-        def __call__(self) -> None:
+        def __call__(self):
             self.sch.step()
 
     program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
