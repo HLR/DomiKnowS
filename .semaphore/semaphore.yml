@@ -2,12 +2,8 @@ version: v1.0
 name: Relational Graph
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-2
     os_image: ubuntu1804
-global_job_config:
-  prologue:
-    commands:
-      - checkout
 blocks:
   - name: Unit tests
     task:
@@ -24,7 +20,6 @@ blocks:
           - 'export PYTHONPATH=.:$PYTHONPATH'
           - export REGR_SOLVER=
       jobs:
-        - name: examples
+        - name: pytest
           commands:
-            - cd examples/WIQA/
-            - python WIQA_aug.py
+            - pytest test_regr -m "not gurobi"
