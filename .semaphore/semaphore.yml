@@ -4,4 +4,15 @@ agent:
   machine:
     type: e1-standard-2
     os_image: ubuntu1804
-blocks: []
+blocks:
+  - name: examples
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+      jobs:
+        - name: WIQA
+          commands:
+            - cd examples/WIQA/
+            - python WIQA_aug.py
