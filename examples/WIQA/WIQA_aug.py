@@ -183,7 +183,7 @@ if not path.exists("new_domi_1"):
     join_model("domi_1_20","new_domi_1")
 
 # at the end we run our program for each epoch and test the results each time
-
+logging.info("training and testing begins")
 for i in range(args.cur_epoch):
     print("this epoch is number:",i,"&"*10)
     class SchCB():
