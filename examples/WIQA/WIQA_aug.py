@@ -97,9 +97,6 @@ with Graph('WIQA_graph') as graph:
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
     ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
 
-from IPython.display import Image
-#graph.visualize("./image")
-#Image(filename='image.png')
 
 print("Sensor Part:")
 
