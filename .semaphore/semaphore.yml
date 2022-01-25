@@ -23,5 +23,5 @@ blocks:
       jobs:
         - name: WIQA
           commands:
-            - cd examples/WIQA/
-            - python WIQA_aug.py
+            - cd examples/demo/
+            - python main.py
