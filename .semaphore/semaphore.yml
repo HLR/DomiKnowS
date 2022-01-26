@@ -10,7 +10,7 @@ blocks:
     task:
       prologue:
         commands:
-          - sem-version python 3.10.2
+          - sem-version python 3.9
           - 'export PATH=$HOME/.local/bin:$PATH'
           - checkout
           - mkdir .pip_cache
