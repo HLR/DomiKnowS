@@ -100,7 +100,7 @@ logging.basicConfig(level=logging.INFO)
 #
 # train
 #
-program.train(reader, train_epoch_num=100, Optim=torch.optim.Adam, device=device)
+program.train(reader, train_epoch_num=10, Optim=torch.optim.Adam, device=device)
 print('Training result:')
 print(program.model.loss)
 print(program.model.metric)
