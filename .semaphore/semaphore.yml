@@ -21,7 +21,8 @@ blocks:
           - 'export PYTHONPATH=.:$PYTHONPATH'
           - export REGR_SOLVER=
       jobs:
-        - name: WIQA
+        - name: graph coloring
           commands:
-            - cd examples/demo/
+            - cd examples/graph_coloring/
             - python main.py
+            - python main2.py
