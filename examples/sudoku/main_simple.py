@@ -21,12 +21,6 @@ from regr.data.reader import RegrReader
 from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 
-import torch
-
-
-from regr.data.reader import RegrReader
-import torch
-
 
 class SudokuReader(RegrReader):
     def parse_file(self):
@@ -62,7 +56,6 @@ class SudokuReader(RegrReader):
     
     def getsizeval(self, item):
         return 9, 9
-    
     
     
 trainreader = SudokuReader("randn", type="raw")
@@ -169,32 +162,16 @@ class Conv2dSame(torch.nn.Module):
         )
     def forward(self, x):
         return self.net(x)
-class SudokuCNN(nn.Module):
+    
+    
+class SudokuSolver(nn.Module):
     def __init__(self):
-        super(SudokuCNN, self).__init__()
-        self.conv_layers = nn.Sequential(Conv2dSame(1,512,3), #1
-                                         Conv2dSame(512,512,3),#2
-                                         Conv2dSame(512,512,3),#3
-                                         Conv2dSame(512,512,3),#4
-                                         Conv2dSame(512,512,3),#5
-                                         Conv2dSame(512,512,3),#6
-                                         Conv2dSame(512,512,3),#7
-                                         Conv2dSame(512,512,3),#8
-                                         Conv2dSame(512,512,3),#9
-                                         Conv2dSame(512,512,3),#10
-                                         Conv2dSame(512,512,3),#11
-                                         Conv2dSame(512,512,3),#12
-                                         Conv2dSame(512,512,3),#13
-                                         Conv2dSame(512,512,3),#14
-                                         Conv2dSame(512,512,3))#15
-        self.last_conv = nn.Conv2d(512, 9, 1)
-    def forward(self, x):
-        x = x.view(1, 1,9, 9)
-        x = self.conv_layers(x)
-        x = self.last_conv(x)
-        x = x.permute(0,2,3,1)
-        x = x.view(81, 9)
-        return x
+        super().__init__()
+        self.W = torch.nn.Parameter(torch.rand((81,9)))
+        
+    def __call__(self, X):
+        
+        return self.W
     
     
     
@@ -254,7 +231,7 @@ sudoku['index'] = FunctionalReaderSensor(keyword='size', forward=createSudoku)
 empty_entry['rows', 'cols', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
 empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_rel, keyword='whole_sudoku', forward=getfixed)
 
-empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuCNN())
+empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuSolver())
 empty_entry[empty_entry_label] = FunctionalReaderSensor(keyword='whole_sudoku', label=True, forward=getlabel)
 
 def filter_col(*inputs, col1, col2):
@@ -300,25 +277,26 @@ from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 
-program = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
+program1 = SolverPOIProgram(
+        graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax', "ILP"],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        metric={
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+#         metric={
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+)
 
 program = SampleLossProgram(
         graph, SolverModel,
         poi=(sudoku, empty_entry, ),
         inferTypes=['local/argmax'],
         # inferTypes=['ILP', 'local/argmax'],
-        metric={
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+#         metric={
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
 
         #metric={ 'softmax' : ValueTracker(prediction_softmax),
         #       'ILP': PRF1Tracker(DatanodeCMMetric()),
         #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
         #       },
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
         sampleSize=300, 
@@ -347,4 +325,38 @@ program = SampleLossProgram(
     
 #     print("sudokuLoss - %s"%(sudokuLoss))
 
-program.train(trainreader, train_epoch_num=20, c_warmup_iters=0, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+program1.train(trainreader, train_epoch_num=1, c_warmup_iters=0, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+
+### test to see whether the FixedL is working, 
+for datanode in program1.populate(trainreader):
+    datanode.inferILPResults(empty_entry_label, fun=None)
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    for entry in entries:
+        t = entry.getAttribute(empty_entry_label, 'ILP')
+        print(t)
+        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+        if entry.getAttribute('fixed').item() == 1:
+            assert entry.getAttribute('val').item() == predicted
+    break
+    
+program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
+              Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+
+### make the table
+for datanode in program.populate(trainreader):
+    print(datanode)
+    table = torch.zeros(9, 9)
+    
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    for entry in entries:
+        t = entry.getAttribute(empty_entry_label, 'local/argmax')
+        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+        table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
+        print(predicted)
+        if entry.getAttribute('fixed').item() == 1:
+            assert entry.getAttribute('val').item() == predicted
+        print("---")
+    break
+    
+    
+print(table)
