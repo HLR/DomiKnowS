@@ -325,7 +325,7 @@ program = SampleLossProgram(
     
 #     print("sudokuLoss - %s"%(sudokuLoss))
 
-program1.train(trainreader, train_epoch_num=1, c_warmup_iters=0, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
 for datanode in program1.populate(trainreader):
