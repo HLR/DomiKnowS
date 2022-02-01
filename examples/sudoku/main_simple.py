@@ -278,7 +278,7 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetr
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 
 program1 = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax', "ILP"],
+        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', "ILP"],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
@@ -286,7 +286,7 @@ program1 = SolverPOIProgram(
 
 program = SampleLossProgram(
         graph, SolverModel,
-        poi=(sudoku, empty_entry, ),
+        poi=(sudoku, empty_entry, same_row, same_col, same_table),
         inferTypes=['local/argmax'],
         # inferTypes=['ILP', 'local/argmax'],
 #         metric={
