@@ -869,7 +869,8 @@ class DataNode:
                 for i, a in enumerate(_concept.enum):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
-                        continue
+                        # continue
+                        pass
                     
                     returnCandR.append((_concept, a, i, len(_concept.enum))) # Create tuple representation for multiclass concept
             else:
