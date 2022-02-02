@@ -126,5 +126,5 @@ class ilpOntSolver(object):
         return self.myOnto
 
     @abc.abstractmethod
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
+    def calculateILPSelection(self, phrase,fun=None,epsilon=None, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None, minimizeObjective = False, hardConstrains = []):
         pass
