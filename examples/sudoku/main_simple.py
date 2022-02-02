@@ -62,7 +62,8 @@ trainreader = SudokuReader("randn", type="raw")
 
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL,\
+    atMostI
 from regr.graph import EnumConcept
 
 
@@ -107,12 +108,19 @@ with Graph('global') as graph:
     # entry_label= entry(name="label")
     # fixedL(entry_label("x", eqL(entry, "given", {True})))
     
-    fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})))
+    FIXED = True
+    SAME_ROW = False
+    SAME_ROW_New = True
+    SAME_COLUMNE = False
+    SAME_COLUMNE_New = True
+    SAME_TABLE = False
+    SAME_TABLE_New = True
+    
+    fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
-
     
-    for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+    for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:        
         ### No same number in the same row between empty entries and empty entries
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
             notL(
@@ -121,7 +129,16 @@ with Graph('global') as graph:
                         same_row('z', path=("x", same_row_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
                 ))
-        ))
+        ), active = SAME_ROW)
+        
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            atMostL(
+                andL(
+                    same_row('z', path=("x", same_row_arg1.reversed)), 
+                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2)
+                )
+            )
+        ), active = SAME_ROW_New)
         
         ### No same number in the same column between empty entries and empty entries
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
@@ -131,7 +148,16 @@ with Graph('global') as graph:
                         same_col('z', path=("x", same_col_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
                 ))
-        ))
+        ), active = SAME_COLUMNE)
+        
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            atMostL(
+                andL(
+                    same_col('z', path=("x", same_col_arg1.reversed)), 
+                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2)
+                )
+            )
+        ), active = SAME_COLUMNE_New)
         
         ### No same number in the same table between empty entries and empty entries
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
@@ -141,7 +167,16 @@ with Graph('global') as graph:
                         same_table('z', path=("x", same_table_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
                 ))
-        ))
+        ), active = SAME_TABLE)
+        
+        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
+            atMostL(
+                    andL(
+                        same_table('z', path=("x", same_table_arg1.reversed)), 
+                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2)
+                    )
+            )
+        ), active = SAME_TABLE_New)
 
         
 import torch
