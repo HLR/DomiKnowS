@@ -90,7 +90,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         for _conceptRelation in conceptsRelations: 
             rootConcept = rootDn.findRootConceptOrRelation(_conceptRelation[0])
             dns = rootDn.findDatanodes(select = rootConcept)
-                        
+            xkey = '<' + _conceptRelation[0].name + '>/ILP/x'  
+       
             for dn in dns:
                 currentProbability = dnFun(dn, _conceptRelation, fun=fun, epsilon=epsilon)
                 
@@ -112,7 +113,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0) in x:
                         xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
                 
-                xkey = '<' + _conceptRelation[0].name + '>/ILP/x'  
                 if xkey not in dn.attributes:
                     dn.attributes[xkey] = [None] * _conceptRelation[3]
                         
@@ -168,9 +168,24 @@ class gurobiILPOntSolver(ilpOntSolver):
                         dn.attributes[notxkey][0] = xNotNew
                                         
                     Q += currentProbability[0] * xNotNew    
-
+                
             if _conceptRelation[2] is not None:
                 self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( _conceptRelation[1]))
+                
+        # Create constraint for multiclass exclusivity 
+        if _conceptRelation[2] is not None:
+            m.update()
+
+            for dn in dns:
+                var = []
+                for _conceptRelation in conceptsRelations: 
+                    currentV = dn.attributes[xkey][_conceptRelation[2]]
+                    
+                    if currentV:
+                        var.append(currentV)
+                
+                     
+                self.myIlpBooleanProcessor.countVar(m, *var, onlyConstrains = True, limitOp = '==', limit = 1, logicMethodName = "MultiClass")
 
         m.update()
 
