@@ -29,7 +29,7 @@ with Graph('global') as graph:
     
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "destroy", "create", "move"])
     
-    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange, active = False)
+    exactL(action_label.create, action_label.destroy, action_label.move, action_label.nochange, active = True)
 
     # if 
     ifL(
@@ -61,7 +61,7 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = False
+            ), active = True
         ) 
 
     # ----------------------------
@@ -80,7 +80,7 @@ with Graph('global') as graph:
             step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1.reversed, before_arg2))), 
             notL(action_label.destroy('a2', path=('j', action_step.reversed)))
             ), 
-        active = True
+        active = False
         ) 
 
 #     Tcreate = action(name="trips_create")
