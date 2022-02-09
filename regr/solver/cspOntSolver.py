@@ -300,7 +300,7 @@ class CSPOntSolver(ilpOntSolver):
 
 
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    def calculateILPSelection(self, phrase, fun=None, epsilon = 0.00001, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
 
         if self.ilpSolver == None:
             self.myLogger.info('ILP solver not provided - returning unchanged results')
