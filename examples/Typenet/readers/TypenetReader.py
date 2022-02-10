@@ -325,7 +325,11 @@ class WikiReader(RegrReader):
                     all_mention_data = {}
                     for curr_data in all_mentions:
                         data = {}
-                        curr_sentence, gold_mention, gold_ent = get_curr_sentence(curr_data.decode("utf-8"))
+
+                        if isinstance(curr_data, bytes):
+                            curr_data = curr_data.decode("utf-8")
+
+                        curr_sentence, gold_mention, gold_ent = get_curr_sentence(curr_data)
                         gold_ent     = gold_ent[7:-4]
                         gold_mention = " ".join(gold_mention[9:].split("_"))
 
