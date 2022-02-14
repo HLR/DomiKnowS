@@ -100,7 +100,7 @@ train_class_weights = wiki_train.get_class_weights()
 
 first_iter = list(wiki_train)[0]
 
-#print(first_iter)
+#print(len(first_iter['types_all']))
 
 print('building graph')
 
@@ -112,32 +112,24 @@ mention_group = app_graph['mention_group']
 mention_group['MentionRepresentation_group'] = ReaderSensor(keyword='MentionRepresentation')
 mention_group['Context_group'] = ReaderSensor(keyword='Context')
 
-for type_name in concepts:
-    if not type_name[:6] == 'Synset' or not config.freebase_only:
-        mention_group[type_name + '_group'] = ReaderSensor(keyword=type_name)
+mention_group['types_all_group'] = ReaderSensor(keyword='types_all')
 
 #mention[mention_group_contains] = FunctionalSensor(mention_group['MentionRepresentation_group'], forward=lambda x:torch.ones((32, 1)))
 
 #mention['MentionRepresentation'] = FunctionalSensor(mention_group['MentionRepresentation_group'], forward=make_batch_list)
 #mention['Context'] = FunctionalSensor(mention_group['Context_group'], forward=make_batch_list)
 
-def make_mention_props(mentionrep_group, context_group, *labels):
-    result = [torch.ones((config.batch_size, 1), device=config.device), mentionrep_group[0], context_group[0]]
-    for l in labels:
-        if not torch.is_tensor(l):
-            l = torch.from_numpy(l, device=config.device)
-        result.append(l)
-    return result
+def make_mention_props(mentionrep_group, context_group, types_all_group):
+    return [torch.ones((config.batch_size, 1), device=config.device),
+            mentionrep_group[0],
+            context_group[0],
+            types_all_group]
 
-mention_type_names = []
-mention_group_concepts = []
-
-for type_name in concepts:
-    if not type_name[:6] == 'Synset' or not config.freebase_only:
-        mention_type_names.append(type_name + '_')
-        mention_group_concepts.append(mention_group[type_name + '_group'])
-
-mention[tuple([mention_group_contains, 'MentionRepresentation', 'Context'] + mention_type_names)] = JointSensor(mention_group['MentionRepresentation_group'], mention_group['Context_group'], *mention_group_concepts, forward=make_mention_props)
+mention[mention_group_contains, 'MentionRepresentation', 'Context', 'types_all'] =\
+    JointSensor(mention_group['MentionRepresentation_group'],
+                mention_group['Context_group'],
+                mention_group['types_all_group'],
+                forward=make_mention_props)
 
 # module learners
 mention['encoded'] = ModuleLearner(
@@ -159,17 +151,25 @@ class WeightedNBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
         #self.weight = torch.tensor([1.0, self.class_weights[prop]])
         return super().forward(input, target, *args, **kwargs) * self.class_weights[prop]
 
-# module learner predictions
+concepts_list = []
 loss_dict = {}
 for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
     if not args.limit_classes == None and i >= args.limit_classes:
         print('stopped after adding %d classe(s)' % args.limit_classes)
         break
     if not type_name[:6] == 'Synset' or not config.freebase_only:
-        mention[type_concept] = FunctionalSensor(mention_group_contains, type_name + '_', forward=lambda x, y: y, label=True)
-        mention[type_concept] = ModuleLearner('encoded', module=TypeComparison(300, 2))
-
         loss_dict[type_name] = WeightedNBCrossEntropyDictLoss(train_class_weights)
+        concepts_list.append(type_concept)
+
+mention['truth_vec'] = FunctionalSensor(mention_group_contains, 'types_all', forward=lambda x, y: y)
+mention['prediction_vec'] = ModuleLearner('encoded', module=TypeComparison(300, config.num_types))
+
+def unpack_vec(type_vec):
+    # tensor of size (batch_size, num_types) -> tuple containing num_types tensors of size (batch_size,)
+    return (x.squeeze(dim=1) for x in torch.split(type_vec, 1, dim=1))
+
+mention[tuple(concepts_list)] = FunctionalSensor('truth_vec', forward=unpack_vec, label=True)
+mention[tuple(concepts_list)] = FunctionalSensor('prediction_vec', forward=unpack_vec)
 
 '''program = Program(app_graph,
     loss=MacroAverageTracker(NBCrossEntropyLoss()),

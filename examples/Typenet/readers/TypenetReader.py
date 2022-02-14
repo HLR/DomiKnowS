@@ -248,18 +248,19 @@ class WikiReader(RegrReader):
 
         result = super().make_object(item)
 
-        for lbl in self.all_types:
-            result[lbl] = []
+        result['types_all'] = []
 
         for data_types in item['gold_types_pos']:
+            type_vector = []
             for lbl in self.all_types:
                 if lbl in data_types:
-                    result[lbl].append([1])
+                    type_vector.append([1])
                 else:
-                    result[lbl].append([0])
+                    type_vector.append([0])
+            result['types_all'].append(type_vector)
 
         return result
-    
+
     def add_to_dict(self, dict_result, new_item):
         for key, val in new_item.items():
             if not key in dict_result:
