@@ -151,6 +151,14 @@ class WeightedNBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
         #self.weight = torch.tensor([1.0, self.class_weights[prop]])
         return super().forward(input, target, *args, **kwargs) * self.class_weights[prop]
 
+mention['truth_vec'] = FunctionalSensor(mention_group_contains, 'types_all', forward=lambda x, y: y)
+mention['prediction_vec'] = ModuleLearner('encoded', module=TypeComparison(300, config.num_types))
+
+def unpack_vec(type_vec, type_index):
+    return [type_vec[:, type_index]]
+
+real_idx = 0
+
 concepts_list = []
 loss_dict = {}
 for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
@@ -158,18 +166,13 @@ for i, (type_name, type_concept) in enumerate(TypenetGraph.concepts.items()):
         print('stopped after adding %d classe(s)' % args.limit_classes)
         break
     if not type_name[:6] == 'Synset' or not config.freebase_only:
+        mention[tuple(concepts_list)] = FunctionalSensor('truth_vec', real_idx, forward=unpack_vec, label=True)
+        mention[tuple(concepts_list)] = FunctionalSensor('prediction_vec', real_idx, forward=unpack_vec)
+
         loss_dict[type_name] = WeightedNBCrossEntropyDictLoss(train_class_weights)
         concepts_list.append(type_concept)
 
-mention['truth_vec'] = FunctionalSensor(mention_group_contains, 'types_all', forward=lambda x, y: y)
-mention['prediction_vec'] = ModuleLearner('encoded', module=TypeComparison(300, config.num_types))
-
-def unpack_vec(type_vec):
-    # tensor of size (batch_size, num_types) -> tuple containing num_types tensors of size (batch_size,)
-    return (x.squeeze(dim=1) for x in torch.split(type_vec, 1, dim=1))
-
-mention[tuple(concepts_list)] = FunctionalSensor('truth_vec', forward=unpack_vec, label=True)
-mention[tuple(concepts_list)] = FunctionalSensor('prediction_vec', forward=unpack_vec)
+        real_idx += 1
 
 '''program = Program(app_graph,
     loss=MacroAverageTracker(NBCrossEntropyLoss()),
