@@ -1,4 +1,7 @@
 
+import sys
+sys.path.append('../../')
+
 import torch
 from transformers import AdamW
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss

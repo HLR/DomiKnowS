@@ -6,6 +6,7 @@ myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
 V = namedtuple("V", ['name', 'v'], defaults= [None, None])
+# V = namedtuple("V", ['name', 'v'])
 
 class LogicalConstrain:
     def __init__(self, *e, p=100, active = True, name = None):
