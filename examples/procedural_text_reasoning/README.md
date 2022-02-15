@@ -21,10 +21,17 @@ CUDA_VISIBLE_DEVICES=6 python WIQA_aug.py --cuda 3 --epoch 100 --lr 2e-7 --sampl
 
 
 git log
+
+vim翻页
 ctrl+f
+ctrl+b
+
+rollback 到某个版本
 git reset --hard 3ca4a0308f5d098478f9f4310026563dd17a5755
 
 git reset --hard origin
+
+git从指定分支更新代码到本地:
 
 import sys
 sys.path.append('../../')
