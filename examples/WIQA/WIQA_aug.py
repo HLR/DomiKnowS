@@ -1,6 +1,10 @@
 
 import sys
+sys.path.append('../../../')
 sys.path.append('../../')
+sys.path.append('./')
+
+sys.path.append('../')
 
 import torch
 from transformers import AdamW
@@ -34,12 +38,16 @@ parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+### chen begin
+parser.add_argument('--semantic_loss', dest='semantic_loss', default=False, help='whether or not to use semantic loss',type=bool)
+### chen end
 args = parser.parse_args()
 
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 cuda_number= args.cuda_number
-cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+# cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+# cur_device = 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
@@ -199,9 +207,9 @@ for i in range(args.cur_epoch):
         def __call__(self) -> None:
             self.sch.step()
 
-    #program.load("domi_7") in case we want to load the model instead of training
+    # program.load("domi_7") # in case we want to load the model instead of training
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
-    #program.save("domi_"+str(i)) in case of saving the parameters of the model
+    program.save("domi_"+str(i)) ### in case of saving the parameters of the model
 
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
