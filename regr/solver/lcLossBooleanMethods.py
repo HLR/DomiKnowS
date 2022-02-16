@@ -336,13 +336,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         countSuccess = 0
             
-        if limitOp == '>': # > limit
+        if limitOp == '>=': # > limit
             countSuccess = min(max(varSum - limit, 0), 1)
             
-        elif limitOp == '<': # < limit
+        elif limitOp == '<=': # < limit
             countSuccess = min(max(limit - varSum, 0), 1)
 
-        elif limitOp == '=': # == limit
+        elif limitOp == '==': # == limit
             countSuccess = min(max(abs(varSum - limit), 0), 1)
                 
         if onlyConstrains:
@@ -356,7 +356,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "FIXED"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,_var))
-        if _var != None: 
-            return 1 - _var
+        
+        fixedSuccess = 1
+        
+        if onlyConstrains:
+            fixedLoss = 1 - fixedSuccess
+    
+            return fixedLoss
         else:
-            return None
+            return fixedSuccess
