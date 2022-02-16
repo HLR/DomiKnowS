@@ -3,111 +3,186 @@ import logging
 import torch
 
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
+from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 
 from regr.solver.ilpConfig import ilpConfig 
 
 class booleanMethods(ilpBooleanProcessor):
     def notVar(self, _, var, onlyConstrains = False):
-        results = 1 - var
-        
-        return results
+        notSuccess = 1 - var
+
+        if onlyConstrains:
+            notLoss = 1 - notSuccess
+            
+            return notLoss
+        else:            
+            return notSuccess
     
     def and2Var(self, _, var1, var2, onlyConstrains = False):
-        results = 0
+        and2Success = 0
         if var1 + var2 == 2:
-            results = 1
+            and2Success = 1
             
-        return results
-        
+        if onlyConstrains:
+            and2Loss = 1 - and2Success
+            
+            return and2Loss
+        else:            
+            return and2Success    
+            
     def andVar(self, _, *var, onlyConstrains = False):
-        results = 0
+        andSuccess = 0
         if sum(var) == len(var):
-            results = 1
+            andSuccess = 1
             
-        return results
+        if onlyConstrains:
+            andLoss = 1 - andSuccess
+            
+            return andLoss
+        else:            
+            return andSuccess    
     
     def or2Var(self, _, var1, var2, onlyConstrains = False):
-        results = 0
+        or2Success = 0
         if var1 + var2 > 0:
-            results = 1
+            or2Success = 1
             
-        return results
+        if onlyConstrains:
+            or2Loss = 1 - or2Success
+            
+            return or2Loss
+        else:            
+            return or2Success   
     
     def orVar(self, _, *var, onlyConstrains = False):
-        results = 0
+        orSuccess = 0
         if sum(var) > 0:
-            results = 1
+            orSuccess = 1
             
-        return results
+        if onlyConstrains:
+            orLoss = 1 - orSuccess
+            
+            return orLoss
+        else:            
+            return orSuccess    
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
         #results = self.notVar(_, self.and2Var(_, var1, var2,))
-            
-        results = 1
+        
+        nand2Success = 1
         if var1 + var2 == 2:
-            results = 0
+            nand2Success = 0
             
-        return results        
+        if onlyConstrains:
+            nand2Loss = 1 - nand2Success
+            
+            return nand2Loss
+        else:            
+            return nand2Success         
+         
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
             
-        results = 1
+        nandSuccess = 1
         if sum(var) == len(var):
-            results = 0
+            nandSuccess = 0
             
-        return results 
-       
+        if onlyConstrains:
+            nandLoss = 1 - nandSuccess
+            
+            return nandLoss
+        else:            
+            return nandSuccess     
+        
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         #results = self.and2Var(_, self.andVar(_, var1), var2)
-        results = 1
+        
+        ifSuccess = 1
         if var1 - var2 == 1:
-            results = 0
+            ifSuccess = 0
             
-        return results
+        if onlyConstrains:
+            ifLoss = 1 - ifSuccess
+            
+            return ifLoss
+        else:            
+            return ifSuccess 
     
     def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
             
-        results = 1
+        norSuccess = 1
         if sum(var) > 0:
-            results = 0
+            norSuccess = 0
             
-        return results     
-  
+        if onlyConstrains:
+            norLoss = 1 - norSuccess
+            
+            return norLoss
+        else:            
+            return norSuccess
+           
     def xorVar(self, _, var1, var2, onlyConstrains = False):
-        results = 0
+        xorSuccess = 0
         if var1 + var2 == 1:
-            results = 1
+            xorSuccess = 1
             
-        return results
+        if onlyConstrains:
+            xorLoss = 1 - xorSuccess
+            
+            return xorLoss
+        else:            
+            return xorSuccess
     
     def epqVar(self, _, var1, var2, onlyConstrains = False):
-        results = 0
+        epqSuccess = 0
         if var1 - var2 == 0:
-            results = 1
+            epqSuccess = 1
             
-        return results
+        if onlyConstrains:
+            epqLoss = 1 - epqSuccess
+            
+            return epqLoss
+        else:       
+            return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         var = var[0]
-        results = 0
+        countSuccess = 0
+
+        varSum = sum(list(var))
 
         if limitOp == '>=':
-            if sum(var) >= limit:
-                results = 1
-        if limitOp == '<=':
-            if sum(var) <= limit:
-                results = 1
-        if limitOp == '==':
-            if sum(var) == limit:
-                results = 1
+            if varSum >= limit:
+                countSuccess = 1
+        elif limitOp == '<=':
+            if varSum <= limit:
+                countSuccess = 1
+        elif limitOp == '==':
+            if varSum == limit:
+                countSuccess = 1
                 
-        return results
+        if onlyConstrains:
+            countLoss = 1 - countSuccess
+            
+            return countLoss
+        else:       
+            return countSuccess    
+        
+    def fixedVar(self, _, _var, onlyConstrains = False):
+        fixedSuccess = 1
+        
+        if onlyConstrains:
+            fixedLoss = 1 - fixedSuccess
+    
+            return fixedLoss
+        else:
+            return fixedSuccess
         
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-        self.myBooleanMethods = booleanMethods() #gurobiILPBooleanProcessor() #lcLossBooleanMethods()
+        self.myBooleanMethods = booleanMethods() # lcLossBooleanMethods() # booleanMethods()
 
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
@@ -115,127 +190,103 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def logicMany(self, _, var, onlyConstrains = False, logicMethod=None):
         for currentVar in var:
             if currentVar is None:
-                continue
-            if not torch.is_tensor(currentVar):
-                raise Exception("Provided variable is not tensor %s"%(type(currentVar)))
-                
-        if var[0] is None:
-            results = None
-            return results
+                results = None
+                return results
+            
+        sampleSize = len(var[0])
+        results = torch.zeros(sampleSize, dtype=torch.int)
         
-        results = torch.clone(var[0])
-        
-        for i, _ in enumerate(var[0]):
+        for i in range(sampleSize-1):
             _var = []
-            
-            if i == 0:
-                results[i] = 1
-            else:
-                for v in var:
-                    if v is None:
-                        results = None
-                        return results
-                    else:
-                        currentV = v[i].item()
-                        if currentV > 0:
-                            currentV = 1
-                        
-                    _var.append(currentV)
+            for v in var:
+                currentV = v[i].item()
+                _var.append(currentV)
                 
-                results[i] = logicMethod(_, *_var, onlyConstrains = onlyConstrains)
+            results[i] = logicMethod(_, *_var, onlyConstrains = onlyConstrains)
             
-            if results[i] == 1:
-                for v in var: 
-                    if v is None:
-                        pass
-                    elif v[i] > 0:
-                        results[i] = results[i] * v[i]
-                    else:
-                        results[i] = results[i] * (1 - v[0])   
-                             
         return results
     
     def notVar(self, _, var, onlyConstrains = False):
         logicMethodName = "NOT"
                 
-        if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
         
         return self.logicMany(_, [var], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.notVar)
         
     def and2Var(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "AND"
             
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
         
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.and2Var)
         
     def andVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "AND"
             
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
               
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.andVar)
     
     def or2Var(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "OR"
        
-        if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.or2Var)
     
     def orVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "OR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
         
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.orVar)
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "NAND"
         
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
         
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.nand2Var)
     
     def nandVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "NAND"
        
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.nandVar)
             
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
 
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
      
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.ifVar)
 
     def norVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "NOR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.norVar)
         
     def xorVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "XOR"
         
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.xorVar)
     
     def epqVar(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "EPQ"
         
-        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         return self.logicMany(_, [var1, var2], onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.epqVar)
      
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
         logicMethodName = "COUNT"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
 
         countFun = lambda _, *var, onlyConstrains=onlyConstrains : self.myBooleanMethods.countVar(_, var, onlyConstrains=onlyConstrains, limitOp=limitOp, limit=limit, logicMethodName = "COUNT")
         return self.logicMany(_, var, onlyConstrains = onlyConstrains, logicMethod = countFun)
@@ -243,10 +294,22 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def fixedVar(self, _, *var, onlyConstrains = False):
         logicMethodName = "FIXED"
         
-        if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
+        if self.ifLog: self.myLogger.debug("%s is called with samples"%(logicMethodName))
+        
+        # Search for tensor size
+        tensorLen = 0
+        for v in var:
+            if v is not None:
+                tensorLen = len(v)
+                break
+            
+        var_update = []
+        for v in var:
+            if v == None:
+                var_update.append(torch.ones(tensorLen))
+            else:
+                var_update.append(v)
 
-        if var[0] == None:
-            return None
-        else:
-            zeros = torch.zeros(len(var))
-            return zeros
+
+        return self.logicMany(_, var_update, onlyConstrains = onlyConstrains, logicMethod = self.myBooleanMethods.fixedVar)
+        
