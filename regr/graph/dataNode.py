@@ -3,7 +3,6 @@ from collections import OrderedDict, namedtuple
 import time
 import re
 from .dataNodeConfig import dnConfig 
-from torch.tensor import Tensor
 
 from ordered_set import OrderedSet 
 
@@ -16,6 +15,8 @@ from .property import Property
 from .concept import Concept, EnumConcept
 
 import graphviz
+
+from sklearn import metrics
 
 logName = __name__
 logLevel = logging.CRITICAL
@@ -193,7 +194,7 @@ class DataNode:
                 
                 # Format attribute
                 attr_str = str(attribute)
-                if isinstance(attribute, Tensor):
+                if isinstance(attribute, torch.Tensor):
                     attr_str = f'<tensor of shape {list(attribute.shape)}>'
 
                 g.node(attr_node_id, f'{attribute_name}: {attr_str}')
@@ -637,15 +638,26 @@ class DataNode:
             return self.impactLinks["contains"][0].getRootDataNode()
         else:
             return self
-                
+    
+    # Keeps hashMap of concept name queries in findConcept to results
+    conceptsMap = {}
+    
     # Find concept in the graph based on concept name
     def findConcept(self, _conceptName, usedGraph = None):
-        if isinstance(_conceptName, Concept):
-            _conceptName = _conceptName.name()
-            
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
+        if usedGraph not in self.conceptsMap:
+            self.conceptsMap[usedGraph] = {}
+            
+        usedGraphConceptsMap = self.conceptsMap[usedGraph]
+        
+        if isinstance(_conceptName, Concept):
+            _conceptName = _conceptName.name()
+            
+        if _conceptName in usedGraphConceptsMap:
+            return usedGraphConceptsMap[_conceptName]
+        
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
             subGraph = usedGraph._objs[subGraphKey]
@@ -654,22 +666,39 @@ class DataNode:
                 if _conceptName == conceptNameItem:
                     concept = subGraph.concepts[conceptNameItem]
                     
-                    return (concept, concept.name, None, 1)
+                    usedGraphConceptsMap[_conceptName] =  (concept, concept.name, None, 1)
+                    return usedGraphConceptsMap[_conceptName]
+                
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
                     vlen = len(subGraph.concepts[conceptNameItem].enum)
                     
                     if _conceptName in subGraph.concepts[conceptNameItem].enum:
                         concept = subGraph.concepts[conceptNameItem]
                         
-                        return (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
+                        usedGraphConceptsMap[_conceptName] = (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
+                        return usedGraphConceptsMap[_conceptName]
+
+        usedGraphConceptsMap[_conceptName] = None
         
-        return None 
-    
+        return usedGraphConceptsMap[_conceptName]
+
     # Check if concept is relation
     def isRelation(self, conceptRelation, usedGraph = None):
         if usedGraph is None:
             usedGraph = self.ontologyNode.getOntologyGraph()
+        
+        if isinstance(conceptRelation, str):
+            conceptRelation = self.findConcept(conceptRelation)
             
+            if conceptRelation == None:
+                return False
+            
+            conceptRelation = conceptRelation[0]
+            
+        from  regr.graph.relation import Relation
+        if isinstance(conceptRelation, Relation):
+            return True
+        
         if len(conceptRelation.has_a()) > 0:  
             return True
         
@@ -713,19 +742,33 @@ class DataNode:
             return [self]
 
         # Path has single element
-        if len(path) == 1:
+        if (not isinstance(path[0], eqL)) and len(path) == 1:
             relDns = self.getDnsForRelation(path[0])
                     
             if relDns is None or len(relDns) == 0 or relDns[0] is None:
                 return [None]
-        
+            
+            return relDns
+                
         # Path has at least 2 elements - will perform recursion
+
         if isinstance(path[0], eqL): # check if eqL
             path0 = path[0].e[0][0]
         else:
             path0 = path[0]
 
-        relDns = self.getDnsForRelation(path0)
+        if self.isRelation(path0):
+            relDns = self.getDnsForRelation(path0)
+        else:
+            attributeValue = self.getAttribute(path[0].e[1]).item()
+            if attributeValue == 1:
+                attributeValue = True
+            else:
+                attributeValue = False
+            if attributeValue in  path[0].e[2]:
+                return [self]
+            else:
+                return [None]
                     
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
@@ -758,7 +801,8 @@ class DataNode:
         else:
             return [None]
 
-    def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
+    # Recursively search for concepts and relations
+    def __collectConceptsAndRelations(self, dn, conceptsAndRelations = set(), visitedDns = set()):
         
         # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
@@ -779,20 +823,39 @@ class DataNode:
                             conceptsAndRelations.add(att[1:-1])
                             _DataNode__Logger.info('Found relation %s in dataNode %s'%(att[1:-1],dn))
 
+        visitedDns.add(dn)
+        
         dnChildren = dn.getChildDataNodes()
         
         # Recursively find concepts and relations in children dataNodes 
-        if dnChildren != None:
+        if dnChildren:
             for child in dnChildren:
-                self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations)
+                if child in visitedDns:
+                    continue
+                        
+                visitedDns.add(child)
+
+                self.__collectConceptsAndRelations(child, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
+
+        # Recursively find concepts and relations in related dataNodes 
+        relationLinks = dn.getRelationLinks()
+        if relationLinks:
+            for rLink in relationLinks:
+                for rDn in relationLinks[rLink]:
+                    if rDn in visitedDns:
+                        continue
+                    
+                    visitedDns.add(rDn)
+                    self.__collectConceptsAndRelations(rDn, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
 
         return conceptsAndRelations
-                                
-    def collectConceptsAndRelations(self, dn, conceptsAndRelations = set()):
-        candR = self.__collectConceptsAndRelations(self)
+             
+    def collectConceptsAndRelations(self, conceptsAndRelations = set()):
+        candR = self.__collectConceptsAndRelations(self) # Search the graph starting from self for concepts and relations
         
         returnCandR = []
         
+        # Process founded concepts 
         for c in candR:
             _concept = self.findConcept(c)[0]
             
@@ -802,18 +865,19 @@ class DataNode:
             if isinstance(_concept, tuple):
                 _concept = _concept[0]
             
+            # Check if this is multiclass concept
             if isinstance(_concept, EnumConcept):
                 for i, a in enumerate(_concept.enum):
                     
                     if conceptsAndRelations and a not in conceptsAndRelations:
                         continue
                     
-                    returnCandR.append((_concept, a, i, len(_concept.enum)))
+                    returnCandR.append((_concept, a, i, len(_concept.enum))) # Create tuple representation for multiclass concept
             else:
                 if conceptsAndRelations and c not in conceptsAndRelations and _concept not in conceptsAndRelations:
                     continue
                 
-                returnCandR.append((_concept, _concept.name, None, 1))
+                returnCandR.append((_concept, _concept.name, None, 1)) # Create tuple representation for binary concept
         
         return returnCandR
         
@@ -849,7 +913,7 @@ class DataNode:
     #----------------- Solver methods
 
     # Collect inferred results of the given type (e.g. ILP, softmax, argmax, etc) from the given concept
-    def collectInferedResults(self, concept, inferKey):
+    def collectInferredResults(self, concept, inferKey):
         collectAttributeList = []
         
         if not isinstance(concept, tuple):
@@ -862,8 +926,7 @@ class DataNode:
                 concept = (concept, concept.name, None, len(concept.enum))
             else:
                 concept = (concept, concept.name, None, 1)
-
-            
+    
         rootConcept = self.findRootConceptOrRelation(concept[0])
         
         if not rootConcept:
@@ -882,24 +945,29 @@ class DataNode:
                 continue
             
             if torch.is_tensor(rTensor):
-                if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and  rTensor.shape[0] == 1:
+                if len(rTensor.shape) == 0 or len(rTensor.shape) == 1 and rTensor.shape[0] == 1:
                     collectAttributeList.append(rTensor.item())
-                elif (concept[2] is None) and concept[3] == 1:
+                elif (concept[2] is None) and concept[3] == 1: # local/argmax, rTensor.shape[0] == 2
                     collectAttributeList.append(rTensor[1])
-                elif concept[2] is not None:
+                elif concept[2] is not None: # multiclass given index(concept[2]) of the multiclass category
                     collectAttributeList.append(rTensor[concept[2]])
-                elif (concept[2] is None) and concept[3] > 1:
-                    return rTensor
+                elif (concept[2] is None) and concept[3] > 1: # multiclass as whole thus no index
+                    collectAttributeList.append(rTensor)
+            elif isinstance(rTensor, (list,tuple)) and len(rTensor) == 1:
+                collectAttributeList.append(rTensor[0])
             elif rTensor:
                 collectAttributeList.append(1)
             else:
                 collectAttributeList.append(0)
+                
+        if collectAttributeList and torch.is_tensor(collectAttributeList[0]):
+            return torch.stack(tuple(collectAttributeList), dim=0)
         
-        return torch.tensor(collectAttributeList)        
+        return torch.as_tensor(collectAttributeList)        
     
     # Calculate argMax and softMax
     def infer(self):
-        conceptsRelations = self.collectConceptsAndRelations(self) 
+        conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
@@ -962,7 +1030,7 @@ class DataNode:
 
     # Calculate local for datanote argMax and softMax
     def inferLocal(self):
-        conceptsRelations = self.collectConceptsAndRelations(self) 
+        conceptsRelations = self.collectConceptsAndRelations() 
         
         for c in conceptsRelations:
             cRoot = self.findRootConceptOrRelation(c[0])
@@ -1023,14 +1091,14 @@ class DataNode:
         else:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
-        # Check if concepts and/or relations have been provided for inference
-        _conceptsRelations = self.collectConceptsAndRelations(self, _conceptsRelations) # Collect all concepts and relation from graph as default set
+        # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relation from graph as default set
 
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
             raise DataNode.DataNodeError('Not found any concepts or relations for inference in provided DataNode %s'%(self))
         else:        
-            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[0].name if isinstance(x, tuple) else x for x in _conceptsRelations]))
+            _DataNode__Logger.info('Found - %s - as a set of concepts and relations for inference'%([x[1] if isinstance(x, tuple) else x for x in _conceptsRelations]))
                 
         myilpOntSolver, conceptsRelations = self.__getILPsolver(_conceptsRelations)
         
@@ -1038,7 +1106,7 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
+        myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def verifySelection(self, *_conceptsRelations):
         
@@ -1057,128 +1125,269 @@ class DataNode:
         
         return verifyResult
     
-    def calculateLcLoss(self):
+    # T-norms: L - Lukasiewicz, G - Godel, P - Product
+    #tnorms = ['L', 'G', 'P']
+    tnormsDefault = 'P'
+    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
         
-        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations(self))
+        myilpOntSolver, _ = self.__getILPsolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize)
         
         return lcResult
 
-    def getInferMetric(self, *conceptsRelations, inferType='ILP', weight = None):
-               
+    def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
+        if not conceptsRelations:
+            _DataNode__Logger.info("Calling %s metrics with empty conceptsRelations"%(inferType))
+            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
+            _DataNode__Logger.info("Found conceptsRelations in DataNode- %s"%(conceptsRelations))
+        else:
+            _DataNode__Logger.info("Calling %s metrics with conceptsRelations - %s"%(inferType, conceptsRelations))
+                
+        weightOriginal = weight
         if weight is None:
             weight = torch.tensor(1)
-                 
-        if not conceptsRelations:
-            conceptsRelations = self.collectConceptsAndRelations(self, conceptsRelations) # Collect all concepts and relation from graph as default set
+        else:
+            _DataNode__Logger.info("Using weight %s"%(weight))
+         
+        # Will store calculated metrics an related data   
+        result = {}   
+        tp, fp, tn, fn  = [], [], [], []  
+        isBinary = False  
+        isMulticlass = False
+        isMulticlassLabel = False
         
-        result = {}
-        tp, fp, tn, fn  = [], [], [], []
-
+        # Calculate metrics for each provided concept
         for cr in conceptsRelations:
-            if not isinstance(cr, tuple):
-                if not isinstance(cr, Concept):
+            # Check format of concepts and translate them to tuple in order to accommodate multiclass concepts
+            if not isinstance(cr, tuple): # Not tuple concept form yet
+                if not isinstance(cr, Concept): # If string find the corresponding concept
                     cr = self.findConcept(cr)
                     
-                    if cr is None:
+                    if cr is None: # Sting mapping to concept is not found
+                        _DataNode__Logger.error("% string is not a concept - not able to calculate metrics"%(cr))
                         continue
-                
-                if isinstance(cr, EnumConcept):
+                elif isinstance(cr, EnumConcept): # Multiclass mapping to concept tuple form
                     cr = (cr, cr.name, None, len(cr.enum))
-                else:
+                elif isinstance(cr, Concept): # Binary mapping to tuple concept form
                     cr = (cr, cr.name, None, 1)
+                else:
+                    _DataNode__Logger.error("% string is not a concept - not able to calculate metrics"%(cr))
+                    continue
             
+            _DataNode__Logger.info("Calculating metrics for concept %s"%(cr[0]))
+
+            # Collect date for metrics from DataNode
+            preds = self.collectInferredResults(cr, inferType)
+            labelsR = self.collectInferredResults(cr, 'label')
+
+            # Check if not empty
+            if preds is None:
+                _DataNode__Logger.warning("Concept %s has predictions data None - not able to calculate metrics"%(cr[1]))
+                continue
+            else:
+                _DataNode__Logger.info("Concept %s predictions from DataNode %s"%(cr[1], preds))
+
+            if labelsR is None:
+                _DataNode__Logger.warning("Concept %s has labels None - not able to calculate metrics"%(cr[1]))
+                continue
+            else:
+                _DataNode__Logger.info("Concept %s labels from DataNode %s"%(cr[1], labelsR))
             
-            preds = self.collectInferedResults(cr, inferType)
-            labelsR = self.collectInferedResults(cr, 'label')
+            if not torch.is_tensor(preds):
+                _DataNode__Logger.error("Concept %s labels is not a Tensor - not able to calculate metrics"%(cr[1]))
+                continue
             
+            if not torch.is_tensor(labelsR):
+                _DataNode__Logger.error("Concept %s predictions is not a Tensor - not able to calculate metrics"%(cr[1]))
+                continue
+            
+            # Move to CPU
+            if preds.is_cuda: preds = preds.cpu()
+            if labelsR.is_cuda: labelsR = labelsR.cpu()
+            
+            # Translate labels - if provided as True/False to long
             labels = torch.clone(labelsR)
+            labels = labels.long()
+            preds = preds.long()
+           
+            # -- Multiclass processing
             
-            if cr[2] is not None:
-                for i, l in enumerate(labelsR):
-                    if labelsR[i] == cr[2]:
-                        labels[i] = 1
-                    else:
-                        labels[i] = 0
-            elif (cr[2] is None) and cr[3] > 1:
-                labels = torch.clone(preds)
-                l = labelsR.item()
-                for i, _ in enumerate(preds):
-                    if i == l:
-                        labels[i] = 1
-                    else:
-                        labels[i] = 0
+            # Check if concept is a label from Multiclass
+            if cr[2] is not None: # Multiclass label given multiclass index (cr[2]) 
+                isMulticlassLabel = True
+                average = None
+                labelsList = [i for i in range(cr[3])]
+                _DataNode__Logger.info("Index of class Labels %s is %s"%(cr[1], cr[2]))
+            # Check if concept is a  Multiclass
+            elif (cr[2] is None) and cr[3] > 1: # Multiclass general without index (cr[2]) - called by the IML model forward method
+                isMulticlass = True
+                average = "micro"
+                labelsList = [i for i in range(cr[3])]
+                if preds.shape[0] == len(labelsR):
+                    predsOriginal = preds
+                    preds = torch.nonzero(preds, as_tuple=True)[1]
+                    
+                    if preds.shape[0] != len(labelsR):
+                        _DataNode__Logger.warning("Concept %s predictions tensor has some predictions not calculated - %s"%(cr[1], predsOriginal))
+                    
+                    _DataNode__Logger.info("Concept %s is Multiclass "%(cr[1]))
+                    _DataNode__Logger.info("Using average %s for Multiclass metrics calculation"%(average))
+
+                else:
+                    _DataNode__Logger.error("Incompatible lengths for %s between inferred results %s and labels %s"%(cr[1], len(preds), len(labelsR)))
+                    continue
+                
+                _DataNode__Logger.info("Calculating metrics for all class Labels of  %s "%(cr[1]))
+                multiclassLabels = cr[0].enum
+                result = self.getInferMetrics(*multiclassLabels, inferType=inferType, weight = weightOriginal, average=average)
+            else:
+                isBinary = True
+                labelsList = None
+
+            # ---
             
-            result[cr[1]] = {'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
-            
-            if preds is None or labels is None:
+            # Check if date prepared correctly
+            if preds.dim() != 1:
+                _DataNode__Logger.error("Concept %s predictions is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], preds.dim()))
                 continue
             
-            if not torch.is_tensor(preds) or not torch.is_tensor(labels):
-                continue
-            
-            if preds.dim() != 1 or labels.dim() != 1:
+            if labels.dim() != 1:
+                _DataNode__Logger.error("Concept %s labels is Tensor with dimension %s > 1- not able to calculate metrics"%(cr[1], labels.dim()))
                 continue
             
             if  preds.size()[0] != labels.size()[0]:
+                _DataNode__Logger.error("Concept %s labels size %s is not equal to prediction size %s - not able to calculate metrics"%(cr[1], labels.size()[0], preds.size()[0]))
                 continue
             
-            labels = labels.long()
-            # calculate confusion matrix
-            _tp = (preds * labels * weight).sum() # true positive
-            tp.append(_tp)
-            result[cr[1]]['TP'] = _tp 
-            _fp = (preds * (1 - labels) * weight).sum() # false positive
-            fp.append(_fp)
-            result[cr[1]]['FP'] = _fp
-            _tn = ((1 - preds) * (1 - labels) * weight).sum() # true negative
-            tn.append(_tn)
-            result[cr[1]]['TN'] = _tn
-            _fn = ((1 - preds) * labels * weight).sum() # false positive
-            fn.append(_fn)
-            result[cr[1]]['FN'] = _fn
+            # Prepare the metrics result storage
+            result[cr[1]] = {'cr': cr, 'inferType' : inferType, 'TP': torch.tensor(0.), 'FP': torch.tensor(0.), 'TN': torch.tensor(0.), 'FN': torch.tensor(0.)}
             
-            _p, _r  = 0, 0
+            # To numpy for sklearn
+            labels = labels.numpy() 
+            preds = preds.numpy()
             
-            if _tp + _fp:
-                _p = _tp / (_tp + _fp) # precision or positive predictive value (PPV)
-                result[cr[1]]['P'] = _p
-            if _tp + _fn:
-                _r = _tp / (_tp + _fn) # recall, sensitivity, hit rate, or true positive rate (TPR)
-                result[cr[1]]['R'] = _r
-                
-            if _p + _r:
-                _f1 = 2 * _p * _r / (_p + _r) # F1 score is the harmonic mean of precision and recall
-                result[cr[1]]['F1'] = _f1
-            elif _tp + (_fp + _fn)/2: 
-                _f1 = _tp/(_tp + (_fp + _fn)/2)
-                result[cr[1]]['F1'] = _f1
-                      
-        result['Total'] = {}  
-        tpT = (torch.tensor(tp)).sum()
-        result['Total']['TP'] = tpT 
-        fpT = (torch.tensor(fp)).sum() 
-        result['Total']['FP'] = fpT
-        tnT = (torch.tensor(tn)).sum() 
-        result['Total']['TN'] = tnT
-        fnT = (torch.tensor(fn)).sum() 
-        result['Total']['FN'] = fnT
+            import numpy as np
+            if np.sum(labels) == 0:
+                _DataNode__Logger.warning("Concept %s - found all zero labels %s"%(cr[1], labels))
+            else:
+                _DataNode__Logger.info("Concept %s - labels used for metrics calculation %s"%(cr[1], labels))
+            result[cr[1]]['labels'] = labels
+            
+            if np.sum(preds) == 0:
+                _DataNode__Logger.warning("Concept %s - found all zero predictions %s"%(cr[1], preds))
+            else:
+                _DataNode__Logger.info("Concept %s - Predictions used for metrics calculation %s"%(cr[1], preds))
+            result[cr[1]]['preds'] = preds
+
+            # Calculate confusion matrix
+            try:
+                if isMulticlass:
+                    cm = metrics.confusion_matrix(labels, preds)
+                elif isMulticlassLabel:
+                    cm = metrics.multilabel_confusion_matrix(labels, preds, labels=labelsList)
+                    cm = cm[cr[2]]
+                elif isBinary:
+                    cm = metrics.confusion_matrix(labels, preds)
+                    _tn, _fp, _fn, _tp = cm.ravel()
         
-        if tpT + fpT:
-            pT = tpT / (tpT + fpT)
-            result['Total']['P'] = pT
-            rT = tpT / (tpT + fnT)
-            result['Total']['R'] = rT
+                    tp.append(_tp) 
+                    result[cr[1]]['TP'] = _tp # true positive 
+        
+                    fp.append(_fp)
+                    result[cr[1]]['FP'] = _fp # false positive
+        
+                    tn.append(_tn)
+                    result[cr[1]]['TN'] = _tn # true negative
+        
+                    fn.append(_fn)
+                    result[cr[1]]['FN'] = _fn # false positive
+                else:
+                    pass
+                    
+                result[cr[1]]['confusion_matrix'] = cm
+                _DataNode__Logger.info("Concept %s confusion matrix %s"%(cr[1], result[cr[1]]['confusion_matrix']))
+            except ValueError as ve: # Error when both labels and preds as zeros
+                _DataNode__Logger.warning("Concept %s - both labels and predictions are all zeros - not able to calculate confusion metrics"%(cr[1]))
             
-            if pT + rT:
-                f1T = 2 * pT * rT / (pT + rT)
-                result['Total']['F1'] = f1T
-            elif tpT + (fpT + fnT)/2:
-                f1T = tpT/(tpT + (fpT + fnT)/2)
-                result['Total']['F1'] = f1T
+            # Calculate precision P - tp/(tp + fp)
+            _p = metrics.precision_score(labels, preds, average=average, labels=labelsList, zero_division=0) # precision or positive predictive value (PPV)
+            if isMulticlassLabel:
+                _p = _p[cr[2]]
+            result[cr[1]]['P'] = _p
+            if _p == 0:
+                _DataNode__Logger.warning("Concept %s precision %s"%(cr[1], _p))
+            else:
+                _DataNode__Logger.info("Concept %s precision %s"%(cr[1], _p))
+
+            # Calculate recall R - tp/(tp + fn)
+            _r = metrics.recall_score(labels, preds, average=average, labels=labelsList, zero_division=0) # recall, sensitivity, hit rate, or true positive rate (TPR)
+            if isMulticlassLabel:
+                _r = _r[cr[2]]
+            result[cr[1]]['R'] = _r
+            if _r == 0:
+                _DataNode__Logger.warning("Concept %s recall %s"%(cr[1], _r))
+            else:
+                _DataNode__Logger.info("Concept %s recall %s"%(cr[1], _r))
+             
+            # Calculate F1 score - (P X R)/(P + R)
+            _f1 = metrics.f1_score(labels, preds, average=average, labels=labelsList, zero_division=0) # f1
+            if isMulticlassLabel:
+                _f1 = _f1[cr[2]]
+            result[cr[1]]['F1'] = _f1
+            if _f1 == 0:
+                _DataNode__Logger.warn("Concept %s f1 %s"%(cr[1], _f1))
+            else:
+                _DataNode__Logger.info("Concept %s f1 %s"%(cr[1], _f1))
+
+        # --- Calculate Total metrics for binary concept
+        if isBinary:
+            result['Total'] = {}  
+            tpT = (torch.tensor(tp)).sum()
+            result['Total']['TP'] = tpT 
+            fpT = (torch.tensor(fp)).sum() 
+            result['Total']['FP'] = fpT
+            tnT = (torch.tensor(tn)).sum() 
+            result['Total']['TN'] = tnT
+            fnT = (torch.tensor(fn)).sum() 
+            result['Total']['FN'] = fnT
+            
+            if tpT + fpT:
+                pT = tpT / (tpT + fpT)                
+                result['Total']['P'] = pT
+                if pT == 0:
+                    _DataNode__Logger.warning("Total precision is %s"%(pT))
+                else:
+                    _DataNode__Logger.info("Total precision is %s"%(pT))
+                    
+                rT = tpT / (tpT + fnT)
+                result['Total']['R'] = rT
+                if rT == 0:
+                    _DataNode__Logger.warning("Total recall is %s"%(rT))
+                else:
+                    _DataNode__Logger.info("Total recall is %s"%(rT))
                 
+                if pT + rT:
+                    f1T = 2 * pT * rT / (pT + rT)
+                    result['Total']['F1'] = f1T
+                    if f1T == 0:
+                        _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+                    else:
+                        _DataNode__Logger.info("Total F1 is %s"%(f1T))
+                        
+                elif tpT + (fpT + fnT)/2:
+                    f1T = tpT/(tpT + (fpT + fnT)/2)
+                    result['Total']['F1'] = f1T
+                    if f1T == 0:
+                        _DataNode__Logger.warning("Total F1 is %s"%(f1T))
+                    else:
+                        _DataNode__Logger.info("Total F1 is %s"%(f1T))
+                else:
+                    _DataNode__Logger.warning("No able to calculate F1 for Total") 
+        else:
+            result['Total'] = {"No Total metrics for multiclass concept"}
+
         return result
     
 # Class constructing the data graph based on the sensors data during the model execution
@@ -1331,7 +1540,7 @@ class DataNodeBuilder(dict):
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots: # review them if they got connected
-            if not dnE.impactLinks: 
+            if not dnE.impactLinks: #or (dnE.ontologyNode.name in dnE.impactLinks): 
                 if dnE not in newDnsRoots:
                     newDnsRoots.append(dnE)    
 
@@ -1354,18 +1563,47 @@ class DataNodeBuilder(dict):
         for dnE in flattenDns: # review them if they got connected
             if not dnE.impactLinks: 
                 if dnE not in newDnsRoots:
-                    newDnsRoots.append(dnE)   
-                         
+                    newDnsRoots.append(dnE) 
+                   
         # Set the updated root list 
         _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRoots))
-        dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict
+        dict.__setitem__(self, 'dataNode', newDnsRoots) # Updated the dict 
+    
+        return
+    
+        # ----------   
+        newDnsRootsFiltered = []
+              
+        # Update list of existing root dataNotes     
+        for dnE in dnsRoots: # review them if they got connected
+            if not dnE.impactLinks:
+                newDnsRootsFiltered.append(dnE)    
+                continue 
+            
+            impactDns = set()
+            for  k in dnE.impactLinks:
+                for v in dnE.impactLinks[k]:
+                    impactDns.add(v) 
+                  
+            stillRoot = True
+            for n in newDnsRootsFiltered:
+                if n in impactDns:
+                    stillRoot = False
+                    break
+                
+            if stillRoot and dnE not in newDnsRootsFiltered:
+                newDnsRootsFiltered.append(dnE)    
+                         
+        # Set the updated root list 
+        _DataNodeBulder__Logger.info('Updated elements in the root dataNodes list - %s'%(newDnsRootsFiltered))
+        dict.__setitem__(self, 'dataNode', newDnsRootsFiltered) # Updated the dict
     
     # Build or update relation dataNode in the data graph for a given key
     def __buildRelationLink(self, vInfo, conceptInfo, keyDataName):
         relationName = conceptInfo['concept'].name
          
         # Check if data graph started
-        existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
+        existingRootDns = dict.__getitem__(self, 'dataNode') # DataNodes roots
         
         if not existingRootDns:
             _DataNodeBulder__Logger.error('No dataNode created yet - abandon processing relation link dataNode value for %s and attribute %s'%(relationName,keyDataName))
@@ -1380,7 +1618,7 @@ class DataNodeBuilder(dict):
                 
         existingDnsForRelationSorted = OrderedDict(sorted(existingDnsForRelationNotSorted.items()))
             
-        # This is an infromation about relation attributes
+        # This is an information about relation attributes
         if conceptInfo['relationAttrData']:
             index = keyDataName.index('.')
             attrName = keyDataName[0:index]
@@ -1393,7 +1631,8 @@ class DataNodeBuilder(dict):
             relationAttrsCache =  dict.__getitem__(self, relationAttrsCacheName)
             relationAttrsCache[attrName] = vInfo.value
                 
-            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'%(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
+            _DataNodeBulder__Logger.info('Caching received data for %s related to relation %s dataNode, found %i existing dataNode of this type - provided value has length %i'
+                                         %(keyDataName,relationName,len(existingDnsForRelation),vInfo.len))
             
             # Find if all the needed attribute were initialized
             allAttrInit = True
@@ -1514,28 +1753,37 @@ class DataNodeBuilder(dict):
     def __createMultiplyDataNode(self, vInfo, conceptInfo, keyDataName):
         conceptName = conceptInfo['concept'].name
         
-        dns = [] # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode (identified by the index in the master list)
+        # Master List of lists of created dataNodes - each list in the master list represent set of new dataNodes connected to the same parent dataNode 
+        # (identified by the index in the master list)
+        dns = [] 
                 
         _DataNodeBulder__Logger.info('Received information about dataNodes of type %s - value dim is %i and length is %i'%(conceptName,vInfo.dim,vInfo.len))
 
+        # --- Create dataNodes
+        
+        # Check the type of sensor data
         if vInfo.dim == 0: 
             _DataNodeBulder__Logger.warning('Provided value is empty %s - abandon the update'%(vInfo.value))
             return
-        elif vInfo.dim == 1: # Internal Value is simple; it is not Tensor or list
+        elif vInfo.dim == 1: # List with indexes for new DataNodes and data for attribute
             _DataNodeBulder__Logger.info('Adding %i new dataNodes of type %s'%(vInfo.len,conceptName))
 
             dns1 = []
             for vIndex, v in enumerate(vInfo.value):
                 instanceValue = ""
                 instanceID = vIndex
+                
+                # Create new DataNode
                 _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                 
+                # add attribute
                 _dn.attributes[keyDataName] = v
                 
                 dns1.append(_dn)
-                                    
+                      
+            # Single list of new DateNodes              
             dns.append(dns1)              
-        elif vInfo.dim == 2:
+        elif vInfo.dim == 2: # Two dimensional realtion information
             if "relationMode" in conceptInfo:
                 relatedDnsType = conceptInfo["relationAttrs"]['src']
                 relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
@@ -1549,10 +1797,18 @@ class DataNodeBuilder(dict):
                     requiredLenOFReltedDns = 0
                     
                 if requiredLenOFReltedDns != len(relatedDns):
-                    _DataNodeBulder__Logger.warning('Provided value expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                    _DataNodeBulder__Logger.warning('Value of %s expects %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
+                                                    %(conceptInfo['relationName'],requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                     return
            
-                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s and link them with %i existing dataNodes of type %s with contain relation %s'%(vInfo.len,conceptName,requiredLenOFReltedDns,relatedDnsType,conceptInfo["relationMode"]))
+                _DataNodeBulder__Logger.info('Create %i new dataNodes of type %s'%(vInfo.len,conceptName))
+                
+                if not conceptInfo['relation']:
+                    _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+                    if conceptInfo["relationMode"] == "forward":
+                        _DataNodeBulder__Logger.info('%s is contain in %s'%(conceptInfo["relationMode"], relatedDnsType))
+                    else:
+                        _DataNodeBulder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptInfo["relationMode"]))
 
                 for i in range(0,vInfo.len):
                     instanceValue = ""
@@ -1562,7 +1818,7 @@ class DataNodeBuilder(dict):
                     _dn.attributes[keyDataName] = vInfo.value[i]
                     dns.append(_dn)
                     
-                    # Create contain relation between the new datanode and existing datanodes
+                    # If it is not a regular relation  but (Create contain relation between the new datanode and existing datanodes
                     if not conceptInfo['relation']:
                         if conceptInfo["relationMode"] == "forward":
                             for index, isRelated in enumerate(vInfo.value[i]):
@@ -1581,7 +1837,7 @@ class DataNodeBuilder(dict):
                         
                     dns.append(_dn)
         else:
-            _DataNodeBulder__Logger.warning('It is a unsupported sensor ipnut - %s'%(vInfo))
+            _DataNodeBulder__Logger.warning('It is an unsupported sensor input - %s'%(vInfo))
                 
         self.__updateRootDataNodeList(dns)   
         return dns
@@ -1592,9 +1848,14 @@ class DataNodeBuilder(dict):
 
         # Check if this is the contain relation update or attribute update
         if "relationMode" in conceptInfo:
-            _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
-
             relatedDnsType = conceptInfo["relationAttrs"]['src']
+
+            _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
+            if conceptInfo["relationMode"] == "forward":
+                _DataNodeBulder__Logger.info('%s is contain in %s'%(conceptName, relatedDnsType))
+            else:
+                _DataNodeBulder__Logger.info('%s is contain in %s'%(relatedDnsType, conceptName))
+
             relatedDns = self.findDataNodesInBuilder(select = relatedDnsType)
 
             if vInfo.dim:
@@ -1603,7 +1864,8 @@ class DataNodeBuilder(dict):
                 requiredLenOFReltedDns = len(vInfo.item())
             
             if requiredLenOFReltedDns != len(relatedDns):
-                _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'%(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+                _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
+                                              %(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
                 return
                 
             for i in range(0,vInfo.len):
@@ -1611,7 +1873,7 @@ class DataNodeBuilder(dict):
                     
                 if vInfo.dim == 0:
                     if i == 0:
-                        if isinstance(vInfo.value, Tensor):
+                        if isinstance(vInfo.value, torch.Tensor):
                             _dn.attributes[keyDataName] =  vInfo.value.item()
                         else:
                             _dn.attributes[keyDataName] =  vInfo.value
@@ -1620,7 +1882,7 @@ class DataNodeBuilder(dict):
                 else:
                     _dn.attributes[keyDataName] = vInfo.value[i]
                 
-                # Create contain relation between existings datanodes
+                # Create contain relation between existing dataNodes
                 if not conceptInfo["relation"]:
                     if conceptInfo["relationMode"] == "forward":
                         for index, isRelated in enumerate(vInfo.value[i]):
@@ -1647,7 +1909,7 @@ class DataNodeBuilder(dict):
                 if len(existingDnsForConcept) == 0:
                     return
                 elif vInfo.dim == 0:
-                    if isinstance(vInfo.value, Tensor):
+                    if isinstance(vInfo.value, torch.Tensor):
                         if keyDataName[0] == '<' and keyDataName[-1] == '>':
                             existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
                         else:
@@ -1721,7 +1983,7 @@ class DataNodeBuilder(dict):
     def __processAttributeValue(self, value, keyDataName):
         ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
 
-        if isinstance(value, Tensor):
+        if isinstance(value, torch.Tensor):
             dimV = value.dim()
             if dimV:
                 lenV = len(value)
@@ -1730,36 +1992,36 @@ class DataNodeBuilder(dict):
         else:
             lenV = len(value)
             
-        if not isinstance(value, (Tensor, list)): # It is scalar value
+        if not isinstance(value, (torch.Tensor, list)): # It is scalar value
             return ValueInfo(len = 1, value = value, dim=0) 
             
-        if isinstance(value, Tensor) and dimV == 0: # It is a Tensor but also scalar value
+        if isinstance(value, torch.Tensor) and dimV == 0: # It is a Tensor but also scalar value
             return ValueInfo(len = 1, value = value.item(), dim=0)
         
         if (lenV == 1): # It is Tensor or list with length 1 - treat it as scalar
-            if isinstance(value, list) and not isinstance(value[0], (Tensor, list)) : # Unpack the value
+            if isinstance(value, list) and not isinstance(value[0], (torch.Tensor, list)) : # Unpack the value
                 return ValueInfo(len = 1, value = value[0], dim=0)
-            elif isinstance(value, Tensor) and dimV < 2:
+            elif isinstance(value, torch.Tensor) and dimV < 2:
                 return ValueInfo(len = 1, value = torch.squeeze(value, 0), dim=0)
 
         #  If it is Tensor or list with length 2 but it is for attribute providing probabilities - assume it is a scalar value
         if isinstance(value, list) and lenV ==  2 and keyDataName[0] == '<': 
             return ValueInfo(lenV = 1, value = value, dim=0)
-        elif isinstance(value, Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
+        elif isinstance(value, torch.Tensor) and lenV ==  2 and dimV  == 0 and keyDataName[0] == '<':
             return ValueInfo(len = 1, value = value, dim=0)
 
         if isinstance(value, list): 
-            if not isinstance(value[0], (Tensor, list)) or (isinstance(value[0], Tensor) and value[0].dim() == 0):
+            if not isinstance(value[0], (torch.Tensor, list)) or (isinstance(value[0], torch.Tensor) and value[0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=1)
-            elif not isinstance(value[0][0], (Tensor, list)) or (isinstance(value[0][0], Tensor) and value[0][0].dim() == 0):
+            elif not isinstance(value[0][0], (torch.Tensor, list)) or (isinstance(value[0][0], torch.Tensor) and value[0][0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=2)
-            elif not isinstance(value[0][0][0], (Tensor, list)) or (isinstance(value[0][0][0], Tensor) and value[0][0][0].dim() == 0):
+            elif not isinstance(value[0][0][0], (torch.Tensor, list)) or (isinstance(value[0][0][0], torch.Tensor) and value[0][0][0].dim() == 0):
                 return ValueInfo(len = lenV, value = value, dim=3)
             else:
                 _DataNodeBulder__Logger.warning('Dimension of nested list value for key %s is more then 3 returning dimension 4'%(keyDataName))
                 return ValueInfo(len = lenV, value = value, dim=4)
 
-        elif isinstance(value, Tensor):
+        elif isinstance(value, torch.Tensor):
             return ValueInfo(len = lenV, value = value, dim=dimV)
     
     # Overloaded __setitem method of Dictionary - tracking sensor data and building corresponding data graph
@@ -1772,7 +2034,7 @@ class DataNodeBuilder(dict):
         if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
             if  isinstance(_key, Sensor) and not _key.build:
-                if isinstance(value, Tensor):
+                if isinstance(value, torch.Tensor):
                     _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
                 elif isinstance(value, list):
                     _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1782,7 +2044,7 @@ class DataNodeBuilder(dict):
                 return dict.__setitem__(self, _key, value)
             
             if  isinstance(_key, Property):
-                if isinstance(value, Tensor):
+                if isinstance(value, torch.Tensor):
                     _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
                 elif isinstance(value, list):
                     _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1804,7 +2066,7 @@ class DataNodeBuilder(dict):
         if self.__addSensorCounters(skey, value):
             return # Stop __setitem__ for repeated key value combination
         
-        if isinstance(value, Tensor):
+        if isinstance(value, torch.Tensor):
             _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, shape %s'%(key,type(_key),type(value),value.shape))
         elif isinstance(value, list):
             _DataNodeBulder__Logger.info('key - %s, key type - %s, value - %s, length %s'%(key,type(_key),type(value),len(value)))
@@ -1912,10 +2174,77 @@ class DataNodeBuilder(dict):
             
     def findDataNodesInBuilder(self, select = None, indexes = None):
         existingRootDns = dict.__getitem__(self, 'dataNode') # Datanodes roots
-        foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
+        
+        if not existingRootDns:
+            foundDns = []
+        else:
+            foundDns = existingRootDns[0].findDatanodes(dns = existingRootDns, select = select, indexes = indexes) 
         
         return foundDns
     
+    def needsBatchRootDN(self):
+        if dict.__contains__(self, 'dataNode'):
+            _dataNode = dict.__getitem__(self, 'dataNode')
+            
+            if len(_dataNode) == 1:
+                return False
+            else:
+                typesInDNs = set()
+                for i, d in enumerate(_dataNode):
+                    if i == 0:
+                        continue
+                    
+                    typesInDNs.add(d.getOntologyNode().name)
+                
+                if len(typesInDNs) > 1:
+                    return False
+                
+            return True
+        else:
+            return False 
+    
+    def addBatchRootDN(self):
+        if dict.__contains__(self, 'dataNode'):
+            _dataNode = dict.__getitem__(self, 'dataNode')
+
+            supGraph = None
+            if len(_dataNode) == 1:
+                rootDn = _dataNode[0]
+                _DataNodeBulder__Logger.warning('No new Batch Root DataNode created - DataNode Builder has single DataNode with id %s of type %s'
+                                                %(rootDn.instanceID,rootDn.getOntologyNode().name))
+            else:
+                typesInDNs = set()
+                for i, d in enumerate(_dataNode):
+                    if i == 0:
+                        continue
+                    
+                    typesInDNs.add(d.getOntologyNode().name)
+                    supGraph = d.getOntologyNode().sup
+                
+                if len(typesInDNs) > 1:
+                    raise ValueError('Not able to create Batch Root DataNode - DataNode Builder has DataNodes of different types: %s'%(typesInDNs))  
+                
+                if supGraph == None:
+                    raise ValueError('Not able to create Batch Root DataNode - existing DataNodes in the Builder have concept type %s not connected to any graph: %s'%(typesInDNs))  
+
+                batchRootDNValue = ""
+                batchRootDNID = 0
+                batchRootDNOntologyNode = Concept(name='batch')
+                supGraph.attach(batchRootDNOntologyNode)
+                
+                batchRootDN= DataNode(instanceID = batchRootDNID, instanceValue = batchRootDNValue, ontologyNode = batchRootDNOntologyNode)
+            
+                for i, d in enumerate(_dataNode):
+                    batchRootDN.addChildDataNode(d)  
+                  
+                dns = []
+                dns.append(batchRootDN)  
+                self.__updateRootDataNodeList(dns)
+
+                _DataNodeBulder__Logger.info('Created single Batch Root DataNode with id %s of type %s'%(batchRootDNID,batchRootDNOntologyNode))
+        else:
+            raise ValueError('DataNode Builder has no DataNode started yet')   
+        
     # Method returning constructed dataNode - the fist in the list
     def getDataNode(self):
         self.__addGetDataNodeCounter()
@@ -1930,10 +2259,14 @@ class DataNodeBuilder(dict):
                     _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:
                     typesInDNs = set()
-                    for d in _dataNode:
-                        typesInDNs.add(returnDn.getOntologyNode().name)
+                    for i, d in enumerate(_dataNode):
+                        if i == 0:
+                            continue
                         
-                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'%(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
+                        typesInDNs.add(d.getOntologyNode().name)
+                        
+                    _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'
+                                                    %(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
 
                 return returnDn
         

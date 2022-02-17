@@ -32,9 +32,12 @@ class dbUpdate():
         self.cwd = os.path.basename(self.cwd)
 
         import __main__
-        self.programName = os.path.basename(__main__.__file__)
-        if self.programName.index('.') >= 0:
-            self.programName = self.programName[:self.programName.index('.')]
+        if hasattr(__main__, '__file__'):
+            self.programName = os.path.basename(__main__.__file__)
+            if self.programName.index('.') >= 0:
+                self.programName = self.programName[:self.programName.index('.')]
+        else:
+            self.programName = ''
 
         try:
             import os
@@ -145,7 +148,7 @@ class dbUpdate():
         #Step 3: Insert business object directly into MongoDB via isnert_one
         try:
             result = self.results.insert_one(mlResult)
-        except :
+        except Exception as e:
             return
 
         if result.inserted_id:
@@ -159,7 +162,16 @@ class LearningBasedProgram():
         self.logger = logger or logging.getLogger(__name__)
         self.dbUpdate = None if db else dbUpdate(graph)
 
-        self.model = Model(graph, **kwargs)
+        from inspect import signature
+        modelSignature = signature(Model.__init__)
+        
+        modelKwargs = {}
+        for param in modelSignature.parameters.values():
+            paramName = param.name
+            if paramName in kwargs:
+                modelKwargs[paramName] = kwargs[paramName]
+                
+        self.model = Model(graph, **modelKwargs)
         self.opt = None
         self.epoch = None
         self.stop = None
@@ -182,7 +194,10 @@ class LearningBasedProgram():
         for k, v in metric1.value().items():
             metricDelta[k] = {}
             for m, _ in v.items():
-                metricDelta[k][m] = v[m] - metric2.value()[k][m]
+                if k in metric2.value() and m in metric2.value()[k]:
+                    metricDelta[k][m] = v[m] - metric2.value()[k][m]
+                else:
+                    metricDelta[k][m] = None
 
         return metricDelta
 
@@ -191,7 +206,7 @@ class LearningBasedProgram():
             self.logger.info(f'{name}:')
             desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
 
-            consume(tqdm(epoch_fn(dataset), total=get_len(dataset), desc=desc))
+            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
 
             if self.model.loss:
                 self.logger.info(' - loss:')
@@ -223,12 +238,12 @@ class LearningBasedProgram():
                     if key == 'softmax':
                         softmaxMetric = metric
 
-            if ilpMetric is not None and softmaxMetric is not None:
+            """if ilpMetric is not None and softmaxMetric is not None:
                 metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
                 metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
 
                 self.logger.info(f' - - {metricDeltaKey}')
-                self.logger.info(metricDelta)
+                self.logger.info(metricDelta)"""
 
     def train(
         self,
@@ -303,12 +318,8 @@ class LearningBasedProgram():
     def populate_one(self, data_item):
         return next(self.populate_epoch([data_item]))
 
-    def save(self, path):
-        torch.save(self.model.state_dict(), path)
+    def save(self, path, **kwargs):
+        torch.save(self.model.state_dict(), path, **kwargs)
 
-    def load(self, path):
-        # self.model.load_state_dict(torch.load(path))
-        ### chen begin
-        self.model.load_state_dict(torch.load(path,map_location='cuda:0'))
-        # self.model.load_state_dict(torch.load(path,map_location='cpu'))
-        ### chen end
+    def load(self, path, **kwargs):
+        self.model.load_state_dict(torch.load(path, **kwargs))

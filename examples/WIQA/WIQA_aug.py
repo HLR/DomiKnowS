@@ -13,6 +13,9 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker,
 import logging
 from transformers import get_linear_schedule_with_warmup
 from regr.program.primaldualprogram import PrimalDualProgram
+### chen begin
+from regr.program.lossprogram import SampleLossProgram
+### chen end
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL
@@ -46,7 +49,7 @@ args = parser.parse_args()
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 cuda_number= args.cuda_number
-# cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 # cur_device = 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
@@ -183,6 +186,28 @@ if args.IML:
     print("IML program")
     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+### chen begin
+if args.semantic_loss:
+    print("Semantic Loss program")
+    program = SampleLossProgram(
+        graph, SolverModel,
+        poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive],
+        inferTypes=['local/argmax'],
+        # inferTypes=['ILP', 'local/argmax'],
+#         metric={
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+
+        #metric={ 'softmax' : ValueTracker(prediction_softmax),
+        #       'ILP': PRF1Tracker(DatanodeCMMetric()),
+        #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
+        #       },
+#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        # loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),
+        sample = True,
+        sampleSize=300, 
+        sampleGlobalLoss = True
+        )
+### chen end
 
 logging.basicConfig(level=logging.INFO)
 
@@ -208,7 +233,8 @@ for i in range(args.cur_epoch):
             self.sch.step()
 
     # program.load("domi_7") # in case we want to load the model instead of training
-    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    # program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     program.save("domi_"+str(i)) ### in case of saving the parameters of the model
 
     print('-' * 40,"\n",'Training result:')
