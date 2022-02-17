@@ -1,9 +1,9 @@
-from datetime import datetime
+from timeit import default_timer as timer
+from time import process_time
 from collections import OrderedDict
-from collections.abc import Mapping
 import logging
 # ontology
-from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
+#from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
 
 # numpy
 import numpy as np
@@ -20,7 +20,7 @@ from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 
-from regr.graph import LogicalConstrain, V
+from regr.graph import LogicalConstrain, V, fixedL
 from torch import tensor
 
 class gurobiILPOntSolver(ilpOntSolver):
@@ -620,20 +620,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                 vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
             except IndexError: 
                 vDn = None
-        else:
+        else: # If ILP inference
             vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
     
         if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
             vDn = vDn.item()  
              
         if not sample:
-            return vDn # Finish if not sample 
+            return vDn # Return here if not sample
         
-        # Generate sample 
+        # --- Generate sample 
         sampleSize = p
 
-        if sampleSize not in dn.getAttributes()[sampleKey]:
-            # Create sample for this concept and sample size
+        if sampleSize not in dn.getAttributes()[sampleKey]: # check if not already generated
             if vDn == None or vDn != vDn:
                 dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
                 for i in range(sampleSize):
@@ -642,11 +641,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                     dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
             else:
-                t = torch.full((sampleSize+1,), vDn)
-                dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(t)
-                dn.getAttributes()[sampleKey][sampleSize][0] = vDn
+                # Create sample for this concept and sample size
+                t = torch.full((sampleSize,), vDn) # init tensor with probabilities for sampling
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize, dtype=torch.int)
+                
+                torch.bernoulli(t, out = dn.getAttributes()[sampleKey][sampleSize])
                
-        return dn.getAttributes()[sampleKey][sampleSize]
+        return dn.getAttributes()[sampleKey][sampleSize] # Return sample data
                       
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
         vDnLabel = self.__getLabel(_dn, conceptName).item()
@@ -894,9 +895,11 @@ class gurobiILPOntSolver(ilpOntSolver):
     def calculateILPSelection(self, dn, *conceptsRelations, fun=None, epsilon = 0.00001, minimizeObjective = False, ignorePinLCs = False):
         if self.ilpSolver == None:
             self.myLogger.warning('ILP solver not provided - returning')
+            self.myLoggerTime.warning('ILP solver not provided - returning')
+            
             return 
         
-        start = datetime.now()
+        start = process_time() # timer()
         
         try:
             if self.reuse_model and self.model:
@@ -921,6 +924,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             if Q is None:
                 Q = 0
                 self.myLogger.error("No data provided to create any ILP variable - not ILP result returned")
+                self.myLoggerTime.error("No data provided to create any ILP variable - not ILP result returned")
                 
             if minimizeObjective:
                 m.setObjective(Q, GRB.MINIMIZE)
@@ -951,7 +955,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
             for p in lcP:
                 self.myLogger.info('Found %i logical constraints with p %i - %s'%(len(lcP[p]),p,lcP[p]))
-
+                self.myLoggerTime.info('Starting ILP inferencing - Found %i logical constraints'%(len(lcP[p])))
+                
             # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
             ps = [] # List with processed p 
@@ -1012,9 +1017,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.model['x'] = xP
                 
                     
-                self.myLogger.info('Optimizing model for lCs with probabilities %s with %i variables and %i constraints'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLogger.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLoggerTime.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
-                startOptimize = datetime.now()
+                startOptimize = process_time() # timer()
 
                 # Run ILP model - Find solution 
                 mP.optimize()
@@ -1022,25 +1028,32 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 #mP.display()    
                 
-                endOptimize = datetime.now()
-                elapsedOptimize = endOptimize - startOptimize
+                endOptimize = process_time() # timer()
+                elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
     
                 # Check model run result
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
                     self.myLogger.info('%s solution was found in %ims for p - %i with optimal value: %.2f'
-                                       %('Min' if minimizeObjective else 'Max', elapsedOptimize.microseconds/1000, p, mP.ObjVal))
+                                       %('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
+                    
+                    self.myLoggerTime.info('%s solution was found in %ims for p - %i with optimal value: %.2f'
+                                       %('Min' if minimizeObjective else 'Max', elapsedOptimizeInMs, p, mP.ObjVal))
                     solved = True
                     objValue = mP.ObjVal
                 elif mP.status == GRB.Status.INFEASIBLE:
                     self.myLogger.error('Model was proven to be infeasible for p - %i.'%(p))
+                    self.myLoggerTime.error('Model was proven to be infeasible for p - %i.'%(p))
                 elif mP.status == GRB.Status.INF_OR_UNBD:
                     self.myLogger.error('Model was proven to be infeasible or unbound for p - %i.'%(p))
+                    self.myLoggerTime.error('Model was proven to be infeasible or unbound for p - %i.'%(p))
                 elif mP.status == GRB.Status.UNBOUNDED:
                     self.myLogger.error('Model was proven to be unbound.')
+                    self.myLoggerTime.error('Model was proven to be unbound.')
                 else:
                     self.myLogger.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
+                    self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
                 # Print ILP model to log file if model is not solved or logger level is DEBUG
                 if (not solved or self.myLogger.level <= logging.INFO) and self.myLogger.filter(""):
@@ -1053,7 +1066,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     sys.stdout = so
 
                 # Keep result of the model run    
-                lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimize.microseconds/1000}
+                lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimizeInMs}
 
             # Select model run with the max/min objective value 
             maxP = None
@@ -1072,6 +1085,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # If found model - return best result          
             if maxP:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
+                #self.myLoggerTime.info('Best  solution found for p - %i'%(maxP))
                 
                 lcRun[maxP]['mP'].update()
                 
@@ -1116,25 +1130,33 @@ class gurobiILPOntSolver(ilpOntSolver):
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
                             self.myLogger.info('\"%s\" is \"%s\"'%(cDn,c[1]))
-                        
+                            #self.myLoggerTime.info('\"%s\" is \"%s\"'%(cDn,c[1]))
             else:
                 pass
                                        
         except Exception as inst:
             self.myLogger.error('Error returning solutions -  %s'%(inst))
+            self.myLoggerTime.error('Error returning solutions -  %s'%(inst))
+            
             raise
            
-        end = datetime.now()
-        elapsed = end - start
+        end = process_time() # timer()
+        elapsedInS = end - start
+        
         self.myLogger.info('')
-        self.myLogger.info('End - elapsed time: %ims'%(elapsed.microseconds/1000))
+        
+        self.myLogger.info('End ILP Inferencing - elapsed time: %is'%(elapsedInS))
+        self.myLoggerTime.info('End ILP Inferencing - elapsed time: %is'%(elapsedInS))
+        self.myLogger.info('')
+        self.myLoggerTime.info('')
         
         # Return
         return
 
     # -- Calculated loss values for logical constraints
     def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0):
-        
+        start = process_time() # timer()
+
         m = None 
         p = 0
         
@@ -1144,18 +1166,29 @@ class gurobiILPOntSolver(ilpOntSolver):
             p = sampleSize
             
             myBooleanMethods = self.myLcLossSampleBooleanMethods
+                    
+            self.myLogger.info('Calculating sample loss with sample size: %i'%(p))
+            self.myLoggerTime.info('Calculating sample loss with sample size: %i'%(p))
         else:
             myBooleanMethods = self.myLcLossBooleanMethods
             self.myLcLossBooleanMethods.setTNorm(tnorm)
+            self.myLogger.info('Calculating loss ')
+            self.myLoggerTime.info('Calculating loss ')
+
 
         key = "/local/softmax"
         
+        noLCs = 0
         lcLosses = {}
         for graph in self.myGraph:
             for _, lc in graph.logicalConstrains.items():
-                if not lc.headLC:
+                if not lc.headLC or not lc.active:
                     continue
                     
+                if type(lc) is fixedL:
+                    continue
+                    
+                noLCs +=  1
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
                 lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
                 
@@ -1191,12 +1224,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcLosses[lc.lcName]['lossData'] = lossData
 
                 lcLosses[lc.lcName]['lossTensor'] = lossTensor
+                
+        self.myLogger.info('')
+
+        self.myLogger.info('Processed %i logical constraints'%(noLCs))
+        self.myLoggerTime.info('Processed %i logical constraints'%(noLCs))
               
         if sample: # Calculate global sample loss
+            startGS = process_time() # timer()
+            
             lossGlobalCountTensor = torch.zeros(sampleSize)
             lossGlobalTensor = torch.zeros(sampleSize)
             
-            for i in range(1,sampleSize+1):
+            for i in range(sampleSize-1):
                 isGlobal = True
                 iSum = 0
                 g = 0
@@ -1228,9 +1268,28 @@ class gurobiILPOntSolver(ilpOntSolver):
             lcLosses['lossGlobalCountTensor_Max'] = torch.max(lossGlobalCountTensor).item()
             
             lcLosses['lossGlobalTensorData'] = lossGlobalTensor
+            
             if torch.count_nonzero(lossGlobalTensor):
                 lcLosses['lossGlobalTensor'] = torch.sum(lossGlobalTensor) / torch.count_nonzero(lossGlobalTensor)
+                
+                self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['lossGlobalTensor'].item()))
+                self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['lossGlobalTensor'].item()))
             else:
                 lcLosses['lossGlobalTensor'] = None
-                
+                self.myLogger.info('Sample global loss is None')
+                self.myLoggerTime.info('Sample global loss is None')
+            
+            endGS = process_time() # timer()
+            #self.myLoggerTime.info('Global Sample Loss Calculation - elapsed time: %is'%(endGS - startGS))
+            
+        end = process_time() # timer()
+        elapsedInS = end - start
+        
+        self.myLogger.info('End Loss Calculation - elapsed time: %is'%(elapsedInS))
+        self.myLoggerTime.info('End Loss Calculation - elapsed time: %is'%(elapsedInS))
+        self.myLogger.info('')
+        self.myLoggerTime.info('')
+
+        [h.flush() for h in self.myLoggerTime.handlers]
+            
         return lcLosses

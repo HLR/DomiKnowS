@@ -1,26 +1,21 @@
-import os,sys,inspect
-import json
+import os,sys
 import torch
 currentdir = os.path.dirname(os.getcwd())
 print(currentdir)
 # parent_dir = os.path.abspath(os.path.join(currentdir, os.pardir))
 root = os.path.dirname(currentdir)
-print("root Folder Absoloute path: ", root)
+print("root Folder Absolute path: ", root)
 
-
-import sys
 sys.path.append(root)
 
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
-
-
 from regr.data.reader import RegrReader
 from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
-
+from regr.utils import setProductionLogMode
 
 class SudokuReader(RegrReader):
     def parse_file(self):
@@ -50,22 +45,18 @@ class SudokuReader(RegrReader):
     
     def getidval(self, item):
         return [1]
+    
     def getwhole_sudokuval(self, item):
         return item['board']
             
-    
     def getsizeval(self, item):
         return 9, 9
     
-    
 trainreader = SudokuReader("randn", type="raw")
 
-
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL,\
-    atMostI
+from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL
 from regr.graph import EnumConcept
-
 
 Graph.clear()
 Concept.clear()
@@ -99,8 +90,8 @@ with Graph('global') as graph:
     same_table = Concept(name="same_table")
     (same_table_arg1, same_table_arg2) = same_table.has_a(entry1=empty_entry, entry2=empty_entry)
     
-    empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
-
+    empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, 
+                                    values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
 
     ### Constraints
     # entry = concept(name="entry")
@@ -109,12 +100,18 @@ with Graph('global') as graph:
     # fixedL(entry_label("x", eqL(entry, "given", {True})))
     
     FIXED = True
-    SAME_ROW = False
-    SAME_ROW_New = True
-    SAME_COLUMNE = False
-    SAME_COLUMNE_New = True
-    SAME_TABLE = False
-    SAME_TABLE_New = True
+    
+    existsL_LCs = False
+    atMostL_LCs = True
+    
+    SAME_ROW = existsL_LCs
+    SAME_ROW_New = atMostL_LCs
+    
+    SAME_COLUMNE = existsL_LCs
+    SAME_COLUMNE_New = atMostL_LCs
+    
+    SAME_TABLE = existsL_LCs
+    SAME_TABLE_New = atMostL_LCs
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
@@ -129,7 +126,7 @@ with Graph('global') as graph:
                         same_row('z', path=("x", same_row_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
                 ))
-        ), active = SAME_ROW)
+        ), active = SAME_ROW, name = "LC_SAME_ROW_ExistL_for_" + f'v{val}')
         
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
             atMostL(
@@ -138,7 +135,7 @@ with Graph('global') as graph:
                     getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2)
                 )
             )
-        ), active = SAME_ROW_New)
+        ), active = SAME_ROW_New, name = "LC_SAME_ROW_atMostL_for_" + f'v{val}')
         
         ### No same number in the same column between empty entries and empty entries
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
@@ -148,7 +145,7 @@ with Graph('global') as graph:
                         same_col('z', path=("x", same_col_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
                 ))
-        ), active = SAME_COLUMNE)
+        ), active = SAME_COLUMNE, name = "LC_SAME_COLUMNE_existsL_for_" + f'v{val}')
         
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
             atMostL(
@@ -157,7 +154,7 @@ with Graph('global') as graph:
                     getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2)
                 )
             )
-        ), active = SAME_COLUMNE_New)
+        ), active = SAME_COLUMNE_New, name = "LC_SAME_COLUMNE_atMostL_for_" + f'v{val}')
         
         ### No same number in the same table between empty entries and empty entries
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
@@ -167,7 +164,7 @@ with Graph('global') as graph:
                         same_table('z', path=("x", same_table_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
                 ))
-        ), active = SAME_TABLE)
+        ), active = SAME_TABLE, name = "LC_SAME_TABLE_existsL_for_" + f'v{val}')
         
         ifL(getattr(empty_entry_label, f'v{val}')('x'), 
             atMostL(
@@ -176,13 +173,10 @@ with Graph('global') as graph:
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2)
                     )
             )
-        ), active = SAME_TABLE_New)
-
+        ), active = SAME_TABLE_New, name = "LC_SAME_TABLE_atMostL_for_" + f'v{val}')
         
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
+
 class Conv2dSame(torch.nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, bias=True, padding_layer=torch.nn.ReflectionPad2d):
         """It only support square kernels and stride=1, dilation=1, groups=1."""
@@ -198,7 +192,6 @@ class Conv2dSame(torch.nn.Module):
     def forward(self, x):
         return self.net(x)
     
-    
 class SudokuSolver(nn.Module):
     def __init__(self):
         super().__init__()
@@ -208,16 +201,12 @@ class SudokuSolver(nn.Module):
         
         return self.W
     
-    
-    
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+from regr.sensor.pytorch.sensors import JointSensor, FunctionalReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
     pass
-
 
 # def getempties(*prev, data):
 #     rows, cols = torch.where(data == 0)
@@ -231,7 +220,6 @@ def getfixed(*prev, data):
     for i, j in zip(rows.detach().tolist(), cols.detach().tolist()):
         fix[i][j] = 1
         vals[i][j] = data[i][j]
-        
         
     return fix.reshape(fix.shape[0]*fix.shape[1]), vals.reshape(vals.shape[0]*vals.shape[1])
 
@@ -254,9 +242,7 @@ def getlabel(*prev, data):
     for i, j in zip(rows.detach().tolist(), cols.detach().tolist()):
         vals[i][j] = data[i][j] - 1
         
-        
     return vals.reshape(vals.shape[0]*vals.shape[1])
-    
     
 def createSudoku(*prev, data):
     return [1]
@@ -289,11 +275,12 @@ same_row[same_row_arg1.reversed, same_row_arg2.reversed] = CompositionCandidateS
     relations=(same_row_arg1.reversed, same_row_arg2.reversed),
     forward=filter_row)
 
-
 def filter_table(*inputs, entry1, entry2):
     if entry1.instanceID != entry2.instanceID:
-        if int(entry1.getAttribute('rows').item() / 3) == int(entry2.getAttribute('rows').item() / 3) and int(entry1.getAttribute('cols').item() / 3) == int(entry2.getAttribute('cols').item() / 3):
+        if int(entry1.getAttribute('rows').item() / 3) == int(entry2.getAttribute('rows').item() / 3) and \
+           int(entry1.getAttribute('cols').item() / 3) == int(entry2.getAttribute('cols').item() / 3):
             return True
+        
     return False
     
 same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCandidateSensor(
@@ -303,14 +290,12 @@ same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCand
 
 # fixed_entries['rows1', 'cols'] = JointFunctionalReaderSensor(keyword='whole_sudoku', forward=getfixed)
 
+### What kind of model should we use for learning the entries? Because it should be aware of all other decision to make the correct decision,
+##  otherwise it is impossible for the model to learn good weights.
 
-### What kind of model should we use for learning the entries? Because it should be aware of all other decision to make the correct decision, otherwise it is impossible for the model to learn good weights.
-
-
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
-from regr.program.callbackprogram import ProgramStorageCallback
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.program import SolverPOIProgram
+from regr.program.metric import MacroAverageTracker
+from regr.program.loss import NBCrossEntropyLoss
 
 program1 = SolverPOIProgram(
         graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', "ILP"],
@@ -360,9 +345,21 @@ program = SampleLossProgram(
     
 #     print("sudokuLoss - %s"%(sudokuLoss))
 
+
+# Disable Logging    
+setProductionLogMode()
+
 program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
+
+if  existsL_LCs:
+    print("\nUsing constraints with fixedL and existL")
+elif atMostL_LCs:
+    print("\nUsing constraints with fixedL and atMostL")
+else:
+    print("\nUsing only fixedL constraintsL")
+    
 for datanode in program1.populate(trainreader):
     datanode.inferILPResults(empty_entry_label, fun=None)
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
@@ -393,5 +390,5 @@ for datanode in program.populate(trainreader):
         print("---")
     break
     
-    
+
 print(table)
