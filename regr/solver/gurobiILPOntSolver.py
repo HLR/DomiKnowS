@@ -600,20 +600,15 @@ class gurobiILPOntSolver(ilpOntSolver):
             if not sample:
                 return 1
             else:
-                sampleSize = p+1
-                dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize)
+                sampleSize = p
+                dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize, dtype=torch.bool)
                 return dn.getAttributes()[sampleKey][sampleSize]
         
         if xPkey not in dn.attributes:
             if not sample:
                 return None
-            else:
-                sampleSize = p+1
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize)
-                for i in range(sampleSize):
-                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
-                    
-                return dn.getAttributes()[sampleKey][sampleSize]
+            else:   
+                return [None]
         
         if loss: # Loss calculation
             try:
@@ -634,16 +629,11 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         if sampleSize not in dn.getAttributes()[sampleKey]: # check if not already generated
             if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize+1)
-                for i in range(sampleSize):
-                    if i== 0:
-                        continue
-                    
-                    dn.getAttributes()[sampleKey][sampleSize][i] = float("nan")
+                dn.getAttributes()[sampleKey][sampleSize] = [None]
             else:
                 # Create sample for this concept and sample size
                 t = torch.full((sampleSize,), vDn) # init tensor with probabilities for sampling
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize, dtype=torch.int)
+                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize, dtype=torch.bool)
                 
                 torch.bernoulli(t, out = dn.getAttributes()[sampleKey][sampleSize])
                
@@ -1207,18 +1197,22 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else: # Sample
                     lossTensorData = []                    
 
-                    for i, l in enumerate(lossList):
-                        if l[0] == None:
+                    lossListInt = []
+                    for l in lossList:
+                        lossListInt.append(l[0].to(dtype=torch.int, copy=True))
+                        
+                    for i, l in enumerate(lossListInt):
+                        if l == None:
                             lossTensor[i] = float("nan")
                             lt = torch.empty(1)
-                            lt[0] = float("nan")
+                            lt = float("nan")
                             lossTensorData.append(lt)
-                        elif torch.count_nonzero(l[0]):
-                            lossTensor[i] = torch.sum(l[0]).item() / torch.count_nonzero(l[0])
-                            lossTensorData.append(l[0])
+                        elif torch.count_nonzero(l):
+                            lossTensor[i] = torch.sum(l).item() / torch.count_nonzero(l)
+                            lossTensorData.append(l)
                         else:
                             lossTensor[i] = float("nan")
-                            lossTensorData.append(l[0])
+                            lossTensorData.append(l)
                         
                     lossData = torch.stack(lossTensorData, dim = 0)
                     lcLosses[lc.lcName]['lossData'] = lossData
@@ -1230,9 +1224,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('Processed %i logical constraints'%(noLCs))
         self.myLoggerTime.info('Processed %i logical constraints'%(noLCs))
               
-        if sample: # Calculate global sample loss
-            startGS = process_time() # timer()
-            
+        if sample: # Calculate global sample loss           
             lossGlobalCountTensor = torch.zeros(sampleSize)
             lossGlobalTensor = torch.zeros(sampleSize)
             
@@ -1278,9 +1270,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 lcLosses['lossGlobalTensor'] = None
                 self.myLogger.info('Sample global loss is None')
                 self.myLoggerTime.info('Sample global loss is None')
-            
-            endGS = process_time() # timer()
-            #self.myLoggerTime.info('Global Sample Loss Calculation - elapsed time: %is'%(endGS - startGS))
             
         end = process_time() # timer()
         elapsedInS = end - start
