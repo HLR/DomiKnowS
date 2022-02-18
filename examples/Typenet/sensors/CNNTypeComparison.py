@@ -35,10 +35,13 @@ class TypeComparison(nn.Module):
         # logits: (batch_size, bag_size, num_types) -> (batch_size, num_types, bag_size)
         logits = logits.permute(0, 2, 1)
 
-        logits = self.log_sum_exp(logits)
+        logits = self.log_sum_exp(logits) # (batch_size, num_types)
 
         if config.timing:
             print('TypeComparison', time.time() - t0)
             pass
 
-        return logits
+        # list of size num_types containing vectors of size (batch_size, 1)
+        logits_shaped = tuple(torch.permute(logits.unsqueeze(-1), (1, 0, 2)))
+
+        return logits_shaped
