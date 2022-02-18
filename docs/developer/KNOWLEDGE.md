@@ -16,9 +16,9 @@ We provide a graph language based on python for knowledge declaration with notat
         - [Inherit declaration](#inherit-declaration)
     - [Access the nodes](#access-the-nodes)
   - [Constraints](#constraints)
-    - [Logical Constrains](#logical-constrains)
-    - [Graph Constrains](#graph-constrains)
-    - [Ontology Cconstrains](#ontology-constrain)
+    - [Logical Constraints](#logical-constraints)
+    - [Graph Constraints](#graph-constraints)
+    - [Ontology Cconstrains](#ontology-constraint)
 
 ## Class Overview
 
@@ -160,20 +160,20 @@ organization.is_a(word)
 
 ## Constraints
 
-The constrains are collected from three sources:
+The constraints are collected from three sources:
 
-- **logical constrains** - basic form of constrain in the ystem,
+- **logical constraints** - basic form of constraint in the system,
 - **knowledge graph** special definitions in the graph, 
 - **ontology (OWL file)** provided as url to OWL file in the ontology graph.
 
-### Logical Constrains
+### Logical Constraints (LC)
 
-They express constrains between concepts defined in the graph using logical and counting methods (e.g. `ifL`, see below for the full list of logical methods).
+They express constraints between instances of concepts defined in the graph using logical and counting methods (e.g. `ifL`, see below for the full list of LC methods).
 
-The basic building block of the logical constrain is the classification concept called with two optional attributes:
-- variable name 
-- `path` argument which provide information how candidates will be selected for the concept during computing of logical constrains. 
-  It can specify an previously defined variable and the path from this variable through graph edges to candidates selected for this concept.
+The basic building block of the logical constraint is the instance candidate selection expression consisting of the instance concept name called with two optional attributes:
+- variable name assigned to the selected candidate set
+- `path` argument which provide information how reach candidates from the given instance for the provided concept name during the computing of logical constraints. 
+  The path can use an previously, defined in the given LC, variable and the list of relation concepts through the graph edges to candidates selected for the LC variable.
 
 	 ifL(
 		 work_for('x'), 
@@ -183,9 +183,16 @@ The basic building block of the logical constrain is the classification concept 
 	     	  )
 	     )
 
-This example above show shows the constrain which defines variable `x` representing candidates for `'work_for'` concept. 
+This example above show shows the constraint defines variables:
+ - `x` representing candidates for `'work_for'` concept. 
+ - this variable is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
+ 	- `'rel_pair_phrase1'` and 
+ 	- `'rel_pair_phrase2'`.
 
-This variable is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively `'rel_pair_phrase1'` and `'rel_pair_phrase2'`.
+
+This example below defines defines variable `x` representing candidates for `'people'` concept. 
+This variable is then used to define candidates for `'live_in'` by specifying `path` to them using names of graph edge respectively `'rel_pair_phrase1'`. 
+This edge is decorated with  `reversed` to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
 
 	LC_SET_ADDITIONAL = True
 	
@@ -195,9 +202,7 @@ This variable is then used to define candidates for `'people'` and `'organizatio
         active = LC_SET_ADDITIONAL
         )
 
-This example above defines defines variable `x` representing candidates for `'people'` concept. This variable is then used to define candidates for `'live_in'` by specifying `path` to them using names of graph edge respectively `'rel_pair_phrase1'`. This edge is decorated with  `reversed` to follow the edge in reversed direction from `people` candidates to corresponding `live_in` relation candidates.
-
-Additionally this constrain shows optional attribute `active` which if set to false will disable usage of this constrain in the ILP model.  
+Additionally this constraint shows optional attribute `active` which if set to false will disable usage of this constraint in the ILP model.  
 
 	ifL(
 		city('x'), 
@@ -205,42 +210,52 @@ Additionally this constrain shows optional attribute `active` which if set to fa
 		p=90
 		)
 	
-The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of teh constrain.   
-The basic blocks are combined using the following logical functions to build logical expression:
+The example above show usage of optional attribute `p` which specify with the value from 0 to 100 the certainty of validity of the constraint.   
+The basic blocks are combined using the following functions:
 
-- `notL()`,
-- `andL()`,
-- `orL()`,
-- `nandL()`,
-- `ifL()`,
-- `norL()`,
-- `xorL()`,
-- `epqL()`,
-- `eqL()`, -  used to select, for the logical constrain, instances with value for specified attribute in the provided set or equal to the provided value, e.g.: 
+- Logical methods:
 
-*eqL(cityLink, 'neighbor', {True})* - instances of *cityLink* with attribute *neighbor* in the set containing only single value True,
+	- `notL()`,
+	- `andL()`,
+	- `orL()`,
+	- `nandL()`,
+	- `ifL()`,
+	- `norL()`,
+	- `xorL()`,
+	- `epqL()`,
 
-- `existsL()`, e.g.: 
+ - Counting methods:
+ 
+	- `existsL()`, e.g.: 
+			*existsL(firestationCity)* - 
+				*firestationCity* exists,
+	
+	- `exactL(firestationCity)`, e.g.:
+			*exactL(firestationCity, 2)* -
+				there are exactly 2 *firestationCity*,
+	
+	- `atLeastL()`, e.g.:
+			*atLeastL(firestationCity, 4)* - 
+				there are at least 4 *firestationCity*,
+	
+	- `atMostL()`,  e.g.:
+			*atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - 
+				each city has no more then 4 *neighbors*.
+	
+ - Auxiliary methods:
+ 
+	- `eqL()`, -  used to select, for the logical constraint, instances with value for specified attribute in the provided set or equal to the provided value, e.g.:
+			*eqL(cityLink, 'neighbor', {True})* - 
+				instances of *cityLink* with attribute *neighbor* in the set containing only single value True,
+			
+	- `fixedL()`, used to fixed selected candidates to selected classification, e.g.:
+	 		*fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)* - 
+	 			candidates for *empty_entry_label* which have attribute *fixed* should have their classification  fixed to *empty_entry*
 
-*existsL(firestationCity)* - *firestationCity* exists,
 
-- `exactL(firestationCity)`, e.g.:
+### Graph Constraints
 
-*exactL(firestationCity, 2)* - exists exactly 2 *firestationCity*,
-
-- `atLeastL()`, e.g.:
-
-*atLeastL(firestationCity, 4)* - exists at least 4 *firestationCity*,
-
-- `atMostL()`,  e.g.:
-
-*atMostL(andL(city('x'), firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 4)* - each city has no more then 4 *neighbors*.
-
-
-
-### Graph Constrains
-
-The graph can specify constrains:
+The graph can also specify constraints:
 
 - **Subclass relation between concepts**: e.g. `people = word(name='people')` is mapped to logical expression -
 
@@ -254,15 +269,15 @@ The graph can specify constrains:
 
   *ifL(work_for('x'), andL(people(path=('x', rel_pair_phrase1.name)), organization(path=('x', rel_pair_phrase2.name))))*
 
-### Ontology Constrain
+### Ontology Constraint
 
 The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
 
-The OWL ontology language allows to specify constrains on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constrains.
+The OWL ontology language allows to specify constraints on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constraints.
 
-This detail of mapping from OWL to logical representation is presented below for each OWL constrain.
+This detail of mapping from OWL to logical representation is presented below for each OWL constraint.
 
-**Constrains extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
+**Constraints extracted from ontology [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") (*concepts*)**:
 
 - **[disjoint](https://www.w3.org/TR/owl2-syntax/#Disjoint_Classes "OWL example of disjoint statement for classes")** statement between two classes *Concept1* and *Concept2* in ontology is mapped to equivalent logical expression -  
   
@@ -294,7 +309,7 @@ This detail of mapping from OWL to logical representation is presented below for
 
 - **[oneOf](https://www.w3.org/TR/owl2-syntax/#Enumeration_of_Individuals "OWL example of enumeration of individuals for classes")** statements for a class *Concept* in ontology
 
-**Constrains extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)**
+**Constraints extracted from ontology [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property") (*relations*)**
 
 - **[domain](https://www.w3.org/TR/owl2-syntax/#Object_Property_Domain "OWL example of domain statement for property")** of relation *P(token1, token2)* statements in ontology are mapped to equivalent logical expression -  
 
@@ -342,11 +357,11 @@ This detail of mapping from OWL to logical representation is presented below for
   
 - **[someValueFrom](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of someValueFrom statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
   
 - **[hasValue](https://www.w3.org/TR/owl2-syntax/#Existential_Quantification "OWL example of hasValue statement for property")** statements statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
 
 - **[objectHasSelf](https://www.w3.org/TR/owl2-syntax/#Self-Restriction "OWL example of objectHasSelf statement for property")** statements for relation *P(token1, token2)* in ontology are mapped to equivalent logical expression -  
 
@@ -362,11 +377,11 @@ This detail of mapping from OWL to logical representation is presented below for
 
 - **[exactCardinality](https://www.w3.org/TR/owl2-syntax/#Exact_Cardinality "OWL example of exactCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
 
 - **[minCardinality](https://www.w3.org/TR/owl2-syntax/#Minimum_Cardinality "OWL example of minCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 
-  *This is an Existential constrain not possible to check without assumption of close world*
+  *This is an Existential constraint not possible to check without assumption of close world*
 
 - **[maxCardinality](https://www.w3.org/TR/owl2-syntax/#Maximum_Cardinality "OWL example of maxCardinality statement for property")** statements for relation *P(token1, token2)*  in ontology are mapped to equivalent logical expression -  
 

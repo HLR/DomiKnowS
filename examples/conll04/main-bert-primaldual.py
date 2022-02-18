@@ -6,7 +6,7 @@ sys.path.append('.')
 sys.path.append('../..')
 
 from regr.program import POIProgram, SolverPOIProgram, IMLProgram
-from regr.program.program import ProgramStorageCallback
+from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
@@ -193,6 +193,7 @@ def model():
     lbp = PrimalDualProgram(
         graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        tnorm = 'G', 
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 

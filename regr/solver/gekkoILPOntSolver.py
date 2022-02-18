@@ -683,7 +683,7 @@ class gekkoILPOntSolver(ilpOntSolver):
             
         return Z_Q
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    def calculateILPSelection(self, phrase, fun=None, epsilon = 0.00001, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
         start = datetime.datetime.now()
         self.myLogger.info('Start for phrase %s'%(phrase))
 
