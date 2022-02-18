@@ -204,7 +204,8 @@ if args.semantic_loss:
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         # loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),
         sample = True,
-        sampleSize=300, 
+        # sampleSize=300, 
+        sampleSize=2,
         sampleGlobalLoss = True
         )
 ### chen end
@@ -235,7 +236,7 @@ for i in range(args.cur_epoch):
     # program.load("domi_7") # in case we want to load the model instead of training
     # program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
-    program.save("domi_"+str(i)) ### in case of saving the parameters of the model
+    # program.save("domi_"+str(i)) ### in case of saving the parameters of the model
 
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
