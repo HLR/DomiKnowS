@@ -155,7 +155,7 @@ def unpack_vec_truth(contains, type_vec):
     # type_vec: (batch_size, num_types, 1)
     # return: list of size num_types containing vectors of size (batch_size, 1)
     out = list(torch.permute(type_vec, (1, 0, 2)))
-    return type_vec
+    return out
 
 concepts_list = []
 loss_dict = {}
