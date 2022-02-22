@@ -20,7 +20,28 @@
 
 ## 1. `TorchSensor`
 
+
 ## 1.1 `FunctionalSensor`
+
+After ReaderSensor, `FunationalSensor` is the most basic sensor. It inherits directly from `TorchSensor` and It overrides its `update_pre_context` and `update_context` functions. It also implements the `forward` fucntion.
+
+This sensor takes as input multiple of arguments, parse them with a python fucntion given to forward and outputs a single feature to be put in a `property` of a `concept`. The definition of a `FunationalSensor` is as such:
+
+```python
+FunctionalSensor(arg1,arg2,..., forward, label)
+```
+the first few arguments will be inputs from various `concept`s and `property`s. Forward get a python function as input that would parse the inputs. and label is an optional input that would determine wheather or not the output of the `FunationalSensor` is used in loss function.
+
+For examples of this Sensor refer to the following examples:
+
+examples->ACE05->model.py
+examples->CIFAR10->Sensors->sensors.py
+examples->Email_Spam->Sensors->sensors.py
+examples->Propara->Propora-Complete.ipynb
+examples->SentimentAnalysis->sensors->tweetGraph.py
+examples->WIQA->WIQA_aug.py
+examples->demo->main.py
+examples->squad->BertQA.py
 
 ## 1.1.1 `JointSensor`
 
