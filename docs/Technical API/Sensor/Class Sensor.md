@@ -35,12 +35,19 @@ the first few arguments will be inputs from various `concept`s and `property`s. 
 For examples of this Sensor refer to the following examples:
 
 examples->ACE05->model.py
+
 examples->CIFAR10->Sensors->sensors.py
+
 examples->Email_Spam->Sensors->sensors.py
+
 examples->Propara->Propora-Complete.ipynb
+
 examples->SentimentAnalysis->sensors->tweetGraph.py
+
 examples->WIQA->WIQA_aug.py
+
 examples->demo->main.py
+
 examples->squad->BertQA.py
 
 ## 1.1.1 `JointSensor`
