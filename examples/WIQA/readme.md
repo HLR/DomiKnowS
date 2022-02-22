@@ -81,4 +81,12 @@ File "/home/zhengchen/anaconda/anaconda3/envs/domi/lib/python3.9/site-packages/t
 RuntimeError: CUDA out of memory.:
 ```
 
-New bug: After I git merge the develop_lc branch to my branch, I meet the error on the cross entrogy. I save the log file to ''wiqa_run_cross_entropy.out''.
+New bug: After I git merge the develop_newlc branch to my branch, I meet the error on the cross entrogy. I save the log file to ''wiqa_run_cross_entropy.out''.
+
+
+## Solutions (Chen writing):
+
+I try to use bitsandbyte library.
+```
+pip install bitsandbytes-cuda111
+```
