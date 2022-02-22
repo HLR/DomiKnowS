@@ -80,3 +80,5 @@ File "/home/zhengchen/anaconda/anaconda3/envs/domi/lib/python3.9/site-packages/t
     Variable._execution_engine.run_backward(
 RuntimeError: CUDA out of memory.:
 ```
+
+New bug: After I git merge the develop_lc branch to my branch, I meet the error on the cross entrogy. I save the log file to ''wiqa_run_cross_entropy.out''.
