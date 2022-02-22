@@ -42,6 +42,9 @@ class TypeComparison(nn.Module):
             pass
 
         # list of size num_types containing vectors of size (batch_size, 1)
-        logits_shaped = tuple(torch.permute(logits.unsqueeze(-1), (1, 0, 2)))
+        logits_shaped = list(torch.permute(logits.unsqueeze(-1), (1, 0, 2)))
+
+        print("len(logits_shaped):", len(logits_shaped))
+        print("logits_shaped[0].shape:", logits_shaped[0].shape)
 
         return logits_shaped
