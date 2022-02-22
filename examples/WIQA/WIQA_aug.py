@@ -3,14 +3,8 @@ import sys
 sys.path.append('../../../')
 sys.path.append('../../')
 sys.path.append('./')
-
 sys.path.append('../')
 
-
-# import sys
-# sys.path.append(".")
-# sys.path.append("../")
-# sys.path.append("../../")
 import torch
 
 from transformers import AdamW
@@ -49,15 +43,18 @@ parser.add_argument('--num_training_steps', dest='num_training_steps', default=1
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
 ### chen begin
 parser.add_argument('--semantic_loss', dest='semantic_loss', default=False, help='whether or not to use semantic loss',type=bool)
+parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',type=bool)
 ### chen end
 
 args = parser.parse_args()
 
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
-cuda_number= args.cuda_number
-cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
-# cur_device = 'cpu'
+if args.cpu:
+    cur_device = 'cpu'
+else:
+    cuda_number= args.cuda_number
+    cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
