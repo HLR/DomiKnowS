@@ -1,7 +1,10 @@
+
 import sys
-sys.path.append(".")
-sys.path.append("../")
-sys.path.append("../../")
+sys.path.append('../../../')
+sys.path.append('../../')
+sys.path.append('./')
+sys.path.append('../')
+
 import torch
 
 from transformers import AdamW
@@ -10,6 +13,9 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker,
 import logging
 from transformers import get_linear_schedule_with_warmup
 from regr.program.primaldualprogram import PrimalDualProgram
+### chen begin
+from regr.program.lossprogram import SampleLossProgram
+### chen end
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
@@ -29,18 +35,26 @@ parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epoc
 parser.add_argument('--lr', dest='learning_rate', default=2e-6, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=100000000, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=10, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML multiplier',type=float)
-parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
-parser.add_argument('--num_training_steps', dest='num_training_steps', default=20000, help='total number of training steps for the transformer',type=int)
-parser.add_argument('--verbose', dest='verbose', default=1, help='print the errors',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
+parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
+parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
+parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+### chen begin
+parser.add_argument('--semantic_loss', dest='semantic_loss', default=False, help='whether or not to use semantic loss',type=bool)
+parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',type=bool)
+### chen end
+
 args = parser.parse_args()
 
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
-cuda_number= args.cuda_number
-cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+if args.cpu:
+    cur_device = 'cpu'
+else:
+    cuda_number= args.cuda_number
+    cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
@@ -175,6 +189,29 @@ if args.IML:
     print("IML program")
     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+### chen begin
+if args.semantic_loss:
+    print("Semantic Loss program")
+    program = SampleLossProgram(
+        graph, SolverModel,
+        poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive],
+        inferTypes=['local/argmax'],
+        # inferTypes=['ILP', 'local/argmax'],
+#         metric={
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+
+        #metric={ 'softmax' : ValueTracker(prediction_softmax),
+        #       'ILP': PRF1Tracker(DatanodeCMMetric()),
+        #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
+        #       },
+#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        # loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),
+        sample = True,
+        # sampleSize=300, 
+        sampleSize=2,
+        sampleGlobalLoss = True
+        )
+### chen end
 
 logging.basicConfig(level=logging.INFO)
 
@@ -199,9 +236,11 @@ for i in range(args.cur_epoch):
         def __call__(self):
             self.sch.step()
 
-    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
-    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)#, train_step_callbacks=[SchCB(program)])
-    #program.save("domi_"+str(i)) in case of saving the parameters of the model
+    # program.load("domi_7") # in case we want to load the model instead of training
+    # program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
+    # program.save("domi_"+str(i)) ### in case of saving the parameters of the model
+
 
     print('-' * 40,"\n",'Training result:')
     print(program.model.loss)
