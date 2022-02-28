@@ -36,7 +36,7 @@ parser.add_argument('--lr', dest='learning_rate', default=2e-6, help='learning r
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
+parser.add_argument('--batch', dest='batch_size', default=1, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
@@ -49,6 +49,19 @@ parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',ty
 args = parser.parse_args()
 
 
+def seed_everything(seed: int):
+    import random, os
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+seed_everything(42)
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
 if args.cpu:
     cur_device = 'cpu'
@@ -180,7 +193,7 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 if not args.primaldual and not args.IML:
     print("simple program")
     program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+                                    symmetric, transitive],inferTypes=['local/argmax',"ILP"],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 if args.primaldual:
     print("primal dual program")
     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
