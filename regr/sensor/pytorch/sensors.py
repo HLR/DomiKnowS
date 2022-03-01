@@ -17,25 +17,16 @@ class TorchSensor(Sensor):
         self.edges = edges
         self.label = label
         if device == 'auto':
-            is_cuda = torch.cuda.is_available()
-            if is_cuda:
-                self.device = torch.device("cuda")
-            else:
-                self.device = torch.device("cpu")
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
-            self.device = device
+            self.device=device
 
     def __call__(
         self,
         data_item: Dict[str, Any]
     ) -> Any:
         self.context_helper = data_item
-        try:
-            self.update_context(data_item)
-        except Exception as ex:
-            print('Error {} during updating data item {} with sensor {}'.format(ex, data_item, self.fullname))
-            raise
-        return data_item[self]
+        return super(TorchSensor, self).__call__(data_item,False,self.fullname)
 
     def update_context(
         self,
@@ -97,18 +88,6 @@ class TorchSensor(Sensor):
 
     def forward(self,) -> Any:
         raise NotImplementedError
-
-    @property
-    def prop(self):
-        if self.sup is None:
-            raise ValueError('{} must be used with with property assignment.'.format(type(self)))
-        return self.sup
-
-    @property
-    def concept(self):
-        if self.prop.sup is None:
-            raise ValueError('{} must be used with with concept[property] assignment.'.format(type(self)))
-        return self.prop.sup
 
 
 class FunctionalSensor(TorchSensor):
