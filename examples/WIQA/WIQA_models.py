@@ -11,7 +11,18 @@ class WIQA_Robert(nn.Module):
         self.last_layer_size = self.bert.config.hidden_size
 
     def forward(self, input_ids,attention_mask):
-        last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+        try:
+            last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+        except RuntimeError:
+            print("Cuda out of memory")
+            print(torch.cuda.memory_summary(device=None, abbreviated=False))
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            
+            last_hidden_state, pooled_output = self.bert(input_ids=input_ids,attention_mask=attention_mask,return_dict=False)
+
+            return last_hidden_state[:,0]
         return last_hidden_state[:,0]
 
 class RobertaClassificationHead(nn.Module):
