@@ -30,11 +30,6 @@ class Sensor(BaseGraphTreeNode):
             data_item[self] = val
         self.propagate_context(data_item, force)
 
-    def propagate_context(self, data_item, node, force=False):
-        if self.prop is not None and (self.prop not in data_item or force):
-            data_item[self.prop] = data_item[self]
-            self.propagate_context(data_item, force)
-
     def forward(
         self,
         data_item: Dict[str, Any]
