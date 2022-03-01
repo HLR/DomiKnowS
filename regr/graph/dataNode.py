@@ -1121,7 +1121,6 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        print("hello")
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def verifySelection(self, *_conceptsRelations):
