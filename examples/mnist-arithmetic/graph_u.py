@@ -24,8 +24,8 @@ with Graph(name='global', reuse_model=True) as graph:
     
     summation = addition(name='summation', ConceptClass=EnumConcept, values=list(map(lambda v: f's_{v}', range(summationRange))))
 
-    atMostL(*digit.attributes)
-    atMostL(*summation.attributes)
+    ifL(image,  atMostL(*digit.attributes))
+    ifL(addition, atMostL(*summation.attributes))
 
     for i in range(digitRange):
         j = summationVal - i

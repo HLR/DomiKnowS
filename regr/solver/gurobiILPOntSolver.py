@@ -1199,6 +1199,9 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     lossListInt = []
                     for l in lossList:
+                        if l[0] is None:
+                            continue
+                        
                         lossListInt.append(l[0].to(dtype=torch.int, copy=True))
                         
                     for i, l in enumerate(lossListInt):

@@ -118,14 +118,15 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
         obj-=1-g_vars[-1][0]*probabilities[i_var][0]+1-g_vars[-1][1]*probabilities[i_var][1]+1-g_vars[-1][2]*probabilities[i_var][2]
         m.addConstr(g_vars[-1][0]+g_vars[-1][1]+g_vars[-1][2]== 1, str(i_var)+" labels")
 
-    for i in results:
-        if i[0]==None or i[1]==None or i[2]==None:
-            if verbose:
+    if verbose:
+        for i in results:
+            if i[0]==None or i[1]==None or i[2]==None:
                 print("Error: There is a None in paragraph : ",para_num)
-        if not i[0]+i[1]+i[2]==1:
-            if verbose:
+            elif i[0]+i[1]+i[2] > 1:
                 print("Error: There more than one correct label in paragraph : ",para_num)
-
+            elif i[0]+i[1]+i[2] == 0:
+                print("Error: There are no label in paragraph : ",para_num)
+        
     for arg1, arg2 in product(range(n), repeat=2):
         if arg1 == arg2:
             continue

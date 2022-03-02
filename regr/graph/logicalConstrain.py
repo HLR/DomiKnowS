@@ -186,10 +186,12 @@ class LogicalConstrain:
                 for cV in cLcVariables:
                     newV = []
                     for cvElement in cV:
+                        if cvElement is None:
+                            pass
                         newElement = [cvElement]
                         newV.append(newElement)
                     newLcVars.append(newV)
-        elif len (cLcVariables) == 1: # Single variable
+        elif len(cLcVariables) == 1: # Single variable
             for indexLcV, lcV in enumerate(lcVars):
                 newV = []
                 for lcVelement in lcV:
@@ -197,7 +199,10 @@ class LogicalConstrain:
                     if cLcVariables is None:
                         newElemenet.append(None)  
                     else:
-                        newElemenet.append(cLcVariables[0])
+                        if cLcVariables[0]:
+                            newElemenet.append(cLcVariables[0][0])
+                        else:
+                            newElemenet.append(None)
                     newV.append(newElemenet)
                                     
                 newLcVars.append(newV)                

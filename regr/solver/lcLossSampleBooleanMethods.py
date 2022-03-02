@@ -186,7 +186,17 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
     
+    def ifNone(self, var):
+        for v in var:
+            if not torch.is_tensor(v):
+                return True
+        
+        return False
+    
     def notVar(self, _, var, onlyConstrains = False):
+        if self.ifNone([var]):
+            return None
+        
         if onlyConstrains:
             return var # notLoss
         else:
@@ -194,6 +204,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return notSuccess
     
     def and2Var(self, _, var1, var2, onlyConstrains = False):
+        if self.ifNone([var1, var2]):
+            return None
+        
         and2Success = torch.logical_and(var1,var2)
        
         if onlyConstrains:
@@ -204,6 +217,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return and2Success    
             
     def andVar(self, _, *var, onlyConstrains = False): 
+        if self.ifNone(var):
+            return None
+        
         andSuccess = var[0]
         for i in range(1, len(var)):
             andSuccess = torch.logical_and(andSuccess, var[i])
@@ -216,6 +232,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return andSuccess    
     
     def or2Var(self, _, var1, var2, onlyConstrains = False):
+        if self.ifNone([var1, var2]):
+            return None
+        
         or2Success = torch.logical_or(var1,var2)
             
         if onlyConstrains:
@@ -226,6 +245,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return or2Success   
     
     def orVar(self, _, *var, onlyConstrains = False):
+        if self.ifNone(var):
+            return None
+        
         orSuccess = var[0]
         for i in range(1, len(var)):
             orSuccess = torch.logical_or(orSuccess, var[i])
@@ -239,6 +261,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
         #results = self.notVar(_, self.and2Var(_, var1, var2,))
+        if self.ifNone([var1, var2]):
+            return None
         
         nand2Success = torch.logical_not(torch.logical_and(var1, var2))
 
@@ -251,6 +275,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
          
     def nandVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.andVar(_, var))
+        if self.ifNone(var):
+            return None
             
         nandSuccess = var[0]
         for i in range(1, len(var)):
@@ -264,7 +290,10 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             nandSuccess = torch.logical_not(nandSuccess)
             return nandSuccess     
         
-    def ifVar(self, _, var1, var2, onlyConstrains = False):        
+    def ifVar(self, _, var1, var2, onlyConstrains = False):
+        if self.ifNone([var1, var2]):
+            return None
+                
         ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
@@ -276,6 +305,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     
     def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
+        if self.ifNone(var):
+            return None
             
         norSuccess = var[0]
         for i in range(1, len(var)):
@@ -290,6 +321,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return norSuccess     
            
     def xorVar(self, _, var1, var2, onlyConstrains = False):
+        if self.ifNone([var1, var2]):
+            return None
+        
         xorSuccess = torch.logical_or(torch.logical_and(torch.logical_not(var1), var2), torch.logical_and(var1, torch.logical_not((var2))))
             
         if onlyConstrains:
@@ -300,6 +334,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return xorSuccess
     
     def epqVar(self, _, var1, var2, onlyConstrains = False):
+        if self.ifNone([var1, var2]):
+            return None
+        
         epqSuccess = torch.eq(var1,var2)
             
         if onlyConstrains:
@@ -310,6 +347,9 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
+        if self.ifNone(var):
+            return None
+        
         limitTensor = torch.full_like(var[0], limit)
        
         # Translate boolean to int
@@ -340,7 +380,10 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         else:       
             return countSuccess    
         
-    def fixedVar(self, _, _var, onlyConstrains = False):
+    def fixedVar(self, _, var, onlyConstrains = False):
+        if self.ifNone([var]):
+            return None
+        
         fixedSuccess = 1
         
         if onlyConstrains:
