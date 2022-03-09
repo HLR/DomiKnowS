@@ -93,6 +93,19 @@ class LossProgram(LearningBasedProgram):
             c_lr_decay_param=c_lr_decay_param,
             c_session=c_session,
             **kwargs)
+    
+    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+        super.call_epoch(name=name, dataset=dataset, epoch_fn=epoch_fn, **kwargs)
+        if dataset is not None:
+            if self.model.loss:
+                self.logger.info(' - Constraint loss:')
+                self.logger.info(self.cmodel.loss)
+
+                metricName = 'Constraint_loss'
+                metricResult = self.cmodel.loss
+
+                if self.dbUpdate is not None:
+                    self.dbUpdate(desc, metricName, metricResult)
 
     def train_epoch(
         self, dataset,
