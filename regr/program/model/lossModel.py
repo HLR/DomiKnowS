@@ -71,6 +71,7 @@ class LossModel(torch.nn.Module):
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['lossGlobalTensor']:
             globalLoss = constr_loss['lossGlobalTensor'].item()
+            self.loss['globalLoss'](globalLoss)
             lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
         else:
             for key, loss in constr_loss.items():

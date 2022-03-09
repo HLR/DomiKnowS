@@ -10,5 +10,3 @@ graphviz
 pymongo[tls]
 dnspython
 sklearn
-spacy
-networkx
