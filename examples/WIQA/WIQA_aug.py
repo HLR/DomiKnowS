@@ -1,5 +1,9 @@
-
+import sys
+sys.path.append(".")
+sys.path.append("../")
+sys.path.append("../../")
 import torch
+
 from transformers import AdamW
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
@@ -40,7 +44,7 @@ cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)[:1]
+reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 #reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
@@ -61,24 +65,28 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     USE_LC_exactL = True
-    USE_LC_atMostL = True
+    USE_LC_atMostL = False
 
     USE_LC_symmetric  = True
     USE_LC_transitiveIsMore  = True
     USE_LC_transitiveIsLess = True
     
     # Only one of the labels to be true
-    exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
-    atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL") # breakpoint in WIQA line 126
+    ifL(question, exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL"))
+
+    #exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
+    ifL(question,  atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL"))
 
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
     # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
+    #ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
     ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
-    
+
     # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
+    #ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
     ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
 
     # the transitive relation is between questions that have a transitive relation between them
@@ -88,14 +96,13 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
+    #ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
     ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
+    #ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
     ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
 
-from IPython.display import Image
-#graph.visualize("./image")
-#Image(filename='image.png')
 
 print("Sensor Part:")
 
@@ -182,11 +189,11 @@ if not path.exists("new_domi_1"):
     join_model("domi_1_20","new_domi_1")
 
 # at the end we run our program for each epoch and test the results each time
-
+logging.info("training and testing begins")
 for i in range(args.cur_epoch):
     print("this epoch is number:",i,"&"*10)
     class SchCB():
-        def __init__(self, program) -> None:
+        def __init__(self, program):
             self.program = program
             self._sch = None
         @property
@@ -195,7 +202,7 @@ for i in range(args.cur_epoch):
                 self._sch = get_linear_schedule_with_warmup(self.program.opt, num_warmup_steps = args.num_warmup_steps, num_training_steps = args.num_training_steps)
             return self._sch
 
-        def __call__(self) -> None:
+        def __call__(self):
             self.sch.step()
 
     program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
@@ -209,6 +216,6 @@ for i in range(args.cur_epoch):
 
     print("***** dev aug *****")
     test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
-    #test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
+    test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
     print("***** test aug *****")
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)

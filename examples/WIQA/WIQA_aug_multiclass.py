@@ -66,8 +66,8 @@ with Graph('WIQA_graph') as graph:
     answer = question(name="answer", ConceptClass=EnumConcept, values=["is_more", "is_less","no_effect"])
 
     # Only one of the labels to be true
-    exactL(answer.is_more, answer.is_less, answer.no_effect)
-    atMostL(answer.is_more, answer.is_less, answer.no_effect)
+    ifL(question, exactL(answer.is_more, answer.is_less, answer.no_effect))
+    ifL(question, atMostL(answer.is_more, answer.is_less, answer.no_effect))
 
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')

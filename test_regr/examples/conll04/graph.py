@@ -51,5 +51,5 @@ with Graph('global') as graph:
         ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         
         # LC3
-        atMostL(people, organization, location, other, o)
+        ifL(word, atMostL(people, organization, location, other, o))
         

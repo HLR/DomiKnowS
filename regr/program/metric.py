@@ -81,9 +81,9 @@ class DatanodeCMMetric(torch.nn.Module):
         else:
             names=list(result.keys())
             names.remove("Total")
-            names.remove(str(prop.name))
-            return {"class_names":names,"labels":result[str(prop.name)]["labels"],"preds":result[str(prop.name)]["preds"]}
-
+            if names:
+                names.remove(str(prop.name))
+                return {"class_names":names,"labels":result[str(prop.name)]["labels"],"preds":result[str(prop.name)]["preds"]}
 
 
 class MetricTracker(torch.nn.Module):

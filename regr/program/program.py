@@ -311,7 +311,7 @@ class LearningBasedProgram():
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
-            for data_item in dataset:
+            for i, data_item in enumerate(dataset):
                 _, _, *output = self.model(data_item)
                 yield detuple(*output[:1])
 
