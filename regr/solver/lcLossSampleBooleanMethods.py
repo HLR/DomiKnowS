@@ -350,7 +350,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         if self.ifNone(var):
             return None
         
-        limitTensor = torch.full_like(var[0], limit)
+        limitTensor = torch.full([len(var[0])], limit)
        
         # Translate boolean to int
         varInt = []

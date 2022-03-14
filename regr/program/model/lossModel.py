@@ -69,8 +69,8 @@ class LossModel(torch.nn.Module):
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
         lmbd_loss = []
-        if self.sampleGlobalLoss and constr_loss['lossGlobalTensor']:
-            globalLoss = constr_loss['lossGlobalTensor'].item()
+        if self.sampleGlobalLoss and constr_loss['globalLoss']:
+            globalLoss = constr_loss['globalLoss']
             self.loss['globalLoss'](globalLoss)
             lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
         else:
