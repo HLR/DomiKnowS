@@ -1229,10 +1229,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if not lossList:
                     continue
                 
-                if lc.name in lcLosses:
-                    lcName = lc.lcName
-                else:
-                    lcName = lc.name
+                lcName = lc.lcName
                     
                 lcLosses[lcName] = {}
                 current_lcLosses = lcLosses[lcName]
