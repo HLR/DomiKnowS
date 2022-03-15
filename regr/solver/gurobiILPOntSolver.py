@@ -886,7 +886,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
-                        sampleInfo = sampleInfo|sampleInfoLC
+                        sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
