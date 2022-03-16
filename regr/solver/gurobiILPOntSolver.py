@@ -1268,15 +1268,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     # Calculate loss value
                     for i, l in enumerate(lossListInt):
-                        lossRate = 0
-                        for lInside in l:    
-                            if lInside == None:
+                        countFailures = 0
+                        for currentFailures in l:    
+                            if currentFailures == None:
                                 lossTensor[i] = float("nan")
                                 lossRateTensor[i] = float("nan")
                                 continue
                             
                             # Calculate Loss rate in sample
-                            lossRate += torch.sum(lInside).item() / sampleSize # torch.count_nonzero(l).item()
+                            countFailures += torch.sum(currentFailures).item()
                             
                             # Calculate los value for sampple loss
                             currentLossT = None
@@ -1290,7 +1290,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     
                                     pSum = torch.add(pS, oneMinusPS) # sum of p and 1-p tensors
                                     
-                                    cLoss = torch.mul(pSum, lInside) # Chose loss entries in tensor
+                                    currentSuccesses = torch.logical_not(currentFailures)
+                                    cLoss = torch.mul(pSum, currentSuccesses) # Chose successes
                                     
                                     # Sum the loss
                                     if currentLossT == None:
@@ -1302,19 +1303,19 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if currentLossT == None:
                                 currentLoss = float("nan")
                             else:
-                                currentLoss = torch.sum(currentLossT).item() / sampleSize
+                                currentLoss = torch.sum(currentLossT).item()
                                 
                             # Collect calculated loss for sample
                             lossTensor[i] = currentLoss
 
-                        lossRateTensor[i] = lossRate
+                        lossRateTensor[i] = countFailures
 
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['loss'] = torch.nansum(lossTensor).item() / len(lossTensor)
                 
                 if sample:
                     current_lcLosses['lossRateTensor'] = lossRateTensor
-                    current_lcLosses['lossRate'] = torch.nansum(lossRateTensor).item() / len(lossRateTensor)
+                    current_lcLosses['failuresRate'] = torch.nansum(lossRateTensor).item() / len(lossRateTensor)
 
         self.myLogger.info('')
 
@@ -1323,19 +1324,19 @@ class gurobiILPOntSolver(ilpOntSolver):
               
         if sample: # Calculate global sample loss  
             globalLoss = 0
-            globalLossRate = 0
+            globalCountFailures = 0
             
             for lc in lcLosses:
                 globalLoss += lcLosses[lc]['loss']
-                globalLossRate += lcLosses[lc]['lossRate']
+                globalCountFailures += lcLosses[lc]['failuresRate']
                          
             lcLosses['globalLoss'] = globalLoss
-            lcLosses['globalLossRate'] = globalLossRate/len(lcLosses)
+            lcLosses['globalFailuresRate'] = globalCountFailures/len(lcLosses)
                 
             self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
             self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            self.myLogger.info('Calculated sample global average loss rate : %f'%(lcLosses['globalLossRate']))
-            self.myLoggerTime.info('Calculated sample global average loss rate: %f'%(lcLosses['globalLossRate']))
+            self.myLogger.info('Calculated sample global average Failures rate : %f'%(lcLosses['globalFailuresRate']))
+            self.myLoggerTime.info('Calculated sample global average Failures rate: %f'%(lcLosses['globalFailuresRate']))
             
         end = process_time() # timer()
         elapsedInS = end - start
