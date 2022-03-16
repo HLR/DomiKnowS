@@ -319,7 +319,7 @@ program = SampleLossProgram(
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=300, 
+        sampleSize=1, 
         sampleGlobalLoss = True
         )
 
@@ -349,7 +349,7 @@ program = SampleLossProgram(
 # Disable Logging    
 setProductionLogMode()
 
-program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+# program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
 
@@ -360,16 +360,16 @@ elif atMostL_LCs:
 else:
     print("\nUsing only fixedL constraintsL")
     
-for datanode in program1.populate(trainreader):
-    datanode.inferILPResults(empty_entry_label, fun=None)
-    entries = datanode.getChildDataNodes(conceptName=empty_entry)
-    for entry in entries:
-        t = entry.getAttribute(empty_entry_label, 'ILP')
-        print(t)
-        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-        if entry.getAttribute('fixed').item() == 1:
-            assert entry.getAttribute('val').item() == predicted
-    break
+# for datanode in program1.populate(trainreader):
+#     datanode.inferILPResults(empty_entry_label, fun=None)
+#     entries = datanode.getChildDataNodes(conceptName=empty_entry)
+#     for entry in entries:
+#         t = entry.getAttribute(empty_entry_label, 'ILP')
+#         print(t)
+#         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+#         if entry.getAttribute('fixed').item() == 1:
+#             assert entry.getAttribute('val').item() == predicted
+#     break
     
 program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
               Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
