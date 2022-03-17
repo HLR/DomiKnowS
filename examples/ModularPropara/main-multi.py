@@ -15,6 +15,7 @@ from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.utils import setProductionLogMode
 
 def model_declaration():
     from graph_multi import (
@@ -79,7 +80,7 @@ def model_declaration():
     def make_before_connection(*prev, data):
         return data[0], data[1]
 
-    before[before_arg1, before_arg2] = JointFunctionalReaderSensor(step['text'], keyword='before', forward=make_before_connection)
+    before[before_arg1.reversed, before_arg2.reversed] = JointFunctionalReaderSensor(step['text'], keyword='before', forward=make_before_connection)
 
     def make_actions(r1, r2, entities, steps):
     #     print(r1, r2)
@@ -146,7 +147,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-
+    setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
     #     lbp.test(dataset, device='auto')
@@ -164,15 +165,17 @@ def main():
             "actions_before": [],
         }
 
-        entities = datanode.findDatanodes(select=entity)
+        entities_instances = datanode.findDatanodes(select=entity)
     #     print(len(entities))
-        steps = datanode.findDatanodes(select=step)
+        steps_instances = datanode.findDatanodes(select=step)
+        actions = datanode.findDatanodes(select=action)
+        print('a')
 
-        for step in steps:
-            a = step.getAttribute('index')
+        for step_instance in steps_instances:
+            a = step_instance.getAttribute('index')
             # rel = step.getRelationLinks(relationName=before)
             # print(rel)
-        print(len(steps), "\n")
+        # print(len(steps_instances), "\n")
         for action_info in datanode.findDatanodes(select=action):
             c = action_info.getAttribute(action_label, "ILP")
             final_output["actions"].append(c)
@@ -180,10 +183,10 @@ def main():
             final_output["actions_before"].append(c1)
 
         final_output['actions'] = torch.stack(final_output['actions'])
-        final_output['actions'] = final_output['actions'].view(len(entities), len(steps), 4)
+        final_output['actions'] = final_output['actions'].view(len(entities_instances), len(steps_instances), 4)
 
         final_output['actions_before'] = torch.stack(final_output['actions_before'])
-        final_output['actions_before'] = final_output['actions_before'].view(len(entities), len(steps), 4)
+        final_output['actions_before'] = final_output['actions_before'].view(len(entities_instances), len(steps_instances), 4)
 
         all_updates.append(final_output)
     return all_updates
