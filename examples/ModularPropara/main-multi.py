@@ -169,9 +169,10 @@ def main():
         steps = datanode.findDatanodes(select=step)
 
         for step in steps:
-            rel = step.getRelationLinks(relationName=before)
-            print(rel)
-    #     print(len(steps), "\n")
+            a = step.getAttribute('index')
+            # rel = step.getRelationLinks(relationName=before)
+            # print(rel)
+        print(len(steps), "\n")
         for action_info in datanode.findDatanodes(select=action):
             c = action_info.getAttribute(action_label, "ILP")
             final_output["actions"].append(c)
