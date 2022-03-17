@@ -46,6 +46,7 @@ class ProparaReader(RegrReader):
                     
                     
         return torch.stack(b1s), torch.stack(b2s)
+        
 
     def getbefore_trueval(self, item):
         num_steps = len(item["sentence_texts"])
@@ -54,3 +55,12 @@ class ProparaReader(RegrReader):
             for step1 in range(step + 1, len(item["sentence_texts"])):
                 values[(step * num_steps) + step1] = 1
         return values
+    
+#     def getTActionval(self, item):
+#         actions = []
+#         for step, step_text in enumerate(item['sentence_texts']):
+#             actions.append([])
+#             for eid, entity in enumerate(item['participants']):
+#                 actions[-1].append(item['Taction_probs'])
+
+#         return torch.tensor(actions)

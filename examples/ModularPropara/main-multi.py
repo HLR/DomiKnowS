@@ -39,10 +39,10 @@ def model_declaration():
         action_entity,
     )
 
-    
 
     class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
         pass
+
 
     procedure['id'] = ReaderSensor(keyword='ProcedureID')
     context['text'] = ReaderSensor(keyword='Context')
@@ -69,25 +69,31 @@ def model_declaration():
         number = len(data)
         rel_links = torch.ones(number, 1)
         indexes = [i for i in range(number)]
-#         print(rel_links, data, indexes)
+    #     print(rel_links, data, indexes)
         return rel_links, data, indexes
 
     entity[entity_rel, 'text', 'index'] = JointFunctionalReaderSensor(entities['text'], keyword='Entity', forward=read_initials)
 
     step[context_step, 'text', 'index'] = JointFunctionalReaderSensor(context['text'], keyword='Step', forward=read_initials)
 
+    def make_before_connection(*prev, data):
+        return data[0], data[1]
+
+    before[before_arg1, before_arg2] = JointFunctionalReaderSensor(step['text'], keyword='before', forward=make_before_connection)
+
     def make_actions(r1, r2, entities, steps):
-#         print(r1, r2)
+    #     print(r1, r2)
         all_actions = len(steps) * len(entities)
         link1 = torch.zeros(all_actions, len(steps))
         link2 = torch.zeros(all_actions, len(entities))
-        for i in range(len(steps)):
-            link1[i*len(entities):(i+1)*len(entities),i] = 1
+        for i in range(len(entities)):
+            link2[i*len(steps):(i+1)*len(steps),i] = 1
 
         for j in range(all_actions):
-            link2[j, j%len(entities)] = 1
+            link1[j, j%len(steps)] = 1
 
     #     print(link1, link2)
+    #     print(link1.shape, link2.shape)
     #     print("steps: ", len(steps))
     #     print("entities: ", len(entities))
         return link1, link2
@@ -95,20 +101,14 @@ def model_declaration():
     action[action_step.reversed, action_entity.reversed] = JointSensor(entity[entity_rel], step[context_step], entity['index'], step['index'], forward=make_actions)
 
     def read_labels(*prevs, data):
-#         print(prevs[0].shape, prevs[1].shape)
-        c = data.view(1, -1, *(data.size()[2:]))
-#         print(c.squeeze(0).shape)
-        return c.squeeze(0)
+    #     print(prevs[0].shape, prevs[1].shape)
+    #     print(data.shape)
+        c = data.view(data.shape[0] * data.shape[1], data.shape[2])
+    #     print(c.shape)
+        return c
     #     pass
 
     action[action_label] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="Action", forward=read_labels)
-
-
-
-    before[before_arg1.reversed, before_arg2.reversed] = JointReaderSensor(step["text"], keyword="before")
-
-#     before["check"] = ReaderSensor(before_arg1.reversed, before_arg2.reversed, keyword="before_true")
-#     before["check"] = ReaderSensor(keyword="before_true", label=True)
 
     program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label), 
                                inferTypes=['ILP', 'local/argmax'], 
@@ -152,8 +152,10 @@ def main():
     #     lbp.test(dataset, device='auto')
     all_updates = []
     for datanode in lbp.populate(dataset, device="cpu"):
-        datanode.inferILPResults(*action_label.enum, fun=None)
-        
+    #     tdatanode = datanode.findDatanodes(select = context)[0]
+    #     print(len(datanode.findDatanodes(select = context)))
+    #     print(tdatanode.getChildDataNodes(conceptName=step))
+        datanode.inferILPResults(action, fun=None)
         final_output = {
             "id": datanode.getAttribute("id"),
             "steps": [],
@@ -161,23 +163,34 @@ def main():
             "steps_before": [],
             "actions_before": [],
         }
-        
+
+        entities = datanode.findDatanodes(select=entity)
+    #     print(len(entities))
+        steps = datanode.findDatanodes(select=step)
+
+        for step in steps:
+            rel = step.getRelationLinks(relationName=before)
+            print(rel)
+    #     print(len(steps), "\n")
         for action_info in datanode.findDatanodes(select=action):
-            c = action_info.getAttribute(action_label, "ILP").tolist()
+            c = action_info.getAttribute(action_label, "ILP")
             final_output["actions"].append(c)
-            c = action_info.getAttribute(action_label).tolist()
-            final_output["actions_before"].append(c)
-            
+            c1 = action_info.getAttribute(action_label)
+            final_output["actions_before"].append(c1)
+
+        final_output['actions'] = torch.stack(final_output['actions'])
+        final_output['actions'] = final_output['actions'].view(len(entities), len(steps), 4)
+
+        final_output['actions_before'] = torch.stack(final_output['actions_before'])
+        final_output['actions_before'] = final_output['actions_before'].view(len(entities), len(steps), 4)
+
         all_updates.append(final_output)
-        
-    #         print('datanode:', datanode)
-    #         print('inference spam:', datanode.getAttribute(Spam, 'ILP'))
-    #         print('inference regular:', datanode.getAttribute(Regular, 'ILP'))
-    
     return all_updates
 
 
 updated_data = main()
-import json
-with open("data/updated_info.json", "w") as f:
-    json.dump(updated_data, f)
+
+print(updated_data[4]['actions'].argmax(dim=-1))
+# import json
+# with open("data/updated_info.json", "w") as f:
+#     json.dump(updated_data, f)
