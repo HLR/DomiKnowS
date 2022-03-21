@@ -167,10 +167,11 @@ def main():
         entities = datanode.findDatanodes(select=entity)
     #     print(len(entities))
         steps = datanode.findDatanodes(select=step)
+        befores = datanode.findDatanodes(select=before)
 
-        for step in steps:
-            a = step.getAttribute('index')
-            # rel = step.getRelationLinks(relationName=before)
+        for step1 in steps:
+            a = step1.getAttribute('index')
+            # rel = step1.getRelationLinks(relationName=before)
             # print(rel)
         print(len(steps), "\n")
         for action_info in datanode.findDatanodes(select=action):
