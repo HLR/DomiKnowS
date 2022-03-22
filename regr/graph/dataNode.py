@@ -408,8 +408,11 @@ class DataNode:
     # --- Query methods
     
     # Recursively search for concepts and relations in the data graph
-    def findConceptsAndRelations(self, dn, conceptsAndRelations = set(), visitedDns = set()):
-        
+    def findConceptsAndRelations(self, dn, conceptsAndRelations = None, visitedDns = None):
+        if visitedDns is None:
+            visitedDns=set()
+        if conceptsAndRelations is None:
+            conceptsAndRelations=set()
         # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
             if att[0] == '<' and att[-1] == '>':  
@@ -431,7 +434,11 @@ class DataNode:
         return conceptsAndRelations
 
     # Find concept and relation names of DataNodes - used in concept.py
-    def findConceptsNamesInDatanodes(self, dns = None, conceptNames = set(), relationNames = set()):
+    def findConceptsNamesInDatanodes(self, dns = None, conceptNames = None, relationNames = None):
+        if conceptNames is None:
+            conceptNames=set()
+        if relationNames is None:
+            relationNames=set()
         if dns is None:
             dns = [self]
             
@@ -845,7 +852,9 @@ class DataNode:
     collectedConceptsAndRelations = None
     
     # Collect all the concepts and relation from the data graph and translate them to tuple form
-    def collectConceptsAndRelations(self, conceptsAndRelations = set()):
+    def collectConceptsAndRelations(self, conceptsAndRelations = None):
+        if conceptsAndRelations is None:
+            conceptsAndRelations=set()
         if self.collectedConceptsAndRelations:
             return self.collectedConceptsAndRelations
         
@@ -882,7 +891,9 @@ class DataNode:
         self.collectedConceptsAndRelations = returnCandR
         return self.collectedConceptsAndRelations
         
-    def __getILPSolver(self, conceptsRelations = []):
+    def __getILPSolver(self, conceptsRelations = None):
+        if conceptsRelations is None:
+            conceptsRelations=[]
         
         _conceptsRelations = []
         
