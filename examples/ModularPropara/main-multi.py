@@ -169,7 +169,7 @@ def main():
     #     print(len(entities))
         steps_instances = datanode.findDatanodes(select=step)
         actions = datanode.findDatanodes(select=action)
-        print('a')
+#         print('a')
 
         for step_instance in steps_instances:
             a = step_instance.getAttribute('index')
