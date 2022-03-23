@@ -663,7 +663,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, loss = False, sample = False):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False):
+        if key == None:
+            key = ""
+        if lcVariablesDns == None:
+            lcVariablesDns = {}
+            
         lcVariables = {}
         if sample:
             sampleInfo = {}
@@ -882,11 +887,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
                 
-                elif isinstance(e, LogicalConstrain): # -- LogicalConstrain - process recursively 
+                elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
-                        sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC
+                        sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
@@ -1278,26 +1283,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                             # Calculate Loss rate in sample
                             countFailures += torch.sum(currentFailures).item()
                             
-                            # Calculate los value for sampple loss
+                            # Calculate loss value for sample loss
                             currentLossT = None
                             for _, vList in enumerate(sampleInfoFiltered[i]): # Loop trough variables in the lc
                                 for v in vList:
-                                    P = torch.full([len(l)], v[0]) # tensor with the current variable p (v[0])
-                                    oneMinusP = torch.sub(torch.ones(len(l)), P) # tensor with the current variable 1-p
+                                    P = torch.full([len(l)], v[0]) # Tensor with the current variable p (v[0])
+                                    oneMinusP = torch.sub(torch.ones(len(l)), P) # Tensor with the current variable 1-p
                                     
-                                    pS = torch.mul(P, v[1]) # tensor with p multiply by variable sample (v[1])
-                                    oneMinusPS = torch.mul(oneMinusP, torch.logical_not(v[1])) # tensor with 1-p multiply by variable sample (v[1])
+                                    pS = torch.mul(P, v[1]) # Tensor with p multiply by True variable sample (v[1])
+                                    oneMinusPS = torch.mul(oneMinusP, torch.logical_not(v[1])) # Tensor with 1-p multiply by False variable sample (v[1])
                                     
-                                    pSum = torch.add(pS, oneMinusPS) # sum of p and 1-p tensors
+                                    pSum = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
                                     
                                     currentSuccesses = torch.logical_not(currentFailures)
-                                    cLoss = torch.mul(pSum, currentSuccesses) # Chose successes
+                                    cLoss = torch.mul(pSum, currentSuccesses) # Chose successes values
                                     
-                                    # Sum the loss
+                                    # Multiply the loss
                                     if currentLossT == None:
                                         currentLossT = cLoss
                                     else:
-                                        currentLossT = torch.add(currentLossT, cLoss)
+                                        currentLossT = torch.mul(currentLossT, cLoss)
                                 
                             # Collect sample used for calculation
                             if currentLossT == None:
