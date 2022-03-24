@@ -82,12 +82,12 @@ with Graph('WIQA_graph') as graph:
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
     # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
-    #ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
-    ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
+    ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
+    #ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
 
     # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
-    #ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
-    ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
+    ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
+    #ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
@@ -96,12 +96,12 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
-    #ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
-    ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
+    ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
+    #ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
-    #ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
-    ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+    ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+    #ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
 
 
 print("Sensor Part:")

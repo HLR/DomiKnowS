@@ -663,7 +663,12 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = "", lcVariablesDns = {}, headLC = False, loss = False, sample = False):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False):
+        if key == None:
+            key = ""
+        if lcVariablesDns == None:
+            lcVariablesDns = {}
+            
         lcVariables = {}
         if sample:
             sampleInfo = {}
@@ -882,11 +887,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
                 
-                elif isinstance(e, LogicalConstrain): # -- LogicalConstrain - process recursively 
+                elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
-                        sampleInfo = sampleInfo|sampleInfoLC
+                        sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
@@ -1229,10 +1234,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if not lossList:
                     continue
                 
-                if lc.name in lcLosses:
-                    lcName = lc.lcName
-                else:
-                    lcName = lc.name
+                lcName = lc.lcName
                     
                 lcLosses[lcName] = {}
                 current_lcLosses = lcLosses[lcName]
@@ -1271,53 +1273,54 @@ class gurobiILPOntSolver(ilpOntSolver):
                         
                     # Calculate loss value
                     for i, l in enumerate(lossListInt):
-                        lossRate = 0
-                        for lInside in l:    
-                            if lInside == None:
+                        countFailures = 0
+                        for currentFailures in l:    
+                            if currentFailures == None:
                                 lossTensor[i] = float("nan")
                                 lossRateTensor[i] = float("nan")
                                 continue
                             
                             # Calculate Loss rate in sample
-                            lossRate += torch.sum(lInside).item() / sampleSize # torch.count_nonzero(l).item()
+                            countFailures += torch.sum(currentFailures).item()
                             
-                            # Calculate los value for sampple loss
+                            # Calculate loss value for sample loss
                             currentLossT = None
                             for _, vList in enumerate(sampleInfoFiltered[i]): # Loop trough variables in the lc
                                 for v in vList:
-                                    P = torch.full([len(l)], v[0]) # tensor with the current variable p (v[0])
-                                    oneMinusP = torch.sub(torch.ones(len(l)), P) # tensor with the current variable 1-p
+                                    P = torch.full([len(l)], v[0]) # Tensor with the current variable p (v[0])
+                                    oneMinusP = torch.sub(torch.ones(len(l)), P) # Tensor with the current variable 1-p
                                     
-                                    pS = torch.mul(P, v[1]) # tensor with p multiply by variable sample (v[1])
-                                    oneMinusPS = torch.mul(oneMinusP, torch.logical_not(v[1])) # tensor with 1-p multiply by variable sample (v[1])
+                                    pS = torch.mul(P, v[1]) # Tensor with p multiply by True variable sample (v[1])
+                                    oneMinusPS = torch.mul(oneMinusP, torch.logical_not(v[1])) # Tensor with 1-p multiply by False variable sample (v[1])
                                     
-                                    pSum = torch.add(pS, oneMinusPS) # sum of p and 1-p tensors
+                                    pSum = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
                                     
-                                    cLoss = torch.mul(pSum, lInside) # Chose loss entries in tensor
+                                    currentSuccesses = torch.logical_not(currentFailures)
+                                    cLoss = torch.mul(pSum, currentSuccesses) # Chose successes values
                                     
-                                    # Sum the loss
+                                    # Multiply the loss
                                     if currentLossT == None:
                                         currentLossT = cLoss
                                     else:
-                                        currentLossT = torch.add(currentLossT, cLoss)
+                                        currentLossT = torch.mul(currentLossT, cLoss)
                                 
                             # Collect sample used for calculation
                             if currentLossT == None:
                                 currentLoss = float("nan")
                             else:
-                                currentLoss = torch.sum(currentLossT).item() / sampleSize
+                                currentLoss = torch.sum(currentLossT).item()
                                 
                             # Collect calculated loss for sample
                             lossTensor[i] = currentLoss
 
-                        lossRateTensor[i] = lossRate
+                        lossRateTensor[i] = countFailures
 
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['loss'] = torch.nansum(lossTensor).item() / len(lossTensor)
                 
                 if sample:
                     current_lcLosses['lossRateTensor'] = lossRateTensor
-                    current_lcLosses['lossRate'] = torch.nansum(lossRateTensor).item() / len(lossRateTensor)
+                    current_lcLosses['failuresRate'] = torch.nansum(lossRateTensor).item() / len(lossRateTensor)
 
         self.myLogger.info('')
 
@@ -1326,19 +1329,19 @@ class gurobiILPOntSolver(ilpOntSolver):
               
         if sample: # Calculate global sample loss  
             globalLoss = 0
-            globalLossRate = 0
+            globalCountFailures = 0
             
             for lc in lcLosses:
                 globalLoss += lcLosses[lc]['loss']
-                globalLossRate += lcLosses[lc]['lossRate']
+                globalCountFailures += lcLosses[lc]['failuresRate']
                          
             lcLosses['globalLoss'] = globalLoss
-            lcLosses['globalLossRate'] = globalLossRate/len(lcLosses)
+            lcLosses['globalFailuresRate'] = globalCountFailures/len(lcLosses)
                 
             self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
             self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            self.myLogger.info('Calculated sample global average loss rate : %f'%(lcLosses['globalLossRate']))
-            self.myLoggerTime.info('Calculated sample global average loss rate: %f'%(lcLosses['globalLossRate']))
+            self.myLogger.info('Calculated sample global average Failures rate : %f'%(lcLosses['globalFailuresRate']))
+            self.myLoggerTime.info('Calculated sample global average Failures rate: %f'%(lcLosses['globalFailuresRate']))
             
         end = process_time() # timer()
         elapsedInS = end - start
