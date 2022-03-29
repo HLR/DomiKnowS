@@ -147,7 +147,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-    setProductionLogMode()
+#     setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
     #     lbp.test(dataset, device='auto')
@@ -195,6 +195,7 @@ def main():
 updated_data = main()
 
 print(updated_data[4]['actions'].argmax(dim=-1))
+print(updated_data[4]['actions_before'].argmax(dim=-1))
 # import json
 # with open("data/updated_info.json", "w") as f:
 #     json.dump(updated_data, f)
