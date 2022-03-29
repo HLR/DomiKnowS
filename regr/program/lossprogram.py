@@ -1,8 +1,10 @@
 import logging
 import torch
 import numpy as np
+from tqdm import tqdm
 
-from .program import LearningBasedProgram
+from .program import LearningBasedProgram, get_len
+from ..utils import consume, entuple, detuple
 from .model.lossModel import PrimalDualModel, SampleLosslModel
 
 # Primal-dual need multiple backward through constraint loss.
@@ -93,6 +95,58 @@ class LossProgram(LearningBasedProgram):
             c_lr_decay_param=c_lr_decay_param,
             c_session=c_session,
             **kwargs)
+    
+    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+        if dataset is not None:
+            self.logger.info(f'{name}:')
+            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+
+            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
+
+            if self.model.loss:
+                self.logger.info(' - loss:')
+                self.logger.info(self.model.loss)
+
+                metricName = 'loss'
+                metricResult = self.model.loss
+
+                if self.dbUpdate is not None:
+                    self.dbUpdate(desc, metricName, metricResult)
+                    
+            if self.cmodel.loss and self.cmodel.loss is not None:
+                desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+                self.logger.info(' - Constraint loss:')
+                self.logger.info(self.cmodel.loss)
+
+                metricName = 'Constraint_loss'
+                metricResult = self.cmodel.loss
+
+                if self.dbUpdate is not None:
+                    self.dbUpdate(desc, metricName, metricResult)
+
+            ilpMetric = None
+            softmaxMetric = None
+
+            if self.model.metric:
+                self.logger.info(' - metric:')
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
+
+                    metricName = key
+                    metricResult = metric
+                    if self.dbUpdate is not None:
+                        self.dbUpdate(desc, metricName, metricResult)
+
+                    if key == 'ILP':
+                        ilpMetric = metric
+
+                    if key == 'softmax':
+                        softmaxMetric = metric
+#         super().call_epoch(name=name, dataset=dataset, epoch_fn=epoch_fn, **kwargs)
+        
+
+    
 
     def train_epoch(
         self, dataset,

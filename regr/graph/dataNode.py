@@ -66,7 +66,7 @@ _DataNodeBulder__Logger.addHandler(ch)
 # Don't propagate
 _DataNodeBulder__Logger.propagate = False
         
-# Class representing single data instance with relation  links to other data nodes
+# Class representing single data instance with relation links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
 
@@ -74,7 +74,7 @@ class DataNode:
         self.instanceValue = instanceValue               # Optional value of the instance (e.g. paragraph text, sentence text, phrase text, image bitmap, etc.)
         self.ontologyNode = ontologyNode                 # Reference to the node in the ontology graph (e.g. Concept) which is the type of this instance (e.g. paragraph, sentence, phrase, etc.)
         if relationLinks:
-            self.relationLinks = relationLinks           # Dictionary mapping relation name to the RealtionLinks
+            self.relationLinks = relationLinks           # Dictionary mapping relation name to RealtionLinks
         else:
             self.relationLinks = {}
             
@@ -408,8 +408,12 @@ class DataNode:
     # --- Query methods
     
     # Recursively search for concepts and relations in the data graph
-    def findConceptsAndRelations(self, dn, conceptsAndRelations = set(), visitedDns = set()):
-        
+    def findConceptsAndRelations(self, dn, conceptsAndRelations = None, visitedDns = None):
+        if conceptsAndRelations is None:
+            conceptsAndRelations = set()
+        if visitedDns is None:
+            visitedDns = set()
+            
         # Find concepts in dataNode - concept are in attributes from learning sensors
         for att in dn.attributes:
             if att[0] == '<' and att[-1] == '>':  
@@ -431,7 +435,12 @@ class DataNode:
         return conceptsAndRelations
 
     # Find concept and relation names of DataNodes - used in concept.py
-    def findConceptsNamesInDatanodes(self, dns = None, conceptNames = set(), relationNames = set()):
+    def findConceptsNamesInDatanodes(self, dns = None, conceptNames = None, relationNames = None):
+        if conceptNames is None:
+            conceptNames=set()
+        if relationNames is None:
+            relationNames=set()
+
         if dns is None:
             dns = [self]
             
@@ -845,7 +854,10 @@ class DataNode:
     collectedConceptsAndRelations = None
     
     # Collect all the concepts and relation from the data graph and translate them to tuple form
-    def collectConceptsAndRelations(self, conceptsAndRelations = set()):
+    def collectConceptsAndRelations(self, conceptsAndRelations = None):
+        if conceptsAndRelations is None:
+            conceptsAndRelations = set()
+            
         if self.collectedConceptsAndRelations:
             return self.collectedConceptsAndRelations
         
@@ -882,8 +894,10 @@ class DataNode:
         self.collectedConceptsAndRelations = returnCandR
         return self.collectedConceptsAndRelations
         
-    def __getILPSolver(self, conceptsRelations = []):
-        
+    def __getILPSolver(self, conceptsRelations = None):
+        if conceptsRelations is None:
+            conceptsRelations = []
+
         _conceptsRelations = []
         
         # Get ontology graphs and then ilpOntsolver
@@ -1093,7 +1107,7 @@ class DataNode:
             _DataNode__Logger.info('Called with - %s - list of concepts and relations for inference'%([x.name if isinstance(x, Concept) else x for x in _conceptsRelations]))
             
         # Check if concepts and/or relations have been provided for inference, if provide translate then to tuple concept info form
-        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relation from graph as default set
+        _conceptsRelations = self.collectConceptsAndRelations(_conceptsRelations) # Collect all concepts and relations from graph as default set
 
         if len(_conceptsRelations) == 0:
             _DataNode__Logger.error('Not found any concepts or relations for inference in provided DataNode %s'%(self))
@@ -1107,7 +1121,6 @@ class DataNode:
         _DataNode__Logger.info("Calling ILP solver")
         
         self.inferLocal()
-        print("hello")
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     def verifySelection(self, *_conceptsRelations):
@@ -1142,7 +1155,7 @@ class DataNode:
     def getInferMetrics(self, *conceptsRelations, inferType='ILP', weight = None, average='binary'):
         if not conceptsRelations:
             _DataNode__Logger.info("Calling %s metrics with empty conceptsRelations"%(inferType))
-            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relation from graph as default set
+            conceptsRelations = self.collectConceptsAndRelations(conceptsRelations) # Collect all concepts and relations from graph as default set
             _DataNode__Logger.info("Found conceptsRelations in DataNode- %s"%(conceptsRelations))
         else:
             _DataNode__Logger.info("Calling %s metrics with conceptsRelations - %s"%(inferType, conceptsRelations))
@@ -1681,14 +1694,14 @@ class DataNodeBuilder(dict):
                 _DataNodeBulder__Logger.info('Adding attribute %s to relation link dataNodes %s'%(keyDataName,conceptInfo['concept'].name))
  
             if len(existingDnsForRelation) != vInfo.len:
-                _DataNodeBulder__Logger.error('Number of relation is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
+                _DataNodeBulder__Logger.error('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
                 return
  
             if len(existingDnsForRelationSorted) == 1:
                 if vInfo.dim == 0:
                     existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
             elif vInfo.dim > 0:
-                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
+                for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
             else:
                 pass
@@ -1814,7 +1827,7 @@ class DataNodeBuilder(dict):
                     _dn.attributes[keyDataName] = vInfo.value[i]
                     dns.append(_dn)
                     
-                    # If it is not a regular relation  but (Create contain relation between the new DataNode and existing DataNodes
+                    # If it is not a regular relation but (Create contain relation between the new DataNode and existing DataNodes
                     if not conceptInfo['relation']:
                         if conceptInfo["relationMode"] == "forward":
                             for index, isRelated in enumerate(vInfo.value[i]):

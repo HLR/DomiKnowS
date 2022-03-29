@@ -69,8 +69,9 @@ class LossModel(torch.nn.Module):
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
 
         lmbd_loss = []
-        if self.sampleGlobalLoss and constr_loss['lossGlobalTensor']:
-            globalLoss = constr_loss['lossGlobalTensor'].item()
+        if self.sampleGlobalLoss and constr_loss['globalLoss']:
+            globalLoss = constr_loss['globalLoss']
+            self.loss['globalLoss'](globalLoss)
             lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
         else:
             for key, loss in constr_loss.items():
@@ -97,3 +98,35 @@ class SampleLosslModel(LossModel):
 
     def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
         super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+
+    def forward(self, builder, build=None):
+        if build is None:
+            build = self.build
+            
+        if not build and not isinstance(builder, DataNodeBuilder):
+            raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
+        
+        if (builder.needsBatchRootDN()):
+            builder.addBatchRootDN()
+        datanode = builder.getDataNode()
+        
+        # Call the loss calculation returns a dictionary, keys are matching the constraints
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
+
+        lmbd_loss = []
+        if self.sampleGlobalLoss and constr_loss['globalLoss']:
+            globalLoss = constr_loss['globalLoss']
+            self.loss['globalLoss'](globalLoss)
+            lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
+        else:
+            for key, loss in constr_loss.items():
+                if key not in self.constr:
+                    continue
+                loss_value = loss['loss']
+                loss_ = self.get_lmbd(key) * loss_value
+                self.loss[key](loss_)
+                lmbd_loss.append(loss_)
+            lmbd_loss = torch.tensor(sum(lmbd_loss), requires_grad=True)
+        
+        # (*out, datanode, builder)
+        return lmbd_loss, datanode, builder
