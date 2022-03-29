@@ -239,6 +239,7 @@ for i in range(args.cur_epoch):
     # program.load("domi_7") # in case we want to load the model instead of training
     # program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
     program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
+    # program.train(question, paragraph, reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
     # program.save("domi_"+str(i)) ### in case of saving the parameters of the model
 
 
@@ -252,3 +253,13 @@ for i in range(args.cur_epoch):
     test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
     print("***** test aug *****")
     #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+
+
+# import torch
+# import gc
+# for obj in gc.get_objects():
+#     try:
+#         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+#             print(type(obj), obj.size())
+#     except:
+#         pass
