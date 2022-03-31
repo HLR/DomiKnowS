@@ -2,7 +2,7 @@
 ## Run the sample train and test
 
 ```
-python main.py --cuda 3 --lr 1e-5 --epoch 10
+python main.py --cuda 0 --lr 2e-6 --epoch 5
 ```
 
 #### inputs
