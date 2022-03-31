@@ -12,12 +12,16 @@ def program_declaration():
     from graph import graph, sentence, entailment, neutral, contradiction
 
     graph.detach()
+    # Reading from sentence
     sentence['premise'] = ReaderSensor(keyword="premise")
     sentence['hypothesis'] = ReaderSensor(keyword="hypothesis")
-    sentence["token_ids", "Mask"] = JointSensor('hypothesis', 'premise', forward=RobertaTokenizer())
 
+    # Creating the ROBERTA representation of premise and hypothesis
+    sentence["token_ids", "Mask"] = JointSensor('hypothesis', 'premise', forward=RobertaTokenizer())
     roberta_model = UFT_Robert()
     sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
+
+    # Define label
     sentence[entailment] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
     sentence[neutral] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
     sentence[contradiction] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
@@ -29,6 +33,7 @@ def program_declaration():
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
     from regr.program.loss import NBCrossEntropyLoss
 
+    # Creating the program to create model
     program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
@@ -40,7 +45,7 @@ def program_declaration():
 def main(args):
     from graph import sentence, entailment, neutral, contradiction
 
-    # here we set the cuda we want to use and the number of maximum epochs we want to train our model
+    # Set the cuda number we want to use
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
