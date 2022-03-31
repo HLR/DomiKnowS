@@ -59,23 +59,23 @@ def main(args):
                          in test_dataset],
               "predict": []}
     for datanode in model.populate(test_dataset):
-        print(datanode)
-        print("Entailment: ", datanode.getAttribute(entailment, 'ILP'))
-        print("Neutral: ", datanode.getAttribute(neutral, 'ILP'))
-        print("Contrast: ", datanode.getAttribute(contradiction, 'ILP'))
+        #print(datanode)
+        #print("Entailment: ", datanode.getAttribute(entailment, 'ILP'))
+        #print("Neutral: ", datanode.getAttribute(neutral, 'ILP'))
+        #print("Contrast: ", datanode.getAttribute(contradiction, 'ILP'))
         result["predict"].append('entailment' if datanode.getAttribute(entailment, 'ILP')
                                  else 'neutral' if datanode.getAttribute(neutral, 'ILP') else 'contrast')
         correct += datanode.getAttribute(entailment, 'ILP') if result["actual"][index] == 'entailment' else \
             datanode.getAttribute(neutral, 'ILP') if result["actual"][index] == 'neutral' else \
             datanode.getAttribute(contradiction, 'ILP')
         index += 1
-    print("Accuracy = %.2f%%" % (correct / index * 100))
+    #print("Accuracy = %.2f%%" % (correct / index * 100))
     result = pd.DataFrame(result)
     result.to_csv("report-{:}-{:}-{:}.csv".format(args.training_samples, args.testing_samples, args.cur_epoch))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Useful Argument Learning Code")
+    parser = argparse.ArgumentParser(description="Run NLI Learning Code")
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',

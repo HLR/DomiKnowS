@@ -5,6 +5,10 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 with Graph('Useful_arg') as graph:
+
+    # TODO: Change the graph to be group of sentences to enable batch implemented
+    # Look at the animal and flower example
+    #
     sentence = Concept(name="sentence")
 
     # 3 classes
@@ -19,6 +23,9 @@ with Graph('Useful_arg') as graph:
     orL(entailment, neutral, contradiction)
 
     # Example Constrain
-    # Ent(X1, X2) => !CON(X2, X!)
+    # T => ENT(X1, X1)
+    # Ent(X1, X2) => !CON(X2, X1)
+    # Neu(X1, X2) => !CON(X2, X1)
+    # CON(X1, X2) => CON(X2, X1)
     # Ent(X1, X2) + Ent(X2, X3) => Ent(X1, X3)
 
