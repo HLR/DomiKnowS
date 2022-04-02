@@ -4,7 +4,7 @@ from transformers import AdamW
 import torch
 from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from model import RobertaTokenizer, UFT_Robert, RobertClassification
+from model import RobertaTokenizer, NLI_Robert, RobertClassification
 import argparse
 
 
@@ -18,7 +18,7 @@ def program_declaration():
 
     # Creating the ROBERTA representation of premise and hypothesis
     sentence["token_ids", "Mask"] = JointSensor('hypothesis', 'premise', forward=RobertaTokenizer())
-    roberta_model = UFT_Robert()
+    roberta_model = NLI_Robert()
     sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 
     # Define label

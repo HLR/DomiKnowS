@@ -6,10 +6,10 @@ from typing import Any
 import torch
 
 
-class UFT_Robert(nn.Module):
+class NLI_Robert(nn.Module):
 
     def __init__(self):
-        super(UFT_Robert, self).__init__()
+        super(NLI_Robert, self).__init__()
         self.bert = RobertaModel.from_pretrained('roberta-base')
         self.last_layer_size = self.bert.config.hidden_size
 
@@ -52,6 +52,17 @@ class RobertaTokenizer:
         self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
 
     def __call__(self, hypothesis, premise):
+        encoded_input = self.tokenizer(hypothesis, premise, padding="max_length", max_length=self.max_length)
+        input_ids = encoded_input["input_ids"]
+        attention_mask = encoded_input["attention_mask"]
+        return torch.LongTensor(input_ids), torch.LongTensor(attention_mask)
+
+class RobertaTokenizerMulti:
+    def __init__(self, max_length=256):
+        self.max_length = max_length
+        self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    def __call__(self, _, hypothesis, premise):
         encoded_input = self.tokenizer(hypothesis, premise, padding="max_length", max_length=self.max_length)
         input_ids = encoded_input["input_ids"]
         attention_mask = encoded_input["attention_mask"]
