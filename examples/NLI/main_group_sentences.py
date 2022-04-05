@@ -41,7 +41,8 @@ def program_declaration():
     roberta_model = NLI_Robert()
     sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 
-    hidden_layer_size = 1 # number of hidden layer excluding the first layer and the last layer
+    # number of hidden layer excluding the first layer and the last layer
+    hidden_layer_size = 2
     sentence[entailment] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
                                                                                    hidden_layer_size=hidden_layer_size))
     sentence[neutral] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
@@ -73,8 +74,12 @@ def main(args):
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
-    test_dataset = DataReaderMulti(file="data/test.csv", size=args.testing_samples, batch_size=args.batch_size)
-    train_dataset = DataReaderMulti(file="data/train.csv", size=args.training_samples,  batch_size=args.batch_size)
+    training_file = "train.csv" if not args.adver_data else "adver_nli_train.jsonl"
+    testing_file = "test.csv" if not args.adver_data else "adver_nli_test.jsonl"
+    test_dataset = DataReaderMulti(file="data/" + testing_file, size=args.testing_samples,
+                                   batch_size=args.batch_size, adver_data_set=args.adver_data)
+    train_dataset = DataReaderMulti(file="data/" + training_file, size=args.training_samples,
+                                    batch_size=args.batch_size, adver_data_set=args.adver_data)
     model = program_declaration()
     model.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                 Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -128,5 +133,7 @@ if __name__ == "__main__":
     parser.add_argument('--testing_sample', dest='testing_samples', default=10000, help="number of data to test model",
                         type=int)
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
+    parser.add_argument('--adver_data', dest='adver_data', default=0, help="Using adversarial data set ot not",
+                        type=int)
     args = parser.parse_args()
     main(args)
