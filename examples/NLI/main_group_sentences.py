@@ -41,9 +41,14 @@ def program_declaration():
     roberta_model = NLI_Robert()
     sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
 
-    sentence[entailment] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
-    sentence[neutral] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
-    sentence[contradiction] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size))
+    hidden_layer_size = 1 # number of hidden layer excluding the first layer and the last layer
+    sentence[entailment] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
+                                                                                   hidden_layer_size=hidden_layer_size))
+    sentence[neutral] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
+                                                                                hidden_layer_size=hidden_layer_size))
+    sentence[contradiction] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
+                                                                                      hidden_layer_size=
+                                                                                      hidden_layer_size))
     sentence[entailment] = FunctionalSensor(sentence_group_contains, "entail_list", forward=read_label, label=True)
     sentence[neutral] = FunctionalSensor(sentence_group_contains, "neutral_list", forward=read_label, label=True)
     sentence[contradiction] = FunctionalSensor(sentence_group_contains, "cont_list", forward=read_label,
@@ -100,6 +105,10 @@ def main(args):
                                      else 'neutral' if sentence.getAttribute(neutral, 'label') else 'contrast')
             result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
                                      else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
+
+            # Should ask it early about argmax value
+            # in neutral be [2.2, 0.0. 2.0]
+            # same as others
             correct += sentence.getAttribute(entailment, 'ILP') if sentence.getAttribute(entailment, 'label') else \
                 sentence.getAttribute(neutral, 'ILP') if sentence.getAttribute(neutral, 'label') else \
                     sentence.getAttribute(contradiction, 'ILP')
@@ -112,12 +121,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run NLI Learning Code")
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
-    parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
+    parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
                         type=float)
     parser.add_argument('--training_sample', dest='training_samples', default=550146,
                         help="number of data to train model", type=int)
     parser.add_argument('--testing_sample', dest='testing_samples', default=10000, help="number of data to test model",
                         type=int)
-    parser.add_argument('--batch_size', dest='batch_size', default=8, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
     args = parser.parse_args()
     main(args)

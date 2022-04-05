@@ -21,12 +21,13 @@ class NLI_Robert(nn.Module):
 
 class RobertClassification(nn.Module):
 
-    def __init__(self, last_layer_size):
+    def __init__(self, last_layer_size, *, hidden_layer_size=1):
         super(RobertClassification, self).__init__()
+        self.hidden_size = hidden_layer_size
         self.start = nn.Linear(last_layer_size, 512)
         self.hidden = nn.Linear(512, 512)
         self.final = nn.Linear(512, 3)
-        self.dropout = nn.Dropout(0.2)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
 
@@ -34,13 +35,10 @@ class RobertClassification(nn.Module):
         x = torch.relu(x)
         x = self.dropout(x)
 
-        x = self.hidden(x)
-        x = torch.relu(x)
-        x = self.dropout(x)
-
-        x = self.hidden(x)
-        x = torch.relu(x)
-        x = self.dropout(x)
+        for _ in range(self.hidden_size):
+            x = self.hidden(x)
+            x = torch.relu(x)
+            x = self.dropout(x)
 
         x = self.final(x)
         return x
