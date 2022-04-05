@@ -119,7 +119,9 @@ def main(args):
                     sentence.getAttribute(contradiction, 'ILP')
     print("Accuracy = %.2f%%" % (correct / len(result["predict"]) * 100))
     result = pd.DataFrame(result)
-    result.to_csv("report-{:}-{:}-{:}.csv".format(args.training_samples, args.testing_samples, args.cur_epoch))
+    training_size = 10000 if args.training_samples > 10000 and args.adver_data else args.training_samples
+    result.to_csv("report-{:}-{:}-{:}--adver:{:}.csv".format(training_size, args.testing_samples,
+                                                             args.cur_epoch, args.adver_data))
 
 
 if __name__ == "__main__":
@@ -134,6 +136,6 @@ if __name__ == "__main__":
                         type=int)
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
     parser.add_argument('--adver_data', dest='adver_data', default=0, help="Using adversarial data set ot not",
-                        type=int)
+                        type=bool)
     args = parser.parse_args()
     main(args)
