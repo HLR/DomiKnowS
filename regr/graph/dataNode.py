@@ -1062,23 +1062,7 @@ class DataNode:
                     continue
                 
                 v = dn.getAttribute(c[0])
-                
-                if v is None:
-                    continue
-                elif not torch.is_tensor(v):
-                    continue
-                
-                vClone = torch.clone(v).double()
-                tExp = torch.exp(vClone)
-                for i, e in enumerate(tExp):
-                    if e == float("inf"):
-                        tExp[i] = 1.0
-                        
-                tExpSum = torch.sum(tExp).item()
-            
-                vSoftmax = [(tExp[i]/tExpSum).item() for i in range(len(v))]
-                    
-                vSoftmaxT = torch.as_tensor(vSoftmax) 
+                vSoftmaxT = torch.nn.functional.softmax(v)
                 
                 # Replace nan with 1/len
                 #for i, s in enumerate(vSoftmaxT):
@@ -1673,6 +1657,7 @@ class DataNodeBuilder(dict):
                             
                             relationDn.addRelationLink(attribute, candidateDn)  
                             relationDn.attributes[keyDataName] = vInfo.value[relationDnIndex] # Add / /Update value of the attribute
+                            relationDn.attributes[keyDataName+"/ref"] = (vInfo.value, relationDnIndex)
                 
                 _DataNodeBulder__Logger.info('Create links between the relation %s and instance dataNode of types'%(conceptInfo['concept'].name))
             else:
@@ -1684,6 +1669,7 @@ class DataNodeBuilder(dict):
                     
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relation links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                    rDn.attributes[keyDataName+"/ref"] = (vInfo.value, i)
 
             self.__updateRootDataNodeList(list(existingDnsForRelationSorted.values()))
         else:    
@@ -1700,9 +1686,11 @@ class DataNodeBuilder(dict):
             if len(existingDnsForRelationSorted) == 1:
                 if vInfo.dim == 0:
                     existingDnsForRelationSorted[0].attributes[keyDataName] = vInfo.value.item() # Add / /Update value of the attribute
+                    existingDnsForRelationSorted[0].attributes[keyDataName+"/ref"] = (vInfo.value, 0)
             elif vInfo.dim > 0:
                 for i, rDn in existingDnsForRelationSorted.items(): # Loop through all relations links dataNodes
                     rDn.attributes[keyDataName] = vInfo.value[i] # Add / /Update value of the attribute
+                    rDn.attributes[keyDataName+"/ref"] = (vInfo.value, i)
             else:
                 pass
 
@@ -1825,6 +1813,7 @@ class DataNodeBuilder(dict):
                     _dn = DataNode(instanceID = instanceID, instanceValue = instanceValue, ontologyNode = conceptInfo['concept'])
                         
                     _dn.attributes[keyDataName] = vInfo.value[i]
+                    _dn.attributes[keyDataName+"/ref"] = (vInfo.value, i)
                     dns.append(_dn)
                     
                     # If it is not a regular relation but (Create contain relation between the new DataNode and existing DataNodes
@@ -1875,14 +1864,18 @@ class DataNodeBuilder(dict):
                 if isinstance(vInfo.value, torch.Tensor):
                     if keyDataName[0] == '<' and keyDataName[-1] == '>':
                         existingDnsForConcept[0].attributes[keyDataName] = [1-vInfo.value.item(), vInfo.value.item()]
+                        existingDnsForConcept[0].attributes[keyDataName+"/ref"] = (vInfo.value, 0)
                     else:
                         existingDnsForConcept[0].attributes[keyDataName] = vInfo.value
+                        existingDnsForConcept[0].attributes[keyDataName+"/ref"] = (vInfo.value, 0)
                 else:
                     existingDnsForConcept[0].attributes[keyDataName] = [vInfo.value]
+                    existingDnsForConcept[0].attributes[keyDataName+"/ref"] = (vInfo.value, 0)
             else:
                 for vIndex, v in enumerate(vInfo.value):
                     if isinstance(existingDnsForConcept[vIndex], DataNode): # Check if DataNode
                         existingDnsForConcept[vIndex].attributes[keyDataName] = v
+                        existingDnsForConcept[0].attributes[keyDataName+"/ref"] = (v, 0)
                     else:
                         _DataNodeBulder__Logger.error('Element %i in the list is not a dataNode - skipping it'%(vIndex))
         elif len(existingDnsForConcept) < vInfo.len: # Too many elements in the value

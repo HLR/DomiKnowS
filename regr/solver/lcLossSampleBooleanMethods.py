@@ -222,7 +222,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         andSuccess = var[0]
         for i in range(1, len(var)):
-            andSuccess = torch.logical_and(andSuccess, var[i])
+            andSuccess = torch.mul(andSuccess.float(), var[i].float()) #torch.logical_and(andSuccess.float(), var[i].float())
             
         if onlyConstrains:
             andLoss = torch.logical_not(andSuccess)
@@ -294,10 +294,14 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         if self.ifNone([var1, var2]):
             return None
                 
-        ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
+        notVar2 = torch.sub(torch.ones(len(var2), device=var2.device), var2.float())
+
+        andV = torch.mul(var1, notVar2)
+        ifSuccess =  torch.sub(torch.ones(len(andV), device=andV.device), andV)
+        #torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
-            ifLoss = torch.logical_not(ifSuccess)
+            ifLoss = torch.sub(torch.ones(len(ifSuccess), device=ifSuccess.device), ifSuccess) #torch.logical_not(ifSuccess)
             
             return ifLoss
         else:            
@@ -350,17 +354,12 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         if self.ifNone(var):
             return None
         
-        limitTensor = torch.full([len(var[0])], limit)
+        limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
-        # Translate boolean to int
-        varInt = []
-        for v in var:
-            varInt.append(v.to(dtype=torch.int, copy=True))
-           
         # Calculate sum 
-        varSum = varInt[0]
-        for i in range(1, len(varInt)):
-            varSum += varInt[i]
+        varSum = torch.clone(var[0])
+        for i in range(1, len(var)):
+            varSum = torch.add(varSum, var[i])
 
         # Check condition
         if limitOp == '>=':
@@ -368,7 +367,12 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             countSuccess = torch.ge(varSum, limitTensor)
         elif limitOp == '<=':
             #if varSum <= limit:
+            countSuccessN = torch.sub(limitTensor, varSum)
+            
+            countSuccessN = torch.clamp(countSuccessN, min=0, max=1)
+
             countSuccess = torch.le(varSum, limitTensor)
+            
         elif limitOp == '==':
             #if varSum == limit:
             countSuccess = torch.eq(varSum, limitTensor)
