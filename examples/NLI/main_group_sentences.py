@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument('--testing_sample', dest='testing_samples', default=10000, help="number of data to test model",
                         type=int)
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
-    parser.add_argument('--adver_data', dest='adver_data', default=0, help="Using adversarial data set ot not",
+    parser.add_argument('--adver_data', dest='adver_data', default=1, help="Using adversarial data set ot not",
                         type=bool)
     args = parser.parse_args()
     main(args)
