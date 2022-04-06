@@ -8,16 +8,16 @@ from model import RobertClassification, NLI_Robert, RobertaTokenizerMulti
 import argparse
 
 
-def program_declaration():
+def program_declaration(cur_device):
     from graph_senetences import graph, sentence, entailment, neutral, \
         contradiction, sentence_group, sentence_group_contains
 
     graph.detach()
-    sentence_group["premises"] = ReaderSensor(keyword="premises")
-    sentence_group["hypothesises"] = ReaderSensor(keyword="hypothesises")
-    sentence_group["entailment_list"] = ReaderSensor(keyword="entailment_list")
-    sentence_group["contradiction_list"] = ReaderSensor(keyword="contradiction_list")
-    sentence_group["neutral_list"] = ReaderSensor(keyword="neutral_list")
+    sentence_group["premises"] = ReaderSensor(keyword="premises", device=cur_device)
+    sentence_group["hypothesises"] = ReaderSensor(keyword="hypothesises", device=cur_device)
+    sentence_group["entailment_list"] = ReaderSensor(keyword="entailment_list", device=cur_device)
+    sentence_group["contradiction_list"] = ReaderSensor(keyword="contradiction_list", device=cur_device)
+    sentence_group["neutral_list"] = ReaderSensor(keyword="neutral_list", device=cur_device)
 
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x])
@@ -34,26 +34,33 @@ def program_declaration():
 
     sentence[sentence_group_contains, "premise", "hypothesis", "entail_list", "cont_list", "neutral_list"] = \
         JointSensor(sentence_group["premises"], sentence_group["hypothesises"], sentence_group["entailment_list"],
-                    sentence_group["contradiction_list"], sentence_group["neutral_list"], forward=make_sentence)
+                    sentence_group["contradiction_list"], sentence_group["neutral_list"], forward=make_sentence,
+                    device=cur_device)
 
     sentence["token_ids", "Mask"] = JointSensor(sentence_group_contains, 'hypothesis', "premise",
-                                                forward=RobertaTokenizerMulti())
+                                                forward=RobertaTokenizerMulti(), device=cur_device)
     roberta_model = NLI_Robert()
-    sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model)
+    sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model, device=cur_device)
 
     # number of hidden layer excluding the first layer and the last layer
     hidden_layer_size = 2
-    sentence[entailment] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
-                                                                                   hidden_layer_size=hidden_layer_size))
+    sentence[entailment] = ModuleLearner("robert_emb",
+                                         module=RobertClassification(roberta_model.last_layer_size,
+                                                                     hidden_layer_size=hidden_layer_size),
+                                         device=cur_device)
+
     sentence[neutral] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
-                                                                                hidden_layer_size=hidden_layer_size))
+                                                                                hidden_layer_size=hidden_layer_size),
+                                      device=cur_device)
+
     sentence[contradiction] = ModuleLearner("robert_emb", module=RobertClassification(roberta_model.last_layer_size,
                                                                                       hidden_layer_size=
-                                                                                      hidden_layer_size))
-    sentence[entailment] = FunctionalSensor(sentence_group_contains, "entail_list", forward=read_label, label=True)
-    sentence[neutral] = FunctionalSensor(sentence_group_contains, "neutral_list", forward=read_label, label=True)
+                                                                                      hidden_layer_size),
+                                            device=cur_device)
+    sentence[entailment] = FunctionalSensor(sentence_group_contains, "entail_list", forward=read_label, label=True, device=cur_device)
+    sentence[neutral] = FunctionalSensor(sentence_group_contains, "neutral_list", forward=read_label, label=True, device=cur_device)
     sentence[contradiction] = FunctionalSensor(sentence_group_contains, "cont_list", forward=read_label,
-                                               label=True)
+                                               label=True, device=cur_device)
 
     from regr.program import POIProgram, IMLProgram, SolverPOIProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
@@ -80,7 +87,7 @@ def main(args):
                                    batch_size=args.batch_size, adver_data_set=args.adver_data)
     train_dataset = DataReaderMulti(file="data/" + training_file, size=args.training_samples,
                                     batch_size=args.batch_size, adver_data_set=args.adver_data)
-    model = program_declaration()
+    model = program_declaration(cur_device)
     model.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                 Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
     model.test(test_dataset, device=cur_device)
