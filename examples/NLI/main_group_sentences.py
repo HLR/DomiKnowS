@@ -1,3 +1,8 @@
+import sys
+sys.path.append(".")
+sys.path.append("../")
+sys.path.append("../../")
+
 import pandas as pd
 from data.reader import DataReaderMulti
 from transformers import AdamW
