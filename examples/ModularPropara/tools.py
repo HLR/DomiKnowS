@@ -438,7 +438,14 @@ def get_koala_fix(preds):
             eitem['states'].append(pred[3])
 
     for pred in preds:
-        assert items[pred[0]]['entities'][pred[2]]['locations'][int(pred[1])] == pred[5]
+        try:
+            assert items[pred[0]]['entities'][pred[2]]['locations'][int(pred[1])] == pred[5]
+        except:
+#             print(items[pred[0]])
+            print(pred)
+            print(items[pred[0]]['entities'][pred[2]]['locations'][int(pred[1])])
+            raise
+            
         if pred[1] != '0':
             assert items[pred[0]]['entities'][pred[2]]['states'][int(pred[1]) - 1] == pred[3]
 

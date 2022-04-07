@@ -56,6 +56,32 @@ class ProparaReader(RegrReader):
                 values[(step * num_steps) + step1] = 1
         return values
     
+    def getexact_beforeval(self, item):
+        b1s = []
+        b2s = []
+        for step in range(len(item['sentence_texts'])):
+            step1 = step + 1
+            if step1 < len(item['sentence_texts']):
+                b1 = torch.zeros(len(item["sentence_texts"]))
+                b1[step] = 1
+                b2 = torch.zeros(len(item["sentence_texts"]))
+                b2[step1] = 1
+                b1s.append(b1)
+                b2s.append(b2)
+                    
+                    
+        return torch.stack(b1s), torch.stack(b2s)
+    
+    def getLocationsval(self, item):
+        return [item['location_cand']]
+    
+    def getLocationval(self, item):
+        return item['location_cand']
+    
+    def getLocationLabelval(self, item):
+        return torch.tensor(item['net_results']['location'])
+                
+    
 #     def getTActionval(self, item):
 #         actions = []
 #         for step, step_text in enumerate(item['sentence_texts']):

@@ -27,19 +27,36 @@ def model_declaration():
         before,
         action,
         action_label,
-        entity
+        entity,
+        exact_before,
+        locations,
+        location,
+        entity_location,
+        entity_location_label
     )
     from graph_multi import (
         procedure_context,
         procedure_entities,
+        procedure_locations,
         entity_rel,
+        loc_rel,
         context_step,
         before_arg1,
         before_arg2,
+        ebefore_arg1,
+        ebefore_arg2,
         action_step,
         action_entity,
+        lentity,
+        lstep,
+        llocation,
     )
 
+
+    from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+    from regr.sensor.pytorch.learners import ModuleLearner
+    from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+    from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
     class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
         pass
@@ -48,23 +65,30 @@ def model_declaration():
     procedure['id'] = ReaderSensor(keyword='ProcedureID')
     context['text'] = ReaderSensor(keyword='Context')
     entities['text'] = ReaderSensor(keyword='Entities')
+    locations['text'] = ReaderSensor(keyword='Locations')
 
-    def make_procedure(arg1m, arg2m, data):
-        total_procedures = len(arg1m) * len(arg2m)
-        rel_links1 = torch.zeros(total_procedures, len(arg1m))
-        rel_links2 = torch.zeros(total_procedures, len(arg2m))
-        past1 = 0
-        past2 = 0
-        for i in range(total_procedures):
-            rel_links1[i, past2: past2 + len(arg2m)] = 1
-            past2 = past2 + len(arg2m)
-            rel_links2[i, past1: past1 + len(arg1m)] = 1
-            past1 = past1 + len(arg1m)
+    def make_procedure(arg1m, arg2m, arg3m, data):
+        total_procedures = len(arg1m) * len(arg2m) * len(arg3m)
+        rel_links1 = torch.ones(total_procedures, len(arg1m))
+        rel_links2 = torch.ones(total_procedures, len(arg2m))
+        rel_links3 = torch.ones(total_procedures, len(arg3m))
+    #     past1 = 0
+    #     past2 = 0
+    #     for i in range(total_procedures):
+    #         rel_links1[i, past2: past2 + len(arg2m)] = 1
+    #         past2 = past2 + len(arg2m)
+    #         rel_links2[i, past1: past1 + len(arg1m)] = 1
+    #         past1 = past1 + len(arg1m)
 
-        return rel_links1, rel_links2
+    #     for i in range(len(arg1m)):
+    #         rel_links1[0, i: (i+1)*(len(arg2m) * len(arg3m))] = 1
 
 
-    procedure[procedure_context.reversed, procedure_entities.reversed] = JointFunctionalReaderSensor(context['text'], entities['text'], keyword="ProcedureID", forward=make_procedure)
+
+        return rel_links1, rel_links2, rel_links3
+
+
+    procedure[procedure_context.reversed, procedure_entities.reversed, procedure_locations.reversed] = JointFunctionalReaderSensor(context['text'], entities['text'], locations['text'], keyword="ProcedureID", forward=make_procedure)
 
     def read_initials(*prev, data):
         number = len(data)
@@ -77,10 +101,17 @@ def model_declaration():
 
     step[context_step, 'text', 'index'] = JointFunctionalReaderSensor(context['text'], keyword='Step', forward=read_initials)
 
+    location[loc_rel, 'text', 'index'] = JointFunctionalReaderSensor(locations['text'], keyword='Location', forward=read_initials)
+
+
+
     def make_before_connection(*prev, data):
         return data[0], data[1]
 
     before[before_arg1.reversed, before_arg2.reversed] = JointFunctionalReaderSensor(step['text'], keyword='before', forward=make_before_connection)
+
+    exact_before[ebefore_arg1.reversed, ebefore_arg2.reversed] = JointFunctionalReaderSensor(step['text'], keyword='exact_before', forward=make_before_connection)
+
 
     def make_actions(r1, r2, entities, steps):
     #     print(r1, r2)
@@ -101,6 +132,58 @@ def model_declaration():
 
     action[action_step.reversed, action_entity.reversed] = JointSensor(entity[entity_rel], step[context_step], entity['index'], step['index'], forward=make_actions)
 
+
+    def make_entity_locations(r1, r2, r3, entities, steps, locations):
+    #     print(r1, r2)
+        all_actions = len(steps) * len(entities) * len(locations)
+        link2 = torch.zeros(all_actions, len(steps))
+        link1 = torch.zeros(all_actions, len(entities))
+        link3 = torch.zeros(all_actions, len(locations))
+        for i in range(len(entities)):
+            link2[i*len(steps):(i+1)*len(steps),i] = 1
+
+        for j in range(all_actions):
+            link1[j, j%len(steps)] = 1
+
+
+
+        for i in range(len(entities)):
+            link1[i*len(steps)*len(locations):(i+1)*len(steps)*len(locations), i] = 1
+
+        for i in range(len(entities)):
+            for j in range(len(steps)):
+                start = i*len(steps)*len(locations)
+                link2[start+(len(locations)*j): start +((j+1)*len(locations)), j] = 1
+
+        for i in range(len(entitie)):
+            for j in range(len(steps)):
+                for k in range(len(locations)):
+                    start = i*len(steps)*len(locations) + (j*len(locations))
+                    link3[start+k] = 1
+
+    #     print(link1, link2)
+    #     print(link1.shape, link2.shape)
+    #     print("steps: ", len(steps))
+    #     print("entities: ", len(entities))
+        return link1, link2, link3
+
+
+    entity_location[lentity.reversed, lstep.reversed, llocation.reversed] = JointSensor(entity[entity_rel], step[context_step], location[loc_rel], entity['index'], step['index'], location['index'], forward=make_entity_locations)
+
+    def read_location_labels(*prevs, data):
+    #     print(prevs[0].shape, prevs[1].shape)
+    #     print(data.shape)
+        c = torch.softmax(data, dim=-1)
+        d = c.repeat(1, 1, 2)
+        for k in range(d.shape[2]):
+            d[:, :, k, 1] = 1 - d[:, :, k, 0]
+    #     print(c.shape)
+
+        d = data.view(data.shape[0] * data.shape[1] * data.shape[2], 2)
+        return d
+
+    entity_location[entity_location_label] = FunctionalReaderSensor(lentity.reversed, lstep.reversed, llocation.reversed, keyword="LocationLabel", forward=read_location_labels)
+
     def read_labels(*prevs, data):
     #     print(prevs[0].shape, prevs[1].shape)
     #     print(data.shape)
@@ -111,7 +194,7 @@ def model_declaration():
 
     action[action_label] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="Action", forward=read_labels)
 
-    program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label), 
+    program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label, exact_before, entity_location_label), 
                                inferTypes=['ILP', 'local/argmax'], 
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                                metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -169,7 +252,7 @@ def main():
     #     print(len(entities))
         steps_instances = datanode.findDatanodes(select=step)
         actions = datanode.findDatanodes(select=action)
-#         print('a')
+    #         print('a')
 
         for step_instance in steps_instances:
             a = step_instance.getAttribute('index')
@@ -194,8 +277,8 @@ def main():
 
 updated_data = main()
 
-print(updated_data[4]['actions'].argmax(dim=-1))
-print(updated_data[4]['actions_before'].argmax(dim=-1))
+print(updated_data[16]['actions'].argmax(dim=-1))
+print(updated_data[16]['actions_before'].argmax(dim=-1))
 # import json
 # with open("data/updated_info.json", "w") as f:
 #     json.dump(updated_data, f)
