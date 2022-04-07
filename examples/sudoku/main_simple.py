@@ -319,7 +319,7 @@ program = SampleLossProgram(
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=1, 
+        sampleSize=300, 
         sampleGlobalLoss = True
         )
 

@@ -1223,7 +1223,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    with torch.no_grad():
+                        lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
                 else:
                     # lossList will contain float result for lc loss calculation
                     lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
@@ -1285,7 +1286,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensor = torch.clone(lcSuccesses)
                     for v in lcVariables:
                         P = lcVariables[v][0] # Tensor with the current variable p (v[0])
-                        S = lcVariables[v][1] # Sample for current Variable
+                        S = lcVariables[v][1] # Sample for the current Variable
                         notS = torch.sub(torch.ones(len(S), device=S.device), S.float()) # Negation of Sample
                         oneMinusP = torch.sub(torch.ones(sampleSize, device=P.device), P) # Tensor with the current variable 1-p
                         

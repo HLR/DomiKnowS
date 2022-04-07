@@ -298,7 +298,8 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
 
         andV = torch.mul(var1, notVar2)
         ifSuccess =  torch.sub(torch.ones(len(andV), device=andV.device), andV)
-        #torch.logical_or(torch.logical_not(var1), var2)
+        #with torch.no_grad():
+        #   ifSuccessO = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
             ifLoss = torch.sub(torch.ones(len(ifSuccess), device=ifSuccess.device), ifSuccess) #torch.logical_not(ifSuccess)
@@ -367,12 +368,11 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             countSuccess = torch.ge(varSum, limitTensor)
         elif limitOp == '<=':
             #if varSum <= limit:
-            countSuccessN = torch.sub(limitTensor, varSum)
-            
-            countSuccessN = torch.clamp(countSuccessN, min=0, max=1)
+            countSuccess = torch.sub(limitTensor, varSum)
+            countSuccess = torch.add(torch.ones(len(countSuccess), device=countSuccess.device), countSuccess)
+            countSuccess = torch.clamp(countSuccess, min=0, max=1)
 
-            countSuccess = torch.le(varSum, limitTensor)
-            
+            #countSuccess = torch.le(varSum, limitTensor)
         elif limitOp == '==':
             #if varSum == limit:
             countSuccess = torch.eq(varSum, limitTensor)
