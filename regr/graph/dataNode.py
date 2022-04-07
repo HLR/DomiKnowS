@@ -1062,7 +1062,7 @@ class DataNode:
                     continue
                 
                 v = dn.getAttribute(c[0])
-                vSoftmaxT = torch.nn.functional.softmax(v)
+                vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
                 
                 # Replace nan with 1/len
                 #for i, s in enumerate(vSoftmaxT):

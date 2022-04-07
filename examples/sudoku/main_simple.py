@@ -320,7 +320,7 @@ program = SampleLossProgram(
         
         sample = True,
         sampleSize=300, 
-        sampleGlobalLoss = True
+        sampleGlobalLoss = False
         )
 
 # program = SolverPOIProgram(

@@ -222,7 +222,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         andSuccess = var[0]
         for i in range(1, len(var)):
-            andSuccess = torch.mul(andSuccess.float(), var[i].float()) #torch.logical_and(andSuccess.float(), var[i].float())
+            torch.logical_and(andSuccess, var[i])
             
         if onlyConstrains:
             andLoss = torch.logical_not(andSuccess)
@@ -293,16 +293,12 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         if self.ifNone([var1, var2]):
             return None
-                
-        notVar2 = torch.sub(torch.ones(len(var2), device=var2.device), var2.float())
-
-        andV = torch.mul(var1, notVar2)
-        ifSuccess =  torch.sub(torch.ones(len(andV), device=andV.device), andV)
+            
         #with torch.no_grad():
-        #   ifSuccessO = torch.logical_or(torch.logical_not(var1), var2)
+        ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
-            ifLoss = torch.sub(torch.ones(len(ifSuccess), device=ifSuccess.device), ifSuccess) #torch.logical_not(ifSuccess)
+            ifLoss = torch.logical_not(ifSuccess)
             
             return ifLoss
         else:            
@@ -368,11 +364,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             countSuccess = torch.ge(varSum, limitTensor)
         elif limitOp == '<=':
             #if varSum <= limit:
-            countSuccess = torch.sub(limitTensor, varSum)
-            countSuccess = torch.add(torch.ones(len(countSuccess), device=countSuccess.device), countSuccess)
-            countSuccess = torch.clamp(countSuccess, min=0, max=1)
-
-            #countSuccess = torch.le(varSum, limitTensor)
+            countSuccess = torch.le(varSum, limitTensor)
         elif limitOp == '==':
             #if varSum == limit:
             countSuccess = torch.eq(varSum, limitTensor)
