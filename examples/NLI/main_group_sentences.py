@@ -86,12 +86,14 @@ def main(args):
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
-    training_file = "train.csv" if not args.adver_data else "adver_nli_train.jsonl"
-    testing_file = "test.csv" if not args.adver_data else "adver_nli_test.jsonl"
+    training_file = "adver_nli_train.jsonl"
+    testing_file = "adver_nli_test.jsonl"
     test_dataset = DataReaderMulti(file="data/" + testing_file, size=args.testing_samples,
-                                   batch_size=args.batch_size, adver_data_set=args.adver_data)
+                                   batch_size=args.batch_size, adver_data_set=args.adver_data,
+                                   adver_file="data/snli_genadv_1000_test.jsonl")
     train_dataset = DataReaderMulti(file="data/" + training_file, size=args.training_samples,
-                                    batch_size=args.batch_size, adver_data_set=args.adver_data)
+                                    batch_size=args.batch_size, adver_data_set=args.adver_data,
+                                    adver_file="data/snli_genadv_1000_dev.jsonl")
     model = program_declaration(cur_device)
     model.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                 Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -142,12 +144,12 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
     parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
                         type=float)
-    parser.add_argument('--training_sample', dest='training_samples', default=550146,
+    parser.add_argument('--training_sample', dest='training_samples', default=10000,
                         help="number of data to train model", type=int)
     parser.add_argument('--testing_sample', dest='testing_samples', default=10000, help="number of data to test model",
                         type=int)
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
-    parser.add_argument('--adver_data', dest='adver_data', default=1, help="Using adversarial data set ot not",
+    parser.add_argument('--adver_data', dest='adver_data', default=1, help="use adversarial data set ot not",
                         type=bool)
     args = parser.parse_args()
     main(args)
