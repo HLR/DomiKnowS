@@ -624,20 +624,18 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
 
-        #vDnVariable = dn.getAttribute(xPkey)[100][e[2]] # Get ILP variable for the concept 
         if sampleSize not in dn.getAttributes()[sampleKey]: # check if not already generated
             xV = dn.getAttribute(xPkey)
-            lv = len(xV)
-            vEp = dn.getAttribute(xPkey).expand(p, lv)
-            vIndex = vEp[:,e[1]]
+            xEp = dn.getAttribute(xPkey).expand(p, len(xV))
+            xP = xEp[:,e[1]]
             
             if vDn == None or vDn != vDn:
                 dn.getAttributes()[sampleKey][sampleSize] = [None]
             else:
                 # Create sample for this concept and sample size
-                dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(vIndex)
+                dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(xP)
                
-        return (dn.getAttributes()[sampleKey][sampleSize], (vIndex, dn.getAttributes()[sampleKey][sampleSize], xVarName)) # Return sample data and probabilty
+        return (dn.getAttributes()[sampleKey][sampleSize], (xP, dn.getAttributes()[sampleKey][sampleSize], xVarName)) # Return sample data and probability info
                       
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
         vDnLabel = self.__getLabel(_dn, conceptName).item()
@@ -1303,43 +1301,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_lcLosses['lossTensor'] = lossTensor
                     current_lcLosses['lcSuccesses'] = lcSuccesses
                     current_lcLosses['lcVariables'] = lcVariables
-
-                    # Calculate loss value - old way
-                    lossTensor1 = torch.zeros(len(lossList))#, requires_grad=True) # entry lcs
-
-                    for i, currentSuccesses in enumerate(successesList): # entries in lc
-                        if currentSuccesses == None:
-                            lossTensor1[i] = float("nan")
-                            continue
-                        
-                        # Calculate loss value for sample loss
-                        currentLossT = currentSuccesses # Chose successes values
-                        for _, v in enumerate(sampleInfoFiltered[i]): # Loop trough variables in the lc
-                            P = v[0] # Tensor with the current variable p (v[0])
-                            S = v[1]
-                            notS = torch.sub(torch.ones(len(S), device=S.device), S.float())
-
-                            oneMinusP = torch.sub(torch.ones(sampleSize, device=P.device), P) # Tensor with the current variable 1-p
-                            
-                            pS = torch.mul(P, S) # Tensor with p multiply by True variable sample (v[1])
-                            oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample (v[1])
-                            
-                            cLoss = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
-                                                        
-                            # Multiply the loss
-                            currentLossT = torch.mul(currentLossT, cLoss)
-                            
-                        # Collect sample used for calculation
-                        if currentLossT == None:
-                            currentLoss = float("nan")
-                        else:
-                            currentLoss = torch.sum(currentLossT).item()
-                            
-                        # Collect calculated loss for sample
-                        lossTensor1[i] = currentLoss
-
-                    current_lcLosses['loss1'] = torch.nansum(lossTensor1).item() / sampleSize
-                    current_lcLosses['lossTensor1'] = lossTensor1
         
         self.myLogger.info('')
 
