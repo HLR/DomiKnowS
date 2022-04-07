@@ -316,11 +316,11 @@ program = SampleLossProgram(
         #       'ILP': PRF1Tracker(DatanodeCMMetric()),
         #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
         #       },
-#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
         sampleSize=1, 
-        sampleGlobalLoss = True
+        sampleGlobalLoss = False
         )
 
 # program = SolverPOIProgram(
@@ -371,7 +371,7 @@ else:
 #             assert entry.getAttribute('val').item() == predicted
 #     break
     
-program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
+program.train(trainreader, train_epoch_num=1, c_warmup_iters=0, 
               Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
 
 ### make the table
@@ -379,16 +379,20 @@ for datanode in program.populate(trainreader):
     print(datanode)
     table = torch.zeros(9, 9)
     
-    entries = datanode.getChildDataNodes(conceptName=empty_entry)
-    for entry in entries:
-        t = entry.getAttribute(empty_entry_label, 'local/argmax')
-        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-        table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
-        print(predicted)
-        if entry.getAttribute('fixed').item() == 1:
-            assert entry.getAttribute('val').item() == predicted
-        print("---")
-    break
+    # entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    # for entry in entries:
+    #     t = entry.getAttribute(empty_entry_label, 'local/argmax')
+    #     predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+    #     table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
+    #     print(predicted)
+    #     if entry.getAttribute('fixed').item() == 1:
+    #         pass
+    #         # assert entry.getAttribute('val').item() == predicted
+    #     print("---")
+    # break
     
 
 print(table)
+
+program.train(trainreader, train_epoch_num=5, c_warmup_iters=0, 
+              Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
