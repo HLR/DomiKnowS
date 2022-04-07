@@ -148,6 +148,6 @@ if __name__ == "__main__":
                         type=int)
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
     parser.add_argument('--adver_data', dest='adver_data', default=0, help="Using adversarial data set ot not",
-                        type=bool)
+                        type=int)
     args = parser.parse_args()
     main(args)
