@@ -88,14 +88,10 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         hypothesis = "hypothesis" if not augment_data else "sentence2"
         pre = item[premise]
         hypo = item[hypothesis]
-        if pre + ',' + hypo not in symmetric:
-            symmetric[pre + ',' + hypo] = []
-        symmetric[pre + ',' + hypo].append(id)
-        if pre == hypo:
-            continue
-        if hypo + ',' + pre not in symmetric:
-            symmetric[hypo + ',' + pre] = []
-        symmetric[hypo + ',' + pre].append(id)
+        key = pre + ',' + hypo if pre <= hypo else hypo + ',' + pre
+        if key not in symmetric:
+            symmetric[key] = []
+        symmetric[key].append(id)
 
     for group_sym in symmetric.values():
         for ind, id in enumerate(group_sym):
@@ -116,6 +112,7 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
                 data['neutral'].append('1' if item['gold_label'] == "neutral" else '0')
                 data['contradiction'].append('1' if item['gold_label'] == "contradiction" else '0')
             current_size += 1
+            # To prevent separation between symmetric sentence
             if ind + 3 == len(group_sym) or current_size == batch_size:
                 current_size = 0
                 return_data.append({"premises": "@@".join(data['premise']),
