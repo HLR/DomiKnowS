@@ -21,11 +21,3 @@ with Graph('Useful_arg') as graph:
     nandL(entailment, contradiction)
     nandL(neutral, contradiction)
     orL(entailment, neutral, contradiction)
-
-    # Example Constrain
-    # T => ENT(X1, X1)
-    # Ent(X1, X2) => !CON(X2, X1)
-    # Neu(X1, X2) => !CON(X2, X1)
-    # CON(X1, X2) => CON(X2, X1)
-    # Ent(X1, X2) + Ent(X2, X3) => Ent(X1, X3)
-

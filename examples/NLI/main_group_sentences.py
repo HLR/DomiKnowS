@@ -4,18 +4,20 @@ sys.path.append("../")
 sys.path.append("../../")
 
 import pandas as pd
-from data.reader import DataReaderMulti
+from data.reader import DataReaderMulti, DataReaderMultiRelation
 from transformers import AdamW
 import torch
 from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from model import RobertClassification, NLI_Robert, RobertaTokenizerMulti
+from utils import check_symmetric
+from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 import argparse
 
 
 def program_declaration(cur_device):
     from graph_senetences import graph, sentence, entailment, neutral, \
-        contradiction, sentence_group, sentence_group_contains
+        contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2
 
     graph.detach()
     sentence_group["premises"] = ReaderSensor(keyword="premises", device=cur_device)
@@ -66,6 +68,9 @@ def program_declaration(cur_device):
     sentence[neutral] = FunctionalSensor(sentence_group_contains, "neutral_list", forward=read_label, label=True, device=cur_device)
     sentence[contradiction] = FunctionalSensor(sentence_group_contains, "cont_list", forward=read_label,
                                                label=True, device=cur_device)
+    symmetric[s_sent1.reversed, s_sent2.reversed] = CompositionCandidateSensor(
+        relations=(s_sent1.reversed, s_sent2.reversed),
+        forward=check_symmetric)
 
     from regr.program import POIProgram, IMLProgram, SolverPOIProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
@@ -88,9 +93,9 @@ def main(args):
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     training_file = "train.csv" if not args.adver_data else "adver_nli_train.jsonl"
     testing_file = "test.csv" if not args.adver_data else "adver_nli_test.jsonl"
-    test_dataset = DataReaderMulti(file="data/" + testing_file, size=args.testing_samples,
+    test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_samples,
                                    batch_size=args.batch_size, adver_data_set=args.adver_data)
-    train_dataset = DataReaderMulti(file="data/" + training_file, size=args.training_samples,
+    train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_samples,
                                     batch_size=args.batch_size, adver_data_set=args.adver_data)
     model = program_declaration(cur_device)
     model.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
