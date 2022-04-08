@@ -222,7 +222,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         andSuccess = var[0]
         for i in range(1, len(var)):
-            torch.logical_and(andSuccess, var[i])
+            andSuccess = torch.logical_and(andSuccess, var[i])
             
         if onlyConstrains:
             andLoss = torch.logical_not(andSuccess)
@@ -293,8 +293,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def ifVar(self, _, var1, var2, onlyConstrains = False):
         if self.ifNone([var1, var2]):
             return None
-            
-        #with torch.no_grad():
+                
         ifSuccess = torch.logical_or(torch.logical_not(var1), var2)
     
         if onlyConstrains:
@@ -353,10 +352,15 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
+        # Translate boolean to int
+        varInt = []
+        for v in var:
+            varInt.append(v.to(dtype=torch.int, copy=True))
+           
         # Calculate sum 
-        varSum = torch.clone(var[0])
-        for i in range(1, len(var)):
-            varSum = torch.add(varSum, var[i])
+        varSum = varInt[0]
+        for i in range(1, len(varInt)):
+            varSum += varInt[i]
 
         # Check condition
         if limitOp == '>=':
