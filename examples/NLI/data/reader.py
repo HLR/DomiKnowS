@@ -16,8 +16,8 @@ def DataReader(file, size):
     return return_data
 
 
-def DataReaderMulti(file, size, *, batch_size=8, adver_data_set=False):
-    df = pd.read_csv(file).dropna() if not adver_data_set else pd.read_json(file, lines=True).dropna()
+def DataReaderMulti(file, size, *, batch_size=8, augment_data=False):
+    df = pd.read_csv(file).dropna() if not augment_data else pd.read_json(file, lines=True).dropna()
     # Default will make the size equal to the maximum size of data
     size = min(size, df.shape[0])
     return_data = []
@@ -25,12 +25,12 @@ def DataReaderMulti(file, size, *, batch_size=8, adver_data_set=False):
     # Doing the basic batch size without relationship, first
     current_size = 0
     data = {'premise': [], 'hypothesis': [], 'entailment': [], 'contradiction': [], 'neutral': []}
-    premise = "premise" if not adver_data_set else "sentence1"
-    hypothesis = "hypothesis" if not adver_data_set else "sentence2"
+    premise = "premise" if not augment_data else "sentence1"
+    hypothesis = "hypothesis" if not augment_data else "sentence2"
     for index, item in sample.iterrows():
         data['premise'].append(item[premise])
         data['hypothesis'].append(item[hypothesis])
-        if not adver_data_set:
+        if not augment_data:
             data['entailment'].append('1' if item['label'] == 0 else '0')
             data['neutral'].append('1' if item['label'] == 1 else '0')
             data['contradiction'].append('1' if item['label'] == 2 else '0')
@@ -58,26 +58,41 @@ def DataReaderMulti(file, size, *, batch_size=8, adver_data_set=False):
     return return_data
 
 
-def DataReaderMultiRelation(file, size, *, batch_size=8, adver_data_set=False):
-    df = pd.read_csv(file).dropna() if not adver_data_set else pd.read_json(file, lines=True).dropna()
+def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
+    df = pd.read_csv(file).dropna()
+    df_augment = pd.read_json(augment_file, lines=True).dropna() if augment_file else None
     # Default will make the size equal to the maximum size of data
     size = min(size, df.shape[0])
     return_data = []
-    sample = df.iloc[:size, :]
     # Doing the basic batch size without relationship, first
     current_size = 0
     data = {'premise': [], 'hypothesis': [], 'entailment': [], 'contradiction': [], 'neutral': []}
-    premise = "premise" if not adver_data_set else "sentence1"
-    hypothesis = "hypothesis" if not adver_data_set else "sentence2"
-    data_id = {index: item for index, item in sample.iterrows()}
+    index = 0
+    data_id_sample = {}
+    sample = df.iloc[:size, :]
+
+    for _, item in sample.iterrows():
+        data_id_sample[index] = (item, False)
+        index += 1
+
+    if augment_file:
+        for _, item in df_augment.iterrows():
+            data_id_sample[index] = (item, True)
+            index += 1
+
     symmetric = {}
     check_id = {}
-    for id, item in data_id.items():
+    for id, pair in data_id_sample.items():
+        item, augment_data = pair
+        premise = "premise" if not augment_data else "sentence1"
+        hypothesis = "hypothesis" if not augment_data else "sentence2"
         pre = item[premise]
         hypo = item[hypothesis]
         if pre + ',' + hypo not in symmetric:
             symmetric[pre + ',' + hypo] = []
         symmetric[pre + ',' + hypo].append(id)
+        if pre == hypo:
+            continue
         if hypo + ',' + pre not in symmetric:
             symmetric[hypo + ',' + pre] = []
         symmetric[hypo + ',' + pre].append(id)
@@ -87,10 +102,12 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, adver_data_set=False):
             if id in check_id:
                 continue
             check_id[id] = True
-            item = data_id[id]
+            item, augment_data = data_id_sample[id]
+            premise = "premise" if not augment_data else "sentence1"
+            hypothesis = "hypothesis" if not augment_data else "sentence2"
             data['premise'].append(item[premise])
             data['hypothesis'].append(item[hypothesis])
-            if not adver_data_set:
+            if not augment_data:
                 data['entailment'].append('1' if item['label'] == 0 else '0')
                 data['neutral'].append('1' if item['label'] == 1 else '0')
                 data['contradiction'].append('1' if item['label'] == 2 else '0')
