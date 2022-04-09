@@ -6,7 +6,7 @@ from utils import check_symmetric
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
-def program_declaration(cur_device, *, sym_relation=True):
+def program_declaration(cur_device, *, sym_relation:bool =True):
     from graph_senetences import graph, sentence, entailment, neutral, \
         contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2
 
@@ -75,7 +75,7 @@ def program_declaration(cur_device, *, sym_relation=True):
     # IMP with lr = [0, 1] 0.5
     poi_list = [sentence, entailment, contradiction, neutral]
     if sym_relation:
-        poi_list.append(sym_relation)
+        poi_list.append(symmetric)
     program = SolverPOIProgram(graph, poi=poi_list,
                                inferTypes=['ILP', 'local/argmax'],
                                loss=MacroAverageTracker(NBCrossEntropyLoss()),

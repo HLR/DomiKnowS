@@ -24,3 +24,5 @@ python main.py --adver_data 1 --cudo 0 --lr 1e-5 --epoch 5 -- batch_size 3
 - lr: learning rate for the AdamW optimiser
 - training_sample: number of training sample will be used
 - testing_sample: number of testing sample will be used
+
+### Result
