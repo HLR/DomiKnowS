@@ -16,7 +16,7 @@ python main.py --cuda 0 --lr 2e-6 --epoch 5 --batch_size 8
 ## Run the adversarially regularising logic bg knowledge testset
 
 ```
-python main_group_sentences.py --adver_data 1 --cudo 0 --lr 1e-5 --epoch 5 -- batch_size 3
+python main_group_sentences.py --lr 1e-5 --training_sample 100000 --epoch 5 --batch_size 32 --sym_relation True
 ```
 - cuda: the number of GPU you want to use
 - epoch: how many epoch you want to train the program

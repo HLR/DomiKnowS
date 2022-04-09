@@ -20,17 +20,18 @@ def main(args):
     training_file = "train.csv"
     testing_file = "test.csv"
 
-    test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_samples,
-                                   batch_size=args.batch_size)
+    augment_file = "data/snli_genadv_1000_dev.jsonl"
+    test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
+                                           batch_size=args.batch_size, augment_file=augment_file)
 
-    train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_samples,
-                                    batch_size=args.batch_size)
+    train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_sample,
+                                            batch_size=args.batch_size)
 
     program = program_declaration(cur_device, sym_relation=args.sym_relation,
-                                primaldual=args.primaldual, iml=args.iml, beta=args.beta)
+                                  primaldual=args.primaldual, iml=args.iml, beta=args.beta)
 
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
-                Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
+                  Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     program.test(test_dataset, device=cur_device)
 
@@ -53,7 +54,7 @@ def main(args):
                     sentence.getAttribute(contradiction, 'ILP')
     print("Accuracy = %.2f%%" % (correct / len(result["predict"]) * 100))
     result = pd.DataFrame(result)
-    training_size = 10000 if args.training_samples > 10000 and args.adver_data else args.training_samples
+    training_size = args.training_samples
     result.to_csv("report-{:}-{:}-{:}--sym:{:}.csv".format(training_size, args.testing_samples,
                                                              args.cur_epoch, args.sym_relation))
 
@@ -68,10 +69,10 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_samples', default=550146,
+    parser.add_argument('--training_sample', dest='training_sample', default=550146,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_samples', default=10000, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=10000, help="number of data to test model",
                         type=int)
 
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
