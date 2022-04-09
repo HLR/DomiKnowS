@@ -8,6 +8,7 @@ from data.reader import DataReaderMulti, DataReaderMultiRelation
 from program_declaration import program_declaration
 import torch
 import argparse
+from regr.graph import Graph, Concept, Relation
 
 
 def main(args):
@@ -20,22 +21,25 @@ def main(args):
     testing_file = "test.csv"
 
     test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_samples,
-                                   batch_size=args.batch_size, augment_file="data/snli_genadv_1000_dev.jsonl")
+                                   batch_size=args.batch_size)
 
     train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_samples,
                                     batch_size=args.batch_size)
 
-    model = program_declaration(cur_device, sym_relation=args.sym_relation)
-    model.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
+    program = program_declaration(cur_device, sym_relation=args.sym_relation,
+                                primaldual=args.primaldual, iml=args.iml, beta=args.beta)
+
+    program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                 Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
-    model.test(test_dataset, device=cur_device)
+
+    program.test(test_dataset, device=cur_device)
 
     correct = 0
     result = {"premise": [],
               "hypothesis": [],
               "actual": [],
               "predict": []}
-    for datanode in model.populate(test_dataset, device=cur_device):
+    for datanode in program.populate(test_dataset, device=cur_device):
         for sentence in datanode.getChildDataNodes():
             result["premise"].append(sentence.getAttribute("premise"))
             result["hypothesis"].append(sentence.getAttribute("hypothesis"))
@@ -72,7 +76,13 @@ if __name__ == "__main__":
 
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
 
-    parser.add_argument('--sym_relation', dest='sym_relation', default=0, help="Using symmetric relation",
-                        type=int)
+    parser.add_argument('--sym_relation', dest='sym_relation', default=False, help="Using symmetric relation",
+                        type=bool)
+    parser.add_argument('--pmd', dest='primaldual', default=False, help="Using primaldual model or not",
+                        type=bool)
+    parser.add_argument('--iml', dest='iml', default=False, help="Using IML model or not",
+                        type=bool)
+    parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
+                        type=float)
     args = parser.parse_args()
     main(args)

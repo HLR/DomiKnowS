@@ -6,7 +6,8 @@ from utils import check_symmetric
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
-def program_declaration(cur_device, *, sym_relation:bool =True):
+def program_declaration(cur_device, *,
+                        sym_relation: bool = False, primaldual: bool = False, iml: bool = False, beta= 0.5):
     from graph_senetences import graph, sentence, entailment, neutral, \
         contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2
 
@@ -66,20 +67,40 @@ def program_declaration(cur_device, *, sym_relation:bool =True):
             relations=(s_sent1.reversed, s_sent2.reversed),
             forward=check_symmetric, device=cur_device)
 
-    from regr.program import POIProgram, IMLProgram, SolverPOIProgram
+    from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-    from regr.program.loss import NBCrossEntropyLoss
+    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+    from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
+    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     # Creating the program to create model
-    # Pdual with lr = 5 1 3
+    # Pdual with lr = .5 1 3
     # IMP with lr = [0, 1] 0.5
-    poi_list = [sentence, entailment, contradiction, neutral]
+    poi_list = [sentence[entailment], sentence[contradiction], sentence[neutral]]
     if sym_relation:
         poi_list.append(symmetric)
-    program = SolverPOIProgram(graph, poi=poi_list,
-                               inferTypes=['ILP', 'local/argmax'],
-                               loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                               metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                       'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    program = None
+    if primaldual:
+        print("Using Primal Dual Program")
+        program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
+                                    inferTypes=['ILP', 'local/argmax'],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    beta=beta,
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    elif iml:
+        print("Using IML Program")
+        program = IMLProgram(graph, poi=poi_list,
+                             inferTypes=['ILP', 'local/argmax'],
+                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=beta)),
+                             metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                     'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    else:
+        print("Using simple Program")
+        program = SolverPOIProgram(graph, poi=poi_list,
+                                   inferTypes=['ILP', 'local/argmax'],
+                                   loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                   metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                           'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program
