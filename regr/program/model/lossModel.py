@@ -142,10 +142,11 @@ class SampleLosslModel(torch.nn.Module):
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
-
+        import math
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
             globalLoss = constr_loss['globalLoss']
+            globalLoss = -1 * math.log(globalLoss)
             self.loss['globalLoss'](globalLoss)
             lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
         else:

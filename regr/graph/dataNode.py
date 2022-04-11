@@ -1127,12 +1127,12 @@ class DataNode:
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
     #tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
-    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
+    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
         
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss)
         
         return lcResult
 
