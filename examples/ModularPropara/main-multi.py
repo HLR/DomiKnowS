@@ -233,6 +233,10 @@ def main():
 #     setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
+    dataset = list(dataset)[16]
+
+    dataset = iter([dataset])
+
     #     lbp.test(dataset, device='auto')
     all_updates = []
     for datanode in lbp.populate(dataset, device="cpu"):
