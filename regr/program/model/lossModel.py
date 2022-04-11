@@ -123,7 +123,7 @@ class SampleLosslModel(LossModel):
                 if key not in self.constr:
                     continue
                 loss_value = loss['loss']
-                loss_value = torch.log(loss['lossTensor'].sum())
+                loss_value = torch.log(loss['lossTensor'].nansum())
                 loss_ = -1 * (self.get_lmbd(key) * loss_value)
                 self.loss[key](loss_)
                 lmbd_loss.append(loss_)
