@@ -278,6 +278,10 @@ class SampleLossProgram(LossProgram):
                 loss = mloss + self.beta * closs
             if self.opt is not None and loss:
                 loss.backward()
+                for name, param in self.model.named_parameters():
+                    if param.requires_grad:
+                        print (name, param.grad)
+
                 self.opt.step()
                 iter += 1
             

@@ -1222,8 +1222,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    with torch.no_grad():
-                        lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
                 else:
                     # lossList will contain float result for lc loss calculation
                     lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
@@ -1289,10 +1288,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensor = torch.clone(lcSuccesses)
                     #lossTensor = countSuccesses.div_(len(lossList))
                     for v in lcVariables:
-                        P = lcVariables[v][0] # Tensor with the current variable p (v[0])
                         S = lcVariables[v][1] # Sample for the current Variable
                         notS = torch.sub(torch.ones(len(S), device=S.device), S.float()) # Negation of Sample
-                        oneMinusP = torch.sub(oneT, P) # Tensor with the current variable 1-p
+                        
+                        P = lcVariables[v][0] # Tensor with the current variable p (v[0])
+                        oneMinusP = torch.sub(torch.ones(len(S), device=S.device), P) # Tensor with the current variable 1-p
                         
                         pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
                         oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
