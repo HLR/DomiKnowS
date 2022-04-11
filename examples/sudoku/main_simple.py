@@ -316,12 +316,12 @@ program = SampleLossProgram(
         #       'ILP': PRF1Tracker(DatanodeCMMetric()),
         #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
         #       },
-        # loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=2000, 
+        sampleSize=10, 
         sampleGlobalLoss = False,
-        beta=0.4
+        beta=10
         )
 
 # program = SolverPOIProgram(
