@@ -1181,7 +1181,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         return
 
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0):
+    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False):
         start = process_time() # timer()
 
         m = None 
@@ -1313,28 +1313,36 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('Processed %i logical constraints'%(lcCounter))
         self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
               
-        if sample: # Calculate global sample loss  
-            globalLossT = torch.zeros(sampleSize, device = currentDevice)
-            globalSuccesses = torch.ones(sampleSize, device = currentDevice)
-            for lc in lcLosses:
-                currentLC = lcLosses[lc]
-                
-                globalSuccesses = globalSuccesses.mul_(currentLC['lcSuccesses']) # Multiply to find common successes
-                globalLossT = globalLossT.add_(currentLC['lossTensor']) 
+        if sample:
+            if sampleGlobalLoss: # Calculate global sample loss  
+                globalLossT = torch.zeros(sampleSize, device = currentDevice)
+                globalSuccesses = torch.ones(sampleSize, device = currentDevice)
+                for lc in lcLosses:
+                    currentLC = lcLosses[lc]
                     
-            globalLossFiltered = torch.mul(globalSuccesses, globalLossT) # Select loss for common successes
-
-            globalLoss = torch.nansum(globalLossFiltered).item()
-            lcLosses['globalLoss'] = globalLoss
-            
-            globalSuccessesCounter = torch.nansum(globalSuccesses).item()
-            self.myLoggerTime.info('Count of global Successes is: %f'%(globalSuccessesCounter))
-            
-            lossSum = torch.nansum(globalLossT).item()
-            self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
-
-            self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
+                    globalSuccesses = globalSuccesses.mul_(currentLC['lcSuccesses']) # Multiply to find common successes
+                    globalLossT = globalLossT.add_(currentLC['lossTensor']) 
+                        
+                globalLossFiltered = torch.mul(globalSuccesses, globalLossT) # Select loss for common successes
+    
+                globalLoss = torch.nansum(globalLossFiltered).item()
+                lcLosses['globalLoss'] = globalLoss
+                
+                globalSuccessesCounter = torch.nansum(globalSuccesses).item()
+                self.myLoggerTime.info('Count of global Successes is: %f'%(globalSuccessesCounter))
+                
+                lossSum = torch.nansum(globalLossT).item()
+                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
+    
+                self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
+                self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
+            else:
+                globalLossT = torch.zeros(sampleSize, device = currentDevice)
+                for lc in lcLosses:
+                    globalLossT = globalLossT.add_(lcLosses[lc]['lossTensor']) 
+                
+                lossSum = torch.nansum(globalLossT).item()
+                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
             
         end = process_time() # timer()
         elapsedInS = end - start

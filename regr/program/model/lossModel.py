@@ -111,7 +111,7 @@ class SampleLosslModel(LossModel):
         datanode = builder.getDataNode()
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
         import math
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
