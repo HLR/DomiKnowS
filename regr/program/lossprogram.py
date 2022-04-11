@@ -253,3 +253,34 @@ class SampleLossProgram(LossProgram):
 
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)
+
+    def train_epoch(
+        self, dataset,
+        c_warmup_iters=0,  # warmup
+        c_session={},
+        **kwargs):
+        assert c_session
+        iter = c_session['iter']
+        self.model.train()
+        self.model.reset()
+        self.model.train()
+        self.model.reset()
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
+            if iter < c_warmup_iters:
+                loss = mloss
+            else:
+                closs, *_ = self.cmodel(output[1])
+                loss = mloss + self.beta * closs
+            if self.opt is not None and loss:
+                loss.backward()
+                self.opt.step()
+                iter += 1
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter

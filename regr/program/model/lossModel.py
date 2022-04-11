@@ -93,11 +93,41 @@ class PrimalDualModel(LossModel):
     def __init__(self, graph, tnorm=DataNode.tnormsDefault):
         super().__init__(graph, tnorm=tnorm)
         
-class SampleLosslModel(LossModel):
+class SampleLosslModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-        super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+    # def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
+    #     super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+
+    def __init__(self, graph, 
+                 tnorm=DataNode.tnormsDefault, 
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False):
+        super().__init__()
+        self.graph = graph
+        self.build = True
+        
+        self.tnorm = tnorm
+        
+        self.sample = sample
+        self.sampleSize = sampleSize
+        self.sampleGlobalLoss = sampleGlobalLoss
+        
+        self.constr = OrderedDict(graph.logicalConstrainsRecursive)
+        nconstr = len(self.constr)
+        if nconstr == 0:
+            warnings.warn('No logical constraint detected in the graph. '
+                          'PrimalDualModel will not generate any constraint loss.')
+            
+            
+        self.reset_parameters()
+        self.loss = MacroAverageTracker(lambda x:x)
+
+    def reset_parameters(self):
+        pass
+
+    def reset(self):
+        if isinstance(self.loss, MetricTracker):
+            self.loss.reset()
 
     def forward(self, builder, build=None):
         if build is None:
@@ -111,7 +141,7 @@ class SampleLosslModel(LossModel):
         datanode = builder.getDataNode()
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
 
         lmbd_loss = []
         if self.sampleGlobalLoss and constr_loss['globalLoss']:
@@ -122,12 +152,15 @@ class SampleLosslModel(LossModel):
             for key, loss in constr_loss.items():
                 if key not in self.constr:
                     continue
-                loss_value = loss['loss']
-                loss_value = torch.log(loss['lossTensor'].nansum())
-                loss_ = -1 * (self.get_lmbd(key) * loss_value)
+                # loss_value = loss['loss']
+                if loss['lossTensor'].nansum().item() != 0: 
+                    loss_value = torch.log(loss['lossTensor'].sum())
+                    loss_ = -1 * (loss_value)
+                else:
+                    loss_ = 0
                 self.loss[key](loss_)
                 lmbd_loss.append(loss_)
-            lmbd_loss = torch.tensor(sum(lmbd_loss), requires_grad=True)
+            lmbd_loss = sum(lmbd_loss)
         
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder
