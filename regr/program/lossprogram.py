@@ -6,6 +6,7 @@ from tqdm import tqdm
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
 from .model.lossModel import PrimalDualModel, SampleLosslModel
+from .model.base import Mode
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -70,6 +71,7 @@ class LossProgram(LearningBasedProgram):
         c_lr_decay=4,  # strategy
         c_lr_decay_param=1,  # param in the strategy
         **kwargs):
+        self.model.mode(Mode.TRAIN)
         
         # if COptim is None:
         #     COptim = Optim
@@ -259,6 +261,7 @@ class SampleLossProgram(LossProgram):
         c_warmup_iters=0,  # warmup
         c_session={},
         **kwargs):
+        self.model.mode(Mode.TRAIN)
         assert c_session
         iter = c_session['iter']
         self.model.train()
