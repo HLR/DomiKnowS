@@ -1243,8 +1243,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
                 if not sample: # Loss value
                     for i, l in enumerate(lossList):
-                        if l[0] is not None:
-                            lossTensor[i] = l[0]
+                        if len(l) > 0:
+                            if l[0] is not None:
+                                lossTensor[i] = l[0]
+                            else:
+                                lossTensor[i] = float("nan")
                         else:
                             lossTensor[i] = float("nan")
                 else: # -----------Sample

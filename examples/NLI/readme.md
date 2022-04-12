@@ -33,4 +33,5 @@ python main_group_sentences.py --lr 1e-5 --training_sample 100000 --epoch 5 --ba
 Training sample size | epoch | learning rate | model | using constrain | Accuracy (%)
 --- | :---: | :---: | :---: | :---: | ---:
 100000 | 5 | 1e-5 | POI | False | 83.89 (Dev Augmentation included),  
-100000 | 5 | 1e-5 | POI | Only Symmetric | 85.39 (Dev Aug included)
+100000 | 5 | 1e-5 | POI | Only Symmetric | 85.392 (Dev Aug included)
+150000 | 5 | 1e-5 | POI | Only Symmetric | 85.167 (Dev Aug included)
