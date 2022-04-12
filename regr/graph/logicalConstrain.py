@@ -276,7 +276,8 @@ class LogicalConstrain:
                 
             rVars.append(tVars)
         
-        # Return results from created ILP constraints - None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
+        # Return results from created ILP constraints - 
+        # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
         return rVars
     
     def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain = False, cOperation = None, cLimit = 1, logicMethodName = "COUNT"):         
@@ -310,10 +311,12 @@ class LogicalConstrain:
              
         # -- Use ILP variable setup to create constrains   
         if headConstrain:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                         logicMethodName = logicMethodName)])
         else:
             for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, logicMethodName = logicMethodName)])
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                             logicMethodName = logicMethodName)])
            
         if model is not None:
             model.update()
@@ -345,14 +348,16 @@ class orL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False):
-        return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, headConstrain)
     
 class nandL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, headConstrain)
         
 class ifL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
@@ -367,21 +372,24 @@ class norL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
 
 class xorL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
     
 class epqL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False):
+        with torch.no_grad(): 
+            return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
      
 # ----------------- Auxiliary
      
@@ -394,8 +402,9 @@ class fixedL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False):
+        with torch.no_grad(): 
+            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
     
 # ----------------- Counting
 
@@ -411,7 +420,8 @@ class exactL(LogicalConstrain):
 
         cOperation = '=='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
+        with torch.no_grad():
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
 class existsL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):

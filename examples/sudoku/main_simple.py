@@ -124,6 +124,8 @@ with Graph('global') as graph:
     SAME_TABLE = existsL_LCs
     SAME_TABLE_New = atMostL_LCs
     
+    atMostL(*empty_entry_label.attributes)
+    
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
@@ -330,7 +332,7 @@ program = SampleLossProgram(
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=2000, 
+        sampleSize=200, 
         sampleGlobalLoss = False,
         beta=1
         )

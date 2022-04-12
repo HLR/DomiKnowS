@@ -65,7 +65,9 @@ _DataNodeBulder__Logger.setLevel(logLevel)
 _DataNodeBulder__Logger.addHandler(ch)
 # Don't propagate
 _DataNodeBulder__Logger.propagate = False
-        
+
+_DataNodeBulder__Logger.info('--- Starting new run ---')
+
 # Class representing single data instance with relation links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
