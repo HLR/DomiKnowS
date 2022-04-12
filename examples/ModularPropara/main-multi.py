@@ -139,11 +139,6 @@ def model_declaration():
         link2 = torch.zeros(all_actions, len(steps))
         link1 = torch.zeros(all_actions, len(entities))
         link3 = torch.zeros(all_actions, len(locations))
-        # for i in range(len(entities)):
-        #     link2[i*len(steps):(i+1)*len(steps),i] = 1
-
-        # for j in range(all_actions):
-        #     link1[j, j%len(steps)] = 1
 
         for i in range(len(entities)):
             link1[i*len(steps)*len(locations):(i+1)*len(steps)*len(locations), i] = 1
@@ -157,12 +152,8 @@ def model_declaration():
             for j in range(len(steps)):
                 for k in range(len(locations)):
                     start = i*len(steps)*len(locations) + (j*len(locations))
-                    link3[start+k] = 1
+                    link3[start+k, k] = 1
 
-    #     print(link1, link2)
-    #     print(link1.shape, link2.shape)
-    #     print("steps: ", len(steps))
-    #     print("entities: ", len(entities))
         return link1, link2, link3
 
 
@@ -280,8 +271,8 @@ def main():
 
 updated_data = main()
 
-print(updated_data[16]['actions'].argmax(dim=-1))
-print(updated_data[16]['actions_before'].argmax(dim=-1))
+print(updated_data[0]['actions'].argmax(dim=-1))
+print(updated_data[0]['actions_before'].argmax(dim=-1))
 # import json
 # with open("data/updated_info.json", "w") as f:
 #     json.dump(updated_data, f)
