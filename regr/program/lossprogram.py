@@ -71,7 +71,6 @@ class LossProgram(LearningBasedProgram):
         c_lr_decay=4,  # strategy
         c_lr_decay_param=1,  # param in the strategy
         **kwargs):
-        self.model.mode(Mode.TRAIN)
         
         # if COptim is None:
         #     COptim = Optim
@@ -161,6 +160,7 @@ class LossProgram(LearningBasedProgram):
         c_session={},
         **kwargs):
         assert c_session
+        self.model.mode(Mode.TRAIN)
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
         c_update_freq = c_session['c_update_freq']

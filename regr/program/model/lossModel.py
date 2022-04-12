@@ -155,7 +155,9 @@ class SampleLosslModel(torch.nn.Module):
                     continue
                 # loss_value = loss['loss']
                 if loss['lossTensor'].nansum().item() != 0: 
-                    loss_value = torch.log(loss['lossTensor'].sum())
+                    loss_value = loss['lossTensor']
+                    # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
+                    loss_value = torch.log(loss_value.sum())
                     loss_ = -1 * (loss_value)
                     self.loss[key](loss_)
                     lmbd_loss.append(loss_)
