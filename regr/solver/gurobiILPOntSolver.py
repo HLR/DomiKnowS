@@ -582,22 +582,40 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
+    def isVariableFixed(self, dn, conceptName, e):
+        labelKey = '<' + conceptName + ">/label" 
+
+        if "fixed" in dn.getAttributes() and dn.getAttributes()["fixed"].item() == 1:
+            if dn.getAttributes()[labelKey].item() == e[1]:
+                return 1
+            else:
+                return 0
+            
+        return None
+        
     def getMLResult(self, dn, conceptName, xPkey, e, p, loss = False, sample = False):
         if dn == None:
             raise Exception("No datanode provided")
-        
-        if sample and 'sample' not in dn.getAttributes():
-            sampleKey = '<' + conceptName + ">/sample" 
+                        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        sampleKey = '<' + conceptName + ">/sample" 
+        if sample and sampleKey not in dn.getAttributes():
             dn.getAttributes()[sampleKey] = {}
-            
+        
         if dn.ontologyNode.name == conceptName:
             if not sample:
                 return 1
             else:
                 sampleSize = p
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize, dtype=torch.bool, device = device)
-                return (dn.getAttributes()[sampleKey][sampleSize], (1.0, dn.getAttributes()[sampleKey][sampleSize]))
+                
+                if sampleSize not in dn.getAttributes()[sampleKey]: 
+                    dn.getAttributes()[sampleKey][sampleSize] = {}
+                    
+                xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
+
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device = device)
+                return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (1.0, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
         
         if xPkey not in dn.attributes:
             if not sample:
@@ -623,19 +641,31 @@ class gurobiILPOntSolver(ilpOntSolver):
         sampleSize = p
 
         xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
-
-        if sampleSize not in dn.getAttributes()[sampleKey]: # check if not already generated
+        
+        isFiexd = self.isVariableFixed(dn, conceptName, e)
+        
+        if isFiexd != None:
+            if isFiexd == 1:
+                xP = torch.ones(sampleSize, device = device)
+            else:
+                xP = torch.zeros(sampleSize, device = device)
+        else:
             xV = dn.getAttribute(xPkey)
-            xEp = dn.getAttribute(xPkey).expand(p, len(xV))
+            xEp = dn.getAttribute(xPkey).expand(sampleSize, len(xV))
             xP = xEp[:,e[1]]
+                
+        if sampleSize not in dn.getAttributes()[sampleKey]: 
+            dn.getAttributes()[sampleKey][sampleSize] = {}
             
+        if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
+            # check if not already generated
             if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize] = [None]
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
             else:
                 # Create sample for this concept and sample size
-                dn.getAttributes()[sampleKey][sampleSize] = torch.bernoulli(xP)
-               
-        return (dn.getAttributes()[sampleKey][sampleSize], (xP, dn.getAttributes()[sampleKey][sampleSize], xVarName)) # Return sample data and probability info
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
+        
+        return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName)) # Return sample data and probability info
                       
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
         vDnLabel = self.__getLabel(_dn, conceptName).item()
@@ -1288,10 +1318,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossTensor = torch.clone(lcSuccesses)
                     #lossTensor = countSuccesses.div_(len(lossList))
                     for v in lcVariables:
-                        S = lcVariables[v][1] # Sample for the current Variable
+                        currentV = lcVariables[v]
+                        
+                        S = currentV[1] # Sample for the current Variable
                         notS = torch.sub(torch.ones(len(S), device=S.device), S.float()) # Negation of Sample
                         
-                        P = lcVariables[v][0] # Tensor with the current variable p (v[0])
+                        P = currentV[0] # Tensor with the current variable p (v[0])
                         oneMinusP = torch.sub(torch.ones(len(S), device=S.device), P) # Tensor with the current variable 1-p
                         
                         pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
