@@ -139,13 +139,11 @@ def model_declaration():
         link2 = torch.zeros(all_actions, len(steps))
         link1 = torch.zeros(all_actions, len(entities))
         link3 = torch.zeros(all_actions, len(locations))
-        for i in range(len(entities)):
-            link2[i*len(steps):(i+1)*len(steps),i] = 1
+        # for i in range(len(entities)):
+        #     link2[i*len(steps):(i+1)*len(steps),i] = 1
 
-        for j in range(all_actions):
-            link1[j, j%len(steps)] = 1
-
-
+        # for j in range(all_actions):
+        #     link1[j, j%len(steps)] = 1
 
         for i in range(len(entities)):
             link1[i*len(steps)*len(locations):(i+1)*len(steps)*len(locations), i] = 1
@@ -155,7 +153,7 @@ def model_declaration():
                 start = i*len(steps)*len(locations)
                 link2[start+(len(locations)*j): start +((j+1)*len(locations)), j] = 1
 
-        for i in range(len(entitie)):
+        for i in range(len(entities)):
             for j in range(len(steps)):
                 for k in range(len(locations)):
                     start = i*len(steps)*len(locations) + (j*len(locations))
@@ -175,11 +173,12 @@ def model_declaration():
     #     print(data.shape)
         c = torch.softmax(data, dim=-1)
         d = c.repeat(1, 1, 2)
+        d = d.view(c.shape[0], c.shape[1], c.shape[2], 2)
         for k in range(d.shape[2]):
             d[:, :, k, 1] = 1 - d[:, :, k, 0]
     #     print(c.shape)
 
-        d = data.view(data.shape[0] * data.shape[1] * data.shape[2], 2)
+        d = d.view(c.shape[0] * c.shape[1] * c.shape[2], 2)
         return d
 
     entity_location[entity_location_label] = FunctionalReaderSensor(lentity.reversed, lstep.reversed, llocation.reversed, keyword="LocationLabel", forward=read_location_labels)
@@ -194,7 +193,7 @@ def model_declaration():
 
     action[action_label] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="Action", forward=read_labels)
 
-    program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label, exact_before, entity_location_label), 
+    program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label, exact_before, entity_location, entity_location_label), 
                                inferTypes=['ILP', 'local/argmax'], 
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                                metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -230,12 +229,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-#     setProductionLogMode()
+    setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
-    dataset = list(dataset)[16]
+    # dataset = list(dataset)[16]
 
-    dataset = iter([dataset])
+    # dataset = iter([dataset])
 
     #     lbp.test(dataset, device='auto')
     all_updates = []

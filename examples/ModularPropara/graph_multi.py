@@ -175,8 +175,8 @@ with Graph('global') as graph:
                 )
             ), active = True
         )
-    
-    
+
+    ### If the action is move, then the location from step before should be different from the current step
     ifL(
         # action a1 is move, i is a1's step and e is action entity
         andL(
@@ -188,6 +188,18 @@ with Graph('global') as graph:
         andL(
             step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
             notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
+        ),
+        active = True
+    )
+    
+    ### There can only be one location for each entity at each step
+    ifL(
+        andL(
+            entity('e'),
+            step('i')
+        ),
+        atMostL( 
+            entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
         ),
         active = True
     )
