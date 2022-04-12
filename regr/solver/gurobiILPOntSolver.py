@@ -1331,47 +1331,57 @@ class gurobiILPOntSolver(ilpOntSolver):
                             
                             sampleInfoFiltered.append(currentSampleInfo)
                         
-                    # Eliminate duplicate samples
-                    variablesSamples = [lcVariables[v][1] for v in lcVariables]
-                    
-                    variablesSamplesT = torch.stack(variablesSamples)
-                    
                     newSampleSize = sampleSize
-                    uniqueSampleIndex = []
-                    
-                    for i in range(sampleSize):
-                        currentS = variablesSamplesT[:,i]
+                    # Eliminate duplicate samples
+                    eliminateDuplicateSamples = False
+                    if eliminateDuplicateSamples:
+                        variablesSamples = [lcVariables[v][1] for v in lcVariables]
                         
-                        isUnique = True
-                        for index in uniqueSampleIndex:
-                            indexSample = variablesSamplesT[:,index]
-                            if torch.equal(indexSample, currentS):
-                                isUnique = False
+                        variablesSamplesT = torch.stack(variablesSamples)
+                        
+                        uniqueSampleIndex = []
+                        
+                        for i in range(sampleSize):
+                            currentS = variablesSamplesT[:,i]
+                            
+                            isUnique = True
+                            for index in uniqueSampleIndex:
+                                indexSample = variablesSamplesT[:,index]
+                                if torch.equal(indexSample, currentS):
+                                    isUnique = False
+                                    continue
+                                
+                            if not isUnique:
                                 continue
                             
-                        if not isUnique:
-                            continue
-                        
-                        uniqueSampleIndex.append(i)
-                        
-                    newSampleSize = len(uniqueSampleIndex)
+                            uniqueSampleIndex.append(i)
+                            
+                        newSampleSize = len(uniqueSampleIndex)
                     
-                    indices = torch.tensor(uniqueSampleIndex, device = currentDevice)
-                    #x = torch.arange(6).view(2,3)
-                    Vs = torch.index_select(variablesSamplesT, dim=1, index=indices)
+                        indices = torch.tensor(uniqueSampleIndex, device = currentDevice)
+                        #x = torch.arange(6).view(2,3)
+                        Vs = torch.index_select(variablesSamplesT, dim=1, index=indices)
                     
                     # Calculate loss value
-                    #lossTensor = torch.clone(lcSuccesses)
-                    lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
+                    if eliminateDuplicateSamples: 
+                        lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
+                    else:
+                        lossTensor = torch.clone(lcSuccesses)
                     #lossTensor = countSuccesses.div_(len(lossList))
                     for i, v in enumerate(lcVariables):
                         currentV = lcVariables[v]
                         
-                        P = currentV[0][:newSampleSize] # Tensor with the current variable p (v[0])
+                        if eliminateDuplicateSamples:
+                            P = currentV[0][:newSampleSize] # Tensor with the current variable p (v[0])
+                        else:
+                            P = currentV[0]
                         oneMinusP = torch.sub(torch.ones(newSampleSize, device=P.device), P) # Tensor with the current variable 1-p
                         
-                        S = Vs[i, :] #currentV[1] # Sample for the current Variable
-                        notS = torch.sub(torch.ones(newSampleSize, device=P.device), S) # Negation of Sample
+                        if eliminateDuplicateSamples:
+                            S = Vs[i, :] #currentV[1] # Sample for the current Variable
+                        else:
+                            S = currentV[1]
+                        notS = torch.sub(torch.ones(newSampleSize, device=P.device), S.float()) # Negation of Sample
                         
                         pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
                         oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
@@ -1390,8 +1400,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     endLC = process_time() # timer()
                     elapsedInSLC = endLC - startLC
                     
-                    self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %is'
-                                       %(lcName, len(lossList), len(lcVariables), newSampleSize, elapsedInSLC))
+                    if eliminateDuplicateSamples: 
+                        self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %is'
+                                               %(lcName, len(lossList), len(lcVariables), newSampleSize, elapsedInSLC))
+                    else:
+                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %is'
+                                               %(lcName, len(lossList), len(lcVariables), elapsedInSLC))
         
         self.myLogger.info('')
 
