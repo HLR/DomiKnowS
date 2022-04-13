@@ -113,7 +113,7 @@ with Graph('global') as graph:
     FIXED = True
     
     existsL_LCs = False
-    atMostL_LCs = False
+    atMostL_LCs = True
     
     SAME_ROW = existsL_LCs
     SAME_ROW_New = atMostL_LCs
@@ -144,7 +144,7 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
-    new_constraints = True
+    new_constraints = False
 
     for row_num in range(9):
         # ifL(
@@ -212,7 +212,7 @@ with Graph('global') as graph:
                     same_row('z', path=("x", same_row_arg1.reversed)), 
                     getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2)
                 )
-            )
+            ), 0
         ), active = SAME_ROW_New, name = "LC_SAME_ROW_atMostL_for_" + f'v{val}')
         
         ### No same number in the same column between empty entries and empty entries
@@ -231,7 +231,7 @@ with Graph('global') as graph:
                     same_col('z', path=("x", same_col_arg1.reversed)), 
                     getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2)
                 )
-            )
+            ), 0
         ), active = SAME_COLUMNE_New, name = "LC_SAME_COLUMNE_atMostL_for_" + f'v{val}')
         
         ### No same number in the same table between empty entries and empty entries
@@ -250,7 +250,7 @@ with Graph('global') as graph:
                         same_table('z', path=("x", same_table_arg1.reversed)), 
                         getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2)
                     )
-            )
+            ), 0
         ), active = SAME_TABLE_New, name = "LC_SAME_TABLE_atMostL_for_" + f'v{val}')
         
 import torch.nn as nn

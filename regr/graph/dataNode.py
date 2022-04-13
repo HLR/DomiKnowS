@@ -2232,7 +2232,7 @@ class DataNodeBuilder(dict):
             raise ValueError('DataNode Builder has no DataNode started yet')   
         
     # Method returning constructed DataNode - the fist in the list
-    def getDataNode(self):
+    def getDataNode(self, device='auto'):
         self.__addGetDataNodeCounter()
         
         if dict.__contains__(self, 'dataNode'):

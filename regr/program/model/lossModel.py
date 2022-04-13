@@ -13,12 +13,13 @@ class LossModel(torch.nn.Module):
 
     def __init__(self, graph, 
                  tnorm=DataNode.tnormsDefault, 
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False):
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph
         self.build = True
         
         self.tnorm = tnorm
+        self.device = device
         
         self.sample = sample
         self.sampleSize = sampleSize
@@ -63,7 +64,7 @@ class LossModel(torch.nn.Module):
         
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
@@ -90,8 +91,8 @@ class LossModel(torch.nn.Module):
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm=DataNode.tnormsDefault):
-        super().__init__(graph, tnorm=tnorm)
+    def __init__(self, graph, tnorm=DataNode.tnormsDefault, device='auto'):
+        super().__init__(graph, tnorm=tnorm, device=device)
         
 class SampleLosslModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
@@ -101,12 +102,13 @@ class SampleLosslModel(torch.nn.Module):
 
     def __init__(self, graph, 
                  tnorm=DataNode.tnormsDefault, 
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False):
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph
         self.build = True
         
         self.tnorm = tnorm
+        self.device = device
         
         self.sample = sample
         self.sampleSize = sampleSize
@@ -138,7 +140,7 @@ class SampleLosslModel(torch.nn.Module):
         
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
@@ -178,6 +180,8 @@ class SampleLosslModel(torch.nn.Module):
 
                     # loss_value = torch.log(loss_value.sum())
                     # loss_ = -1 * (loss_value)
+                    # self.loss[key](loss_)
+                    # lmbd_loss.append(loss_) 
                     
                 else:
                     loss_ = 0

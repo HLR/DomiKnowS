@@ -17,12 +17,13 @@ def all_properties(node):
 
 
 class BaseModel(torch.nn.Module):
-    def __init__(self, graph, loss=None, metric=None):
+    def __init__(self, graph, loss=None, metric=None, device='auto'):
         super().__init__()
         self.graph = graph
         self.loss = loss
         self.metric = metric
         self.mode_ = Mode.TRAIN
+        self.device = device
 
     def mode(self, mode):
         self.mode_ = mode
@@ -59,8 +60,8 @@ class TorchModel(BaseModel):
     BaseSensor = TorchSensor
     BaseLearner = ModuleLearner
 
-    def __init__(self, graph, loss=None, metric=None):
-        super().__init__(graph, loss=loss, metric=metric)
+    def __init__(self, graph, loss=None, metric=None, device='auto'):
+        super().__init__(graph, loss=loss, metric=metric, device=device)
         self.poi = {prop: (output_sensor, target_sensor) for prop, output_sensor, target_sensor in self.find_poi()}
         self.graph.poi = self.poi
         for node in self.graph.traversal_apply(all_properties):
