@@ -1299,8 +1299,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else: # -----------Sample
                     # Prepare data
                     currentDevice = "cpu"
-                    if lossList[0] != None and lossList[0][0] != None:
-                        currentDevice = lossList[0][0].device
+                    for l in lossList:
+                        if l and l[0] != None:
+                            currentDevice = l[0].device
+                            break
+                    # if lossList[0] != None and lossList[0][0] != None:
+                    #     currentDevice = lossList[0][0].device
                         
                     successesList = [] # Entry lcs successes
                     sampleInfoFiltered = []

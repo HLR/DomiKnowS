@@ -156,10 +156,15 @@ class SampleLosslModel(torch.nn.Module):
                 # loss_value = loss['loss']
 
                 if loss['lossTensor'].sum().item() != 0:
-                    tidx = (loss['lcSuccesses'] == 0).nonzero().squeeze(-1)
+                    tidx = (loss['lcSuccesses'] == 1).nonzero().squeeze(-1)
                     true_val = loss['lossTensor'][tidx]
-                    loss_value = true_val.sum() / loss['lossTensor'].sum()
-                    loss_ = -1 * torch.log(loss_value)
+                    if true_val.sum().item() != 0:
+                        loss_value = true_val.sum() / loss['lossTensor'].sum()
+                        loss_ = -1 * torch.log(loss_value)
+                        self.loss[key](loss_)
+                        lmbd_loss.append(loss_) 
+                    else:
+                        loss_ = 0
 
                     # if loss['lossTensor'].nansum().item() <= 1:
                     #     loss_value = loss['lossTensor']
@@ -173,8 +178,7 @@ class SampleLosslModel(torch.nn.Module):
 
                     # loss_value = torch.log(loss_value.sum())
                     # loss_ = -1 * (loss_value)
-                    self.loss[key](loss_)
-                    lmbd_loss.append(loss_)
+                    
                 else:
                     loss_ = 0
                 

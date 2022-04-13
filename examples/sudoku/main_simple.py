@@ -113,7 +113,7 @@ with Graph('global') as graph:
     FIXED = True
     
     existsL_LCs = False
-    atMostL_LCs = True
+    atMostL_LCs = False
     
     SAME_ROW = existsL_LCs
     SAME_ROW_New = atMostL_LCs
@@ -124,58 +124,62 @@ with Graph('global') as graph:
     SAME_TABLE = existsL_LCs
     SAME_TABLE_New = atMostL_LCs
     
-    atMostL(*empty_entry_label.attributes)
+    # exactL(*empty_entry_label.attributes, 1)
+    ifL(empty_entry, exactL(*empty_entry_label.attributes))
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
-    new_constraints = False
+    new_constraints = True
 
     for row_num in range(9):
-        ifL(
-            empty_entry_label("x", eqL(empty_entry, "rows", {row_num})),
-            andL(
-                exactL(getattr(empty_entry_label, "v1")('z1', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v2')('z2', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v3')('z3', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v4')('z4', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v5')('z5', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v6')('z6', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v7')('z7', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v8')('z8', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v9')('z9', path=('x')) , 1),
-            ), active = new_constraints
+        # ifL(
+            # empty_entry_label("x", eqL(empty_entry, "rows", {row_num})),
+        andL(
+            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "rows", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "rows", {row_num})) , 1)
+            , active = new_constraints
         )
+        # )
 
-        ifL(
-            empty_entry('x', eqL(empty_entry, 'cols', {row_num})),
-            andL(
-                exactL(getattr(empty_entry_label, 'v1')('z', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v2')('z1', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v3')('z2', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v4')('z3', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v5')('z4', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v6')('z5', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v7')('z6', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v8')('z7', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v9')('z8', path=('x')) , 1),
-            ), active = new_constraints
+        # ifL(
+        #     empty_entry('x', eqL(empty_entry, 'cols', {row_num})),
+        andL(
+            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "cols", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "cols", {row_num})) , 1)
+            , active = new_constraints
         )
+        # )
 
-        ifL(
-            empty_entry('x', eqL(empty_entry, 'tables', {row_num})),
-            andL(
-                exactL(getattr(empty_entry_label, 'v1')('z1', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v2')('z2', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v3')('z3', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v4')('z4', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v5')('z5', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v6')('z6', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v7')('z7', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v8')('z8', path=('x')) , 1),
-                exactL(getattr(empty_entry_label, 'v9')('z9', path=('x')) , 1),
-            ), active = new_constraints
+        # ifL(
+        #     empty_entry('x', eqL(empty_entry, 'tables', {row_num})),
+        andL(
+            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "tables", {row_num})) , 1),
+            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "tables", {row_num})) , 1)
+            , active = new_constraints
         )
+        # )
     
     for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:        
         ### No same number in the same row between empty entries and empty entries
@@ -368,7 +372,7 @@ from regr.program.metric import MacroAverageTracker
 from regr.program.loss import NBCrossEntropyLoss
 
 program1 = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax'],
+        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', 'ILP'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
@@ -432,22 +436,22 @@ elif atMostL_LCs:
 else:
     print("\nUsing only fixedL constraintsL")
     
-# for datanode in program1.populate(trainreader):
-#     datanode.inferILPResults(empty_entry_label, fun=None)
-#     _sud = list(trainreader)[0]['sudoku']
-#     entries = datanode.getChildDataNodes(conceptName=empty_entry)
-#     for entry in entries:
-#         # t = entry.getAttribute(empty_entry_label, 'ILP')
-#         row = entry.getAttribute('rows').item()
-#         col = entry.getAttribute('cols').item()
-#         val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+for datanode in program1.populate(trainreader):
+    datanode.inferILPResults(empty_entry_label, fun=None)
+    _sud = list(trainreader)[0]['sudoku']
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    for entry in entries:
+        # t = entry.getAttribute(empty_entry_label, 'ILP')
+        row = entry.getAttribute('rows').item()
+        col = entry.getAttribute('cols').item()
+        val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
 
-#         assert val == _sud[row][col]
-#         # print(t)
-#         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-#         # if entry.getAttribute('fixed').item() == 1:
-#         #     assert entry.getAttribute('val').item() == predicted
-#     break
+        assert val == _sud[row][col]
+        # print(t)
+        # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+        # if entry.getAttribute('fixed').item() == 1:
+        #     assert entry.getAttribute('val').item() == predicted
+    break
     
 # program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
 #               Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
