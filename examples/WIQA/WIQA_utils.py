@@ -118,14 +118,15 @@ def is_ILP_consistant(questions_id,results,verbose,probabilities,para_num):
         obj-=1-g_vars[-1][0]*probabilities[i_var][0]+1-g_vars[-1][1]*probabilities[i_var][1]+1-g_vars[-1][2]*probabilities[i_var][2]
         m.addConstr(g_vars[-1][0]+g_vars[-1][1]+g_vars[-1][2]== 1, str(i_var)+" labels")
 
-    for i in results:
-        if i[0]==None or i[1]==None or i[2]==None:
-            if verbose:
+    if verbose:
+        for i in results:
+            if i[0]==None or i[1]==None or i[2]==None:
                 print("Error: There is a None in paragraph : ",para_num)
-        if not i[0]+i[1]+i[2]==1:
-            if verbose:
+            elif i[0]+i[1]+i[2] > 1:
                 print("Error: There more than one correct label in paragraph : ",para_num)
-
+            elif i[0]+i[1]+i[2] == 0:
+                print("Error: There are no label in paragraph : ",para_num)
+        
     for arg1, arg2 in product(range(n), repeat=2):
         if arg1 == arg2:
             continue
@@ -197,16 +198,19 @@ def test_inference_results(program, reader, cur_device, is_more, is_less, no_eff
             if not "_symmetric" in question_.getAttribute('quest_id') and not "_transit" in question_.getAttribute('quest_id'):
                 import logging
                 if not np.array(list(results[num])).argmax()==np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax() and verbose:
-                    logging.info(" This question in paragraph number {} is Incorrect".format(str(para_num)))
+                    # logging.info(" This question in paragraph number {} is Incorrect".format(str(para_num)))
                     #print(para_num," This question in paragraph number {} is Incorrect".format(para_num),len(list(results)),question_.getAttribute('quest_id'),np.array(list(results[num])),np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]),questions_id, results , verbose,sresult,para_num)
+                    pass
                 elif verbose:
-                    logging.info(" This question in paragraph number {} is Correct".format(str(para_num)))
+                    # logging.info(" This question in paragraph number {} is Correct".format(str(para_num)))
                     #print(para_num," This question in paragraph number {} is Correct".format(para_num))
+                    pass
                 fb=np.array([_vars[num*3],_vars[num*3+1],_vars[num*3+2]]).argmax()
                 sb=np.array([question_.getAttribute("is_more_").cpu().numpy()[0],question_.getAttribute("is_less_").cpu().numpy()[0],question_.getAttribute("no_effect_").cpu().numpy()[0]]).argmax()
                 ac_test+=fb==sb
-    print("accuracy:", ac_ / counter)
-    print("ILP accuracy:", ILPac_ / counter)
+    ### chen add round function
+    print("accuracy:", round(ac_ / counter, 3))
+    print("ILP accuracy:", round(ILPac_ / counter, 3))
     #print("ILP test accuracy:", ac_test / counter)
 
 import os
