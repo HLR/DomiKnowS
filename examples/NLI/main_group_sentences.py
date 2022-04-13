@@ -8,6 +8,7 @@ from data.reader import DataReaderMulti, DataReaderMultiRelation
 from program_declaration import program_declaration
 import torch
 import argparse
+import numpy as np
 from regr.graph import Graph, Concept, Relation
 
 
@@ -20,7 +21,8 @@ def main(args):
     training_file = "train.csv"
     testing_file = "test.csv"
 
-    augment_file = "data/snli_genadv_1000_dev.jsonl"
+    #augment_file = "data/snli_genadv_1000_dev.jsonl"
+    augment_file = None
     test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
                                            batch_size=args.batch_size, augment_file=augment_file)
 
@@ -46,16 +48,29 @@ def main(args):
             result["hypothesis"].append(sentence.getAttribute("hypothesis"))
             result["actual"].append('entailment' if sentence.getAttribute(entailment, 'label')
                                     else 'neutral' if sentence.getAttribute(neutral, 'label') else 'contrast')
-            result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
-                                     else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
+            if not args.softmax:
+                print("ILP")
+                result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
+                                         else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
 
-            correct += sentence.getAttribute(entailment, 'ILP') if sentence.getAttribute(entailment, 'label') else \
-                sentence.getAttribute(neutral, 'ILP') if sentence.getAttribute(neutral, 'label') else \
-                    sentence.getAttribute(contradiction, 'ILP')
+                correct += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
+                    sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
+                        sentence.getAttribute(contradiction, 'ILP').item()
+            else:
+                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[2].item()
+                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[2].item()
+                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[2].item()
+                label = ["entailment", "neutral", "contrast"]
+                predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
+                result["predict"] = predict
+                actual_check = entailment if predict == "entailment" else \
+                    neutral if predict == "neutral" else contradiction
+                correct += 1 if sentence.getAttribute(actual_check, 'label') else 0
+
     print("Accuracy = %.2f%%" % (correct / len(result["predict"]) * 100))
     result = pd.DataFrame(result)
-    training_size = args.training_samples
-    result.to_csv("report-{:}-{:}-{:}--sym:{:}.csv".format(training_size, args.testing_samples,
+    training_size = args.training_sample
+    result.to_csv("report-{:}-{:}-{:}--sym:{:}.csv".format(training_size, args.testing_sample,
                                                              args.cur_epoch, args.sym_relation))
 
 
@@ -85,5 +100,7 @@ if __name__ == "__main__":
                         type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
                         type=float)
+    parser.add_argument('--softmax', dest='softmax', default=False, help="using softmax or not",
+                        type=bool)
     args = parser.parse_args()
     main(args)

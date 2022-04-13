@@ -34,4 +34,5 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 --- | :---: | :---: | :---: | :---: | ---:
 100000 | 5 | 1e-5 | POI | False | 83.89 (Dev Augmentation included),  
 100000 | 5 | 1e-5 | POI | Only Symmetric | 85.392 (Dev Aug included)
+100000 | 5 | 1e-5 | PMD | Only Symmetric | 82.99 (Dev Aug included)
 150000 | 5 | 1e-5 | POI | Only Symmetric | 85.167 (Dev Aug included)
