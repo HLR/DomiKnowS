@@ -154,11 +154,25 @@ class SampleLosslModel(torch.nn.Module):
                 if key not in self.constr:
                     continue
                 # loss_value = loss['loss']
-                if loss['lossTensor'].nansum().item() != 0: 
-                    loss_value = loss['lossTensor']
-                    # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
-                    loss_value = torch.log(loss_value.sum())
-                    loss_ = -1 * (loss_value)
+
+                if loss['lossTensor'].sum().item() != 0:
+                    tidx = (loss['lcSuccesses'] == 0).nonzero().squeeze(-1)
+                    true_val = loss['lossTensor'][tidx]
+                    loss_value = true_val.sum() / loss['lossTensor'].sum()
+                    loss_ = -1 * torch.log(loss_value)
+
+                    # if loss['lossTensor'].nansum().item() <= 1:
+                    #     loss_value = loss['lossTensor']
+                    #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
+                    # else:
+                    #     _idx = []
+                    #     for i in torch.unique(loss['lossTensor']):
+                    #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
+                    #     loss_value = loss['lossTensor'][_idx]
+                    #     # loss_value = torch.unique(loss['lossTensor'])
+
+                    # loss_value = torch.log(loss_value.sum())
+                    # loss_ = -1 * (loss_value)
                     self.loss[key](loss_)
                     lmbd_loss.append(loss_)
                 else:

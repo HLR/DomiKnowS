@@ -1366,7 +1366,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if eliminateDuplicateSamples: 
                         lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
                     else:
-                        lossTensor = torch.clone(lcSuccesses)
+                        # lossTensor = torch.clone(lcSuccesses)
+                        lossTensor = torch.ones(lcSuccesses.shape).to(lcSuccesses.device)
                     #lossTensor = countSuccesses.div_(len(lossList))
                     for i, v in enumerate(lcVariables):
                         currentV = lcVariables[v]

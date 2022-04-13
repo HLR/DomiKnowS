@@ -66,7 +66,7 @@ class SudokuReader(RegrReader):
 trainreader = SudokuReader("randn", type="raw")
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL
+from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL, exactL
 from regr.graph import EnumConcept
 
 Graph.clear()
@@ -129,6 +129,53 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
+    new_constraints = False
+
+    for row_num in range(9):
+        ifL(
+            empty_entry_label("x", eqL(empty_entry, "rows", {row_num})),
+            andL(
+                exactL(getattr(empty_entry_label, "v1")('z1', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v2')('z2', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v3')('z3', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v4')('z4', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v5')('z5', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v6')('z6', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v7')('z7', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v8')('z8', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v9')('z9', path=('x')) , 1),
+            ), active = new_constraints
+        )
+
+        ifL(
+            empty_entry('x', eqL(empty_entry, 'cols', {row_num})),
+            andL(
+                exactL(getattr(empty_entry_label, 'v1')('z', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v2')('z1', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v3')('z2', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v4')('z3', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v5')('z4', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v6')('z5', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v7')('z6', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v8')('z7', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v9')('z8', path=('x')) , 1),
+            ), active = new_constraints
+        )
+
+        ifL(
+            empty_entry('x', eqL(empty_entry, 'tables', {row_num})),
+            andL(
+                exactL(getattr(empty_entry_label, 'v1')('z1', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v2')('z2', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v3')('z3', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v4')('z4', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v5')('z5', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v6')('z6', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v7')('z7', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v8')('z8', path=('x')) , 1),
+                exactL(getattr(empty_entry_label, 'v9')('z9', path=('x')) , 1),
+            ), active = new_constraints
+        )
     
     for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:        
         ### No same number in the same row between empty entries and empty entries
@@ -244,10 +291,20 @@ def makeSoduko(*prev, data):
     
     cols = torch.arange(num_rows)
     cols = cols.unsqueeze(0).repeat(num_rows, 1).reshape(num_rows*num_cols)
+
+    tables = []
+    for i in range(data[0]*data[1]):
+        row = rows[i]
+        col = cols[i]
+        x = int((col.item() / 3)) * 3
+        x += int(row.item() / 3) 
+        tables.append(x)
+    tables = torch.tensor(tables)
+
     
     rel = torch.ones(data[0]*data[1], 1)
     
-    return rows, cols, rel
+    return rows, cols, tables, rel
 
 def getlabel(*prev, data):
     rows, cols = torch.where(data != 0)
@@ -262,7 +319,7 @@ def createSudoku(*prev, data):
 
 sudoku['index'] = FunctionalReaderSensor(keyword='size', forward=createSudoku)
     
-empty_entry['rows', 'cols', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
+empty_entry['rows', 'cols', 'tables', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
 empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_rel, keyword='whole_sudoku', forward=getfixed)
 
 empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuSolver())
@@ -332,16 +389,17 @@ program = SampleLossProgram(
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=200, 
+        sampleSize=2000, 
         sampleGlobalLoss = False,
-        beta=1
+        beta=10
         )
 
-# program = SolverPOIProgram(
-#         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
+# program1 = SolverPOIProgram(
+#         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-#         metric={
-#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        # metric={
+        #     'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+            # )
 
 # program = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry, same_col, same_row, same_table), inferTypes=['ILP', 'local/argmax'],
@@ -376,13 +434,19 @@ else:
     
 # for datanode in program1.populate(trainreader):
 #     datanode.inferILPResults(empty_entry_label, fun=None)
+#     _sud = list(trainreader)[0]['sudoku']
 #     entries = datanode.getChildDataNodes(conceptName=empty_entry)
 #     for entry in entries:
-#         t = entry.getAttribute(empty_entry_label, 'ILP')
-#         print(t)
-#         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-#         if entry.getAttribute('fixed').item() == 1:
-#             assert entry.getAttribute('val').item() == predicted
+#         # t = entry.getAttribute(empty_entry_label, 'ILP')
+#         row = entry.getAttribute('rows').item()
+#         col = entry.getAttribute('cols').item()
+#         val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+
+#         assert val == _sud[row][col]
+#         # print(t)
+#         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+#         # if entry.getAttribute('fixed').item() == 1:
+#         #     assert entry.getAttribute('val').item() == predicted
 #     break
     
 # program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
@@ -390,7 +454,7 @@ else:
 
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
-for i in range(100):
+for i in range(220):
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
                     Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
     check = False
