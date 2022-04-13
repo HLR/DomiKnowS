@@ -1,4 +1,4 @@
-from time import process_time
+from time import process_time, process_time_ns
 from collections import OrderedDict
 import logging
 # ontology
@@ -568,6 +568,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         key = "/ILP/xP" # to get ILP variable from datanodes
         
         for lc in lcs:   
+            startLC = process_time_ns() # timer()
             
             if lc.active:
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
@@ -577,10 +578,16 @@ class gurobiILPOntSolver(ilpOntSolver):
 
             result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
             
+            endLC = process_time_ns() # timer()
+            elapsedInNsLC = endLC - startLC
+            elapsedInMsLC = elapsedInNsLC/1000000
+            
             if result != None and isinstance(result, list):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
+                self.myLoggerTime.info('Processing time for Lc %s is: %ims'%(lc.lcName, elapsedInMsLC))
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
+                self.myLoggerTime.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
     def isVariableFixed(self, dn, conceptName, e):
         
@@ -1225,6 +1232,39 @@ class gurobiILPOntSolver(ilpOntSolver):
         # Return
         return
 
+    def eliminateDuplicateSamples(self, lcVariables, sampleSize, currentDevice):
+        variablesSamples = [lcVariables[v][1] for v in lcVariables]
+                    
+        variablesSamplesT = torch.stack(variablesSamples)
+        
+        uniqueSampleIndex = OrderedDict()
+        
+        for i in range(sampleSize):
+            currentS = variablesSamplesT[:,i]
+            
+            currentSHash = hash(currentS.cpu().detach().numpy().tobytes())
+            
+            if currentSHash in uniqueSampleIndex:
+                continue
+                
+                # For testing  - not used now
+                if torch.equal(currentS, variablesSamplesT[:,uniqueSampleIndex[currentSHash]]):
+                    continue
+                else:
+                    raise Exception("HashWrong")
+            else:
+                uniqueSampleIndex[currentSHash] = i
+            
+        va = list(uniqueSampleIndex.values())
+            
+        newSampleSize = len(va)
+    
+        indices = torch.tensor(va, device = currentDevice)
+        #x = torch.arange(6).view(2,3)
+        Vs = torch.index_select(variablesSamplesT, dim=1, index=indices)
+        
+        return newSampleSize, indices, Vs
+
     # -- Calculated loss values for logical constraints
     def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False):
         start = process_time() # timer()
@@ -1254,7 +1294,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         lcLosses = {}
         for graph in self.myGraph: # Loop through graphs
             for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
-                startLC = process_time() # timer()
+                startLC = process_time_ns() # timer()
 
                 if not lc.headLC or not lc.active: # Process only active and head lcs
                     continue
@@ -1299,8 +1339,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else: # -----------Sample
                     # Prepare data
                     currentDevice = "cpu"
-                    if lossList[0] != None and lossList[0][0] != None:
-                        currentDevice = lossList[0][0].device
+                    for l in lossList:
+                        if l and l[0] != None:
+                            currentDevice = l[0].device
+                            break
                         
                     successesList = [] # Entry lcs successes
                     sampleInfoFiltered = []
@@ -1331,58 +1373,35 @@ class gurobiILPOntSolver(ilpOntSolver):
                             
                             sampleInfoFiltered.append(currentSampleInfo)
                         
-                    newSampleSize = sampleSize
+                    #lcSuccessesSum = torch.sum(lcSuccesses).item()
+                    
+                    lcSampleSize = sampleSize
                     # Eliminate duplicate samples
                     eliminateDuplicateSamples = False
                     if eliminateDuplicateSamples:
-                        variablesSamples = [lcVariables[v][1] for v in lcVariables]
-                        
-                        variablesSamplesT = torch.stack(variablesSamples)
-                        
-                        uniqueSampleIndex = []
-                        
-                        for i in range(sampleSize):
-                            currentS = variablesSamplesT[:,i]
-                            
-                            isUnique = True
-                            for index in uniqueSampleIndex:
-                                indexSample = variablesSamplesT[:,index]
-                                if torch.equal(indexSample, currentS):
-                                    isUnique = False
-                                    continue
-                                
-                            if not isUnique:
-                                continue
-                            
-                            uniqueSampleIndex.append(i)
-                            
-                        newSampleSize = len(uniqueSampleIndex)
-                    
-                        indices = torch.tensor(uniqueSampleIndex, device = currentDevice)
-                        #x = torch.arange(6).view(2,3)
-                        Vs = torch.index_select(variablesSamplesT, dim=1, index=indices)
-                    
+                        lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize, currentDevice)
+
                     # Calculate loss value
                     if eliminateDuplicateSamples: 
                         lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
                     else:
                         # lossTensor = torch.clone(lcSuccesses)
                         lossTensor = torch.ones(lcSuccesses.shape).to(lcSuccesses.device)
-                    #lossTensor = countSuccesses.div_(len(lossList))
+                        #lossTensor = countSuccesses.div_(len(lossList))
                     for i, v in enumerate(lcVariables):
                         currentV = lcVariables[v]
                         
                         if eliminateDuplicateSamples:
-                            P = currentV[0][:newSampleSize] # Tensor with the current variable p (v[0])
+                            P = currentV[0][:lcSampleSize] # Tensor with the current variable p (v[0])
                         else:
                             P = currentV[0]
-                        oneMinusP = torch.sub(torch.ones(newSampleSize, device=P.device), P) # Tensor with the current variable 1-p
+                        oneMinusP = torch.sub(torch.ones(lcSampleSize, device=P.device), P) # Tensor with the current variable 1-p
                         
                         if eliminateDuplicateSamples:
                             S = Vs[i, :] #currentV[1] # Sample for the current Variable
                         else:
                             S = currentV[1]
-                        notS = torch.sub(torch.ones(newSampleSize, device=P.device), S.float()) # Negation of Sample
+                        notS = torch.sub(torch.ones(lcSampleSize, device=P.device), S.float()) # Negation of Sample
                         
                         pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
                         oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
@@ -1398,15 +1417,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_lcLosses['lcSuccesses'] = lcSuccesses
                     current_lcLosses['lcVariables'] = lcVariables
                 
-                    endLC = process_time() # timer()
-                    elapsedInSLC = endLC - startLC
+                    endLC = process_time_ns() # timer()
+                    elapsedInNsLC = endLC - startLC
+                    elapsedInMsLC = elapsedInNsLC/1000000
                     
                     if eliminateDuplicateSamples: 
-                        self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %is'
-                                               %(lcName, len(lossList), len(lcVariables), newSampleSize, elapsedInSLC))
+                        self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %ims'
+                                               %(lcName, len(lossList), len(lcVariables), lcSampleSize, elapsedInMsLC))
                     else:
-                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %is'
-                                               %(lcName, len(lossList), len(lcVariables), elapsedInSLC))
+                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
+                                               %(lcName, len(lossList), len(lcVariables), elapsedInMsLC))
         
         self.myLogger.info('')
 
