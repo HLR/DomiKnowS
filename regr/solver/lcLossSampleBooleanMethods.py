@@ -352,15 +352,10 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
-        # Translate boolean to int
-        varInt = []
-        for v in var:
-            varInt.append(v.to(dtype=torch.int, copy=True))
-           
         # Calculate sum 
-        varSum = varInt[0]
-        for i in range(1, len(varInt)):
-            varSum += varInt[i]
+        varSum = var[0].int()
+        for i in range(1, len(var)):
+            varSum.add_(var[i].int())
 
         # Check condition
         if limitOp == '>=':

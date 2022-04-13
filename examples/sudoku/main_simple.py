@@ -124,8 +124,22 @@ with Graph('global') as graph:
     SAME_TABLE = existsL_LCs
     SAME_TABLE_New = atMostL_LCs
     
-    # exactL(*empty_entry_label.attributes, 1)
-    ifL(empty_entry, exactL(*empty_entry_label.attributes))
+    ifL(empty_entry, 
+        atMostL(
+            getattr(empty_entry_label, "v1")(path=('x')),
+            getattr(empty_entry_label, "v2")(path=('x')),
+            getattr(empty_entry_label, "v3")(path=('x')),
+            getattr(empty_entry_label, "v4")(path=('x')),
+            getattr(empty_entry_label, "v5")(path=('x')),
+            getattr(empty_entry_label, "v6")(path=('x')),
+            getattr(empty_entry_label, "v7")(path=('x')),
+            getattr(empty_entry_label, "v8")(path=('x')),
+            getattr(empty_entry_label, "v9")(path=('x'))
+            ),
+            active = False
+        )
+
+    ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True)
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
