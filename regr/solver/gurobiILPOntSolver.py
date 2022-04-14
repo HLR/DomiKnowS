@@ -582,21 +582,40 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
 
+    def isVariableFixed(self, dn, conceptName, e):
+        labelKey = '<' + conceptName + ">/label" 
+
+        if "fixed" in dn.getAttributes() and dn.getAttributes()["fixed"].item() == 1:
+            if dn.getAttributes()[labelKey].item() == e[1]:
+                return 1
+            else:
+                return 0
+            
+        return None
+        
     def getMLResult(self, dn, conceptName, xPkey, e, p, loss = False, sample = False):
         if dn == None:
             raise Exception("No datanode provided")
-        
-        if sample and 'sample' not in dn.getAttributes():
-            sampleKey = '<' + conceptName + ">/sample" 
+                        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        sampleKey = '<' + conceptName + ">/sample" 
+        if sample and sampleKey not in dn.getAttributes():
             dn.getAttributes()[sampleKey] = {}
-            
+        
         if dn.ontologyNode.name == conceptName:
             if not sample:
                 return 1
             else:
                 sampleSize = p
-                dn.getAttributes()[sampleKey][sampleSize] = torch.ones(sampleSize, dtype=torch.bool)
-                return (dn.getAttributes()[sampleKey][sampleSize], (1.0, dn.getAttributes()[sampleKey][sampleSize]))
+                
+                if sampleSize not in dn.getAttributes()[sampleKey]: 
+                    dn.getAttributes()[sampleKey][sampleSize] = {}
+                    
+                xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
+
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device = device)
+                return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (1.0, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName))
         
         if xPkey not in dn.attributes:
             if not sample:
@@ -621,17 +640,32 @@ class gurobiILPOntSolver(ilpOntSolver):
         # --- Generate sample 
         sampleSize = p
 
-        if sampleSize not in dn.getAttributes()[sampleKey]: # check if not already generated
+        xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
+        
+        isFiexd = self.isVariableFixed(dn, conceptName, e)
+        
+        if isFiexd != None:
+            if isFiexd == 1:
+                xP = torch.ones(sampleSize, device = device)
+            else:
+                xP = torch.zeros(sampleSize, device = device)
+        else:
+            xV = dn.getAttribute(xPkey)
+            xEp = dn.getAttribute(xPkey).expand(sampleSize, len(xV))
+            xP = xEp[:,e[1]]
+                
+        if sampleSize not in dn.getAttributes()[sampleKey]: 
+            dn.getAttributes()[sampleKey][sampleSize] = {}
+            
+        if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
+            # check if not already generated
             if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize] = [None]
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
             else:
                 # Create sample for this concept and sample size
-                t = torch.full((sampleSize,), vDn) # init tensor with probabilities for sampling
-                dn.getAttributes()[sampleKey][sampleSize] = torch.zeros(sampleSize, dtype=torch.bool)
-                
-                torch.bernoulli(t, out = dn.getAttributes()[sampleKey][sampleSize])
-               
-        return (dn.getAttributes()[sampleKey][sampleSize], (vDn, dn.getAttributes()[sampleKey][sampleSize])) # Return sample data and probabilty
+                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
+        
+        return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName)) # Return sample data and probability info
                       
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
         vDnLabel = self.__getLabel(_dn, conceptName).item()
@@ -839,16 +873,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 eT = (e[0], e[2], e[2])
                                 
                                 if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
-                                    
-                                    import time
-                                    start = time.perf_counter()
-                                    vSum = torch.sum(vDn)
-                                    vLen = len(vDn)
-                                    vDnCal = torch.sum(vDn)/len(vDn)
-                                    end = time.perf_counter()
-                                    dur = end - start
-                                    
+                                    vDn, vDnSampleInfo = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)                                    
                                     _sampleInfoForVariable.append(vDnSampleInfo)
                                 else:
                                     vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
@@ -890,10 +915,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                 elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
-                        vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
+                        vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
+                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                         sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                     else:
-                        vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
+                        vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
+                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
                     
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constraint'%
@@ -1027,7 +1054,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                             dns[0].attributes[xPkey][p] = [None] * xLen
                             
                         dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
-                   
                     
                 # Prepare set with logical constraints for this run
                 lcs = []
@@ -1185,7 +1211,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         return
 
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0):
+    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False):
         start = process_time() # timer()
 
         m = None 
@@ -1203,9 +1229,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         else:
             myBooleanMethods = self.myLcLossBooleanMethods
             self.myLcLossBooleanMethods.setTNorm(tnorm)
+            
             self.myLogger.info('Calculating loss ')
             self.myLoggerTime.info('Calculating loss ')
-
 
         key = "/local/softmax"
         
@@ -1238,110 +1264,117 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 lcLosses[lcName] = {}
                 current_lcLosses = lcLosses[lcName]
-                lossTensor = torch.zeros(len(lossList))
-                lossRateTensor = torch.zeros(len(lossList))
                 
                 if not sample: # Loss value
+                    lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
                     for i, l in enumerate(lossList):
-                        if l[0] is not None:
-                            lossTensor[i] = l[0]
-                        else:
-                            lossTensor[i] = float("nan")
+                        lossTensor[i] = float("nan")
+                        for entry in l:
+                            if entry is not None:
+                                if lossTensor[i] != lossTensor[i]:
+                                    lossTensor[i] = entry
+                                else:
+                                    lossTensor[i] += entry
+
+                    current_lcLosses['lossTensor'] = lossTensor
+                    current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                    
                 else: # -----------Sample
                     # Prepare data
-                    lossListInt = []
+                    currentDevice = "cpu"
+                    if lossList[0] != None and lossList[0][0] != None:
+                        currentDevice = lossList[0][0].device
+                        
+                    successesList = [] # Entry lcs successes
                     sampleInfoFiltered = []
+                    lcSuccesses = torch.ones(sampleSize, device = currentDevice) # Consolidated successes for all the entry lcs
+                    lcVariables = {} # Unique variables used in all the entry lcs
+                    countSuccesses = torch.zeros(sampleSize, device = currentDevice)
+                    oneT = torch.ones(sampleSize, device = currentDevice)
                     for i, l in enumerate(lossList):
-                        lossListIntForL = []
-                        sampleInfoFilteredForL = []
-                        for crrentL in l:
-                            if crrentL is None:
-                                lossListIntForL.append(None)
+                        for currentFailures in l:
+                            if currentFailures is None:
+                                successesList.append(None)
                                 continue
                             
-                            lossListIntForL.append(crrentL.to(dtype=torch.int, copy=True))
+                            currentSuccesses = torch.sub(oneT, currentFailures.float())
+                            successesList.append(currentSuccesses)
+                                
+                            lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
+                            countSuccesses = countSuccesses.add_(currentSuccesses)
                             
                             currentSampleInfo = []
                             for k in sampleInfo.keys():
                                 for c in sampleInfo[k][i]:
-                                    currentSampleInfo.append(c)
+                                    if len(c) > 2:
+                                        currentSampleInfo.append(c)
+                                        
+                                        if c[2] not in lcVariables:
+                                            lcVariables[c[2]] = c
                             
-                            sampleInfoFilteredForL.append(currentSampleInfo)
-                            
-                        lossListInt.append(lossListIntForL)
-                        sampleInfoFiltered.append(sampleInfoFilteredForL)
+                            sampleInfoFiltered.append(currentSampleInfo)
                         
                     # Calculate loss value
-                    for i, l in enumerate(lossListInt):
-                        countFailures = 0
-                        for currentFailures in l:    
-                            if currentFailures == None:
-                                lossTensor[i] = float("nan")
-                                lossRateTensor[i] = float("nan")
-                                continue
-                            
-                            # Calculate Loss rate in sample
-                            countFailures += torch.sum(currentFailures).item()
-                            
-                            # Calculate loss value for sample loss
-                            currentLossT = None
-                            for _, vList in enumerate(sampleInfoFiltered[i]): # Loop trough variables in the lc
-                                for v in vList:
-                                    P = torch.full([len(l)], v[0]) # Tensor with the current variable p (v[0])
-                                    oneMinusP = torch.sub(torch.ones(len(l)), P) # Tensor with the current variable 1-p
-                                    
-                                    pS = torch.mul(P, v[1]) # Tensor with p multiply by True variable sample (v[1])
-                                    oneMinusPS = torch.mul(oneMinusP, torch.logical_not(v[1])) # Tensor with 1-p multiply by False variable sample (v[1])
-                                    
-                                    pSum = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
-                                    
-                                    currentSuccesses = torch.logical_not(currentFailures)
-                                    cLoss = torch.mul(pSum, currentSuccesses) # Chose successes values
-                                    
-                                    # Multiply the loss
-                                    if currentLossT == None:
-                                        currentLossT = cLoss
-                                    else:
-                                        currentLossT = torch.mul(currentLossT, cLoss)
-                                
-                            # Collect sample used for calculation
-                            if currentLossT == None:
-                                currentLoss = float("nan")
-                            else:
-                                currentLoss = torch.sum(currentLossT).item()
-                                
-                            # Collect calculated loss for sample
-                            lossTensor[i] = currentLoss
+                    lossTensor = torch.clone(lcSuccesses)
+                    #lossTensor = countSuccesses.div_(len(lossList))
+                    for v in lcVariables:
+                        currentV = lcVariables[v]
+                        
+                        S = currentV[1] # Sample for the current Variable
+                        notS = torch.sub(torch.ones(len(S), device=S.device), S.float()) # Negation of Sample
+                        
+                        P = currentV[0] # Tensor with the current variable p (v[0])
+                        oneMinusP = torch.sub(torch.ones(len(S), device=S.device), P) # Tensor with the current variable 1-p
+                        
+                        pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
+                        oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
+                        
+                        cLoss = pS.add(oneMinusPS) # Sum of p and 1-p tensors
+                                                        
+                        # Multiply the loss
+                        lossTensor = torch.mul(lossTensor, cLoss)
+                        
+                    current_lcLosses['loss'] = torch.nansum(lossTensor).item() # Sum of losses across sample for x|=alfa
 
-                        lossRateTensor[i] = countFailures
-
-                current_lcLosses['lossTensor'] = lossTensor
-                current_lcLosses['loss'] = torch.nansum(lossTensor).item() / len(lossTensor)
-                
-                if sample:
-                    current_lcLosses['lossRateTensor'] = lossRateTensor
-                    current_lcLosses['failuresRate'] = torch.nansum(lossRateTensor).item() / len(lossRateTensor)
-
+                    current_lcLosses['lossTensor'] = lossTensor
+                    current_lcLosses['lcSuccesses'] = lcSuccesses
+                    current_lcLosses['lcVariables'] = lcVariables
+        
         self.myLogger.info('')
 
         self.myLogger.info('Processed %i logical constraints'%(lcCounter))
         self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
               
-        if sample: # Calculate global sample loss  
-            globalLoss = 0
-            globalCountFailures = 0
-            
-            for lc in lcLosses:
-                globalLoss += lcLosses[lc]['loss']
-                globalCountFailures += lcLosses[lc]['failuresRate']
-                         
-            lcLosses['globalLoss'] = globalLoss
-            lcLosses['globalFailuresRate'] = globalCountFailures/len(lcLosses)
+        if sample:
+            if sampleGlobalLoss: # Calculate global sample loss  
+                globalLossT = torch.zeros(sampleSize, device = currentDevice)
+                globalSuccesses = torch.ones(sampleSize, device = currentDevice)
+                for lc in lcLosses:
+                    currentLC = lcLosses[lc]
+                    
+                    globalSuccesses = globalSuccesses.mul_(currentLC['lcSuccesses']) # Multiply to find common successes
+                    globalLossT = globalLossT.add_(currentLC['lossTensor']) 
+                        
+                globalLossFiltered = torch.mul(globalSuccesses, globalLossT) # Select loss for common successes
+    
+                globalLoss = torch.nansum(globalLossFiltered).item()
+                lcLosses['globalLoss'] = globalLoss
                 
-            self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            self.myLogger.info('Calculated sample global average Failures rate : %f'%(lcLosses['globalFailuresRate']))
-            self.myLoggerTime.info('Calculated sample global average Failures rate: %f'%(lcLosses['globalFailuresRate']))
+                globalSuccessesCounter = torch.nansum(globalSuccesses).item()
+                self.myLoggerTime.info('Count of global Successes is: %f'%(globalSuccessesCounter))
+                
+                lossSum = torch.nansum(globalLossT).item()
+                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
+    
+                self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
+                self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
+            else:
+                globalLossT = torch.zeros(sampleSize, device = currentDevice)
+                for lc in lcLosses:
+                    globalLossT = globalLossT.add_(lcLosses[lc]['lossTensor']) 
+                
+                lossSum = torch.nansum(globalLossT).item()
+                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
             
         end = process_time() # timer()
         elapsedInS = end - start

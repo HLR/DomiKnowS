@@ -17,6 +17,9 @@ from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 from regr.utils import setProductionLogMode
 
+
+from random import sample
+
 class SudokuReader(RegrReader):
     def parse_file(self):
         base  = 3
@@ -35,22 +38,30 @@ class SudokuReader(RegrReader):
 
         # produce board using randomized baseline pattern
         board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
+        F = []
+        for i in board:
+            F.append([])
+            for j in i:
+                F[-1].append(j)
         squares = side*side
         empties = squares * 3//4
         for p in sample(range(squares),empties):
             board[p//side][p%side] = 0
         board = torch.tensor(board)
     
-        return [{"board": board}]
+        return [{"board": board, "F": F}]
     
     def getidval(self, item):
         return [1]
-    
     def getwhole_sudokuval(self, item):
         return item['board']
-            
+    
+    def getsudokuval(self, item):
+        return item['F']
+    
     def getsizeval(self, item):
         return 9, 9
+    
     
 trainreader = SudokuReader("randn", type="raw")
 
@@ -220,7 +231,7 @@ def getfixed(*prev, data):
     for i, j in zip(rows.detach().tolist(), cols.detach().tolist()):
         fix[i][j] = 1
         vals[i][j] = data[i][j]
-        
+                
     return fix.reshape(fix.shape[0]*fix.shape[1]), vals.reshape(vals.shape[0]*vals.shape[1])
 
 def makeSoduko(*prev, data):
@@ -298,7 +309,7 @@ from regr.program.metric import MacroAverageTracker
 from regr.program.loss import NBCrossEntropyLoss
 
 program1 = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', "ILP"],
+        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
@@ -316,11 +327,12 @@ program = SampleLossProgram(
         #       'ILP': PRF1Tracker(DatanodeCMMetric()),
         #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
         #       },
-#         loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        loss=MacroAverageTracker(NBCrossEntropyLoss()),
         
         sample = True,
-        sampleSize=300, 
-        sampleGlobalLoss = True
+        sampleSize=2000, 
+        sampleGlobalLoss = False,
+        beta=1
         )
 
 # program = SolverPOIProgram(
@@ -349,7 +361,7 @@ program = SampleLossProgram(
 # Disable Logging    
 setProductionLogMode()
 
-program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+# program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
 
@@ -360,19 +372,46 @@ elif atMostL_LCs:
 else:
     print("\nUsing only fixedL constraintsL")
     
-for datanode in program1.populate(trainreader):
-    datanode.inferILPResults(empty_entry_label, fun=None)
-    entries = datanode.getChildDataNodes(conceptName=empty_entry)
-    for entry in entries:
-        t = entry.getAttribute(empty_entry_label, 'ILP')
-        print(t)
-        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-        if entry.getAttribute('fixed').item() == 1:
-            assert entry.getAttribute('val').item() == predicted
-    break
+# for datanode in program1.populate(trainreader):
+#     datanode.inferILPResults(empty_entry_label, fun=None)
+#     entries = datanode.getChildDataNodes(conceptName=empty_entry)
+#     for entry in entries:
+#         t = entry.getAttribute(empty_entry_label, 'ILP')
+#         print(t)
+#         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+#         if entry.getAttribute('fixed').item() == 1:
+#             assert entry.getAttribute('val').item() == predicted
+#     break
     
-program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
-              Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+# program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
+#               Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+
+# program1.train(trainreader, train_epoch_num=100, 
+#                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+for i in range(100):
+    program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
+                    Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+    check = False
+    if program.model.loss.value()['empty_entry_label'].item() == 0:
+        print("loss is zero")
+        check = True
+    for datanode in program.populate(trainreader):
+        count = 0
+        _sud = list(trainreader)[0]['sudoku']
+        entries = datanode.getChildDataNodes(conceptName=empty_entry)
+        for entry in entries:
+            row = entry.getAttribute('rows').item()
+            col = entry.getAttribute('cols').item()
+            val = entry.getAttribute(empty_entry_label, 'local/argmax').argmax(dim=-1).item() + 1
+            if check:
+                print("checking fixed stuff", entry.getAttribute('fixed').item())
+                if entry.getAttribute('fixed').item() == 1:
+                    print(entry.getAttribute('val').item(), val)
+                    assert entry.getAttribute('val').item() == val
+                    
+            if val != _sud[row][col]:
+                count += 1
+        print(count)
 
 ### make the table
 for datanode in program.populate(trainreader):
@@ -385,9 +424,9 @@ for datanode in program.populate(trainreader):
         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
         table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
         print(predicted)
-        if entry.getAttribute('fixed').item() == 1:
-            assert entry.getAttribute('val').item() == predicted
-        print("---")
+#         if entry.getAttribute('fixed').item() == 1:
+#             assert entry.getAttribute('val').item() == predicted
+#         print("---")
     break
     
 

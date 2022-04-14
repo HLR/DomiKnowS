@@ -3,6 +3,7 @@ from regr.solver.ilpConfig import ilpConfig
 from regr.graph import Concept
 
 import logging
+import torch
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
@@ -326,7 +327,8 @@ class notL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
 
 # ----------------- Logical
 
@@ -335,7 +337,8 @@ class andL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
         
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
+        with torch.no_grad():
+            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
 
 class orL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
@@ -356,7 +359,8 @@ class ifL(LogicalConstrain):
         LogicalConstrain.__init__(self, *e, p=p, active=active, name=name)
     
     def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False): 
-        return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+        with torch.no_grad():
+            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
     
 class norL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
@@ -418,7 +422,8 @@ class existsL(LogicalConstrain):
 
         cOperation = '>='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
+        with torch.no_grad():
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
 
 class atLeastL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
@@ -432,7 +437,8 @@ class atLeastL(LogicalConstrain):
             
         cOperation = '>='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
+        with torch.no_grad():
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
     
 class atMostL(LogicalConstrain):
     def __init__(self, *e, p=100, active = True, name = None):
@@ -446,4 +452,5 @@ class atMostL(LogicalConstrain):
             
         cOperation = '<='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))
+        with torch.no_grad():
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, logicMethodName = str(self))

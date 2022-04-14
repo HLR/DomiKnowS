@@ -6,6 +6,7 @@ from tqdm import tqdm
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
 from .model.lossModel import PrimalDualModel, SampleLosslModel
+from .model.base import Mode
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -159,6 +160,7 @@ class LossProgram(LearningBasedProgram):
         c_session={},
         **kwargs):
         assert c_session
+        self.model.mode(Mode.TRAIN)
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
         c_update_freq = c_session['c_update_freq']
@@ -253,3 +255,39 @@ class SampleLossProgram(LossProgram):
 
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)
+
+    def train_epoch(
+        self, dataset,
+        c_warmup_iters=0,  # warmup
+        c_session={},
+        **kwargs):
+        self.model.mode(Mode.TRAIN)
+        assert c_session
+        iter = c_session['iter']
+        self.model.train()
+        self.model.reset()
+        self.model.train()
+        self.model.reset()
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
+            if iter < c_warmup_iters:
+                loss = mloss
+            else:
+                closs, *_ = self.cmodel(output[1])
+                loss = mloss + self.beta * closs
+            if self.opt is not None and loss:
+                loss.backward()
+                # for name, param in self.model.named_parameters():
+                #     if param.requires_grad:
+                #         print (name, param.grad)
+
+                self.opt.step()
+                iter += 1
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter

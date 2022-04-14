@@ -1062,23 +1062,7 @@ class DataNode:
                     continue
                 
                 v = dn.getAttribute(c[0])
-                
-                if v is None:
-                    continue
-                elif not torch.is_tensor(v):
-                    continue
-                
-                vClone = torch.clone(v).double()
-                tExp = torch.exp(vClone)
-                for i, e in enumerate(tExp):
-                    if e == float("inf"):
-                        tExp[i] = 1.0
-                        
-                tExpSum = torch.sum(tExp).item()
-            
-                vSoftmax = [(tExp[i]/tExpSum).item() for i in range(len(v))]
-                    
-                vSoftmaxT = torch.as_tensor(vSoftmax) 
+                vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
                 
                 # Replace nan with 1/len
                 #for i, s in enumerate(vSoftmaxT):
@@ -1143,12 +1127,12 @@ class DataNode:
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
     #tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
-    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
+    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
         
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss)
         
         return lcResult
 
