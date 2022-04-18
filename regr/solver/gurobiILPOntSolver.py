@@ -8,7 +8,7 @@ import logging
 import torch
 
 # Gurobi
-from gurobipy import GRB, Model, Var
+from gurobipy import GRB, Model, Var, Env
 
 from regr.graph.concept import Concept, EnumConcept
 from regr.solver.ilpOntSolver import ilpOntSolver
@@ -17,6 +17,7 @@ from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 
 from regr.graph import LogicalConstrain, V, fixedL
+from _functools import reduce
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
 
@@ -729,7 +730,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         if sample:
             sampleInfo = {}
         vNo = 0
+        
         firstV = True
+        integrate = False
         
         for eIndex, e in enumerate(lc.e): 
             if  isinstance(e, V):
@@ -782,37 +785,47 @@ class gurobiILPOntSolver(ilpOntSolver):
                         _dns = dn.findDatanodes(select = rootConcept)
                         dnsList = [[dn] for dn in _dns]
                     else: # Path specified
-                        if len(variable.v) == 0:
-                            self.myLogger.error('The element %s of logical constraint %s has empty part v of the variable'%(conceptName, lc.lcName))
-                            return None
+                        from regr.graph.logicalConstrain import eqL
+                        if not isinstance(variable.v, eqL):
+                            if len(variable.v) == 0:
+                                self.myLogger.error('The element %s of logical constraint %s has empty part v of the variable'%(conceptName, lc.lcName))
+                                return None
                           
                         # -- Prepare paths
                         path = variable.v
                         paths = []
                         
-                        if isinstance(path[0], str) and len(path) == 1:
+                        if isinstance(path, eqL):
+                            paths.append(path)
+                        elif isinstance(path[0], str) and len(path) == 1:
                             paths.append(path)
                         elif isinstance(path[0], str) and not isinstance(path[1], tuple):
                             paths.append(path)
-                        else:
+                        else: # If many paths
                             for i, vE in enumerate(variable.v):
                                 if i == 0 and isinstance(vE, str):
                                     continue
                                 
                                 paths.append(vE)
                                 
+                        pathsCount = len(paths)
+                        
                         # -- Process  paths
                         dnsListForPaths = []
                         for i, v in enumerate(paths):
                             dnsListForPaths.append([])
                             
                             # Get name of the referred variable 
-                            referredVariableName = v[0] 
+                            if isinstance(path, eqL):
+                                referredVariableName = None
+                            else:
+                                referredVariableName = v[0] 
                         
                             if referredVariableName not in lcVariablesDns: # Not yet defined - it has to be the current lc element dataNodes list
                                 rootConcept = dn.findRootConceptOrRelation(conceptName)
                                 _dns = dn.findDatanodes(select = rootConcept)
                                 referredDns = [[dn] for dn in _dns]
+                                integrate = True
                             else: # already defined in the logical constraint from the v part 
                                 referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
                                 
@@ -825,11 +838,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         continue
                                     
                                     # -- Get DataNodes for the edge defined by the path part of the v
-                                    _eDns = _rDn.getEdgeDataNode(v[1:]) 
+                                    if isinstance(path, eqL):
+                                        _eDns = _rDn.getEdgeDataNode(v) 
+                                    else:
+                                        _eDns = _rDn.getEdgeDataNode(v[1:]) 
                                     
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
-                                    else:
+                                    elif not isinstance(path, eqL):
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
                                         if lc.__str__() != "fixedL":
                                             self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%
@@ -838,26 +854,38 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         
                                 dnsListForPaths[i].append(eDns)
                            
-                        # ----------- Fix this - TODO: use all the list -----
-                        dnsList = dnsListForPaths[0]
+                        # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
+                        dnsList = []
+                        newIntersection = True
+                        if newIntersection:
+                            if pathsCount == 1: # Single path
+                                dnsList = dnsListForPaths[0]
+                            else:
+                                # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation                                
+                                for i in range(len(dnsListForPaths[0])):
+                                    se = [set(dnsListForPaths[item][i]) for item in range(pathsCount)]
+                                    dnsListR = reduce(set.intersection, se)
+                                    dnsList.append(list(dnsListR))
+                        else:
+                            dnsList = dnsListForPaths[0]
                            
-                        # -- Combine the collected lists of dataNodes based on paths 
-                        for l in dnsListForPaths[1:]:
-                            # --- Assume Intersection - TODO: in future use lo if defined to determine if different  operation
-                            _d = []
-                            for i in range(len(l)):
-                                di = []
-                                for x in dnsList[i]:
-                                    if x in l[i]:
-                                        di.append(x)
+                            # -- Combine the collected lists of dataNodes based on paths 
+                            for l in dnsListForPaths[1:]:
+                                # --- Assume Intersection - TODO: in future use lo if defined to determine if different  operation
+                                _d = []
+                                for i in range(len(l)):
+                                    di = []
+                                    for x in dnsList[i]:
+                                        if x in l[i]:
+                                            di.append(x)
+                                            
+                                    if not di:
+                                        di = [None]
                                         
-                                if not di:
-                                    di = [None]
+                                    _d.append(di)
                                     
-                                _d.append(di)
+                                dnsList = _d
                                 
-                            dnsList = _d
-                            
                     # -- Get ILP variables from collected DataNodes for the given element of logical constraint
                     
                     vDns = [] # Stores ILP variables
@@ -965,9 +993,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lc,e))
                 return None
         if sample:
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC), sampleInfo
+            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo
         else:
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC)
+            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate)
     
     # ---------------
                 
@@ -981,6 +1009,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         start = process_time() # timer()
         
+        gurobiEnv = Env("logs/gurobi.log")
         try:
             if self.reuse_model and self.model:
                 m = self.model['m']
@@ -988,7 +1017,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 # Create a new Gurobi model
                 self.myIlpBooleanProcessor.resetCaches()
-                m = Model("decideOnClassificationResult" + str(start))
+                m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
                 m.params.outputflag = 0
                 x = {}
                 
@@ -1099,14 +1128,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
                 self.myLoggerTime.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
+                #mP.update()
+                #mP.display() 
                 startOptimize = process_time() # timer()
 
                 # Run ILP model - Find solution 
                 mP.optimize()
                 mP.update()
-                
-                #mP.display()    
-                
+                                
                 endOptimize = process_time() # timer()
                 elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
     
@@ -1143,6 +1172,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     sys.stdout = log
                     mP.display() 
                     sys.stdout = so
+                    
+                if (not solved):
+                    mP.computeIIS()
+                    mP.write("logs/gurabiInfeasible.ilp")
+
+                #if (self.myLogger.level <= logging.INFO):# and self.myLogger.filter(""):
+                #    mP.write("logs/gurabiInfeasible.lp")
 
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimizeInMs}

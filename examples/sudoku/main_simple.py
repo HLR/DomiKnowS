@@ -89,7 +89,7 @@ with Graph('global') as graph:
     
     same_row = Concept(name="same_row")
 #     same_row_mixed = Concept(name="same_row_mixed")
-    (same_row_arg1, same_row_arg2) = same_row.has_a(arg1=empty_entry, arg2=empty_entry)
+    (same_row_arg1, same_row_arg2) = same_row.has_a(row1=empty_entry, row2=empty_entry)
 #     (same_row_mixed_arg1, same_row_mixed_arg2) = same_row_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
     
     same_col = Concept(name="same_col")
@@ -99,10 +99,11 @@ with Graph('global') as graph:
 #     (same_col_mixed_arg1, same_col_mixed_arg2) = same_col_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
 
     same_table = Concept(name="same_table")
-    (same_table_arg1, same_table_arg2) = same_table.has_a(entry1=empty_entry, entry2=empty_entry)
+    (same_table_arg1, same_table_arg2) = same_table.has_a(table1=empty_entry, table2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, 
                                     values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
+    v = [getattr(empty_entry_label, a) for a in ('', *empty_entry_label.enum)]
 
     ### Constraints
     # entry = concept(name="entry")
@@ -112,147 +113,16 @@ with Graph('global') as graph:
     
     FIXED = True
     
-    existsL_LCs = False
-    atMostL_LCs = True
-    
-    SAME_ROW = existsL_LCs
-    SAME_ROW_New = atMostL_LCs
-    
-    SAME_COLUMNE = existsL_LCs
-    SAME_COLUMNE_New = atMostL_LCs
-    
-    SAME_TABLE = existsL_LCs
-    SAME_TABLE_New = atMostL_LCs
-    
-    ifL(empty_entry, 
-        atMostL(
-            getattr(empty_entry_label, "v1")(path=('x')),
-            getattr(empty_entry_label, "v2")(path=('x')),
-            getattr(empty_entry_label, "v3")(path=('x')),
-            getattr(empty_entry_label, "v4")(path=('x')),
-            getattr(empty_entry_label, "v5")(path=('x')),
-            getattr(empty_entry_label, "v6")(path=('x')),
-            getattr(empty_entry_label, "v7")(path=('x')),
-            getattr(empty_entry_label, "v8")(path=('x')),
-            getattr(empty_entry_label, "v9")(path=('x'))
-            ),
-            active = False
-        )
-
     ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True)
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
-    #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
-    new_constraints = False
-
     for row_num in range(9):
-        # ifL(
-            # empty_entry_label("x", eqL(empty_entry, "rows", {row_num})),
-        andL(
-            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "rows", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "rows", {row_num})) , 1)
-            , active = new_constraints
-        )
-        # )
-
-        # ifL(
-        #     empty_entry('x', eqL(empty_entry, 'cols', {row_num})),
-        andL(
-            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "cols", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "cols", {row_num})) , 1)
-            , active = new_constraints
-        )
-        # )
-
-        # ifL(
-        #     empty_entry('x', eqL(empty_entry, 'tables', {row_num})),
-        andL(
-            exactL(getattr(empty_entry_label, "v1")('z1', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v2')('z2', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v3')('z3', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v4')('z4', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v5')('z5', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v6')('z6', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v7')('z7', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v8')('z8', eqL(empty_entry, "tables", {row_num})) , 1),
-            exactL(getattr(empty_entry_label, 'v9')('z9', eqL(empty_entry, "tables", {row_num})) , 1)
-            , active = new_constraints
-        )
-        # )
-    
-    for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:        
-        ### No same number in the same row between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_row('z', path=("x", same_row_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
-                ))
-        ), active = SAME_ROW, name = "LC_SAME_ROW_ExistL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                andL(
-                    same_row('z', path=("x", same_row_arg1.reversed)), 
-                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2)
-                )
-            ), 0
-        ), active = SAME_ROW_New, name = "LC_SAME_ROW_atMostL_for_" + f'v{val}')
-        
-        ### No same number in the same column between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_col('z', path=("x", same_col_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
-                ))
-        ), active = SAME_COLUMNE, name = "LC_SAME_COLUMNE_existsL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                andL(
-                    same_col('z', path=("x", same_col_arg1.reversed)), 
-                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2)
-                )
-            ), 0
-        ), active = SAME_COLUMNE_New, name = "LC_SAME_COLUMNE_atMostL_for_" + f'v{val}')
-        
-        ### No same number in the same table between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_table('z', path=("x", same_table_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
-                ))
-        ), active = SAME_TABLE, name = "LC_SAME_TABLE_existsL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                    andL(
-                        same_table('z', path=("x", same_table_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2)
-                    )
-            ), 0
-        ), active = SAME_TABLE_New, name = "LC_SAME_TABLE_atMostL_for_" + f'v{val}')
-        
+        for index in range(1, 10):        
+            exactL(v[index](path = (eqL(empty_entry, "rows", {row_num}))))
+            exactL(v[index](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[index](path = (eqL(empty_entry, "tables", {row_num}))))
+   
 import torch.nn as nn
 
 class Conv2dSame(torch.nn.Module):
@@ -353,8 +223,8 @@ same_col[same_col_arg1.reversed, same_col_arg2.reversed] = CompositionCandidateS
     relations=(same_col_arg1.reversed, same_col_arg2.reversed),
     forward=filter_col)
 
-def filter_row(*inputs, arg1, arg2):
-    if arg1.getAttribute('rows').item() == arg2.getAttribute('rows').item() and arg1.instanceID != arg2.instanceID:
+def filter_row(*inputs, row1, row2):
+    if row1.getAttribute('rows').item() == row2.getAttribute('rows').item() and row1.instanceID != row2.instanceID:
         return True
     return False
     
@@ -363,10 +233,10 @@ same_row[same_row_arg1.reversed, same_row_arg2.reversed] = CompositionCandidateS
     relations=(same_row_arg1.reversed, same_row_arg2.reversed),
     forward=filter_row)
 
-def filter_table(*inputs, entry1, entry2):
-    if entry1.instanceID != entry2.instanceID:
-        if int(entry1.getAttribute('rows').item() / 3) == int(entry2.getAttribute('rows').item() / 3) and \
-           int(entry1.getAttribute('cols').item() / 3) == int(entry2.getAttribute('cols').item() / 3):
+def filter_table(*inputs, table1, table2):
+    if table1.instanceID != table2.instanceID:
+        if int(table1.getAttribute('rows').item() / 3) == int(table2.getAttribute('rows').item() / 3) and \
+           int(table1.getAttribute('cols').item() / 3) == int(table2.getAttribute('cols').item() / 3):
             return True
         
     return False
@@ -436,30 +306,67 @@ program = SampleLossProgram(
 #     print("sudokuLoss - %s"%(sudokuLoss))
 
 
-# Disable Logging    
-setProductionLogMode()
+# Disable Logging  
+productionMode = False  
+if productionMode:
+    setProductionLogMode()
 
 # program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
-
-if  existsL_LCs:
-    print("\nUsing constraints with fixedL and existL")
-elif atMostL_LCs:
-    print("\nUsing constraints with fixedL and atMostL")
-else:
-    print("\nUsing only fixedL constraintsL")
     
 for datanode in program1.populate(trainreader):
-    datanode.inferILPResults(empty_entry_label, fun=None)
-    _sud = list(trainreader)[0]['sudoku']
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
+
+    ilpSud = torch.zeros((9,9))
+    fixedSud = torch.zeros((9,9)) #[[None for i in range(9)] for i in range(9)]
+    for entry in entries:
+        # t = entry.getAttribute(empty_entry_label, 'ILP')
+        row = entry.getAttribute('rows').item()
+        col = entry.getAttribute('cols').item()
+        fixed = entry.getAttribute('fixed').item()
+        label = int(entry.getAttribute(empty_entry_label, 'label').item()) + 1
+
+        val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+        ilpSud[row][col] = val
+        
+        if fixed == 1 and label > -1:
+            if ilpSud[row][col] != label:
+                print("ILP fixed wrong at %i:%i)"%(row,col))            
+            fixedSud[row][col] = label
+            
+    print("ilpSud:\n %s"%(ilpSud))
+    print("fixedSud:\n %s"%(fixedSud))
+
+    for i in range(9):
+        if len(ilpSud[i][:].unique()) != 9:
+            print("ILP wrong at row %i - %i"%(i,ilpSud[i][:]))  
+        
+        if len(ilpSud[:][i].unique()) != 9:
+            print("ILP wrong at col %i - %i"%(i,ilpSud[:][i]))
+        
+        r, c = divmod(i, 3)   
+        r *=3
+        c *=3
+        rIndices = torch.tensor([r, r+1, r+2])
+        cIndices = torch.tensor([c, c+1, c+2])
+
+        currentTable = torch.index_select(ilpSud, 0, rIndices)
+        currentTable = torch.index_select(currentTable, 1, cIndices)
+        print("currentTable:\n %s"%(currentTable))
+
+        currentTable = torch.reshape(currentTable, (1,9))
+        if len(currentTable.unique()) != 9:
+            print("ILP wrong at table %i"%(i))
+        
+    _sud = list(trainreader)[0]['sudoku']
+    
     for entry in entries:
         # t = entry.getAttribute(empty_entry_label, 'ILP')
         row = entry.getAttribute('rows').item()
         col = entry.getAttribute('cols').item()
         val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
-
+        
         assert val == _sud[row][col]
         # print(t)
         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1

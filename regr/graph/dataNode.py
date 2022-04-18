@@ -789,6 +789,8 @@ class DataNode:
     #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
     def getEdgeDataNode(self, path):
         # Path is empty
+        if isinstance(path, eqL):
+            path = [path]
         if len(path) == 0:
             return [self]
 
@@ -808,24 +810,28 @@ class DataNode:
         else:
             path0 = path[0]
 
+        relDns = None         
         if self.isRelation(path0):
             relDns = self.getDnsForRelation(path0)
-        else:
+        else: # if not relation then has to be attribute in eql
             attributeValue = self.getAttribute(path[0].e[1]).item()
-            if attributeValue == 1:
-                attributeValue = True
-            else:
-                attributeValue = False
-            if attributeValue in  path[0].e[2]:
+            requiredValue = path[0].e[2]
+             
+            if attributeValue in requiredValue:
                 return [self]
+            elif (True in  requiredValue ) and attributeValue == 1:
+                return [self]
+            elif (False in  requiredValue ) and attributeValue == 0:
+                attributeValue = False
             else:
                 return [None]
-                    
+          
+        # Check if it is a valid relation link  with not empty set of connected datanodes      
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
             relDns = []
             
-        # Filter DataNode through eqL
+        # if eqL then filter DataNode  
         if isinstance(path[0], eqL):
             _cDns = []
             for cDn in relDns:
