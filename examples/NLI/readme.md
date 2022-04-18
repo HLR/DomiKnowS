@@ -29,10 +29,27 @@ python main_group_sentences.py --lr 1e-5 --training_sample 100000 --epoch 5 --ba
 - iml: using iml model
 - beta: beta for pmd or iml model
 
-### Result
-Training sample size | epoch | learning rate | model | using constrain | Accuracy (%)
---- | :---: | :---: | :---: | :---: | ---:
-100000 | 5 | 1e-5 | POI | False | 83.89 (Dev Augmentation included),  
-100000 | 5 | 1e-5 | POI | Only Symmetric | 85.392 (Dev Aug included)
-100000 | 5 | 1e-5 | PMD | Only Symmetric | 82.99 (Dev Aug included)
-150000 | 5 | 1e-5 | POI | Only Symmetric | 85.167 (Dev Aug included)
+### Result  
+#### Large Train Set  
+Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
+--- | :---: | :---: | :---: | :---: | :---: | ---:
+100000 | 5 | 1e-5 | ILP | w/o symmetric | 83.89 (Dev Augmentation included) | 
+100000 | 5 | 1e-5 | ILP | Symmetric | 85.392 (Dev Aug included) |
+100000 | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 82.99 (Dev Aug included) |
+100000 | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 83.508 (Dev Aug included) |
+100000 | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 84.12 (Running in progress) | 73.800
+150000 | 5 | 1e-5 | ILP | Symmetric | 85.167 (Dev Aug included) |
+
+
+#### Small Train Set  
+
+Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
+--- | :---: | :---: | :---: | :---: | :---: | ---:  
+10000  | 5 | 1e-5 | Normal | w/o Symmetric | 78.07 | 57.200
+10000  | 5 | 1e-5 | Normal | Only Symmetric | 78.280 | 60.600
+10000  | 5 | 1e-5 | PMD | Symmetric | 79.290 | 60.300
+10000  | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 79.392 | 60.400
+10000  | 5 | 1e-5 | ILP | Symmetric | 79.510 | 62.700
+10000  | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 79.783 | 65.550
+10000  | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 80.99 | 64.100
+

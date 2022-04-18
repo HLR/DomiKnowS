@@ -4,7 +4,7 @@ sys.path.append("../")
 sys.path.append("../../")
 
 import pandas as pd
-from data.reader import DataReaderMulti, DataReaderMultiRelation
+from data.reader import DataReaderMultiRelation
 from program_declaration import program_declaration
 import torch
 import argparse
@@ -21,21 +21,22 @@ def main(args):
     training_file = "train.csv"
     testing_file = "test.csv"
 
-    #augment_file = "data/snli_genadv_1000_dev.jsonl"
-    augment_file = None
+    augment_file = "data/snli_genadv_1000_dev.jsonl"
+    #augment_file = None
     test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
                                            batch_size=args.batch_size, augment_file=augment_file)
 
     train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_sample,
                                             batch_size=args.batch_size)
 
+    augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
+                                              augment_file="data/snli_genadv_1000_dev.jsonl")
+
     program = program_declaration(cur_device, sym_relation=args.sym_relation,
                                   primaldual=args.primaldual, iml=args.iml, beta=args.beta)
 
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                   Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
-
-    program.test(test_dataset, device=cur_device)
 
     correct = 0
     result = {"premise": [],
@@ -49,7 +50,6 @@ def main(args):
             result["actual"].append('entailment' if sentence.getAttribute(entailment, 'label')
                                     else 'neutral' if sentence.getAttribute(neutral, 'label') else 'contrast')
             if not args.softmax:
-                print("ILP")
                 result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
                                          else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
 
@@ -57,21 +57,45 @@ def main(args):
                     sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
                         sentence.getAttribute(contradiction, 'ILP').item()
             else:
-                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[2].item()
-                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[2].item()
-                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[2].item()
+                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
+                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
+                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
                 label = ["entailment", "neutral", "contrast"]
                 predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
-                result["predict"] = predict
+                result["predict"].append(predict)
                 actual_check = entailment if predict == "entailment" else \
                     neutral if predict == "neutral" else contradiction
                 correct += 1 if sentence.getAttribute(actual_check, 'label') else 0
 
+    correct_augment = 0
+    count_augment = 0
+    for datanode in program.populate(augment_dataset, device=cur_device):
+        for sentence in datanode.getChildDataNodes():
+            if not args.softmax:
+                correct_augment += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
+                    sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
+                        sentence.getAttribute(contradiction, 'ILP').item()
+            else:
+                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
+                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
+                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
+                label = ["entailment", "neutral", "contrast"]
+                predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
+                actual_check = entailment if predict == "entailment" else \
+                    neutral if predict == "neutral" else contradiction
+                correct_augment += 1 if sentence.getAttribute(actual_check, 'label') else 0
+            count_augment += 1
+
     print("Accuracy = %.2f%%" % (correct / len(result["predict"]) * 100))
+    print("Accuracy on augment data = %.3f%%" % (correct_augment / count_augment))
     result = pd.DataFrame(result)
     training_size = args.training_sample
     result.to_csv("report-{:}-{:}-{:}--sym:{:}.csv".format(training_size, args.testing_sample,
                                                              args.cur_epoch, args.sym_relation))
+    import os
+    output_file = "report-{:}-{:}-{:}--sym:{:}.csv".format(args.training_sample, args.testing_sample,
+                                                           args.cur_epoch, args.sym_relation)
+    result.to_csv(os.path.join(output_file))
 
 
 if __name__ == "__main__":

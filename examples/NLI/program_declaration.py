@@ -36,7 +36,7 @@ def program_declaration(cur_device, *,
                     sentence_group["contradiction_list"], sentence_group["neutral_list"], forward=make_sentence,
                     device=cur_device)
 
-    sentence["token_ids", "Mask"] = JointSensor(sentence_group_contains, 'hypothesis', "premise",
+    sentence["token_ids", "Mask"] = JointSensor(sentence_group_contains, 'premise', "hypothesis",
                                                 forward=RobertaTokenizerMulti(), device=cur_device)
     roberta_model = NLI_Robert()
     sentence["robert_emb"] = ModuleLearner("token_ids", "Mask", module=roberta_model, device=cur_device)

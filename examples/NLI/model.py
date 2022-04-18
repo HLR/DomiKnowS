@@ -60,8 +60,8 @@ class RobertaTokenizerMulti:
         self.max_length = max_length
         self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
 
-    def __call__(self, _, hypothesis, premise):
-        encoded_input = self.tokenizer(hypothesis, premise, padding="max_length", max_length=self.max_length)
+    def __call__(self, _, premise, hypothesis):
+        encoded_input = self.tokenizer(premise, hypothesis, padding="max_length", max_length=self.max_length)
         input_ids = encoded_input["input_ids"]
         attention_mask = encoded_input["attention_mask"]
         return torch.LongTensor(input_ids), torch.LongTensor(attention_mask)
