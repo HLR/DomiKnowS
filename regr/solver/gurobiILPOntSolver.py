@@ -1385,13 +1385,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                     #     currentDevice = lossList[0][0].device
                         
                     successesList = [] # Entry lcs successes
-                    sampleInfoFiltered = []
                     lcSuccesses = torch.ones(sampleSize, device = currentDevice) # Consolidated successes for all the entry lcs
                     lcVariables = {} # Unique variables used in all the entry lcs
                     countSuccesses = torch.zeros(sampleSize, device = currentDevice)
                     oneT = torch.ones(sampleSize, device = currentDevice)
-                    for i, l in enumerate(lossList):
-                        for currentFailures in l:
+                    if len(lossList) == 1:
+                        for currentFailures in lossList[0]:
                             if currentFailures is None:
                                 successesList.append(None)
                                 continue
@@ -1402,16 +1401,32 @@ class gurobiILPOntSolver(ilpOntSolver):
                             lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
                             countSuccesses = countSuccesses.add_(currentSuccesses)
                             
-                            currentSampleInfo = []
+                        for k in sampleInfo.keys():
+                            for c in sampleInfo[k]:
+                                if not c:
+                                    continue
+                                c = c[0]
+                                if len(c) > 2:                                    
+                                    if c[2] not in lcVariables:
+                                        lcVariables[c[2]] = c
+                    else:
+                        for i, l in enumerate(lossList):
+                            for currentFailures in l:
+                                if currentFailures is None:
+                                    successesList.append(None)
+                                    continue
+                                
+                                currentSuccesses = torch.sub(oneT, currentFailures.float())
+                                successesList.append(currentSuccesses)
+                                    
+                                lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
+                                countSuccesses = countSuccesses.add_(currentSuccesses)
+                                
                             for k in sampleInfo.keys():
                                 for c in sampleInfo[k][i]:
-                                    if len(c) > 2:
-                                        currentSampleInfo.append(c)
-                                        
+                                    if len(c) > 2:                                        
                                         if c[2] not in lcVariables:
                                             lcVariables[c[2]] = c
-                            
-                            sampleInfoFiltered.append(currentSampleInfo)
                         
                     #lcSuccessesSum = torch.sum(lcSuccesses).item()
                     
