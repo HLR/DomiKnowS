@@ -418,11 +418,7 @@ for datanode in program1.populate(trainreader):
     #     col = entry.getAttribute('cols').item()
     #     val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
         
-<<<<<<< HEAD
     #     assert val == _sud[row][col]
-=======
-        #assert val == _sud[row][col]
->>>>>>> c04e4877beddd1bc29360a15098cf4d194dff266
         # print(t)
         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
         # if entry.getAttribute('fixed').item() == 1:
