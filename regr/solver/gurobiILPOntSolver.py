@@ -720,7 +720,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None):
         if key == None:
             key = ""
         if lcVariablesDns == None:
@@ -729,7 +729,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         lcVariables = {}
         if sample:
             sampleInfo = {}
-        vNo = 0
+        if vNo == None:
+            vNo = [0]
         
         firstV = True
         integrate = False
@@ -744,15 +745,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                     variable = lc.e[eIndex+1]
                 else:
                     if isinstance(e, LogicalConstrain):
-                        variable = V(name="_lc" + str(vNo))
-                        vNo += 1
+                        variable = V(name="_lc" + str(vNo[0]))
+                        vNo[0] += 1
                     else:
                         if firstV:
                             variable = V(name="_x" )
                             firstV = False
                         else:
-                            variable = V(name="_x" + str(vNo), v = ("_x",))
-                            vNo += 1
+                            variable = V(name="_x" + str(vNo[0]), v = ("_x",))
+                            vNo[0] += 1
                     
                 if variable.name:
                     variableName = variable.name
@@ -760,8 +761,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     variableName = "V" + str(eIndex)
                     
                 if variableName in lcVariables:
-                    newvVariableName = "_x" + str(vNo)
-                    vNo += 1
+                    newvVariableName = "_x" + str(vNo[0])
+                    vNo[0] += 1
                     
                     lcVariablesDns[newvVariableName] = lcVariablesDns[variableName]
                     if None in lcVariablesDns:
@@ -966,11 +967,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
+                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                         sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample)
+                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                     
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constraint'%
