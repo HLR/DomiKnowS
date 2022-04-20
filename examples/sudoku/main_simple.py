@@ -118,10 +118,9 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(9):
-        for index in range(1, 10):        
-            exactL(v[index](path = (eqL(empty_entry, "rows", {row_num}))))
-            exactL(v[index](path = (eqL(empty_entry, "cols", {row_num})))),
-            exactL(v[index](path = (eqL(empty_entry, "tables", {row_num}))))
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
    
 import torch.nn as nn
 
@@ -307,18 +306,28 @@ program = SampleLossProgram(
 
 
 # Disable Logging  
-productionMode = False  
+productionMode = True  
 if productionMode:
     setProductionLogMode()
 
 # program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
+def testSudokuPrediction(entries, predictionP = None):
     
-for datanode in program1.populate(trainreader):
-    entries = datanode.getChildDataNodes(conceptName=empty_entry)
-
-    ilpSud = torch.zeros((9,9))
+    if predictionP != None:
+        prediction = predictionP
+    else:
+        prediction = torch.zeros((9,9))
+        for entry in entries:
+            row = entry.getAttribute('rows').item()
+            col = entry.getAttribute('cols').item()
+    
+            val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+            prediction[row][col] = val
+          
+    print("Prediction:\n %s"%(prediction))
+     
     fixedSud = torch.zeros((9,9)) #[[None for i in range(9)] for i in range(9)]
     for entry in entries:
         # t = entry.getAttribute(empty_entry_label, 'ILP')
@@ -327,23 +336,21 @@ for datanode in program1.populate(trainreader):
         fixed = entry.getAttribute('fixed').item()
         label = int(entry.getAttribute(empty_entry_label, 'label').item()) + 1
 
-        val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
-        ilpSud[row][col] = val
-        
         if fixed == 1 and label > -1:
-            if ilpSud[row][col] != label:
-                print("ILP fixed wrong at %i:%i)"%(row,col))            
             fixedSud[row][col] = label
+
+            if prediction[row][col] != label:
+                print("Prediction fixed wrong at %i:%i is %i should be %i"%(row,col,prediction[row][col],label))            
             
-    print("ilpSud:\n %s"%(ilpSud))
+   
     print("fixedSud:\n %s"%(fixedSud))
 
     for i in range(9):
-        if len(ilpSud[i][:].unique()) != 9:
-            print("ILP wrong at row %i - %i"%(i,ilpSud[i][:]))  
+        if len(prediction[i][:].unique()) != 9:
+            print("Prediction wrong at row %i - %s"%(i,prediction[i][:]))  
         
-        if len(ilpSud[:][i].unique()) != 9:
-            print("ILP wrong at col %i - %i"%(i,ilpSud[:][i]))
+        if len(prediction[:][i].unique()) != 9:
+            print("Prediction wrong at col %i - %s"%(i,prediction[:][i]))
         
         r, c = divmod(i, 3)   
         r *=3
@@ -351,14 +358,19 @@ for datanode in program1.populate(trainreader):
         rIndices = torch.tensor([r, r+1, r+2])
         cIndices = torch.tensor([c, c+1, c+2])
 
-        currentTable = torch.index_select(ilpSud, 0, rIndices)
+        currentTable = torch.index_select(prediction, 0, rIndices)
         currentTable = torch.index_select(currentTable, 1, cIndices)
-        print("currentTable:\n %s"%(currentTable))
+        #print("currentTable:\n %s"%(currentTable))
 
         currentTable = torch.reshape(currentTable, (1,9))
         if len(currentTable.unique()) != 9:
-            print("ILP wrong at table %i"%(i))
-        
+            print("Prediction wrong at table %i - %s"%(i,currentTable))
+    
+for datanode in program1.populate(trainreader):
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    
+    testSudokuPrediction(entries)
+    
     _sud = list(trainreader)[0]['sudoku']
     
     for entry in entries:
@@ -367,7 +379,7 @@ for datanode in program1.populate(trainreader):
         col = entry.getAttribute('cols').item()
         val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
         
-        assert val == _sud[row][col]
+        #assert val == _sud[row][col]
         # print(t)
         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
         # if entry.getAttribute('fixed').item() == 1:
@@ -379,7 +391,11 @@ for datanode in program1.populate(trainreader):
 
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
-for i in range(220):
+
+trainingNo = 10
+for i in range(trainingNo):
+    print("Training - %i"%(i))
+    
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
                     Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
     check = False
@@ -402,23 +418,30 @@ for i in range(220):
                     
             if val != _sud[row][col]:
                 count += 1
-        print(count)
+                
+        print("Count of sudoku entries different from label- %s"%(count))
 
 ### make the table
 for datanode in program.populate(trainreader):
-    print(datanode)
+    datanode.inferILPResults(empty_entry_label, fun=None)
+
+    print("Datanode %s"%(datanode))
     table = torch.zeros(9, 9)
-    
+    ilpTable = torch.zeros(9, 9)
+
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
     for entry in entries:
         t = entry.getAttribute(empty_entry_label, 'local/argmax')
         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
         table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
-        print(predicted)
-#         if entry.getAttribute('fixed').item() == 1:
-#             assert entry.getAttribute('val').item() == predicted
-#         print("---")
+        
+        ilpPredicted = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+        ilpTable[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = ilpPredicted
+
+    print("Argmax Predicted Table")
+    testSudokuPrediction(entries, predictionP = table)
+    
+    print("\n ILP Predicted Table")
+    testSudokuPrediction(entries, predictionP = ilpTable)
     break
     
-
-print(table)
