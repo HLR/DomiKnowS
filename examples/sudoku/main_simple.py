@@ -118,10 +118,45 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(9):
-        for index in range(1, 10):        
-            exactL(v[index](path = (eqL(empty_entry, "rows", {row_num}))))
-            exactL(v[index](path = (eqL(empty_entry, "cols", {row_num})))),
-            exactL(v[index](path = (eqL(empty_entry, "tables", {row_num}))))
+        andL(
+            exactL(v[1](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[2](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[3](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[4](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[5](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[6](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[7](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[8](path = (eqL(empty_entry, "rows", {row_num})))),
+            exactL(v[9](path = (eqL(empty_entry, "rows", {row_num}))))
+        )
+
+        andL(
+            exactL(v[1](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[2](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[3](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[4](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[5](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[6](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[7](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[8](path = (eqL(empty_entry, "cols", {row_num})))),
+            exactL(v[9](path = (eqL(empty_entry, "cols", {row_num}))))
+        )
+
+        andL(
+            exactL(v[1](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[2](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[3](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[4](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[5](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[6](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[7](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[8](path = (eqL(empty_entry, "tables", {row_num})))),
+            exactL(v[9](path = (eqL(empty_entry, "tables", {row_num}))))
+        )
+        # for index in range(1, 10):        
+        #     exactL(v[index](path = (eqL(empty_entry, "rows", {row_num}))))
+        #     exactL(v[index](path = (eqL(empty_entry, "cols", {row_num})))),
+        #     exactL(v[index](path = (eqL(empty_entry, "tables", {row_num}))))
    
 import torch.nn as nn
 
@@ -307,7 +342,7 @@ program = SampleLossProgram(
 
 
 # Disable Logging  
-productionMode = False  
+productionMode = True  
 if productionMode:
     setProductionLogMode()
 
@@ -361,13 +396,13 @@ for datanode in program1.populate(trainreader):
         
     _sud = list(trainreader)[0]['sudoku']
     
-    for entry in entries:
-        # t = entry.getAttribute(empty_entry_label, 'ILP')
-        row = entry.getAttribute('rows').item()
-        col = entry.getAttribute('cols').item()
-        val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+    # for entry in entries:
+    #     # t = entry.getAttribute(empty_entry_label, 'ILP')
+    #     row = entry.getAttribute('rows').item()
+    #     col = entry.getAttribute('cols').item()
+    #     val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
         
-        assert val == _sud[row][col]
+    #     assert val == _sud[row][col]
         # print(t)
         # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
         # if entry.getAttribute('fixed').item() == 1:
