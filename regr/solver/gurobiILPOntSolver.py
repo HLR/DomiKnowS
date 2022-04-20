@@ -758,7 +758,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if variable.name:
                     variableName = variable.name
                 else:
-                    variableName = "V" + str(eIndex)
+                    variableName = "V" + str(vNo[0])
+                    vNo[0] += 1
                     
                 if variableName in lcVariables:
                     newvVariableName = "_x" + str(vNo[0])
