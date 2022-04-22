@@ -110,15 +110,6 @@ class LossProgram(LearningBasedProgram):
 
                 metricName = 'loss'
                 metricResult = self.model.loss
-
-                if "collectLoss" in kwargs:
-                    if kwargs["collectLoss"] == None:
-                        kwargs["collectLoss"] = {}
-                    
-                    if metricName not in kwargs["collectLoss"]:
-                        kwargs["collectLoss"][metricName] = []
-                        
-                    kwargs["collectLoss"][metricName].append(metricResult)
                     
                 if self.dbUpdate is not None:
                     self.dbUpdate(desc, metricName, metricResult)
@@ -130,15 +121,6 @@ class LossProgram(LearningBasedProgram):
 
                 metricName = 'Constraint_loss'
                 metricResult = self.cmodel.loss
-                
-                if "collectLoss" in kwargs:
-                    if kwargs["collectLoss"] == None:
-                        kwargs["collectLoss"] = {}
-                    
-                    if metricName not in kwargs ["collectLoss"]:
-                        kwargs["collectLoss"][metricName] = []
-                        
-                    kwargs["collectLoss"][metricName].append(metricResult)
 
                 if self.dbUpdate is not None:
                     self.dbUpdate(desc, metricName, metricResult)
