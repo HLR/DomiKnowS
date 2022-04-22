@@ -563,10 +563,11 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         m.update()
         
-    def addLogicalConstrains(self, m, dn, lcs, p):
+    def addLogicalConstrains(self, m, dn, lcs, p, key = None):
         self.myLogger.info('Starting method')
         
-        key = "/ILP/xP" # to get ILP variable from datanodes
+        if key == None:
+            key = "/ILP/xP" # to get ILP variable from datanodes
         
         for lc in lcs:   
             startLC = process_time_ns() # timer()
@@ -652,7 +653,10 @@ class gurobiILPOntSolver(ilpOntSolver):
             except IndexError: 
                 vDn = None
         else: # If ILP inference
-            vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept 
+            if "xP" in xPkey:
+                vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept
+            else:
+                vDn = dn.getAttribute(xPkey)[e[2]] # Get ILP variable for the concept
     
         if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
             vDn = vDn.item()  
@@ -1010,7 +1014,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             return 
         
         start = process_time() # timer()
-        
+
         gurobiEnv = Env("logs/gurobi.log")
         try:
             if self.reuse_model and self.model:
@@ -1026,11 +1030,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Create ILP Variables for concepts and objective
             Q = self.createILPVariables(m, x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
                 
+            endVariableInit = process_time() # timer()
+            elapsedVariablesInMs = (endVariableInit - start) *1000
+            self.myLoggerTime.info('ILP Variables Init - time: %ism'%(elapsedVariablesInMs))
+
             if self.model is None:
                 # Add constraints based on ontology and graph definition
                 self.addOntologyConstrains(m, dn, *conceptsRelations)
                 self.addGraphConstrains(m, dn, *conceptsRelations)
                 
+            endGraphAndOntologyConstraints = process_time() # timer()
+            elapsedGandOConstraintsInMs = (endGraphAndOntologyConstraints - endVariableInit) * 1000
+            self.myLoggerTime.info('ILP Graph and Ontology Constraints - time: %ims'%(elapsedGandOConstraintsInMs))
+            
             # ILP Model objective setup
             if Q is None:
                 Q = 0
@@ -1058,7 +1070,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                             
                         if lcP not in _lcP:
                             _lcP[lcP] = []
-                            pUsed = True
+                            pUsed = True # Found p different then default 100
                         
                         _lcP[lcP].append(lc) # Keep constraint with the same p in the list 
             
@@ -1067,47 +1079,57 @@ class gurobiILPOntSolver(ilpOntSolver):
             for p in lcP:
                 self.myLogger.info('Found %i logical constraints with p %i - %s'%(len(lcP[p]),p,lcP[p]))
                 self.myLoggerTime.info('Starting ILP inferencing - Found %i logical constraints'%(len(lcP[p])))
-                
+            
             # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
             lcRun = {} # Keeps information about subsequent model runs
             ps = [] # List with processed p 
+            
+            #  -----------  Run ILP solver for each set of lcs based on their p
             for p in lcP:
                 ps.append(p)
                 
                 if pUsed:
                     mP = m.copy() # Copy model for this run                    
                     xP = {}
+                    lckey = "/ILP/xP"
+                   
+                    pStart= process_time() # timer()
+                    
+                    for _x in x:
+                        # Map variables to the new copy model
+                        xP[_x] = mP.getVarByName(x[_x].VarName)
+                        
+                        rootConcept = dn.findRootConceptOrRelation(_x[0])
+                        
+                        dns = dn.findDatanodes(select = ((rootConcept,), ("instanceID", _x[2])))  
+                        
+                        if dns:
+                            if _x[1].startswith('Not'):
+                                xPkey = '<' + _x[0].name + '>/ILP/notxP'
+                            else:
+                                xPkey = '<' + _x[0].name + '>/ILP/xP'
+    
+                            if xPkey not in dns[0].attributes:
+                                dns[0].attributes[xPkey] = {}
+                                
+                            if p not in dns[0].attributes[xPkey]:
+                                xkey = '<' + _x[0].name + '>/ILP/x'
+                                if xkey not in dns[0].attributes:
+                                    continue
+                                
+                                xLen = len(dns[0].attributes[xkey])
+                                dns[0].attributes[xPkey][p] = [None] * xLen
+                                
+                            dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
+                            
+                            pEnd= process_time() # timer()
+                            self.myLoggerTime.info('ILP Model init for p %i - time: %fs'%(p, pEnd - pStart))
                 else:
                     mP = m
                     xP = x
                     
-                for _x in x:
-                    # Map variables to the new copy model
-                    xP[_x] = mP.getVarByName(x[_x].VarName)
-                    
-                    rootConcept = dn.findRootConceptOrRelation(_x[0])
-                    
-                    dns = dn.findDatanodes(select = ((rootConcept,), ("instanceID", _x[2])))  
-                    
-                    if dns:
-                        if _x[1].startswith('Not'):
-                            xPkey = '<' + _x[0].name + '>/ILP/notxP'
-                        else:
-                            xPkey = '<' + _x[0].name + '>/ILP/xP'
-
-                        if xPkey not in dns[0].attributes:
-                            dns[0].attributes[xPkey] = {}
-                            
-                        if p not in dns[0].attributes[xPkey]:
-                            xkey = '<' + _x[0].name + '>/ILP/x'
-                            if xkey not in dns[0].attributes:
-                                continue
-                            
-                            xLen = len(dns[0].attributes[xkey])
-                            dns[0].attributes[xPkey][p] = [None] * xLen
-                            
-                        dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
-                    
+                    lckey = "/ILP/x"
+            
                 # Prepare set with logical constraints for this run
                 lcs = []
                 for _p in lcP:
@@ -1116,32 +1138,39 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if _p == p:
                         break     
     
-                # Add LC constraints to the copy model
+                # ----------- Add LC constraints to the ILP model
+                
+                endLogicalConstraintsPrep = process_time() # timer()
+                elapsedLogicalConstraintsPrepInMs = (endLogicalConstraintsPrep - endGraphAndOntologyConstraints)
+                self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %fs'%(elapsedLogicalConstraintsPrepInMs))
                 
                 if pUsed or self.model is None:
-                    self.addLogicalConstrains(mP, dn, lcs, p)
+                    self.addLogicalConstrains(mP, dn, lcs, p, key = lckey) # <--- LC constraints
                     
                     if self.reuse_model:
                         self.model = {}
                         self.model['m'] = mP
                         self.model['x'] = xP
                 
-                    
                 self.myLogger.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
                 self.myLoggerTime.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
+                endLogicalConstraints = process_time() # timer()
+                elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep)
+                self.myLoggerTime.info('ILP Logical Constraints - time: %fs'%(elapsedLogicalConstraintsInMs))
+            
                 #mP.update()
                 #mP.display() 
                 startOptimize = process_time() # timer()
 
-                # Run ILP model - Find solution 
+                # ----------- Run ILP model - Find solution 
                 mP.optimize()
                 mP.update()
                                 
                 endOptimize = process_time() # timer()
                 elapsedOptimizeInMs = (endOptimize - startOptimize) * 1000
     
-                # Check model run result
+                # ----------- Check model run result
                 solved = False
                 objValue = None
                 if mP.status == GRB.Status.OPTIMAL:
@@ -1185,7 +1214,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Keep result of the model run    
                 lcRun[p] = {'p':p, 'solved':solved, 'objValue':objValue, 'lcs':lcs, 'mP':mP, 'xP':xP, 'elapsedOptimize':elapsedOptimizeInMs}
 
-            # Select model run with the max/min objective value 
+            # ----------- Select model run with the max/min objective value 
             maxP = None
             for p in lcRun:
                 if lcRun[p]['objValue']:
@@ -1199,7 +1228,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-            # If found model - return best result          
+            # ----------- If solution found model - return best result          
             if maxP:
                 self.myLogger.info('Best  solution found for p - %i'%(maxP))
                 #self.myLoggerTime.info('Best  solution found for p - %i'%(maxP))
@@ -1222,12 +1251,22 @@ class gurobiILPOntSolver(ilpOntSolver):
                    
                     for cDn in c_root_dns:
                         dnAtt = cDn.getAttributes()
-                        if xPkey not in dnAtt:
-                            dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
-                            self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
-                            continue
                         
-                        solution = dnAtt[xPkey][maxP][index].X
+                        if pUsed:
+                            if xPkey not in dnAtt:
+                                dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
+                                self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
+                                continue
+                        
+                            solution = dnAtt[xPkey][maxP][index].X
+                        else:
+                            if xkey not in dnAtt:
+                                dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
+                                self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
+                                continue
+                            
+                            solution = dnAtt[xkey][index].X
+                            
                         if solution == 0:
                             solution = 0
                         elif solution == 1: 
@@ -1240,9 +1279,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                             dnAtt[xkey] = torch.empty(c[3], dtype=torch.float)
                        
                         dnAtt[ILPkey][index] = solution
-                        dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
-                        if xNotPkey in dnAtt:
-                            dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
+                        if pUsed: 
+                            dnAtt[xkey][index] = dnAtt[xPkey][maxP][index]
+                            if xNotPkey in dnAtt:
+                                dnAtt[xNotPkey][index] = dnAtt[xNotPkey][maxP][index]
 
                         ILPV = dnAtt[ILPkey][index]
                         if ILPV == 1:
@@ -1257,17 +1297,21 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             raise
            
+        endResultPrep = process_time() # timer()
+        elapsedResultPrepInMs = (endResultPrep - endOptimize) *1000
+        self.myLoggerTime.info('ILP Preparing Return Results - time: %ism'%(elapsedResultPrepInMs))
+            
         end = process_time() # timer()
         elapsedInS = end - start
         
         self.myLogger.info('')
         
-        self.myLogger.info('End ILP Inferencing - elapsed time: %is'%(elapsedInS))
-        self.myLoggerTime.info('End ILP Inferencing - elapsed time: %is'%(elapsedInS))
+        self.myLogger.info('End ILP Inferencing - total time: %is'%(elapsedInS))
+        self.myLoggerTime.info('End ILP Inferencing - total time: %is'%(elapsedInS))
         self.myLogger.info('')
         self.myLoggerTime.info('')
         
-        # Return
+        # ----------- Return
         return
 
     def eliminateDuplicateSamples(self, lcVariables, sampleSize, currentDevice):
@@ -1303,6 +1347,44 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return newSampleSize, indices, Vs
 
+    def calulateSampleLossForVariable(self, lcVariables, lcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples):
+        lcSampleSize = sampleSize
+        if eliminateDuplicateSamples:
+            lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize, currentDevice)
+
+        # Calculate loss value
+        if eliminateDuplicateSamples: 
+            lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
+        else:
+            # lossTensor = torch.clone(lcSuccesses)
+            lossTensor = torch.ones(lcSuccesses.shape).to(currentDevice)
+            #lossTensor = countSuccesses.div_(len(lossList))
+            
+        for i, v in enumerate(lcVariables):
+            currentV = lcVariables[v]
+            
+            if eliminateDuplicateSamples:
+                P = currentV[0][:lcSampleSize] # Tensor with the current variable p (v[0])
+            else:
+                P = currentV[0]
+            oneMinusP = torch.sub(torch.ones(lcSampleSize, device=currentDevice), P) # Tensor with the current variable 1-p
+            
+            if eliminateDuplicateSamples:
+                S = Vs[i, :] #currentV[1] # Sample for the current Variable
+            else:
+                S = currentV[1]
+            notS = torch.sub(torch.ones(lcSampleSize, device=currentDevice), S.float()) # Negation of Sample
+            
+            pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
+            oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
+            
+            cLoss = pS.add(oneMinusPS) # Sum of p and 1-p tensors
+                                            
+            # Multiply the loss
+            lossTensor.mul_(cLoss)
+            
+        return lossTensor, lcSampleSize
+            
     # -- Calculated loss values for logical constraints
     def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False):
         start = process_time() # timer()
@@ -1330,6 +1412,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         lcCounter = 0 # Count processed lcs
         lcLosses = {}
+        canComputeGlobalLoss = True
         for graph in self.myGraph: # Loop through graphs
             for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
                 startLC = process_time_ns() # timer()
@@ -1375,7 +1458,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_lcLosses['loss'] = torch.nansum(lossTensor).item()
                     
                 else: # -----------Sample
-                    # Prepare data
+                    
                     currentDevice = "cpu"
                     for l in lossList:
                         if l and l[0] != None:
@@ -1389,6 +1472,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lcVariables = {} # Unique variables used in all the entry lcs
                     countSuccesses = torch.zeros(sampleSize, device = currentDevice)
                     oneT = torch.ones(sampleSize, device = currentDevice)
+                    
+                    # Prepare data
                     if len(lossList) == 1:
                         for currentFailures in lossList[0]:
                             if currentFailures is None:
@@ -1401,6 +1486,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
                             countSuccesses = countSuccesses.add_(currentSuccesses)
                             
+                        # Collect lc variable
                         for k in sampleInfo.keys():
                             for c in sampleInfo[k]:
                                 if not c:
@@ -1422,6 +1508,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
                                 countSuccesses = countSuccesses.add_(currentSuccesses)
                                 
+                            # Collect lc variable
                             for k in sampleInfo.keys():
                                 for c in sampleInfo[k][i]:
                                     if len(c) > 2:                                        
@@ -1429,53 +1516,53 @@ class gurobiILPOntSolver(ilpOntSolver):
                                             lcVariables[c[2]] = c
                         
                     #lcSuccessesSum = torch.sum(lcSuccesses).item()
+                                    
+                    eliminateDuplicateSamples = False # Eliminate duplicate samples
                     
-                    lcSampleSize = sampleSize
-                    # Eliminate duplicate samples
-                    eliminateDuplicateSamples = False
-                    if eliminateDuplicateSamples:
-                        lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize, currentDevice)
+                    # --- Calculate sample loss for lc variables
+                    current_lcLosses['lossTensor'] = []
+                    current_lcLosses['lcSuccesses'] = []
+                    current_lcLosses['lcVariables'] = []
+                    current_lcLosses['loss'] = []
+                    
+                    # Per each lc entry separately
+                    if lc.sampleEntries:
+                        canComputeGlobalLoss = False # The current global loss algorithm is not able to process data from separate lc entries
+                        current_lcLosses['lcSuccesses'] = successesList
+                        
+                        for i, l in enumerate(lossList):
+                            currentLcVariables = {}
+                            for k in sampleInfo.keys():
+                                for c in sampleInfo[k][i]:
+                                    if len(c) > 2:                                        
+                                        if c[2] not in currentLcVariables:
+                                            currentLcVariables[c[2]] = c
+                                            
+                            
+                            currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, successesList[i], sampleSize, currentDevice, eliminateDuplicateSamples)
+                            
+                            current_lcLosses['lossTensor'].append(currentLossTensor)
+                            current_lcLosses['lcVariables'].append(currentLcVariables)
 
-                    # Calculate loss value
-                    if eliminateDuplicateSamples: 
-                        lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
-                    else:
-                        # lossTensor = torch.clone(lcSuccesses)
-                        lossTensor = torch.ones(lcSuccesses.shape).to(lcSuccesses.device)
-                        #lossTensor = countSuccesses.div_(len(lossList))
-                    for i, v in enumerate(lcVariables):
-                        currentV = lcVariables[v]
-                        
-                        if eliminateDuplicateSamples:
-                            P = currentV[0][:lcSampleSize] # Tensor with the current variable p (v[0])
-                        else:
-                            P = currentV[0]
-                        oneMinusP = torch.sub(torch.ones(lcSampleSize, device=P.device), P) # Tensor with the current variable 1-p
-                        
-                        if eliminateDuplicateSamples:
-                            S = Vs[i, :] #currentV[1] # Sample for the current Variable
-                        else:
-                            S = currentV[1]
-                        notS = torch.sub(torch.ones(lcSampleSize, device=P.device), S.float()) # Negation of Sample
-                        
-                        pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
-                        oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
-                        
-                        cLoss = pS.add(oneMinusPS) # Sum of p and 1-p tensors
-                                                        
-                        # Multiply the loss
-                        lossTensor.mul_(cLoss)
-                        
-                    current_lcLosses['loss'] = torch.nansum(lossTensor).item() # Sum of losses across sample for x|=alfa
+                            currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
+                            current_lcLosses['loss'].append(currentLoss)
 
-                    current_lcLosses['lossTensor'] = lossTensor
-                    current_lcLosses['lcSuccesses'] = lcSuccesses
-                    current_lcLosses['lcVariables'] = lcVariables
+                    else: # Regular calculation for all lc entries at once
+                        lossTensor, lcSampleSize = self.calulateSampleLossForVariable(lcVariables, lcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples)
+                        current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
+
+                        current_lcLosses['lossTensor'].append(lossTensor)
+                        current_lcLosses['lcSuccesses'].append(lcSuccesses)
+                        current_lcLosses['lcVariables'].append(lcVariables)
                 
+                    # Calculate processing time
                     endLC = process_time_ns() # timer()
                     elapsedInNsLC = endLC - startLC
                     elapsedInMsLC = elapsedInNsLC/1000000
                     
+                    if lc.sampleEntries:
+                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
+                                               %(lcName, len(lossList), len(lcVariables), elapsedInMsLC))
                     if eliminateDuplicateSamples: 
                         self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %ims'
                                                %(lcName, len(lossList), len(lcVariables), lcSampleSize, elapsedInMsLC))
@@ -1488,7 +1575,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLogger.info('Processed %i logical constraints'%(lcCounter))
         self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
               
-        if sample:
+        if sample and canComputeGlobalLoss:
             if sampleGlobalLoss: # Calculate global sample loss  
                 globalLossT = torch.zeros(sampleSize, device = currentDevice)
                 globalSuccesses = torch.ones(sampleSize, device = currentDevice)
@@ -1511,7 +1598,7 @@ class gurobiILPOntSolver(ilpOntSolver):
     
                 self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
                 self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            elif False: # TODO
+            elif False: #omputeGlobalLoss:
                 globalLossT = torch.zeros(sampleSize, device = currentDevice)
                 for lc in lcLosses:
                     globalLossT = globalLossT.add_(lcLosses[lc]['lossTensor']) 
@@ -1522,8 +1609,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         end = process_time() # timer()
         elapsedInS = end - start
         
-        self.myLogger.info('End Loss Calculation - elapsed time: %is'%(elapsedInS))
-        self.myLoggerTime.info('End Loss Calculation - elapsed time: %is'%(elapsedInS))
+        self.myLogger.info('End Loss Calculation - total time: %is'%(elapsedInS))
+        self.myLoggerTime.info('End Loss Calculation - total time: %is'%(elapsedInS))
         self.myLogger.info('')
         self.myLoggerTime.info('')
 

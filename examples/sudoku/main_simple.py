@@ -113,50 +113,11 @@ with Graph('global') as graph:
     
     FIXED = True
     
-    ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True)
+    ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True, sampleEntries = True)
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(9):
-        # andL(
-        #     exactL(v[1](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[2](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[3](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[4](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[5](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[6](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[7](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[8](path = (eqL(empty_entry, "rows", {row_num})))),
-        #     exactL(v[9](path = (eqL(empty_entry, "rows", {row_num}))))
-        # )
-
-        # andL(
-        #     exactL(v[1](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[2](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[3](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[4](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[5](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[6](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[7](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[8](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[9](path = (eqL(empty_entry, "cols", {row_num}))))
-        # )
-
-        # andL(
-        #     exactL(v[1](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[2](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[3](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[4](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[5](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[6](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[7](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[8](path = (eqL(empty_entry, "tables", {row_num})))),
-        #     exactL(v[9](path = (eqL(empty_entry, "tables", {row_num}))))
-        # )
-        # for index in range(1, 10):        
-        #     exactL(v[index](path = (eqL(empty_entry, "rows", {row_num}))))
-        #     exactL(v[index](path = (eqL(empty_entry, "cols", {row_num})))),
-        #     exactL(v[index](path = (eqL(empty_entry, "tables", {row_num}))))
         andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
         andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
         andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
@@ -381,7 +342,7 @@ def testSudokuPrediction(entries, predictionP = None):
             if prediction[row][col] != label:
                 print("Prediction fixed wrong at %i:%i is %i should be %i"%(row,col,prediction[row][col],label))            
             
-   
+
     print("fixedSud:\n %s"%(fixedSud))
 
     for i in range(9):
@@ -430,12 +391,12 @@ for datanode in program1.populate(trainreader):
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
 
-trainingNo = 10
+trainingNo = 200
 for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
+                    Optim=lambda param: torch.optim.SGD(param, lr=1), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")
@@ -458,6 +419,7 @@ for i in range(trainingNo):
                 count += 1
                 
         print("Count of sudoku entries different from label- %s"%(count))
+        
 
 ### make the table
 for datanode in program.populate(trainreader):
