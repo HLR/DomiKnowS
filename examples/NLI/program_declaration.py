@@ -2,16 +2,18 @@ import torch
 from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from model import RobertClassification, NLI_Robert, RobertaTokenizerMulti
-from utils import check_symmetric
+from utils import check_symmetric, check_transitive
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
 def program_declaration(cur_device, *,
-                        sym_relation: bool = False, primaldual: bool = False, iml: bool = False, beta= 0.5):
+                        sym_relation: bool = False, tran_relation: bool = False, primaldual: bool = False, iml: bool = False, beta= 0.5):
     from graph_senetences import graph, sentence, entailment, neutral, \
-        contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2
+        contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2, \
+        transitive, t_sent1, t_sent2, t_sent3
 
     graph.detach()
+    # Reading directly from data table
     sentence_group["premises"] = ReaderSensor(keyword="premises", device=cur_device)
     sentence_group["hypothesises"] = ReaderSensor(keyword="hypothesises", device=cur_device)
     sentence_group["entailment_list"] = ReaderSensor(keyword="entailment_list", device=cur_device)
@@ -20,7 +22,7 @@ def program_declaration(cur_device, *,
 
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x])
-
+    # Making individual data from batch
     def make_sentence(premises, hypothesises, ent_list, cont_list, neu_list):
         ent_int_list = str_to_int_list(ent_list.split("@@"))
         cont_int_list = str_to_int_list(cont_list.split("@@"))
@@ -62,10 +64,19 @@ def program_declaration(cur_device, *,
                                          device=cur_device)
     sentence[contradiction] = FunctionalSensor(sentence_group_contains, "cont_list", forward=read_label,
                                                label=True, device=cur_device)
+    poi_list = [sentence[entailment], sentence[contradiction], sentence[neutral]]
+    # Using symmetric relation
     if sym_relation:
         symmetric[s_sent1.reversed, s_sent2.reversed] = CompositionCandidateSensor(
             relations=(s_sent1.reversed, s_sent2.reversed),
             forward=check_symmetric, device=cur_device)
+        poi_list.append(symmetric)
+
+    if tran_relation:
+        transitive[t_sent1.reversed, t_sent2.reversed, t_sent3.reversed] = CompositionCandidateSensor(
+            relations=(t_sent1.reversed, t_sent2.reversed, t_sent3.reversed),
+            forward=check_transitive, device=cur_device)
+        poi_list.append(transitive)
 
     from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
@@ -73,12 +84,6 @@ def program_declaration(cur_device, *,
     from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
-    # Creating the program to create model
-    # Pdual with lr = .5 1 3
-    # IMP with lr = [0, 1] 0.5
-    poi_list = [sentence[entailment], sentence[contradiction], sentence[neutral]]
-    if sym_relation:
-        poi_list.append(symmetric)
     program = None
     if primaldual:
         print("Using Primal Dual Program")

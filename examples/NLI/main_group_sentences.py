@@ -22,17 +22,17 @@ def main(args):
     testing_file = "test.csv"
 
     augment_file = "data/snli_genadv_1000_dev.jsonl"
-    #augment_file = None
+    # Loading Test and Train data
     test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
                                            batch_size=args.batch_size, augment_file=augment_file)
 
     train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_sample,
                                             batch_size=args.batch_size)
-
+    # Load Augmentation data
     augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
                                               augment_file="data/snli_genadv_1000_dev.jsonl")
-
-    program = program_declaration(cur_device, sym_relation=args.sym_relation,
+    # Declare Program
+    program = program_declaration(cur_device, sym_relation=args.sym_relation, tran_relation=args.tran_relation,
                                   primaldual=args.primaldual, iml=args.iml, beta=args.beta)
 
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
@@ -117,6 +117,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
 
     parser.add_argument('--sym_relation', dest='sym_relation', default=False, help="Using symmetric relation",
+                        type=bool)
+    parser.add_argument('--tran_relation', dest='tran_relation', default=False, help="Using transitive relation",
                         type=bool)
     parser.add_argument('--pmd', dest='primaldual', default=False, help="Using primaldual model or not",
                         type=bool)

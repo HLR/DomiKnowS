@@ -23,8 +23,7 @@ with Graph('Useful_arg') as graph:
     orL(entailment, neutral, contradiction)
 
     # Example Constrain
-    # True => ENT(X1, X1)
-    # Ent(X1, X2) + Ent(X2, X3) => Ent(X1, X3)
+
     symmetric = Concept(name="symmetric")
     s_sent1, s_sent2 = symmetric.has_a(arg1=sentence, arg2=sentence)
 
@@ -38,5 +37,9 @@ with Graph('Useful_arg') as graph:
     ifL(andL(contradiction('x'), symmetric('s', path=('x', symmetric))),
         contradiction(path=('s', s_sent2)))
 
-
+    # Ent(X1, X2) + Ent(X2, X3) => Ent(X1, X3)
+    transitive = Concept("transitive")
+    t_sent1, t_sent2, t_sent3 = transitive.has_a(arg11=sentence, arg22=sentence, arg33=sentence)
+    ifL(andL(entailment('x'), transitive("t", path=('x', transitive)), entailment(path=('t', t_sent2))),
+        entailment(path=('t', t_sent3)))
 

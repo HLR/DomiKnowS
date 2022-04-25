@@ -25,6 +25,7 @@ python main_group_sentences.py --lr 1e-5 --training_sample 100000 --epoch 5 --ba
 - testing_sample: number of testing sample will be used
 - batch_size: batch size of sample
 - sym_relation: using symmetric relation or not
+- tran_relation: using transitive relation or not
 - pmd: using primaldual model
 - iml: using iml model
 - beta: beta for pmd or iml model
@@ -33,12 +34,12 @@ python main_group_sentences.py --lr 1e-5 --training_sample 100000 --epoch 5 --ba
 #### Large Train Set  
 Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
 --- | :---: | :---: | :---: | :---: | :---: | ---:
-100000 | 5 | 1e-5 | ILP | w/o symmetric | 83.89 (Dev Augmentation included) | 
-100000 | 5 | 1e-5 | ILP | Symmetric | 85.392 (Dev Aug included) |
-100000 | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 82.99 (Dev Aug included) |
-100000 | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 83.508 (Dev Aug included) |
+100000 | 5 | 1e-5 | ILP | w/o symmetric | 83.89 (Dev Augmentation included) | Not Test 
+100000 | 5 | 1e-5 | ILP | Symmetric | 85.392 (Dev Aug included) | Not Test
+100000 | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 82.99 (Dev Aug included) | Not Test
+100000 | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 83.508 (Dev Aug included) | Not Test
 100000 | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 84.12 (Running in progress) | 73.800
-150000 | 5 | 1e-5 | ILP | Symmetric | 85.167 (Dev Aug included) |
+150000 | 5 | 1e-5 | ILP | Symmetric | 85.167 (Dev Aug included) | Not Test
 
 
 #### Small Train Set  
