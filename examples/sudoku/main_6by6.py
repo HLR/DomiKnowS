@@ -49,26 +49,20 @@ class SudokuReader(RegrReader):
             board[p//side][p%side] = 0
         board = torch.tensor(board)
 
-        board = torch.tensor([[6, 4, 0, 1, 0, 0, 8, 5, 9],
-                 [8, 9, 5, 6, 0, 4, 2, 7, 0],
-                 [0, 0, 0, 9, 0, 5, 0, 3, 4],
-                 [0, 3, 6, 0, 4, 8, 9, 2, 0],
-                 [9, 0, 2, 3, 0, 7, 0, 6, 5],
-                 [0, 7, 4, 0, 9, 6, 0, 8, 0],
-                 [4, 6, 0, 0, 2, 3, 5, 0, 8],
-                 [0, 0, 7, 0, 0, 9, 0, 4, 0],
-                 [3, 0, 8, 4, 0, 1, 0, 0, 0],
+        board = torch.tensor([[0, 4, 1, 0, 3, 0],
+                 [0, 0, 3, 5, 1, 0],
+                 [4, 1, 0, 0, 2, 5],
+                 [0, 3, 5, 4, 6, 0],
+                 [1, 0, 2, 6, 0, 3],
+                 [3, 0, 0, 0, 0, 2]
                  ])
 
-        F = torch.tensor([[6, 4, 3, 1, 7, 2, 8, 5, 9],
-                 [8, 9, 5, 6, 3, 4, 2, 7, 1],
-                 [7, 2, 1, 9, 8, 5, 6, 3, 4],
-                 [1, 3, 6, 5, 4, 8, 9, 2, 7],
-                 [9, 8, 2, 3, 1, 7, 4, 6, 5],
-                 [5, 7, 4, 2, 9, 6, 1, 8, 3],
-                 [4, 6, 9, 7, 2, 3, 5, 1, 8],
-                 [2, 1, 7, 8, 5, 9, 3, 4, 6],
-                 [3, 5, 8, 4, 6, 1, 7, 9, 2],
+        F = torch.tensor([[5, 4, 1, 2, 3, 6],
+                 [6, 2, 3, 5, 1, 4],
+                 [4, 1, 6, 3, 2, 5],
+                 [2, 3, 5, 4, 6, 1],
+                 [1, 5, 2, 6, 4, 3],
+                 [3, 6, 4, 1, 5, 2]
                  ])
     
         return [{"board": board, "F": F}]
@@ -82,7 +76,7 @@ class SudokuReader(RegrReader):
         return item['F']
     
     def getsizeval(self, item):
-        return 9, 9
+        return 6, 6
     
     
 trainreader = SudokuReader("randn", type="raw")
@@ -139,7 +133,7 @@ with Graph('global') as graph:
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
-    for row_num in range(9):
+    for row_num in range(6):
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
@@ -169,7 +163,7 @@ class Conv2dSame(torch.nn.Module):
 class SudokuSolver(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W = torch.nn.Parameter(torch.rand((81,9)))
+        self.W = torch.nn.Parameter(torch.rand((36,6)))
         
     def __call__(self, X):
         
@@ -305,7 +299,7 @@ program = SampleLossProgram(
         sample = True,
         sampleSize=2000, 
         sampleGlobalLoss = False,
-        beta=50
+        beta=10
         )
 
 # program1 = SolverPOIProgram(
@@ -345,7 +339,7 @@ def testSudokuPrediction(entries, predictionP = None):
     if predictionP != None:
         prediction = predictionP
     else:
-        prediction = torch.zeros((9,9))
+        prediction = torch.zeros((6,6))
         for entry in entries:
             row = entry.getAttribute('rows').item()
             col = entry.getAttribute('cols').item()
@@ -355,7 +349,7 @@ def testSudokuPrediction(entries, predictionP = None):
           
     print("Prediction:\n %s"%(prediction))
      
-    fixedSud = torch.zeros((9,9)) #[[None for i in range(9)] for i in range(9)]
+    fixedSud = torch.zeros((6,6)) #[[None for i in range(6)] for i in range(6)]
     for entry in entries:
         # t = entry.getAttribute(empty_entry_label, 'ILP')
         row = entry.getAttribute('rows').item()
@@ -372,11 +366,11 @@ def testSudokuPrediction(entries, predictionP = None):
 
     print("fixedSud:\n %s"%(fixedSud))
 
-    for i in range(9):
-        if len(prediction[i][:].unique()) != 9:
+    for i in range(6):
+        if len(prediction[i][:].unique()) != 6:
             print("Prediction wrong at row %i - %s"%(i,prediction[i][:]))  
         
-        if len(prediction[:][i].unique()) != 9:
+        if len(prediction[:][i].unique()) != 6:
             print("Prediction wrong at col %i - %s"%(i,prediction[:][i]))
         
         r, c = divmod(i, 3)   
@@ -389,8 +383,8 @@ def testSudokuPrediction(entries, predictionP = None):
         currentTable = torch.index_select(currentTable, 1, cIndices)
         #print("currentTable:\n %s"%(currentTable))
 
-        currentTable = torch.reshape(currentTable, (1,9))
-        if len(currentTable.unique()) != 9:
+        currentTable = torch.reshape(currentTable, (1,6))
+        if len(currentTable.unique()) != 6:
             print("Prediction wrong at table %i - %s"%(i,currentTable))
     
 for datanode in program1.populate(trainreader):
@@ -435,7 +429,7 @@ for i in range(trainingNo):
         row_values = []
         col_values = []
         tab_values = []
-        for i in range(9):
+        for i in range(6):
             row_values.append([])
             col_values.append([])
             tab_values.append([])
@@ -459,13 +453,13 @@ for i in range(trainingNo):
         errors = 0
         for row_vals in row_values:
             un = set(row_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
         for col_vals in col_values:
             un = set(col_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
         for tab_vals in tab_values:
             un = set(tab_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
                 
         print("Count of sudoku entries different from label- %s"%(count))
         print("Count of sudoku violations- %s"%(errors))
@@ -476,8 +470,8 @@ for datanode in program.populate(trainreader):
     datanode.inferILPResults(empty_entry_label, fun=None)
 
     print("Datanode %s"%(datanode))
-    table = torch.zeros(9, 9)
-    ilpTable = torch.zeros(9, 9)
+    table = torch.zeros(6, 6)
+    ilpTable = torch.zeros(6, 6)
 
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
     for entry in entries:

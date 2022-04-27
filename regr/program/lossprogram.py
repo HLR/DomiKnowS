@@ -76,8 +76,8 @@ class LossProgram(LearningBasedProgram):
         #     COptim = Optim
         # if COptim is not None and list(self.model.parameters()):
         #     self.copt = COptim(self.model.parameters())
-        if list(self.model.parameters()):
-            self.copt = torch.optim.SGD(self.model.parameters(), lr=c_lr, momentum=c_momentum)
+        if list(self.cmodel.parameters()):
+            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=c_lr)
         else:
             self.copt = None
             
@@ -256,6 +256,38 @@ class SampleLossProgram(LossProgram):
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)
 
+
+    def train(
+        self,
+        training_set,
+        valid_set=None,
+        test_set=None,
+        # COptim=None,  # SGD only
+        c_lr=0.05,
+        c_momentum=0.9,
+        c_warmup_iters=100,  # warmup
+        c_freq=10,
+        c_freq_increase=5,  # d
+        c_freq_increase_freq=1,
+        c_lr_decay=4,  # strategy
+        c_lr_decay_param=1,  # param in the strategy
+        **kwargs):
+        
+        return super().train(
+            training_set=training_set,
+            valid_set=valid_set,
+            test_set=test_set,
+            c_lr=c_lr,
+            c_momentum=c_momentum,
+            c_warmup_iters=c_warmup_iters,  # warmup
+            c_freq=c_freq,
+            c_freq_increase=c_freq_increase,  # d
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay,  # strategy
+            c_lr_decay_param=c_lr_decay_param,  # param in the strategy
+            **kwargs)
+
+
     def train_epoch(
         self, dataset,
         c_warmup_iters=0,  # warmup
@@ -287,6 +319,12 @@ class SampleLossProgram(LossProgram):
 
                 self.opt.step()
                 iter += 1
+            
+            if (
+                self.copt is not None and
+                loss
+            ):
+                self.copt.step()
             
             yield (loss, metric, *output[:1])
 

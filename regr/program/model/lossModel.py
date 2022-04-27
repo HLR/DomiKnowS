@@ -120,16 +120,27 @@ class SampleLosslModel(torch.nn.Module):
             warnings.warn('No logical constraint detected in the graph. '
                           'PrimalDualModel will not generate any constraint loss.')
             
+        self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
+        self.lmbd_index = {}
+        
+        for i, (key, lc) in enumerate(self.constr.items()):
+            self.lmbd_index[key] = i
             
         self.reset_parameters()
         self.loss = MacroAverageTracker(lambda x:x)
 
     def reset_parameters(self):
-        pass
+        torch.nn.init.constant_(self.lmbd, 0.0)
 
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()
+
+    def get_lmbd(self, key):
+        if self.lmbd[self.lmbd_index[key]] < 0:
+            with torch.no_grad():
+                self.lmbd[self.lmbd_index[key]] = 0
+        return self.lmbd[self.lmbd_index[key]]
 
     def forward(self, builder, build=None):
         if build is None:
@@ -156,17 +167,22 @@ class SampleLosslModel(torch.nn.Module):
                 if key not in self.constr:
                     continue
                 # loss_value = loss['loss']
-
+                epsilon = 0.0
+                key_loss = 0
                 for i, lossTensor in enumerate(loss['lossTensor']):
                     lcSuccesses = loss['lcSuccesses'][i]
                     if lossTensor.sum().item() != 0:
                         tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
                         true_val = lossTensor[tidx]
-                        if true_val.sum().item() != 0:
+                        if true_val.sum().item() != 0: 
                             loss_value = true_val.sum() / lossTensor.sum()
-                            loss_ = -1 * torch.log(loss_value)
-                            self.loss[key](loss_)
-                            lmbd_loss.append(loss_) 
+                            loss_value = epsilon - ( -1 * torch.log(loss_value) )
+                            # loss_value = -1 * torch.log(loss_value)
+                            with torch.no_grad():
+                                min_val = 10 * loss_value
+                            loss_ = - (self.get_lmbd(key) - min_val) * loss_value
+                            key_loss += loss_
+                            # loss_ = min_val * loss_value
                         else:
                             loss_ = 0
     
@@ -187,6 +203,10 @@ class SampleLosslModel(torch.nn.Module):
                         
                     else:
                         loss_ = 0
+
+                if key_loss != 0:
+                    self.loss[key](key_loss)
+                    lmbd_loss.append(key_loss) 
                 
             lmbd_loss = sum(lmbd_loss)
         
