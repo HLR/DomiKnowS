@@ -22,32 +22,32 @@ from random import sample
 
 class SudokuReader(RegrReader):
     def parse_file(self):
-        base  = 3
-        side  = base*base
+        # base  = 3
+        # side  = base*base
 
         # pattern for a baseline valid solution
-        def pattern(r,c): return (base*(r%base)+r//base+c)%side
+        # def pattern(r,c): return (base*(r%base)+r//base+c)%side
 
-        # randomize rows, columns and numbers (of valid base pattern)
-        from random import sample
-        def shuffle(s): return sample(s,len(s)) 
-        rBase = range(base) 
-        rows  = [ g*base + r for g in shuffle(rBase) for r in shuffle(rBase) ] 
-        cols  = [ g*base + c for g in shuffle(rBase) for c in shuffle(rBase) ]
-        nums  = shuffle(range(1,base*base+1))
+        # # randomize rows, columns and numbers (of valid base pattern)
+        # from random import sample
+        # def shuffle(s): return sample(s,len(s)) 
+        # rBase = range(base) 
+        # rows  = [ g*base + r for g in shuffle(rBase) for r in shuffle(rBase) ] 
+        # cols  = [ g*base + c for g in shuffle(rBase) for c in shuffle(rBase) ]
+        # nums  = shuffle(range(1,base*base+1))
 
-        # produce board using randomized baseline pattern
-        board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
-        F = []
-        for i in board:
-            F.append([])
-            for j in i:
-                F[-1].append(j)
-        squares = side*side
-        empties = squares * 3//4
-        for p in sample(range(squares),empties):
-            board[p//side][p%side] = 0
-        board = torch.tensor(board)
+        # # produce board using randomized baseline pattern
+        # board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
+        # F = []
+        # for i in board:
+        #     F.append([])
+        #     for j in i:
+        #         F[-1].append(j)
+        # squares = side*side
+        # empties = squares * 3//4
+        # for p in sample(range(squares),empties):
+        #     board[p//side][p%side] = 0
+        # board = torch.tensor(board)
 
         board = torch.tensor([[0, 4, 1, 0, 3, 0],
                  [0, 0, 3, 5, 1, 0],
@@ -118,7 +118,7 @@ with Graph('global') as graph:
     (same_table_arg1, same_table_arg2) = same_table.has_a(table1=empty_entry, table2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, 
-                                    values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
+                                    values=["v1", "v2", "v3", "v4", "v5", "v6"])
     v = [getattr(empty_entry_label, a) for a in ('', *empty_entry_label.enum)]
 
     ### Constraints
@@ -138,7 +138,7 @@ with Graph('global') as graph:
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
 
-        for j in range(1, 10):
+        for j in range(1, 7):
             exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
             exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
             exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
@@ -201,11 +201,12 @@ def makeSoduko(*prev, data):
     cols = cols.unsqueeze(0).repeat(num_rows, 1).reshape(num_rows*num_cols)
 
     tables = []
+    passing = int(num_cols/3)
     for i in range(data[0]*data[1]):
         row = rows[i]
         col = cols[i]
-        x = int((col.item() / 3)) * 3
-        x += int(row.item() / 3) 
+        x = int((col.item() / 3))
+        x += int(row.item() / 2) * passing
         tables.append(x)
     tables = torch.tensor(tables)
 
@@ -373,19 +374,19 @@ def testSudokuPrediction(entries, predictionP = None):
         if len(prediction[:][i].unique()) != 6:
             print("Prediction wrong at col %i - %s"%(i,prediction[:][i]))
         
-        r, c = divmod(i, 3)   
-        r *=3
-        c *=3
-        rIndices = torch.tensor([r, r+1, r+2])
-        cIndices = torch.tensor([c, c+1, c+2])
+        # r, c = divmod(i, 3)   
+        # r *=3
+        # c *=3
+        # rIndices = torch.tensor([r, r+1, r+2])
+        # cIndices = torch.tensor([c, c+1, c+2])
 
-        currentTable = torch.index_select(prediction, 0, rIndices)
-        currentTable = torch.index_select(currentTable, 1, cIndices)
-        #print("currentTable:\n %s"%(currentTable))
+        # currentTable = torch.index_select(prediction, 0, rIndices)
+        # currentTable = torch.index_select(currentTable, 1, cIndices)
+        # #print("currentTable:\n %s"%(currentTable))
 
-        currentTable = torch.reshape(currentTable, (1,6))
-        if len(currentTable.unique()) != 6:
-            print("Prediction wrong at table %i - %s"%(i,currentTable))
+        # currentTable = torch.reshape(currentTable, (1,6))
+        # if len(currentTable.unique()) != 6:
+        #     print("Prediction wrong at table %i - %s"%(i,currentTable))
     
 for datanode in program1.populate(trainreader):
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
