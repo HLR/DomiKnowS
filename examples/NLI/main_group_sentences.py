@@ -85,13 +85,13 @@ def main(args):
                     neutral if predict == "neutral" else contradiction
                 correct_augment += 1 if sentence.getAttribute(actual_check, 'label') else 0
             count_augment += 1
-
-    print("Accuracy = %.2f%%" % (correct / len(result["predict"]) * 100))
-    print("Accuracy on augment data = %.3f%%" % (correct_augment / count_augment))
+    print("Using Symmetric:", args.sym_relation)
+    print("Using ILP:", not args.softmax)
+    print("Using PML:", args.primaldual)
+    print("Accuracy = %.3f%%" % (correct / len(result["predict"]) * 100))
+    print("Accuracy on augment data = %.3f%%" % (correct_augment * 100 / count_augment))
     result = pd.DataFrame(result)
     training_size = args.training_sample
-    result.to_csv("report-{:}-{:}-{:}--sym:{:}.csv".format(training_size, args.testing_sample,
-                                                             args.cur_epoch, args.sym_relation))
     import os
     output_file = "report-{:}-{:}-{:}--sym:{:}.csv".format(args.training_sample, args.testing_sample,
                                                            args.cur_epoch, args.sym_relation)

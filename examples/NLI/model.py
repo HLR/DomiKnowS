@@ -30,7 +30,6 @@ class RobertClassification(nn.Module):
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
-
         x = self.start(x)
         x = torch.relu(x)
         x = self.dropout(x)
@@ -54,6 +53,7 @@ class RobertaTokenizer:
         input_ids = encoded_input["input_ids"]
         attention_mask = encoded_input["attention_mask"]
         return torch.LongTensor(input_ids), torch.LongTensor(attention_mask)
+
 
 class RobertaTokenizerMulti:
     def __init__(self, max_length=256):
