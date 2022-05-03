@@ -1347,7 +1347,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return newSampleSize, indices, Vs
 
-    def calulateSampleLossForVariable(self, lcVariables, lcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples):
+    def calulateSampleLossForVariable(self, lcVariables, lcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples, replace_mul=False):
         lcSampleSize = sampleSize
         if eliminateDuplicateSamples:
             lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize, currentDevice)
@@ -1357,7 +1357,11 @@ class gurobiILPOntSolver(ilpOntSolver):
             lossTensor = torch.index_select(lcSuccesses, dim=0, index=indices)
         else:
             # lossTensor = torch.clone(lcSuccesses)
-            lossTensor = torch.ones(lcSuccesses.shape).to(currentDevice)
+            if replace_mul:
+                lossTensor = torch.zeros(lcSuccesses.shape).to(currentDevice)
+            else:
+                lossTensor = torch.ones(lcSuccesses.shape).to(currentDevice)
+
             #lossTensor = countSuccesses.div_(len(lossList))
             
         for i, v in enumerate(lcVariables):
@@ -1381,8 +1385,13 @@ class gurobiILPOntSolver(ilpOntSolver):
             cLoss = pS.add(oneMinusPS) # Sum of p and 1-p tensors
                                             
             # Multiply the loss
-            lossTensor.mul_(cLoss)
-            
+            if replace_mul:
+                lossTensor = lossTensor + torch.log(cLoss)
+            else:
+                lossTensor.mul_(cLoss)
+        
+        if replace_mul:
+            lossTensor = torch.exp(lossTensor)
         return lossTensor, lcSampleSize
             
     # -- Calculated loss values for logical constraints
