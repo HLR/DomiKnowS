@@ -32,20 +32,22 @@ class Net(torch.nn.Module):
 
         #print("net out", y[0], y[1])
 
+        '''y = torch.zeros((2, 10))
+
+        y[0, 3] = 1.0
+        y[1, 5] = 1.0'''
+
         return torch.unsqueeze(y, dim=0)
 
-def sum_func(d_distr, prob_func = lambda d: F.softmax(d, dim=0)):
-    # given d_1 and d_2 logits, get P(d_1) and P(d_2)
-    # using P(d_1) and P(d_2), find P(d_1 + d_2)
+
+def sum_func(d_distr):
+    # given P(d_1) and P(d_2), find P(d_1 + d_2)
     
     #print("sum in", d_1_distr, d_2_distr)
     
     #print(d_1_distr)
 
-    d_1_distr, d_2_distr = d_distr
-
-    Pd_1 = prob_func(d_1_distr)
-    Pd_2 = prob_func(d_2_distr)
+    Pd_1, Pd_2 = d_distr
     
     #print(Pd_1, Pd_1.shape)
     
@@ -59,18 +61,26 @@ def sum_func(d_distr, prob_func = lambda d: F.softmax(d, dim=0)):
     
     return Pd_sum
 
-class SumFunc(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
 
-    def forward(self, d_distr):
-        return sum_func(d_distr)
-
-
-def print_and_output(x, f=lambda x: x.shape, do_print=True):
+def I_pr(x, f=lambda x: x, do_print=True, prefix=""):
     if do_print:
-        print(f(x))
+        print(prefix + str(f(x)))
     return x
+
+
+def probs_to_digit(probs, digit_idx, digit):
+    # input: (1, 2, 10)
+    # prob distribution -> prob of single digit
+    # output: (2,)
+    p_digit = probs[0, digit_idx, digit]
+    return torch.unsqueeze(torch.tensor([1 - p_digit, p_digit], requires_grad=True), dim=0)
+
+
+def probs_to_sum(sum_probs, digit_sum):
+    # input: (1, 19)
+    # output: (2,)
+    p_sum = sum_probs[0, digit_sum]
+    return torch.unsqueeze(torch.tensor([1 - p_sum, p_sum], requires_grad=True), dim=0)
 
 
 def build_program():
@@ -80,22 +90,53 @@ def build_program():
     # (1, 2, 784) -> (2, 784) -> (2, 10) -> (1, 2, 10)
     images['logits'] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.digitRange))
 
-    # (1, 2, 10) -> (1, 10) to digit enums
-    images[d0] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 0]))
+    # (1, 2, 10) -> (1, 2, 10)
+    images['probs'] = FunctionalSensor('logits', forward=lambda x: F.softmax(x, dim=2))
 
-    # (1, 2, 10) -> (1, 10) to digit enums
-    images[d1] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 1]))
+    # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19)
+    images['sum_probs'] = FunctionalSensor('probs', forward=lambda x: torch.unsqueeze(sum_func(x[0]), dim=0))
 
-    # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = FunctionalSensor('logits', forward=lambda x: print_and_output(torch.unsqueeze(sum_func(torch.squeeze(x, dim=0)), dim=0)))
+    # [lbl] -> label
+    images['label'] = ReaderSensor(keyword='summation')
 
-    # [lbl] -> summation enums
-    images[s] = ReaderSensor(keyword='summation', label=True)
+    for d_nm, d_c in zip(digits_0, digits_0_c):
+        d_number = name_to_number(d_nm)
+
+        images[d_c] = FunctionalSensor('probs', d_number,
+                                       forward=lambda x, n: I_pr(probs_to_digit(x, 0, n),
+                                                              prefix=f"d0_{n} ", do_print=False))
+
+    for d_nm, d_c in zip(digits_1, digits_1_c):
+        d_number = name_to_number(d_nm)
+
+        images[d_c] = FunctionalSensor('probs', d_number,
+                                       forward=lambda x, n: I_pr(probs_to_digit(x, 1, n),
+                                                                 prefix=f"d1_{n} ", do_print=False))
+
+    for s_nm, s_c in zip(summations, summations_c):
+        s_number = name_to_number(s_nm)
+
+        images[s_c] = FunctionalSensor('sum_probs', s_number,
+                                       forward=lambda x, n: I_pr(probs_to_sum(x, n),
+                                                              prefix=f"s_{n} ", do_print=False))
+
+        def label_to_binary(lbl, n):
+            if lbl[0] == n:
+                return torch.tensor([1])
+            return torch.tensor([0])
+
+        images[s_c] = FunctionalSensor('label', s_number,
+                                       forward=lambda x, n: I_pr(label_to_binary(x, n),
+                                                                prefix=f"s'_{n} ", do_print=False), label=True)
 
     program = SolverPOIProgram(graph,
                                poi=(images,),
                                inferTypes=['ILP', 'local/argmax'],
-                               loss=MacroAverageTracker(NBCrossEntropyLoss()))
+                               loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                               metric={
+                                   'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                   'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+                               )
 
     return program
 

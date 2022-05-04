@@ -1,6 +1,6 @@
 from regr.graph.concept import EnumConcept
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL
+from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL, exactL
 from regr.graph.relation import disjoint
 import config
 from itertools import product
@@ -24,36 +24,37 @@ for sum_val in range(config.summationRange):
 
 numbers = digits_0 + digits_1 + summations
 
+def name_to_number(name):
+    return int(name.split('_')[-1])
+
 with Graph(name='global') as graph:
     images = Concept(name='images')
 
-    d0 = images(name='digits0',
-                ConceptClass=EnumConcept,
-                values=digits_0)
+    def make(name):
+        return images(name=name)
 
-    d1 = images(name='digits1',
-               ConceptClass=EnumConcept,
-               values=digits_1)
+    digits_0_c = list(map(make, digits_0))
+    digits_1_c = list(map(make, digits_1))
+    summations_c = list(map(make, summations))
 
-    s = images(name='summations',
-                ConceptClass=EnumConcept,
-                values=summations)
+    exactL(*digits_0_c)
+    exactL(*digits_1_c)
+    exactL(*summations_c)
 
-    for d0_nm in digits_0:
-        for d1_nm in digits_1:
-            d0_val = int(d0_nm.split('_')[-1])
-            d1_val = int(d1_nm.split('_')[-1])
+    numbers_c = digits_0_c + digits_1_c + summations_c
 
-            sum_val = d0_val + d1_val
-            sum_nm = f's_{sum_val}'
+    for d0_nm, d0_c in zip(digits_0, digits_0_c):
+        for d1_nm, d1_c in zip(digits_1, digits_1_c):
+            d0_number = name_to_number(d0_nm)
+            d1_number = name_to_number(d1_nm)
 
-            #print(d0_nm, d1_nm, sum_nm)
+            sum_val = d0_number + d1_number
 
             ifL(
-                getattr(d0, d0_nm)(),
+                d0_c,
                 ifL(
-                    getattr(d1, d1_nm)(),
-                    getattr(s, sum_nm)()
+                    d1_c,
+                    summations_c[sum_val]
                 ),
                 active=True
             )
