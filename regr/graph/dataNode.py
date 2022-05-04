@@ -86,6 +86,8 @@ class DataNode:
             self.attributes = attributes                 # Dictionary with node's attributes
         else:
             self.attributes = {}
+            
+        self.current_device = 'auto'
                      
     class DataNodeError(Exception):
         pass
@@ -2247,6 +2249,13 @@ class DataNodeBuilder(dict):
             if len(_dataNode) > 0:  
                 returnDn = _dataNode[0]
                 
+                # Set the torch device
+                returnDn.current_device = device
+                if returnDn.current_device=='auto': # if not set use cpu or cuda if available
+                    returnDn.current_device = 'cpu'
+                    if torch.cuda.is_available():
+                        returnDn.current_device = 'cuda'
+                    
                 if len(_dataNode) == 1:
                     _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:

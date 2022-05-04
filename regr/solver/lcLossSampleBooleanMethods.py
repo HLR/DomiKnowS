@@ -182,7 +182,8 @@ class booleanMethods(ilpBooleanProcessor):
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-
+        self.grad = False
+        
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
     

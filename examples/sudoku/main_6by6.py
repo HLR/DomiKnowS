@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from regr.data.reader import RegrReader
-from regr.program.lossprogram import SampleLossProgram
+from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
 from regr.utils import setProductionLogMode
 
@@ -302,6 +302,17 @@ program = SampleLossProgram(
         sampleGlobalLoss = False,
         beta=50
         )
+
+from regr.program.metric import PRF1Tracker, DatanodeCMMetric
+
+programRLoss = PrimalDualProgram(
+       graph, SolverModel, 
+       poi=(sudoku, empty_entry, same_row, same_col, same_table),
+       inferTypes=['ILP', 'local/argmax'],
+       loss=MacroAverageTracker(NBCrossEntropyLoss()),
+       metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+       )
 
 # program1 = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],

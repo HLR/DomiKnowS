@@ -647,24 +647,28 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:   
                 return ([None], (None, [None]))
         
-        if loss: # Loss calculation
-            try:
-                vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
-            except IndexError: 
-                vDn = None
-        else: # If ILP inference
+        if not loss: # ------- If ILP inference
             if "xP" in xPkey:
                 vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept
             else:
                 vDn = dn.getAttribute(xPkey)[e[2]] # Get ILP variable for the concept
+                
+            return vDn # ILP variable for ILP inference
+        
+        # ----- Loss calculation
+        
+        try:
+            vDn = dn.getAttribute(xPkey)[e[1]] # Get value for the concept 
+        except IndexError: 
+            vDn = None
     
-        if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
-            vDn = vDn.item()  
-             
         if not sample:
             return vDn # Return here if not sample
         
         # --- Generate sample 
+        if torch.is_tensor(vDn) and (len(vDn.shape) == 0 or len(vDn.shape) == 1 and vDn.shape[0] == 1):
+            vDn = vDn.item()  
+             
         sampleSize = p
 
         xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
@@ -1226,7 +1230,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     else:
                         maxP = p
                
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = dn.current_device # torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
             # ----------- If solution found model - return best result          
             if maxP:
@@ -1299,15 +1303,21 @@ class gurobiILPOntSolver(ilpOntSolver):
            
         endResultPrep = process_time() # timer()
         elapsedResultPrepInMs = (endResultPrep - endOptimize) *1000
-        self.myLoggerTime.info('ILP Preparing Return Results - time: %ism'%(elapsedResultPrepInMs))
+        self.myLoggerTime.info('ILP Preparing Return Results - time: %ims'%(elapsedResultPrepInMs))
             
+        self.myLogger.info('')
+
         end = process_time() # timer()
         elapsedInS = end - start
         
-        self.myLogger.info('')
-        
-        self.myLogger.info('End ILP Inferencing - total time: %is'%(elapsedInS))
-        self.myLoggerTime.info('End ILP Inferencing - total time: %is'%(elapsedInS))
+        if elapsedInS > 1:
+            self.myLogger.info('End ILP Inferencing - total time: %is'%(elapsedInS))
+            self.myLoggerTime.info('End ILP Inferencing - total time: %is'%(elapsedInS))
+        else:
+            elapsedInMs = (end - start) *1000
+            self.myLogger.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
+            
         self.myLogger.info('')
         self.myLoggerTime.info('')
         
@@ -1417,6 +1427,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.info('Calculating loss ')
             self.myLoggerTime.info('Calculating loss ')
 
+        myBooleanMethods.current_device = dn.current_device
+        
         key = "/local/softmax"
         
         lcCounter = 0 # Count processed lcs
@@ -1468,13 +1480,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 else: # -----------Sample
                     
-                    currentDevice = "cpu"
-                    for l in lossList:
-                        if l and l[0] != None:
-                            currentDevice = l[0].device
-                            break
-                    # if lossList[0] != None and lossList[0][0] != None:
-                    #     currentDevice = lossList[0][0].device
+                    currentDevice = dn.current_device
                         
                     successesList = [] # Entry lcs successes
                     lcSuccesses = torch.ones(sampleSize, device = currentDevice) # Consolidated successes for all the entry lcs
