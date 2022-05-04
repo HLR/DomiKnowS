@@ -1400,8 +1400,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 lossTensor.mul_(cLoss)
         
-        if replace_mul:
-            lossTensor = torch.exp(lossTensor)
+        # if replace_mul:
+        #     lossTensor = torch.exp(lossTensor)
         return lossTensor, lcSampleSize
             
     # -- Calculated loss values for logical constraints

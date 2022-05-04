@@ -140,14 +140,14 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(9):
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
 
-        for j in range(1, 10):
-            exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
-            exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
-            exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
+        # for j in range(1, 10):
+        #     exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
+        #     exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
+        #     exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
    
 import torch.nn as nn
 
@@ -305,7 +305,7 @@ program = SampleLossProgram(
         sample = True,
         sampleSize=2000, 
         sampleGlobalLoss = False,
-        beta=50
+        beta=1
         )
 
 # program1 = SolverPOIProgram(
@@ -418,12 +418,12 @@ for datanode in program1.populate(trainreader):
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
 
-trainingNo = 220
+trainingNo = 500
 for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.Adam(param, lr=0.05), collectLoss=None, device='auto')
+                    Optim=lambda param: torch.optim.Adam(param, lr=1), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")
@@ -469,6 +469,10 @@ for i in range(trainingNo):
                 
         print("Count of sudoku entries different from label- %s"%(count))
         print("Count of sudoku violations- %s"%(errors))
+
+    if count == 0:
+        print("value achieved at step ", i)
+        break
         
 
 ### make the table
