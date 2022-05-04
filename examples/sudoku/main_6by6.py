@@ -308,10 +308,9 @@ from regr.program.metric import PRF1Tracker, DatanodeCMMetric
 programRLoss = PrimalDualProgram(
        graph, SolverModel, 
        poi=(sudoku, empty_entry, same_row, same_col, same_table),
-       inferTypes=['ILP', 'local/argmax'],
+       inferTypes=['local/argmax'],
        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-       metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-            'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+       metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
        )
 
 # program1 = SolverPOIProgram(
