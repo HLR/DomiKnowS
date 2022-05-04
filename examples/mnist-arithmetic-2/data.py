@@ -11,7 +11,7 @@ DATA_PATH = 'data'
 
 def make_sum(samples):
     return {
-        'pixels': torch.stack(tuple(map(lambda s: s[0], samples)), dim=0),
+        'pixels': torch.unsqueeze(torch.stack(tuple(map(lambda s: s[0], samples)), dim=0), dim=0),
         'summation': [sum(map(lambda s: s[1], samples))],
     }
 
@@ -28,7 +28,7 @@ def get_readers():
 
     trainloader = DataLoader(
         trainset,
-        sampler=random.sample(range(0, 50000), config.num_train * 2),
+        sampler=random.sample(range(0, 2000), config.num_train * 2),
         shuffle=False,
         batch_size=2,
         collate_fn=make_sum

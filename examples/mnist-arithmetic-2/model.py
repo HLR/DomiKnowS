@@ -28,19 +28,24 @@ class Net(torch.nn.Module):
                     #   nn.LogSoftmax(dim=1)
                       )
     def forward(self, x):
-        y = self.recognition(x)
-        return y
+        y = self.recognition(torch.squeeze(x, dim=0))
 
-def sum_func(d_1_distr, d_2_distr, prob_func = lambda d: F.softmax(d, dim=1)):
+        #print("net out", y[0], y[1])
+
+        return torch.unsqueeze(y, dim=0)
+
+def sum_func(d_distr, prob_func = lambda d: F.softmax(d, dim=0)):
     # given d_1 and d_2 logits, get P(d_1) and P(d_2)
     # using P(d_1) and P(d_2), find P(d_1 + d_2)
     
-    #print(d_1_distr.shape)
+    #print("sum in", d_1_distr, d_2_distr)
     
     #print(d_1_distr)
-    
-    Pd_1 = prob_func(d_1_distr)[0]
-    Pd_2 = prob_func(d_2_distr)[0]
+
+    d_1_distr, d_2_distr = d_distr
+
+    Pd_1 = prob_func(d_1_distr)
+    Pd_2 = prob_func(d_2_distr)
     
     #print(Pd_1, Pd_1.shape)
     
@@ -54,28 +59,41 @@ def sum_func(d_1_distr, d_2_distr, prob_func = lambda d: F.softmax(d, dim=1)):
     
     return Pd_sum
 
+class SumFunc(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, d_distr):
+        return sum_func(d_distr)
+
+
+def print_and_output(x, f=lambda x: x.shape, do_print=True):
+    if do_print:
+        print(f(x))
+    return x
+
+
 def build_program():
-    class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
+    # (1, 2, 784)
+    images['pixels'] = ReaderSensor(keyword='pixels')
 
-    image['pixels'] = ReaderSensor(keyword='pixels')
+    # (1, 2, 784) -> (2, 784) -> (2, 10) -> (1, 2, 10)
+    images['logits'] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.digitRange))
 
-    addition[operand1.reversed] = ConstantEdgeSensor(image['pixels'], data=[[1,0]], relation=operand1.reversed)
-    addition[operand2.reversed] = ConstantEdgeSensor(image['pixels'], data=[[0,1]], relation=operand1.reversed)
+    # (1, 2, 10) -> (1, 10) to digit enums
+    images[d0] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 0]))
 
-    image['logits'] = ModuleLearner('pixels', module=Net(config.input_size, config.hidden_sizes, config.digitRange))
+    # (1, 2, 10) -> (1, 10) to digit enums
+    images[d1] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 1]))
 
-    image[digit] = FunctionalSensor('logits', forward=lambda x: x)
+    # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
+    images[s] = FunctionalSensor('logits', forward=lambda x: print_and_output(torch.unsqueeze(sum_func(torch.squeeze(x, dim=0)), dim=0)))
 
-    def test(x1, x2):
-        print(x1.shape, x2.shape)
-        
-        return torch.zeros(summationRange)
-
-    addition[summation] = ReaderSensor(keyword='summation', label=True)
-    addition[summation] = FunctionalSensor(operand2.reversed('logits'), operand2.reversed('logits'), forward=sum_func)
+    # [lbl] -> summation enums
+    images[s] = ReaderSensor(keyword='summation', label=True)
 
     program = SolverPOIProgram(graph,
-                               poi=(image, addition, summation),
+                               poi=(images,),
                                inferTypes=['ILP', 'local/argmax'],
                                loss=MacroAverageTracker(NBCrossEntropyLoss()))
 

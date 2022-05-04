@@ -26,6 +26,10 @@ def get_classification_report(program, reader, total=None, verbose=False):
 
         addition = node.getRelationLinks()['addition'][0]
 
+        addition.inferILPResults()
+
+        print(addition.getAttributes())
+
         operands = addition.getRelationLinks()
         operand1 = operands['operand1'][0]
         operand2 = operands['operand2'][0]
@@ -39,6 +43,8 @@ def get_classification_report(program, reader, total=None, verbose=False):
 
         label_sum = addition.getAttribute('<summation>/label')
 
+        print(addition.getAttributes().keys())
+
         pred_all.append(pred_sum.item())
         label_all.append(label_sum)
 
@@ -47,19 +53,19 @@ def get_classification_report(program, reader, total=None, verbose=False):
 
     return classification_report(label_all, pred_all)
 
+
 program = build_program()
 
-#print(get_classification_report(program, validloader, total=config.num_valid))
+print(get_classification_report(program, validloader, total=config.num_valid, verbose=True))
 
 for i in range(10):
     print("EPOCH", i)
 
     program.train(trainloader,
-              valid_set=validloader,
-              test_set=testloader,
               train_epoch_num=1,
               Optim=partial(torch.optim.SGD,
                             lr=config.lr),
               device='auto')
 
-    print(get_classification_report(program, validloader, total=config.num_valid))
+    # validation
+    print(get_classification_report(program, trainloader, total=config.num_train))
