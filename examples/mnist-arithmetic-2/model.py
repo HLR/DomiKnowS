@@ -151,7 +151,7 @@ def build_program():
 
     images['digit0_label'] = ReaderSensor(keyword='digit0')
     images['digit1_label'] = ReaderSensor(keyword='digit1')
-    images['summation_label'] = ReaderSensor(keyword='summation', label=True)
+    images['summation_label'] = ReaderSensor(keyword='summation')
 
     # (1, 2, 10) -> (1, 10) to digit enums
     #images[d0] = ModuleLearner('logits', module=Net())
@@ -169,36 +169,7 @@ def build_program():
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
     images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
-
-    for d_nm, d_c in zip(digits_0, digits_0_c):
-        d_number = name_to_number(d_nm)
-
-        images[d_c] = FunctionalSensor('probs', d_number,
-                                       forward=lambda x, n: I_pr(probs_to_digit(x, 0, n),
-                                                              prefix=f"d0_{n} ", do_print=False))
-
-    for d_nm, d_c in zip(digits_1, digits_1_c):
-        d_number = name_to_number(d_nm)
-
-        images[d_c] = FunctionalSensor('probs', d_number,
-                                       forward=lambda x, n: I_pr(probs_to_digit(x, 1, n),
-                                                                 prefix=f"d1_{n} ", do_print=False))
-
-    for s_nm, s_c in zip(summations, summations_c):
-        s_number = name_to_number(s_nm)
-
-        images[s_c] = FunctionalSensor('sum_probs', s_number,
-                                       forward=lambda x, n: I_pr(probs_to_sum(x, n),
-                                                              prefix=f"s_{n} ", do_print=False))
-
-        def label_to_binary(lbl, n):
-            if lbl[0] == n:
-                return torch.tensor([1])
-            return torch.tensor([0])
-
-        images[s_c] = FunctionalSensor('label', s_number,
-                                       forward=lambda x, n: I_pr(label_to_binary(x, n),
-                                                                prefix=f"s'_{n} ", do_print=False), label=True)
+    images[s] = ReaderSensor(keyword='summation', label=True)
 
     '''program = IMLProgram(graph,
                        poi=(images,),
