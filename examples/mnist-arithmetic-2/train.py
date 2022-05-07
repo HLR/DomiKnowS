@@ -11,8 +11,6 @@ from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
 
-from graph import digits_0, digits_1, summations, name_to_number
-
 from model import build_program
 import config
 
