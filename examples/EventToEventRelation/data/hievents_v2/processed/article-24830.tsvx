@@ -1,0 +1,56 @@
+Text	Three climbers returning from the summit of Mount Everest have died and two others are missing, a Nepalese official said. Gyanendra Shrestha, of the Mountaineering Department, said a German, a Nepal-born Canadian and a Korean died on Saturday while descending from the 29,035ft (8,850m) summit. Mr Shrestha said the weather was favourable on Friday and Saturday morning but a wind storm swept the mountain later on Saturday. Mr Shrestha, stationed at Everest base camp, said he was waiting for details. German doctor Eberhard Schaaf, 61, is believed to have suffered high altitude cerebral oedema. The Nepalese-Canadian climber was Shriya Shah, while the Korean mountaineer's name has yet to be confirmed.
+Event	1	returning	Occurrence	15
+Event	2	died	Occurrence	63
+Event	3	said	Reporting	116
+Event	4	said	Reporting	176
+Event	5	died	Occurrence	226
+Event	6	descending	Occurrence	249
+Event	7	said	Reporting	307
+Event	8	swept	Occurrence	387
+Event	9	said	Reporting	470
+Event	10	suffered	Occurrence	558
+Relation	1	2	SuperSub	true	returning	died
+Relation	1	3	NoRel	true	returning	said
+Relation	1	4	NoRel	true	returning	said
+Relation	1	5	SuperSub	true	returning	died
+Relation	1	6	Coref	true	returning	descending
+Relation	1	7	NoRel	true	returning	said
+Relation	1	8	SubSuper	true	returning	swept
+Relation	1	9	NoRel	true	returning	said
+Relation	1	10	SuperSub	true	returning	suffered
+Relation	2	3	NoRel	true	died	said
+Relation	2	4	NoRel	true	died	said
+Relation	2	5	Coref	true	died	died
+Relation	2	6	SubSuper	true	died	descending
+Relation	2	7	NoRel	true	died	said
+Relation	2	8	SubSuper	true	died	swept
+Relation	2	9	NoRel	true	died	said
+Relation	2	10	SubSuper	true	died	suffered
+Relation	3	4	NoRel	true	said	said
+Relation	3	5	NoRel	true	said	died
+Relation	3	6	NoRel	true	said	descending
+Relation	3	7	NoRel	true	said	said
+Relation	3	8	NoRel	true	said	swept
+Relation	3	9	NoRel	true	said	said
+Relation	3	10	NoRel	true	said	suffered
+Relation	4	5	NoRel	true	said	died
+Relation	4	6	NoRel	true	said	descending
+Relation	4	7	NoRel	true	said	said
+Relation	4	8	NoRel	true	said	swept
+Relation	4	9	NoRel	true	said	said
+Relation	4	10	NoRel	true	said	suffered
+Relation	5	6	SubSuper	true	died	descending
+Relation	5	7	NoRel	true	died	said
+Relation	5	8	SubSuper	true	died	swept
+Relation	5	9	NoRel	true	died	said
+Relation	5	10	SubSuper	true	died	suffered
+Relation	6	7	NoRel	true	descending	said
+Relation	6	8	SubSuper	true	descending	swept
+Relation	6	9	NoRel	true	descending	said
+Relation	6	10	SuperSub	true	descending	suffered
+Relation	7	8	NoRel	true	said	swept
+Relation	7	9	NoRel	true	said	said
+Relation	7	10	NoRel	true	said	suffered
+Relation	8	9	NoRel	true	swept	said
+Relation	8	10	SuperSub	true	swept	suffered
+Relation	9	10	NoRel	true	said	suffered

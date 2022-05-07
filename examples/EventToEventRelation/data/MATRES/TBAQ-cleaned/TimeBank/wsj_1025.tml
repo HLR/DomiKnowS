@@ -1,0 +1,50 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_1025</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-26" temporalFunction="false" functionInDocument="CREATION_TIME">10/26/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891026-0031 = 891026 891026-0031.
+Business Brief -- Sotheby's Holdings Inc.: @ Third-Period Loss Narrowed @ On Operating Revenue Gain 10/26/89 WALL STREET JOURNAL (J) BID EARNINGS (ERN)
+</EXTRAINFO>
+
+<TEXT>
+Sotheby's Holdings Inc., the parent of the auction house Sotheby's, <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> its net <EVENT eid="e2" class="OCCURRENCE" stem="loss">loss</EVENT> for the seasonally slow <TIMEX3 tid="t21" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third quarter</TIMEX3> <EVENT eid="e4" class="OCCURRENCE" stem="narrow">narrowed</EVENT> from <TIMEX3 tid="t22" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t21">a year earlier</TIMEX3> on a <EVENT eid="e5" class="OCCURRENCE" stem="leap">leap</EVENT> in operating revenue.
+
+The New York-based company <EVENT eid="e7" class="REPORTING" stem="report">reported</EVENT> a <TIMEX3 tid="t36" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> net <EVENT eid="e8" class="OCCURRENCE" stem="loss">loss</EVENT> of $5.1 million, or 10 cents a share, compared with a <TIMEX3 tid="t37" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t36">year-earlier</TIMEX3> net <EVENT eid="e10" class="OCCURRENCE" stem="loss">loss</EVENT> of $6.2 million, or 12 cents a share. Operating revenue <EVENT eid="e11" class="OCCURRENCE" stem="surge">surged</EVENT> 54% in <TIMEX3 tid="t38" type="DATE" value="1989-QX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the latest period</TIMEX3> to $42.9 million from $27.7 million.
+
+The company <EVENT eid="e12" class="REPORTING" stem="say">said</EVENT> 80% of its auction business is usually <EVENT eid="e14" class="OCCURRENCE" stem="conduct">conducted</EVENT> in the <TIMEX3 tid="t40" type="SET" value="XXXX-Q2" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t41" quant="EVERY">second</TIMEX3> and <TIMEX3 tid="t41" type="SET" value="XXXX-Q4" temporalFunction="false" functionInDocument="NONE" quant="EVERY">fourth quarters</TIMEX3>, with <TIMEX3 tid="t42" type="DATE" value="1989-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the current quarter</TIMEX3> having <EVENT eid="e43" class="ASPECTUAL" stem="begin">begun</EVENT> " extremely well."
+</TEXT>
+
+<MAKEINSTANCE eventID="e7" eiid="ei63" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei68" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei66" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei59" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e43" eiid="ei69" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei62" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e2" eiid="ei60" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei61" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei64" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e12" eiid="ei67" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei65" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l17" relType="IDENTITY" eventInstanceID="ei67" relatedToEventInstance="ei63" />
+<TLINK lid="l16" relType="IS_INCLUDED" eventInstanceID="ei63" relatedToTime="t0" />
+<TLINK lid="l1" relType="AFTER" timeID="t0" relatedToEventInstance="ei69" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei59" relatedToTime="t0" />
+<TLINK lid="l3" relType="ENDS" eventInstanceID="ei60" relatedToTime="t21" />
+<TLINK lid="l4" relType="ENDS" eventInstanceID="ei61" relatedToTime="t22" />
+<TLINK lid="l5" relType="DURING" eventInstanceID="ei61" relatedToTime="t21" />
+<TLINK lid="l6" relType="SIMULTANEOUS" eventInstanceID="ei62" relatedToEventInstance="ei61" />
+<TLINK lid="l7" relType="ENDED_BY" timeID="t36" relatedToEventInstance="ei64" />
+<TLINK lid="l8" relType="ENDS" eventInstanceID="ei65" relatedToTime="t37" />
+<TLINK lid="l9" relType="INCLUDES" timeID="t38" relatedToEventInstance="ei66" />
+<TLINK lid="l10" relType="INCLUDES" timeID="t40" relatedToEventInstance="ei68" />
+<TLINK lid="l11" relType="INCLUDES" timeID="t41" relatedToEventInstance="ei68" />
+<TLINK lid="l12" relType="BEGUN_BY" timeID="t42" relatedToEventInstance="ei69" />
+<SLINK lid="l13" relType="EVIDENTIAL" eventInstanceID="ei59" subordinatedEventInstance="ei60" />
+<SLINK lid="l14" relType="EVIDENTIAL" eventInstanceID="ei63" subordinatedEventInstance="ei64" />
+<SLINK lid="l15" relType="EVIDENTIAL" eventInstanceID="ei67" subordinatedEventInstance="ei68" />
+
+</TimeML>

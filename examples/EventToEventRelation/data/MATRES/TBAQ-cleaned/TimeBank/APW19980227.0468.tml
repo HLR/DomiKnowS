@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>APW19980227.0468</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="TIME" value="1998-02-27T07:56:00" temporalFunction="false" functionInDocument="CREATION_TIME">02/27/1998 07:56:00</TIMEX3></DCT>
+
+<EXTRAINFO>
+APW19980227.0468 NEWS STORY 02/27/1998 07:56:00
+w2373 Cx1f wstmr i Cx13 Cx11 BC-Russia-Kalashnikov'sM 1stLd 02-27 0148
+BC-Russia-Kalashnikov's Museum, 1st Ld
+Moscow mayor donates funds to build Kalashnikov museum
+UR Eds: SUBS 3rd graf to conform to AP style.
+QL
+</EXTRAINFO>
+
+<TEXT>
+MOSCOW (AP)_ The mayor of Moscow has <EVENT eid="e1" class="OCCURRENCE" stem="allocate">allocated</EVENT> funds to <EVENT eid="e2" class="I_ACTION" stem="help">help</EVENT> <EVENT eid="e3" class="OCCURRENCE" stem="build">build</EVENT> a museum in honor of Mikhail Kalashnikov, the Russian who <EVENT eid="e6" class="OCCURRENCE" stem="give">gave</EVENT> his name to the world's most widely wielded weapon, <EVENT eid="e91" class="REPORTING" stem="accord">according</EVENT> to a news agency <EVENT eid="e55" class="REPORTING" stem="report">report</EVENT> <TIMEX3 tid="t15" type="DATE" value="1998-02-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3>. Kalashnikov <EVENT eid="e7" class="OCCURRENCE" stem="design">designed</EVENT> the AK-47 automatic rifle, famed for its reliability and effectiveness. Together with its derivatives, the Kalashnikov rifle has been <EVENT eid="e8" class="OCCURRENCE" stem="use">used</EVENT> by the police and armies of 55 countries and an assortment of guerrillas, terrorists and just plain thugs around the globe. Seventy-five million copies of the rifle have been <EVENT eid="e9" class="OCCURRENCE" stem="build">built</EVENT> since it <EVENT eid="e10" class="ASPECTUAL" stem="enter">entered</EVENT> <EVENT eid="e79" class="STATE" stem="production">production</EVENT> in <TIMEX3 tid="t16" type="DATE" value="1947-02" temporalFunction="false" functionInDocument="NONE">February 1947</TIMEX3>, making it history's most widely distributed weapon. UR The ITAR-Tass, 4th graf pvs (pvs/ji)
+</TEXT>
+
+<LASTEXTRAINFO>
+(PROFILE (WS SL:BC-Russia-Kalashnikov's Museum, 1st Ld; CT:i; (REG:EURO;) (REG:BRIT;) (REG:SCAN;) (REG:MEST;) (REG:AFRI;) (REG:INDI;) (REG:ENGL;) (REG:ASIA;) (LANG:ENGLISH;)) )
+AP-NY-02-27-98 0756EST
+</LASTEXTRAINFO>
+
+<MAKEINSTANCE eventID="e8" eiid="ei112" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e79" eiid="ei115" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e7" eiid="ei111" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei104" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei106" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei116" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei110" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e3" eiid="ei107" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei114" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei109" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei113" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei108" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l15" relType="BEGUN_BY" eventInstanceID="ei115" relatedToEventInstance="ei114" />
+<TLINK lid="l1" relType="IDENTITY" eventInstanceID="ei109" relatedToEventInstance="ei110" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei111" relatedToEventInstance="ei112" />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei110" relatedToTime="t15" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei108" relatedToEventInstance="ei104" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei111" relatedToTime="t16"  />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei114" relatedToTime="t16"  />
+<TLINK lid="l7" relType="BEGUN_BY" eventInstanceID="ei113" relatedToTime="t16"  />
+<TLINK lid="l8" relType="AFTER" eventInstanceID="ei113" relatedToEventInstance="ei111" />
+<TLINK lid="l9" relType="AFTER" eventInstanceID="ei113" relatedToEventInstance="ei114"  />
+<SLINK lid="l14" relType="EVIDENTIAL" eventInstanceID="ei109" subordinatedEventInstance="ei104" />
+<SLINK lid="l10" relType="MODAL" eventInstanceID="ei106" subordinatedEventInstance="ei107" />
+<SLINK lid="l11" relType="EVIDENTIAL" eventInstanceID="ei110" subordinatedEventInstance="ei104" />
+<SLINK lid="l12" relType="MODAL" eventInstanceID="ei104" subordinatedEventInstance="ei116" />
+<ALINK lid="l13" relType="INITIATES" eventInstanceID="ei114" relatedToEventInstance="ei115" />
+
+</TimeML>

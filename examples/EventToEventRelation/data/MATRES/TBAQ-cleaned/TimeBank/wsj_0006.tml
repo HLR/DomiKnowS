@@ -1,0 +1,42 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0006</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0188 = 891102 891102-0188.
+Pacific First Financial Corp. 11/02/89 WALL STREET JOURNAL (J) PFFS T.RYL TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) SAVINGS AND LOANS, THRIFTS, CREDIT UNIONS (SAL) SEATTLE
+</EXTRAINFO>
+
+<TEXT>
+Pacific First Financial Corp. <EVENT eid="e1" class="REPORTING">said</EVENT> shareholders <EVENT eid="e2" class="OCCURRENCE">approved</EVENT> its <EVENT eid="e8" class="OCCURRENCE">acquisition</EVENT> by Royal Trustco Ltd. of Toronto for $27 a share, or $212 million.
+
+The thrift holding company <EVENT eid="e4" class="REPORTING">said</EVENT> it <EVENT eid="e5" class="I_STATE">expects</EVENT> to <EVENT eid="e6" class="OCCURRENCE">obtain</EVENT> regulatory <EVENT eid="e19" class="OCCURRENCE">approval</EVENT> and <EVENT eid="e7" class="ASPECTUAL">complete</EVENT> the <EVENT eid="e20" class="OCCURRENCE">transaction</EVENT> by <TIMEX3 tid="t10" type="DATE" value="1989-12-31" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">year-end</TIMEX3>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e19" eiid="ei79" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei76" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei77" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei73" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei81" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e2" eiid="ei74" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei80" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei78" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei75" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei80" relatedToTime="t10"  />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei73" relatedToTime="t0" />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei74" relatedToEventInstance="ei73" />
+<TLINK lid="l4" relType="AFTER" eventInstanceID="ei74" relatedToEventInstance="ei75" />
+<TLINK lid="l5" relType="SIMULTANEOUS" eventInstanceID="ei76" relatedToEventInstance="ei73" />
+<TLINK lid="l6" relType="ENDS" eventInstanceID="ei80" relatedToEventInstance="ei81" />
+<SLINK lid="l13" relType="MODAL" eventInstanceID="ei74" subordinatedEventInstance="ei75" />
+<SLINK lid="l7" relType="EVIDENTIAL" eventInstanceID="ei73" subordinatedEventInstance="ei74" />
+<SLINK lid="l8" relType="EVIDENTIAL" eventInstanceID="ei76" subordinatedEventInstance="ei77" />
+<SLINK lid="l9" relType="MODAL" eventInstanceID="ei77" subordinatedEventInstance="ei78" />
+<SLINK lid="l10" relType="FACTIVE" eventInstanceID="ei78" subordinatedEventInstance="ei79" />
+<SLINK lid="l11" relType="MODAL" eventInstanceID="ei77" subordinatedEventInstance="ei80" />
+<ALINK lid="l12" relType="CULMINATES" eventInstanceID="ei80" relatedToEventInstance="ei81" />
+
+</TimeML>

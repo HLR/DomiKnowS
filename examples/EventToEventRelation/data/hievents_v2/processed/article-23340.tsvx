@@ -1,0 +1,172 @@
+Text	A rally car has crashed into a crowd in France, killing two people. The toll could worsen given some of the injuries sustained by other people in the crowd. During a race in southern France on Saturday, the orange-coloured car which had been competing in the 14th annual Maures regional rally, swerved off the road, killing a 20-year-old spectator and a fifty year old race marshal. At least fifteen other people, including children and youths, were badly injured. Two teenagers are listed in critical condition. It was the second day of the rally at Plan-de-la-Tour in the Var region near the Mediterranean coast. Local prosecutors have been sent to the scene to investigate. According to initial reports, a rally driver mistook an intersection where he was supposed to turn right. He is reported to have driven straight ahead, plunging into the spectators. The driver of the vehicle is also in hospital suffering shock. 
+Event	1	crashed	Occurrence	16
+Event	2	killing	Occurrence	48
+Event	3	sustained	Occurrence	117
+Event	4	race	Occurrence	166
+Event	5	competing	Occurrence	242
+Event	6	rally	Occurrence	287
+Event	7	swerved	Occurrence	294
+Event	8	killing	Occurrence	316
+Event	9	injured	Occurrence	456
+Event	10	listed	Reporting	483
+Event	11	rally	Occurrence	542
+Event	12	sent	I_Action	643
+Event	13	reports	Reporting	698
+Event	14	mistook	Occurrence	722
+Event	15	reported	Reporting	789
+Event	16	driven	Occurrence	806
+Event	17	plunging	Occurrence	829
+Event	18	suffering	Occurrence	905
+Relation	1	2	SuperSub	true	crashed	killing
+Relation	1	3	NoRel	true	crashed	sustained
+Relation	1	4	NoRel	true	crashed	race
+Relation	1	5	NoRel	true	crashed	competing
+Relation	1	6	NoRel	true	crashed	rally
+Relation	1	7	SubSuper	true	crashed	swerved
+Relation	1	8	SuperSub	true	crashed	killing
+Relation	1	9	NoRel	true	crashed	injured
+Relation	1	10	NoRel	true	crashed	listed
+Relation	1	11	NoRel	true	crashed	rally
+Relation	1	12	NoRel	true	crashed	sent
+Relation	1	13	NoRel	true	crashed	reports
+Relation	1	14	NoRel	true	crashed	mistook
+Relation	1	15	NoRel	true	crashed	reported
+Relation	1	16	SubSuper	true	crashed	driven
+Relation	1	17	Coref	true	crashed	plunging
+Relation	1	18	NoRel	true	crashed	suffering
+Relation	2	3	NoRel	true	killing	sustained
+Relation	2	4	NoRel	true	killing	race
+Relation	2	5	NoRel	true	killing	competing
+Relation	2	6	NoRel	true	killing	rally
+Relation	2	7	SubSuper	true	killing	swerved
+Relation	2	8	Coref	true	killing	killing
+Relation	2	9	NoRel	true	killing	injured
+Relation	2	10	NoRel	true	killing	listed
+Relation	2	11	NoRel	true	killing	rally
+Relation	2	12	NoRel	true	killing	sent
+Relation	2	13	NoRel	true	killing	reports
+Relation	2	14	NoRel	true	killing	mistook
+Relation	2	15	NoRel	true	killing	reported
+Relation	2	16	SubSuper	true	killing	driven
+Relation	2	17	SubSuper	true	killing	plunging
+Relation	2	18	NoRel	true	killing	suffering
+Relation	3	4	NoRel	true	sustained	race
+Relation	3	5	NoRel	true	sustained	competing
+Relation	3	6	NoRel	true	sustained	rally
+Relation	3	7	NoRel	true	sustained	swerved
+Relation	3	8	NoRel	true	sustained	killing
+Relation	3	9	Coref	true	sustained	injured
+Relation	3	10	NoRel	true	sustained	listed
+Relation	3	11	NoRel	true	sustained	rally
+Relation	3	12	NoRel	true	sustained	sent
+Relation	3	13	NoRel	true	sustained	reports
+Relation	3	14	NoRel	true	sustained	mistook
+Relation	3	15	NoRel	true	sustained	reported
+Relation	3	16	NoRel	true	sustained	driven
+Relation	3	17	NoRel	true	sustained	plunging
+Relation	3	18	NoRel	true	sustained	suffering
+Relation	4	5	SuperSub	true	race	competing
+Relation	4	6	Coref	true	race	rally
+Relation	4	7	NoRel	true	race	swerved
+Relation	4	8	NoRel	true	race	killing
+Relation	4	9	NoRel	true	race	injured
+Relation	4	10	NoRel	true	race	listed
+Relation	4	11	Coref	true	race	rally
+Relation	4	12	NoRel	true	race	sent
+Relation	4	13	NoRel	true	race	reports
+Relation	4	14	NoRel	true	race	mistook
+Relation	4	15	NoRel	true	race	reported
+Relation	4	16	NoRel	true	race	driven
+Relation	4	17	NoRel	true	race	plunging
+Relation	4	18	NoRel	true	race	suffering
+Relation	5	6	SubSuper	true	competing	rally
+Relation	5	7	NoRel	true	competing	swerved
+Relation	5	8	NoRel	true	competing	killing
+Relation	5	9	NoRel	true	competing	injured
+Relation	5	10	NoRel	true	competing	listed
+Relation	5	11	SubSuper	true	competing	rally
+Relation	5	12	NoRel	true	competing	sent
+Relation	5	13	NoRel	true	competing	reports
+Relation	5	14	NoRel	true	competing	mistook
+Relation	5	15	NoRel	true	competing	reported
+Relation	5	16	NoRel	true	competing	driven
+Relation	5	17	NoRel	true	competing	plunging
+Relation	5	18	NoRel	true	competing	suffering
+Relation	6	7	NoRel	true	rally	swerved
+Relation	6	8	NoRel	true	rally	killing
+Relation	6	9	NoRel	true	rally	injured
+Relation	6	10	NoRel	true	rally	listed
+Relation	6	11	Coref	true	rally	rally
+Relation	6	12	NoRel	true	rally	sent
+Relation	6	13	NoRel	true	rally	reports
+Relation	6	14	NoRel	true	rally	mistook
+Relation	6	15	NoRel	true	rally	reported
+Relation	6	16	NoRel	true	rally	driven
+Relation	6	17	NoRel	true	rally	plunging
+Relation	6	18	NoRel	true	rally	suffering
+Relation	7	8	SuperSub	true	swerved	killing
+Relation	7	9	NoRel	true	swerved	injured
+Relation	7	10	NoRel	true	swerved	listed
+Relation	7	11	NoRel	true	swerved	rally
+Relation	7	12	NoRel	true	swerved	sent
+Relation	7	13	NoRel	true	swerved	reports
+Relation	7	14	NoRel	true	swerved	mistook
+Relation	7	15	NoRel	true	swerved	reported
+Relation	7	16	SubSuper	true	swerved	driven
+Relation	7	17	SuperSub	true	swerved	plunging
+Relation	7	18	NoRel	true	swerved	suffering
+Relation	8	9	NoRel	true	killing	injured
+Relation	8	10	NoRel	true	killing	listed
+Relation	8	11	NoRel	true	killing	rally
+Relation	8	12	NoRel	true	killing	sent
+Relation	8	13	NoRel	true	killing	reports
+Relation	8	14	NoRel	true	killing	mistook
+Relation	8	15	NoRel	true	killing	reported
+Relation	8	16	SubSuper	true	killing	driven
+Relation	8	17	SubSuper	true	killing	plunging
+Relation	8	18	NoRel	true	killing	suffering
+Relation	9	10	NoRel	true	injured	listed
+Relation	9	11	NoRel	true	injured	rally
+Relation	9	12	NoRel	true	injured	sent
+Relation	9	13	NoRel	true	injured	reports
+Relation	9	14	NoRel	true	injured	mistook
+Relation	9	15	NoRel	true	injured	reported
+Relation	9	16	NoRel	true	injured	driven
+Relation	9	17	NoRel	true	injured	plunging
+Relation	9	18	NoRel	true	injured	suffering
+Relation	10	11	NoRel	true	listed	rally
+Relation	10	12	NoRel	true	listed	sent
+Relation	10	13	NoRel	true	listed	reports
+Relation	10	14	NoRel	true	listed	mistook
+Relation	10	15	NoRel	true	listed	reported
+Relation	10	16	NoRel	true	listed	driven
+Relation	10	17	NoRel	true	listed	plunging
+Relation	10	18	NoRel	true	listed	suffering
+Relation	11	12	NoRel	true	rally	sent
+Relation	11	13	NoRel	true	rally	reports
+Relation	11	14	NoRel	true	rally	mistook
+Relation	11	15	NoRel	true	rally	reported
+Relation	11	16	NoRel	true	rally	driven
+Relation	11	17	NoRel	true	rally	plunging
+Relation	11	18	NoRel	true	rally	suffering
+Relation	12	13	NoRel	true	sent	reports
+Relation	12	14	NoRel	true	sent	mistook
+Relation	12	15	NoRel	true	sent	reported
+Relation	12	16	NoRel	true	sent	driven
+Relation	12	17	NoRel	true	sent	plunging
+Relation	12	18	NoRel	true	sent	suffering
+Relation	13	14	NoRel	true	reports	mistook
+Relation	13	15	NoRel	true	reports	reported
+Relation	13	16	NoRel	true	reports	driven
+Relation	13	17	NoRel	true	reports	plunging
+Relation	13	18	NoRel	true	reports	suffering
+Relation	14	15	NoRel	true	mistook	reported
+Relation	14	16	SubSuper	true	mistook	driven
+Relation	14	17	NoRel	true	mistook	plunging
+Relation	14	18	NoRel	true	mistook	suffering
+Relation	15	16	NoRel	true	reported	driven
+Relation	15	17	NoRel	true	reported	plunging
+Relation	15	18	NoRel	true	reported	suffering
+Relation	16	17	SuperSub	true	driven	plunging
+Relation	16	18	NoRel	true	driven	suffering
+Relation	17	18	NoRel	true	plunging	suffering

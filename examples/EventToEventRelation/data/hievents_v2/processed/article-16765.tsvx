@@ -1,0 +1,92 @@
+Text	Mexican authorities have found 49 dismembered bodies on a highway near the northern industrial city of Monterrey. The gruesome find is the latest in a string of suspected drug related killings in the country. The body parts were found stuffed into bags in the early hours of Sunday. It follows a similar incident last Wednesday, when 18 victims were found decapitated and dismembered near Mexico's second-largest city, Guadalajara. Both cities are in the state of Nuevo Leon, which has seen escalating violence between rival drug cartels. More than 47,000 people are thought to have been killed in drug-related attacks since President Felipe Calderon launched a crackdown on organized crime in 2006. 
+Event	1	found	Occurrence	25
+Event	2	find	Occurrence	127
+Event	3	killings	HalfGeneric	184
+Event	4	found	Occurrence	229
+Event	5	stuffed	Occurrence	235
+Event	6	incident	Occurrence	304
+Event	7	found	Occurrence	350
+Event	8	decapitated	Occurrence	356
+Event	9	dismembered	Occurrence	372
+Event	10	escalating	StateChange	491
+Event	11	attacks	HalfGeneric	611
+Event	12	launched	I_Action	651
+Event	13	crackdown	Occurrence	662
+Relation	1	2	Coref	true	found	find
+Relation	1	3	NoRel	true	found	killings
+Relation	1	4	Coref	true	found	found
+Relation	1	5	NoRel	true	found	stuffed
+Relation	1	6	NoRel	true	found	incident
+Relation	1	7	NoRel	true	found	found
+Relation	1	8	NoRel	true	found	decapitated
+Relation	1	9	NoRel	true	found	dismembered
+Relation	1	10	NoRel	true	found	escalating
+Relation	1	11	NoRel	true	found	attacks
+Relation	1	12	NoRel	true	found	launched
+Relation	1	13	NoRel	true	found	crackdown
+Relation	2	3	NoRel	true	find	killings
+Relation	2	4	Coref	true	find	found
+Relation	2	5	NoRel	true	find	stuffed
+Relation	2	6	NoRel	true	find	incident
+Relation	2	7	NoRel	true	find	found
+Relation	2	8	NoRel	true	find	decapitated
+Relation	2	9	NoRel	true	find	dismembered
+Relation	2	10	NoRel	true	find	escalating
+Relation	2	11	NoRel	true	find	attacks
+Relation	2	12	NoRel	true	find	launched
+Relation	2	13	NoRel	true	find	crackdown
+Relation	3	4	NoRel	true	killings	found
+Relation	3	5	NoRel	true	killings	stuffed
+Relation	3	6	NoRel	true	killings	incident
+Relation	3	7	NoRel	true	killings	found
+Relation	3	8	NoRel	true	killings	decapitated
+Relation	3	9	NoRel	true	killings	dismembered
+Relation	3	10	SubSuper	true	killings	escalating
+Relation	3	11	SubSuper	true	killings	attacks
+Relation	3	12	NoRel	true	killings	launched
+Relation	3	13	SubSuper	true	killings	crackdown
+Relation	4	5	NoRel	true	found	stuffed
+Relation	4	6	NoRel	true	found	incident
+Relation	4	7	NoRel	true	found	found
+Relation	4	8	NoRel	true	found	decapitated
+Relation	4	9	NoRel	true	found	dismembered
+Relation	4	10	NoRel	true	found	escalating
+Relation	4	11	NoRel	true	found	attacks
+Relation	4	12	NoRel	true	found	launched
+Relation	4	13	NoRel	true	found	crackdown
+Relation	5	6	NoRel	true	stuffed	incident
+Relation	5	7	NoRel	true	stuffed	found
+Relation	5	8	NoRel	true	stuffed	decapitated
+Relation	5	9	NoRel	true	stuffed	dismembered
+Relation	5	10	NoRel	true	stuffed	escalating
+Relation	5	11	NoRel	true	stuffed	attacks
+Relation	5	12	NoRel	true	stuffed	launched
+Relation	5	13	NoRel	true	stuffed	crackdown
+Relation	6	7	SuperSub	true	incident	found
+Relation	6	8	SuperSub	true	incident	decapitated
+Relation	6	9	SuperSub	true	incident	dismembered
+Relation	6	10	SubSuper	true	incident	escalating
+Relation	6	11	SubSuper	true	incident	attacks
+Relation	6	12	NoRel	true	incident	launched
+Relation	6	13	SubSuper	true	incident	crackdown
+Relation	7	8	NoRel	true	found	decapitated
+Relation	7	9	NoRel	true	found	dismembered
+Relation	7	10	SubSuper	true	found	escalating
+Relation	7	11	SubSuper	true	found	attacks
+Relation	7	12	NoRel	true	found	launched
+Relation	7	13	SubSuper	true	found	crackdown
+Relation	8	9	NoRel	true	decapitated	dismembered
+Relation	8	10	SubSuper	true	decapitated	escalating
+Relation	8	11	SubSuper	true	decapitated	attacks
+Relation	8	12	NoRel	true	decapitated	launched
+Relation	8	13	SubSuper	true	decapitated	crackdown
+Relation	9	10	SubSuper	true	dismembered	escalating
+Relation	9	11	SubSuper	true	dismembered	attacks
+Relation	9	12	NoRel	true	dismembered	launched
+Relation	9	13	SubSuper	true	dismembered	crackdown
+Relation	10	11	SubSuper	true	escalating	attacks
+Relation	10	12	NoRel	true	escalating	launched
+Relation	10	13	SubSuper	true	escalating	crackdown
+Relation	11	12	NoRel	true	attacks	launched
+Relation	11	13	SubSuper	true	attacks	crackdown
+Relation	12	13	NoRel	true	launched	crackdown

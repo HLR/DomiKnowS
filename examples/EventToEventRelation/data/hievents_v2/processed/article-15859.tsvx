@@ -1,0 +1,232 @@
+Text	Spain's Telefonica said first-quarter net profit halved after the value of its stake in Telecom Italia plunged following a capital increase and it cut prices in its recession-hit home country. Spain's economy, which sunk into a recession in the first three months of 2012, is not expected to grow again until the end of the year at the earliest. Net profit at the euro zone's largest telecoms company, which operates as o2 in Ireland, fell 54 per cent to E748 million, below the bottom end of analyst forecasts that ranged from E764 million to E1.2 billion. The bottom line was hit after Telefonica wrote down the value of its 10 per cent indirect stake in Telecom Italia to E337 million. Telefonica invested E2.3 billion when it bought the stake in 2008. Italy's biggest telecom player posted a net loss for 2011 after a goodwill writedown on its domestic business due to an economic downturn. Last week Telecom Italia shareholders agreed to refinance its investment vehicle's debt, meaning Telefonica must contribute E277 million to a capital increase and new bond issue. Telefonica's revenue was virtually flat at E15.5 billion as fast growth in Latin America, which accounts for almost half of group revenue, compensated for tough competition in the company's main European markets, where revenues slipped. Telefonica chairman Cesar Alierta said the results were in line with the company's targets and reiterated 2012 earnings and debt forecasts.
+Event	1	said	Reporting	19
+Event	2	halved	StateChange	49
+Event	3	plunged	StateChange	103
+Event	4	increase	StateChange	131
+Event	5	cut	Occurrence	147
+Event	6	sunk	StateChange	216
+Event	7	recession	Occurrence	228
+Event	8	fell	StateChange	435
+Event	9	hit	Occurrence	578
+Event	10	wrote	Occurrence	599
+Event	11	invested	Occurrence	700
+Event	12	bought	Occurrence	730
+Event	13	posted	Reporting	787
+Event	14	loss	Occurrence	800
+Event	15	writedown	Occurrence	831
+Event	16	downturn	Occurrence	885
+Event	17	agreed	I_Action	933
+Event	18	growth	StateChange	1139
+Event	19	compensated	I_Action	1213
+Event	20	slipped	StateChange	1302
+Event	21	said	Reporting	1345
+Relation	1	2	NoRel	true	said	halved
+Relation	1	3	NoRel	true	said	plunged
+Relation	1	4	NoRel	true	said	increase
+Relation	1	5	NoRel	true	said	cut
+Relation	1	6	NoRel	true	said	sunk
+Relation	1	7	NoRel	true	said	recession
+Relation	1	8	NoRel	true	said	fell
+Relation	1	9	NoRel	true	said	hit
+Relation	1	10	NoRel	true	said	wrote
+Relation	1	11	NoRel	true	said	invested
+Relation	1	12	NoRel	true	said	bought
+Relation	1	13	NoRel	true	said	posted
+Relation	1	14	NoRel	true	said	loss
+Relation	1	15	NoRel	true	said	writedown
+Relation	1	16	NoRel	true	said	downturn
+Relation	1	17	NoRel	true	said	agreed
+Relation	1	18	NoRel	true	said	growth
+Relation	1	19	NoRel	true	said	compensated
+Relation	1	20	NoRel	true	said	slipped
+Relation	1	21	NoRel	true	said	said
+Relation	2	3	SuperSub	true	halved	plunged
+Relation	2	4	NoRel	true	halved	increase
+Relation	2	5	SuperSub	true	halved	cut
+Relation	2	6	NoRel	true	halved	sunk
+Relation	2	7	SubSuper	true	halved	recession
+Relation	2	8	Coref	true	halved	fell
+Relation	2	9	Coref	true	halved	hit
+Relation	2	10	SubSuper	true	halved	wrote
+Relation	2	11	NoRel	true	halved	invested
+Relation	2	12	NoRel	true	halved	bought
+Relation	2	13	NoRel	true	halved	posted
+Relation	2	14	NoRel	true	halved	loss
+Relation	2	15	NoRel	true	halved	writedown
+Relation	2	16	NoRel	true	halved	downturn
+Relation	2	17	NoRel	true	halved	agreed
+Relation	2	18	NoRel	true	halved	growth
+Relation	2	19	NoRel	true	halved	compensated
+Relation	2	20	Coref	true	halved	slipped
+Relation	2	21	NoRel	true	halved	said
+Relation	3	4	NoRel	true	plunged	increase
+Relation	3	5	NoRel	true	plunged	cut
+Relation	3	6	NoRel	true	plunged	sunk
+Relation	3	7	SubSuper	true	plunged	recession
+Relation	3	8	SubSuper	true	plunged	fell
+Relation	3	9	SubSuper	true	plunged	hit
+Relation	3	10	SubSuper	true	plunged	wrote
+Relation	3	11	NoRel	true	plunged	invested
+Relation	3	12	NoRel	true	plunged	bought
+Relation	3	13	NoRel	true	plunged	posted
+Relation	3	14	NoRel	true	plunged	loss
+Relation	3	15	NoRel	true	plunged	writedown
+Relation	3	16	NoRel	true	plunged	downturn
+Relation	3	17	NoRel	true	plunged	agreed
+Relation	3	18	NoRel	true	plunged	growth
+Relation	3	19	NoRel	true	plunged	compensated
+Relation	3	20	SubSuper	true	plunged	slipped
+Relation	3	21	NoRel	true	plunged	said
+Relation	4	5	NoRel	true	increase	cut
+Relation	4	6	NoRel	true	increase	sunk
+Relation	4	7	NoRel	true	increase	recession
+Relation	4	8	NoRel	true	increase	fell
+Relation	4	9	NoRel	true	increase	hit
+Relation	4	10	NoRel	true	increase	wrote
+Relation	4	11	NoRel	true	increase	invested
+Relation	4	12	NoRel	true	increase	bought
+Relation	4	13	NoRel	true	increase	posted
+Relation	4	14	NoRel	true	increase	loss
+Relation	4	15	NoRel	true	increase	writedown
+Relation	4	16	NoRel	true	increase	downturn
+Relation	4	17	NoRel	true	increase	agreed
+Relation	4	18	NoRel	true	increase	growth
+Relation	4	19	NoRel	true	increase	compensated
+Relation	4	20	NoRel	true	increase	slipped
+Relation	4	21	NoRel	true	increase	said
+Relation	5	6	NoRel	true	cut	sunk
+Relation	5	7	SubSuper	true	cut	recession
+Relation	5	8	SubSuper	true	cut	fell
+Relation	5	9	SubSuper	true	cut	hit
+Relation	5	10	SubSuper	true	cut	wrote
+Relation	5	11	NoRel	true	cut	invested
+Relation	5	12	NoRel	true	cut	bought
+Relation	5	13	NoRel	true	cut	posted
+Relation	5	14	NoRel	true	cut	loss
+Relation	5	15	NoRel	true	cut	writedown
+Relation	5	16	NoRel	true	cut	downturn
+Relation	5	17	NoRel	true	cut	agreed
+Relation	5	18	NoRel	true	cut	growth
+Relation	5	19	NoRel	true	cut	compensated
+Relation	5	20	SubSuper	true	cut	slipped
+Relation	5	21	NoRel	true	cut	said
+Relation	6	7	SubSuper	true	sunk	recession
+Relation	6	8	NoRel	true	sunk	fell
+Relation	6	9	NoRel	true	sunk	hit
+Relation	6	10	NoRel	true	sunk	wrote
+Relation	6	11	NoRel	true	sunk	invested
+Relation	6	12	NoRel	true	sunk	bought
+Relation	6	13	NoRel	true	sunk	posted
+Relation	6	14	NoRel	true	sunk	loss
+Relation	6	15	NoRel	true	sunk	writedown
+Relation	6	16	NoRel	true	sunk	downturn
+Relation	6	17	NoRel	true	sunk	agreed
+Relation	6	18	NoRel	true	sunk	growth
+Relation	6	19	NoRel	true	sunk	compensated
+Relation	6	20	NoRel	true	sunk	slipped
+Relation	6	21	NoRel	true	sunk	said
+Relation	7	8	SuperSub	true	recession	fell
+Relation	7	9	SuperSub	true	recession	hit
+Relation	7	10	NoRel	true	recession	wrote
+Relation	7	11	NoRel	true	recession	invested
+Relation	7	12	NoRel	true	recession	bought
+Relation	7	13	NoRel	true	recession	posted
+Relation	7	14	NoRel	true	recession	loss
+Relation	7	15	NoRel	true	recession	writedown
+Relation	7	16	NoRel	true	recession	downturn
+Relation	7	17	NoRel	true	recession	agreed
+Relation	7	18	NoRel	true	recession	growth
+Relation	7	19	NoRel	true	recession	compensated
+Relation	7	20	SuperSub	true	recession	slipped
+Relation	7	21	NoRel	true	recession	said
+Relation	8	9	Coref	true	fell	hit
+Relation	8	10	SubSuper	true	fell	wrote
+Relation	8	11	NoRel	true	fell	invested
+Relation	8	12	NoRel	true	fell	bought
+Relation	8	13	NoRel	true	fell	posted
+Relation	8	14	NoRel	true	fell	loss
+Relation	8	15	NoRel	true	fell	writedown
+Relation	8	16	NoRel	true	fell	downturn
+Relation	8	17	NoRel	true	fell	agreed
+Relation	8	18	NoRel	true	fell	growth
+Relation	8	19	NoRel	true	fell	compensated
+Relation	8	20	Coref	true	fell	slipped
+Relation	8	21	NoRel	true	fell	said
+Relation	9	10	SubSuper	true	hit	wrote
+Relation	9	11	NoRel	true	hit	invested
+Relation	9	12	NoRel	true	hit	bought
+Relation	9	13	NoRel	true	hit	posted
+Relation	9	14	NoRel	true	hit	loss
+Relation	9	15	NoRel	true	hit	writedown
+Relation	9	16	NoRel	true	hit	downturn
+Relation	9	17	NoRel	true	hit	agreed
+Relation	9	18	NoRel	true	hit	growth
+Relation	9	19	NoRel	true	hit	compensated
+Relation	9	20	Coref	true	hit	slipped
+Relation	9	21	NoRel	true	hit	said
+Relation	10	11	NoRel	true	wrote	invested
+Relation	10	12	NoRel	true	wrote	bought
+Relation	10	13	NoRel	true	wrote	posted
+Relation	10	14	NoRel	true	wrote	loss
+Relation	10	15	NoRel	true	wrote	writedown
+Relation	10	16	NoRel	true	wrote	downturn
+Relation	10	17	NoRel	true	wrote	agreed
+Relation	10	18	NoRel	true	wrote	growth
+Relation	10	19	NoRel	true	wrote	compensated
+Relation	10	20	SuperSub	true	wrote	slipped
+Relation	10	21	NoRel	true	wrote	said
+Relation	11	12	Coref	true	invested	bought
+Relation	11	13	NoRel	true	invested	posted
+Relation	11	14	NoRel	true	invested	loss
+Relation	11	15	NoRel	true	invested	writedown
+Relation	11	16	NoRel	true	invested	downturn
+Relation	11	17	NoRel	true	invested	agreed
+Relation	11	18	NoRel	true	invested	growth
+Relation	11	19	NoRel	true	invested	compensated
+Relation	11	20	NoRel	true	invested	slipped
+Relation	11	21	NoRel	true	invested	said
+Relation	12	13	NoRel	true	bought	posted
+Relation	12	14	NoRel	true	bought	loss
+Relation	12	15	NoRel	true	bought	writedown
+Relation	12	16	NoRel	true	bought	downturn
+Relation	12	17	NoRel	true	bought	agreed
+Relation	12	18	NoRel	true	bought	growth
+Relation	12	19	NoRel	true	bought	compensated
+Relation	12	20	NoRel	true	bought	slipped
+Relation	12	21	NoRel	true	bought	said
+Relation	13	14	NoRel	true	posted	loss
+Relation	13	15	NoRel	true	posted	writedown
+Relation	13	16	NoRel	true	posted	downturn
+Relation	13	17	NoRel	true	posted	agreed
+Relation	13	18	NoRel	true	posted	growth
+Relation	13	19	NoRel	true	posted	compensated
+Relation	13	20	NoRel	true	posted	slipped
+Relation	13	21	NoRel	true	posted	said
+Relation	14	15	NoRel	true	loss	writedown
+Relation	14	16	SubSuper	true	loss	downturn
+Relation	14	17	NoRel	true	loss	agreed
+Relation	14	18	NoRel	true	loss	growth
+Relation	14	19	NoRel	true	loss	compensated
+Relation	14	20	NoRel	true	loss	slipped
+Relation	14	21	NoRel	true	loss	said
+Relation	15	16	SubSuper	true	writedown	downturn
+Relation	15	17	NoRel	true	writedown	agreed
+Relation	15	18	NoRel	true	writedown	growth
+Relation	15	19	NoRel	true	writedown	compensated
+Relation	15	20	NoRel	true	writedown	slipped
+Relation	15	21	NoRel	true	writedown	said
+Relation	16	17	NoRel	true	downturn	agreed
+Relation	16	18	NoRel	true	downturn	growth
+Relation	16	19	NoRel	true	downturn	compensated
+Relation	16	20	NoRel	true	downturn	slipped
+Relation	16	21	NoRel	true	downturn	said
+Relation	17	18	NoRel	true	agreed	growth
+Relation	17	19	NoRel	true	agreed	compensated
+Relation	17	20	NoRel	true	agreed	slipped
+Relation	17	21	NoRel	true	agreed	said
+Relation	18	19	NoRel	true	growth	compensated
+Relation	18	20	NoRel	true	growth	slipped
+Relation	18	21	NoRel	true	growth	said
+Relation	19	20	NoRel	true	compensated	slipped
+Relation	19	21	NoRel	true	compensated	said
+Relation	20	21	NoRel	true	slipped	said

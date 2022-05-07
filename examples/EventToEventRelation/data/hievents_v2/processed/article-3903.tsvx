@@ -1,0 +1,137 @@
+Text	The United States has offered a $10 million bounty for the founder of the Pakistani militant group blamed for the 2008 attacks in the Indian city of Mumbai that killed 166 people, a move that could complicate U.S.-Pakistan relations at a tense time, The Associated Press reported. Hafiz Saeed founded Lashkar-e-Taiba in the 1980s, allegedly with Pakistani support to pressure archenemy India over the disputed territory of Kashmir. Pakistan banned the group in 2002 under pressure from the U.S. but has done little to crack down on its activities. Saeed operates openly in the country, giving public speeches and appearing on TV talk shows. The U.S. also offered up to $2 million for Lashkar-e-Taiba's deputy leader, Hafiz Abdul Rahman Makki. The bounties were posted on the U.S. State Department Rewards for Justice website late Monday, the U.S. Embassy in Islamabad said Tuesday, April 3. The reward for Saeed is one of the highest offered by the program and is equal to the amount for Taliban chief Mullah Omar. Only Ayman al-Zawahri, who succeeded Osama bin Laden as al-Qaida chief, fetches a higher, $25 million bounty.
+Event	1	offered	Occurrence	22
+Event	2	blamed	Occurrence	99
+Event	3	attacks	Occurrence	119
+Event	4	killed	Occurrence	161
+Event	5	move	Occurrence	182
+Event	6	reported	Reporting	271
+Event	7	founded	Occurrence	293
+Event	8	banned	Occurrence	441
+Event	9	activities	HalfGeneric	536
+Event	10	operates	HalfGeneric	554
+Event	11	giving	HalfGeneric	586
+Event	12	appearing	HalfGeneric	613
+Event	13	offered	Occurrence	655
+Event	14	posted	Reporting	761
+Event	15	said	Reporting	868
+Event	16	succeeded	Occurrence	1042
+Relation	1	2	NoRel	true	offered	blamed
+Relation	1	3	NoRel	true	offered	attacks
+Relation	1	4	NoRel	true	offered	killed
+Relation	1	5	SubSuper	true	offered	move
+Relation	1	6	NoRel	true	offered	reported
+Relation	1	7	NoRel	true	offered	founded
+Relation	1	8	NoRel	true	offered	banned
+Relation	1	9	NoRel	true	offered	activities
+Relation	1	10	NoRel	true	offered	operates
+Relation	1	11	NoRel	true	offered	giving
+Relation	1	12	NoRel	true	offered	appearing
+Relation	1	13	NoRel	true	offered	offered
+Relation	1	14	NoRel	true	offered	posted
+Relation	1	15	NoRel	true	offered	said
+Relation	1	16	NoRel	true	offered	succeeded
+Relation	2	3	NoRel	true	blamed	attacks
+Relation	2	4	NoRel	true	blamed	killed
+Relation	2	5	NoRel	true	blamed	move
+Relation	2	6	NoRel	true	blamed	reported
+Relation	2	7	NoRel	true	blamed	founded
+Relation	2	8	NoRel	true	blamed	banned
+Relation	2	9	NoRel	true	blamed	activities
+Relation	2	10	NoRel	true	blamed	operates
+Relation	2	11	NoRel	true	blamed	giving
+Relation	2	12	NoRel	true	blamed	appearing
+Relation	2	13	NoRel	true	blamed	offered
+Relation	2	14	NoRel	true	blamed	posted
+Relation	2	15	NoRel	true	blamed	said
+Relation	2	16	NoRel	true	blamed	succeeded
+Relation	3	4	SuperSub	true	attacks	killed
+Relation	3	5	NoRel	true	attacks	move
+Relation	3	6	NoRel	true	attacks	reported
+Relation	3	7	NoRel	true	attacks	founded
+Relation	3	8	NoRel	true	attacks	banned
+Relation	3	9	SubSuper	true	attacks	activities
+Relation	3	10	NoRel	true	attacks	operates
+Relation	3	11	NoRel	true	attacks	giving
+Relation	3	12	NoRel	true	attacks	appearing
+Relation	3	13	NoRel	true	attacks	offered
+Relation	3	14	NoRel	true	attacks	posted
+Relation	3	15	NoRel	true	attacks	said
+Relation	3	16	NoRel	true	attacks	succeeded
+Relation	4	5	NoRel	true	killed	move
+Relation	4	6	NoRel	true	killed	reported
+Relation	4	7	NoRel	true	killed	founded
+Relation	4	8	NoRel	true	killed	banned
+Relation	4	9	SubSuper	true	killed	activities
+Relation	4	10	NoRel	true	killed	operates
+Relation	4	11	NoRel	true	killed	giving
+Relation	4	12	NoRel	true	killed	appearing
+Relation	4	13	NoRel	true	killed	offered
+Relation	4	14	NoRel	true	killed	posted
+Relation	4	15	NoRel	true	killed	said
+Relation	4	16	NoRel	true	killed	succeeded
+Relation	5	6	NoRel	true	move	reported
+Relation	5	7	NoRel	true	move	founded
+Relation	5	8	NoRel	true	move	banned
+Relation	5	9	NoRel	true	move	activities
+Relation	5	10	NoRel	true	move	operates
+Relation	5	11	NoRel	true	move	giving
+Relation	5	12	NoRel	true	move	appearing
+Relation	5	13	SuperSub	true	move	offered
+Relation	5	14	NoRel	true	move	posted
+Relation	5	15	NoRel	true	move	said
+Relation	5	16	NoRel	true	move	succeeded
+Relation	6	7	NoRel	true	reported	founded
+Relation	6	8	NoRel	true	reported	banned
+Relation	6	9	NoRel	true	reported	activities
+Relation	6	10	NoRel	true	reported	operates
+Relation	6	11	NoRel	true	reported	giving
+Relation	6	12	NoRel	true	reported	appearing
+Relation	6	13	NoRel	true	reported	offered
+Relation	6	14	NoRel	true	reported	posted
+Relation	6	15	NoRel	true	reported	said
+Relation	6	16	NoRel	true	reported	succeeded
+Relation	7	8	NoRel	true	founded	banned
+Relation	7	9	NoRel	true	founded	activities
+Relation	7	10	NoRel	true	founded	operates
+Relation	7	11	NoRel	true	founded	giving
+Relation	7	12	NoRel	true	founded	appearing
+Relation	7	13	NoRel	true	founded	offered
+Relation	7	14	NoRel	true	founded	posted
+Relation	7	15	NoRel	true	founded	said
+Relation	7	16	NoRel	true	founded	succeeded
+Relation	8	9	NoRel	true	banned	activities
+Relation	8	10	NoRel	true	banned	operates
+Relation	8	11	NoRel	true	banned	giving
+Relation	8	12	NoRel	true	banned	appearing
+Relation	8	13	NoRel	true	banned	offered
+Relation	8	14	NoRel	true	banned	posted
+Relation	8	15	NoRel	true	banned	said
+Relation	8	16	NoRel	true	banned	succeeded
+Relation	9	10	NoRel	true	activities	operates
+Relation	9	11	NoRel	true	activities	giving
+Relation	9	12	NoRel	true	activities	appearing
+Relation	9	13	NoRel	true	activities	offered
+Relation	9	14	NoRel	true	activities	posted
+Relation	9	15	NoRel	true	activities	said
+Relation	9	16	NoRel	true	activities	succeeded
+Relation	10	11	SuperSub	true	operates	giving
+Relation	10	12	SuperSub	true	operates	appearing
+Relation	10	13	NoRel	true	operates	offered
+Relation	10	14	NoRel	true	operates	posted
+Relation	10	15	NoRel	true	operates	said
+Relation	10	16	NoRel	true	operates	succeeded
+Relation	11	12	NoRel	true	giving	appearing
+Relation	11	13	NoRel	true	giving	offered
+Relation	11	14	NoRel	true	giving	posted
+Relation	11	15	NoRel	true	giving	said
+Relation	11	16	NoRel	true	giving	succeeded
+Relation	12	13	NoRel	true	appearing	offered
+Relation	12	14	NoRel	true	appearing	posted
+Relation	12	15	NoRel	true	appearing	said
+Relation	12	16	NoRel	true	appearing	succeeded
+Relation	13	14	NoRel	true	offered	posted
+Relation	13	15	NoRel	true	offered	said
+Relation	13	16	NoRel	true	offered	succeeded
+Relation	14	15	NoRel	true	posted	said
+Relation	14	16	NoRel	true	posted	succeeded
+Relation	15	16	NoRel	true	said	succeeded

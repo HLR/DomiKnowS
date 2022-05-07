@@ -42,13 +42,16 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 100000 | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 83.508 (Dev Aug included) | Not Test
 100000 | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 84.12 (Dev Aug included) | 73.800
 150000 | 5 | 1e-5 | ILP | Symmetric | 85.167 (Dev Aug included) | Not Test
+250000 | 5 | 1e-5 | Simple | Nothing | 84.583 | 67.100
+250000 | 5 | 1e-5 | PMD | Symmetric | 85.292 | 69.350
+250000 | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 87.758 (Dev Aug included) | 81.850
 
 
 #### Small Train Set  
 
 Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
 --- | :---: | :---: | :---: | :---: | :---: | ---:  
-10000  | 5 | 1e-5 | Normal | w/o Symmetric | 78.07(80.17) | 57.200(61.000)
+10000  | 5 | 1e-5 | Normal | w/o Symmetric | 78.07(80.17) | 57.200
 10000  | 5 | 1e-5 | Normal | Only Symmetric | 78.280 | 60.600
 10000  | 5 | 1e-5 | PMD | Symmetric | 79.290 | 60.300
 10000  | 5 | 1e-5 | ILP + PMD(beta = 0.5) | Symmetric | 79.392 | 60.400

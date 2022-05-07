@@ -1,0 +1,241 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0938</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-26" temporalFunction="false" functionInDocument="CREATION_TIME">10/26/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891026-0120 = 891026 891026-0120.
+Cineplex Chairman Drabinsky Considers @ Bid of $666 Million to Acquire Company @ ---- @ By Suzanne McGee @ Staff Reporter of The Wall Street Journal 10/26/89 WALL STREET JOURNAL (J) CPX MCA RANKY TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) RECREATION, ENTERTAINMENT, TOYS, MOVIES, PHOTOGRAPHY, SPORTS (REC) TORONTO
+</EXTRAINFO>
+
+<TEXT>
+Cineplex Odeon Corp. directors <EVENT eid="e1" class="REPORTING">said</EVENT> the company's chairman and chief executive, Garth Drabinsky, is <EVENT eid="e2" class="I_STATE">considering</EVENT> <EVENT eid="e3" class="OCCURRENCE">bidding</EVENT> 780.6 million Canadian dollars (US$666 million) to <EVENT eid="e5" class="OCCURRENCE">acquire</EVENT> the company.
+
+The board <EVENT eid="e6" class="REPORTING">said</EVENT> Mr. Drabinsky and Vice Chairman Myron Gottlieb are <EVENT eid="e7" class="I_ACTION">negotiating</EVENT> <EVENT eid="e8" class="OCCURRENCE">financing</EVENT> before <EVENT eid="e10" class="I_ACTION">offering</EVENT> C$16.40 a share to <EVENT eid="e12" class="OCCURRENCE">acquire</EVENT> all of Cineplex's shares outstanding. The directors <EVENT eid="e13" class="REPORTING">added</EVENT> that the two executives haven't <EVENT eid="e14" class="OCCURRENCE">reached</EVENT> a final <EVENT eid="e16" class="OCCURRENCE">decision</EVENT> to <EVENT eid="e18" class="OCCURRENCE">proceed</EVENT> with a <EVENT eid="e19" class="OCCURRENCE">bid</EVENT> and that until an <EVENT eid="e20" class="OCCURRENCE">offer</EVENT> is <EVENT eid="e22" class="OCCURRENCE">made</EVENT> the board will <EVENT eid="e23" class="ASPECTUAL">continue</EVENT> <EVENT eid="e24" class="I_ACTION">seeking</EVENT> higher offers from other bidders.
+
+The directors <EVENT eid="e26" class="REPORTING">said</EVENT> if Messrs. Drabinsky and Gottlieb <EVENT eid="e176" class="OCCURRENCE">mail</EVENT> an <EVENT eid="e180" class="OCCURRENCE">offer</EVENT> to shareholders by <TIMEX3 tid="t179" type="DATE" value="1989-11-22" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 22</TIMEX3>, it will <EVENT eid="e29" class="OCCURRENCE">reimburse</EVENT> them a maximum of C$8.5 million for expenses related to a bid.
+
+"We <EVENT eid="e33" class="I_STATE">consider</EVENT> that his bid is an acceptable bid," <EVENT eid="e36" class="REPORTING">said</EVENT> Sandra Kolber, spokeswoman for the independent directors' committee <EVENT eid="e37" class="OCCURRENCE">appointed</EVENT> <TIMEX3 tid="t183" type="DATE" value="1989-05" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last May</TIMEX3> to <EVENT eid="e39" class="OCCURRENCE">solicit</EVENT> and <EVENT eid="e40" class="OCCURRENCE">review</EVENT> bids for the company in the wake of a <EVENT eid="e43" class="OCCURRENCE">dispute</EVENT> between Mr. Drabinsky and Cineplex's major shareholder, MCA Inc.
+
+MCA and Cineplex's other major shareholder, Montreal-based financier Charles Bronfman and his associates, have <EVENT eid="e44" class="I_STATE">agreed</EVENT> to <EVENT eid="e46" class="OCCURRENCE">tender</EVENT> their holdings to an <EVENT eid="e3000" class="OCCURRENCE">offer</EVENT> by Mr. Drabinsky unless a higher offer is <EVENT eid="e50" class="OCCURRENCE">made</EVENT> by another bidder. MCA holds half of Cineplex's equity and 33% of its voting rights through restricted voting shares, while Bronfman interests hold about 24% of the company's equity.
+
+Ms. Kolber <EVENT eid="e55" class="REPORTING">said</EVENT> the committee had <EVENT eid="e56" class="OCCURRENCE">received</EVENT> other bids. She <EVENT eid="e58" class="I_ACTION">declined</EVENT> to <EVENT eid="e60" class="OCCURRENCE">identify</EVENT> other bidders but <EVENT eid="e61" class="REPORTING">said</EVENT> Mr. Drabinsky's offer "is all cash, and it's for all of the company." Several Cineplex analysts have <EVENT eid="e64" class="I_ACTION">speculated</EVENT> that outside bids received by the committee were either disappointingly <EVENT eid="e223" class="STATE">low</EVENT> or for only part of the company.
+
+"All this has really established is that MCA and the Bronfmans have <EVENT eid="e68" class="I_STATE">agreed</EVENT> on a price at which they can be <EVENT eid="e70" class="OCCURRENCE">bought</EVENT> out," <EVENT eid="e72" class="REPORTING">said</EVENT> Jeffery Logsdon, an analyst with Crowell, Weedon in Los Angeles. "If a bid <EVENT eid="e74" class="OCCURRENCE">materializes</EVENT> at that price, shareholders will have every reason to be <EVENT eid="e192" class="STATE">glad</EVENT>, but the question of financing still <EVENT eid="e81" class="STATE">remains</EVENT>."
+
+<TIMEX3 tid="t193" type="DATE" value="1989-04" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Last April</TIMEX3>, Mr. Drabinsky and a group of financial backers <EVENT eid="e82" class="I_STATE">planned</EVENT> to <EVENT eid="e84" class="OCCURRENCE">acquire</EVENT> up to 30.2% of Cineplex for C$17.50 a share from Bronfman associates. Mr. Drabinsky, who would have <EVENT eid="e195" class="STATE">had</EVENT> the right to <EVENT eid="e85" class="OCCURRENCE">vote</EVENT> those shares for <TIMEX3 tid="t201" type="DURATION" value="P2Y" temporalFunction="false" functionInDocument="NONE">two years</TIMEX3>, <EVENT eid="e86" class="REPORTING">said</EVENT> the <EVENT eid="e202" class="OCCURRENCE">purchase</EVENT>, subsequently <EVENT eid="e88" class="OCCURRENCE">rejected</EVENT> by regulators, was <EVENT eid="e89" class="I_STATE">aimed</EVENT> at <EVENT eid="e91" class="I_ACTION">consolidating</EVENT> his control of the company. MCA strongly <EVENT eid="e92" class="I_ACTION">opposed</EVENT> the Drabinsky group's move.
+
+The directors didn't <EVENT eid="e94" class="I_ACTION">indicate</EVENT> the source of financing for Mr. Drabinsky's new proposal, but <EVENT eid="e98" class="REPORTING">said</EVENT> MCA and the Bronfman associates <EVENT eid="e99" class="I_STATE">agreed</EVENT> in principle to <EVENT eid="e101" class="OCCURRENCE">buy</EVENT> for $57 million and then <EVENT eid="e207" class="OCCURRENCE">lease</EVENT> back to Cineplex its 18-screen theater complex in Universal City, Calif., if Mr. Drabinsky <EVENT eid="e103" class="OCCURRENCE">succeeds</EVENT> in an offer.
+
+"This is being <EVENT eid="e106" class="OCCURRENCE">done</EVENT> at the <EVENT eid="e107" class="OCCURRENCE">suggestion</EVENT> of {Mr. Drabinsky} and to <EVENT eid="e110" class="OCCURRENCE">accommodate</EVENT> him, to <EVENT eid="e112" class="I_STATE">facilitate</EVENT> his financing <EVENT eid="e208" class="OCCURRENCE">arrangements</EVENT>," Ms. Kolber <EVENT eid="e113" class="REPORTING">said</EVENT>.
+
+In addition, the directors <EVENT eid="e115" class="REPORTING">said</EVENT> if a bid by Mr. Drabinsky is <EVENT eid="e209" class="STATE">successful</EVENT>, Cineplex <EVENT eid="e118" class="I_STATE">expects</EVENT> Rank Organisation PLC to <EVENT eid="e120" class="OCCURRENCE">acquire</EVENT> the 51% of Cineplex's Film House unit it doesn't <EVENT eid="e211" class="STATE">own</EVENT>, and <EVENT eid="e122" class="OCCURRENCE">provide</EVENT> Mr. Drabinsky with additional loan financing.
+
+Michael Gifford, Rank's chief executive, <EVENT eid="e124" class="REPORTING">said</EVENT> the British theater chain's total involvement "wouldn't <EVENT eid="e126" class="OCCURRENCE">exceed</EVENT> $100 million" but <EVENT eid="e129" class="OCCURRENCE">declined</EVENT> to <EVENT eid="e131" class="OCCURRENCE">give</EVENT> a breakdown between the loan financing and the proposed Film House purchase.
+
+Cineplex shareholders <EVENT eid="e135" class="OCCURRENCE">responded</EVENT> coolly to <TIMEX3 tid="t212" type="DATE" value="1989-10-25" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">yesterday</TIMEX3>'s <EVENT eid="e136" class="OCCURRENCE">announcement</EVENT>. In <EVENT eid="e214" class="OCCURRENCE">trading</EVENT> on the New York Stock Exchange, Cineplex <EVENT eid="e138" class="OCCURRENCE">closed</EVENT> at $11, down 25 cents, with more than a million shares changing hands. On the Toronto Stock Exchange, Cineplex <EVENT eid="e141" class="OCCURRENCE">closed</EVENT> at C$12.875, off 37.5 Canadian cents, well below the C$16.40 level.
+
+"Where's the bid?" asked Pierre Panet-Raymond, an analyst and broker with Toronto securities dealer McDermid St. Lawrence Ltd. Mr. Panet-Raymond <EVENT eid="e144" class="REPORTING">said</EVENT> he doesn't <EVENT eid="e145" class="I_STATE">think</EVENT> Messrs. Drabinsky and Gottlieb are "anywhere <EVENT eid="e147" class="I_STATE">close</EVENT>" to <EVENT eid="e148" class="I_ACTION">arranging</EVENT> <EVENT eid="e149" class="OCCURRENCE">financing</EVENT> and that investors will <EVENT eid="e150" class="I_STATE">need</EVENT> a solid <EVENT eid="e222" class="OCCURRENCE">offer</EVENT> before the stock <EVENT eid="e153" class="ASPECTUAL">begins</EVENT> to <EVENT eid="e155" class="OCCURRENCE">rise</EVENT> again.
+
+Mr. Drabinsky couldn't be <EVENT eid="e156" class="OCCURRENCE">reached</EVENT> for comment.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei761" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei762" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei763" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e5" eiid="ei764" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei765" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei766" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei767" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei768" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei769" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei770" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei771" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei772" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e18" eiid="ei773" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e19" eiid="ei774" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e20" eiid="ei775" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e22" eiid="ei776" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei777" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei778" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e26" eiid="ei779" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e176" eiid="ei780" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e180" eiid="ei781" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e29" eiid="ei782" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei783" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e36" eiid="ei785" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei786" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei787" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei788" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e43" eiid="ei789" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e44" eiid="ei790" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e46" eiid="ei791" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei793" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei794" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e56" eiid="ei795" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei796" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei797" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e61" eiid="ei798" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e64" eiid="ei800" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e68" eiid="ei803" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e70" eiid="ei804" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="can" />
+<MAKEINSTANCE eventID="e72" eiid="ei805" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e74" eiid="ei806" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e192" eiid="ei807" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e81" eiid="ei808" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e82" eiid="ei809" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e84" eiid="ei810" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e195" eiid="ei811" tense="NONE" aspect="PERFECTIVE" polarity="POS" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e85" eiid="ei813" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e86" eiid="ei814" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e202" eiid="ei815" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e88" eiid="ei816" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e89" eiid="ei817" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei818" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e92" eiid="ei820" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e94" eiid="ei821" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e98" eiid="ei822" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e99" eiid="ei823" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e101" eiid="ei824" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e207" eiid="ei825" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e103" eiid="ei826" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e106" eiid="ei827" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e107" eiid="ei828" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e110" eiid="ei829" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e112" eiid="ei830" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e208" eiid="ei831" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e113" eiid="ei832" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e115" eiid="ei833" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e209" eiid="ei834" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e118" eiid="ei835" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e120" eiid="ei836" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e211" eiid="ei837" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e122" eiid="ei838" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e124" eiid="ei839" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e126" eiid="ei840" tense="NONE" aspect="NONE" polarity="NEG" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e129" eiid="ei841" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e131" eiid="ei842" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e135" eiid="ei843" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e136" eiid="ei844" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e214" eiid="ei845" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e138" eiid="ei846" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e141" eiid="ei848" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e144" eiid="ei850" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e145" eiid="ei851" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e147" eiid="ei852" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e148" eiid="ei853" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e149" eiid="ei854" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e150" eiid="ei855" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e222" eiid="ei856" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e153" eiid="ei857" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e155" eiid="ei858" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e156" eiid="ei859" tense="NONE" aspect="PERFECTIVE" polarity="NEG" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e223" eiid="ei860" tense="NONE" aspect="NONE" polarity="POS" pos="OTHER" />
+<TLINK lid="l117" relType="BEGUN_BY" eventInstanceID="ei858" relatedToEventInstance="ei857" />
+<TLINK lid="l113" relType="INCLUDES" eventInstanceID="ei778" relatedToEventInstance="ei777" />
+<TLINK lid="l1" relType="AFTER" eventInstanceID="ei859" relatedToEventInstance="ei850" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei761" relatedToTime="t0" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei765" relatedToEventInstance="ei761" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei766" relatedToEventInstance="ei768"  />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei770" relatedToEventInstance="ei765" />
+<TLINK lid="l6" relType="ENDED_BY" eventInstanceID="ei771" relatedToEventInstance="ei772" />
+<TLINK lid="l7" relType="BEGINS" eventInstanceID="ei773" relatedToEventInstance="ei774" />
+<TLINK lid="l8" relType="ENDED_BY" eventInstanceID="ei777" relatedToEventInstance="ei775"  />
+<TLINK lid="l9" relType="IDENTITY" eventInstanceID="ei775" relatedToEventInstance="ei776" />
+<TLINK lid="l10" relType="INCLUDES" eventInstanceID="ei771" relatedToEventInstance="ei770" />
+<TLINK lid="l11" relType="IDENTITY" eventInstanceID="ei779" relatedToEventInstance="ei765" />
+<TLINK lid="l12" relType="AFTER" eventInstanceID="ei782" relatedToEventInstance="ei780" />
+<TLINK lid="l13" relType="IDENTITY" eventInstanceID="ei780" relatedToEventInstance="ei781" />
+<TLINK lid="l14" relType="BEFORE" eventInstanceID="ei780" relatedToTime="t179"  />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei785" relatedToEventInstance="ei765" />
+<TLINK lid="l16" relType="BEFORE" eventInstanceID="ei786" relatedToEventInstance="ei785" />
+<TLINK lid="l17" relType="IS_INCLUDED" eventInstanceID="ei786" relatedToTime="t183" />
+<TLINK lid="l18" relType="AFTER" eventInstanceID="ei787" relatedToEventInstance="ei789" />
+<TLINK lid="l19" relType="AFTER" eventInstanceID="ei788" relatedToEventInstance="ei789" />
+<TLINK lid="l20" relType="BEFORE" eventInstanceID="ei790" relatedToTime="t0" />
+<TLINK lid="l23" relType="IDENTITY" eventInstanceID="ei794" relatedToEventInstance="ei785" />
+<TLINK lid="l24" relType="BEFORE" eventInstanceID="ei795" relatedToEventInstance="ei794" />
+<TLINK lid="l25" relType="IS_INCLUDED" eventInstanceID="ei796" relatedToEventInstance="ei794" />
+<TLINK lid="l26" relType="IDENTITY" eventInstanceID="ei798" relatedToEventInstance="ei794" />
+<TLINK lid="l27" relType="AFTER" eventInstanceID="ei800" relatedToEventInstance="ei798" />
+<TLINK lid="l28" relType="BEFORE" eventInstanceID="ei805" relatedToTime="t0" />
+<TLINK lid="l29" relType="BEFORE" eventInstanceID="ei806" relatedToEventInstance="ei808" />
+<TLINK lid="l30" relType="IS_INCLUDED" eventInstanceID="ei809" relatedToTime="t193" />
+<TLINK lid="l31" relType="IS_INCLUDED" eventInstanceID="ei814" relatedToTime="t193" />
+<TLINK lid="l33" relType="INCLUDES" eventInstanceID="ei815" relatedToEventInstance="ei810" />
+<TLINK lid="l34" relType="AFTER" eventInstanceID="ei816" relatedToEventInstance="ei809"  />
+<TLINK lid="l35" relType="AFTER" eventInstanceID="ei815" relatedToEventInstance="ei811" />
+<TLINK lid="l36" relType="IBEFORE" eventInstanceID="ei820" relatedToEventInstance="ei816" />
+<TLINK lid="l37" relType="BEFORE" eventInstanceID="ei809" relatedToEventInstance="ei820" />
+<TLINK lid="l38" relType="IS_INCLUDED" eventInstanceID="ei821" relatedToEventInstance="ei779" />
+<TLINK lid="l39" relType="IDENTITY" eventInstanceID="ei822" relatedToEventInstance="ei779" />
+<TLINK lid="l40" relType="BEFORE" eventInstanceID="ei824" relatedToEventInstance="ei825"  />
+<TLINK lid="l41" relType="AFTER" eventInstanceID="ei824" relatedToEventInstance="ei826" />
+<TLINK lid="l42" relType="IDENTITY" eventInstanceID="ei832" relatedToEventInstance="ei785" />
+<TLINK lid="l43" relType="AFTER" eventInstanceID="ei827" relatedToEventInstance="ei828" />
+<TLINK lid="l44" relType="IDENTITY" eventInstanceID="ei833" relatedToEventInstance="ei779" />
+<TLINK lid="l45" relType="AFTER" eventInstanceID="ei835" relatedToEventInstance="ei834" />
+<TLINK lid="l46" relType="SIMULTANEOUS" eventInstanceID="ei836" relatedToEventInstance="ei838" />
+<TLINK lid="l47" relType="ENDED_BY" eventInstanceID="ei837" relatedToEventInstance="ei836" />
+<TLINK lid="l48" relType="INCLUDES" eventInstanceID="ei839" relatedToEventInstance="ei841" />
+<TLINK lid="l49" relType="AFTER" eventInstanceID="ei843" relatedToEventInstance="ei844" />
+<TLINK lid="l50" relType="INCLUDES" timeID="t212" relatedToEventInstance="ei844"  />
+<TLINK lid="l51" relType="IS_INCLUDED" eventInstanceID="ei843" relatedToTime="t212" />
+<TLINK lid="l52" relType="ENDED_BY" eventInstanceID="ei845" relatedToEventInstance="ei846" />
+<TLINK lid="l54" relType="SIMULTANEOUS" eventInstanceID="ei848" relatedToEventInstance="ei846" />
+<TLINK lid="l56" relType="IS_INCLUDED" eventInstanceID="ei850" relatedToTime="t212" />
+<TLINK lid="l57" relType="BEFORE" eventInstanceID="ei856" relatedToEventInstance="ei857"  />
+<SLINK lid="l112" relType="FACTIVE" eventInstanceID="ei843" subordinatedEventInstance="ei844" />
+<SLINK lid="l108" relType="FACTIVE" eventInstanceID="ei780" subordinatedEventInstance="ei781" />
+<SLINK lid="l107" relType="MODAL" eventInstanceID="ei773" subordinatedEventInstance="ei774" />
+<SLINK lid="l106" relType="FACTIVE" eventInstanceID="ei771" subordinatedEventInstance="ei772" />
+<SLINK lid="l58" relType="CONDITIONAL" eventInstanceID="ei780" subordinatedEventInstance="ei782"  />
+<SLINK lid="l59" relType="CONDITIONAL" eventInstanceID="ei826" subordinatedEventInstance="ei823"  />
+<SLINK lid="l60" relType="CONDITIONAL" eventInstanceID="ei834" subordinatedEventInstance="ei835"  />
+<SLINK lid="l61" relType="EVIDENTIAL" eventInstanceID="ei761" subordinatedEventInstance="ei762" />
+<SLINK lid="l62" relType="MODAL" eventInstanceID="ei762" subordinatedEventInstance="ei763" />
+<SLINK lid="l63" relType="MODAL" eventInstanceID="ei763" subordinatedEventInstance="ei764" />
+<SLINK lid="l64" relType="EVIDENTIAL" eventInstanceID="ei765" subordinatedEventInstance="ei766" />
+<SLINK lid="l65" relType="MODAL" eventInstanceID="ei766" subordinatedEventInstance="ei767" />
+<SLINK lid="l66" relType="MODAL" eventInstanceID="ei768" subordinatedEventInstance="ei769" />
+<SLINK lid="l67" relType="EVIDENTIAL" eventInstanceID="ei770" subordinatedEventInstance="ei771" />
+<SLINK lid="l68" relType="MODAL" eventInstanceID="ei772" subordinatedEventInstance="ei773" />
+<SLINK lid="l69" relType="EVIDENTIAL" eventInstanceID="ei779" subordinatedEventInstance="ei782" />
+<SLINK lid="l70" relType="EVIDENTIAL" eventInstanceID="ei785" subordinatedEventInstance="ei783" />
+<SLINK lid="l71" relType="MODAL" eventInstanceID="ei786" subordinatedEventInstance="ei787" />
+<SLINK lid="l72" relType="MODAL" eventInstanceID="ei786" subordinatedEventInstance="ei788" />
+<SLINK lid="l73" relType="MODAL" eventInstanceID="ei790" subordinatedEventInstance="ei791" />
+<SLINK lid="l74" relType="EVIDENTIAL" eventInstanceID="ei794" subordinatedEventInstance="ei795" />
+<SLINK lid="l75" relType="COUNTER_FACTIVE" eventInstanceID="ei796" subordinatedEventInstance="ei797" />
+<SLINK lid="l76" relType="EVIDENTIAL" eventInstanceID="ei805" subordinatedEventInstance="ei803" />
+<SLINK lid="l77" relType="MODAL" eventInstanceID="ei803" subordinatedEventInstance="ei804" />
+<SLINK lid="l78" relType="EVIDENTIAL" eventInstanceID="ei805" subordinatedEventInstance="ei807" />
+<SLINK lid="l79" relType="MODAL" eventInstanceID="ei809" subordinatedEventInstance="ei810" />
+<SLINK lid="l80" relType="EVIDENTIAL" eventInstanceID="ei814" subordinatedEventInstance="ei817" />
+<SLINK lid="l81" relType="MODAL" eventInstanceID="ei817" subordinatedEventInstance="ei818" />
+<SLINK lid="l82" relType="COUNTER_FACTIVE" eventInstanceID="ei816" subordinatedEventInstance="ei815" />
+<SLINK lid="l83" relType="EVIDENTIAL" eventInstanceID="ei822" subordinatedEventInstance="ei823" />
+<SLINK lid="l84" relType="MODAL" eventInstanceID="ei823" subordinatedEventInstance="ei824" />
+<SLINK lid="l85" relType="EVIDENTIAL" eventInstanceID="ei832" subordinatedEventInstance="ei827" />
+<SLINK lid="l86" relType="MODAL" eventInstanceID="ei827" subordinatedEventInstance="ei829" />
+<SLINK lid="l87" relType="MODAL" eventInstanceID="ei827" subordinatedEventInstance="ei830" />
+<SLINK lid="l88" relType="MODAL" eventInstanceID="ei830" subordinatedEventInstance="ei831" />
+<SLINK lid="l89" relType="EVIDENTIAL" eventInstanceID="ei833" subordinatedEventInstance="ei835" />
+<SLINK lid="l90" relType="MODAL" eventInstanceID="ei835" subordinatedEventInstance="ei836" />
+<SLINK lid="l91" relType="MODAL" eventInstanceID="ei835" subordinatedEventInstance="ei838" />
+<SLINK lid="l92" relType="EVIDENTIAL" eventInstanceID="ei839" subordinatedEventInstance="ei840" />
+<SLINK lid="l93" relType="COUNTER_FACTIVE" eventInstanceID="ei841" subordinatedEventInstance="ei842" />
+<SLINK lid="l94" relType="EVIDENTIAL" eventInstanceID="ei850" subordinatedEventInstance="ei851" />
+<SLINK lid="l95" relType="MODAL" eventInstanceID="ei851" subordinatedEventInstance="ei852" />
+<SLINK lid="l96" relType="MODAL" eventInstanceID="ei852" subordinatedEventInstance="ei853" />
+<SLINK lid="l97" relType="MODAL" eventInstanceID="ei853" subordinatedEventInstance="ei854" />
+<SLINK lid="l98" relType="EVIDENTIAL" eventInstanceID="ei850" subordinatedEventInstance="ei855" />
+<SLINK lid="l99" relType="MODAL" eventInstanceID="ei855" subordinatedEventInstance="ei856" />
+<SLINK lid="l100" relType="CONDITIONAL" eventInstanceID="ei806" subordinatedEventInstance="ei807"  />
+<SLINK lid="l101" relType="MODAL" eventInstanceID="ei800" subordinatedEventInstance="ei860" />
+<ALINK lid="l104" relType="CONTINUES" eventInstanceID="ei777" relatedToEventInstance="ei778" />
+<ALINK lid="l105" relType="INITIATES" eventInstanceID="ei857" relatedToEventInstance="ei858" />
+
+</TimeML>

@@ -1,0 +1,232 @@
+Text	A 6-foot-long inactive training missile accidentally fell from a military helicopter into field near a Texas military post, causing the brief evacuation of nearby homes but not harming anyone, officials said. About 100 homes in a neighborhood near Fort Hood were evacuated Tuesday night after a witness reported seeing something fall from the sky around 8 p.m., Killeen police spokeswoman Carroll Smith said. Residents were allowed back into their homes within an hour of the incident. Ordnance technicians from the Army post examined the missile and determined it didn't have a warhead or propulsion system, Fort Hood officials said. The training missile, which had implanted itself into the ground, was removed before midnight and left a hole in the ground several feet deep. "Safety is always our No. 1 concern, and we regret the inconvenience to the families affected in the area," Col. Howard Arey, a Fort Hood aviation officer, said in a statement Wednesday. "We want to reassure the public that our military aircraft never fly off the installation with live munitions." Arey said the post is investigating and reviewing its safety procedures, but "we believe at this time that it is not a systemic issue." Copyright 2012 The Associated Press. All rights reserved. This material may not be published, broadcast, rewritten or redistributed.
+Event	1	fell	Occurrence	53
+Event	2	causing	I_Action	124
+Event	3	evacuation	Occurrence	142
+Event	4	said	Reporting	203
+Event	5	evacuated	Occurrence	263
+Event	6	reported	I_Action	303
+Event	7	seeing	Perception	312
+Event	8	fall	Occurrence	329
+Event	9	said	Reporting	403
+Event	10	allowed	Occurrence	424
+Event	11	incident	Occurrence	476
+Event	12	examined	Occurrence	526
+Event	13	determined	Occurrence	551
+Event	14	said	Reporting	629
+Event	15	implanted	Occurrence	667
+Event	16	removed	Occurrence	705
+Event	17	left	Occurrence	733
+Event	18	said	Reporting	934
+Event	19	said	Reporting	1082
+Event	20	investigating	Occurrence	1099
+Event	21	reviewing	Occurrence	1117
+Relation	1	2	NoRel	true	fell	causing
+Relation	1	3	SuperSub	true	fell	evacuation
+Relation	1	4	NoRel	true	fell	said
+Relation	1	5	SuperSub	true	fell	evacuated
+Relation	1	6	NoRel	true	fell	reported
+Relation	1	7	NoRel	true	fell	seeing
+Relation	1	8	Coref	true	fell	fall
+Relation	1	9	NoRel	true	fell	said
+Relation	1	10	NoRel	true	fell	allowed
+Relation	1	11	SubSuper	true	fell	incident
+Relation	1	12	NoRel	true	fell	examined
+Relation	1	13	NoRel	true	fell	determined
+Relation	1	14	NoRel	true	fell	said
+Relation	1	15	SuperSub	true	fell	implanted
+Relation	1	16	NoRel	true	fell	removed
+Relation	1	17	NoRel	true	fell	left
+Relation	1	18	NoRel	true	fell	said
+Relation	1	19	NoRel	true	fell	said
+Relation	1	20	NoRel	true	fell	investigating
+Relation	1	21	NoRel	true	fell	reviewing
+Relation	2	3	NoRel	true	causing	evacuation
+Relation	2	4	NoRel	true	causing	said
+Relation	2	5	NoRel	true	causing	evacuated
+Relation	2	6	NoRel	true	causing	reported
+Relation	2	7	NoRel	true	causing	seeing
+Relation	2	8	NoRel	true	causing	fall
+Relation	2	9	NoRel	true	causing	said
+Relation	2	10	NoRel	true	causing	allowed
+Relation	2	11	NoRel	true	causing	incident
+Relation	2	12	NoRel	true	causing	examined
+Relation	2	13	NoRel	true	causing	determined
+Relation	2	14	NoRel	true	causing	said
+Relation	2	15	NoRel	true	causing	implanted
+Relation	2	16	NoRel	true	causing	removed
+Relation	2	17	NoRel	true	causing	left
+Relation	2	18	NoRel	true	causing	said
+Relation	2	19	NoRel	true	causing	said
+Relation	2	20	NoRel	true	causing	investigating
+Relation	2	21	NoRel	true	causing	reviewing
+Relation	3	4	NoRel	true	evacuation	said
+Relation	3	5	Coref	true	evacuation	evacuated
+Relation	3	6	NoRel	true	evacuation	reported
+Relation	3	7	NoRel	true	evacuation	seeing
+Relation	3	8	SubSuper	true	evacuation	fall
+Relation	3	9	NoRel	true	evacuation	said
+Relation	3	10	NoRel	true	evacuation	allowed
+Relation	3	11	SubSuper	true	evacuation	incident
+Relation	3	12	NoRel	true	evacuation	examined
+Relation	3	13	NoRel	true	evacuation	determined
+Relation	3	14	NoRel	true	evacuation	said
+Relation	3	15	NoRel	true	evacuation	implanted
+Relation	3	16	NoRel	true	evacuation	removed
+Relation	3	17	NoRel	true	evacuation	left
+Relation	3	18	NoRel	true	evacuation	said
+Relation	3	19	NoRel	true	evacuation	said
+Relation	3	20	NoRel	true	evacuation	investigating
+Relation	3	21	NoRel	true	evacuation	reviewing
+Relation	4	5	NoRel	true	said	evacuated
+Relation	4	6	NoRel	true	said	reported
+Relation	4	7	NoRel	true	said	seeing
+Relation	4	8	NoRel	true	said	fall
+Relation	4	9	NoRel	true	said	said
+Relation	4	10	NoRel	true	said	allowed
+Relation	4	11	NoRel	true	said	incident
+Relation	4	12	NoRel	true	said	examined
+Relation	4	13	NoRel	true	said	determined
+Relation	4	14	NoRel	true	said	said
+Relation	4	15	NoRel	true	said	implanted
+Relation	4	16	NoRel	true	said	removed
+Relation	4	17	NoRel	true	said	left
+Relation	4	18	NoRel	true	said	said
+Relation	4	19	NoRel	true	said	said
+Relation	4	20	NoRel	true	said	investigating
+Relation	4	21	NoRel	true	said	reviewing
+Relation	5	6	NoRel	true	evacuated	reported
+Relation	5	7	NoRel	true	evacuated	seeing
+Relation	5	8	SubSuper	true	evacuated	fall
+Relation	5	9	NoRel	true	evacuated	said
+Relation	5	10	NoRel	true	evacuated	allowed
+Relation	5	11	SubSuper	true	evacuated	incident
+Relation	5	12	NoRel	true	evacuated	examined
+Relation	5	13	NoRel	true	evacuated	determined
+Relation	5	14	NoRel	true	evacuated	said
+Relation	5	15	NoRel	true	evacuated	implanted
+Relation	5	16	NoRel	true	evacuated	removed
+Relation	5	17	NoRel	true	evacuated	left
+Relation	5	18	NoRel	true	evacuated	said
+Relation	5	19	NoRel	true	evacuated	said
+Relation	5	20	NoRel	true	evacuated	investigating
+Relation	5	21	NoRel	true	evacuated	reviewing
+Relation	6	7	NoRel	true	reported	seeing
+Relation	6	8	NoRel	true	reported	fall
+Relation	6	9	NoRel	true	reported	said
+Relation	6	10	NoRel	true	reported	allowed
+Relation	6	11	NoRel	true	reported	incident
+Relation	6	12	NoRel	true	reported	examined
+Relation	6	13	NoRel	true	reported	determined
+Relation	6	14	NoRel	true	reported	said
+Relation	6	15	NoRel	true	reported	implanted
+Relation	6	16	NoRel	true	reported	removed
+Relation	6	17	NoRel	true	reported	left
+Relation	6	18	NoRel	true	reported	said
+Relation	6	19	NoRel	true	reported	said
+Relation	6	20	NoRel	true	reported	investigating
+Relation	6	21	NoRel	true	reported	reviewing
+Relation	7	8	NoRel	true	seeing	fall
+Relation	7	9	NoRel	true	seeing	said
+Relation	7	10	NoRel	true	seeing	allowed
+Relation	7	11	SubSuper	true	seeing	incident
+Relation	7	12	NoRel	true	seeing	examined
+Relation	7	13	NoRel	true	seeing	determined
+Relation	7	14	NoRel	true	seeing	said
+Relation	7	15	NoRel	true	seeing	implanted
+Relation	7	16	NoRel	true	seeing	removed
+Relation	7	17	NoRel	true	seeing	left
+Relation	7	18	NoRel	true	seeing	said
+Relation	7	19	NoRel	true	seeing	said
+Relation	7	20	NoRel	true	seeing	investigating
+Relation	7	21	NoRel	true	seeing	reviewing
+Relation	8	9	NoRel	true	fall	said
+Relation	8	10	NoRel	true	fall	allowed
+Relation	8	11	SubSuper	true	fall	incident
+Relation	8	12	NoRel	true	fall	examined
+Relation	8	13	NoRel	true	fall	determined
+Relation	8	14	NoRel	true	fall	said
+Relation	8	15	SuperSub	true	fall	implanted
+Relation	8	16	NoRel	true	fall	removed
+Relation	8	17	NoRel	true	fall	left
+Relation	8	18	NoRel	true	fall	said
+Relation	8	19	NoRel	true	fall	said
+Relation	8	20	NoRel	true	fall	investigating
+Relation	8	21	NoRel	true	fall	reviewing
+Relation	9	10	NoRel	true	said	allowed
+Relation	9	11	NoRel	true	said	incident
+Relation	9	12	NoRel	true	said	examined
+Relation	9	13	NoRel	true	said	determined
+Relation	9	14	NoRel	true	said	said
+Relation	9	15	NoRel	true	said	implanted
+Relation	9	16	NoRel	true	said	removed
+Relation	9	17	NoRel	true	said	left
+Relation	9	18	NoRel	true	said	said
+Relation	9	19	NoRel	true	said	said
+Relation	9	20	NoRel	true	said	investigating
+Relation	9	21	NoRel	true	said	reviewing
+Relation	10	11	NoRel	true	allowed	incident
+Relation	10	12	NoRel	true	allowed	examined
+Relation	10	13	NoRel	true	allowed	determined
+Relation	10	14	NoRel	true	allowed	said
+Relation	10	15	NoRel	true	allowed	implanted
+Relation	10	16	NoRel	true	allowed	removed
+Relation	10	17	NoRel	true	allowed	left
+Relation	10	18	NoRel	true	allowed	said
+Relation	10	19	NoRel	true	allowed	said
+Relation	10	20	NoRel	true	allowed	investigating
+Relation	10	21	NoRel	true	allowed	reviewing
+Relation	11	12	NoRel	true	incident	examined
+Relation	11	13	NoRel	true	incident	determined
+Relation	11	14	NoRel	true	incident	said
+Relation	11	15	SuperSub	true	incident	implanted
+Relation	11	16	NoRel	true	incident	removed
+Relation	11	17	NoRel	true	incident	left
+Relation	11	18	NoRel	true	incident	said
+Relation	11	19	NoRel	true	incident	said
+Relation	11	20	NoRel	true	incident	investigating
+Relation	11	21	NoRel	true	incident	reviewing
+Relation	12	13	SuperSub	true	examined	determined
+Relation	12	14	NoRel	true	examined	said
+Relation	12	15	NoRel	true	examined	implanted
+Relation	12	16	NoRel	true	examined	removed
+Relation	12	17	NoRel	true	examined	left
+Relation	12	18	NoRel	true	examined	said
+Relation	12	19	NoRel	true	examined	said
+Relation	12	20	NoRel	true	examined	investigating
+Relation	12	21	NoRel	true	examined	reviewing
+Relation	13	14	NoRel	true	determined	said
+Relation	13	15	NoRel	true	determined	implanted
+Relation	13	16	NoRel	true	determined	removed
+Relation	13	17	NoRel	true	determined	left
+Relation	13	18	NoRel	true	determined	said
+Relation	13	19	NoRel	true	determined	said
+Relation	13	20	NoRel	true	determined	investigating
+Relation	13	21	NoRel	true	determined	reviewing
+Relation	14	15	NoRel	true	said	implanted
+Relation	14	16	NoRel	true	said	removed
+Relation	14	17	NoRel	true	said	left
+Relation	14	18	NoRel	true	said	said
+Relation	14	19	NoRel	true	said	said
+Relation	14	20	NoRel	true	said	investigating
+Relation	14	21	NoRel	true	said	reviewing
+Relation	15	16	NoRel	true	implanted	removed
+Relation	15	17	NoRel	true	implanted	left
+Relation	15	18	NoRel	true	implanted	said
+Relation	15	19	NoRel	true	implanted	said
+Relation	15	20	NoRel	true	implanted	investigating
+Relation	15	21	NoRel	true	implanted	reviewing
+Relation	16	17	SuperSub	true	removed	left
+Relation	16	18	NoRel	true	removed	said
+Relation	16	19	NoRel	true	removed	said
+Relation	16	20	NoRel	true	removed	investigating
+Relation	16	21	NoRel	true	removed	reviewing
+Relation	17	18	NoRel	true	left	said
+Relation	17	19	NoRel	true	left	said
+Relation	17	20	NoRel	true	left	investigating
+Relation	17	21	NoRel	true	left	reviewing
+Relation	18	19	NoRel	true	said	said
+Relation	18	20	NoRel	true	said	investigating
+Relation	18	21	NoRel	true	said	reviewing
+Relation	19	20	NoRel	true	said	investigating
+Relation	19	21	NoRel	true	said	reviewing
+Relation	20	21	NoRel	true	investigating	reviewing

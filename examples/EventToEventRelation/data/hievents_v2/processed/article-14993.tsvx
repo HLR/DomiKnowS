@@ -1,0 +1,172 @@
+Text	Police in Northern Ireland say they have ended an overnight search of Belfast Lough after a woman's claim that her baby fell from a ferry into the water proved to be false. The story that a 37-year-old woman and her infant plunged together into the harbor — but only the mother was rescued — made headlines Thursday across Britain and Ireland. But police said officers have concluded the woman fell alone. She spent 15 minutes in the water and was treated for hypothermia in a Belfast hospital. Police say other passengers on the ferry from Scotland reported seeing a baby with the woman, but after interviewing her family, they now believe she had no child with her. The search lasted 18 hours and involved a police helicopter and several vessels. 
+Event	1	say	Reporting	27
+Event	2	ended	I_Action	41
+Event	3	search	Occurrence	60
+Event	4	fell	Occurrence	120
+Event	5	proved	Occurrence	153
+Event	6	plunged	Occurrence	223
+Event	7	rescued	Occurrence	282
+Event	8	made	Occurrence	292
+Event	9	said	Reporting	355
+Event	10	concluded	Occurrence	374
+Event	11	fell	Occurrence	394
+Event	12	spent	Occurrence	410
+Event	13	treated	Occurrence	448
+Event	14	say	Reporting	502
+Event	15	reported	I_Action	550
+Event	16	seeing	Perception	559
+Event	17	interviewing	Occurrence	599
+Event	18	search	Occurrence	672
+Relation	1	2	NoRel	true	say	ended
+Relation	1	3	NoRel	true	say	search
+Relation	1	4	NoRel	true	say	fell
+Relation	1	5	NoRel	true	say	proved
+Relation	1	6	NoRel	true	say	plunged
+Relation	1	7	NoRel	true	say	rescued
+Relation	1	8	NoRel	true	say	made
+Relation	1	9	NoRel	true	say	said
+Relation	1	10	NoRel	true	say	concluded
+Relation	1	11	NoRel	true	say	fell
+Relation	1	12	NoRel	true	say	spent
+Relation	1	13	NoRel	true	say	treated
+Relation	1	14	NoRel	true	say	say
+Relation	1	15	NoRel	true	say	reported
+Relation	1	16	NoRel	true	say	seeing
+Relation	1	17	NoRel	true	say	interviewing
+Relation	1	18	NoRel	true	say	search
+Relation	2	3	NoRel	true	ended	search
+Relation	2	4	NoRel	true	ended	fell
+Relation	2	5	NoRel	true	ended	proved
+Relation	2	6	NoRel	true	ended	plunged
+Relation	2	7	NoRel	true	ended	rescued
+Relation	2	8	NoRel	true	ended	made
+Relation	2	9	NoRel	true	ended	said
+Relation	2	10	NoRel	true	ended	concluded
+Relation	2	11	NoRel	true	ended	fell
+Relation	2	12	NoRel	true	ended	spent
+Relation	2	13	NoRel	true	ended	treated
+Relation	2	14	NoRel	true	ended	say
+Relation	2	15	NoRel	true	ended	reported
+Relation	2	16	NoRel	true	ended	seeing
+Relation	2	17	NoRel	true	ended	interviewing
+Relation	2	18	NoRel	true	ended	search
+Relation	3	4	NoRel	true	search	fell
+Relation	3	5	SuperSub	true	search	proved
+Relation	3	6	NoRel	true	search	plunged
+Relation	3	7	NoRel	true	search	rescued
+Relation	3	8	NoRel	true	search	made
+Relation	3	9	NoRel	true	search	said
+Relation	3	10	SuperSub	true	search	concluded
+Relation	3	11	NoRel	true	search	fell
+Relation	3	12	NoRel	true	search	spent
+Relation	3	13	NoRel	true	search	treated
+Relation	3	14	NoRel	true	search	say
+Relation	3	15	NoRel	true	search	reported
+Relation	3	16	NoRel	true	search	seeing
+Relation	3	17	NoRel	true	search	interviewing
+Relation	3	18	Coref	true	search	search
+Relation	4	5	NoRel	true	fell	proved
+Relation	4	6	Coref	true	fell	plunged
+Relation	4	7	NoRel	true	fell	rescued
+Relation	4	8	NoRel	true	fell	made
+Relation	4	9	NoRel	true	fell	said
+Relation	4	10	NoRel	true	fell	concluded
+Relation	4	11	Coref	true	fell	fell
+Relation	4	12	NoRel	true	fell	spent
+Relation	4	13	NoRel	true	fell	treated
+Relation	4	14	NoRel	true	fell	say
+Relation	4	15	NoRel	true	fell	reported
+Relation	4	16	NoRel	true	fell	seeing
+Relation	4	17	NoRel	true	fell	interviewing
+Relation	4	18	NoRel	true	fell	search
+Relation	5	6	NoRel	true	proved	plunged
+Relation	5	7	NoRel	true	proved	rescued
+Relation	5	8	NoRel	true	proved	made
+Relation	5	9	NoRel	true	proved	said
+Relation	5	10	Coref	true	proved	concluded
+Relation	5	11	NoRel	true	proved	fell
+Relation	5	12	NoRel	true	proved	spent
+Relation	5	13	NoRel	true	proved	treated
+Relation	5	14	NoRel	true	proved	say
+Relation	5	15	NoRel	true	proved	reported
+Relation	5	16	NoRel	true	proved	seeing
+Relation	5	17	NoRel	true	proved	interviewing
+Relation	5	18	SubSuper	true	proved	search
+Relation	6	7	NoRel	true	plunged	rescued
+Relation	6	8	NoRel	true	plunged	made
+Relation	6	9	NoRel	true	plunged	said
+Relation	6	10	NoRel	true	plunged	concluded
+Relation	6	11	Coref	true	plunged	fell
+Relation	6	12	NoRel	true	plunged	spent
+Relation	6	13	NoRel	true	plunged	treated
+Relation	6	14	NoRel	true	plunged	say
+Relation	6	15	NoRel	true	plunged	reported
+Relation	6	16	NoRel	true	plunged	seeing
+Relation	6	17	NoRel	true	plunged	interviewing
+Relation	6	18	NoRel	true	plunged	search
+Relation	7	8	NoRel	true	rescued	made
+Relation	7	9	NoRel	true	rescued	said
+Relation	7	10	NoRel	true	rescued	concluded
+Relation	7	11	NoRel	true	rescued	fell
+Relation	7	12	NoRel	true	rescued	spent
+Relation	7	13	NoRel	true	rescued	treated
+Relation	7	14	NoRel	true	rescued	say
+Relation	7	15	NoRel	true	rescued	reported
+Relation	7	16	NoRel	true	rescued	seeing
+Relation	7	17	NoRel	true	rescued	interviewing
+Relation	7	18	NoRel	true	rescued	search
+Relation	8	9	NoRel	true	made	said
+Relation	8	10	NoRel	true	made	concluded
+Relation	8	11	NoRel	true	made	fell
+Relation	8	12	NoRel	true	made	spent
+Relation	8	13	NoRel	true	made	treated
+Relation	8	14	NoRel	true	made	say
+Relation	8	15	NoRel	true	made	reported
+Relation	8	16	NoRel	true	made	seeing
+Relation	8	17	NoRel	true	made	interviewing
+Relation	8	18	NoRel	true	made	search
+Relation	9	10	NoRel	true	said	concluded
+Relation	9	11	NoRel	true	said	fell
+Relation	9	12	NoRel	true	said	spent
+Relation	9	13	NoRel	true	said	treated
+Relation	9	14	NoRel	true	said	say
+Relation	9	15	NoRel	true	said	reported
+Relation	9	16	NoRel	true	said	seeing
+Relation	9	17	NoRel	true	said	interviewing
+Relation	9	18	NoRel	true	said	search
+Relation	10	11	NoRel	true	concluded	fell
+Relation	10	12	NoRel	true	concluded	spent
+Relation	10	13	NoRel	true	concluded	treated
+Relation	10	14	NoRel	true	concluded	say
+Relation	10	15	NoRel	true	concluded	reported
+Relation	10	16	NoRel	true	concluded	seeing
+Relation	10	17	NoRel	true	concluded	interviewing
+Relation	10	18	SubSuper	true	concluded	search
+Relation	11	12	NoRel	true	fell	spent
+Relation	11	13	NoRel	true	fell	treated
+Relation	11	14	NoRel	true	fell	say
+Relation	11	15	NoRel	true	fell	reported
+Relation	11	16	NoRel	true	fell	seeing
+Relation	11	17	NoRel	true	fell	interviewing
+Relation	11	18	NoRel	true	fell	search
+Relation	12	13	NoRel	true	spent	treated
+Relation	12	14	NoRel	true	spent	say
+Relation	12	15	NoRel	true	spent	reported
+Relation	12	16	NoRel	true	spent	seeing
+Relation	12	17	NoRel	true	spent	interviewing
+Relation	12	18	NoRel	true	spent	search
+Relation	13	14	NoRel	true	treated	say
+Relation	13	15	NoRel	true	treated	reported
+Relation	13	16	NoRel	true	treated	seeing
+Relation	13	17	NoRel	true	treated	interviewing
+Relation	13	18	NoRel	true	treated	search
+Relation	14	15	NoRel	true	say	reported
+Relation	14	16	NoRel	true	say	seeing
+Relation	14	17	NoRel	true	say	interviewing
+Relation	14	18	NoRel	true	say	search
+Relation	15	16	NoRel	true	reported	seeing
+Relation	15	17	NoRel	true	reported	interviewing
+Relation	15	18	NoRel	true	reported	search
+Relation	16	17	NoRel	true	seeing	interviewing
+Relation	16	18	NoRel	true	seeing	search
+Relation	17	18	NoRel	true	interviewing	search
