@@ -1,0 +1,23 @@
+explicit sum + prior
+	IML: 95+ sum, 95 digit (argmax/ILP)
+	POI: 95+ sum, 95 digit (argmax/ILP)
+
+	maybe a bit better in early epochs
+
+explicit sum + no prior
+	IML: 50 sum, 0 digits (argmax/ILP)
+	POI: ?
+
+no explicit sum + prior
+	IML: 85 sum, 50 digits (argmax), 85 sum, 65 digits (ILP)
+	POI: 10 sum, 40 digits (argmax), 15 sum, 30 digits  (ILP)
+
+	better digits in earlier epochs
+		70 sum, 80 digits (ILP)
+
+	probably undertrained w/ 10 epochs
+
+no explicit sum + no prior
+	IML: 95 sum, 0 digit (argmax), 75 sum, 0 digit (ILP)
+	POI: 2 sum, 2 digit (argmax), 0 sum, 2 digit (ILP)
+

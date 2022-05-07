@@ -3,10 +3,11 @@ from torch import nn
 import torch.nn.functional as F
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import LearningBasedProgram
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram
+from regr.program import POIProgram, IMLProgram, SolverPOIProgram, LearningBasedProgram
+from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.ilpu import ILPUModel
+from regr.program.model.iml import IMLModel
 from regr.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 
@@ -66,8 +67,8 @@ class SumLayer(torch.nn.Module):
 
         self.relu = nn.ReLU()
 
-    def forward(self, x):
-        x = torch.unsqueeze(torch.flatten(x), dim=0)
+    def forward(self, digit0, digit1):
+        x = torch.cat((digit0, digit1), dim=1)
 
         x = self.lin1(x)
         x = self.relu(x)
@@ -78,7 +79,7 @@ class SumLayer(torch.nn.Module):
         return y_sum
 
 
-class SumLayer2(torch.nn.Module):
+class SumLayerExplicit(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -156,18 +157,18 @@ def build_program():
     #images[d0] = ModuleLearner('logits', module=Net())
     images[d0] = FunctionalSensor('logits', forward=lambda x: x[:, 0])
     #images[d0] = ReaderSensor(keyword='digit0', label=True)
-    images[d0] = FunctionalSensor('summation_label',
-                                  forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+    #images[d0] = FunctionalSensor('summation_label',
+    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (1, 10) to digit enums
     #images[d1] = ModuleLearner('logits', 1, module=Net())
     images[d1] = FunctionalSensor('logits', forward=lambda x: x[:, 1])
     #images[d1] = ReaderSensor(keyword='digit1', label=True)
-    images[d1] = FunctionalSensor('summation_label',
-                                  forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+    #images[d1] = FunctionalSensor('summation_label',
+    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer2())
+    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
 
     for d_nm, d_c in zip(digits_0, digits_0_c):
         d_number = name_to_number(d_nm)
@@ -199,15 +200,21 @@ def build_program():
                                        forward=lambda x, n: I_pr(label_to_binary(x, n),
                                                                 prefix=f"s'_{n} ", do_print=False), label=True)
 
-    program = IMLProgram(graph,
+    '''program = IMLProgram(graph,
                        poi=(images,),
                        inferTypes=['local/argmax'],
-                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
+                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
     '''program = SolverPOIProgram(graph,
                          poi=(images,),
                          inferTypes=['local/argmax'],
-                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss()))'''
+                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss(prior_weight=1.0)))'''
+
+    program = PrimalDualProgram(graph,
+                                IMLModel,
+                                poi=(images,),
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
 
     return program
 
