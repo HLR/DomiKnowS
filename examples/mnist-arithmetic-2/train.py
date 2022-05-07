@@ -13,7 +13,7 @@ from operator import itemgetter
 
 from graph import digits_0, digits_1, summations, name_to_number
 
-from model import build_program, sum_func
+from model import build_program
 import config
 
 trainloader, validloader, testloader = get_readers()
@@ -25,46 +25,55 @@ def argmax(lst):
     return index
 
 def get_classification_report(program, reader, total=None, verbose=False):
-    pred_all = []
-    label_all = []
+    digit_pred_a = []
+    sum_pred_a = []
 
-    for node in tqdm(program.populate(reader, device='auto'), total=total):
+    digit_label_a = []
+    sum_label_a = []
+
+    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total):
         node.inferILPResults()
 
-        suffix = "/ILP"
-        idx = 0
+        #print(node.getAttributes())
 
-        pred_digit_0_distr = list(map(lambda nm: node.getAttribute("<" + nm + f">{suffix}")[idx], digits_0))
-        pred_digit_1_distr = list(map(lambda nm: node.getAttribute("<" + nm + f">{suffix}")[idx], digits_1))
-        pred_sum_distr = list(map(lambda nm: node.getAttribute("<" + nm + f">{suffix}")[idx], summations))
-
-        pred_digit_0 = argmax(pred_digit_0_distr)
-        pred_digit_1 = argmax(pred_digit_1_distr)
-        pred_sum = argmax(pred_sum_distr)
-
-        label = node.getAttribute('label').item()
+        digit0_pred = torch.argmax(node.getAttribute('<digits1>/ILP'))
+        digit1_pred = torch.argmax(node.getAttribute('<digits0>/ILP'))
+        summation_pred = torch.argmax(node.getAttribute('<summations>/ILP'))
 
         if verbose:
-            print('pred:', pred_digit_0, pred_digit_1, pred_sum, 'label:', label)
+            print(f"PRED: {digit0_pred} + {digit1_pred} = {summation_pred}")
 
-        label_all.append(label)
-        pred_all.append(pred_sum)
+        digit0_label = node.getAttribute('<digits0>/label').item()
+        digit1_label = node.getAttribute('<digits1>/label').item()
+        summation_label = node.getAttribute('<summations>/label').item()
 
-    return classification_report(label_all, pred_all)
+        if verbose:
+            print(f"LABEL: {digit0_label} + {digit1_label} = {summation_label}")
+
+        digit_pred_a.append(digit0_pred)
+        digit_pred_a.append(digit1_pred)
+
+        digit_label_a.append(digit0_label)
+        digit_label_a.append(digit1_label)
+
+        sum_pred_a.append(summation_pred)
+        sum_label_a.append(summation_label)
+
+    print(classification_report(digit_label_a, digit_pred_a))
+    print(classification_report(sum_label_a, sum_pred_a))
 
 
 program = build_program()
 
-# print(get_classification_report(program, validloader, total=config.num_valid, verbose=True))
+#get_classification_report(program, validloader, total=config.num_valid, verbose=True)
 
 for i in range(10):
     print("EPOCH", i)
 
     program.train(trainloader,
               train_epoch_num=1,
-              Optim=partial(torch.optim.SGD,
-                            lr=config.lr),
+              Optim=lambda p: torch.optim.Adam(p, lr=0.001),
               device='auto')
 
     # validation
-    print(get_classification_report(program, trainloader, total=config.num_train, verbose=True))
+    get_classification_report(program, validloader, total=config.num_valid, verbose=False)

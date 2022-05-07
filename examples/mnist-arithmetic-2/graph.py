@@ -41,7 +41,14 @@ with Graph(name='global') as graph:
     exactL(*digits_1_c)
     exactL(*summations_c)
 
-    numbers_c = digits_0_c + digits_1_c + summations_c
+    exactL(*d0.attributes)
+    exactL(*d1.attributes)
+    exactL(*s.attributes)
+
+    for d0_nm in digits_0:
+        for d1_nm in digits_1:
+            d0_val = int(d0_nm.split('_')[-1])
+            d1_val = int(d1_nm.split('_')[-1])
 
     for d0_nm, d0_c in zip(digits_0, digits_0_c):
         for d1_nm, d1_c in zip(digits_1, digits_1_c):
