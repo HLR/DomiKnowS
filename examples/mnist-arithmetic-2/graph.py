@@ -24,22 +24,20 @@ for sum_val in range(config.summationRange):
 
 numbers = digits_0 + digits_1 + summations
 
-def name_to_number(name):
-    return int(name.split('_')[-1])
-
 with Graph(name='global') as graph:
     images = Concept(name='images')
 
-    def make(name):
-        return images(name=name)
+    d0 = images(name='digits0',
+                ConceptClass=EnumConcept,
+                values=digits_0)
 
-    digits_0_c = list(map(make, digits_0))
-    digits_1_c = list(map(make, digits_1))
-    summations_c = list(map(make, summations))
+    d1 = images(name='digits1',
+               ConceptClass=EnumConcept,
+               values=digits_1)
 
-    exactL(*digits_0_c)
-    exactL(*digits_1_c)
-    exactL(*summations_c)
+    s = images(name='summations',
+                ConceptClass=EnumConcept,
+                values=summations)
 
     exactL(*d0.attributes)
     exactL(*d1.attributes)
@@ -50,18 +48,16 @@ with Graph(name='global') as graph:
             d0_val = int(d0_nm.split('_')[-1])
             d1_val = int(d1_nm.split('_')[-1])
 
-    for d0_nm, d0_c in zip(digits_0, digits_0_c):
-        for d1_nm, d1_c in zip(digits_1, digits_1_c):
-            d0_number = name_to_number(d0_nm)
-            d1_number = name_to_number(d1_nm)
+            sum_val = d0_val + d1_val
+            sum_nm = f's_{sum_val}'
 
-            sum_val = d0_number + d1_number
+            #print(d0_nm, d1_nm, sum_nm)
 
             ifL(
-                d0_c,
+                getattr(d0, d0_nm)(),
                 ifL(
-                    d1_c,
-                    summations_c[sum_val]
+                    getattr(d1, d1_nm)(),
+                    getattr(s, sum_nm)()
                 ),
                 active=True
             )
