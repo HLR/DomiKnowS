@@ -78,6 +78,25 @@ class SumLayer(torch.nn.Module):
         return y_sum
 
 
+class SumLayer2(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        x = F.softmax(x, dim=2)
+
+        digit0, digit1 = torch.squeeze(x, dim=0)
+
+        digit0 = torch.unsqueeze(digit0, dim=1)
+        digit1 = torch.unsqueeze(digit1, dim=0)
+        d = torch.matmul(digit0, digit1)
+        d = d.repeat(1, 1, 1, 1)
+        f = torch.flip(torch.eye(10), dims=(0,)).repeat(1, 1, 1, 1)
+        conv_diag_sums = F.conv2d(d, f, padding=(9, 0), groups=1)[..., 0]
+
+        return torch.squeeze(conv_diag_sums, dim=0)
+
+
 class NBSoftCrossEntropyLoss(NBCrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
         if target.dim() == 1:
@@ -132,7 +151,7 @@ def build_program():
     #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner('logits', module=SumLayer())
+    images[s] = ModuleLearner('logits', module=SumLayer2())
 
     for d_nm, d_c in zip(digits_0, digits_0_c):
         d_number = name_to_number(d_nm)
@@ -167,12 +186,12 @@ def build_program():
     program = IMLProgram(graph,
                        poi=(images,),
                        inferTypes=['local/argmax'],
-                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(lmbd=0.5)))
+                       loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)))
 
     '''program = SolverPOIProgram(graph,
                          poi=(images,),
                          inferTypes=['local/argmax'],
-                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss()))'''
+                         loss=MacroAverageTracker(NBCrossEntropyLoss()))'''
 
     return program
 
