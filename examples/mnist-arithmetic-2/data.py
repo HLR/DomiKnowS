@@ -30,14 +30,14 @@ def get_readers():
 
     trainloader = DataLoader(
         trainset,
-        sampler=random.sample(range(0, 2000), config.num_train * 2),
+        sampler=random.sample(range(0, 50000), config.num_train * 2),
         shuffle=False,
         batch_size=2,
         collate_fn=make_sum
         )
     validloader = DataLoader(
         trainset,
-        sampler=random.sample(range(50000), config.num_valid * 2),
+        sampler=random.sample(range(50000, 60000), config.num_valid * 2),
         shuffle=False,
         batch_size=2,
         collate_fn=make_sum

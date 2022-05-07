@@ -8,10 +8,11 @@ from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.program import POIProgram, IMLProgram, SolverPOIProgram
 from regr.program.model.ilpu import ILPUModel
 from regr.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 
 from graph import *
 
+from digit_label import digit_labels
 import config
 
 
@@ -76,10 +77,34 @@ class SumLayer(torch.nn.Module):
         #return torch.zeros((1, 19), requires_grad=True)
         return y_sum
 
+
+class NBSoftCrossEntropyLoss(NBCrossEntropyLoss):
+    def forward(self, input, target, *args, **kwargs):
+        if target.dim() == 1:
+            return super().forward(input, target, *args, **kwargs)
+
+        epsilon = 1e-5
+        input = input.view(-1, input.shape[-1])
+        input = input.clamp(min=epsilon, max=1-epsilon)
+
+        logprobs = F.log_softmax(input, dim=1)
+        return -(target * logprobs).sum() / input.shape[0]
+
+
+class NBSoftCrossEntropyIMLoss(BCEWithLogitsIMLoss):
+    def forward(self, input, inference, target, weight=None):
+        if target.dim() == 1:
+            num_classes = input.shape[-1]
+            target = target.to(dtype=torch.long)
+            target = F.one_hot(target, num_classes=num_classes)
+        return super().forward(input, inference, target, weight=weight)
+
+
 def print_and_output(x, f=lambda x: x.shape, do_print=False):
     if do_print:
         print(prefix + str(f(x)))
     return x
+
 
 def build_program():
     # (1, 2, 784)
@@ -88,13 +113,23 @@ def build_program():
     # (1, 2, 784) -> (2, 784) -> (2, 10) -> (1, 2, 10)
     images['logits'] = ModuleLearner('pixels', module=Net())
 
-    # (1, 2, 10) -> (1, 10) to digit enums
-    images[d0] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 0]))
-    images[d0] = ReaderSensor(keyword='digit0', label=True)
+    images['digit0_label'] = ReaderSensor(keyword='digit0')
+    images['digit1_label'] = ReaderSensor(keyword='digit1')
+    images['summation_label'] = ReaderSensor(keyword='summation', label=True)
 
     # (1, 2, 10) -> (1, 10) to digit enums
-    images[d1] = FunctionalSensor('logits', forward=lambda x: print_and_output(x[:, 1]))
-    images[d1] = ReaderSensor(keyword='digit1', label=True)
+    #images[d0] = ModuleLearner('logits', module=Net())
+    images[d0] = FunctionalSensor('logits', forward=lambda x: x[:, 0])
+    #images[d0] = ReaderSensor(keyword='digit0', label=True)
+    #images[d0] = FunctionalSensor('summation_label',
+    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+
+    # (1, 2, 10) -> (1, 10) to digit enums
+    #images[d1] = ModuleLearner('logits', 1, module=Net())
+    images[d1] = FunctionalSensor('logits', forward=lambda x: x[:, 1])
+    #images[d1] = ReaderSensor(keyword='digit1', label=True)
+    #images[d1] = FunctionalSensor('summation_label',
+    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
     images[s] = ModuleLearner('logits', module=SumLayer())
@@ -129,14 +164,15 @@ def build_program():
                                        forward=lambda x, n: I_pr(label_to_binary(x, n),
                                                                 prefix=f"s'_{n} ", do_print=False), label=True)
 
-    program = SolverPOIProgram(graph,
-                               poi=(images,),
-                               inferTypes=['ILP', 'local/argmax'],
-                               loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                               metric={
-                                   'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                   'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
-                               )
+    program = IMLProgram(graph,
+                       poi=(images,),
+                       inferTypes=['local/argmax'],
+                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(lmbd=0.5)))
+
+    '''program = SolverPOIProgram(graph,
+                         poi=(images,),
+                         inferTypes=['local/argmax'],
+                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss()))'''
 
     return program
 

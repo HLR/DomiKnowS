@@ -36,19 +36,21 @@ def get_classification_report(program, reader, total=None, verbose=False):
 
         #print(node.getAttributes())
 
-        digit0_pred = torch.argmax(node.getAttribute('<digits1>/ILP'))
-        digit1_pred = torch.argmax(node.getAttribute('<digits0>/ILP'))
-        summation_pred = torch.argmax(node.getAttribute('<summations>/ILP'))
+        suffix = '/ILP'
+
+        digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
+        digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
+        summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
         if verbose:
-            print(f"PRED: {digit0_pred} + {digit1_pred} = {summation_pred}")
+            print(f"PRED: {digit0_pred} + {digit1_pred}")
 
-        digit0_label = node.getAttribute('<digits0>/label').item()
-        digit1_label = node.getAttribute('<digits1>/label').item()
+        digit0_label = node.getAttribute('digit0_label').item()
+        digit1_label = node.getAttribute('digit1_label').item()
         summation_label = node.getAttribute('<summations>/label').item()
 
         if verbose:
-            print(f"LABEL: {digit0_label} + {digit1_label} = {summation_label}")
+            print(f"LABEL: {digit0_label} + {digit1_label}")
 
         digit_pred_a.append(digit0_pred)
         digit_pred_a.append(digit1_pred)
@@ -65,15 +67,18 @@ def get_classification_report(program, reader, total=None, verbose=False):
 
 program = build_program()
 
-#get_classification_report(program, validloader, total=config.num_valid, verbose=True)
+#get_classification_report(program, validloader, total=config.num_valid, verbose=False)
 
-for i in range(10):
+for i in range(1, 11):
     print("EPOCH", i)
 
     program.train(trainloader,
               train_epoch_num=1,
-              Optim=lambda p: torch.optim.Adam(p, lr=0.001),
+              Optim=lambda x: torch.optim.Adam(x, lr=0.001),
               device='auto')
 
     # validation
-    get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+    if i % 3 == 0:
+        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+
+get_classification_report(program, validloader, total=config.num_valid, verbose=False)
