@@ -82,13 +82,16 @@ class SumLayer2(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, x):
-        x = F.softmax(x, dim=2)
+    def forward(self, digit0, digit1):
+        #x = F.softmax(x, dim=2)
 
-        digit0, digit1 = torch.squeeze(x, dim=0)
+        #digit0, digit1 = torch.squeeze(x, dim=0)
 
-        digit0 = torch.unsqueeze(digit0, dim=1)
-        digit1 = torch.unsqueeze(digit1, dim=0)
+        digit0 = F.softmax(digit0, dim=1)
+        digit1 = F.softmax(digit1, dim=1)
+
+        digit0 = torch.reshape(digit0, (10, 1))
+        digit1 = torch.reshape(digit1, (1, 10))
         d = torch.matmul(digit0, digit1)
         d = d.repeat(1, 1, 1, 1)
         f = torch.flip(torch.eye(10), dims=(0,)).repeat(1, 1, 1, 1)
@@ -98,6 +101,11 @@ class SumLayer2(torch.nn.Module):
 
 
 class NBSoftCrossEntropyLoss(NBCrossEntropyLoss):
+    def __init__(self, prior_weight=1.0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.prior_weight = prior_weight
+
     def forward(self, input, target, *args, **kwargs):
         if target.dim() == 1:
             return super().forward(input, target, *args, **kwargs)
@@ -107,16 +115,24 @@ class NBSoftCrossEntropyLoss(NBCrossEntropyLoss):
         input = input.clamp(min=epsilon, max=1-epsilon)
 
         logprobs = F.log_softmax(input, dim=1)
-        return -(target * logprobs).sum() / input.shape[0]
+        return self.prior_weight * -(target * logprobs).sum() / input.shape[0]
 
 
 class NBSoftCrossEntropyIMLoss(BCEWithLogitsIMLoss):
+    def __init__(self, prior_weight=1.0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.prior_weight = prior_weight
+
     def forward(self, input, inference, target, weight=None):
         if target.dim() == 1:
             num_classes = input.shape[-1]
             target = target.to(dtype=torch.long)
             target = F.one_hot(target, num_classes=num_classes)
-        return super().forward(input, inference, target, weight=weight)
+
+            return super().forward(input, inference, target, weight=weight)
+
+        return super().forward(input, inference, target, weight=weight) * self.prior_weight
 
 
 def print_and_output(x, f=lambda x: x.shape, do_print=False):
@@ -140,18 +156,18 @@ def build_program():
     #images[d0] = ModuleLearner('logits', module=Net())
     images[d0] = FunctionalSensor('logits', forward=lambda x: x[:, 0])
     #images[d0] = ReaderSensor(keyword='digit0', label=True)
-    #images[d0] = FunctionalSensor('summation_label',
-    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+    images[d0] = FunctionalSensor('summation_label',
+                                  forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (1, 10) to digit enums
     #images[d1] = ModuleLearner('logits', 1, module=Net())
     images[d1] = FunctionalSensor('logits', forward=lambda x: x[:, 1])
     #images[d1] = ReaderSensor(keyword='digit1', label=True)
-    #images[d1] = FunctionalSensor('summation_label',
-    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+    images[d1] = FunctionalSensor('summation_label',
+                                  forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner('logits', module=SumLayer2())
+    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer2())
 
     for d_nm, d_c in zip(digits_0, digits_0_c):
         d_number = name_to_number(d_nm)
@@ -186,12 +202,12 @@ def build_program():
     program = IMLProgram(graph,
                        poi=(images,),
                        inferTypes=['local/argmax'],
-                       loss=MacroAverageTracker(NBCrossEntropyIMLoss(lmbd=0.5)))
+                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
 
     '''program = SolverPOIProgram(graph,
                          poi=(images,),
                          inferTypes=['local/argmax'],
-                         loss=MacroAverageTracker(NBCrossEntropyLoss()))'''
+                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss()))'''
 
     return program
 

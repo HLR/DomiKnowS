@@ -16,58 +16,60 @@ from graph import digits_0, digits_1, summations, name_to_number
 from model import build_program
 import config
 
+
 trainloader, validloader, testloader = get_readers()
 
-#program = LearningBasedProgram(graph, Model)
 
-def argmax(lst):
-    index, _ = max(enumerate(lst), key=itemgetter(1))
-    return index
+def get_pred_from_node(node, suffix):
+    digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
+    digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
+    summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
-def get_classification_report(program, reader, total=None, verbose=False):
-    digit_pred_a = []
-    sum_pred_a = []
+    return digit0_pred, digit1_pred, summation_pred
 
-    digit_label_a = []
-    sum_label_a = []
+
+def get_classification_report(program, reader, total=None):
+    digits_results = {
+        'label': []
+    }
+
+    summation_results = {
+        'label': []
+    }
+
+    infer_suffixes = ['/ILP', '/local/argmax']
+
+    for suffix in infer_suffixes:
+        digits_results[suffix] = []
+        summation_results[suffix] = []
 
     for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total):
         node.inferILPResults()
 
-        #print(node.getAttributes())
+        for suffix in infer_suffixes:
+            digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
 
-        suffix = '/ILP'
+            digits_results[suffix].append(digit0_pred)
+            digits_results[suffix].append(digit1_pred)
 
-        digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
-        digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
-        summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
+            summation_results[suffix].append(summation_pred)
 
-        if verbose:
-            print(f"PRED: {digit0_pred} + {digit1_pred}")
+        digits_results['label'].append(node.getAttribute('digit0_label').item())
+        digits_results['label'].append(node.getAttribute('digit1_label').item())
+        summation_results['label'].append(node.getAttribute('<summations>/label').item())
 
-        digit0_label = node.getAttribute('digit0_label').item()
-        digit1_label = node.getAttribute('digit1_label').item()
-        summation_label = node.getAttribute('<summations>/label').item()
+    for suffix in infer_suffixes:
+        print('============== RESULTS FOR:', suffix, '==============')
 
-        if verbose:
-            print(f"LABEL: {digit0_label} + {digit1_label}")
+        print(classification_report(digits_results['label'], digits_results[suffix]))
+        print(classification_report(summation_results['label'], summation_results[suffix]))
 
-        digit_pred_a.append(digit0_pred)
-        digit_pred_a.append(digit1_pred)
-
-        digit_label_a.append(digit0_label)
-        digit_label_a.append(digit1_label)
-
-        sum_pred_a.append(summation_pred)
-        sum_label_a.append(summation_label)
-
-    print(classification_report(digit_label_a, digit_pred_a))
-    print(classification_report(sum_label_a, sum_pred_a))
+        print('==========================================')
 
 
 program = build_program()
 
-#get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+#get_classification_report(program, validloader, total=config.num_valid)
 
 for i in range(1, 11):
     print("EPOCH", i)
@@ -78,7 +80,4 @@ for i in range(1, 11):
               device='auto')
 
     # validation
-    if i % 3 == 0:
-        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
-
-get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+    get_classification_report(program, validloader, total=config.num_valid)
