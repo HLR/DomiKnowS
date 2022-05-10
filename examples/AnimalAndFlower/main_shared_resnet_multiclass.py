@@ -16,7 +16,7 @@ from graph_multiclass import graph
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
-parser.add_argument('--solver', help='the model solver', default='primal_dual')
+parser.add_argument('--solver', help='iml', default='iml')
 parser.add_argument('--samplenum', dest='samplenum', default=4521, help='number of samples to choose from the dataset',
                     type=int)
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors', type=int)
