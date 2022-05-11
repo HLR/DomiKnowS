@@ -299,7 +299,7 @@ program = SampleLossProgram(
         
         sample = True,
         sampleSize=2000, 
-        sampleGlobalLoss = False,
+        sampleGlobalLoss = True,
         beta=50
         )
 
