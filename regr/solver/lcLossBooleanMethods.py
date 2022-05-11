@@ -30,21 +30,21 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
     def _isTensor(self, v):
         if v is None:
-            return  None
+            return  0
         elif torch.is_tensor(v):
             if len(v.shape) == 0 or len(v.shape) == 1 and v.shape[0] == 1:
                 return v.item()
             else:
-                None
+                0
         elif isinstance(v, (int, float, complex)):
-            return None
+            return 0
         else:
-            return None
+            return 0
         
     def _fixVar(self, var):
         varFixed = []  
         for v in var:
-            if not self._isTensor(v):
+            if v == None or self._isTensor(v) == 0:
                 varFixed.append(torch.zeros(1, device=self.current_device, requires_grad=True))
             else:
                 varFixed.append(v)
@@ -82,11 +82,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             var2 = 0
             
         if self.tnorm =='L':
-            and2Success = torch.maximum(torch.zeros(1, device=self.current_device, requires_grad=True), torch.sub(torch.add(var1, var2), 1))   #max(0, var1 + var2 - 1)
+            tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
+            and2Success = torch.maximum(tZero, torch.sub(torch.add(var1, var2), 1)) # max(0, var1 + var2 - 1)
         elif self.tnorm =='G':
-            and2Success = torch.minimum(var1, var2) #min(var1, var2)
+            and2Success = torch.minimum(var1, var2) # min(var1, var2)
         elif self.tnorm =='P':
-            and2Success = torch.mul(var1, var2) #var1*var2
+            and2Success = torch.mul(var1, var2) # var1*var2
          
         if onlyConstrains:
             and2Loss = torch.sub(1, and2Success)
@@ -106,19 +107,20 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if self.tnorm =='L':
             N = len(var)
         
-            varSum = var[0]
+            varSum = torch.clone(var[0])
             for v in var[1:]:
-                varSum.add(v)
-                
-            andSuccess = torch.maximum(torch.add(torch.sub(varSum,N), 1), torch.zeros(1, device=self.current_device, requires_grad=True))
+                varSum.add_(v)
+            
+            tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
+            andSuccess = torch.maximum(torch.add(torch.sub(varSum,N), 1), tZero) # max(varSum - N + 1, 0)
         elif self.tnorm =='G':
-            andSuccess = var[0]
+            andSuccess = torch.clone(var[0])
             for v in var[1:]:
-                andSuccess.minimum(v)
+                andSuccess = torch.minimum(andSuccess, v)
         elif self.tnorm =='P':
-            andSuccess = var[0]
+            andSuccess = torch.clone(var[0])
             for v in var[1:]:
-                andSuccess.mul(v)
+                andSuccess.mul_(v)
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
@@ -140,11 +142,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             var2 = 0
             
         if self.tnorm =='L':
-            or2Success = torch.minimum(torch.add(var1, var2), torch.ones(1, device=self.current_device, requires_grad=True))  #min(var1 + var2, 1)
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            or2Success = torch.minimum(torch.add(var1, var2), tOne) # min(var1 + var2, 1)
         elif self.tnorm =='G':
-            or2Success = torch.maximum(var1, var2)#max(var1, var2)
+            or2Success = torch.maximum(var1, var2) # max(var1, var2)
         elif self.tnorm =='P':
-            or2Success = torch.sub(torch.add(var1, var2), torch.mul(var1, var2))  #var1+var2 - var1*var2
+            or2Success = torch.sub(torch.add(var1, var2), torch.mul(var1, var2)) # var1+var2 - var1*var2
 
         if onlyConstrains:
             or2Loss = torch.sub(1, or2Success) # 1 - or2Success
@@ -161,24 +164,25 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         var = self._fixVar(var)
         
-        varSum = var[0]
+        varSum = torch.clone(var[0])
         for v in var[1:]:
-            varSum.add(v)
+            varSum.add_(v)
            
         if self.tnorm =='L':
-            orSuccess = torch.minimum(varSum, torch.ones(1, device=self.current_device, requires_grad=True))  #min(varSum, 1)
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            orSuccess = torch.minimum(varSum, tOne) # min(varSum, 1)
         elif self.tnorm =='G':
-            orSuccess = var[0]
+            orSuccess = torch.clone(var[0])
             for v in var[1:]:
                 orSuccess.maximum(v)
         elif self.tnorm =='P':
-            varPod = var[0]
+            varPod = torch.clone(var[0])
             for v in var[1:]:
-                varPod.mul(v)
-            orSuccess = torch.sub(varSum, varPod)   #varSum - math.prod(var)
+                varPod.mul_(v)
+            orSuccess = torch.sub(varSum, varPod) # varSum - math.prod(var)
             
         if onlyConstrains:
-            orLoss = torch.sub(1, orSuccess) #1 - orSuccess
+            orLoss = torch.sub(1, orSuccess) # 1 - orSuccess
                 
             return orLoss
         else:            
@@ -231,17 +235,19 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             var2 = 0
           
         if self.tnorm =='L':
-            ifSuccess = torch.minimum(torch.ones(1, device=self.current_device, requires_grad=True), torch.sub(1, torch.add(var1, var2))) #min(1, 1 - var1 + var2) #torch.sub
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
         elif self.tnorm =='G':
             if var2Item > var1Item: 
-                ifSuccess = torch.mul(var2, torch.div(1, var2)) #1
+                ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
             else: 
                 ifSuccess = var2
         elif self.tnorm =='P':
             if var1Item != 0:
-                ifSuccess = torch.minimum(torch.ones(1, device=self.current_device, requires_grad=True), torch.div(var2, var1)) # min(1, var2/var1) # 
+                tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+                ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
             else:
-                ifSuccess = torch.mul(var2, torch.div(1, var2)) #1
+                ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
 
         # if(var1, var2) = or(not(var1), var2)
         #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
@@ -309,18 +315,20 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         var = self._fixVar(var)
                 
-        varSum = var[0]
+        varSum = torch.clone(var[0])
         for v in var[1:]:
-            varSum.add(v)
+            varSum.add_(v)
                         
+        tZero = torch.zeros(1, device=self.current_device, requires_grad=True)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True)
         if limitOp == '>=': # > limit
-            countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), torch.zeros(1, device=self.current_device, requires_grad=True)), torch.ones(1, device=self.current_device, requires_grad=True)) #min(max(varSum - limit, 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
             
         elif limitOp == '<=': # < limit
-            countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), torch.zeros(1, device=self.current_device, requires_grad=True)), torch.ones(1, device=self.current_device, requires_grad=True)) #min(max(limit - varSum, 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
 
         elif limitOp == '==': # == limit
-            countSuccess = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), torch.zeros(1, device=self.current_device, requires_grad=True)), torch.ones(1, device=self.current_device, requires_grad=True)) #min(max(abs(varSum - limit), 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
                 
         if onlyConstrains:
             countLoss = torch.sub(1, countSuccess)

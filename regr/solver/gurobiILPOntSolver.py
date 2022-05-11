@@ -1259,14 +1259,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                         if pUsed:
                             if xPkey not in dnAtt:
                                 dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
-                                self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
+                                self.myLogger.info('Not returning solutions for %s in %s it is nan'%(c[1], cDn))
                                 continue
                         
                             solution = dnAtt[xPkey][maxP][index].X
                         else:
                             if xkey not in dnAtt:
                                 dnAtt[ILPkey] = torch.tensor([float("nan")], device=device) 
-                                self.myLogger.info('Not returning solutions for %s in %sit is nan'%(c[1], cDn))
+                                self.myLogger.info('Not returning solutions for %s in %s it is nan'%(c[1], cDn))
                                 continue
                             
                             solution = dnAtt[xkey][index].X
@@ -1387,12 +1387,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                 S = Vs[i, :] #currentV[1] # Sample for the current Variable
             else:
                 S = currentV[1]
+                
+            if isinstance(S, list):
+                continue
+            
             notS = torch.sub(torch.ones(lcSampleSize, device=currentDevice), S.float()) # Negation of Sample
             
             pS = torch.mul(P, S) # Tensor with p multiply by True variable sample
             oneMinusPS = torch.mul(oneMinusP, notS) # Tensor with 1-p multiply by False variable sample
             
-            cLoss = pS.add(oneMinusPS) # Sum of p and 1-p tensors
+            cLoss = torch.add(pS, oneMinusPS) # Sum of p and 1-p tensors
                                             
             # Multiply the loss
             if replace_mul:
@@ -1477,6 +1481,13 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                     current_lcLosses['lossTensor'] = lossTensor
                     current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                    
+                    endLC = process_time_ns() # timer()
+                    elapsedInNsLC = endLC - startLC
+                    elapsedInMsLC = elapsedInNsLC/1000000
+                    
+                    self.myLoggerTime.info('Processing time for Lc %s with %i entries is: %ims'%(lcName, len(lossList),  elapsedInMsLC))
+                    [h.flush() for h in self.myLoggerTime.handlers]
                     
                 else: # -----------Sample
                     
