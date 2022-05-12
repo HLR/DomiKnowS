@@ -161,70 +161,68 @@ class SampleLosslModel(torch.nn.Module):
         import math
         lmbd_loss = []
         replace_mul = False
-        if self.sampleGlobalLoss and constr_loss['globalLoss']:
-            globalLoss = constr_loss['globalLoss']
-            globalLoss = -1 * math.log(globalLoss)
-            self.loss['globalLoss'](globalLoss)
-            lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
-        else:
-            key_losses = dict()
-            for key, loss in constr_loss.items():
-                if key not in self.constr:
-                    continue
-                # loss_value = loss['loss']
-                epsilon = 0.0
-                key_loss = 0
-                for i, lossTensor in enumerate(loss['lossTensor']):
-                    lcSuccesses = loss['lcSuccesses'][i]
-                    if lossTensor.sum().item() != 0:
-                        tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
-                        true_val = lossTensor[tidx]
-                        
-                        if true_val.sum().item() != 0: 
-                            if not replace_mul:
-                                loss_value = true_val.sum() / lossTensor.sum()
-                                loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                                # loss_value = -1 * torch.log(loss_value)
-                                with torch.no_grad():
-                                    min_val = 10 * loss_value
-                                loss_ = - (self.get_lmbd(key) - min_val) * loss_value
-                                key_loss += loss_
-                                # loss_ = min_val * loss_value
-                            else:
-                                loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
-                                key_loss += -1 * loss_value
-
+        
+        key_losses = dict()
+        for key, loss in constr_loss.items():
+            if key not in self.constr:
+                continue
+            # loss_value = loss['loss']
+            epsilon = 0.0
+            key_loss = 0
+            for i, lossTensor in enumerate(loss['lossTensor']):
+                lcSuccesses = loss['lcSuccesses'][i]
+                if constr_loss["globalSuccessCountet"] > 0:
+                    lcSuccesses = constr_loss["globalSuccesses"]
+                if lossTensor.sum().item() != 0:
+                    tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
+                    true_val = lossTensor[tidx]
+                    
+                    if true_val.sum().item() != 0: 
+                        if not replace_mul:
+                            loss_value = true_val.sum() / lossTensor.sum()
+                            loss_value = epsilon - ( -1 * torch.log(loss_value) )
+                            # loss_value = -1 * torch.log(loss_value)
+                            with torch.no_grad():
+                                min_val = 10 * loss_value
+                            loss_ = - (self.get_lmbd(key) - min_val) * loss_value
+                            key_loss += loss_
+                            # loss_ = min_val * loss_value
                         else:
-                            loss_ = 0
-                        
-                        
-    
-                        # if loss['lossTensor'].nansum().item() <= 1:
-                        #     loss_value = loss['lossTensor']
-                        #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
-                        # else:
-                        #     _idx = []
-                        #     for i in torch.unique(loss['lossTensor']):
-                        #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
-                        #     loss_value = loss['lossTensor'][_idx]
-                        #     # loss_value = torch.unique(loss['lossTensor'])
-    
-                        # loss_value = torch.log(loss_value.sum())
-                        # loss_ = -1 * (loss_value)
-                        # self.loss[key](loss_)
-                        # lmbd_loss.append(loss_) 
-                        
+                            loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
+                            key_loss += -1 * loss_value
+
                     else:
                         loss_ = 0
+                    
+                    
 
-                epsilon = 1e-2
-                key_loss = max(key_loss - epsilon, 0) 
-                if key_loss != 0:  
-                    key_losses[key] = key_loss
-                    # self.loss[key](key_loss)
-                    # lmbd_loss.append(key_loss) 
+                    # if loss['lossTensor'].nansum().item() <= 1:
+                    #     loss_value = loss['lossTensor']
+                    #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
+                    # else:
+                    #     _idx = []
+                    #     for i in torch.unique(loss['lossTensor']):
+                    #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
+                    #     loss_value = loss['lossTensor'][_idx]
+                    #     # loss_value = torch.unique(loss['lossTensor'])
 
-            all_losses = [key_losses[key] for key in key_losses]
+                    # loss_value = torch.log(loss_value.sum())
+                    # loss_ = -1 * (loss_value)
+                    # self.loss[key](loss_)
+                    # lmbd_loss.append(loss_) 
+                    
+                else:
+                    loss_ = 0
+
+            epsilon = 1e-2
+            key_loss = max(key_loss - epsilon, 0) 
+            if key_loss != 0:  
+                key_losses[key] = key_loss
+                # self.loss[key](key_loss)
+                # lmbd_loss.append(key_loss) 
+                    
+        all_losses = [key_losses[key] for key in key_losses]
+        if all_losses:
             all_losses = torch.stack(all_losses)
 
             satisfied_num = len( set(constr_loss.keys()) - set(key_losses.keys()) )

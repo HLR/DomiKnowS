@@ -472,8 +472,8 @@ for i in range(trainingNo):
             un = set(tab_vals)
             errors += 6 - len(un)
                 
-        print("Count of sudoku entries different from label- %s"%(count))
-        print("Count of sudoku violations- %s"%(errors))
+        print("Count of sudoku entries different from label - %s"%(count))
+        print("Count of sudoku violations - %s"%(errors))
         
 
 ### make the table

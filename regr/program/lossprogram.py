@@ -310,7 +310,10 @@ class SampleLossProgram(LossProgram):
                 loss = mloss
             else:
                 closs, *_ = self.cmodel(output[1])
-                loss = mloss + self.beta * closs
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
             if self.opt is not None and loss:
                 loss.backward()
                 # for name, param in self.model.named_parameters():

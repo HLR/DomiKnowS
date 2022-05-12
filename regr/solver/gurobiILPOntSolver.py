@@ -1414,7 +1414,8 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         m = None 
         p = 0
-        
+        currentDevice = dn.current_device
+
         if sample: 
             if sampleSize <= 0: 
                 raise Exception("Sample size is not incorrect - %i"%(sampleSize))
@@ -1437,7 +1438,6 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         lcCounter = 0 # Count processed lcs
         lcLosses = {}
-        canComputeGlobalLoss = True
         for graph in self.myGraph: # Loop through graphs
             for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
                 startLC = process_time_ns() # timer()
@@ -1451,57 +1451,100 @@ class gurobiILPOntSolver(ilpOntSolver):
                 lcCounter +=  1
                 self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
                 
-                # Calculate loss for the given lc
-                if sample:
-                    # lossList will contain boolean results for lc evaluation for the given sample element
-                    # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
-                else:
-                    # lossList will contain float result for lc loss calculation
-                    lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
-                
-                if not lossList:
-                    continue
-                
                 lcName = lc.lcName
                     
                 lcLosses[lcName] = {}
                 current_lcLosses = lcLosses[lcName]
                 
-                if not sample: # Loss value
-                    lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
-                    for i, l in enumerate(lossList):
-                        lossTensor[i] = float("nan")
-                        for entry in l:
-                            if entry is not None:
-                                if lossTensor[i] != lossTensor[i]:
-                                    lossTensor[i] = entry
-                                else:
-                                    lossTensor[i] += entry
+                # Calculate loss for the given lc
+                if sample:
+                    # lossList will contain boolean results for lc evaluation for the given sample element
+                    # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
+                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    current_lcLosses['lossList'] = lossList
+                    current_lcLosses['sampleInfo'] = sampleInfo
+                else:
+                    # lossList will contain float result for lc loss calculation
+                    lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    current_lcLosses['lossList'] = lossList
+                    
+                    
+                endLC = process_time_ns() # timer()
+                elapsedInNsLC = endLC - startLC
+                elapsedInMsLC = elapsedInNsLC/1000000
+                current_lcLosses['elapsedInMsLC'] = elapsedInMsLC
+                            
+        if not sample: # Loss value
+            for currentLcName in lcLosses:
+                startLC = process_time_ns() # timer()
 
-                    current_lcLosses['lossTensor'] = lossTensor
-                    current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                current_lcLosses = lcLosses[currentLcName]
+                lossList = current_lcLosses['lossList']
+                
+                lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
+                for i, l in enumerate(lossList):
+                    lossTensor[i] = float("nan")
+                    for entry in l:
+                        if entry is not None:
+                            if lossTensor[i] != lossTensor[i]:
+                                lossTensor[i] = entry
+                            else:
+                                lossTensor[i] += entry
+    
+                current_lcLosses['lossTensor'] = lossTensor
+                current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                
+                endLC = process_time_ns() # timer()
+                elapsedInNsLC = endLC - startLC
+                elapsedInMsLC = elapsedInNsLC/1000000
+                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
+
+                self.myLoggerTime.info('Processing time for Lc %s with %i entries is: %ims'%(lcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
+                [h.flush() for h in self.myLoggerTime.handlers]
+            
+        else: # -----------Sample
+            globalSuccesses = torch.ones(sampleSize, device = currentDevice)
+            
+            for currentLcName in lcLosses:
+                startLC = process_time_ns() # timer()
+
+                current_lcLosses = lcLosses[currentLcName]
+                lossList = current_lcLosses['lossList']
+                
+                sampleInfo = current_lcLosses['sampleInfo']
                     
-                    endLC = process_time_ns() # timer()
-                    elapsedInNsLC = endLC - startLC
-                    elapsedInMsLC = elapsedInNsLC/1000000
-                    
-                    self.myLoggerTime.info('Processing time for Lc %s with %i entries is: %ims'%(lcName, len(lossList),  elapsedInMsLC))
-                    [h.flush() for h in self.myLoggerTime.handlers]
-                    
-                else: # -----------Sample
-                    
-                    currentDevice = dn.current_device
+                successesList = [] # Entry lcs successes
+                lcSuccesses = torch.ones(sampleSize, device = currentDevice) # Consolidated successes for all the entry lcs
+                lcVariables = {} # Unique variables used in all the entry lcs
+                countSuccesses = torch.zeros(sampleSize, device = currentDevice)
+                oneT = torch.ones(sampleSize, device = currentDevice)
+                
+                # Prepare data
+                if len(lossList) == 1:
+                    for currentFailures in lossList[0]:
+                        if currentFailures is None:
+                            successesList.append(None)
+                            continue
                         
-                    successesList = [] # Entry lcs successes
-                    lcSuccesses = torch.ones(sampleSize, device = currentDevice) # Consolidated successes for all the entry lcs
-                    lcVariables = {} # Unique variables used in all the entry lcs
-                    countSuccesses = torch.zeros(sampleSize, device = currentDevice)
-                    oneT = torch.ones(sampleSize, device = currentDevice)
-                    
-                    # Prepare data
-                    if len(lossList) == 1:
-                        for currentFailures in lossList[0]:
+                        currentSuccesses = torch.sub(oneT, currentFailures.float())
+                        successesList.append(currentSuccesses)
+                            
+                        lcSuccesses.mul_(currentSuccesses)
+                        globalSuccesses.mul_(currentSuccesses)
+                        countSuccesses.add_(currentSuccesses)
+                        
+                    # Collect lc variable
+                    for k in sampleInfo.keys():
+                        for c in sampleInfo[k]:
+                            if not c:
+                                continue
+                            c = c[0]
+                            if len(c) > 2:                                    
+                                if c[2] not in lcVariables:
+                                    lcVariables[c[2]] = c
+                else:
+                    for i, l in enumerate(lossList):
+                        for currentFailures in l:
                             if currentFailures is None:
                                 successesList.append(None)
                                 continue
@@ -1509,134 +1552,110 @@ class gurobiILPOntSolver(ilpOntSolver):
                             currentSuccesses = torch.sub(oneT, currentFailures.float())
                             successesList.append(currentSuccesses)
                                 
-                            lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
-                            countSuccesses = countSuccesses.add_(currentSuccesses)
+                            lcSuccesses.mul_(currentSuccesses)
+                            globalSuccesses.mul_(currentSuccesses)
+                            countSuccesses.add_(currentSuccesses)
                             
                         # Collect lc variable
                         for k in sampleInfo.keys():
-                            for c in sampleInfo[k]:
-                                if not c:
-                                    continue
-                                c = c[0]
-                                if len(c) > 2:                                    
+                            for c in sampleInfo[k][i]:
+                                if len(c) > 2:                                        
                                     if c[2] not in lcVariables:
                                         lcVariables[c[2]] = c
-                    else:
-                        for i, l in enumerate(lossList):
-                            for currentFailures in l:
-                                if currentFailures is None:
-                                    successesList.append(None)
-                                    continue
-                                
-                                currentSuccesses = torch.sub(oneT, currentFailures.float())
-                                successesList.append(currentSuccesses)
-                                    
-                                lcSuccesses =  lcSuccesses.mul_(currentSuccesses)
-                                countSuccesses = countSuccesses.add_(currentSuccesses)
-                                
-                            # Collect lc variable
-                            for k in sampleInfo.keys():
-                                for c in sampleInfo[k][i]:
-                                    if len(c) > 2:                                        
-                                        if c[2] not in lcVariables:
-                                            lcVariables[c[2]] = c
-                        
-                    #lcSuccessesSum = torch.sum(lcSuccesses).item()
-                                    
-                    eliminateDuplicateSamples = False # Eliminate duplicate samples
-                    
-                    # --- Calculate sample loss for lc variables
-                    current_lcLosses['lossTensor'] = []
-                    current_lcLosses['lcSuccesses'] = []
-                    current_lcLosses['lcVariables'] = []
-                    current_lcLosses['loss'] = []
-                    
-                    # Per each lc entry separately
-                    if lc.sampleEntries:
-                        canComputeGlobalLoss = False # The current global loss algorithm is not able to process data from separate lc entries
-                        current_lcLosses['lcSuccesses'] = successesList
-                        
-                        for i, l in enumerate(lossList):
-                            currentLcVariables = {}
-                            for k in sampleInfo.keys():
-                                for c in sampleInfo[k][i]:
-                                    if len(c) > 2:                                        
-                                        if c[2] not in currentLcVariables:
-                                            currentLcVariables[c[2]] = c
-                                            
-                            
-                            currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, successesList[i], sampleSize, currentDevice, eliminateDuplicateSamples)
-                            
-                            current_lcLosses['lossTensor'].append(currentLossTensor)
-                            current_lcLosses['lcVariables'].append(currentLcVariables)
-
-                            currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
-                            current_lcLosses['loss'].append(currentLoss)
-
-                    else: # Regular calculation for all lc entries at once
-                        lossTensor, lcSampleSize = self.calulateSampleLossForVariable(lcVariables, lcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples)
-                        current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
-
-                        current_lcLosses['lossTensor'].append(lossTensor)
-                        current_lcLosses['lcSuccesses'].append(lcSuccesses)
-                        current_lcLosses['lcVariables'].append(lcVariables)
                 
-                    # Calculate processing time
-                    endLC = process_time_ns() # timer()
-                    elapsedInNsLC = endLC - startLC
-                    elapsedInMsLC = elapsedInNsLC/1000000
+                current_lcLosses['successesList'] = successesList
+                current_lcLosses['lcSuccesses'] = lcSuccesses
+                current_lcLosses['lcVariables'] = lcVariables
+                current_lcLosses['countSuccesses'] = countSuccesses
+
+                endLC = process_time_ns() # timer()
+                elapsedInNsLC = endLC - startLC
+                elapsedInMsLC = elapsedInNsLC/1000000
+                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
+
+            lcLosses["globalSuccesses"] = globalSuccesses
+            lcLosses["globalSuccessCountet"] = torch.nansum(globalSuccesses).item()
+            self.myLoggerTime.info('Global success counter is %i '%(lcLosses["globalSuccessCountet"]))
+            
+            
+            for currentLcName in lcLosses:
+                if currentLcName in ["globalSuccessCountet", "globalSuccesses"]:
+                    continue
+                
+                startLC = process_time_ns() # timer()
+
+                current_lcLosses = lcLosses[currentLcName]
+                lossList = current_lcLosses['lossList']
+                
+                successesList = current_lcLosses['successesList']
+                lcSuccesses = current_lcLosses['lcSuccesses']
+                lcVariables = current_lcLosses['lcVariables']
+                        
+                #lcSuccessesSum = torch.sum(lcSuccesses).item()
+                                
+                eliminateDuplicateSamples = False # Eliminate duplicate samples
+                
+                # --- Calculate sample loss for lc variables
+                current_lcLosses['lossTensor'] = []
+                current_lcLosses['lcSuccesses'] = []
+                current_lcLosses['lcVariables'] = []
+                current_lcLosses['loss'] = []
+                
+                # Per each lc entry separately
+                if lc.sampleEntries:
+                    current_lcLosses['lcSuccesses'] = successesList
                     
-                    if lc.sampleEntries:
-                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
-                                               %(lcName, len(lossList), len(lcVariables), elapsedInMsLC))
-                    if eliminateDuplicateSamples: 
-                        self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %ims'
-                                               %(lcName, len(lossList), len(lcVariables), lcSampleSize, elapsedInMsLC))
-                    else:
-                        self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
-                                               %(lcName, len(lossList), len(lcVariables), elapsedInMsLC))
+                    for i, l in enumerate(lossList):
+                        currentLcVariables = {}
+                        for k in sampleInfo.keys():
+                            for c in sampleInfo[k][i]:
+                                if len(c) > 2:                                        
+                                    if c[2] not in currentLcVariables:
+                                        currentLcVariables[c[2]] = c
+                                        
+                        
+                        usedLcSuccesses = successesList[i]
+                        if sampleGlobalLoss:
+                            usedLcSuccesses = globalSuccesses
+                        currentLossTensor, _ = self.calulateSampleLossForVariable(currentLcVariables, usedLcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples)
+                        
+                        current_lcLosses['lossTensor'].append(currentLossTensor)
+                        current_lcLosses['lcVariables'].append(currentLcVariables)
+    
+                        currentLoss = torch.nansum(currentLossTensor).item() # Sum of losses across sample for x|=alfa
+                        current_lcLosses['loss'].append(currentLoss)
+    
+                else: # Regular calculation for all lc entries at once
+                    usedLcSuccesses = lcSuccesses
+                    if sampleGlobalLoss:
+                        usedLcSuccesses = globalSuccesses
+                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(lcVariables, usedLcSuccesses, sampleSize, currentDevice, eliminateDuplicateSamples)
+                    current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
+    
+                    current_lcLosses['lossTensor'].append(lossTensor)
+                    current_lcLosses['lcSuccesses'].append(lcSuccesses)
+                    current_lcLosses['lcVariables'].append(lcVariables)
+            
+                # Calculate processing time
+                endLC = process_time_ns() # timer()
+                elapsedInNsLC = endLC - startLC
+                elapsedInMsLC = elapsedInNsLC/1000000
+                current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
+
+                if lc.sampleEntries:
+                    self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
+                                           %(lcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
+                if eliminateDuplicateSamples: 
+                    self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %ims'
+                                           %(lcName, len(lossList), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
+                else:
+                    self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
+                                           %(lcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
         
         self.myLogger.info('')
 
         self.myLogger.info('Processed %i logical constraints'%(lcCounter))
         self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
-              
-        if sample:# and canComputeGlobalLoss:
-            if sampleGlobalLoss: # Calculate global sample loss  
-                lcLossesList = list(lcLosses.values())
-                globalLoss = 0
-                globalSuccesses = 0
-                lossSum = 0
-                
-                if lcLossesList:
-                    globalLossT = lcLossesList[0]['lossTensor'][0]
-                    globalSuccesses = lcLossesList[0]['lcSuccesses'][0]
-
-                    for lc in lcLossesList[1:]:
-                        currentLC = lc
-                        
-                        globalSuccesses = globalSuccesses.mul_(currentLC['lcSuccesses'][0]) # Multiply to find common successes
-                        globalLossT = globalLossT.add_(currentLC['lossTensor'][0]) 
-                            
-                    globalLossFiltered = torch.mul(globalSuccesses, globalLossT) # Select loss for common successes
-                    globalLoss = torch.nansum(globalLossFiltered)
-                    globalSuccessesCounter = torch.nansum(globalSuccesses).item()
-                    lossSum = torch.nansum(globalLossT).item()
-
-                lcLosses['globalLoss'] = globalLoss
-                self.myLoggerTime.info('Count of global Successes is: %f'%(globalSuccessesCounter))
-                
-                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
-    
-                self.myLogger.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-                self.myLoggerTime.info('Calculated sample global loss: %f'%(lcLosses['globalLoss']))
-            elif False: #omputeGlobalLoss:
-                globalLossT = torch.zeros(sampleSize, device = currentDevice)
-                for lc in lcLosses:
-                    globalLossT = globalLossT.add_(lcLosses[lc]['lossTensor']) 
-                
-                lossSum = torch.nansum(globalLossT).item()
-                self.myLoggerTime.info('Sum of lc losses: %f'%(lossSum))
             
         end = process_time() # timer()
         elapsedInS = end - start
