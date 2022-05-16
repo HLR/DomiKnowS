@@ -122,6 +122,9 @@ class SampleLosslModel(torch.nn.Module):
             
         self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
         self.lmbd_index = {}
+
+        self.iter_step = 0
+        self.warmpup = 80
         
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
@@ -145,6 +148,7 @@ class SampleLosslModel(torch.nn.Module):
     def forward(self, builder, build=None):
         if build is None:
             build = self.build
+        self.iter_step += 1
             
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
@@ -169,6 +173,7 @@ class SampleLosslModel(torch.nn.Module):
             # loss_value = loss['loss']
             epsilon = 0.0
             key_loss = 0
+            new_eps = 0.01
             for i, lossTensor in enumerate(loss['lossTensor']):
                 lcSuccesses = loss['lcSuccesses'][i]
                 if constr_loss["globalSuccessCountet"] > 0:
@@ -181,12 +186,17 @@ class SampleLosslModel(torch.nn.Module):
                         if not replace_mul:
                             loss_value = true_val.sum() / lossTensor.sum()
                             loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                            # loss_value = -1 * torch.log(loss_value)
-                            with torch.no_grad():
-                                min_val = 10 * loss_value
-                            loss_ = - (self.get_lmbd(key) - min_val) * loss_value
+                            # loss_value = -1 * torch.log(loss_value) 
+                            if self.iter_step < self.warmpup:
+                                with torch.no_grad():
+                                    min_val = loss_value
+                            else:
+                                min_val = -1
+                            # min_val = -1
+                            # with torch.no_grad():
+                            #     min_val = loss_value
+                            loss_ = min_val * loss_value
                             key_loss += loss_
-                            # loss_ = min_val * loss_value
                         else:
                             loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
                             key_loss += -1 * loss_value

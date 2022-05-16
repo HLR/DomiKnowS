@@ -199,7 +199,7 @@ class PoiModel(TorchModel):
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
-                    if self.loss:
+                    if self.loss is not None:
                         local_loss = self.poi_loss(builder, prop, sensors)
                         if local_loss is not None:
                             loss += local_loss
@@ -247,8 +247,6 @@ class SolverModel(PoiModel):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
     
-    
-
 
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     def __init__(self, graph, poi=None, device='auto'):
@@ -338,7 +336,7 @@ class PoiModelDictLoss(PoiModel):
             
     def poi_loss(self, data_item, prop, sensors):
         if self.dictloss:
-            if not self.loss:
+            if self.loss is None:
                 return 0
     #         outs = [sensor(data_item) for sensor in sensors]
             target = None
@@ -348,12 +346,14 @@ class PoiModelDictLoss(PoiModel):
                     target = sensor
                 else:
                     pred = sensor
-            if target == None or pred == None:
+            if target == None or pred == None or pred(data_item).shape[0] == 0:
                 return None
             if not str(prop.name) in self.dictloss and not "default" in self.dictloss:
                 return None
             elif not str(prop.name) in self.dictloss:
                 self.losses[pred, target] = self.dictloss["default"](data_item, prop, pred(data_item), target(data_item))
+                if torch.isnan(self.losses[pred, target]).any() :
+                    print("here it is")
                 return self.losses[pred, target]
             else:
                 self.losses[pred, target] = self.dictloss[str(prop.name)](data_item, prop, pred(data_item), target(data_item))
