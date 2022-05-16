@@ -75,7 +75,7 @@ def make_reader(file_address="data/WIQA_AUG/train.jsonl",sample_num=1000000000,b
             final_list.append(sorted(list(i)))
             continue
         cur_list=sorted(list(i))
-        for j in range(0,len(i),batch_size):
+        for j in range(0, len(i), batch_size):
             final_list.append(cur_list[j:j+batch_size])
 
     for i in final_list:
