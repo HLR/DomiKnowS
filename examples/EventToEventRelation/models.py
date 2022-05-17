@@ -1,6 +1,7 @@
 from transformers import RobertaTokenizer
 from utils import *
 
+
 class Roberta_Tokenizer:
     def __init__(self):
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')

@@ -156,7 +156,11 @@ def matres_reader():
     read_matres_relation(MATRES_TB, events_to_relation, file_to_event_trigger)
     read_matres_relation(MATRES_AQ, events_to_relation, file_to_event_trigger)
     read_matres_relation(MATRES_PL, events_to_relation, file_to_event_trigger)
+
     # Reading text information from original file
+    training = []
+    validation = []
+    testing = []
     for file in tqdm.tqdm(file_to_event_trigger.keys()):
         file_name = file + ".tml"
         dirname = path_TB if file_name in TB_files else \
@@ -169,7 +173,6 @@ def matres_reader():
         result_dict = read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigger)
         eiid_to_event_trigger = file_to_event_trigger[file]
         all_event_pairs = events_to_relation[file]
-        train_set = []
         for eiid1, eiid2 in all_event_pairs:
             # TODO: Check which variable need to be used in the model to train from original paper
             x = result_dict["eiid"][eiid1]["eID"]
@@ -184,17 +187,22 @@ def matres_reader():
             x_position = result_dict["event"][x]["roberta_subword_id"]  # A_pos
             y_position = result_dict["event"][y]["roberta_subword_id"]  # B_pos
 
-            x_sent_pos = padding(result_dict["sentences"][x_sent_id]["roberta_subword_pos"], pos=True)
-            y_sent_pos = padding(result_dict["sentences"][y_sent_id]["roberta_subword_pos"], pos=True)
-            # Related relation need to group together for constrain learning
-    # TODO: Continue on this after finishing the DomiKnows Model
+            x_sent_pos = padding(result_dict["sentences"][x_sent_id]["roberta_subword_pos"], pos = True)
+            y_sent_pos = padding(result_dict["sentences"][y_sent_id]["roberta_subword_pos"], pos = True)
 
-    # Notes:
-    #     TB files goto training set
-    #     Others goto testing set
-    #     break
-    # return train_set, test_set
+            relation = all_event_pairs[(eiid1, eiid2)]
 
+            dataset = [(result_dict["content"],
+                        x_sent, y_sent,
+                        x_position, y_position,
+                        x_sent_pos, y_sent_pos,
+                        eiid1, eiid2,
+                        relation)]
 
-if __name__ == "__main__":
-    matres_reader()
+            if file_name in TB_files:
+                training.append(dataset)
+            elif file_name in AQ_files:
+                validation.append(dataset)
+            else:
+                testing.append(dataset)
+    return training, validation, testing
