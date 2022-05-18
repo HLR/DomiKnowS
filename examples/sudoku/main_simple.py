@@ -423,7 +423,7 @@ for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.Adam(param, lr=1), collectLoss=None, device='auto')
+                    Optim=lambda param: torch.optim.Adam(param, lr=0.01), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")
