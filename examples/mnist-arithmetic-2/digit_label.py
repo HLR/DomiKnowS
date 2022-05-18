@@ -19,7 +19,7 @@ def get_digit_label(summation):
     # P(sum = s)
     psum = torch.sum(torch.sum(joint, dim=0), dim=0)[summation]
 
-    # P(d_0 = i | sum = 2)
+    # P(d_0 = i | sum = s)
     cond = margin/psum
 
     return torch.unsqueeze(cond, dim=0)

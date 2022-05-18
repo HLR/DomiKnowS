@@ -1,23 +1,42 @@
-explicit sum + prior
-	IML: 95+ sum, 95 digit (argmax/ILP)
-	POI: 95+ sum, 95 digit (argmax/ILP)
+balanced digit dataset
+	explicit sum + prior
+		IML: 95+ sum, 95 digit (argmax/ILP)
+		POI: 95+ sum, 95 digit (argmax/ILP)
 
-	maybe a bit better in early epochs
+		maybe a bit better in early epochs with ILP
 
-explicit sum + no prior
-	IML: 50 sum, 0 digits (argmax/ILP)
-	POI: ?
+	explicit sum + no prior
+		IML: 50 sum, 0 digits (argmax/ILP)
+		POI: 35 sum, 0 digits (argmax/ILP)
 
-no explicit sum + prior
-	IML: 85 sum, 50 digits (argmax), 85 sum, 65 digits (ILP)
-	POI: 10 sum, 40 digits (argmax), 15 sum, 30 digits  (ILP)
+	no explicit sum + prior
+		IML: 85 sum, 50 digits (argmax), 85 sum, 65 digits (ILP)
+			85 sum, 60 digits (argmax), 85 sum, 75 digits (ILP) in 40 epochs
+		POI: 10 sum, 40 digits (argmax), 15 sum, 30 digits  (ILP)
 
-	better digits in earlier epochs
-		70 sum, 80 digits (ILP)
+		better digits in earlier epochs
+			70 sum, 80 digits (ILP)
 
-	probably undertrained w/ 10 epochs
+	no explicit sum + no prior
+		IML: 95 sum, 0 digit (argmax), 75 sum, 0 digit (ILP)
+		POI: 2 sum, 2 digit (argmax), 0 sum, 2 digit (ILP)
 
-no explicit sum + no prior
-	IML: 95 sum, 0 digit (argmax), 75 sum, 0 digit (ILP)
-	POI: 2 sum, 2 digit (argmax), 0 sum, 2 digit (ILP)
+balanced sum dataset
+	explicit sum + prior
+		IML: 95+ sum, 95+ digits (argmax/ILP)
+		POI: 95 sum, 95 digits (argmax/ILP)
+			for 0.1 prior weight, worse performance w/ higher prior weight
+
+	explicit sum + no prior
+		IML: 90 sum, 95 digits (argmax/ILP)
+		POI: 90 sum, 95 digits (argmax/ILP)
+
+	no explicit sum + prior
+		IML: 80 sum, 40 digits (argmax), 80 sum, 60 digits (ILP)
+		POI: 5 sum, 50 digit (argmax), 15 sum, 35 digit (ILP)
+
+	no explicit sum + no prior
+		IML: 95 digit, 30 digit (argmax), 90 sum, 50 digit (ILP)
+		POI: 0 digit, 0 sum (argmax/ILP)
+
 

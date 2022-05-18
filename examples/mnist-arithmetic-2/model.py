@@ -168,26 +168,21 @@ def build_program():
     #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
+    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayerExplicit())
     images[s] = ReaderSensor(keyword='summation', label=True)
-
-    '''program = IMLProgram(graph,
-                       poi=(images,),
-                       inferTypes=['local/argmax'],
-                       loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
     '''program = SolverPOIProgram(graph,
                          poi=(images,),
                          inferTypes=['local/argmax'],
                          loss=MacroAverageTracker(NBSoftCrossEntropyLoss(prior_weight=1.0)))'''
 
-    program = PrimalDualProgram(graph,
+    '''program = PrimalDualProgram(graph,
                                 IMLModel,
                                 poi=(images,),
                                 inferTypes=['local/argmax'],
-                                loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
+                                loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
-    return program
+    return graph, images
 
 
 

@@ -1,0 +1,527 @@
+/Users/alexanderwan/miniconda3/envs/domiknows/bin/python /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/train.py
+* Owlready2 * Warning: optimized Cython parser module 'owlready2_optimized' is not available, defaulting to slower Python implementation
+Log file for dataNode is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/datanode.log
+initializing optimizer
+INFO:regr.program.program:Epoch: 1
+INFO:regr.program.program:Training:
+Epoch 1 Training:   0%|          | 0/10000 [00:00<?, ?it/s]../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits0. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits1. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for summations. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+Epoch 1 Training: 100%|██████████| 10000/10000 [01:19<00:00, 126.58it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0247), 'digits1': tensor(0.0247), 'summations': tensor(0.1340)}
+INFO:regr.program.program:Epoch: 2
+INFO:regr.program.program:Training:
+Epoch 2 Training: 100%|██████████| 10000/10000 [01:23<00:00, 119.61it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0241), 'digits1': tensor(0.0241), 'summations': tensor(0.1011)}
+INFO:regr.program.program:Epoch: 3
+INFO:regr.program.program:Training:
+Epoch 3 Training: 100%|██████████| 10000/10000 [01:19<00:00, 126.44it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0242), 'digits1': tensor(0.0242), 'summations': tensor(0.0897)}
+INFO:regr.program.program:Epoch: 4
+INFO:regr.program.program:Training:
+Epoch 4 Training: 100%|██████████| 10000/10000 [01:20<00:00, 124.95it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0243), 'digits1': tensor(0.0243), 'summations': tensor(0.0817)}
+INFO:regr.program.program:Epoch: 5
+INFO:regr.program.program:Training:
+  0%|          | 0/1000 [00:00<?, ?it/s]train evaluation
+Log file for ilpOntSolver is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+Log file for ilpOntSolverTime is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+Academic license - for non-commercial use only - expires 2022-09-17
+Using license file /Users/alexanderwan/gurobi.lic
+INFO:gurobipy.gurobipy:Academic license - for non-commercial use only - expires 2022-09-17
+INFO:gurobipy.gurobipy:Using license file /Users/alexanderwan/gurobi.lic
+100%|██████████| 1000/1000 [00:57<00:00, 17.26it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.64      1.00      0.78       182
+           1       0.64      0.67      0.66       238
+           2       0.59      0.43      0.50       207
+           3       0.70      0.56      0.62       207
+           4       0.70      0.17      0.27       192
+           5       0.46      0.83      0.59       156
+           6       0.67      0.51      0.58       179
+           7       0.55      0.59      0.57       212
+           8       0.64      0.59      0.62       209
+           9       0.76      0.91      0.82       218
+
+    accuracy                           0.62      2000
+   macro avg       0.63      0.63      0.60      2000
+weighted avg       0.64      0.62      0.60      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       0.86      1.00      0.92        18
+           2       0.85      1.00      0.92        34
+           3       0.88      0.80      0.84        46
+           4       0.93      0.80      0.86        49
+           5       0.86      0.83      0.84        59
+           6       0.68      0.81      0.74        72
+           7       0.61      0.64      0.62        77
+           8       0.65      0.69      0.67        87
+           9       0.63      0.41      0.50       110
+          10       0.48      0.61      0.54       105
+          11       0.46      0.28      0.35        79
+          12       0.52      0.78      0.63        68
+          13       1.00      0.06      0.11        33
+          14       0.42      0.61      0.50        41
+          15       0.49      0.90      0.64        41
+          16       0.50      0.40      0.44        35
+          17       0.44      0.29      0.35        28
+          18       1.00      0.21      0.35        14
+
+    accuracy                           0.62      1000
+   macro avg       0.70      0.64      0.62      1000
+weighted avg       0.65      0.62      0.60      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+              precision    recall  f1-score   support
+
+           0       0.43      0.99      0.60       182
+           1       0.40      0.37      0.38       238
+           2       0.15      0.07      0.10       207
+           3       0.94      0.37      0.53       207
+           4       0.00      0.00      0.00       192
+           5       0.40      0.49      0.44       156
+           6       0.92      0.40      0.55       179
+           7       0.46      0.53      0.49       212
+           8       0.39      0.65      0.49       209
+           9       0.67      0.98      0.79       218
+
+    accuracy                           0.48      2000
+   macro avg       0.48      0.48      0.44      2000
+weighted avg       0.48      0.48      0.44      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       0.86      1.00      0.92        18
+           2       0.92      1.00      0.96        34
+           3       0.88      0.76      0.81        46
+           4       0.81      0.80      0.80        49
+           5       0.85      0.78      0.81        59
+           6       0.66      0.79      0.72        72
+           7       0.56      0.62      0.59        77
+           8       0.64      0.63      0.64        87
+           9       0.60      0.32      0.42       110
+          10       0.45      0.62      0.52       105
+          11       0.41      0.24      0.30        79
+          12       0.50      0.79      0.62        68
+          13       1.00      0.03      0.06        33
+          14       0.46      0.63      0.53        41
+          15       0.46      0.93      0.62        41
+          16       0.35      0.23      0.28        35
+          17       0.32      0.21      0.26        28
+          18       0.00      0.00      0.00        14
+
+    accuracy                           0.59      1000
+   macro avg       0.62      0.60      0.57      1000
+weighted avg       0.60      0.59      0.56      1000
+
+==========================================
+validation evaluation
+100%|██████████| 1000/1000 [00:57<00:00, 17.51it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.65      0.99      0.78       190
+           1       0.66      0.66      0.66       209
+           2       0.56      0.46      0.51       194
+           3       0.69      0.54      0.60       202
+           4       0.54      0.15      0.23       216
+           5       0.46      0.74      0.57       195
+           6       0.70      0.45      0.55       199
+           7       0.53      0.63      0.58       225
+           8       0.63      0.62      0.62       188
+           9       0.73      0.91      0.81       182
+
+    accuracy                           0.61      2000
+   macro avg       0.61      0.62      0.59      2000
+weighted avg       0.61      0.61      0.59      2000
+
+              precision    recall  f1-score   support
+
+           0       0.91      1.00      0.95        10
+           1       0.94      1.00      0.97        17
+           2       0.71      0.89      0.79        28
+           3       0.80      0.69      0.74        48
+           4       0.72      0.70      0.71        44
+           5       0.74      0.82      0.78        56
+           6       0.82      0.74      0.78        82
+           7       0.66      0.79      0.72        72
+           8       0.69      0.72      0.71        85
+           9       0.61      0.30      0.40       123
+          10       0.35      0.60      0.44        82
+          11       0.52      0.24      0.33        96
+          12       0.44      0.81      0.57        59
+          13       0.75      0.12      0.21        50
+          14       0.42      0.67      0.52        43
+          15       0.51      0.78      0.62        51
+          16       0.39      0.25      0.30        28
+          17       0.60      0.45      0.51        20
+          18       1.00      0.17      0.29         6
+
+    accuracy                           0.59      1000
+   macro avg       0.66      0.62      0.60      1000
+weighted avg       0.62      0.59      0.57      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+              precision    recall  f1-score   support
+
+           0       0.48      0.98      0.64       190
+           1       0.39      0.43      0.40       209
+           2       0.15      0.07      0.09       194
+           3       0.96      0.39      0.55       202
+           4       0.00      0.00      0.00       216
+           5       0.42      0.46      0.44       195
+           6       0.89      0.41      0.56       199
+           7       0.44      0.56      0.49       225
+           8       0.37      0.67      0.48       188
+           9       0.63      0.96      0.76       182
+
+    accuracy                           0.48      2000
+   macro avg       0.47      0.49      0.44      2000
+weighted avg       0.47      0.48      0.44      2000
+
+              precision    recall  f1-score   support
+
+           0       0.91      1.00      0.95        10
+           1       0.94      1.00      0.97        17
+           2       0.74      0.89      0.81        28
+           3       0.84      0.67      0.74        48
+           4       0.65      0.73      0.69        44
+           5       0.79      0.82      0.81        56
+           6       0.84      0.77      0.80        82
+           7       0.62      0.81      0.70        72
+           8       0.73      0.71      0.72        85
+           9       0.60      0.26      0.36       123
+          10       0.34      0.60      0.43        82
+          11       0.50      0.22      0.30        96
+          12       0.43      0.81      0.56        59
+          13       0.71      0.10      0.18        50
+          14       0.39      0.65      0.49        43
+          15       0.47      0.73      0.57        51
+          16       0.38      0.21      0.27        28
+          17       0.56      0.45      0.50        20
+          18       0.00      0.00      0.00         6
+
+    accuracy                           0.58      1000
+   macro avg       0.60      0.60      0.57      1000
+weighted avg       0.61      0.58      0.56      1000
+
+==========================================
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+Epoch 5 Training: 100%|██████████| 10000/10000 [03:13<00:00, 51.55it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:None
+INFO:regr.program.program:Epoch: 6
+INFO:regr.program.program:Training:
+Epoch 6 Training:   0%|          | 0/10000 [00:00<?, ?it/s]../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits0. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits1. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for summations. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+Epoch 6 Training: 100%|██████████| 10000/10000 [01:18<00:00, 127.52it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0245), 'digits1': tensor(0.0246), 'summations': tensor(0.0716)}
+INFO:regr.program.program:Epoch: 7
+INFO:regr.program.program:Training:
+Epoch 7 Training: 100%|██████████| 10000/10000 [01:19<00:00, 126.13it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0246), 'digits1': tensor(0.0245), 'summations': tensor(0.0676)}
+INFO:regr.program.program:Epoch: 8
+INFO:regr.program.program:Training:
+Epoch 8 Training: 100%|██████████| 10000/10000 [01:19<00:00, 126.39it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0246), 'digits1': tensor(0.0246), 'summations': tensor(0.0644)}
+INFO:regr.program.program:Epoch: 9
+INFO:regr.program.program:Training:
+Epoch 9 Training: 100%|██████████| 10000/10000 [01:18<00:00, 126.93it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0246), 'digits1': tensor(0.0246), 'summations': tensor(0.0608)}
+INFO:regr.program.program:Epoch: 10
+INFO:regr.program.program:Training:
+  0%|          | 0/1000 [00:00<?, ?it/s]train evaluation
+100%|██████████| 1000/1000 [00:57<00:00, 17.27it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.67      1.00      0.80       182
+           1       0.59      0.70      0.64       238
+           2       0.49      0.31      0.38       207
+           3       0.77      0.46      0.58       207
+           4       0.66      0.24      0.35       192
+           5       0.44      0.88      0.59       156
+           6       0.68      0.50      0.58       179
+           7       0.69      0.70      0.69       212
+           8       0.86      0.67      0.75       209
+           9       0.72      0.97      0.83       218
+
+    accuracy                           0.64      2000
+   macro avg       0.66      0.64      0.62      2000
+weighted avg       0.66      0.64      0.62      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       0.90      1.00      0.95        18
+           2       0.85      1.00      0.92        34
+           3       0.85      0.89      0.87        46
+           4       0.93      0.78      0.84        49
+           5       0.73      0.92      0.81        59
+           6       0.71      0.72      0.72        72
+           7       0.69      0.75      0.72        77
+           8       0.81      0.67      0.73        87
+           9       0.84      0.47      0.60       110
+          10       0.60      0.72      0.66       105
+          11       0.64      0.61      0.62        79
+          12       0.69      0.82      0.75        68
+          13       0.81      0.64      0.71        33
+          14       0.70      0.90      0.79        41
+          15       0.79      0.90      0.84        41
+          16       0.89      0.94      0.92        35
+          17       1.00      0.79      0.88        28
+          18       1.00      1.00      1.00        14
+
+    accuracy                           0.75      1000
+   macro avg       0.81      0.82      0.81      1000
+weighted avg       0.76      0.75      0.75      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/sklearn/metrics/_classification.py:1248: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+              precision    recall  f1-score   support
+
+           0       0.40      1.00      0.58       182
+           1       0.33      0.38      0.35       238
+           2       0.00      0.00      0.00       207
+           3       1.00      0.04      0.08       207
+           4       0.00      0.00      0.00       192
+           5       0.42      0.89      0.57       156
+           6       0.68      0.27      0.38       179
+           7       0.58      0.60      0.59       212
+           8       0.71      0.69      0.70       209
+           9       0.63      0.98      0.77       218
+
+    accuracy                           0.48      2000
+   macro avg       0.48      0.49      0.40      2000
+weighted avg       0.48      0.48      0.40      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       0.90      1.00      0.95        18
+           2       0.87      1.00      0.93        34
+           3       0.86      0.91      0.88        46
+           4       0.93      0.78      0.84        49
+           5       0.74      0.92      0.82        59
+           6       0.73      0.74      0.73        72
+           7       0.71      0.78      0.74        77
+           8       0.81      0.67      0.73        87
+           9       0.85      0.47      0.61       110
+          10       0.60      0.71      0.65       105
+          11       0.64      0.62      0.63        79
+          12       0.67      0.84      0.75        68
+          13       0.80      0.61      0.69        33
+          14       0.72      0.88      0.79        41
+          15       0.76      0.90      0.82        41
+          16       0.85      0.94      0.89        35
+          17       1.00      0.71      0.83        28
+          18       1.00      0.93      0.96        14
+
+    accuracy                           0.75      1000
+   macro avg       0.81      0.81      0.80      1000
+weighted avg       0.77      0.75      0.75      1000
+
+==========================================
+validation evaluation
+100%|██████████| 1000/1000 [00:57<00:00, 17.38it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.71      0.98      0.82       190
+           1       0.59      0.72      0.65       209
+           2       0.48      0.41      0.44       194
+           3       0.84      0.43      0.57       202
+           4       0.66      0.20      0.31       216
+           5       0.48      0.91      0.63       195
+           6       0.71      0.54      0.62       199
+           7       0.68      0.65      0.67       225
+           8       0.83      0.64      0.72       188
+           9       0.67      0.97      0.79       182
+
+    accuracy                           0.64      2000
+   macro avg       0.66      0.65      0.62      2000
+weighted avg       0.66      0.64      0.62      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        10
+           1       0.85      1.00      0.92        17
+           2       0.72      0.93      0.81        28
+           3       0.83      0.83      0.83        48
+           4       0.89      0.70      0.78        44
+           5       0.75      0.95      0.83        56
+           6       0.84      0.78      0.81        82
+           7       0.61      0.82      0.70        72
+           8       0.72      0.49      0.59        85
+           9       0.77      0.39      0.52       123
+          10       0.42      0.66      0.51        82
+          11       0.68      0.60      0.64        96
+          12       0.69      0.92      0.79        59
+          13       0.90      0.54      0.68        50
+          14       0.67      0.79      0.72        43
+          15       0.83      0.88      0.86        51
+          16       0.74      0.89      0.81        28
+          17       1.00      0.95      0.97        20
+          18       1.00      1.00      1.00         6
+
+    accuracy                           0.71      1000
+   macro avg       0.78      0.80      0.78      1000
+weighted avg       0.74      0.71      0.71      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+              precision    recall  f1-score   support
+
+           0       0.43      0.99      0.60       190
+           1       0.24      0.29      0.26       209
+           2       0.00      0.00      0.00       194
+           3       1.00      0.06      0.12       202
+           4       0.00      0.00      0.00       216
+           5       0.46      0.85      0.60       195
+           6       0.51      0.19      0.28       199
+           7       0.53      0.61      0.57       225
+           8       0.62      0.66      0.64       188
+           9       0.62      0.98      0.76       182
+
+    accuracy                           0.45      2000
+   macro avg       0.44      0.46      0.38      2000
+weighted avg       0.44      0.45      0.38      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        10
+           1       0.85      1.00      0.92        17
+           2       0.76      0.93      0.84        28
+           3       0.84      0.88      0.86        48
+           4       0.91      0.73      0.81        44
+           5       0.77      0.95      0.85        56
+           6       0.87      0.79      0.83        82
+           7       0.62      0.85      0.72        72
+           8       0.72      0.52      0.60        85
+           9       0.75      0.38      0.51       123
+          10       0.43      0.67      0.52        82
+          11       0.70      0.65      0.67        96
+          12       0.67      0.90      0.77        59
+          13       0.86      0.50      0.63        50
+          14       0.68      0.79      0.73        43
+          15       0.85      0.90      0.88        51
+          16       0.78      0.89      0.83        28
+          17       1.00      0.95      0.97        20
+          18       1.00      1.00      1.00         6
+
+    accuracy                           0.72      1000
+   macro avg       0.79      0.80      0.79      1000
+weighted avg       0.74      0.72      0.72      1000
+
+==========================================
+Epoch 10 Training: 100%|██████████| 10000/10000 [03:14<00:00, 51.38it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:None
+INFO:regr.program.program:Epoch: 11
+INFO:regr.program.program:Training:
+Epoch 11 Training:   0%|          | 0/10000 [00:00<?, ?it/s]../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits0. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for digits1. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+../../regr/program/model/iml.py:40: UserWarning: Failed to get inference result for summations. Is it included in the inference (with `inference_with` attribute)? Continue with predicted value.
+  warnings.warn(message)
+Epoch 11 Training: 100%|██████████| 10000/10000 [01:17<00:00, 128.43it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0247), 'digits1': tensor(0.0247), 'summations': tensor(0.0540)}
+INFO:regr.program.program:Epoch: 12
+INFO:regr.program.program:Training:
+Epoch 12 Training: 100%|██████████| 10000/10000 [01:19<00:00, 125.49it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'digits0': tensor(0.0247), 'digits1': tensor(0.0246), 'summations': tensor(0.0540)}
+INFO:regr.program.program:Epoch: 13
+INFO:regr.program.program:Training:
+Epoch 13 Training:  61%|██████▏   | 6131/10000 [00:49<00:31, 124.01it/s]
+Traceback (most recent call last):
+  File "/Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/train.py", line 126, in <module>
+    device='auto')
+  File "../../regr/program/callbackprogram.py", line 54, in train
+    super().train(*args, **kwargs)
+  File "../../regr/program/program.py", line 270, in train
+    self.call_epoch('Training', training_set, self.train_epoch, **kwargs)
+  File "../../regr/program/program.py", line 209, in call_epoch
+    consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
+  File "../../regr/utils.py", line 299, in consume
+    collections.deque(it, maxlen=0)
+  File "/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/tqdm/std.py", line 1185, in __iter__
+    for obj in iterable:
+  File "../../regr/program/callbackprogram.py", line 68, in train_epoch
+    self.train_pure_epoch(dataset),
+  File "../../regr/program/callbackprogram.py", line 61, in train_pure_epoch
+    loss, metric, *output = self.model(data_item)
+  File "/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "../../regr/program/model/pytorch.py", line 95, in forward
+    *out, = self.populate(builder)
+  File "../../regr/program/model/pytorch.py", line 246, in populate
+    data_item = self.inference(builder)
+  File "../../regr/program/model/pytorch.py", line 221, in inference
+    sensor(builder)
+  File "../../regr/sensor/pytorch/sensors.py", line 34, in __call__
+    self.update_context(data_item)
+  File "../../regr/sensor/pytorch/sensors.py", line 160, in update_context
+    data_item[self] = val
+  File "../../regr/graph/dataNode.py", line 2123, in __setitem__
+    vInfo = self.__processAttributeValue(value, keyDataName)
+  File "../../regr/graph/dataNode.py", line 1984, in __processAttributeValue
+    ValueInfo = namedtuple('ValueInfo', ["len", "value", 'dim'])
+  File "/Users/alexanderwan/miniconda3/envs/domiknows/lib/python3.7/collections/__init__.py", line 466, in namedtuple
+    result = type(typename, (tuple,), class_namespace)
+KeyboardInterrupt
+
+Process finished with exit code 1

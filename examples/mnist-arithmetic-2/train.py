@@ -10,12 +10,14 @@ import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
+from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
+from regr.program.metric import MacroAverageTracker
 
-from model import build_program
+from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
 
-trainloader, validloader, testloader = get_readers()
+trainloader, trainloader_mini, validloader, testloader = get_readers()
 
 
 def get_pred_from_node(node, suffix):
@@ -26,7 +28,7 @@ def get_pred_from_node(node, suffix):
     return digit0_pred, digit1_pred, summation_pred
 
 
-def get_classification_report(program, reader, total=None):
+def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/ILP', '/local/argmax']):
     digits_results = {
         'label': []
     }
@@ -35,13 +37,11 @@ def get_classification_report(program, reader, total=None):
         'label': []
     }
 
-    infer_suffixes = ['/ILP', '/local/argmax']
-
     for suffix in infer_suffixes:
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total):
+    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
         node.inferILPResults()
 
         for suffix in infer_suffixes:
@@ -59,23 +59,86 @@ def get_classification_report(program, reader, total=None):
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
 
+        if verbose:
+            for j, (digit_pred, digit_gt) in enumerate(zip(digits_results[suffix], digits_results['label'])):
+                print(f'digit {j % 2}: pred {digit_pred}, gt {digit_gt}')
+
+                if j % 2 == 1:
+                    print(f'summation: pred {summation_results[suffix][j // 2]},'
+                          f'gt {summation_results["label"][j // 2]}\n')
+
         print(classification_report(digits_results['label'], digits_results[suffix]))
         print(classification_report(summation_results['label'], summation_results[suffix]))
 
         print('==========================================')
 
 
-program = build_program()
+graph, images = build_program()
 
-#get_classification_report(program, validloader, total=config.num_valid)
 
-for i in range(1, 11):
+'''class Program(CallbackProgram, SolverPOIProgram):
+    pass
+
+
+program = Program(graph,
+                     poi=(images,),
+                     inferTypes=['local/argmax'],
+                     loss=MacroAverageTracker(NBSoftCrossEntropyLoss(prior_weight=0.5)))'''
+
+
+class Program(CallbackProgram, IMLProgram):
+    pass
+
+
+program = Program(graph,
+                   poi=(images,),
+                   inferTypes=['local/argmax'],
+                   loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
+
+
+epoch_num = 1
+
+
+def post_epoch_metrics():
+    global epoch_num
+
+    if epoch_num % 5 == 0:
+        print("train evaluation")
+        get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
+
+        print("validation evaluation")
+        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+
+    epoch_num += 1
+
+
+program.after_train_epoch = [post_epoch_metrics]
+
+
+def test_adam(params):
+    print('initializing optimizer')
+    return torch.optim.Adam(params, lr=0.001)
+
+
+program.train(trainloader,
+              train_epoch_num=20,
+              Optim=test_adam,
+              device='auto')
+
+'''for i in range(1, config.epochs + 1):
     print("EPOCH", i)
 
     program.train(trainloader,
-              train_epoch_num=1,
+              train_epoch_num=20,
               Optim=lambda x: torch.optim.Adam(x, lr=0.001),
               device='auto')
 
-    # validation
-    get_classification_report(program, validloader, total=config.num_valid)
+
+    if i == 0:
+        program = IMLProgram(graph,
+                             poi=(images,),
+                             inferTypes=['local/argmax'],
+                             loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0, lmbd=0.5)))
+
+    # validation'''
+
