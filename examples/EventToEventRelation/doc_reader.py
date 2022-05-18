@@ -92,8 +92,8 @@ def read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigg
     return_dict["relations"] = {}
     sent_tokenized_text = sent_tokenize(return_dict["content"])
     sent_span = tokenized_to_origin_span(return_dict["content"], sent_tokenized_text)
-    count_sent = 0
     # PART BELOW IS COPYING DIRECTLY FROM PROJECT
+    count_sent = 0
     for sent in sent_tokenized_text:
         sent_dict = {}
         sent_dict["sent_id"] = count_sent
@@ -114,7 +114,7 @@ def read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigg
         # RoBERTa tokenizer
         sent_dict["roberta_subword_to_ID"], sent_dict["roberta_subwords"], \
         sent_dict["roberta_subword_span_SENT"], sent_dict["roberta_subword_map"] = \
-            tokenlize(sent_dict["content"], sent_dict["token_span_SENT"])
+            tokenlize(sent_dict["content"], sent_dict["tokens"], sent_dict["token_span_SENT"])
 
         sent_dict["roberta_subword_span_DOC"] = \
             span_SENT_to_DOC(sent_dict["roberta_subword_span_SENT"], sent_dict["sent_start_char"])
@@ -171,7 +171,6 @@ def matres_reader():
         # TODO: Creating the train and test file from this
         # Events to relation
         result_dict = read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigger)
-        eiid_to_event_trigger = file_to_event_trigger[file]
         all_event_pairs = events_to_relation[file]
         for eiid1, eiid2 in all_event_pairs:
             # TODO: Check which variable need to be used in the model to train from original paper
@@ -187,17 +186,17 @@ def matres_reader():
             x_position = result_dict["event"][x]["roberta_subword_id"]  # A_pos
             y_position = result_dict["event"][y]["roberta_subword_id"]  # B_pos
 
-            x_sent_pos = padding(result_dict["sentences"][x_sent_id]["roberta_subword_pos"], pos = True)
-            y_sent_pos = padding(result_dict["sentences"][y_sent_id]["roberta_subword_pos"], pos = True)
+            x_sent_pos = padding(result_dict["sentences"][x_sent_id]["roberta_subword_pos"], pos=True)
+            y_sent_pos = padding(result_dict["sentences"][y_sent_id]["roberta_subword_pos"], pos=True)
 
             relation = all_event_pairs[(eiid1, eiid2)]
 
-            dataset = [(result_dict["content"],
-                        x_sent, y_sent,
-                        x_position, y_position,
-                        x_sent_pos, y_sent_pos,
-                        eiid1, eiid2,
-                        relation)]
+            dataset = (result_dict["content"],
+                       x_sent, y_sent,
+                       x_position, y_position,
+                       x_sent_pos, y_sent_pos,  # PART OF SPEECH
+                       eiid1, eiid2,
+                       relation)
 
             if file_name in TB_files:
                 training.append(dataset)
@@ -206,3 +205,66 @@ def matres_reader():
             else:
                 testing.append(dataset)
     return training, validation, testing
+
+
+def create_data_loader(raw_data, batch_size=1):
+    dataset = []
+    count = 0
+    append_data = {"context": [],
+            "eiids1": [],
+            "eiids2": [],
+            "x_tokens_list": [],
+            "y_tokens_list": [],
+            "x_position_list": [],
+            "y_position_list": [],
+            "relation_list": []}
+    for data in raw_data:
+        context, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1, eiid2, relation = data
+        append_data["context"].append(context)
+        append_data["eiids1"].append(str(eiid1))
+        append_data["eiids2"].append(str(eiid2))
+        append_data["x_tokens_list"].append(str(x_sent.tolist()))
+        append_data["y_tokens_list"].append(str(y_sent.tolist()))
+        append_data["x_position_list"].append(str(x_pos))
+        append_data["y_position_list"].append(str(y_pos))
+        append_data["relation_list"].append(relation)
+        count += 1
+
+        # NO MORE INITIAL CONDITION FOR NOW -> NEED TO CHANGE TO GROUP SIMILAR THING TOGETHER
+        if count == batch_size:
+            dataset.append({
+                "context": "@@".join(append_data["context"]),
+                "eiids1": "@@".join(append_data["eiids1"]),
+                "eiids2": "@@".join(append_data["eiids2"]),
+                "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+                "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                "x_position_list": "@@".join(append_data["x_position_list"]),
+                "y_position_list": "@@".join(append_data["y_position_list"]),
+                "relation_list": "@@".join(append_data["relation_list"])
+            })
+            count = 0
+            # Clear appended data
+            for key in append_data:
+                append_data[key] = []
+
+    if count != 0:
+        dataset.append({
+            "context": "@@".join(append_data["context"]),
+            "eiids1": "@@".join(append_data["eiids1"]),
+            "eiids2": "@@".join(append_data["eiids2"]),
+            "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+            "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+            "x_position_list": "@@".join(append_data["x_position_list"]),
+            "y_position_list": "@@".join(append_data["y_position_list"]),
+            "relation_list": "@@".join(append_data["relation_list"])
+        })
+
+    return dataset
+
+
+def load_dataset(batch_size=1):
+    training, validation, testing = matres_reader()
+    training_set = create_data_loader(training, batch_size=batch_size)
+    validation_set = create_data_loader(validation, batch_size=batch_size)
+    testing_set = create_data_loader(testing, batch_size=batch_size)
+    return training_set, validation_set, testing_set

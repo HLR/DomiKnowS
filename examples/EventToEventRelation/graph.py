@@ -4,45 +4,43 @@ from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMo
 Graph.clear()
 Concept.clear()
 Relation.clear()
-with Graph('Useful_arg') as graph:
+with Graph('event_to_event') as graph:
 
     # Group of sentence
     paragraph = Concept(name="paragraph")
-    event = Concept(name="event")
-    paragraph_contain, = paragraph.contains(event)
+    event_relation = Concept(name="event_relation")
+    paragraph_contain, = paragraph.contains(event_relation)
 
     # each relation could be one the following four concepts:
     # sub-event relation consists of four relations, parent child, child parent, coref, and noref
-    sub_relation = event(name="sub_relation", ConceptClass=EnumConcept, values=["parent_child", "child_parent",
-                                                                                "coref", "noref"])
-
-    temp_relation = event(name="temp_relation", ConceptClass=EnumConcept, values=["before", "after",
-                                                                                 "equal", "vague"])
+    relation = event_relation(name="relation", ConceptClass=EnumConcept, values=["parent_child", "child_parent",
+                                                                                "coref", "norel", "before", "after",
+                                                                                         "EQUAL", "VAGUE"])
 
     # Only one of the labels to be true
-    ifL(event, exactL(
-        sub_relation.parent_child, sub_relation.child_parent, sub_relation.coref, sub_relation.noref,
-        temp_relation.before, temp_relation.after, temp_relation.equal, temp_relation.vague))
+    ifL(event_relation, exactL(
+        relation.parent_child, relation.child_parent, relation.coref, relation.norel,
+        relation.before, relation.after, relation.EQUAL, relation.VAGUE))
 
-    ifL(event, atMostL(
-        sub_relation.parent_child, sub_relation.child_parent, sub_relation.coref, sub_relation.noref,
-        temp_relation.before, temp_relation.after, temp_relation.equal, temp_relation.vague))
+    ifL(event_relation, atMostL(
+        relation.parent_child, relation.child_parent, relation.coref, relation.norel,
+        relation.before, relation.after, relation.EQUAL, relation.VAGUE))
 
-    # Symmetric Constrain
-    symmetric = Concept("symmetric")
-    s_event1, s_event2 = symmetric.has_a(arg1=event, arg2=event)
-    # TODO: Symmetric of subevent relation
-
-    # Before(e1, e2) <=> After(e2, e1)
-    ifL(temp_relation.before('x'), temp_relation.after(path=('x', symmetric, s_event2)))
-    ifL(temp_relation.after('x'), temp_relation.before(path=('x', symmetric, s_event2)))
-
-    # Equal(e1, e2) <=> Vague(e2, e1)
-    ifL(temp_relation.equal('x'), temp_relation.vague(path=('x', symmetric, s_event2)))
-    ifL(temp_relation.vague('x'), temp_relation.equal(path=('x', symmetric, s_event2)))
-
-    # TODO: Transitive Constrains
-    transitive_table = {
-        temp_relation.after: {}, temp_relation.before: {}, temp_relation.vague: {}, temp_relation.equal: {},
-        sub_relation.parent_child: {}, sub_relation.child_parent: {}, sub_relation.coref: {}, sub_relation.noref: {}
-    }
+    # # Symmetric Constrain
+    # symmetric = Concept("symmetric")
+    # s_event1, s_event2 = symmetric.has_a(arg1=event_relation, arg2=event_relation)
+    # # TODO: Symmetric of subevent relation
+    #
+    # # Before(e1, e2) <=> After(e2, e1)
+    # ifL(relation.before('x'), relation.after(path=('x', symmetric, s_event2)))
+    # ifL(relation.after('x'), relation.before(path=('x', symmetric, s_event2)))
+    #
+    # # Equal(e1, e2) <=> Vague(e2, e1)
+    # ifL(relation.EQUAL('x'), relation.VAGUE(path=('x', symmetric, s_event2)))
+    # ifL(relation.VAGUE('x'), relation.EQUAL(path=('x', symmetric, s_event2)))
+    #
+    # # TODO: Transitive Constrains
+    # transitive_table = {
+    #     relation.after: {}, relation.before: {}, relation.vague: {}, relation.equal: {},
+    #     relation.parent_child: {}, relation.child_parent: {}, relation.coref: {}, relation.noref: {}
+    # }

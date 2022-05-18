@@ -1,12 +1,14 @@
-from transformers import RobertaTokenizer
+import torch
+from transformers import RobertaTokenizer, RobertaModel
 from utils import *
+from torch import nn
 
 
 class Roberta_Tokenizer:
     def __init__(self):
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
 
-    def __call__(self, content, token_span_SENT=None):
+    def __call__(self, content, token_list=None, token_span_SENT=None):
         encoded = self.tokenizer.encode(content)
         roberta_subword_to_ID = encoded
         roberta_subwords = []
@@ -29,3 +31,36 @@ class Roberta_Tokenizer:
             return roberta_subword_to_ID, roberta_subwords, roberta_subword_span, roberta_subword_map
         else:
             return roberta_subword_to_ID, roberta_subwords, roberta_subword_span, -1
+
+
+class BiLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(BiLSTM, self).__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True)
+
+    def forward(self, input_sent, pos):
+        last_hidden_state, _ = self.lstm(input_sent)  # Size [1, 78, 256]
+        return last_hidden_state[1, pos.long(), :].unsqueeze(0)
+
+
+class BiLSTM_MLP(nn.Module):
+    def __init__(self, BiLSTM_last_hidden_size, MLP_size, output_classes):
+        super(BiLSTM_MLP, self).__init__()
+        self.start = nn.Linear(BiLSTM_last_hidden_size * 4, MLP_size * 2)
+        self.final = nn.Linear(MLP_size * 2, output_classes)
+
+    def forward(self, x):
+        input = x
+        x = self.start(input)
+        x = torch.relu(x)
+        x = self.final(x)
+        return x
+
+class Robert_Model(nn.Module):
+    def __init__(self):
+        super(Robert_Model, self).__init__()
+        self.model = RobertaModel.from_pretrained('roberta-large')
+
+    def forward(self, input_sent, pos):
+        last_hidden_state= self.model(input_sent)[0]
+        return last_hidden_state[0, pos.long(), :].unsqueeze(0)
