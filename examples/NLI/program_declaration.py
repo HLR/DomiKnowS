@@ -7,7 +7,8 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
 def program_declaration(cur_device, *,
-                        sym_relation: bool = False, tran_relation: bool = False, primaldual: bool = False, iml: bool = False, beta= 0.5):
+                        sym_relation: bool = False, tran_relation: bool = False,
+                        primaldual: bool = False, sample:bool = False, iml: bool = False, beta= 0.5):
     from graph_senetences import graph, sentence, entailment, neutral, \
         contradiction, sentence_group, sentence_group_contains, symmetric, s_sent1, s_sent2, \
         transitive, t_sent1, t_sent2, t_sent3
@@ -78,10 +79,10 @@ def program_declaration(cur_device, *,
             forward=check_transitive, device=cur_device)
         poi_list.append(transitive)
 
-    from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
     from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-    from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
+    from regr.program import LearningBasedProgram, SolverPOIProgram
+    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     program = None
@@ -93,13 +94,17 @@ def program_declaration(cur_device, *,
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
-    elif iml:
-        print("Using IML Program")
-        program = IMLProgram(graph, poi=poi_list,
-                             inferTypes=['ILP', 'local/argmax'],
-                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=beta)),
-                             metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                     'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    elif sample:
+        print("Using Sampling Program")
+        program = SampleLossProgram(
+            graph, SolverModel,
+            loss=MacroAverageTracker(NBCrossEntropyLoss()),
+            beta=beta,
+            metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                    'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+            sample= True,
+            sampleGlobalLoss= True
+        )
     else:
         print("Using simple Program")
         program = SolverPOIProgram(graph, poi=poi_list,

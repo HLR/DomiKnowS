@@ -33,7 +33,7 @@ def main(args):
                                               augment_file="data/snli_genadv_1000_dev.jsonl")
     # Declare Program
     program = program_declaration(cur_device, sym_relation=args.sym_relation, tran_relation=args.tran_relation,
-                                  primaldual=args.primaldual, iml=args.iml, beta=args.beta)
+                                  primaldual=args.primaldual, sample=args.sampleloss, beta=args.beta)
 
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                   Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -122,7 +122,7 @@ if __name__ == "__main__":
                         type=bool)
     parser.add_argument('--pmd', dest='primaldual', default=False, help="Using primaldual model or not",
                         type=bool)
-    parser.add_argument('--iml', dest='iml', default=False, help="Using IML model or not",
+    parser.add_argument('--sampleloss', dest='sampleloss', default=False, help="Using IML model or not",
                         type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
                         type=float)
