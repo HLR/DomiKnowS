@@ -13,12 +13,13 @@ class LossModel(torch.nn.Module):
 
     def __init__(self, graph, 
                  tnorm=DataNode.tnormsDefault, 
-                 sample = False, sampleSize = 0, sampleGlobalLoss = False):
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
         super().__init__()
         self.graph = graph
         self.build = True
         
         self.tnorm = tnorm
+        self.device = device
         
         self.sample = sample
         self.sampleSize = sampleSize
@@ -63,7 +64,7 @@ class LossModel(torch.nn.Module):
         
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
@@ -90,43 +91,163 @@ class LossModel(torch.nn.Module):
 class PrimalDualModel(LossModel):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, tnorm=DataNode.tnormsDefault):
-        super().__init__(graph, tnorm=tnorm)
+    def __init__(self, graph, tnorm=DataNode.tnormsDefault, device='auto'):
+        super().__init__(graph, tnorm=tnorm, device=device)
         
-class SampleLosslModel(LossModel):
+class SampleLosslModel(torch.nn.Module):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
-        super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+    # def __init__(self, graph, sample = False, sampleSize = 0, sampleGlobalLoss = False):
+    #     super().__init__(graph, sample=sample, sampleSize=sampleSize, sampleGlobalLoss=sampleGlobalLoss)
+
+    def __init__(self, graph, 
+                 tnorm=DataNode.tnormsDefault, 
+                 sample = False, sampleSize = 0, sampleGlobalLoss = False, device='auto'):
+        super().__init__()
+        self.graph = graph
+        self.build = True
+        
+        self.tnorm = tnorm
+        self.device = device
+        
+        self.sample = sample
+        self.sampleSize = sampleSize
+        self.sampleGlobalLoss = sampleGlobalLoss
+        
+        self.constr = OrderedDict(graph.logicalConstrainsRecursive)
+        nconstr = len(self.constr)
+        if nconstr == 0:
+            warnings.warn('No logical constraint detected in the graph. '
+                          'PrimalDualModel will not generate any constraint loss.')
+            
+        self.lmbd = torch.nn.Parameter(torch.zeros(nconstr).float())
+        self.lmbd_index = {}
+
+        self.iter_step = 0
+        self.warmpup = 80
+        
+        for i, (key, lc) in enumerate(self.constr.items()):
+            self.lmbd_index[key] = i
+            
+        self.reset_parameters()
+        self.loss = MacroAverageTracker(lambda x:x)
+
+    def reset_parameters(self):
+        torch.nn.init.constant_(self.lmbd, 0.0)
+
+    def reset(self):
+        if isinstance(self.loss, MetricTracker):
+            self.loss.reset()
+
+    def get_lmbd(self, key):
+        if self.lmbd[self.lmbd_index[key]] < 0:
+            with torch.no_grad():
+                self.lmbd[self.lmbd_index[key]] = 0
+        return self.lmbd[self.lmbd_index[key]]
 
     def forward(self, builder, build=None):
         if build is None:
             build = self.build
+        self.iter_step += 1
             
         if not build and not isinstance(builder, DataNodeBuilder):
             raise ValueError('PrimalDualModel must be invoked with `build` on or with provided DataNode Builder.')
         
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        
+        self.loss.reset()
+
+        datanode = builder.getDataNode(device=self.device)
         
         # Call the loss calculation returns a dictionary, keys are matching the constraints
-        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize)
-
+        constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm, sample=self.sample, sampleSize = self.sampleSize, sampleGlobalLoss = self.sampleGlobalLoss)
+        import math
         lmbd_loss = []
-        if self.sampleGlobalLoss and constr_loss['globalLoss']:
-            globalLoss = constr_loss['globalLoss']
-            self.loss['globalLoss'](globalLoss)
-            lmbd_loss = torch.tensor(globalLoss, requires_grad=True)
-        else:
-            for key, loss in constr_loss.items():
-                if key not in self.constr:
-                    continue
-                loss_value = loss['loss']
-                loss_ = self.get_lmbd(key) * loss_value
-                self.loss[key](loss_)
-                lmbd_loss.append(loss_)
-            lmbd_loss = torch.tensor(sum(lmbd_loss), requires_grad=True)
+        replace_mul = False
+        
+        key_losses = dict()
+        for key, loss in constr_loss.items():
+            if key not in self.constr:
+                continue
+            # loss_value = loss['loss']
+            epsilon = 0.0
+            key_loss = 0
+            new_eps = 0.01
+            for i, lossTensor in enumerate(loss['lossTensor']):
+                lcSuccesses = loss['lcSuccesses'][i]
+                if constr_loss["globalSuccessCountet"] > 0:
+                    lcSuccesses = constr_loss["globalSuccesses"]
+                if lossTensor.sum().item() != 0:
+                    tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
+                    true_val = lossTensor[tidx]
+                    
+                    if true_val.sum().item() != 0: 
+                        if not replace_mul:
+                            loss_value = true_val.sum() / lossTensor.sum()
+                            loss_value = epsilon - ( -1 * torch.log(loss_value) )
+                            # loss_value = -1 * torch.log(loss_value) 
+                            if self.iter_step < self.warmpup:
+                                with torch.no_grad():
+                                    min_val = loss_value
+                            else:
+                                min_val = -1
+                            # min_val = -1
+                            # with torch.no_grad():
+                            #     min_val = loss_value
+                            loss_ = min_val * loss_value
+                            key_loss += loss_
+                        else:
+                            loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
+                            key_loss += -1 * loss_value
+
+                    else:
+                        loss_ = 0
+                    
+                    
+
+                    # if loss['lossTensor'].nansum().item() <= 1:
+                    #     loss_value = loss['lossTensor']
+                    #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
+                    # else:
+                    #     _idx = []
+                    #     for i in torch.unique(loss['lossTensor']):
+                    #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
+                    #     loss_value = loss['lossTensor'][_idx]
+                    #     # loss_value = torch.unique(loss['lossTensor'])
+
+                    # loss_value = torch.log(loss_value.sum())
+                    # loss_ = -1 * (loss_value)
+                    # self.loss[key](loss_)
+                    # lmbd_loss.append(loss_) 
+                    
+                else:
+                    loss_ = 0
+
+            epsilon = 1e-2
+            key_loss = max(key_loss - epsilon, 0) 
+            if key_loss != 0:  
+                key_losses[key] = key_loss
+                # self.loss[key](key_loss)
+                # lmbd_loss.append(key_loss) 
+                    
+        all_losses = [key_losses[key] for key in key_losses]
+        if all_losses:
+            all_losses = torch.stack(all_losses)
+
+            satisfied_num = len( set(constr_loss.keys()) - set(key_losses.keys()) )
+            unsatisfied_num = len(set(constr_loss.keys())) - satisfied_num
+            self.logger.info(f'-- number of satisfied constraints are {satisfied_num}')
+            self.logger.info(f'-- number of unstatisfied constraints are {unsatisfied_num}')
+            for key in key_losses:
+                if replace_mul:
+                    loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
+                else:
+                    loss_val = key_losses[key]
+                self.loss[key](loss_val)
+                lmbd_loss.append(loss_val) 
+                
+            lmbd_loss = sum(lmbd_loss)
         
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder
