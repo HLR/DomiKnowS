@@ -31,12 +31,12 @@ def program_declaration(cur_device):
     def relation_str_to_list(relations):
         rel = []
         flags = []  # 0 for temporal, otherwise 1
-        rel_index = {"BEFORE": 4, "AFTER": 5, "EQUAL": 6, "VAGUE": 7,
-                     "SuperSub": 0, "SubSuper": 1, "Coref": 2, "NoRel": 3}
+        rel_index = {"BEFORE": '4', "AFTER": '5', "EQUAL": '6', "VAGUE": '7',
+                     "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
         for relation in relations:
             rel += [rel_index[relation]]
-            flags.append(0 if rel_index[relation] < 4 else 0)
-        return rel, flags
+            flags.append(0 if int(rel_index[relation]) < 4 else 0)
+        return str_to_int_list(rel), str_to_int_list(flags)
 
     def make_event(context, eiids1, eiids2, x_token_list, y_token_list,
                    x_position_list, y_position_list, relation_list):
@@ -50,7 +50,7 @@ def program_declaration(cur_device):
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
-        return torch.ones(len(eiids1.split("@@")), 1), context.split("@@"), \
+        return torch.ones(len(context.split("@@")), 1), context.split("@@"), \
                eiid1_list, eiid2_list, x_token_list, y_token_list, x_pos_list, y_pos_list, rel, flags
 
     event_relation[paragraph_contain,
@@ -63,23 +63,24 @@ def program_declaration(cur_device):
     def label_reader(_, label):
         return label
 
-    event_relation[relation] = FunctionalSensor(paragraph_contain, "rel_",
-                                                forward=label_reader, label=True, device=cur_device)
     #BiLSTM_model = BiLSTM(512, 128, 1)
-    Roberta_model = Robert_Model()
+    out_model = Robert_Model()
 
-    event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=Roberta_model, device=cur_device)
-    event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=Roberta_model, device=cur_device)
+    event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
+    event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=out_model, device=cur_device)
 
-    def make_MLP_input(x, y):
+    def make_MLP_input(_, x, y):
         subXY = torch.sub(x, y)
         mulXY = torch.mul(x, y)
         return torch.cat((x, y, subXY, mulXY), 1)
 
-    event_relation["MLP_input"] = FunctionalSensor("x_output", "y_output", forward=make_MLP_input, device=cur_device)
+    event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
+                                                    forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation] = ModuleLearner("MLP_input", module=BiLSTM_MLP(256, 256, 8), device=cur_device)
+    event_relation[relation] = ModuleLearner("x_output", module=BiLSTM_MLP(256, 256, 8), device=cur_device)
 
+    event_relation[relation] = FunctionalSensor(paragraph_contain, "rel_",
+                                                forward=label_reader, label=True, device=cur_device)
 
     from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
@@ -99,7 +100,8 @@ def program_declaration(cur_device):
     poi_list = [event_relation, relation]
     # Initial program using only ILP
     program = SolverPOIProgram(graph,
-                               inferTypes=['ILP', 'local/argmax'],
+                               inferTypes=['local/argmax'],
+                               poi=poi_list,
                                loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})

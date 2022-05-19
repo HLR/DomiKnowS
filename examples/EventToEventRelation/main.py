@@ -25,7 +25,8 @@ def main(args):
     program = program_declaration(cur_device)
 
     program.train(train_dataset, valid_set=valid_dataset, test_set=test_dataset, train_epoch_num=args.epoch,
-                  Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
+                  Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
+                  ,device=cur_device)
 
     # TODO: Evaluate Testing dataset
     print(program.model.loss)

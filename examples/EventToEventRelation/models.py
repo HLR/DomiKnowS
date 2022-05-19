@@ -54,7 +54,7 @@ class BiLSTM_MLP(nn.Module):
         x = self.start(input)
         x = torch.relu(x)
         x = self.final(x)
-        return x
+        return torch.squeeze(x)
 
 class Robert_Model(nn.Module):
     def __init__(self):
