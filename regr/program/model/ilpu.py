@@ -17,7 +17,7 @@ class ILPUModel(SolverModel):
         builder = data_item
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         concept = prop.sup
         values = []
         try:

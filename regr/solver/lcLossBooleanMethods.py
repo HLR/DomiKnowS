@@ -1,4 +1,5 @@
 import logging
+import torch
 
 from regr.graph import DataNode
 
@@ -10,6 +11,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
         self.tnorm = DataNode.tnormsDefault
+        self.grad = True
         
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog =  ilpConfig['ifLog']
@@ -26,19 +28,24 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         self.tnorm = tnorm
         
-    def _isNumber(self, v):
+    def _isTensor(self, v):
         if v is None:
-            return  False
+            return  0
+        elif torch.is_tensor(v):
+            if len(v.shape) == 0 or len(v.shape) == 1 and v.shape[0] == 1:
+                return v.item()
+            else:
+                0
         elif isinstance(v, (int, float, complex)):
-            return True
+            return 0
         else:
-            return False
+            return 0
         
     def _fixVar(self, var):
         varFixed = []  
         for v in var:
-            if not self._isNumber(v):
-                varFixed.append(0)
+            if v == None or self._isTensor(v) == 0:
+                varFixed.append(torch.zeros(1, device=self.current_device, requires_grad=True))
             else:
                 varFixed.append(v)
         
@@ -50,13 +57,13 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 
         if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
         
-        if not self._isNumber(var):
-            var = 0
+        if not self._isTensor(var):
+            var = torch.zeros(1, device=self.current_device, requires_grad=True)
             
-        notSuccess = 1 - var
+        notSuccess = torch.sub(1, var)
 
         if onlyConstrains:
-            notLoss = 1 - notSuccess
+            notLoss = torch.sub(1, notSuccess)
             
             return notLoss
         else:            
@@ -68,21 +75,22 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
         
-        if not self._isNumber(var1):
+        if not self._isTensor(var1):
             var1 = 0
             
-        if not self._isNumber(var2):
+        if not self._isTensor(var2):
             var2 = 0
             
         if self.tnorm =='L':
-            and2Success = max(0, var1 + var2 - 1)
+            tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
+            and2Success = torch.maximum(tZero, torch.sub(torch.add(var1, var2), 1)) # max(0, var1 + var2 - 1)
         elif self.tnorm =='G':
-            and2Success = min(var1, var2)
+            and2Success = torch.minimum(var1, var2) # min(var1, var2)
         elif self.tnorm =='P':
-            and2Success = var1*var2
+            and2Success = torch.mul(var1, var2) # var1*var2
          
         if onlyConstrains:
-            and2Loss = 1 - and2Success
+            and2Loss = torch.sub(1, and2Success)
             
             return and2Loss
         else:
@@ -95,20 +103,24 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
               
         var = self._fixVar(var)
-                
-        N = len(var)
-        
-        varSum = 0
-        for currentVar in var:
-            varSum += currentVar 
-            
+                    
         if self.tnorm =='L':
-            andSuccess = max(varSum - N + 1, 0)
+            N = len(var)
+        
+            varSum = torch.clone(var[0])
+            for v in var[1:]:
+                varSum.add_(v)
+            
+            tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
+            andSuccess = torch.maximum(torch.add(torch.sub(varSum,N), 1), tZero) # max(varSum - N + 1, 0)
         elif self.tnorm =='G':
-            andSuccess = min(var)
+            andSuccess = torch.clone(var[0])
+            for v in var[1:]:
+                andSuccess = torch.minimum(andSuccess, v)
         elif self.tnorm =='P':
-            import math
-            andSuccess = math.prod(var)
+            andSuccess = torch.clone(var[0])
+            for v in var[1:]:
+                andSuccess.mul_(v)
 
         if onlyConstrains:
             andLoss = 1 - andSuccess
@@ -123,21 +135,22 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
-        if not self._isNumber(var1):
+        if not self._isTensor(var1):
             var1 = 0
             
-        if not self._isNumber(var2):
+        if not self._isTensor(var2):
             var2 = 0
             
         if self.tnorm =='L':
-            or2Success = min(var1 + var2, 1)
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            or2Success = torch.minimum(torch.add(var1, var2), tOne) # min(var1 + var2, 1)
         elif self.tnorm =='G':
-            or2Success = max(var1, var2)
+            or2Success = torch.maximum(var1, var2) # max(var1, var2)
         elif self.tnorm =='P':
-            or2Success = var1+var2 - var1*var2
+            or2Success = torch.sub(torch.add(var1, var2), torch.mul(var1, var2)) # var1+var2 - var1*var2
 
         if onlyConstrains:
-            or2Loss = 1 - or2Success
+            or2Loss = torch.sub(1, or2Success) # 1 - or2Success
            
             return or2Loss
         else:
@@ -151,22 +164,25 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         var = self._fixVar(var)
         
-        N = len(var)
-        
-        varSum = 0
-        for currentVar in var:            
-            varSum += currentVar
+        varSum = torch.clone(var[0])
+        for v in var[1:]:
+            varSum.add_(v)
            
         if self.tnorm =='L':
-            orSuccess = min(varSum, 1)
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            orSuccess = torch.minimum(varSum, tOne) # min(varSum, 1)
         elif self.tnorm =='G':
-            orSuccess = max(var)
+            orSuccess = torch.clone(var[0])
+            for v in var[1:]:
+                orSuccess.maximum(v)
         elif self.tnorm =='P':
-            import math
-            orSuccess = varSum - math.prod(var)
+            varPod = torch.clone(var[0])
+            for v in var[1:]:
+                varPod.mul_(v)
+            orSuccess = torch.sub(varSum, varPod) # varSum - math.prod(var)
             
         if onlyConstrains:
-            orLoss = 1 - orSuccess
+            orLoss = torch.sub(1, orSuccess) # 1 - orSuccess
                 
             return orLoss
         else:            
@@ -177,18 +193,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "NAND"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-        
-        if not self._isNumber(var1):
-            var1 = 0
-            
-        if not self._isNumber(var2):
-            var2 = 0
             
         # nand(var1, var2) = not(and(var1, var2))
         nand2Success = self.notVar(_, self.and2Var(_, var1, var2))
 
         if onlyConstrains:
-            nand2Loss = 1 - nand2Success
+            nand2Loss = torch.sub(1, nand2Success)
                         
             return nand2Loss
         else:
@@ -200,21 +210,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
         
-        var = self._fixVar(var)
-                
-        nandLoss = 0
-        
-        N = len(var)
-        
-        varSum = 0
-        for currentVar in var:
-            varSum += currentVar
-        
         # nand(var) = not(and(var))
         nandSuccess = self.notVar(_, self.andVar(_, *var))
 
         if onlyConstrains:
-            nandLoss = 1 - nandSuccess
+            nandLoss = torch.sub(1, nandSuccess)
                         
             return nandLoss
         else:            
@@ -226,31 +226,34 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
      
-        if not self._isNumber(var1):
+        var1Item = self._isTensor(var1)
+        if var1Item == None:
             var1 = 0
             
-        if not self._isNumber(var2):
+        var2Item = self._isTensor(var2)
+        if var2Item == None:
             var2 = 0
           
         if self.tnorm =='L':
-            ifSuccess = min(1, 1 - var1 + var2)
+            tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+            ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
         elif self.tnorm =='G':
-            if var2 > var1: 
-                ifSuccess = 1
+            if var2Item > var1Item: 
+                ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
             else: 
                 ifSuccess = var2
         elif self.tnorm =='P':
-            if var1 != 0:
-                ifSuccess = min(1, var2/var1)
+            if var1Item != 0:
+                tOne = torch.ones(1, device=self.current_device, requires_grad=True)
+                ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
             else:
-                ifSuccess = 1
+                ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
 
-              
         # if(var1, var2) = or(not(var1), var2)
         #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
 
         if onlyConstrains:
-            ifLoss = 1 - ifSuccess
+            ifLoss = torch.sub(1, ifSuccess) # 1 - ifSuccess
             
             return ifLoss
         else:            
@@ -262,17 +265,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
 
-        var = self._fixVar(var)
-                
-        varSum = 0
-        for currentVar in var:
-            varSum += currentVar
-    
         # nor(var) = not(or(var)
         norSucess = self.notVar(_, self.orVar(_, *var))
         
         if onlyConstrains:
-            norLoss = 1 - norSucess
+            norLoss = torch.sub(1, norSucess)
             
             return norLoss
         else:
@@ -284,17 +281,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
-        if not self._isNumber(var1):
-            var1 = 0
-            
-        if not self._isNumber(var2):
-            var2 = 0
-            
         # xor(var1, var2) = or(and(var1, not(var2)), and(not(var1), var2))
         xorSuccess = self.or2Var(_, self.and2Var(_, var1, self.notVar(_, var2)), self.and2Var(_, self.notVar(_, var1), var2))
         
         if onlyConstrains:
-            xorLoss = 1 - xorSuccess
+            xorLoss = torch.sub(1, xorSuccess)
             
             return xorLoss
         else:
@@ -305,18 +296,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "EPQ"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-
-        if not self._isNumber(var1):
-            var1 = 0
-            
-        if not self._isNumber(var2):
-            var2 = 0
             
         # epq(var1, var2) = and(or(var1, not(var2)), or(not(var1), var2)))
         epqSuccess = self.and2Var(_, self.or2Var(_, var1, self.notVar(_, var2)), self.or2Var(_, self.notVar(_, var1), var2))
         
         if onlyConstrains:
-            epqLoss = 1 - epqSuccess
+            epqLoss = torch.sub(1, epqSuccess)
             
             return epqLoss
         else:
@@ -330,23 +315,23 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
 
         var = self._fixVar(var)
                 
-        varSum = 0
-        for currentVar in var:
-            varSum += currentVar
-            
-        countSuccess = 0
-            
+        varSum = torch.clone(var[0])
+        for v in var[1:]:
+            varSum.add_(v)
+                        
+        tZero = torch.zeros(1, device=self.current_device, requires_grad=True)
+        tOne = torch.ones(1, device=self.current_device, requires_grad=True)
         if limitOp == '>=': # > limit
-            countSuccess = min(max(varSum - limit, 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
             
         elif limitOp == '<=': # < limit
-            countSuccess = min(max(limit - varSum, 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
 
         elif limitOp == '==': # == limit
-            countSuccess = min(max(abs(varSum - limit), 0), 1)
+            countSuccess = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
                 
         if onlyConstrains:
-            countLoss = 1 - countSuccess
+            countLoss = torch.sub(1, countSuccess)
     
             return countLoss
         else:
@@ -357,10 +342,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,_var))
         
-        fixedSuccess = 1
+        fixedSuccess = torch.ones(1, device=self.current_device, requires_grad=True)
         
         if onlyConstrains:
-            fixedLoss = 1 - fixedSuccess
+            fixedLoss = torch.sub(1,  fixedSuccess)
     
             return fixedLoss
         else:

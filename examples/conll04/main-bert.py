@@ -6,16 +6,17 @@ sys.path.append('../..')
 
 import numpy as np
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
 from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
+from regr.utils import setProductionLogMode
 
 
 import spacy
@@ -85,7 +86,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
 
 
-def model():
+def model(device=None):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
@@ -220,6 +221,9 @@ def model():
     class Program(CallbackProgram, SolverPOIProgram):
         pass
 
+    class DictCallBackProgram(CallbackProgram, SolverPOIDictLossProgram):
+        pass
+
     lbp1 = Program(
         graph, poi=(phrase, pair), inferTypes=['ILP', 'local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -233,10 +237,28 @@ def model():
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
+    lbp = DictCallBackProgram(
+        graph, poi=(phrase, pair), inferTypes=['local/argmax'],
+        dictloss={
+            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.3836,  0.5644]).to(device)),
+            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5197, 13.1628]).to(device)),
+            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5168, 15.3461]).to(device)), 
+            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5122, 21.0087]).to(device)),             
+            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5100, 25.3879]).to(device)), 
+            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6653, 2.0123]).to(device)), 
+            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6468, 2.2027]).to(device)), 
+            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6269, 2.4697]).to(device)), 
+            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6128, 2.7167]).to(device)), 
+            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5801, 3.6222]).to(device)), 
+            "default": NBCrossEntropyDictLoss()},
+        metric={
+            # 'ILP': PRF1Tracker(DatanodeCMMetric()),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
     return lbp, lbp1
 
 def main(args):
-    program, program1 = model()
+    program, program1 = model(device=args.gpu)
 
     split_id = args.split
     print(args.number)
@@ -258,8 +280,8 @@ def main(args):
     def compute_scores(item, criteria="P"):
         entities = ["location", "people", "organization", "other"]
         relations = ["work_for", "located_in", "live_in", "orgbase_on", "kill"]
-        instances = {"location": 931, "people": 793, "organization": 523, "other": 572, "work_for": 94, "located_in": 107, "live_in": 108, 
-                     "orgbase_on": 93, "kill": 53}
+        instances = {"location": 904, "people": 781, "organization": 482, "other": 656, "work_for": 55, "located_in": 88, "live_in": 129, 
+                     "orgbase_on": 102, "kill": 39}
         sum_entity = 0
         sum_relations = 0
         precision_entity = 0
@@ -270,14 +292,14 @@ def main(args):
         precision_all = 0
         normal_precision_all = 0
         for key in entities:
-            sum_entity += instances[key]
-            precision_entity += instances[key] * item[key][criteria]
-            normal_precision_entity += item[key][criteria]
+            sum_entity += float(instances[key])
+            precision_entity += float(instances[key]) * float(item[key][criteria])
+            normal_precision_entity += float(item[key][criteria])
 
         for key in relations:
-            sum_relations += instances[key]
-            precision_relations += instances[key] * item[key][criteria]
-            normal_precision_relations += item[key][criteria]
+            sum_relations += float(instances[key])
+            precision_relations += float(instances[key]) * float(item[key][criteria])
+            normal_precision_relations += float(item[key][criteria])
 
         sum_all = sum_relations + sum_entity
         precision_all = precision_entity + precision_relations
@@ -355,7 +377,7 @@ def parse_arguments():
         type=float,
         required=False,
         choices=[1, 0.25, 0.1],
-        default=1,
+        default=0.25,
     )
     parser.add_argument(
         "-i",
@@ -363,7 +385,7 @@ def parse_arguments():
         help="Number of iterations",
         type=int,
         required=False,
-        default=10,
+        default=100,
     )
     parser.add_argument(
         "-l",
@@ -389,7 +411,7 @@ def parse_arguments():
         help="GPU option",
         type=str,
         required=False,
-        default="auto",
+        default="cuda:1",
         choices=[
             "auto",
             "cpu",
@@ -411,4 +433,5 @@ def parse_arguments():
 
 if __name__ == '__main__':
     args = parse_arguments()
+    setProductionLogMode()
     main(args)
