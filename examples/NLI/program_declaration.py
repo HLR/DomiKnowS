@@ -97,7 +97,8 @@ def program_declaration(cur_device, *,
     elif sample:
         print("Using Sampling Program")
         program = SampleLossProgram(
-            graph, SolverModel,
+            graph, SolverModel, poi=poi_list,
+            inferTypes=['ILP', 'local/argmax'],
             loss=MacroAverageTracker(NBCrossEntropyLoss()),
             beta=beta,
             metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
