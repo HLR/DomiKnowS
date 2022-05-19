@@ -13,18 +13,18 @@ with Graph('event_to_event') as graph:
 
     # each relation could be one the following four concepts:
     # sub-event relation consists of four relations, parent child, child parent, coref, and noref
-    relation = event_relation(name="relation", ConceptClass=EnumConcept, values=["parent_child", "child_parent",
+    relation_classes = event_relation(name="relation_classes", ConceptClass=EnumConcept, values=["parent_child", "child_parent",
                                                                                 "coref", "norel", "before", "after",
                                                                                          "EQUAL", "VAGUE"])
 
     # Only one of the labels to be true
     ifL(event_relation, exactL(
-        relation.parent_child, relation.child_parent, relation.coref, relation.norel,
-        relation.before, relation.after, relation.EQUAL, relation.VAGUE))
+        relation_classes.parent_child, relation_classes.child_parent, relation_classes.coref, relation_classes.norel,
+        relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
 
     ifL(event_relation, atMostL(
-        relation.parent_child, relation.child_parent, relation.coref, relation.norel,
-        relation.before, relation.after, relation.EQUAL, relation.VAGUE))
+        relation_classes.parent_child, relation_classes.child_parent, relation_classes.coref, relation_classes.norel,
+        relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
 
     # # Symmetric Constrain
     # symmetric = Concept("symmetric")

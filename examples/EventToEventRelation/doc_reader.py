@@ -168,12 +168,10 @@ def matres_reader():
                 path_PL if file_name in PL_files else None
         if dirname is None:
             continue
-        # TODO: Creating the train and test file from this
         # Events to relation
         result_dict = read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigger)
         all_event_pairs = events_to_relation[file]
         for eiid1, eiid2 in all_event_pairs:
-            # TODO: Check which variable need to be used in the model to train from original paper
             x = result_dict["eiid"][eiid1]["eID"]
             y = result_dict["eiid"][eiid2]["eID"]
 
@@ -210,6 +208,7 @@ def matres_reader():
 def create_data_loader(raw_data, batch_size=1):
     dataset = []
     count = 0
+    # TODO: Group by relevant not order
     append_data = {"context": [],
             "eiids1": [],
             "eiids2": [],

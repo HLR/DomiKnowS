@@ -54,7 +54,7 @@ class BiLSTM_MLP(nn.Module):
         x = self.start(input)
         x = torch.relu(x)
         x = self.final(x)
-        return torch.squeeze(x)
+        return x
 
 class Robert_Model(nn.Module):
     def __init__(self):
@@ -63,5 +63,5 @@ class Robert_Model(nn.Module):
         self.last_layer_size = self.model.config.hidden_size
 
     def forward(self, input_sent, pos):
-        last_hidden_state= self.model(input_sent)[0]
+        last_hidden_state = self.model(input_sent)[0]
         return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(1), start_dim=1)

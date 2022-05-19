@@ -7,9 +7,8 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
 def program_declaration(cur_device):
-    from graph import graph, paragraph, paragraph_contain, event_relation, relation
+    from graph import graph, paragraph, paragraph_contain, event_relation, relation_classes
 
-    graph.detach()
     # Reading directly from data table
     paragraph["context"] = ReaderSensor(keyword="context", device=cur_device)
     paragraph["eiids1"] = ReaderSensor(keyword="eiids1", device=cur_device)
@@ -62,7 +61,10 @@ def program_declaration(cur_device):
     def label_reader(_, label):
         return label
 
-    #BiLSTM_model = BiLSTM(512, 128, 1)
+    event_relation[relation_classes] = FunctionalSensor(paragraph_contain, "rel_",
+                                                        forward=label_reader, label=True, device=cur_device)
+
+    # BiLSTM_model = BiLSTM(512, 128, 1)
     out_model = Robert_Model()
 
     event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
@@ -75,17 +77,15 @@ def program_declaration(cur_device):
         return return_input
 
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
-                                                    forward=make_MLP_input, device=cur_device)
+                                                   forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8), device=cur_device)
-
-    event_relation[relation] = FunctionalSensor(paragraph_contain, "rel_",
-                                                forward=label_reader, label=True, device=cur_device)
+    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8),
+                                                     device=cur_device)
 
     from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
     from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-    from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
+    from regr.program import LearningBasedProgram, SolverPOIProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     # Define the same weight as original paper
@@ -93,14 +93,15 @@ def program_declaration(cur_device):
     HierCP = 1846.0
     HierCo = 758.0
     HierNo = 63755.0
-    HierTo = HierPC + HierCP + HierCo + HierNo # total number of event pairs
-    weights = torch.FloatTensor([0.25*818.0/412.0, 0.25*818.0/263.0, 0.25*818.0/30.0, 0.25*818.0/113.0,
-               0.25*HierTo/HierPC, 0.25*HierTo/HierCP, 0.25*HierTo/HierCo, 0.25*HierTo/HierNo]).to(cur_device)
+    HierTo = HierPC + HierCP + HierCo + HierNo  # total number of event pairs
+    weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0, 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0,
+                                 0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP, 0.25 * HierTo / HierCo,
+                                 0.25 * HierTo / HierNo]).to(cur_device)
 
-    poi_list = [event_relation, relation]
+    poi_list = [event_relation, relation_classes]
     # Initial program using only ILP
     program = SolverPOIProgram(graph,
-                               inferTypes=['local/argmax'],
+                               inferTypes=['ILP', 'local/argmax'],
                                poi=poi_list,
                                loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),

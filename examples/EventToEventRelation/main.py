@@ -14,12 +14,12 @@ from doc_reader import load_dataset
 
 
 def main(args):
-
+    from graph import graph, paragraph, paragraph_contain, event_relation, relation_classes
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
-    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=1)
+    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=4)
 
     # Declare Program
     program = program_declaration(cur_device)
