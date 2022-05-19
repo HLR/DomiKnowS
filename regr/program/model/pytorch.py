@@ -15,11 +15,12 @@ from ..metric import MetricTracker
 
 
 class TorchModel(torch.nn.Module):
-    def __init__(self, graph):
+    def __init__(self, graph, device='auto'):
         super().__init__()
         self.graph = graph
         self.mode(Mode.TRAIN)
         self.build = True
+        self.device = device
 
         for learner in self.graph.get_sensors(TorchLearner):
             self.add_module(learner.fullname, learner.model)
@@ -93,7 +94,7 @@ class TorchModel(torch.nn.Module):
             if (builder.needsBatchRootDN()):
                 builder.addBatchRootDN()
             *out, = self.populate(builder)
-            datanode = builder.getDataNode()
+            datanode = builder.getDataNode(device=self.device)
             return (*out, datanode, builder)
         else:
             *out, = self.populate(data_item)
@@ -108,8 +109,8 @@ def model_helper(Model, *args, **kwargs):
 
 
 class PoiModel(TorchModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None):
-        super().__init__(graph)
+    def __init__(self, graph, poi=None, loss=None, metric=None, device='auto'):
+        super().__init__(graph, device)
         if poi is None:
             self.poi = self.default_poi()
         else:
@@ -198,7 +199,7 @@ class PoiModel(TorchModel):
             for sensors in self.find_sensors(prop):
                 if self.mode() not in {Mode.POPULATE,}:
                     # calculated any loss or metric
-                    if self.loss:
+                    if self.loss is not None:
                         local_loss = self.poi_loss(builder, prop, sensors)
                         if local_loss is not None:
                             loss += local_loss
@@ -210,8 +211,8 @@ class PoiModel(TorchModel):
         return loss, metric
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP']):
-        super().__init__(graph, poi=poi, loss=loss, metric=metric)
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP'], device='auto'):
+        super().__init__(graph, poi=poi, loss=loss, metric=metric, device=device)
         self.inference_with = []
         self.inferTypes = inferTypes
 
@@ -228,7 +229,7 @@ class SolverModel(PoiModel):
         # Check if this is batch
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
         for infertype in self.inferTypes:
@@ -246,12 +247,10 @@ class SolverModel(PoiModel):
         data_item = self.inference(builder)
         return super().populate(builder, run=False)
     
-    
-
 
 class PoiModelToWorkWithLearnerWithLoss(TorchModel):
-    def __init__(self, graph, poi=None):
-        super().__init__(graph)
+    def __init__(self, graph, poi=None, device='auto'):
+        super().__init__(graph, device=device)
         if poi is not None:
             self.poi = poi
         else:
@@ -310,12 +309,12 @@ class PoiModelToWorkWithLearnerWithLoss(TorchModel):
     
     
 class PoiModelDictLoss(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None):
+    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None, device='auto'):
         self.loss_tracker = MacroAverageTracker()
         if dictloss:
-            super().__init__(graph, poi=poi, loss=self.loss_tracker, metric=metric)
+            super().__init__(graph, poi=poi, loss=self.loss_tracker, metric=metric, device=device)
         else:
-            super().__init__(graph, poi=poi, loss=loss, metric=metric)
+            super().__init__(graph, poi=poi, loss=loss, metric=metric, device=device)
         
         self.metric_tracker = None
         self.losses = dict()
@@ -337,7 +336,7 @@ class PoiModelDictLoss(PoiModel):
             
     def poi_loss(self, data_item, prop, sensors):
         if self.dictloss:
-            if not self.loss:
+            if self.loss is None:
                 return 0
     #         outs = [sensor(data_item) for sensor in sensors]
             target = None
@@ -347,12 +346,14 @@ class PoiModelDictLoss(PoiModel):
                     target = sensor
                 else:
                     pred = sensor
-            if target == None or pred == None:
+            if target == None or pred == None or pred(data_item).shape[0] == 0:
                 return None
             if not str(prop.name) in self.dictloss and not "default" in self.dictloss:
                 return None
             elif not str(prop.name) in self.dictloss:
                 self.losses[pred, target] = self.dictloss["default"](data_item, prop, pred(data_item), target(data_item))
+                if torch.isnan(self.losses[pred, target]).any() :
+                    print("here it is")
                 return self.losses[pred, target]
             else:
                 self.losses[pred, target] = self.dictloss[str(prop.name)](data_item, prop, pred(data_item), target(data_item))
@@ -454,8 +455,8 @@ class PoiModelDictLoss(PoiModel):
     
     
 class SolverModelDictLoss(PoiModelDictLoss):
-    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None, inferTypes=['ILP']):
-        super().__init__(graph, poi=poi, loss=loss, metric=metric, dictloss=dictloss)
+    def __init__(self, graph, poi=None, loss=None, metric=None, dictloss=None, inferTypes=['ILP'], device='auto'):
+        super().__init__(graph, poi=poi, loss=loss, metric=metric, dictloss=dictloss, device=device)
         self.inference_with = []
         self.inferTypes = inferTypes
 
@@ -472,7 +473,7 @@ class SolverModelDictLoss(PoiModelDictLoss):
         # Check if this is batch
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
-        datanode = builder.getDataNode()
+        datanode = builder.getDataNode(device=self.device)
         # trigger inference
 #         fun=lambda val: torch.tensor(val, dtype=float).softmax(dim=-1).detach().cpu().numpy().tolist()
         for infertype in self.inferTypes:

@@ -182,7 +182,8 @@ class booleanMethods(ilpBooleanProcessor):
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-
+        self.grad = False
+        
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
     
@@ -350,17 +351,12 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         if self.ifNone(var):
             return None
         
-        limitTensor = torch.full([len(var[0])], limit)
+        limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
-        # Translate boolean to int
-        varInt = []
-        for v in var:
-            varInt.append(v.to(dtype=torch.int, copy=True))
-           
         # Calculate sum 
-        varSum = varInt[0]
-        for i in range(1, len(varInt)):
-            varSum += varInt[i]
+        varSum = var[0].int()
+        for i in range(1, len(var)):
+            varSum.add_(var[i].int())
 
         # Check condition
         if limitOp == '>=':

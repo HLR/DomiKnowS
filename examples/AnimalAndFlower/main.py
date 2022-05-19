@@ -14,6 +14,8 @@ from graph import graph, daisy, dandelion, rose, sunflower, tulip, cat, dog, mon
 import logging, random
 import torch
 
+from regr.utils import setProductionLogMode
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
 parser.add_argument('--solver', help='the model solver', default='primal_dual')
@@ -30,6 +32,9 @@ parser.add_argument('--lr', dest='learning_rate', default=2e-5, help='learning r
 # TODO add  model size and other things here
 args = parser.parse_args()
 
+# Disable Logging  
+productionMode = True  
+    
 import math
 def main():
     if torch.cuda.is_available():
@@ -38,6 +43,10 @@ def main():
         device='cpu'
     print("selected device is:",device)
 
+    
+    if productionMode:
+        setProductionLogMode()
+        
     torch.manual_seed(777)
     random.seed(777)
     logging.basicConfig(level=logging.INFO)

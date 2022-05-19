@@ -37,7 +37,7 @@ def test_case():
             'raw': ['John', 'works', 'for', 'IBM'],
             'emb': word_emb,
             #                             John        works       for           IBM
-            'people':       torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.98, 0.02], [0.40, 0.6]], device=device),
+            'people':       torch.tensor([[0.3, 0.7], [0.9, 0.1], [0.98, 0.02], [0.50, 0.5]], device=device),
             'organization': torch.tensor([[0.5, 0.5], [0.8, 0.2], [0.97, 0.03], [0.09, 0.91]], device=device),
             'location':     torch.tensor([[0.7, 0.3], [0.4, 0.6], [0.95, 0.05], [0.50, 0.50]], device=device),
             'other':        torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.90, 0.10], [0.70, 0.30]], device=device),
@@ -114,9 +114,9 @@ def test_case():
         # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM
         'lc2LossTensor' : {"L" : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
-                                               0,              0,             0.4502,  0.3971, # works
+                                               float("nan"),   float("nan"),  0.4502,  0.3971, # works
                                                0.2769,         0.3385,        0.2891,  0.3100, # for
-                                               0.5246,         0.3543,        0.3100,  0.1572], # IBM
+                                               0.5744,         0.3543,        0.3100,  0.2071], # IBM
                          # torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
                          #             float("nan"),   float("nan"),  0.4000,  0.2900,  # works
                          #              0.0200,         0.0300,        0.0500,  0.1000,  # for
@@ -128,9 +128,9 @@ def test_case():
                                                0.5000,          0.6457,       0.7191,   0.0000], device=device),
                            
                            "P" : torch.tensor([0.3350,          0.4013,       0.5254,   0.2639, 
-                                               0.0000,          0.0000,       0.8065,   0.4637, 
+                                               float("nan"),   float("nan"),  0.8065,   0.4637, 
                                                0.5000,          0.7102,       0.7309,   0.3800, 
-                                               0.5214,          0.4502,       0.5018,  0.0488], device=device)
+                                               0.5648,          0.5000,       0.5470,  0.0488], device=device)
                            }
     
     }
@@ -370,7 +370,7 @@ def test_main_conll04(case):
         # ------------ Calculate logical constraints losses 
         for tnorm in ['L', 'G', "P"]:
             lcResult = datanode.calculateLcLoss(tnorm=tnorm)
-                    
+                                    
             for i in range(3):
                 assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
     
