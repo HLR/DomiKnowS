@@ -34,13 +34,24 @@ class Roberta_Tokenizer:
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers):
+    def __init__(self, input_size, hidden_size, num_layers, roberta_size, cuda):
         super(BiLSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True,
+                            bidirectional=True)
+        self.roberta_last_size = 768 if roberta_size == 'roberta-base' else 1024
+        self.last_layer_size = hidden_size * 2 # Bi direction
+        self.cuda = cuda
+        self.roberta_model = RobertaModel.from_pretrained(roberta_size).to(self.cuda)
+
+    def add_length_dim(self, sents):
+        return_list = []
+        for sent in sents:
+            return_list.append(self.roberta_model(sent.unsqueeze(0))[0].view(-1, self.roberta_last_size))
+        return torch.stack(return_list).to(self.cuda)
 
     def forward(self, input_sent, pos):
-        last_hidden_state, _ = self.lstm(input_sent)  # Size [1, 78, 256]
-        return last_hidden_state[1, pos.long(), :].unsqueeze(0)
+        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent))  # Size [1, 78, 256]
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=1, end_dim=2)
 
 
 class BiLSTM_MLP(nn.Module):
@@ -56,6 +67,7 @@ class BiLSTM_MLP(nn.Module):
         x = self.final(x)
         return x
 
+
 class Robert_Model(nn.Module):
     def __init__(self):
         super(Robert_Model, self).__init__()
@@ -63,5 +75,5 @@ class Robert_Model(nn.Module):
         self.last_layer_size = self.model.config.hidden_size
 
     def forward(self, input_sent, pos):
-        last_hidden_state= self.model(input_sent)[0]
-        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)
+        last_hidden_state = self.model(input_sent)[0]
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=1, end_dim=2)

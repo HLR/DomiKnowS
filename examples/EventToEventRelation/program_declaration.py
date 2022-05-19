@@ -64,8 +64,12 @@ def program_declaration(cur_device):
     event_relation[relation_classes] = FunctionalSensor(paragraph_contain, "rel_",
                                                         forward=label_reader, label=True, device=cur_device)
 
-    # BiLSTM_model = BiLSTM(512, 128, 1)
-    out_model = Robert_Model()
+    # BiLSTM setting
+    hidden_layer = 384
+    roberta_size = 'roberta-base'
+    out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
+                       hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
+    # out_model = Robert_Model()
 
     event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
     event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=out_model, device=cur_device)
@@ -102,7 +106,7 @@ def program_declaration(cur_device):
     # Initial program using only ILP
     # TODO: FIX ILP ON THIS MODEL
     program = SolverPOIProgram(graph,
-                               inferTypes=['local/argmax'],
+                               inferTypes=['ILP', 'local/argmax'],
                                loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
