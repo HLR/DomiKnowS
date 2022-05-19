@@ -246,6 +246,8 @@ def create_data_loader(raw_data, batch_size=1):
             # Clear appended data
             for key in append_data:
                 append_data[key] = []
+            if len(dataset) == 1:
+                return dataset
 
     if count != 0:
         dataset.append({

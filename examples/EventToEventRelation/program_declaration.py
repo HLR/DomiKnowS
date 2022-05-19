@@ -22,11 +22,11 @@ def program_declaration(cur_device):
 
     # TODO: Follow the paper code for these steps
     def str_to_int_list(x):
-        return torch.LongTensor([int(i) for i in x])
+        return torch.LongTensor([int(i) for i in x]).to(cur_device)
 
     def str_to_token_list(x):
         tokens_list = x.split("@@")
-        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list])
+        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
 
     def relation_str_to_list(relations):
         rel = []
@@ -42,7 +42,6 @@ def program_declaration(cur_device):
                    x_position_list, y_position_list, relation_list):
         # Seperate them from batch to seperate dataset
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
-
         eiid1_list = str_to_int_list(eiids1.split("@@"))
         eiid2_list = str_to_int_list(eiids2.split("@@"))
         x_token_list = str_to_token_list(x_token_list)
@@ -72,12 +71,13 @@ def program_declaration(cur_device):
     def make_MLP_input(_, x, y):
         subXY = torch.sub(x, y)
         mulXY = torch.mul(x, y)
-        return torch.cat((x, y, subXY, mulXY), 1)
+        return_input = torch.cat((x, y, subXY, mulXY), 1)
+        return return_input
 
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
                                                     forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation] = ModuleLearner("x_output", module=BiLSTM_MLP(256, 256, 8), device=cur_device)
+    event_relation[relation] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8), device=cur_device)
 
     event_relation[relation] = FunctionalSensor(paragraph_contain, "rel_",
                                                 forward=label_reader, label=True, device=cur_device)
@@ -95,7 +95,7 @@ def program_declaration(cur_device):
     HierNo = 63755.0
     HierTo = HierPC + HierCP + HierCo + HierNo # total number of event pairs
     weights = torch.FloatTensor([0.25*818.0/412.0, 0.25*818.0/263.0, 0.25*818.0/30.0, 0.25*818.0/113.0,
-               0.25*HierTo/HierPC, 0.25*HierTo/HierCP, 0.25*HierTo/HierCo, 0.25*HierTo/HierNo])
+               0.25*HierTo/HierPC, 0.25*HierTo/HierCP, 0.25*HierTo/HierCo, 0.25*HierTo/HierNo]).to(cur_device)
 
     poi_list = [event_relation, relation]
     # Initial program using only ILP

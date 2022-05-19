@@ -59,8 +59,9 @@ class BiLSTM_MLP(nn.Module):
 class Robert_Model(nn.Module):
     def __init__(self):
         super(Robert_Model, self).__init__()
-        self.model = RobertaModel.from_pretrained('roberta-large')
+        self.model = RobertaModel.from_pretrained('roberta-base')
+        self.last_layer_size = self.model.config.hidden_size
 
     def forward(self, input_sent, pos):
         last_hidden_state= self.model(input_sent)[0]
-        return last_hidden_state[0, pos.long(), :].unsqueeze(0)
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(1), start_dim=1)

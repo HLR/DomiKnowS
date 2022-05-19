@@ -30,6 +30,10 @@ def main(args):
 
     # TODO: Evaluate Testing dataset
     print(program.model.loss)
+    for datanode in program.populate(test_dataset, device=cur_device):
+        for event_relation in datanode.getChildDataNodes():
+            print(event_relation)
+
 
 
 if __name__ == "__main__":
