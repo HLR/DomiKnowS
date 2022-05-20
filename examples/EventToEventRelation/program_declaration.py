@@ -105,8 +105,10 @@ def program_declaration(cur_device):
     poi_list = [event_relation, relation_classes]
     # Initial program using only ILP
     # TODO: FIX ILP ON THIS MODEL
+    inferList = ['local/argmax']  # ['ILP', 'local/argmax']
+
     program = SolverPOIProgram(graph,
-                               inferTypes=['ILP', 'local/argmax'],
+                               inferTypes=inferList,
                                loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
