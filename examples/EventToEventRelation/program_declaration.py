@@ -7,7 +7,8 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
 def program_declaration(cur_device):
-    from graph import graph, paragraph, paragraph_contain, event_relation, relation_classes
+    from graph import graph, paragraph, paragraph_contain, event_relation,\
+        relation_classes, symmetric, s_event1, s_event2, transitive, t_event1, t_event2, t_event3
 
     # Reading directly from data table
     paragraph["context"] = ReaderSensor(keyword="context", device=cur_device)
@@ -102,12 +103,22 @@ def program_declaration(cur_device):
                                  0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP, 0.25 * HierTo / HierCo,
                                  0.25 * HierTo / HierNo]).to(cur_device)
 
-    poi_list = [event_relation, relation_classes]
+
     # Initial program using only ILP
+    symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(
+        relations=(s_event1.reversed, s_event2.reversed),
+        forward=check_symmetric, device=cur_device)
+
+    transitive[t_event1.reversed, t_event2.reversed, t_event3.reversed] = CompositionCandidateSensor(
+        relations=(t_event1.reversed, t_event2.reversed, t_event3.reversed),
+        forward=check_transitive, device=cur_device)
+
+
     # TODO: FIX ILP ON THIS MODEL
     inferList = ['local/argmax']  # ['ILP', 'local/argmax']
-
+    poi_list = [event_relation, relation_classes, symmetric, transitive]
     program = SolverPOIProgram(graph,
+                               poi=poi_list,
                                inferTypes=inferList,
                                loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                metric={'ILP': PRF1Tracker(DatanodeCMMetric()),

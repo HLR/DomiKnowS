@@ -26,21 +26,23 @@ with Graph('event_to_event') as graph:
         relation_classes.parent_child, relation_classes.child_parent, relation_classes.coref, relation_classes.norel,
         relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
 
-    # # Symmetric Constrain
-    # symmetric = Concept("symmetric")
-    # s_event1, s_event2 = symmetric.has_a(arg1=event_relation, arg2=event_relation)
-    # # TODO: Symmetric of subevent relation
-    #
-    # # Before(e1, e2) <=> After(e2, e1)
-    # ifL(relation.before('x'), relation.after(path=('x', symmetric, s_event2)))
-    # ifL(relation.after('x'), relation.before(path=('x', symmetric, s_event2)))
-    #
-    # # Equal(e1, e2) <=> Vague(e2, e1)
-    # ifL(relation.EQUAL('x'), relation.VAGUE(path=('x', symmetric, s_event2)))
-    # ifL(relation.VAGUE('x'), relation.EQUAL(path=('x', symmetric, s_event2)))
-    #
+    # Symmetric Constrain
+    symmetric = Concept("symmetric")
+    s_event1, s_event2 = symmetric.has_a(arg1=event_relation, arg2=event_relation)
+    # TODO: Symmetric of subevent relation
+
+    # Before(e1, e2) <=> After(e2, e1)
+    ifL(event_relation.before('x'), event_relation.after(path=('x', symmetric, s_event2)))
+    ifL(event_relation.after('x'), event_relation.before(path=('x', symmetric, s_event2)))
+
+    # Equal(e1, e2) <=> Vague(e2, e1)
+    ifL(event_relation.EQUAL('x'), event_relation.VAGUE(path=('x', symmetric, s_event2)))
+    ifL(event_relation.VAGUE('x'), event_relation.EQUAL(path=('x', symmetric, s_event2)))
+
     # # TODO: Transitive Constrains
     # transitive_table = {
     #     relation.after: {}, relation.before: {}, relation.vague: {}, relation.equal: {},
     #     relation.parent_child: {}, relation.child_parent: {}, relation.coref: {}, relation.noref: {}
     # }
+    transitive = Concept("transitive")
+    t_event1, t_event2, t_event3 = transitive.has_a(arg11=event_relation, arg22=event_relation, arg33=event_relation)
