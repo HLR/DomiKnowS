@@ -58,4 +58,6 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 10000  | 5 | 1e-5 | ILP | Symmetric | 79.510 | 62.700
 10000  | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 79.783 | 65.550
 10000  | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 80.99 | 64.100
+10000  | 5 | 1e-5 | SimpleLoss(1) | Symmetric | 79.583 | 59.250
+10000  | 5 | 1e-5 | SimpleLoss(1) + ILP | Symmetric | 81.933 | 70.150
 
