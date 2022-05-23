@@ -50,8 +50,8 @@ class BiLSTM(nn.Module):
         return torch.stack(return_list).to(self.cuda)
 
     def forward(self, input_sent, pos):
-        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent))  # Size [1, 78, 256]
-        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=1, end_dim=2)
+        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent))  # Size [batch_size, 78, 256]
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)
 
 
 class BiLSTM_MLP(nn.Module):
@@ -76,4 +76,4 @@ class Robert_Model(nn.Module):
 
     def forward(self, input_sent, pos):
         last_hidden_state = self.model(input_sent)[0]
-        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=1, end_dim=2)
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)

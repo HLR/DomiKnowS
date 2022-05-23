@@ -19,7 +19,7 @@ def main(args):
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
-    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=1)
+    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=2)
 
     # Declare Program
     program = program_declaration(cur_device)
