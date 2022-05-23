@@ -14,7 +14,7 @@ DATA_PATH = 'data'
 
 
 class SumBalanceDataset(Dataset):
-    def __init__(self, dataset, digit_ids):
+    def __init__(self, dataset, digit_ids, eval=False):
         digit_to_id = {}
 
         for d in range(10):
@@ -28,6 +28,8 @@ class SumBalanceDataset(Dataset):
         self.dataset = dataset
 
         self.digit_id_pairs = self.build_balanced_sum()
+
+        self.eval = eval
 
     def build_balanced_sum(self):
         digit_id_pairs = []
@@ -61,15 +63,18 @@ class SumBalanceDataset(Dataset):
             'pixels': torch.unsqueeze(torch.stack((d0_image[0], d1_image[0]), dim=0), dim=0),
             'summation': [d0 + d1],
             'digit0': [d0],
-            'digit1': [d1]
+            'digit1': [d1],
+            'eval': self.eval
         }
 
-def make_sum(samples):
+
+def make_sum(samples, eval=False):
     return {
         'pixels': torch.unsqueeze(torch.stack(tuple(map(lambda s: s[0], samples)), dim=0), dim=0),
         'summation': [sum(map(lambda s: s[1], samples))],
         'digit0': [samples[0][1]],
-        'digit1': [samples[1][1]]
+        'digit1': [samples[1][1]],
+        'eval': eval
     }
 
 
@@ -113,14 +118,14 @@ def get_readers():
         sampler=valid_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=make_sum
+        collate_fn=lambda x: make_sum(x, eval=True)
         )
     testloader = DataLoader(
         testset,
         sampler=test_ids,
         shuffle=False,
         batch_size=2,
-        collate_fn=make_sum
+        collate_fn=lambda x: make_sum(x, eval=True)
         )
 
     return trainloader, trainloader_mini, validloader, testloader

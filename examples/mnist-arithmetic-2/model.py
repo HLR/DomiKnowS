@@ -153,6 +153,8 @@ def build_program():
     images['digit1_label'] = ReaderSensor(keyword='digit1')
     images['summation_label'] = ReaderSensor(keyword='summation')
 
+    s['eval'] = ReaderSensor(keyword='eval')
+
     # (1, 2, 10) -> (1, 10) to digit enums
     #images[d0] = ModuleLearner('logits', module=Net())
     images[d0] = FunctionalSensor('logits', forward=lambda x: x[:, 0])
@@ -168,7 +170,7 @@ def build_program():
     #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayerExplicit())
+    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
     images[s] = ReaderSensor(keyword='summation', label=True)
 
     '''program = SolverPOIProgram(graph,

@@ -11,7 +11,11 @@ from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
 from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
+from regr.program.callbackprogram import hook
+from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.metric import MacroAverageTracker
+from regr.program.model.pytorch import SolverModel
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
@@ -76,24 +80,31 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 graph, images = build_program()
 
 
-'''class Program(CallbackProgram, SolverPOIProgram):
-    pass
+class PrimalDualCallbackProgram(PrimalDualProgram):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.after_train_epoch = []
+
+    def call_epoch(self, *args, **kwargs):
+        super().call_epoch(*args, **kwargs)
+        self.after_train_epoch[0](kwargs['c_session']['iter']/config.num_train)
 
 
-program = Program(graph,
-                     poi=(images,),
-                     inferTypes=['local/argmax'],
-                     loss=MacroAverageTracker(NBSoftCrossEntropyLoss(prior_weight=0.5)))'''
+program = PrimalDualCallbackProgram(graph,
+                    Model=SolverModel,
+                    poi=(images,),
+                    inferTypes=['local/argmax'],
+                    loss=MacroAverageTracker(NBCrossEntropyLoss()))
 
 
-class Program(CallbackProgram, IMLProgram):
+'''class Program(CallbackProgram, IMLProgram):
     pass
 
 
 program = Program(graph,
                    poi=(images,),
                    inferTypes=['local/argmax'],
-                   loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))
+                   loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
 
 epoch_num = 1
@@ -112,7 +123,16 @@ def post_epoch_metrics():
     epoch_num += 1
 
 
-program.after_train_epoch = [post_epoch_metrics]
+def post_epoch_metrics_pd(epoch_num):
+    if epoch_num % 5 == 0:
+        print("train evaluation")
+        get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
+
+        print("validation evaluation")
+        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+
+
+program.after_train_epoch = [post_epoch_metrics_pd]
 
 
 def test_adam(params):
