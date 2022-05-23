@@ -114,8 +114,7 @@ def program_declaration(cur_device):
         forward=check_transitive, device=cur_device)
 
 
-    # TODO: FIX ILP ON THIS MODEL
-    inferList = ['local/argmax']  # ['ILP', 'local/argmax']
+    inferList = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     poi_list = [event_relation, relation_classes, symmetric, transitive]
     program = SolverPOIProgram(graph,
                                poi=poi_list,
