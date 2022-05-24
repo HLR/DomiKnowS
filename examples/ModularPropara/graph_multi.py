@@ -34,6 +34,9 @@ with Graph('global') as graph:
     action = Concept(name='action')
     (action_step, action_entity) = action.has_a(step=step, entity=entity)
     
+    same_mention = Concept(name='same_mention')
+    (same_entity, same_location) = same_mention.has_a(se1=entity, se2=location)
+    
     entity_location = Concept(name='entity_location')
     (lentity, lstep, llocation) = entity_location.has_a(lentity=entity, lstep=step, llocation=location)
     
@@ -193,16 +196,16 @@ with Graph('global') as graph:
     )
     
     ### There can only be one location for each entity at each step
-    ifL(
-        andL(
-            entity('e'),
-            step('i')
-        ),
-        atMostL( 
-            entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-        ),
-        active = True
-    )
+#     ifL(
+#         andL(
+#             entity('e'),
+#             step('i')
+#         ),
+#         atMostL( 
+#             entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
+#         ),
+#         active = True
+#     )
     
     
     # if 

@@ -32,7 +32,8 @@ def model_declaration():
         locations,
         location,
         entity_location,
-        entity_location_label
+        entity_location_label,
+        same_mention
     )
     from graph_multi import (
         procedure_context,
@@ -50,6 +51,8 @@ def model_declaration():
         lentity,
         lstep,
         llocation,
+        same_entity,
+        same_location
     )
 
 
@@ -131,6 +134,25 @@ def model_declaration():
         return link1, link2
 
     action[action_step.reversed, action_entity.reversed] = JointSensor(entity[entity_rel], step[context_step], entity['index'], step['index'], forward=make_actions)
+    
+    def make_same_mentions(r1, r2, entities, locations):
+        matches = []
+        for eid, ent in enumerate(entities):
+            for lid, loc in emumerate(locations):
+                if ent == loc:
+                    matches.append(eid, lid)
+        link1 = torch.zeros(len(matches), len(entities))
+        link2 = torch.zeros(len(matches), len(locations))
+
+        for mid, match in enumerate(matches):
+            link1[mid][match[0]] = 1
+            link2[mid][match[1]] = 1
+
+        return link1, link2
+                
+
+    same_mention[same_entity.reversed, same_location.reversed] = JointSensor(entity[entity_rel], location[loc_rel], entity['text'], location['text'], forward=make_same_mentions)
+
 
 
     def make_entity_locations(r1, r2, r3, entities, steps, locations):
@@ -202,6 +224,7 @@ def main():
         action,
         action_label,
         entity,
+        same_mention
     )
     
     from graph_multi import (
@@ -213,6 +236,8 @@ def main():
         before_arg2,
         action_step,
         action_entity,
+        same_entity,
+        same_location
     )
 
     import logging
@@ -220,7 +245,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     lbp = model_declaration()
-    setProductionLogMode()
+#     setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
     # dataset = list(dataset)[16]
