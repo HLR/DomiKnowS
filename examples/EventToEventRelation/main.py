@@ -19,20 +19,44 @@ def main(args):
     cuda_number = args.cuda_number
     cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
-    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=2)
+    train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=args.batch_size)
 
     # Declare Program
-    program = program_declaration(cur_device)
+    program = program_declaration(cur_device, PMD=args.PMD, sampleloss=args.sampleloss, ILP=args.ILP)
 
-    program.train(train_dataset, valid_set=valid_dataset, test_set=test_dataset, train_epoch_num=args.epoch,
+    program.train(train_dataset, valid_set=valid_dataset, train_epoch_num=args.epoch,
                   Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
                   ,device=cur_device)
 
     # TODO: Evaluate Testing dataset
-    print(program.model.loss)
+    classes = ["parent_child", "child_parent",
+               "COREF", "NOREL", "before", "after",
+               "EQUAL", "VAGUE"]
+    output_file = {"file":[], "eiid1":[], "eiid2":[], "actual":[], "argmax":[], "ILP":[]}
+    accuracy_argmax = 0
+    accuracy_ILP = 0
+    total = 0
     for datanode in program.populate(test_dataset, device=cur_device):
         for event_relation in datanode.getChildDataNodes():
-            print(event_relation)
+            actual_class = classes[int(event_relation.getAttribute(relation_classes, "label"))]
+            pred_argmax = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "local/argmax")))]
+            pred_ILP = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "ILP")))]
+            output_file["file"].append(event_relation.getAttribute("file"))
+            output_file["eiid1"].append(int(event_relation.getAttribute("eiid1")))
+            output_file["eiid2"].append(int(event_relation.getAttribute("eiid2")))
+            output_file["actual"].append(actual_class)
+            output_file["argmax"].append(pred_argmax)
+            output_file["ILP"].append(pred_ILP)
+            accuracy_argmax += 1 if actual_class == pred_argmax else 0
+            accuracy_ILP += 1 if args.ILP and actual_class == pred_ILP else 0
+            total += 1
+    output_file = pd.DataFrame(output_file)
+    output_file.to_csv("result.csv")
+    print("Result:")
+    print("EPOCH:", args.epoch, "\nlearning rate:", args.learning_rate, "\nPMD:", args.PMD, "\nSample Loss:", args.sampleloss)
+    print("Argmax accuracy =", accuracy_argmax * 100/total, "%")
+    print("ILP accuracy =", accuracy_ILP * 100/total, "%")
+
 
 
 
@@ -42,7 +66,11 @@ if __name__ == "__main__":
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--epoch', dest='epoch', default=5, help='number of epoch to train the model', type=int)
     parser.add_argument('--lr', dest='learning_rate', default=1e-3, help='learning rate of the model', type=float)
-
+    parser.add_argument('--batch_size', dest='batch_size', default=1, help="batch size of sample", type=int)
+    parser.add_argument('--PMD', dest='PMD', default=False, help="using primal dual program or not", type=bool)
+    parser.add_argument('--beta', dest='beta', default=0.5, help="beta value for primal dual program", type=float)
+    parser.add_argument('--sampleloss', dest='sampleloss', default=False, help="using sample loss program or not", type=bool)
+    parser.add_argument('--sampleSize', dest='sampleSize', default=1, help="Sample Size for sample loss program", type=int)
     args = parser.parse_args()
     main(args)
 

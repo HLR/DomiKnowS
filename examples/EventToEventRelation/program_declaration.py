@@ -6,12 +6,12 @@ from utils import *
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
-def program_declaration(cur_device):
-    from graph import graph, paragraph, paragraph_contain, event_relation,\
+def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sampleSize=1):
+    from graph import graph, paragraph, paragraph_contain, event_relation, \
         relation_classes, symmetric, s_event1, s_event2, transitive, t_event1, t_event2, t_event3
 
     # Reading directly from data table
-    paragraph["context"] = ReaderSensor(keyword="context", device=cur_device)
+    paragraph["files"] = ReaderSensor(keyword="files", device=cur_device)
     paragraph["eiids1"] = ReaderSensor(keyword="eiids1", device=cur_device)
     paragraph["eiids2"] = ReaderSensor(keyword="eiids2", device=cur_device)
     paragraph["x_tokens_list"] = ReaderSensor(keyword="x_tokens_list", device=cur_device)
@@ -38,7 +38,7 @@ def program_declaration(cur_device):
             flags.append(0 if int(rel_index[relation]) < 4 else 0)
         return str_to_int_list(rel), str_to_int_list(flags)
 
-    def make_event(context, eiids1, eiids2, x_token_list, y_token_list,
+    def make_event(files, eiids1, eiids2, x_token_list, y_token_list,
                    x_position_list, y_position_list, relation_list):
         # Seperate them from batch to seperate dataset
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
@@ -49,12 +49,12 @@ def program_declaration(cur_device):
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
-        return torch.ones(len(context.split("@@")), 1), context.split("@@"), \
+        return torch.ones(len(files.split("@@")), 1), files.split("@@"), \
                eiid1_list, eiid2_list, x_token_list, y_token_list, x_pos_list, y_pos_list, rel, flags
 
     event_relation[paragraph_contain,
-                   "context", "eiid1", "eiid2", "x_sent", "y_sent", "x_pos", "y_pos", "rel_", "flags"] = \
-        JointSensor(paragraph["context"], paragraph["eiids1"], paragraph["eiids2"],
+                   "file", "eiid1", "eiid2", "x_sent", "y_sent", "x_pos", "y_pos", "rel_", "flags"] = \
+        JointSensor(paragraph["files"], paragraph["eiids1"], paragraph["eiids2"],
                     paragraph["x_tokens_list"], paragraph["y_tokens_list"],
                     paragraph["x_position_list"], paragraph["y_position_list"],
                     paragraph["relation_list"], forward=make_event, device=cur_device)
@@ -91,6 +91,7 @@ def program_declaration(cur_device):
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
     from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
     from regr.program import LearningBasedProgram, SolverPOIProgram
+    from regr.program.lossprogram import SampleLossProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     # Define the same weight as original paper
@@ -103,7 +104,6 @@ def program_declaration(cur_device):
                                  0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP, 0.25 * HierTo / HierCo,
                                  0.25 * HierTo / HierNo]).to(cur_device)
 
-
     # Initial program using only ILP
     symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(
         relations=(s_event1.reversed, s_event2.reversed),
@@ -113,14 +113,30 @@ def program_declaration(cur_device):
         relations=(t_event1.reversed, t_event2.reversed, t_event3.reversed),
         forward=check_transitive, device=cur_device)
 
-
     inferList = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     poi_list = [event_relation, relation_classes, symmetric, transitive]
-    program = SolverPOIProgram(graph,
-                               poi=poi_list,
-                               inferTypes=inferList,
-                               loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
-                               metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                       'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    if PMD:
+        program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
+                                    inferTypes=inferList,
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    beta=beta,
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    elif sampleloss:
+        program = SampleLossProgram(graph, SolverModel, poi=poi_list,
+                                    inferTypes=inferList,
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    sample=True,
+                                    sampleSize=sampleSize,
+                                    sampleGlobalLoss=True)
+    else:
+        program = SolverPOIProgram(graph,
+                                   poi=poi_list,
+                                   inferTypes=inferList,
+                                   loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
+                                   metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                           'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return program

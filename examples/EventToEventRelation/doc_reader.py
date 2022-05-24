@@ -189,7 +189,7 @@ def matres_reader():
 
             relation = all_event_pairs[(eiid1, eiid2)]
 
-            dataset = (result_dict["content"],
+            dataset = (file,
                        x_sent, y_sent,
                        x_position, y_position,
                        x_sent_pos, y_sent_pos,  # PART OF SPEECH
@@ -209,7 +209,7 @@ def create_data_loader(raw_data, batch_size=1):
     dataset = []
     count = 0
     # TODO: Group by relevant not order
-    append_data = {"context": [],
+    append_data = {"file": [],
             "eiids1": [],
             "eiids2": [],
             "x_tokens_list": [],
@@ -218,8 +218,8 @@ def create_data_loader(raw_data, batch_size=1):
             "y_position_list": [],
             "relation_list": []}
     for data in raw_data:
-        context, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1, eiid2, relation = data
-        append_data["context"].append(context)
+        file, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1, eiid2, relation = data
+        append_data["file"].append(file)
         append_data["eiids1"].append(str(eiid1))
         append_data["eiids2"].append(str(eiid2))
         append_data["x_tokens_list"].append(str(x_sent.tolist()))
@@ -232,7 +232,7 @@ def create_data_loader(raw_data, batch_size=1):
         # NO MORE INITIAL CONDITION FOR NOW -> NEED TO CHANGE TO GROUP SIMILAR THING TOGETHER
         if count == batch_size:
             dataset.append({
-                "context": "@@".join(append_data["context"]),
+                "files": "@@".join(append_data["file"]),
                 "eiids1": "@@".join(append_data["eiids1"]),
                 "eiids2": "@@".join(append_data["eiids2"]),
                 "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
@@ -248,7 +248,7 @@ def create_data_loader(raw_data, batch_size=1):
 
     if count != 0:
         dataset.append({
-            "context": "@@".join(append_data["context"]),
+            "files": "@@".join(append_data["file"]),
             "eiids1": "@@".join(append_data["eiids1"]),
             "eiids2": "@@".join(append_data["eiids2"]),
             "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
