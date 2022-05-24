@@ -22,7 +22,7 @@ def main(args):
     train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=args.batch_size)
 
     # Declare Program
-    program = program_declaration(cur_device, PMD=args.PMD, sampleloss=args.sampleloss, ILP=args.ILP)
+    program = program_declaration(cur_device, PMD=args.PMD, sampleloss=args.sampleloss)
 
     program.train(train_dataset, valid_set=valid_dataset, train_epoch_num=args.epoch,
                   Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
