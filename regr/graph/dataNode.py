@@ -65,7 +65,9 @@ _DataNodeBulder__Logger.setLevel(logLevel)
 _DataNodeBulder__Logger.addHandler(ch)
 # Don't propagate
 _DataNodeBulder__Logger.propagate = False
-        
+
+_DataNodeBulder__Logger.info('--- Starting new run ---')
+
 # Class representing single data instance with relation links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
@@ -84,6 +86,8 @@ class DataNode:
             self.attributes = attributes                 # Dictionary with node's attributes
         else:
             self.attributes = {}
+            
+        self.current_device = 'auto'
                      
     class DataNodeError(Exception):
         pass
@@ -787,6 +791,8 @@ class DataNode:
     #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
     def getEdgeDataNode(self, path):
         # Path is empty
+        if isinstance(path, eqL):
+            path = [path]
         if len(path) == 0:
             return [self]
 
@@ -806,24 +812,28 @@ class DataNode:
         else:
             path0 = path[0]
 
+        relDns = None         
         if self.isRelation(path0):
             relDns = self.getDnsForRelation(path0)
-        else:
+        else: # if not relation then has to be attribute in eql
             attributeValue = self.getAttribute(path[0].e[1]).item()
-            if attributeValue == 1:
-                attributeValue = True
-            else:
-                attributeValue = False
-            if attributeValue in  path[0].e[2]:
+            requiredValue = path[0].e[2]
+             
+            if attributeValue in requiredValue:
                 return [self]
+            elif (True in  requiredValue ) and attributeValue == 1:
+                return [self]
+            elif (False in  requiredValue ) and attributeValue == 0:
+                attributeValue = False
             else:
                 return [None]
-                    
+          
+        # Check if it is a valid relation link  with not empty set of connected datanodes      
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
             relDns = []
             
-        # Filter DataNode through eqL
+        # if eqL then filter DataNode  
         if isinstance(path[0], eqL):
             _cDns = []
             for cDn in relDns:
@@ -2230,7 +2240,7 @@ class DataNodeBuilder(dict):
             raise ValueError('DataNode Builder has no DataNode started yet')   
         
     # Method returning constructed DataNode - the fist in the list
-    def getDataNode(self):
+    def getDataNode(self, device='auto'):
         self.__addGetDataNodeCounter()
         
         if dict.__contains__(self, 'dataNode'):
@@ -2239,6 +2249,13 @@ class DataNodeBuilder(dict):
             if len(_dataNode) > 0:  
                 returnDn = _dataNode[0]
                 
+                # Set the torch device
+                returnDn.current_device = device
+                if returnDn.current_device=='auto': # if not set use cpu or cuda if available
+                    returnDn.current_device = 'cpu'
+                    if torch.cuda.is_available():
+                        returnDn.current_device = 'cuda'
+                    
                 if len(_dataNode) == 1:
                     _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:
