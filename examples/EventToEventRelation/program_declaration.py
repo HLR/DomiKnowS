@@ -20,7 +20,6 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     paragraph["y_position_list"] = ReaderSensor(keyword="y_position_list", device=cur_device)
     paragraph["relation_list"] = ReaderSensor(keyword="relation_list", device=cur_device)
 
-    # TODO: Follow the paper code for these steps
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x]).to(cur_device)
 

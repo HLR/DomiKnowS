@@ -28,7 +28,6 @@ def main(args):
                   Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
                   ,device=cur_device)
 
-    # TODO: Evaluate Testing dataset
     classes = ["parent_child", "child_parent",
                "COREF", "NOREL", "before", "after",
                "EQUAL", "VAGUE"]
