@@ -189,6 +189,8 @@ class LearningBasedProgram():
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
 
+            self.model.device = self.device
+
     def calculateMetricDelta(self, metric1, metric2):
         metricDelta = {}
         for k, v in metric1.value().items():
