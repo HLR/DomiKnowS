@@ -73,8 +73,8 @@ with Graph('event_to_event') as graph:
                     relation3.append(all_classes[relation](path=('x', transitive, t_event3)))
                 else:
                     relation3.append(notL(all_classes[relation.split(" ")[1]](path=('x', transitive, t_event3))))
-            ifL(andL(all_classes[relation1]('x'), all_classes[relation2](path=('x', transitive, t_event2))),
-                exactL(*relation3))
+            # ifL(andL(all_classes[relation1]('x'), all_classes[relation2](path=('x', transitive, t_event2))),
+            #     existsL(*relation3))
 
 
     transitive_table = {relation_class:
@@ -97,12 +97,16 @@ with Graph('event_to_event') as graph:
     transitive_table["child_parent"]["equal"] = case2
 
     transitive_table["parent_child"]["parent_child"] = ("parent_child", "not after")
-    transitive_table["parent_child"]["coref"] = transitive_table["coref"]["parent_child"] = ("parent_child", "not after")
-    transitive_table["parent_child"]["norel"] = transitive_table["norel"]["parent_child"] = ("not child_parent", "not coref")
+    transitive_table["parent_child"]["coref"] = \
+        transitive_table["coref"]["parent_child"] = ("parent_child", "not after")
+    transitive_table["parent_child"]["norel"] = \
+        transitive_table["norel"]["parent_child"] = ("not child_parent", "not coref")
 
     transitive_table["child_parent"]["child_parent"] = ("child_parent", "not before")
-    transitive_table["child_parent"]["coref"] = transitive_table["coref"]["child_parent"] = ("child_parent", "not before")
-    transitive_table["child_parent"]["norel"] = transitive_table["norel"]["child_parent"] = ("not parent_child", "not coref")
+    transitive_table["child_parent"]["coref"] = \
+        transitive_table["coref"]["child_parent"] = ("child_parent", "not before")
+    transitive_table["child_parent"]["norel"] = \
+        transitive_table["norel"]["child_parent"] = ("not parent_child", "not coref")
 
     transitive_table["coref"]["coref"] = ("coref", "equal")
     transitive_table["coref"]["norel"] = transitive_table["norel"]["coref"] = ("norel",)

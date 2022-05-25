@@ -207,45 +207,150 @@ def matres_reader():
 
 def create_data_loader(raw_data, batch_size=1):
     dataset = []
-    count = 0
     # TODO: Group by relevant not order
+    group_data = {}
+    data_dict = {}
+    total = 0
     append_data = {"file": [],
-            "eiids1": [],
-            "eiids2": [],
-            "x_tokens_list": [],
-            "y_tokens_list": [],
-            "x_position_list": [],
-            "y_position_list": [],
-            "relation_list": []}
+                   "eiids1": [],
+                   "eiids2": [],
+                   "x_tokens_list": [],
+                   "y_tokens_list": [],
+                   "x_position_list": [],
+                   "y_position_list": [],
+                   "relation_list": []}
     for data in raw_data:
         file, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1, eiid2, relation = data
-        append_data["file"].append(file)
-        append_data["eiids1"].append(str(eiid1))
-        append_data["eiids2"].append(str(eiid2))
-        append_data["x_tokens_list"].append(str(x_sent.tolist()))
-        append_data["y_tokens_list"].append(str(y_sent.tolist()))
-        append_data["x_position_list"].append(str(x_pos))
-        append_data["y_position_list"].append(str(y_pos))
-        append_data["relation_list"].append(relation)
-        count += 1
+        if file not in data_dict:
+            data_dict[file] = {}
+            group_data[file] = {}
+        if eiid1 not in data_dict[file]:
+            data_dict[file][eiid1] = {}
+            group_data[file][eiid1] = {}
+        group_data[file][eiid1][eiid2] = False
+        data_dict[file][eiid1][eiid2] = data
 
-        # NO MORE INITIAL CONDITION FOR NOW -> NEED TO CHANGE TO GROUP SIMILAR THING TOGETHER
-        if count == batch_size:
-            dataset.append({
-                "files": "@@".join(append_data["file"]),
-                "eiids1": "@@".join(append_data["eiids1"]),
-                "eiids2": "@@".join(append_data["eiids2"]),
-                "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-                "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
-                "x_position_list": "@@".join(append_data["x_position_list"]),
-                "y_position_list": "@@".join(append_data["y_position_list"]),
-                "relation_list": "@@".join(append_data["relation_list"])
-            })
-            count = 0
-            # Clear appended data
-            for key in append_data:
-                append_data[key] = []
+    count = 0
+    for file in group_data.keys():
+        for eiid1 in group_data[file].keys():
+            for eiid2, taken in group_data[file][eiid1].items():
 
+                if taken:
+                    continue
+
+                file_p, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1_p, eiid2_p, relation = \
+                    data_dict[file][eiid1][eiid2]
+                append_data["file"].append(file_p)
+                append_data["eiids1"].append(str(eiid1_p))
+                append_data["eiids2"].append(str(eiid2_p))
+                append_data["x_tokens_list"].append(str(x_sent.tolist()))
+                append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                append_data["x_position_list"].append(str(x_pos))
+                append_data["y_position_list"].append(str(y_pos))
+                append_data["relation_list"].append(relation)
+                group_data[file][eiid1][eiid2] = True
+                count += 1
+                total += 1
+                if count == batch_size:
+                    dataset.append({
+                        "files": "@@".join(append_data["file"]),
+                        "eiids1": "@@".join(append_data["eiids1"]),
+                        "eiids2": "@@".join(append_data["eiids2"]),
+                        "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+                        "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                        "x_position_list": "@@".join(append_data["x_position_list"]),
+                        "y_position_list": "@@".join(append_data["y_position_list"]),
+                        "relation_list": "@@".join(append_data["relation_list"])
+                    })
+                    count = 0
+                    # Clear appended data
+                    for key in append_data:
+                        append_data[key] = []
+                    continue
+
+                if eiid2 in group_data[file] and eiid1 in group_data[file][eiid2] and not group_data[file][eiid2][
+                    eiid1]:
+                    file_p, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1_p, eiid2_p, relation = \
+                        data_dict[file][eiid2][eiid1]
+                    append_data["file"].append(file_p)
+                    append_data["eiids1"].append(str(eiid1_p))
+                    append_data["eiids2"].append(str(eiid2_p))
+                    append_data["x_tokens_list"].append(str(x_sent.tolist()))
+                    append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                    append_data["x_position_list"].append(str(x_pos))
+                    append_data["y_position_list"].append(str(y_pos))
+                    append_data["relation_list"].append(relation)
+                    group_data[file][eiid2][eiid1] = True
+                    count += 1
+                    total += 1
+                    if count == batch_size:
+                        dataset.append({
+                            "files": "@@".join(append_data["file"]),
+                            "eiids1": "@@".join(append_data["eiids1"]),
+                            "eiids2": "@@".join(append_data["eiids2"]),
+                            "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+                            "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                            "x_position_list": "@@".join(append_data["x_position_list"]),
+                            "y_position_list": "@@".join(append_data["y_position_list"]),
+                            "relation_list": "@@".join(append_data["relation_list"])
+                        })
+                        count = 0
+                        # Clear appended data
+                        for key in append_data:
+                            append_data[key] = []
+                        continue
+
+                for eiid3, taken in group_data[file][eiid1].items():
+                    # Cannot fit transitive relation
+                    if count + 2 > batch_size:
+                        break
+                    if taken:
+                        continue
+                    if eiid2 in group_data[file] and eiid3 in group_data[file][eiid2] \
+                            and not group_data[file][eiid2][eiid3]:
+
+                        file_p, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1_p, eiid2_p, relation = \
+                            data_dict[file][eiid2][eiid3]
+                        append_data["file"].append(file_p)
+                        append_data["eiids1"].append(str(eiid1_p))
+                        append_data["eiids2"].append(str(eiid2_p))
+                        append_data["x_tokens_list"].append(str(x_sent.tolist()))
+                        append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                        append_data["x_position_list"].append(str(x_pos))
+                        append_data["y_position_list"].append(str(y_pos))
+                        append_data["relation_list"].append(relation)
+                        group_data[file][eiid2][eiid3] = True
+
+                        file_p, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1_p, eiid2_p, relation = \
+                            data_dict[file][eiid1][eiid3]
+                        append_data["file"].append(file_p)
+                        append_data["eiids1"].append(str(eiid1_p))
+                        append_data["eiids2"].append(str(eiid2_p))
+                        append_data["x_tokens_list"].append(str(x_sent.tolist()))
+                        append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                        append_data["x_position_list"].append(str(x_pos))
+                        append_data["y_position_list"].append(str(y_pos))
+                        append_data["relation_list"].append(relation)
+                        group_data[file][eiid1][eiid3] = True
+
+                        count += 2
+                        total += 2
+                        if count == batch_size:
+                            dataset.append({
+                                "files": "@@".join(append_data["file"]),
+                                "eiids1": "@@".join(append_data["eiids1"]),
+                                "eiids2": "@@".join(append_data["eiids2"]),
+                                "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+                                "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                                "x_position_list": "@@".join(append_data["x_position_list"]),
+                                "y_position_list": "@@".join(append_data["y_position_list"]),
+                                "relation_list": "@@".join(append_data["relation_list"])
+                            })
+                            count = 0
+                            # Clear appended data
+                            for key in append_data:
+                                append_data[key] = []
+                            break
     if count != 0:
         dataset.append({
             "files": "@@".join(append_data["file"]),
@@ -257,7 +362,6 @@ def create_data_loader(raw_data, batch_size=1):
             "y_position_list": "@@".join(append_data["y_position_list"]),
             "relation_list": "@@".join(append_data["relation_list"])
         })
-
     return dataset
 
 

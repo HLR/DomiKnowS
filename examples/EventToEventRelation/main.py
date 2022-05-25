@@ -47,7 +47,7 @@ def main(args):
             output_file["argmax"].append(pred_argmax)
             output_file["ILP"].append(pred_ILP)
             accuracy_argmax += 1 if actual_class == pred_argmax else 0
-            accuracy_ILP += 1 if args.ILP and actual_class == pred_ILP else 0
+            accuracy_ILP += 1 if actual_class == pred_ILP else 0
             total += 1
     output_file = pd.DataFrame(output_file)
     output_file.to_csv("result.csv")
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--epoch', dest='epoch', default=5, help='number of epoch to train the model', type=int)
     parser.add_argument('--lr', dest='learning_rate', default=1e-3, help='learning rate of the model', type=float)
-    parser.add_argument('--batch_size', dest='batch_size', default=1, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=3, help="batch size of sample", type=int)
     parser.add_argument('--PMD', dest='PMD', default=False, help="using primal dual program or not", type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="beta value for primal dual program", type=float)
     parser.add_argument('--sampleloss', dest='sampleloss', default=False, help="using sample loss program or not", type=bool)
