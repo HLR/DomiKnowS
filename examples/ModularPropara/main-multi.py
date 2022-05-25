@@ -158,6 +158,7 @@ def model_declaration():
     def make_entity_locations(r1, r2, r3, entities, steps, locations):
     #     print(r1, r2)
         all_actions = len(steps) * len(entities) * len(locations)
+#         print("entity_rel lengh is: ", all_actions)
         link2 = torch.zeros(all_actions, len(steps))
         link1 = torch.zeros(all_actions, len(entities))
         link3 = torch.zeros(all_actions, len(locations))
@@ -192,6 +193,8 @@ def model_declaration():
     #     print(c.shape)
 
         d = d.view(c.shape[0] * c.shape[1] * c.shape[2], 2)
+        
+#         print("entity location label is : ", d.shape)
         return d
 
     entity_location[entity_location_label] = FunctionalReaderSensor(lentity.reversed, lstep.reversed, llocation.reversed, keyword="LocationLabel", forward=read_location_labels)
@@ -248,9 +251,9 @@ def main():
 #     setProductionLogMode()
     dataset = ProparaReader(file="data/train.json")  # Adding the info on the reader
 
-    # dataset = list(dataset)[16]
+    dataset = list(dataset)[16]
 
-    # dataset = iter([dataset])
+    dataset = iter([dataset])
 
     #     lbp.test(dataset, device='auto')
     all_updates = []

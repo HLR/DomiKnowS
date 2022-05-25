@@ -73,13 +73,17 @@ class ProparaReader(RegrReader):
         return torch.stack(b1s), torch.stack(b2s)
     
     def getLocationsval(self, item):
-        return [item['location_cand']]
+        lc = item['location_cand'].copy()
+        lc.append("?")
+        return [lc]
     
     def getLocationval(self, item):
-        return item['location_cand']
+        lc = item['location_cand'].copy()
+        lc.append("?")
+        return lc
     
     def getLocationLabelval(self, item):
-        return torch.tensor(item['net_results']['location'])
+        return torch.tensor(item['net_results']['location'])[:, 1:, :]
                 
     
 #     def getTActionval(self, item):
