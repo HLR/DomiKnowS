@@ -74,7 +74,7 @@ with Graph('event_to_event') as graph:
                 else:
                     relation3.append(notL(all_classes[relation.split(" ")[1]](path=('x', transitive, t_event3))))
             # ifL(andL(all_classes[relation1]('x'), all_classes[relation2](path=('x', transitive, t_event2))),
-            #     existsL(*relation3))
+            #     orL(*relation3))
 
 
     transitive_table = {relation_class:
@@ -82,19 +82,58 @@ with Graph('event_to_event') as graph:
                         for relation_class in all_classes}
 
     # create_transitive_relation(relation_classes.before, relation_classes.before, relation_classes.before
-    case1 = ("before", "not child_parent", "not coref")
+    case1 = ("before", "not child_parent")
     transitive_table["before"]["parent_child"] = transitive_table["parent_child"]["before"] = case1
+    ifL(andL(relation_classes.before('x'), relation_classes.parent_child(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.parent_child('x'), relation_classes.before(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
     transitive_table["before"]["coref"] = transitive_table["coref"]["before"] = case1
+    ifL(andL(relation_classes.before('x'), relation_classes.COREF(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.COREF('x'), relation_classes.before(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
     transitive_table["before"]["before"] = case1
+    ifL(andL(relation_classes.before('x'), relation_classes.before(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
     transitive_table["before"]["equal"] = transitive_table["equal"]["before"] = case1
+    ifL(andL(relation_classes.before('x'), relation_classes.EQUAL(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.EQUAL('x'), relation_classes.before(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
     transitive_table["parent_child"]["equal"] = case1
+    ifL(andL(relation_classes.parent_child('x'), relation_classes.EQUAL(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
 
     case2 = ("after", "not parent_child", "not coref")
     transitive_table["after"]["child_parent"] = transitive_table["child_parent"]["after"] = case2
+    ifL(andL(relation_classes.after('x'), relation_classes.parent_child(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.parent_child('x'), relation_classes.after(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
     transitive_table["after"]["coref"] = transitive_table["coref"]["after"] = case2
+    ifL(andL(relation_classes.after('x'), relation_classes.COREF(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.COREF('x'), relation_classes.after(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
     transitive_table["after"]["equal"] = transitive_table["equal"]["after"] = case2
+    ifL(andL(relation_classes.after('x'), relation_classes.EQUAL(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+    ifL(andL(relation_classes.EQUAL('x'), relation_classes.after(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
+
+
     transitive_table["after"]["after"] = case2
+    ifL(andL(relation_classes.after('x'), relation_classes.after(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
     transitive_table["child_parent"]["equal"] = case2
+    ifL(andL(relation_classes.child_parent('x'), relation_classes.EQUAL(path=('x', transitive, t_event2))),
+        notL(relation_classes.COREF(path=('x', transitive, t_event3))))
 
     transitive_table["parent_child"]["parent_child"] = ("parent_child", "not after")
     transitive_table["parent_child"]["coref"] = \
