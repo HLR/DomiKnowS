@@ -83,7 +83,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
                                                    forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8),
+    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 384, 8),
                                                      device=cur_device)
 
     from regr.program.primaldualprogram import PrimalDualProgram
@@ -99,9 +99,10 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     HierCo = 758.0
     HierNo = 63755.0
     HierTo = HierPC + HierCP + HierCo + HierNo  # total number of event pairs
-    weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0, 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0,
-                                 0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP, 0.25 * HierTo / HierCo,
-                                 0.25 * HierTo / HierNo]).to(cur_device)
+    weights = torch.FloatTensor([0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP,
+                                 0.25 * HierTo / HierCo, 0.25 * HierTo / HierNo,
+                                 0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
+                                 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
 
     # Initial program using only ILP
     symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(
