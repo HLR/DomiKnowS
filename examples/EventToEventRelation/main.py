@@ -24,7 +24,7 @@ def main(args):
     # Declare Program
     program = program_declaration(cur_device, PMD=args.PMD, sampleloss=args.sampleloss)
 
-    program.train(train_dataset, valid_set=valid_dataset, train_epoch_num=args.epoch,
+    program.train(train_dataset, train_epoch_num=args.epoch,
                   Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
                   ,device=cur_device)
 
