@@ -61,16 +61,17 @@ class NLI_Robert(nn.Module):
 class NLIDataset(Dataset):
     __slots__ = ["data", "target"]
 
-    def __init__(self, file, size, model=None, augmented_file=None):
+    def __init__(self, file, size, augmented_file=None):
         self.data = []
         self.target = []
-        self.model = model
-        df = pd.read_csv(file).dropna()
-        df_augment = pd.read_csv(augmented_file) if augmented_file else None
+        df = pd.read_csv(file).dropna() if file else None
+        df_augment = pd.read_json(augmented_file, lines=True).dropna() if augmented_file else None
         all_data = []
+        size = min(size, len(df))
         sample = df.iloc[:size, :]
-        for _, data in sample.iterrows():
-            all_data.append((data, False))
+        if file:
+            for _, data in sample.iterrows():
+                all_data.append((data, False))
         if augmented_file:
             for _, data in df_augment.iterrows():
                 all_data.append((data, True))
@@ -96,17 +97,52 @@ class NLIDataset(Dataset):
         return data, torch.tensor(target)
 
 
-def load_data(file):
-    return DataLoader(NLIDataset(file=file, size=100), batch_size=10)
+def load_data(file, size, batch_size = 1, *, augment=None):
+    return DataLoader(NLIDataset(file=file, size=size, augmented_file=augment), batch_size=batch_size)
+
+
+def train(model, dataloader, loss_fn, optimizer, epoch):
+    model.train()
+    losses = []
+    for batch, (attr, label) in enumerate(tqdm(dataloader, desc="Training Epoch " + str(epoch))):
+        pred = model(*attr)
+        loss = loss_fn(pred, label)
+
+        optimizer.zero_grad()
+
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+
+    return np.mean(losses)
+
+
+def eval(model, dataloader, loss_fn):
+    model.eval()
+    correct = 0
+    total = len(dataloader.dataset)
+    with torch.no_grad():
+        for attr, label in tqdm(dataloader, desc="Testing"):
+            pred = model(*attr)
+            correct += (pred.argmax(axis=1) == label).float().sum()
+    return correct / total
+
 
 
 def main(args):
-    test = load_data("data/test.csv")
+    train_set = load_data("data/train.csv", size=args.training_sample, batch_size=args.batch_size)
+    test_set = load_data("data/test.csv", size=args.testing_sample, batch_size=args.batch_size)
+    aug_set = load_data(None, batch_size=args.batch_size, augment="data/snli_genadv_1000_dev.jsonl")
     cuda_number = args.cuda_number
     device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     loss_fn = nn.CrossEntropyLoss()
     model = NLI_model().to(device)
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.learning_rate)
+
+    for epoch in range(args.epoch):
+        loss = train(model, train_set, loss_fn, optimizer, epoch + 1)
+    print("Accuracy = {:3f}%".format(100 * eval(model, test_set, loss_fn)))
+    print("Augmented Accuracy = {:3f}%".format(100 * eval(model, aug_set, loss_fn)))
 
 
 if __name__ == "__main__":
@@ -114,7 +150,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
 
-    parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
+    parser.add_argument('--epoch', dest='epoch', default=10, help='number of epochs to train model', type=int)
 
     parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
                         type=float)
