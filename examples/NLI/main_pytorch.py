@@ -67,9 +67,9 @@ class NLIDataset(Dataset):
         df = pd.read_csv(file).dropna() if file else None
         df_augment = pd.read_json(augmented_file, lines=True).dropna() if augmented_file else None
         all_data = []
-        size = min(size, len(df))
-        sample = df.iloc[:size, :]
+        size = min(size, len(df)) if file else None
         if file:
+            sample = df.iloc[:size, :]
             for _, data in sample.iterrows():
                 all_data.append((data, False))
         if augmented_file:
@@ -80,6 +80,8 @@ class NLIDataset(Dataset):
         for data, augmented in all_data:
             premise = data["premise"] if not augmented else data["sentence1"]
             hypo = data["hypothesis"] if not augmented else data["sentence2"]
+            if augmented and data['gold_label'] not in augmented_class:
+                data['gold_label'] = 'contradiction'
             target = data['label'] if not augmented else augmented_class[data['gold_label']]
             self.data.append((premise, hypo))
             self.target.append(target)
@@ -90,9 +92,6 @@ class NLIDataset(Dataset):
     def __getitem__(self, ind):
         data = self.data[ind]
         target = self.target[ind]
-
-        if self.model:
-            data = self.model(*data)
 
         return data, torch.tensor(target)
 
@@ -132,7 +131,7 @@ def eval(model, dataloader, loss_fn):
 def main(args):
     train_set = load_data("data/train.csv", size=args.training_sample, batch_size=args.batch_size)
     test_set = load_data("data/test.csv", size=args.testing_sample, batch_size=args.batch_size)
-    aug_set = load_data(None, batch_size=args.batch_size, augment="data/snli_genadv_1000_dev.jsonl")
+    aug_set = load_data(None, size=0, batch_size=args.batch_size, augment="data/snli_genadv_1000_dev.jsonl")
     cuda_number = args.cuda_number
     device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     loss_fn = nn.CrossEntropyLoss()
