@@ -137,7 +137,7 @@ program.after_train_epoch = [post_epoch_metrics_pd]
 
 def test_adam(params):
     print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.001)
+    return torch.optim.Adam(params, lr=0.05)
 
 
 program.train(trainloader,
