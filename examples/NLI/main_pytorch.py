@@ -17,22 +17,24 @@ import torchvision.transforms as transforms
 
 
 class NLI_RobertaTokenizer:
-    def __init__(self, max_length=256):
+    def __init__(self, max_length=256, device='cpu'):
         self.max_length = max_length
         self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+        self.device = device
 
     def __call__(self, premise, hypothesis):
         encoded_input = self.tokenizer(premise, hypothesis, padding="max_length", max_length=self.max_length)
         input_ids = encoded_input["input_ids"]
         attention_mask = encoded_input["attention_mask"]
-        return torch.LongTensor(input_ids), torch.LongTensor(attention_mask)
+        return torch.LongTensor(input_ids).to(self.device), torch.LongTensor(attention_mask).to(self.device)
 
 
 class NLI_model(nn.Module):
-    def __init__(self):
+    def __init__(self, device ="cpu"):
         super(NLI_model, self).__init__()
-        self.tokenizer = NLI_RobertaTokenizer()
-        self.robert = NLI_Robert()
+        self.tokenizer = NLI_RobertaTokenizer(device=device)
+        self.robert = NLI_Robert(device=device)
+        self.device = device
         self.MLP = nn.Sequential(
             nn.Linear(self.robert.last_layer_size, 512), nn.ReLU(), nn.Dropout(0.1),
             nn.Linear(512, 512), nn.ReLU(), nn.Dropout(0.1),
@@ -47,15 +49,16 @@ class NLI_model(nn.Module):
 
 
 class NLI_Robert(nn.Module):
-    def __init__(self):
+    def __init__(self, device="cpu"):
         super(NLI_Robert, self).__init__()
         self.bert = RobertaModel.from_pretrained('roberta-base')
         self.last_layer_size = self.bert.config.hidden_size
+        self.device = device
 
     def forward(self, input_ids, attention_mask):
         last_hidden_state, pooled_output = self.bert(input_ids=input_ids, attention_mask=attention_mask,
                                                      return_dict=False)
-        return last_hidden_state[:, 0]
+        return last_hidden_state[:, 0].to()
 
 
 class NLIDataset(Dataset):
@@ -135,7 +138,7 @@ def main(args):
     cuda_number = args.cuda_number
     device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     loss_fn = nn.CrossEntropyLoss()
-    model = NLI_model().to(device)
+    model = NLI_model(device=device).to(device)
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.learning_rate)
 
     for epoch in range(args.epoch):
