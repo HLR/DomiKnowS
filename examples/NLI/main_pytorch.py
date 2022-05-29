@@ -103,11 +103,12 @@ def load_data(file, size, batch_size = 1, *, augment=None):
     return DataLoader(NLIDataset(file=file, size=size, augmented_file=augment), batch_size=batch_size)
 
 
-def train(model, dataloader, loss_fn, optimizer, epoch):
+def train(model, dataloader, loss_fn, optimizer, epoch, *, device="cpu"):
     model.train()
     losses = []
     for batch, (attr, label) in enumerate(tqdm(dataloader, desc="Training Epoch " + str(epoch))):
-        pred = model(*attr)
+        label = torch.Tensor(label).to(device)
+        pred = model(*attr).to(device)
         loss = loss_fn(pred, label)
 
         optimizer.zero_grad()
@@ -142,7 +143,7 @@ def main(args):
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.learning_rate)
 
     for epoch in range(args.epoch):
-        loss = train(model, train_set, loss_fn, optimizer, epoch + 1)
+        loss = train(model, train_set, loss_fn, optimizer, epoch + 1, device=device)
     print("Accuracy = {:3f}%".format(100 * eval(model, test_set, loss_fn)))
     print("Augmented Accuracy = {:3f}%".format(100 * eval(model, aug_set, loss_fn)))
 
