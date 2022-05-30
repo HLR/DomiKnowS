@@ -350,18 +350,20 @@ def create_data_loader(raw_data, batch_size=1):
                             # Clear appended data
                             for key in append_data:
                                 append_data[key] = []
-                            break
-    if count != 0:
-        dataset.append({
-            "files": "@@".join(append_data["file"]),
-            "eiids1": "@@".join(append_data["eiids1"]),
-            "eiids2": "@@".join(append_data["eiids2"]),
-            "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-            "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
-            "x_position_list": "@@".join(append_data["x_position_list"]),
-            "y_position_list": "@@".join(append_data["y_position_list"]),
-            "relation_list": "@@".join(append_data["relation_list"])
-        })
+                            continue
+            # Clear batch at the end of eiid1 involved relation
+            if count != 0:
+                count = 0
+                dataset.append({
+                    "files": "@@".join(append_data["file"]),
+                    "eiids1": "@@".join(append_data["eiids1"]),
+                    "eiids2": "@@".join(append_data["eiids2"]),
+                    "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
+                    "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                    "x_position_list": "@@".join(append_data["x_position_list"]),
+                    "y_position_list": "@@".join(append_data["y_position_list"]),
+                    "relation_list": "@@".join(append_data["relation_list"])
+                })
     return dataset
 
 

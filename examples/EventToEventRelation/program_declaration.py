@@ -116,14 +116,14 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     inferList = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     poi_list = [event_relation, relation_classes, symmetric, transitive]
     if PMD:
-        program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
+        program = PrimalDualProgram(graph, SolverModel, poi=poi_list[1:],
                                     inferTypes=inferList,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif sampleloss:
-        program = SampleLossProgram(graph, SolverModel, poi=poi_list,
+        program = SampleLossProgram(graph, SolverModel, poi=poi_list[1:],
                                     inferTypes=inferList,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
