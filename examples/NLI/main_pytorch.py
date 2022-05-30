@@ -122,12 +122,13 @@ def train(model, dataloader, loss_fn, optimizer, epoch, *, device="cpu"):
     return np.mean(losses)
 
 
-def eval(model, dataloader, loss_fn):
+def eval(model, dataloader, loss_fn, *, device="cpu"):
     model.eval()
     correct = 0
     total = len(dataloader.dataset)
     with torch.no_grad():
         for attr, label in tqdm(dataloader, desc="Testing"):
+            label = torch.LongTensor(label).to(device)
             pred = model(*attr)
             correct += (pred.argmax(axis=1) == label).float().sum()
     return correct / total
@@ -146,8 +147,8 @@ def main(args):
 
     for epoch in range(args.epoch):
         loss = train(model, train_set, loss_fn, optimizer, epoch + 1, device=device)
-    accuracy = 100 * eval(model, test_set, loss_fn)
-    aug_acc = 100 * eval(model, aug_set, loss_fn)
+    accuracy = 100 * eval(model, test_set, loss_fn, device=device)
+    aug_acc = 100 * eval(model, aug_set, loss_fn, device=device)
     print("Accuracy = {:3f}%".format(accuracy))
     print("Augmented Accuracy = {:3f}%".format(aug_acc))
 

@@ -64,3 +64,10 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 10000  | 5 | 1e-5 | SimpleLoss(1) + ILP | Symmetric | 81.933 | 70.150
 10000  | 5 | 1e-5 | Pytorch | None | 82.1083 | 65.0503
 
+
+#### Result Testing Augment
+#### Large Train Set
+Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
+--- | :---: | :---: | :---: | :---: | :---: | ---:
+100000 | 5 | 1e-5 | ILP | w/o symmetric | 83.89 (Dev Augmentation included) | Not Test 
+
