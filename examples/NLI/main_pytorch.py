@@ -86,6 +86,8 @@ class NLIDataset(Dataset):
             if augmented and data['gold_label'] not in augmented_class:
                 data['gold_label'] = 'contradiction'
             target = data['label'] if not augmented else augmented_class[data['gold_label']]
+            if target < 0:
+                target = 2
             self.data.append((premise, hypo))
             self.target.append(target)
 
@@ -107,7 +109,7 @@ def train(model, dataloader, loss_fn, optimizer, epoch, *, device="cpu"):
     model.train()
     losses = []
     for batch, (attr, label) in enumerate(tqdm(dataloader, desc="Training Epoch " + str(epoch))):
-        label = torch.Tensor(label).to(device)
+        label = torch.LongTensor(label).to(device)
         pred = model(*attr).to(device)
         loss = loss_fn(pred, label)
 
@@ -135,7 +137,7 @@ def eval(model, dataloader, loss_fn):
 def main(args):
     train_set = load_data("data/train.csv", size=args.training_sample, batch_size=args.batch_size)
     test_set = load_data("data/test.csv", size=args.testing_sample, batch_size=args.batch_size)
-    aug_set = load_data(None, size=0, batch_size=args.batch_size, augment="data/snli_genadv_1000_dev.jsonl")
+    aug_set = load_data(None, size=0, batch_size=args.batch_size, augment="data/snli_genadv_1000_test.jsonl")
     cuda_number = args.cuda_number
     device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     loss_fn = nn.CrossEntropyLoss()
@@ -144,8 +146,10 @@ def main(args):
 
     for epoch in range(args.epoch):
         loss = train(model, train_set, loss_fn, optimizer, epoch + 1, device=device)
-    print("Accuracy = {:3f}%".format(100 * eval(model, test_set, loss_fn)))
-    print("Augmented Accuracy = {:3f}%".format(100 * eval(model, aug_set, loss_fn)))
+    accuracy = 100 * eval(model, test_set, loss_fn)
+    aug_acc = 100 * eval(model, aug_set, loss_fn)
+    print("Accuracy = {:3f}%".format(accuracy))
+    print("Augmented Accuracy = {:3f}%".format(aug_acc))
 
 
 if __name__ == "__main__":

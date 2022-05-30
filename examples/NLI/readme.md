@@ -43,6 +43,7 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 100000 | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 83.508 (Dev Aug included) | Not Test
 100000 | 5 | 1e-5 | ILP + PMD(beta = 1) | Symmetric | 84.12 (Dev Aug included) | 73.800
 100000 | 5 | 1e-5 | ILP + SimpleLoss(1) | Symmetric | 85.650 | 76.800
+100000 | 5 | 1e-5 | Pytorch | None | 84.808(88.16) | 68.05
 150000 | 5 | 1e-5 | ILP | Symmetric | 85.167 (Dev Aug included) | Not Test
 550146 | 3 | 1e-5 | ILP + SimpleLoss(1) | Symmetric | 87.575 | 81.750
 550146 | 5 | 1e-5 | ILP + SimpleLoss(1) | Symmetric | 86.367 | 72.650
@@ -61,4 +62,5 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 10000  | 5 | 1e-5 | ILP + PMD(beta = 3) | Symmetric | 80.99 | 64.100
 10000  | 5 | 1e-5 | SimpleLoss(1) | Symmetric | 79.583 | 59.250
 10000  | 5 | 1e-5 | SimpleLoss(1) + ILP | Symmetric | 81.933 | 70.150
+10000  | 5 | 1e-5 | Pytorch | None | 82.1083 | 65.0503
 

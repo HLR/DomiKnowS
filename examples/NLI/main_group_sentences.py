@@ -30,7 +30,7 @@ def main(args):
                                             batch_size=args.batch_size)
     # Load Augmentation data
     augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
-                                              augment_file="data/snli_genadv_1000_dev.jsonl")
+                                              augment_file="data/snli_genadv_1000_test.jsonl")
     # Declare Program
     program = program_declaration(cur_device, sym_relation=args.sym_relation, tran_relation=args.tran_relation,
                                   primaldual=args.primaldual, sample=args.sampleloss, beta=args.beta)
@@ -103,9 +103,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
 
-    parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
+    parser.add_argument('--epoch', dest='cur_epoch', default=3, help='number of epochs to train model', type=int)
 
-    parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
+    parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
     parser.add_argument('--training_sample', dest='training_sample', default=550146,
