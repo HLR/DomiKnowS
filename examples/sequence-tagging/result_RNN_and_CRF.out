@@ -1,0 +1,85 @@
+RNN model:
+
+We are using pre-trained word embeddings.
+Epoch 1: train loss = 0.4613, val f1: 0.6256, time = 4.1732
+Epoch 2: train loss = 0.2012, val f1: 0.6989, time = 3.8872
+Epoch 3: train loss = 0.1380, val f1: 0.7444, time = 3.9182
+Epoch 4: train loss = 0.1046, val f1: 0.7193, time = 4.1595
+Epoch 5: train loss = 0.0882, val f1: 0.7649, time = 3.9215
+Epoch 6: train loss = 0.0876, val f1: 0.7262, time = 3.9714
+Epoch 7: train loss = 0.0805, val f1: 0.7736, time = 4.1019
+Epoch 8: train loss = 0.0763, val f1: 0.7652, time = 4.1175
+Epoch 9: train loss = 0.0605, val f1: 0.7799, time = 4.0421
+Epoch 10: train loss = 0.0592, val f1: 0.7969, time = 3.9827
+Epoch 11: train loss = 0.0527, val f1: 0.8066, time = 4.1715
+Epoch 12: train loss = 0.0448, val f1: 0.8080, time = 3.8794
+Epoch 13: train loss = 0.0401, val f1: 0.8212, time = 3.9877
+Epoch 14: train loss = 0.0331, val f1: 0.8406, time = 3.9608
+Epoch 15: train loss = 0.0283, val f1: 0.8281, time = 3.9695
+Epoch 16: train loss = 0.0237, val f1: 0.8429, time = 4.1101
+Epoch 17: train loss = 0.0215, val f1: 0.8342, time = 4.1791
+Epoch 18: train loss = 0.0210, val f1: 0.8454, time = 3.9355
+Epoch 19: train loss = 0.0191, val f1: 0.8386, time = 3.8890
+Epoch 20: train loss = 0.0177, val f1: 0.8331, time = 4.0602
+Epoch 21: train loss = 0.0160, val f1: 0.8347, time = 3.8404
+Epoch 22: train loss = 0.0160, val f1: 0.8383, time = 4.0288
+Epoch 23: train loss = 0.0156, val f1: 0.8417, time = 3.8884
+Epoch 24: train loss = 0.0143, val f1: 0.8541, time = 4.2275
+Epoch 25: train loss = 0.0155, val f1: 0.8484, time = 3.8269
+
+Final evaluation on the test set:
+Overall: P = 0.8417, R = 0.8553, F1 = 0.8484
+LOC : P = 0.9477, R = 0.8775, F1 = 0.9112
+ORG : P = 0.7495, R = 0.8277, F1 = 0.7867
+MISC: P = 0.8984, R = 0.7766, F1 = 0.8330
+PER : P = 0.7984, R = 0.8925, F1 = 0.8429
+
+
+
+
+
+RNN+CRF model:
+
+
+We are using pre-trained word embeddings.
+Epoch 1: train loss = 0.4561, val f1: 0.6253, time = 4.8394
+Epoch 2: train loss = 0.1936, val f1: 0.7003, time = 4.9778
+Epoch 3: train loss = 0.1288, val f1: 0.7406, time = 5.1124
+Epoch 4: train loss = 0.1000, val f1: 0.7353, time = 5.0458
+Epoch 5: train loss = 0.0950, val f1: 0.7712, time = 4.8934
+Epoch 6: train loss = 0.0778, val f1: 0.7593, time = 5.3412
+Epoch 7: train loss = 0.0739, val f1: 0.7843, time = 4.8848
+Epoch 8: train loss = 0.0697, val f1: 0.7986, time = 5.0185
+Epoch 9: train loss = 0.0593, val f1: 0.7858, time = 5.0784
+Epoch 10: train loss = 0.0508, val f1: 0.8041, time = 4.8339
+Epoch 11: train loss = 0.0428, val f1: 0.8418, time = 5.0149
+Epoch 12: train loss = 0.0346, val f1: 0.8393, time = 4.9236
+Epoch 13: train loss = 0.0308, val f1: 0.8528, time = 5.0456
+Epoch 14: train loss = 0.0266, val f1: 0.8509, time = 4.9571
+Epoch 15: train loss = 0.0220, val f1: 0.8662, time = 4.9550
+Epoch 16: train loss = 0.0190, val f1: 0.8560, time = 4.9452
+Epoch 17: train loss = 0.0196, val f1: 0.8566, time = 4.8694
+Epoch 18: train loss = 0.0174, val f1: 0.8586, time = 4.9897
+Epoch 19: train loss = 0.0170, val f1: 0.8702, time = 4.7834
+Epoch 20: train loss = 0.0152, val f1: 0.8630, time = 4.9764
+Epoch 21: train loss = 0.0140, val f1: 0.8567, time = 4.9406
+Epoch 22: train loss = 0.0139, val f1: 0.8300, time = 4.9537
+Epoch 23: train loss = 0.0138, val f1: 0.8342, time = 4.8054
+Epoch 24: train loss = 0.0134, val f1: 0.8374, time = 4.9964
+Epoch 25: train loss = 0.0156, val f1: 0.8508, time = 4.9924
+
+Final evaluation on the test set:
+Overall: P = 0.8877, R = 0.8169, F1 = 0.8508
+LOC : P = 0.9276, R = 0.9064, F1 = 0.9169
+ORG : P = 0.8649, R = 0.7450, F1 = 0.8005
+MISC: P = 0.8188, R = 0.7842, F1 = 0.8011
+PER : P = 0.8972, R = 0.7964, F1 = 0.8438
+
+
+
+
+
+
+
+RNN+CRF+BIO_constraint model:
+
