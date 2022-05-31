@@ -132,6 +132,10 @@ paragraph['more_list'] = ReaderSensor(keyword='more_list')
 paragraph['no_effect_list'] = ReaderSensor(keyword='no_effect_list')
 paragraph['quest_ids'] = ReaderSensor(keyword='quest_ids')
 
+### chen begin
+paragraph['graoh'] = GraphSensor(keyword='wiqa_graph')
+### chen end
+
 def str_to_int_list(x):
     return torch.LongTensor([[int(i)] for i in x])
 
@@ -146,9 +150,16 @@ def make_questions(paragraph, question_list, less_list, more_list, no_effect_lis
 # for example the first element of the output tuple is a tensor of the shape (number of questions,1) meaning that each question
 # has a contain relation with the ith question.
 # the third element of the tuple is a list of str elements each a text of the a question related to the paragraph.
+
 question[para_quest_contains, "question_paragraph", 'text', "is_more_", "is_less_", "no_effect_", "quest_id"] = JointSensor(
     paragraph['paragraph_intext'], paragraph['question_list'], paragraph['less_list'], paragraph['more_list'],
     paragraph['no_effect_list'], paragraph['quest_ids'],forward=make_questions)
+
+### chen begin
+# question[para_quest_contains, "question_paragraph", 'text', "is_more_", "is_less_", "no_effect_", "quest_id"] = JointSensor(
+#     paragraph['paragraph_intext'], paragraph['question_list'], paragraph['less_list'], paragraph['more_list'],
+#     paragraph['no_effect_list'], paragraph['quest_ids'], paragraph['graoh'], forward=make_questions)
+### chen end
 
 # we use another joint sensor, so given a roberta transformer tokenizer, we use the paragraph and question text, concat them and feed them
 # to the tokenizer and get the token_ids and masks for the <s>paragraph</s></s>question</s>
@@ -217,7 +228,7 @@ if args.semantic_loss:
         # loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),
         sample = True,
         # sampleSize=300, 
-        sampleSize=2,
+        sampleSize=3,
         sampleGlobalLoss = True
         )
 ### chen end
