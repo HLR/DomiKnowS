@@ -12,7 +12,7 @@ from sklearn.metrics import classification_report
 from operator import itemgetter
 from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
 from regr.program.callbackprogram import hook
-from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
