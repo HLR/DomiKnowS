@@ -83,7 +83,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
                                                    forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 384, 8),
+    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8),
                                                      device=cur_device)
 
     from regr.program.primaldualprogram import PrimalDualProgram
@@ -116,14 +116,14 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     inferList = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     poi_list = [event_relation, relation_classes, symmetric, transitive]
     if PMD:
-        program = PrimalDualProgram(graph, SolverModel, poi=poi_list[1:],
+        program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=inferList,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif sampleloss:
-        program = SampleLossProgram(graph, SolverModel, poi=poi_list[1:],
+        program = SampleLossProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=inferList,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
