@@ -13,13 +13,16 @@ from operator import itemgetter
 from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
 from regr.program.callbackprogram import hook
 from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.metric import MacroAverageTracker
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
+from regr import setProductionLogMode
+import os
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
+setProductionLogMode()
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
 
@@ -32,7 +35,9 @@ def get_pred_from_node(node, suffix):
     return digit0_pred, digit1_pred, summation_pred
 
 
-def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/ILP', '/local/argmax']):
+#program.populate(reader, device='auto')
+
+def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax']):
     digits_results = {
         'label': []
     }
@@ -45,8 +50,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
-        node.inferILPResults()
+    for i, (loss, metric, node) in tqdm(enumerate(program.test_epoch(reader)), total=total, position=0, leave=True):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
@@ -85,16 +89,19 @@ class PrimalDualCallbackProgram(PrimalDualProgram):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
 
-    def call_epoch(self, *args, **kwargs):
-        super().call_epoch(*args, **kwargs)
-        self.after_train_epoch[0](kwargs['c_session']['iter']/config.num_train)
+    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+        if name == 'Testing':
+            for fn in self.after_train_epoch:
+                fn(kwargs)
+        else:
+            super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = PrimalDualCallbackProgram(graph,
-                    Model=SolverModel,
+program = PrimalDualCallbackProgram(graph, SolverModel,
                     poi=(images,),
                     inferTypes=['local/argmax'],
-                    loss=MacroAverageTracker(NBCrossEntropyLoss()))
+                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                    metric={})
 
 
 '''class Program(CallbackProgram, IMLProgram):
@@ -110,55 +117,73 @@ program = Program(graph,
 epoch_num = 1
 
 
-def post_epoch_metrics():
+def post_epoch_metrics(kwargs, interval=1, train=False, valid=True):
     global epoch_num
 
-    if epoch_num % 5 == 0:
-        print("train evaluation")
-        get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
+    if epoch_num % interval == 0:
+        if train:
+            print("train evaluation")
+            get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
 
-        print("validation evaluation")
-        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+        if valid:
+            print("validation evaluation")
+            get_classification_report(program, validloader, total=config.num_valid, verbose=False)
 
     epoch_num += 1
 
 
-def post_epoch_metrics_pd(epoch_num):
-    if epoch_num % 5 == 0:
-        print("train evaluation")
-        get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
+def save_model(kwargs, interval=1, directory='checkpoints'):
+    save_dir = os.path.join(directory, f'epoch{epoch_num}')
 
-        print("validation evaluation")
-        get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+    print('saving model to', save_dir)
+    if epoch_num % interval == 0:
+        if os.path.isdir(save_dir):
+            print("WARNING: %s already exists. Overwriting contents." % save_dir)
+        else:
+            os.mkdir(save_dir)
+
+        torch.save(program.model.state_dict(), os.path.join(save_dir, 'model.pth'))
+        torch.save(program.cmodel.state_dict(), os.path.join(save_dir, 'cmodel.pth'))
+        torch.save(program.opt.state_dict(), os.path.join(save_dir, 'opt.pth'))
+        torch.save(program.copt.state_dict(), os.path.join(save_dir, 'copt.pth'))
+
+        other_params = {}
+        other_params['c_session'] = kwargs['c_session']
+        other_params['beta'] = program.beta
+
+        torch.save('other_params', os.path.join(save_dir, 'other.pth'))
 
 
-program.after_train_epoch = [post_epoch_metrics_pd]
+def load_program_inference(program, save_dir):
+    program.model.load_state_dict(torch.load(os.path.join(save_dir, 'model.pth')))
+
+
+program.after_train_epoch = [save_model, post_epoch_metrics]
 
 
 def test_adam(params):
     print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.05)
+    return torch.optim.Adam(params, lr=0.0005)
 
 
 program.train(trainloader,
-              train_epoch_num=20,
+              train_epoch_num=50,
               Optim=test_adam,
-              device='auto')
+              device='auto',
+              test_every_epoch=True)
+
+
+#optim = program.model.params()
+
 
 '''for i in range(1, config.epochs + 1):
     print("EPOCH", i)
 
     program.train(trainloader,
-              train_epoch_num=20,
-              Optim=lambda x: torch.optim.Adam(x, lr=0.001),
+              train_epoch_num=1,
+              Optim=test_adam,
               device='auto')
 
-
-    if i == 0:
-        program = IMLProgram(graph,
-                             poi=(images,),
-                             inferTypes=['local/argmax'],
-                             loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0, lmbd=0.5)))
-
-    # validation'''
+    # validation
+    post_epoch_metrics_pd(i, interval=1)'''
 
