@@ -84,10 +84,10 @@ class NLIDataset(Dataset):
             premise = data["premise"] if not augmented else data["sentence1"]
             hypo = data["hypothesis"] if not augmented else data["sentence2"]
             if augmented and data['gold_label'] not in augmented_class:
-                data['gold_label'] = 'contradiction'
+                data['gold_label'] = 'neutral'
             target = data['label'] if not augmented else augmented_class[data['gold_label']]
             if target < 0:
-                target = 2
+                target = 1
             self.data.append((premise, hypo))
             self.target.append(target)
 

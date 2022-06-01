@@ -104,7 +104,7 @@ def program_declaration(cur_device, *,
             metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                     'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
             sample= True,
-            sampleSize=100,
+            sampleSize=1,
             sampleGlobalLoss= True
         )
     else:
