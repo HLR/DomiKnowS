@@ -69,5 +69,10 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 #### Large Train Set
 Training sample size | epoch | learning rate | model | using constrain | Accuracy (%) | Accuracy on Augmented test only (%)
 --- | :---: | :---: | :---: | :---: | :---: | ---:
-100000 | 5 | 1e-5 | ILP | w/o symmetric | 83.89 (Dev Augmentation included) | Not Test 
+Paper | ? | 1e-5 | ? | Non-Regularize | 87.25 | 60.78
+Paper | ? | 1e-5 | ? | Regularize | 87.55 | 73.32
+550146 | 3 | 1e-5 | Pytorch | w/o constrain | 90.01 | 72.900
+550146 | 3 | 1e-5 | SampleLoss(1) | w/o constrain | 89.57 | 70.500
+550146 | 3 | 1e-5 | SampleLoss(1) | w/ constrain | RUNNING | RUNNING
+550146 | 3 | 1e-5 | ILP + SampleLoss(1) (Old one) | Symmetric | 88.74 | 81.750
 
