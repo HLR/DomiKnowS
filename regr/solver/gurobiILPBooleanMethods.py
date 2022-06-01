@@ -974,11 +974,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, varsNames))
         
         # Purge vars
-        varSet = set()
-        for v in var:
-            varSet.add(v)
+        #varPurged = []
+        #for v in var:
+        #    if v not in varPurged:
+        #        varPurged.append(v)
             
-        var = varSet
+        # var = varPurged
         
         # Check number of variables
         N = len(var)

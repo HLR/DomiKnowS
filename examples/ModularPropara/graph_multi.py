@@ -42,12 +42,10 @@ with Graph('global') as graph:
     
     entity_location_label = entity_location(name='entity_location_label')
     
-    
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "move", "create", "destroy"])
     
-    
-    
-    
+    #  ------------ Destroy
+
     ifL(
         # action a1 is destroy, i is a1's step and e is action entity
         andL(
@@ -79,41 +77,8 @@ with Graph('global') as graph:
                 )
             ), active = True
         ) 
-    
-    ifL(
-        # action a1 is destroy, i is a1's step and e is action entity
-        andL(
-            action_label.destroy('a1'), 
-            step('i', path=('a1', action_step)),
-            entity('e', path=('a1', action_entity))
-            ), 
-        # then either
-        orL(
-            # step j associated with entity e, which is before step i cannot be associated with destroy action a2
-#         andL(
-#             step('j', path=(('i', before_arg2.reversed, before_arg1))), 
-#             notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
-#             ), 
-#             # or if  
-            ifL(
-                # step j1 which is before step i is associated with destroy action a2
-                andL(
-                    step('j1', path=('i', before_arg1.reversed, before_arg2)), 
-                    action_label.destroy('a2', path=(('j1', action_step.reversed), ('e', action_entity.reversed)))
-                    ), 
-                # then exists step k associated with entity e, which is between step i and j1 associated with create action a3
-                existsL(
-                    andL(
-                        step('k', path=(('j1', before_arg2.reversed, before_arg1), ('i', before_arg1.reversed, before_arg2))), 
-                        action_label.create('a3', path=(('k', action_step.reversed), ('e', action_entity.reversed)))
-                        )
-                    )
-                )
-            ), 
-            active = False
-        )
 
-    # ----------------------------
+    #  ------------ Create
     
     ifL(
         # action a1 is create, i is a1's step and e is action entity
@@ -147,7 +112,7 @@ with Graph('global') as graph:
             ), active = True
         )
     
-    #  ------------
+    #  ------------ Move
     
     ifL(
         # action a1 is move, i is a1's step and e is action entity
@@ -178,51 +143,3 @@ with Graph('global') as graph:
                 )
             ), active = True
         )
-
-    ### If the action is move, then the location from step before should be different from the current step
-#     ifL(
-#         # action a1 is move, i is a1's step and e is action entity
-#         andL(
-#             action_label.move('a1'), 
-#             step('i', path=('a1', action_step)),
-#             entity('e', path=('a1', action_entity)),
-#             entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed)))
-#             ), 
-#         andL(
-#             step('j', path=('i', ebefore_arg2.reversed, ebefore_arg1)),
-#             notL(entity_location_label('y', path=(('j', lstep.reversed), ('e', lentity.reversed), ('x', llocation, llocation.reversed))))
-#         ),
-#         active = True
-#     )
-    
-    ### There can only be one location for each entity at each step
-#     ifL(
-#         andL(
-#             entity('e'),
-#             step('i')
-#         ),
-#         atMostL( 
-#             entity_location_label('x', path=(('i', lstep.reversed), ('e', lentity.reversed))), 1
-#         ),
-#         active = True
-#     )
-    
-    
-    # if 
-#     ifL(
-#         # action a1 is destroy, i is a1's step and e is action entity
-#         andL(
-#             action_label.destroy('a1'), 
-#             step('i', path=('a1', action_step)),
-#             entity('e', path=('a1', action_entity))
-#             ), 
-        
-#         # step j associated with entity e, which is before step i cannot be associated with destroy action a2
-#         andL(
-#             step('j', path=(('e', action_entity.reversed, action_step), ('i', before_arg1.reversed, before_arg2))), 
-#             notL(action_label.destroy('a2', path=('j', action_step.reversed)))
-#             ), 
-#         active = False
-#         ) 
-
-
