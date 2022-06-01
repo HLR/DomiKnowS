@@ -92,6 +92,8 @@ class PrimalDualProgram(LearningBasedProgram):
         c_lr_decay_param=1,
         c_session={},
         **kwargs):
+        self.model.mode(Mode.TRAIN)
+        self.cmodel.mode(Mode.TRAIN)
         assert c_session
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
