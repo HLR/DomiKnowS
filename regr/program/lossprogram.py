@@ -168,8 +168,8 @@ class LossProgram(LearningBasedProgram):
         c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
-        self.model.train()
-        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
@@ -310,8 +310,8 @@ class SampleLossProgram(LossProgram):
         iter = c_session['iter']
         self.model.train()
         self.model.reset()
-        self.model.train()
-        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
