@@ -161,7 +161,7 @@ class LossProgram(LearningBasedProgram):
         **kwargs):
         assert c_session
         self.model.mode(Mode.TRAIN)
-        self.cmodel.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
         c_update_freq = c_session['c_update_freq']
@@ -243,12 +243,12 @@ class LossProgram(LearningBasedProgram):
 
     def test_epoch(self, dataset, **kwargs):
         # just to consum kwargs
-        self.cmodel.mode(Mode.TEST)
+#         self.cmodel.mode(Mode.TEST)
         yield from super().test_epoch(dataset)
         
     def populate_epoch(self, dataset):
         self.model.mode(Mode.POPULATE)
-        self.cmodel.mode(Mode.POPULATE)
+#         self.cmodel.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
             for i, data_item in enumerate(dataset):
@@ -305,7 +305,7 @@ class SampleLossProgram(LossProgram):
         c_session={},
         **kwargs):
         self.model.mode(Mode.TRAIN)
-        self.cmodel.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
         assert c_session
         iter = c_session['iter']
         self.model.train()
