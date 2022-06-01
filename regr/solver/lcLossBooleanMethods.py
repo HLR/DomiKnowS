@@ -45,7 +45,8 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v == None or self._isTensor(v) == 0:
-                varFixed.append(torch.zeros(1, device=self.current_device, requires_grad=True))
+                #varFixed.append(torch.zeros(1, device=self.current_device, requires_grad=True))
+                varFixed.append(torch.tensor(0))
             else:
                 varFixed.append(v)
         

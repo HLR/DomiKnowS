@@ -82,47 +82,47 @@ class gurobiILPOntSolver(ilpOntSolver):
         Q = None
         
         # Create ILP variables 
-        for _conceptRelation in conceptsRelations: 
-            rootConcept = rootDn.findRootConceptOrRelation(_conceptRelation[0])
+        for currentConceptRelation in conceptsRelations: 
+            rootConcept = rootDn.findRootConceptOrRelation(currentConceptRelation[0])
             dns = rootDn.findDatanodes(select = rootConcept)
-            xkey = '<' + _conceptRelation[0].name + '>/ILP/x'  
+            xkey = '<' + currentConceptRelation[0].name + '>/ILP/x'  
        
             for dn in dns:
-                currentProbability = dnFun(dn, _conceptRelation, fun=fun, epsilon=epsilon)
+                currentProbability = dnFun(dn, currentConceptRelation, fun=fun, epsilon=epsilon)
                 
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
-                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(_conceptRelation[0].name,dn.getInstanceID()))
+                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentConceptRelation[0].name,dn.getInstanceID()))
 
                     continue
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],_conceptRelation[1],dn.getInstanceID()))
+                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
                     continue
     
                 xNew = None
-                if _conceptRelation[2] is not None:
-                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
-                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                if currentConceptRelation[2] is not None:
+                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                 else:
-                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0) in x:
-                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
+                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0) in x:
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
                 
                 if xkey not in dn.attributes:
-                    dn.attributes[xkey] = [None] * _conceptRelation[3]
+                    dn.attributes[xkey] = [None] * currentConceptRelation[3]
                         
                 if xNew is None:
                     # Create variable
-                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), _conceptRelation[1])
+                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentConceptRelation[1])
                     xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
                     
-                    if _conceptRelation[2] is not None:
-                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNew
+                    if currentConceptRelation[2] is not None:
+                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNew
                     else:
-                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
+                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
 
-                if _conceptRelation[2] is not None:
-                    dn.attributes[xkey][_conceptRelation[2]] = xNew
+                if currentConceptRelation[2] is not None:
+                    dn.attributes[xkey][currentConceptRelation[2]] = xNew
                 else:
                     dn.attributes[xkey][0] = xNew
                     
@@ -132,55 +132,43 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if self.valueToBeSkipped(currentProbability[0]):
                     currentProbability[0] = 1 - currentProbability[1]
                     self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"
-                                       %(dn.getInstanceID(), _conceptRelation[0].name, currentProbability[1]))
+                                       %(dn.getInstanceID(), currentConceptRelation[0].name, currentProbability[1]))
     
                 # Create negative variable for binary concept
-                if _conceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
+                if currentConceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
                     xNotNew  = None
                     
-                    if _conceptRelation[2] is not None:
-                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
-                            xNotNew= x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                    if currentConceptRelation[2] is not None:
+                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
+                            xNotNew= x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                     else:
-                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0) in x:
-                            xNotNew = x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0]
+                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0) in x:
+                            xNotNew = x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0]
                     
-                    notxkey = '<' + _conceptRelation[0].name + '>/ILP/notx'
+                    notxkey = '<' + currentConceptRelation[0].name + '>/ILP/notx'
                 
                     if notxkey not in dn.attributes:
-                        dn.attributes[notxkey] = [None] * _conceptRelation[3]
+                        dn.attributes[notxkey] = [None] * currentConceptRelation[3]
                         
                     if xNotNew is None:
-                        xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  _conceptRelation[1]))
-                        if _conceptRelation[2] is not None:
-                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNotNew
+                        xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  currentConceptRelation[1]))
+                        if currentConceptRelation[2] is not None:
+                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNotNew
                         else:
-                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0] = xNotNew
+                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0] = xNotNew
                         
-                    if _conceptRelation[2] is not None:
-                        dn.attributes[notxkey][_conceptRelation[2]] = xNotNew
+                    if currentConceptRelation[2] is not None:
+                        dn.attributes[notxkey][currentConceptRelation[2]] = xNotNew
                     else:
                         dn.attributes[notxkey][0] = xNotNew
                                         
                     Q += currentProbability[0] * xNotNew    
                 
-            if _conceptRelation[2] is not None:
-                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( _conceptRelation[1]))
+            if currentConceptRelation[2] is not None:
+                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
                 
         # Create constraint for multiclass exclusivity 
-        if _conceptRelation[2] is not None:
-            m.update()
-
-            for dn in dns:
-                var = []
-                for _conceptRelation in conceptsRelations: 
-                    currentV = dn.attributes[xkey][_conceptRelation[2]]
-                    
-                    if currentV:
-                        var.append(currentV)
-                
-                     
-                self.myIlpBooleanProcessor.countVar(m, *var, onlyConstrains = True, limitOp = '==', limit = 1, logicMethodName = "MultiClass")
+        self.addMulticlassExclusivity(conceptsRelations, rootDn, m)
 
         m.update()
 
@@ -191,6 +179,44 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return Q
     
+    def addMulticlassExclusivity(self, conceptsRelations, rootDn, m):
+        m.update()
+
+        multiclassDict = {}
+        
+        for c in conceptsRelations:
+            if c[2] is None:
+                continue
+            
+            if c[0] not in multiclassDict:
+                multiclassDict[c[0]] = []
+            
+            multiclassDict[c[0]].append(c)
+            
+        for mc in multiclassDict:
+            
+            rootConcept = rootDn.findRootConceptOrRelation(mc)
+            dns = rootDn.findDatanodes(select = rootConcept)
+            xkey = '<' + mc.name + '>/ILP/x'  
+            
+            for dn in dns:
+                var = []
+                for mlabel in multiclassDict[mc]: 
+                    
+                    if xkey not in dn.attributes:
+                        continue
+                    
+                    cILPs =  dn.attributes[xkey]
+                    cIndex = mlabel[2]
+                    
+                    currentV = cILPs[cIndex]
+                    
+                    if currentV:
+                        var.append(currentV)
+                     
+                if var: 
+                    self.myIlpBooleanProcessor.countVar(m, *var, onlyConstrains = True, limitOp = '==', limit = 1, logicMethodName = "MultiClass")
+
     def addGraphConstrains(self, m, rootDn, *conceptsRelations):
         # Add constraint based on probability 
         for _conceptRelation in conceptsRelations: 
@@ -841,7 +867,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 
                             # Get variables from dataNodes selected  based on referredVariableName
                             for rDn in referredDns:
-                                eDns = []
+                                eDns = [None] # Init as None - to keep track of candidates
                                 
                                 for _rDn in rDn:
                                     if _rDn is None:
@@ -860,8 +886,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         if lc.__str__() != "fixedL":
                                             self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%
                                                                (_rDn, vNames, lc.lcName, conceptName))
-                                        eDns.extend([None])
-                                        
+                                
                                 dnsListForPaths[i].append(eDns)
                            
                         # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
@@ -956,7 +981,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         
                                 vDn = _vDns.append(vDn)
                         
+                        if len(_vDns) == 0:
+                            #continue
+                            pass
+                        
                         vDns.append(_vDns)
+                        
                         if sample:
                             sampleInfoForVariable.append(_sampleInfoForVariable)
                         
@@ -1489,7 +1519,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if lossTensor[i] != lossTensor[i]:
                                 lossTensor[i] = entry
                             else:
-                                lossTensor[i] += entry
+                                lossTensor[i] += entry.item()
     
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['loss'] = torch.nansum(lossTensor).item()

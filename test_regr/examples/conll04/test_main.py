@@ -113,26 +113,23 @@ def test_case():
         
         # ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))))
         #                                 John           works          for      IBM
-        'lc2LossTensor' : {"L" : torch.tensor([0.3515,         0.3543,        0.3543,  0.2717, # John
-                                               float("nan"),   float("nan"),  0.4502,  0.3971, # works
-                                               0.2769,         0.3385,        0.2891,  0.3100, # for
-                                               0.5744,         0.3543,        0.3100,  0.2071], # IBM
-                         # torch.tensor([0.2000,         0.2000,        0.2000,  0.0200,  # John
-                         #             float("nan"),   float("nan"),  0.4000,  0.2900,  # works
-                         #              0.0200,         0.0300,        0.0500,  0.1000,  # for
-                         #               0.5500,         0.2000,        0.1000,  0.2000], # IBM
-                                        device=device),
-                           "G" : torch.tensor([0.0000,          0.6457,       0.7191,   0.0000, 
-                                               0.6900,          0.6900,       0.7191,   0.6900, 
-                                               0.7231,          0.7231,       0.7231,   0.7231, 
-                                               0.5000,          0.6457,       0.7191,   0.0000], device=device),
+        'lc2LossTensor' : {"L" : torch.tensor([0.8016,         0.7087,        0.7087,  0.8363, # John
+                                               float("nan"),   float("nan"),  0.9003,  0.7984, # works
+                                               0.5538,         0.6770,        0.5781,  0.6201, # for
+                                               1.1489,         0.7087,        0.6201,  0.6084], # IBM
+                                               device=device),
+                           "G" : torch.tensor([1.0000,          1.6457,       1.7191,  1.0000, 
+                                               1.6900,          1.6900,       1.7191,  1.6900, 
+                                               1.7231,          1.7231,       1.7231,  1.7231, 
+                                               1.5000,          1.6457,       1.7191,  1.0000], 
+                                               device=device),
                            
-                           "P" : torch.tensor([0.3350,          0.4013,       0.5254,   0.2639, 
-                                               float("nan"),   float("nan"),  0.8065,   0.4637, 
-                                               0.5000,          0.7102,       0.7309,   0.3800, 
-                                               0.5648,          0.5000,       0.5470,  0.0488], device=device)
+                           "P" : torch.tensor([1.3350,          1.4013,       1.5254,  1.2639,   
+                                               float("nan"),    float("nan"), 1.8065,  1.4637, 
+                                               1.5000,          1.7102,       1.7309,  1.3800, 
+                                               1.5648,          1.5000,       1.5470,  1.1350], 
+                                               device=device)
                            }
-    
     }
     case = Namespace(case)
     return case
