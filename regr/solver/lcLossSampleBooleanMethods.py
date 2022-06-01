@@ -194,6 +194,14 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
         
         return False
     
+    def filterNone(self, var):
+        filteredVar = []
+        for v in var:
+            if torch.is_tensor(v):
+                filteredVar.append(v)
+        
+        return filteredVar
+    
     def notVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
             return None
@@ -348,8 +356,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        if self.ifNone(var):
-            return None
+        var = self.filterNone(var)
         
         limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
