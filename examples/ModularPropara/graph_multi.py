@@ -45,7 +45,8 @@ with Graph('global') as graph:
     action_label = action(name="action_label", ConceptClass=EnumConcept, values=["nochange", "move", "create", "destroy"])
     
     #  ------------ Destroy
-
+    # No subsequent destroy action unless there is a create action between them
+    
     ifL(
         # action a1 is destroy, i is a1's step and e is action entity
         andL(
@@ -79,6 +80,7 @@ with Graph('global') as graph:
         ) 
 
     #  ------------ Create
+    # No subsequent create action unless there is a destroy action between them
     
     ifL(
         # action a1 is create, i is a1's step and e is action entity
@@ -109,11 +111,12 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = False
         )
     
     #  ------------ Move
-    
+    # No subsequent move action unless there is a create action between them
+
     ifL(
         # action a1 is move, i is a1's step and e is action entity
         andL(
@@ -141,5 +144,5 @@ with Graph('global') as graph:
                         )
                     )
                 )
-            ), active = True
+            ), active = False
         )

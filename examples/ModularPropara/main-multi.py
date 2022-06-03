@@ -210,7 +210,8 @@ def model_declaration():
     action[action_label] = FunctionalReaderSensor(action_step.reversed, action_entity.reversed, keyword="Action", forward=read_labels)
 
     program = SolverPOIProgram(graph, poi=(procedure, before, action, action_label, exact_before, entity_location, entity_location_label), 
-                               inferTypes=['ILP', 'local/argmax'], 
+                               inferTypes=['ILP', 'local/argmax'],
+                               inference_with=[action_label],
                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
                                metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     return program
@@ -261,7 +262,7 @@ def main():
     #     tdatanode = datanode.findDatanodes(select = context)[0]
     #     print(len(datanode.findDatanodes(select = context)))
     #     print(tdatanode.getChildDataNodes(conceptName=step))
-        datanode.inferILPResults(action, fun=None)
+        datanode.inferILPResults(action_label, fun=None)
         final_output = {
             "id": datanode.getAttribute("id"),
             "steps": [],

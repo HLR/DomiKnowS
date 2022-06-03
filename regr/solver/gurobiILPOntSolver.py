@@ -1056,7 +1056,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 x = self.model['x']
             else:
                 # Create a new Gurobi model
-                self.myIlpBooleanProcessor.resetCaches()
                 m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
                 m.params.outputflag = 0
                 x = {}
