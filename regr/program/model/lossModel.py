@@ -83,7 +83,7 @@ class LossModel(torch.nn.Module):
                 loss_ = self.get_lmbd(key) * loss_nansum
                 self.loss[key](loss_)
                 lmbd_loss.append(loss_)
-            lmbd_loss = torch.tensor(sum(lmbd_loss), requires_grad=True)
+            lmbd_loss = sum(lmbd_loss)
         
         # (*out, datanode, builder)
         return lmbd_loss, datanode, builder

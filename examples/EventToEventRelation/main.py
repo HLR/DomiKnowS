@@ -17,7 +17,12 @@ def main(args):
     from graph import graph, paragraph, paragraph_contain, event_relation, relation_classes
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
-    cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
+    if cuda_number == -1:
+        cur_device = 'cpu'
+    else:
+        cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
+        
+    print('Using: %s'%(cur_device))
 
     train_dataset, valid_dataset, test_dataset = load_dataset(batch_size=args.batch_size)
 

@@ -211,10 +211,18 @@ class PoiModel(TorchModel):
         return loss, metric
 
 class SolverModel(PoiModel):
-    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=['ILP'], device='auto'):
+    def __init__(self, graph, poi=None, loss=None, metric=None, inferTypes=None, inference_with = None, device='auto'):
         super().__init__(graph, poi=poi, loss=loss, metric=metric, device=device)
-        self.inference_with = []
-        self.inferTypes = inferTypes
+        
+        if inferTypes == None:
+            self.inferTypes = ['ILP']
+        else:
+            self.inferTypes = inferTypes
+            
+        if inference_with == None:
+            self.inference_with = []
+        else:
+            self.inference_with = inference_with
 
     def inference(self, builder):
         for prop in self.poi:
