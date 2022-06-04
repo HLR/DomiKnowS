@@ -161,14 +161,15 @@ class LossProgram(LearningBasedProgram):
         **kwargs):
         assert c_session
         self.model.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
         c_update_freq = c_session['c_update_freq']
         c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
-        self.model.train()
-        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
@@ -242,7 +243,17 @@ class LossProgram(LearningBasedProgram):
 
     def test_epoch(self, dataset, **kwargs):
         # just to consum kwargs
+#         self.cmodel.mode(Mode.TEST)
         yield from super().test_epoch(dataset)
+        
+    def populate_epoch(self, dataset):
+        self.model.mode(Mode.POPULATE)
+#         self.cmodel.mode(Mode.POPULATE)
+        self.model.reset()
+        with torch.no_grad():
+            for i, data_item in enumerate(dataset):
+                _, _, *output = self.model(data_item)
+                yield detuple(*output[:1])
         
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
@@ -294,12 +305,13 @@ class SampleLossProgram(LossProgram):
         c_session={},
         **kwargs):
         self.model.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
         assert c_session
         iter = c_session['iter']
         self.model.train()
         self.model.reset()
-        self.model.train()
-        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
