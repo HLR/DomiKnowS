@@ -65,7 +65,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
                                                         forward=label_reader, label=True, device=cur_device)
 
     # BiLSTM setting
-    hidden_layer = 384
+    hidden_layer = 256
     roberta_size = 'roberta-base'
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
@@ -83,7 +83,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
                                                    forward=make_MLP_input, device=cur_device)
 
-    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 256, 8),
+    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 512, 8),
                                                      device=cur_device)
 
     from regr.program.primaldualprogram import PrimalDualProgram
