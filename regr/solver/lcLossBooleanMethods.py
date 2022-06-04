@@ -74,7 +74,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
                
-        var1, var1 = self._fixVar((var1,var1))
+        var1, var2 = self._fixVar((var1,var2))
 
         if self.tnorm =='L':
             tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
@@ -128,7 +128,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
        
         if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
-        var1, var1 = self._fixVar((var1,var1))
+        var1, var2 = self._fixVar((var1,var2))
   
         if self.tnorm =='L':
             tOne = torch.ones(1, device=self.current_device, requires_grad=True)
@@ -214,7 +214,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         var1Item = self._isTensor(var1)
         var2Item = self._isTensor(var2)
 
-        var1, var1 = self._fixVar((var1,var1))
+        var1, var2 = self._fixVar((var1,var2))
 
         if self.tnorm =='L':
             tOne = torch.ones(1, device=self.current_device, requires_grad=True)
