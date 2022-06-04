@@ -178,8 +178,8 @@ def matres_reader():
             x_sent_id = result_dict["event"][x]["sent_id"]
             y_sent_id = result_dict["event"][y]["sent_id"]
 
-            x_sent = padding(result_dict["sentences"][x_sent_id]["roberta_subword_to_ID"])  # A
-            y_sent = padding(result_dict["sentences"][y_sent_id]["roberta_subword_to_ID"])  # B
+            x_sent = result_dict["sentences"][x_sent_id]["content"]  # A
+            y_sent = result_dict["sentences"][y_sent_id]["content"]  # B
 
             x_position = result_dict["event"][x]["roberta_subword_id"]  # A_pos
             y_position = result_dict["event"][y]["roberta_subword_id"]  # B_pos
@@ -214,8 +214,8 @@ def create_data_loader(raw_data, batch_size=1):
     append_data = {"file": [],
                    "eiids1": [],
                    "eiids2": [],
-                   "x_tokens_list": [],
-                   "y_tokens_list": [],
+                   "x_sent_list": [],
+                   "y_sent_list": [],
                    "x_position_list": [],
                    "y_position_list": [],
                    "relation_list": []}
@@ -243,8 +243,8 @@ def create_data_loader(raw_data, batch_size=1):
                 append_data["file"].append(file_p)
                 append_data["eiids1"].append(str(eiid1_p))
                 append_data["eiids2"].append(str(eiid2_p))
-                append_data["x_tokens_list"].append(str(x_sent.tolist()))
-                append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                append_data["x_sent_list"].append(x_sent)
+                append_data["y_sent_list"].append(y_sent)
                 append_data["x_position_list"].append(str(x_pos))
                 append_data["y_position_list"].append(str(y_pos))
                 append_data["relation_list"].append(relation)
@@ -256,8 +256,8 @@ def create_data_loader(raw_data, batch_size=1):
                         "files": "@@".join(append_data["file"]),
                         "eiids1": "@@".join(append_data["eiids1"]),
                         "eiids2": "@@".join(append_data["eiids2"]),
-                        "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-                        "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                        "x_sent_list": "@@".join(append_data["x_sent_list"]),
+                        "y_sent_list": "@@".join(append_data["y_sent_list"]),
                         "x_position_list": "@@".join(append_data["x_position_list"]),
                         "y_position_list": "@@".join(append_data["y_position_list"]),
                         "relation_list": "@@".join(append_data["relation_list"])
@@ -275,8 +275,8 @@ def create_data_loader(raw_data, batch_size=1):
                     append_data["file"].append(file_p)
                     append_data["eiids1"].append(str(eiid1_p))
                     append_data["eiids2"].append(str(eiid2_p))
-                    append_data["x_tokens_list"].append(str(x_sent.tolist()))
-                    append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                    append_data["x_sent_list"].append(x_sent)
+                    append_data["y_sent_list"].append(y_sent)
                     append_data["x_position_list"].append(str(x_pos))
                     append_data["y_position_list"].append(str(y_pos))
                     append_data["relation_list"].append(relation)
@@ -288,8 +288,8 @@ def create_data_loader(raw_data, batch_size=1):
                             "files": "@@".join(append_data["file"]),
                             "eiids1": "@@".join(append_data["eiids1"]),
                             "eiids2": "@@".join(append_data["eiids2"]),
-                            "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-                            "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                            "x_sent_list": "@@".join(append_data["x_sent_list"]),
+                            "y_sent_list": "@@".join(append_data["y_sent_list"]),
                             "x_position_list": "@@".join(append_data["x_position_list"]),
                             "y_position_list": "@@".join(append_data["y_position_list"]),
                             "relation_list": "@@".join(append_data["relation_list"])
@@ -314,8 +314,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["file"].append(file_p)
                         append_data["eiids1"].append(str(eiid1_p))
                         append_data["eiids2"].append(str(eiid2_p))
-                        append_data["x_tokens_list"].append(str(x_sent.tolist()))
-                        append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                        append_data["x_sent_list"].append(x_sent)
+                        append_data["y_sent_list"].append(y_sent)
                         append_data["x_position_list"].append(str(x_pos))
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["relation_list"].append(relation)
@@ -326,8 +326,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["file"].append(file_p)
                         append_data["eiids1"].append(str(eiid1_p))
                         append_data["eiids2"].append(str(eiid2_p))
-                        append_data["x_tokens_list"].append(str(x_sent.tolist()))
-                        append_data["y_tokens_list"].append(str(y_sent.tolist()))
+                        append_data["x_sent_list"].append(x_sent)
+                        append_data["y_sent_list"].append(y_sent)
                         append_data["x_position_list"].append(str(x_pos))
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["relation_list"].append(relation)
@@ -340,8 +340,8 @@ def create_data_loader(raw_data, batch_size=1):
                                 "files": "@@".join(append_data["file"]),
                                 "eiids1": "@@".join(append_data["eiids1"]),
                                 "eiids2": "@@".join(append_data["eiids2"]),
-                                "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-                                "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                                "x_sent_list": "@@".join(append_data["x_sent_list"]),
+                                "y_sent_list": "@@".join(append_data["y_sent_list"]),
                                 "x_position_list": "@@".join(append_data["x_position_list"]),
                                 "y_position_list": "@@".join(append_data["y_position_list"]),
                                 "relation_list": "@@".join(append_data["relation_list"])
@@ -358,8 +358,8 @@ def create_data_loader(raw_data, batch_size=1):
                     "files": "@@".join(append_data["file"]),
                     "eiids1": "@@".join(append_data["eiids1"]),
                     "eiids2": "@@".join(append_data["eiids2"]),
-                    "x_tokens_list": "@@".join(append_data["x_tokens_list"]),
-                    "y_tokens_list": "@@".join(append_data["y_tokens_list"]),
+                    "x_sent_list": "@@".join(append_data["x_sent_list"]),
+                    "y_sent_list": "@@".join(append_data["y_sent_list"]),
                     "x_position_list": "@@".join(append_data["x_position_list"]),
                     "y_position_list": "@@".join(append_data["y_position_list"]),
                     "relation_list": "@@".join(append_data["relation_list"])

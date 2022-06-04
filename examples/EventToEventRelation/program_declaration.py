@@ -14,18 +14,14 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     paragraph["files"] = ReaderSensor(keyword="files", device=cur_device)
     paragraph["eiids1"] = ReaderSensor(keyword="eiids1", device=cur_device)
     paragraph["eiids2"] = ReaderSensor(keyword="eiids2", device=cur_device)
-    paragraph["x_tokens_list"] = ReaderSensor(keyword="x_tokens_list", device=cur_device)
-    paragraph["y_tokens_list"] = ReaderSensor(keyword="y_tokens_list", device=cur_device)
+    paragraph["x_sent_list"] = ReaderSensor(keyword="x_sent_list", device=cur_device)
+    paragraph["y_sent_list"] = ReaderSensor(keyword="y_sent_list", device=cur_device)
     paragraph["x_position_list"] = ReaderSensor(keyword="x_position_list", device=cur_device)
     paragraph["y_position_list"] = ReaderSensor(keyword="y_position_list", device=cur_device)
     paragraph["relation_list"] = ReaderSensor(keyword="relation_list", device=cur_device)
 
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x]).to(cur_device)
-
-    def str_to_token_list(x):
-        tokens_list = x.split("@@")
-        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
 
     def relation_str_to_list(relations):
         rel = []
@@ -37,24 +33,24 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
             flags.append(0 if int(rel_index[relation]) < 4 else 0)
         return str_to_int_list(rel), str_to_int_list(flags)
 
-    def make_event(files, eiids1, eiids2, x_token_list, y_token_list,
+    def make_event(files, eiids1, eiids2, x_sent_list, y_sent_list,
                    x_position_list, y_position_list, relation_list):
         # Seperate them from batch to seperate dataset
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
         eiid1_list = str_to_int_list(eiids1.split("@@"))
         eiid2_list = str_to_int_list(eiids2.split("@@"))
-        x_token_list = str_to_token_list(x_token_list)
-        y_token_list = str_to_token_list(y_token_list)
+        x_sent = x_sent_list.split("@@")
+        y_sent = y_sent_list.split("@@")
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
         return torch.ones(len(files.split("@@")), 1), files.split("@@"), \
-               eiid1_list, eiid2_list, x_token_list, y_token_list, x_pos_list, y_pos_list, rel, flags
+               eiid1_list, eiid2_list, x_sent, y_sent, x_pos_list, y_pos_list, rel, flags
 
     event_relation[paragraph_contain,
                    "file", "eiid1", "eiid2", "x_sent", "y_sent", "x_pos", "y_pos", "rel_", "flags"] = \
         JointSensor(paragraph["files"], paragraph["eiids1"], paragraph["eiids2"],
-                    paragraph["x_tokens_list"], paragraph["y_tokens_list"],
+                    paragraph["x_sent_list"], paragraph["y_sent_list"],
                     paragraph["x_position_list"], paragraph["y_position_list"],
                     paragraph["relation_list"], forward=make_event, device=cur_device)
 
@@ -70,9 +66,10 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
     # out_model = Robert_Model()
-
-    event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
-    event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=out_model, device=cur_device)
+    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(), device=cur_device)
+    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(), device=cur_device)
+    event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model, device=cur_device)
+    event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model, device=cur_device)
 
     def make_MLP_input(_, x, y):
         subXY = torch.sub(x, y)

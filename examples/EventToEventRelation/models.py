@@ -33,6 +33,15 @@ class Roberta_Tokenizer:
             return roberta_subword_to_ID, roberta_subwords, roberta_subword_span, -1
 
 
+class RobertaToken:
+    def __init__(self):
+        self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
+
+    def __call__(self, _, content):
+        encodeds_input = self.tokenizer(content)
+        input_id = encodeds_input["input_ids"]
+        return [torch.LongTensor(padding(encode)) for encode in input_id]
+
 class BiLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, roberta_size, cuda):
         super(BiLSTM, self).__init__()
