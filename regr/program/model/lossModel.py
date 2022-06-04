@@ -156,7 +156,7 @@ class SampleLosslModel(torch.nn.Module):
         if (builder.needsBatchRootDN()):
             builder.addBatchRootDN()
         
-        self.loss.reset()
+#         self.loss.reset()
 
         datanode = builder.getDataNode(device=self.device)
         
