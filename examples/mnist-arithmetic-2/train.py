@@ -103,7 +103,7 @@ program = CallbackProgram(graph, SolverModel,
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                     metric={},
                     sample=True,
-                    sampleSize=2000,
+                    sampleSize=20,
                     sampleGlobalLoss=True,
                     beta=50)
 
@@ -172,9 +172,7 @@ def test_adam(params):
 
 program.train(trainloader,
               train_epoch_num=50,
-              c_warmup_iters=0,
               Optim=test_adam,
-              collectLoss=None,
               device='auto',
               test_every_epoch=True)
 

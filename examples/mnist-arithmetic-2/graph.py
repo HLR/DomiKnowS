@@ -45,21 +45,31 @@ with Graph(name='global') as graph:
 
     fixedL(s)
 
-    for d0_nm in digits_0:
-        for d1_nm in digits_1:
-            d0_val = int(d0_nm.split('_')[-1])
-            d1_val = int(d1_nm.split('_')[-1])
+    for sum_val in range(config.summationRange):
+        sum_combinations = []
 
-            sum_val = d0_val + d1_val
-            sum_nm = f's_{sum_val}'
+        sum_nm = summations[sum_val]
 
-            #print(d0_nm, d1_nm, sum_nm)
+        for d0_val in range(sum_val + 1):
+            d1_val = sum_val - d0_val
 
+            if d0_val >= len(digits_0) or d1_val >= len(digits_1):
+                continue
+
+            d0_nm = digits_0[d0_val]
+            d1_nm = digits_1[d1_val]
+
+            sum_combinations.append(andL(getattr(d0, d0_nm)(), getattr(d1, d1_nm)()))
+
+        print(sum_val, '-', sum_combinations)
+
+        if len(sum_combinations) == 1:
             ifL(
-                getattr(d0, d0_nm)(),
-                ifL(
-                    getattr(d1, d1_nm)(),
-                    getattr(s, sum_nm)()
-                ),
-                active=True
+                getattr(s, sum_nm)(),
+                sum_combinations[0]
+            )
+        else:
+            ifL(
+                getattr(s, sum_nm)(),
+                orL(*sum_combinations)
             )
