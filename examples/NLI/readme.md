@@ -72,7 +72,7 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 Paper | ? | 1e-5 | ? | Non-Regularize | 87.25 | 60.78
 Paper | ? | 1e-5 | ? | Regularize | 87.55 | 73.32
 550146 | 3 | 1e-5 | Pytorch | w/o constrain | 90.01 | 72.900
-550146 | 3 | 1e-5 | SampleLoss(1) | w/o constrain | 89.57 | 70.500
+550146 | 3 | 1e-5 | POI | w/o constrain | 86.025 | 70.750
 550146 | 3 | 1e-5 | SampleLoss(1) | w/ constrain | 89.46 | 73.550
 550146 | 3 | 1e-5 | ILP + SampleLoss(1) (Old one) | Symmetric | 88.74 | 81.750
 
