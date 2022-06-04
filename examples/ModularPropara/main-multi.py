@@ -300,8 +300,11 @@ def main():
 
 updated_data = main()
 
-print(updated_data[0]['actions'].argmax(dim=-1))
+print("\nResults from model before ILP")
 print(updated_data[0]['actions_before'].argmax(dim=-1))
+
+print("\nResults after ILP")
+print(updated_data[0]['actions'].argmax(dim=-1))
 # import json
 # with open("data/updated_info.json", "w") as f:
 #     json.dump(updated_data, f)

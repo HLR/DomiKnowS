@@ -790,11 +790,12 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
                 if m: m.update()
                 
-                m.addConstr(varSumLinExpr >= updatedLimit + BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
-                m.addConstr(varSumLinExpr <= updatedLimit - BigM * varCOUNT, name='Count %s:'%(logicMethodName))
+                m.addConstr(varSumLinExpr - BigM *varCOUNT >= updatedLimit - BigM, name='Count %s:'%(logicMethodName))
+                m.addConstr(varSumLinExpr - BigM *varCOUNT <= updatedLimit, name='Count %s:'%(logicMethodName))
                 
-                #           action_11_is_create + -100.0 existsL_1__action_11_is_create >= -100.0
-                #           action_11_is_create + -100.0 existsL_1__action_11_is_create <= 0.0
+                #m.addConstr(varSumLinExpr + BigM *varCOUNT <= updatedLimit + BigM, name='Count %s:'%(logicMethodName))
+                #m.addConstr(varSumLinExpr + BigM *varCOUNT >= updatedLimit + 1, name='Count %s:'%(logicMethodName))
+                #m.addConstr(varSumLinExpr - varCOUNT <= updatedLimit - 1, name='Count %s:'%(logicMethodName))
         if limitOp == '<=':
             if noOfILPVars == 0:
                 result = int(updatedLimit > 0)
