@@ -41,24 +41,24 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:
             return 0
         
+    # -- Consider None
     def _fixVar(self, var):
         varFixed = []  
         for v in var:
             if v == None or self._isTensor(v) == 0:
-                varFixed.append(torch.zeros(1, device=self.current_device, requires_grad=True))
+                varFixed.append(torch.tensor(0)) # Uses 0 for None
             else:
                 varFixed.append(v)
         
         return varFixed
-            
+    # -- 
+
     def notVar(self, _, var, onlyConstrains = False):
-        methodName = "notVar"
         logicMethodName = "NOT"
                 
         if self.ifLog: self.myLogger.debug("%s called with : %s"%(logicMethodName,var))
         
-        if not self._isTensor(var):
-            var = torch.zeros(1, device=self.current_device, requires_grad=True)
+        var, = self._fixVar((var,))
             
         notSuccess = torch.sub(1, var)
 
@@ -70,17 +70,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return notSuccess
     
     def and2Var(self, _, var1, var2, onlyConstrains = False):
-        methodName = "and2Var"
         logicMethodName = "AND"
             
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-        
-        if not self._isTensor(var1):
-            var1 = 0
-            
-        if not self._isTensor(var2):
-            var2 = 0
-            
+               
+        var1, var1 = self._fixVar((var1,var1))
+
         if self.tnorm =='L':
             tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
             and2Success = torch.maximum(tZero, torch.sub(torch.add(var1, var2), 1)) # max(0, var1 + var2 - 1)
@@ -97,7 +92,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return and2Success
         
     def andVar(self, _, *var, onlyConstrains = False):
-        methodName = "andVar"
         logicMethodName = "AND"
             
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
@@ -130,17 +124,12 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return andSuccess
     
     def or2Var(self, _, var1, var2, onlyConstrains = False):
-        methodName = "or2Var"
         logicMethodName = "OR"
        
         if self.ifLog: self.myLogger.debug("%s called with : var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
 
-        if not self._isTensor(var1):
-            var1 = 0
-            
-        if not self._isTensor(var2):
-            var2 = 0
-            
+        var1, var1 = self._fixVar((var1,var1))
+  
         if self.tnorm =='L':
             tOne = torch.ones(1, device=self.current_device, requires_grad=True)
             or2Success = torch.minimum(torch.add(var1, var2), tOne) # min(var1 + var2, 1)
@@ -157,7 +146,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return or2Success
     
     def orVar(self, _, *var, onlyConstrains = False):
-        methodName = "orVar"
         logicMethodName = "OR"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
@@ -189,7 +177,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return orSuccess
             
     def nand2Var(self, _, var1, var2, onlyConstrains = False):
-        methodName = "nand2Var"
         logicMethodName = "NAND"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
@@ -205,7 +192,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return nand2Success
     
     def nandVar(self, _, *var, onlyConstrains = False):
-        methodName = "nandVar"
         logicMethodName = "NAND"
        
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
@@ -221,19 +207,15 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return nandSuccess
             
     def ifVar(self, _, var1, var2, onlyConstrains = False):
-        methodName = "ifVar"
         logicMethodName = "IF"
 
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
      
         var1Item = self._isTensor(var1)
-        if var1Item == None:
-            var1 = 0
-            
         var2Item = self._isTensor(var2)
-        if var2Item == None:
-            var2 = 0
-          
+
+        var1, var1 = self._fixVar((var1,var1))
+
         if self.tnorm =='L':
             tOne = torch.ones(1, device=self.current_device, requires_grad=True)
             ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
@@ -260,7 +242,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return ifSuccess
                
     def norVar(self, _, *var, onlyConstrains = False):
-        methodName = "norVar"
         logicMethodName = "NOR"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
@@ -276,7 +257,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return norSucess
         
     def xorVar(self, _, var1, var2, onlyConstrains = False):
-        methodName = "xorVar"
         logicMethodName = "XOR"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
@@ -292,7 +272,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return xorSuccess
     
     def epqVar(self, _, var1, var2, onlyConstrains = False):
-        methodName = "epqVar"
         logicMethodName = "EPQ"
         
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
@@ -308,7 +287,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             return epqSuccess
      
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        methodName = "countVar"
         logicMethodName = "COUNT"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName,var))
