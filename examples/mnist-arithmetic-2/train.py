@@ -10,9 +10,9 @@ import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
-from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
+from regr.program import IMLProgram, SolverPOIProgram
 from regr.program.callbackprogram import hook
-from regr.program.lossprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
@@ -84,7 +84,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 graph, images = build_program()
 
 
-class PrimalDualCallbackProgram(PrimalDualProgram):
+class CallbackProgram(SampleLossProgram):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
@@ -97,11 +97,15 @@ class PrimalDualCallbackProgram(PrimalDualProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = PrimalDualCallbackProgram(graph, SolverModel,
+program = CallbackProgram(graph, SolverModel,
                     poi=(images,),
                     inferTypes=['local/argmax'],
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                    metric={})
+                    metric={},
+                    sample=True,
+                    sampleSize=2000,
+                    sampleGlobalLoss=True,
+                    beta=50)
 
 
 '''class Program(CallbackProgram, IMLProgram):
@@ -163,15 +167,16 @@ program.after_train_epoch = [save_model, post_epoch_metrics]
 
 def test_adam(params):
     print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.0005)
+    return torch.optim.Adam(params, lr=0.05)
 
 
 program.train(trainloader,
               train_epoch_num=50,
+              c_warmup_iters=0,
               Optim=test_adam,
+              collectLoss=None,
               device='auto',
               test_every_epoch=True)
-
 
 #optim = program.model.params()
 
