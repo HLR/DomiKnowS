@@ -247,7 +247,7 @@ def model(device=None):
             str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5100, 25.3879]).to(device)), 
             str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6653, 2.0123]).to(device)), 
             str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6468, 2.2027]).to(device)), 
-            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6269, 2.4697]).to(device)), 
+            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6269, 2.5697]).to(device)), 
             str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6128, 2.7167]).to(device)), 
             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5801, 3.6222]).to(device)), 
             "default": NBCrossEntropyDictLoss()},
