@@ -23,4 +23,3 @@ class MNISTCNN(nn.Module):
         x = x.reshape(x.size(0), -1)
         x = self.fc1(x)
         return x
-

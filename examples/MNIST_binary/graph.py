@@ -31,4 +31,3 @@ with Graph('MNISTGraph') as graph:
     Numbers=[Zero,One,Two,Three,Four,Five,Six,Seven,Eight,Nine]
     for l1, l2 in combinations(Numbers, 2):
         nandL(l1, l2)
-
