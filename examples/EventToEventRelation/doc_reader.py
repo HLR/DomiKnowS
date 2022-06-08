@@ -93,14 +93,14 @@ def read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigg
     sent_tokenized_text = sent_tokenize(return_dict["content"])
     sent_span = tokenized_to_origin_span(return_dict["content"], sent_tokenized_text)
     # PART BELOW IS COPYING DIRECTLY FROM PROJECT
-    count_sent = 0
+    index = 0
     for sent in sent_tokenized_text:
         sent_dict = {}
-        sent_dict["sent_id"] = count_sent
+        sent_dict["sent_id"] = index
         sent_dict["content"] = sent
-        sent_dict["sent_start_char"] = sent_span[count_sent][0]
-        sent_dict["sent_end_char"] = sent_span[count_sent][1]
-        count_sent += 1
+        sent_dict["sent_start_char"] = sent_span[index][0]
+        sent_dict["sent_end_char"] = sent_span[index][1]
+        index += 1
         spacy_token = nlp(sent_dict["content"])
         sent_dict["tokens"] = []
         sent_dict["pos"] = []

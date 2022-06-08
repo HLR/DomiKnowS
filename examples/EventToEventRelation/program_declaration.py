@@ -30,7 +30,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
                      "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
         for relation in relations:
             rel += [rel_index[relation]]
-            flags.append(0 if int(rel_index[relation]) < 4 else 0)
+            flags.append(0 if int(rel_index[relation]) < 4 else 1)
         return str_to_int_list(rel), str_to_int_list(flags)
 
     def make_event(files, eiids1, eiids2, x_sent_list, y_sent_list,
@@ -39,8 +39,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
         eiid1_list = str_to_int_list(eiids1.split("@@"))
         eiid2_list = str_to_int_list(eiids2.split("@@"))
-        x_sent = x_sent_list.split("@@")
-        y_sent = y_sent_list.split("@@")
+        x_sent = torch.Tensor(x_sent_list.split("@@"))
+        y_sent = torch.Tensor(y_sent_list.split("@@"))
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
