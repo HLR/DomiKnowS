@@ -39,8 +39,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
         eiid1_list = str_to_int_list(eiids1.split("@@"))
         eiid2_list = str_to_int_list(eiids2.split("@@"))
-        x_sent = torch.Tensor(x_sent_list.split("@@"))
-        y_sent = torch.Tensor(y_sent_list.split("@@"))
+        x_sent = x_sent_list.split("@@")
+        y_sent = y_sent_list.split("@@")
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
@@ -66,8 +66,10 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
     # out_model = Robert_Model()
-    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(), device=cur_device)
-    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(), device=cur_device)
+    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(cuda=cur_device),
+                                            device=cur_device)
+    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(cuda=cur_device),
+                                            device=cur_device)
     event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model, device=cur_device)
     event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model, device=cur_device)
 
