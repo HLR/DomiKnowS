@@ -17,7 +17,13 @@ def main(args):
 
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
-    cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
+    if cuda_number == -1:
+        cur_device = 'cpu'
+    else:
+        cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
+        
+    print('Using: %s'%(cur_device))
+    
     training_file = "train.csv"
     testing_file = "test.csv"
 
@@ -30,10 +36,10 @@ def main(args):
                                             batch_size=args.batch_size)
     # Load Augmentation data
     augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
-                                              augment_file="data/snli_genadv_1000_dev.jsonl")
+                                              augment_file="data/snli_genadv_1000_test.jsonl")
     # Declare Program
     program = program_declaration(cur_device, sym_relation=args.sym_relation, tran_relation=args.tran_relation,
-                                  primaldual=args.primaldual, iml=args.iml, beta=args.beta)
+                                  primaldual=args.primaldual, sample=args.sampleloss, beta=args.beta)
 
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                   Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -103,9 +109,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
 
-    parser.add_argument('--epoch', dest='cur_epoch', default=10, help='number of epochs to train model', type=int)
+    parser.add_argument('--epoch', dest='cur_epoch', default=3, help='number of epochs to train model', type=int)
 
-    parser.add_argument('--lr', dest='learning_rate', default=1e-6, help='learning rate of the adamW optimiser',
+    parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
     parser.add_argument('--training_sample', dest='training_sample', default=550146,
@@ -122,7 +128,7 @@ if __name__ == "__main__":
                         type=bool)
     parser.add_argument('--pmd', dest='primaldual', default=False, help="Using primaldual model or not",
                         type=bool)
-    parser.add_argument('--iml', dest='iml', default=False, help="Using IML model or not",
+    parser.add_argument('--sampleloss', dest='sampleloss', default=False, help="Using IML model or not",
                         type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
                         type=float)

@@ -66,12 +66,12 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             data['hypothesis'].append(item[hypothesis])
             if not augment_data:
                 data['entailment'].append('1' if item['label'] == 0 else '0')
-                data['neutral'].append('1' if item['label'] == 1 else '0')
                 data['contradiction'].append('1' if item['label'] == 2 else '0')
+                data['neutral'].append('1' if data['entailment'][-1] == '0' and data['contradiction'][-1] == '0' else '0')
             else:
                 data['entailment'].append('1' if item['gold_label'] == "entailment" else '0')
-                data['neutral'].append('1' if item['gold_label'] == "neutral" else '0')
                 data['contradiction'].append('1' if item['gold_label'] == "contradiction" else '0')
+                data['neutral'].append('1' if data['entailment'][-1] == '0' and data['contradiction'][-1] == '0' else '0')
             current_size += 1
             # To prevent separation between symmetric sentence
             if ind + 3 == len(group_sym) or current_size == batch_size:
