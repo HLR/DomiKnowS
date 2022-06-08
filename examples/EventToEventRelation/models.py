@@ -36,12 +36,24 @@ class Roberta_Tokenizer:
 class RobertaToken:
     def __init__(self, cuda="cpu"):
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
-        self.cuda = cuda
 
     def __call__(self, _, content):
         encodeds_input = self.tokenizer(content)
         input_id = encodeds_input["input_ids"]
-        return [torch.LongTensor(padding(encode)).to(self.cuda) for encode in input_id]
+        return [torch.LongTensor(padding(encode)) for encode in input_id]
+
+
+class RobertaLSTM(nn.Module):
+    def __init__(self, roberta_size):
+        super(RobertaLSTM, self).__init__()
+        self.roberta_model = RobertaModel.from_pretrained(roberta_size)
+        self.roberta_last_size = 768 if roberta_size == 'roberta-base' else 1024
+
+    def forward(self, sents):
+        return_list = []
+        for sent in sents:
+            return_list.append(self.roberta_model(sent.unsqueeze(0))[0].view(-1, self.roberta_last_size))
+        return torch.stack(return_list)
 
 
 class BiLSTM(nn.Module):
@@ -49,20 +61,13 @@ class BiLSTM(nn.Module):
         super(BiLSTM, self).__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True,
                             bidirectional=True)
-        self.roberta_last_size = 768 if roberta_size == 'roberta-base' else 1024
         self.last_layer_size = hidden_size * 2  # Bi direction
         self.cuda = cuda
-        self.roberta_model = RobertaModel.from_pretrained(roberta_size).to(self.cuda)
-
-    def add_length_dim(self, sents):
-        return_list = []
-        for sent in sents:
-            return_list.append(self.roberta_model(sent.unsqueeze(0))[0].view(-1, self.roberta_last_size))
-        return torch.stack(return_list).to(self.cuda)
+        self.roberta_model = RobertaLSTM(roberta_size)
 
     def forward(self, input_sent, pos):
-        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent)) # Size [batch_size, 78, 256]
-        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1).to(self.cuda)
+        last_hidden_state, _ = self.lstm(self.roberta_model(input_sent))  # Size [batch_size, 78, 256]
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)
 
 
 class BiLSTM_MLP(nn.Module):
