@@ -61,8 +61,8 @@ class BiLSTM(nn.Module):
         return torch.stack(return_list).to(self.cuda)
 
     def forward(self, input_sent, pos):
-        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent)).to(self.cuda)  # Size [batch_size, 78, 256]
-        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)
+        last_hidden_state, _ = self.lstm(self.add_length_dim(input_sent)) # Size [batch_size, 78, 256]
+        return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1).to(self.cuda)
 
 
 class BiLSTM_MLP(nn.Module):
