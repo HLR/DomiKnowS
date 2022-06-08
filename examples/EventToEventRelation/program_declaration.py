@@ -66,8 +66,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
     # out_model = Robert_Model()
-    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(cuda=cur_device), device=cur_device)
-    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(cuda=cur_device), device=cur_device)
+    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(), device=cur_device)
+    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(), device=cur_device)
     event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model, device=cur_device)
     event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model, device=cur_device)
 

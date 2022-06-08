@@ -34,25 +34,27 @@ class Roberta_Tokenizer:
 
 
 class RobertaToken:
-    def __init__(self, cuda="cpu"):
+    def __init__(self):
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
 
     def __call__(self, _, content):
         encodeds_input = self.tokenizer(content)
         input_id = encodeds_input["input_ids"]
-        return [torch.LongTensor(padding(encode)) for encode in input_id]
+        return input_id
 
 
 class RobertaLSTM(nn.Module):
-    def __init__(self, roberta_size):
+    def __init__(self, roberta_size, cuda):
         super(RobertaLSTM, self).__init__()
         self.roberta_model = RobertaModel.from_pretrained(roberta_size)
         self.roberta_last_size = 768 if roberta_size == 'roberta-base' else 1024
+        self.cuda = cuda
 
     def forward(self, sents):
         return_list = []
         for sent in sents:
-            return_list.append(self.roberta_model(sent.unsqueeze(0))[0].view(-1, self.roberta_last_size))
+            sent = torch.LongTensor(padding(sent)).unsqueeze(0)
+            return_list.append(self.roberta_model(sent)[0].view(-1, self.roberta_last_size))
         return torch.stack(return_list)
 
 
@@ -63,7 +65,7 @@ class BiLSTM(nn.Module):
                             bidirectional=True)
         self.last_layer_size = hidden_size * 2  # Bi direction
         self.cuda = cuda
-        self.roberta_model = RobertaLSTM(roberta_size)
+        self.roberta_model = RobertaLSTM(roberta_size, cuda)
 
     def forward(self, input_sent, pos):
         last_hidden_state, _ = self.lstm(self.roberta_model(input_sent))  # Size [batch_size, 78, 256]
