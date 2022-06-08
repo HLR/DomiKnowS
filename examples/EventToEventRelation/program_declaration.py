@@ -66,12 +66,10 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
     # out_model = Robert_Model()
-    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(cuda=cur_device),
-                                            device=cur_device)
-    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(cuda=cur_device),
-                                            device=cur_device)
-    event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model, device=cur_device)
-    event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model, device=cur_device)
+    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(cuda=cur_device))
+    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(cuda=cur_device))
+    event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model)
+    event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model)
 
     def make_MLP_input(_, x, y):
         subXY = torch.sub(x, y)
@@ -80,7 +78,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         return return_input
 
     event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output",
-                                                   forward=make_MLP_input, device=cur_device)
+                                                   forward=make_MLP_input)
 
     event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 512, 8),
                                                      device=cur_device)
