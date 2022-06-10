@@ -58,7 +58,7 @@ class RobertaLSTM(nn.Module):
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, roberta_size, cuda):
+    def __init__(self, input_size, hidden_size, num_layers, roberta_size):
         super(BiLSTM, self).__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True,
                             bidirectional=True)

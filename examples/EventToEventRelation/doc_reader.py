@@ -140,7 +140,7 @@ def read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigg
     return return_dict
 
 
-def matres_reader():
+def matres_reader(training_size, validation_size, testing_size):
     path_TB = os.path.join("data/MATRES/TBAQ-cleaned/TimeBank")
     TB_files = set([file for file in os.listdir(path_TB) if os.path.isfile(os.path.join(path_TB, file))])
     path_AQ = os.path.join("data/MATRES/TBAQ-cleaned/AQUAINT")
@@ -161,12 +161,19 @@ def matres_reader():
     training = []
     validation = []
     testing = []
-    for file in tqdm.tqdm(file_to_event_trigger.keys()):
+    keys = list(file_to_event_trigger.keys())
+    for file in tqdm.tqdm(keys):
         file_name = file + ".tml"
         dirname = path_TB if file_name in TB_files else \
             path_AQ if file_name in AQ_files else \
                 path_PL if file_name in PL_files else None
         if dirname is None:
+            continue
+        if file_name in TB_files and len(training) >= training_size:
+            continue
+        elif file_name in AQ_files and len(validation) >= validation_size:
+            continue
+        elif len(testing) >= testing_size:
             continue
         # Events to relation
         result_dict = read_matres_info(dirname, file_name, events_to_relation, file_to_event_trigger)
@@ -196,11 +203,11 @@ def matres_reader():
                        eiid1, eiid2,
                        relation)
 
-            if file_name in TB_files:
+            if file_name in TB_files and len(training) < training_size:
                 training.append(dataset)
-            elif file_name in AQ_files:
+            elif file_name in AQ_files and len(validation) < validation_size:
                 validation.append(dataset)
-            else:
+            elif len(testing) < testing_size:
                 testing.append(dataset)
     return training, validation, testing
 
@@ -367,8 +374,8 @@ def create_data_loader(raw_data, batch_size=1):
     return dataset
 
 
-def load_dataset(batch_size=1):
-    training, validation, testing = matres_reader()
+def load_dataset(training_size, validation_size, testing_size, batch_size=1):
+    training, validation, testing = matres_reader(training_size, validation_size, testing_size)
     training_set = create_data_loader(training, batch_size=batch_size)
     validation_set = create_data_loader(validation, batch_size=batch_size)
     testing_set = create_data_loader(testing, batch_size=batch_size)

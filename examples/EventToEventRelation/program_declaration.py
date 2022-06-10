@@ -64,7 +64,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     hidden_layer = 256
     roberta_size = 'roberta-base'
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
-                       hidden_layer, num_layers=1, roberta_size=roberta_size, cuda=cur_device)
+                       hidden_layer, num_layers=1, roberta_size=roberta_size)
     # out_model = Robert_Model()
     event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(), device=cur_device)
     event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(), device=cur_device)
@@ -83,11 +83,10 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 512, 8),
                                                      device=cur_device)
 
-    from regr.program.primaldualprogram import PrimalDualProgram
     from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
     from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
     from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram
+    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     # Define the same weight as original paper
@@ -115,14 +114,14 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     if PMD:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=inferList,
-                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif sampleloss:
         program = SampleLossProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=inferList,
-                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     sample=True,
