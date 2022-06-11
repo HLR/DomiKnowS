@@ -23,9 +23,8 @@ with Graph('event_to_event') as graph:
     # ifL(event_relation, exactL( #     relation_classes.parent_child,
     # relation_classes.child_parent, relation_classes.coref, relation_classes.norel, #     relation_classes.before,
     # relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
-    exactL(relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE)
-
-    atMostL(relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE)
+    ifL(event_relation,
+        exactL(relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
 
     # ifL(event_relation, atMostL(
     #     relation_classes.parent_child, relation_classes.child_parent, relation_classes.coref, relation_classes.norel,
