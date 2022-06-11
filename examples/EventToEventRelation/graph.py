@@ -15,9 +15,7 @@ with Graph('event_to_event') as graph:
     # each relation could be one the following four concepts:
     # sub-event relation consists of four relations, parent child, child parent, coref, and noref
     relation_classes = event_relation(name="relation_classes", ConceptClass=EnumConcept,
-                                      values=["parent_child", "child_parent",
-                                              "COREF", "NOREL",
-                                              "before", "after",
+                                      values=["before", "after",
                                               "EQUAL", "VAGUE"])
 
     # Only one of the labels to be true
@@ -25,6 +23,9 @@ with Graph('event_to_event') as graph:
     # ifL(event_relation, exactL( #     relation_classes.parent_child,
     # relation_classes.child_parent, relation_classes.coref, relation_classes.norel, #     relation_classes.before,
     # relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE))
+    exactL(relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE)
+
+    atMostL(relation_classes.before, relation_classes.after, relation_classes.EQUAL, relation_classes.VAGUE)
 
     # ifL(event_relation, atMostL(
     #     relation_classes.parent_child, relation_classes.child_parent, relation_classes.coref, relation_classes.norel,
@@ -52,13 +53,13 @@ with Graph('event_to_event') as graph:
     # # # TODO: Transitive Constrains
     transitive = Concept("transitive")
     t_event1, t_event2, t_event3 = transitive.has_a(arg11=event_relation, arg22=event_relation, arg33=event_relation)
-    ifL(andL(relation_classes.before('x'), relation_classes.parent_child(path=('x', transitive, t_event2))),
-        orL(
-            notL(relation_classes.COREF(path=('x', transitive, t_event3))),
-            relation_classes.before(path=('x', transitive, t_event3)),
-            notL(relation_classes.child_parent(path=('x', transitive, t_event3))),
-        ))
-    #
+    # ifL(andL(relation_classes.before('x'), relation_classes.parent_child(path=('x', transitive, t_event2))),
+    #     orL(
+    #         notL(relation_classes.COREF(path=('x', transitive, t_event3))),
+    #         relation_classes.before(path=('x', transitive, t_event3)),
+    #         notL(relation_classes.child_parent(path=('x', transitive, t_event3)))
+    #     ))
+
     # all_classes = {"after": relation_classes.after, "before": relation_classes.before, "vague": relation_classes.VAGUE,
     #                "equal": relation_classes.EQUAL, "parent_child": relation_classes.parent_child,
     #                "child_parent": relation_classes.child_parent, "coref": relation_classes.COREF,
