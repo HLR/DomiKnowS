@@ -623,7 +623,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 return 1
             else:
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,var2Name))
-                return var2
+                if onlyConstrains:
+                    m.addConstr(var2 >= 1, name='If:')
+                    return
+                else:
+                    return var2
         elif  self.__varIsNumber(var2):
             if var2 == 1:
                 if self.ifLog: self.myLogger.debug("%s is True returning %i"%(logicMethodName,1))
@@ -631,7 +635,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
             else:
                 notVar1 = self.notVar(m, var1)
                 if self.ifLog: self.myLogger.debug("%s returns: %s"%(logicMethodName,notVar1.VarName))
-                return notVar1
+                if onlyConstrains:
+                    m.addConstr(notVar1 >= 1, name='If:')
+                    return
+                else:
+                    return notVar1
             
         # If only constructing constrains forcing OR to be true 
         if onlyConstrains:
@@ -806,8 +814,8 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 varCOUNT = m.addVar(vtype=GRB.BINARY, name=countVarName)
                 if m: m.update()
                 
-                m.addConstr(varSumLinExpr >= updatedLimit - BigM * varCOUNT, name='Count %s:'%(logicMethodName))
-                m.addConstr(varSumLinExpr <= updatedLimit + BigM * (1 - varCOUNT), name='Count %s:'%(logicMethodName))
+                m.addConstr(varSumLinExpr + BigM *varCOUNT <= updatedLimit + BigM, name='Count %s:'%(logicMethodName))
+                m.addConstr(varSumLinExpr + BigM *varCOUNT >= updatedLimit, name='Count %s:'%(logicMethodName))
         if limitOp == '==':
             if noOfILPVars == 0:
                 result = int(updatedLimit == 0)
