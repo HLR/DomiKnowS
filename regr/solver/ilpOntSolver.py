@@ -83,7 +83,11 @@ class ilpOntSolver(object):
         print("Log file for %s is in: %s"%(logName + "Time",chAll.baseFilename))
 
         self.myLogger = logger
+        self.myLogger.info('--- Starting new run ---')
+
         self.myLoggerTime = loggerTime
+        self.myLoggerTime.info('--- Starting new run ---')
+
 
     def loadOntology(self, ontologies):
         start = datetime.datetime.now()

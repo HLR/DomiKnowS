@@ -6,6 +6,7 @@ from tqdm import tqdm
 from .program import LearningBasedProgram, get_len
 from ..utils import consume, entuple, detuple
 from .model.lossModel import PrimalDualModel, SampleLosslModel
+from .model.base import Mode
 
 # Primal-dual need multiple backward through constraint loss.
 # It requires retain_graph=True.
@@ -75,8 +76,8 @@ class LossProgram(LearningBasedProgram):
         #     COptim = Optim
         # if COptim is not None and list(self.model.parameters()):
         #     self.copt = COptim(self.model.parameters())
-        if list(self.model.parameters()):
-            self.copt = torch.optim.SGD(self.model.parameters(), lr=c_lr, momentum=c_momentum)
+        if list(self.cmodel.parameters()):
+            self.copt = torch.optim.Adam(self.cmodel.parameters(), lr=c_lr)
         else:
             self.copt = None
             
@@ -109,7 +110,7 @@ class LossProgram(LearningBasedProgram):
 
                 metricName = 'loss'
                 metricResult = self.model.loss
-
+                    
                 if self.dbUpdate is not None:
                     self.dbUpdate(desc, metricName, metricResult)
                     
@@ -159,14 +160,16 @@ class LossProgram(LearningBasedProgram):
         c_session={},
         **kwargs):
         assert c_session
+        self.model.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
         iter = c_session['iter']
         c_update_iter = c_session['c_update_iter']
         c_update_freq = c_session['c_update_freq']
         c_update = c_session['c_update']
         self.model.train()
         self.model.reset()
-        self.model.train()
-        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
         for data in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
@@ -240,7 +243,17 @@ class LossProgram(LearningBasedProgram):
 
     def test_epoch(self, dataset, **kwargs):
         # just to consum kwargs
+#         self.cmodel.mode(Mode.TEST)
         yield from super().test_epoch(dataset)
+        
+    def populate_epoch(self, dataset):
+        self.model.mode(Mode.POPULATE)
+#         self.cmodel.mode(Mode.POPULATE)
+        self.model.reset()
+        with torch.no_grad():
+            for i, data_item in enumerate(dataset):
+                _, _, *output = self.model(data_item)
+                yield detuple(*output[:1])
         
 class PrimalDualProgram(LossProgram):
     logger = logging.getLogger(__name__)
@@ -253,3 +266,81 @@ class SampleLossProgram(LossProgram):
 
     def __init__(self, graph, Model, beta=1, **kwargs):
         super().__init__(graph, Model, CModel=SampleLosslModel, beta=beta, **kwargs)
+
+
+    def train(
+        self,
+        training_set,
+        valid_set=None,
+        test_set=None,
+        # COptim=None,  # SGD only
+        c_lr=0.05,
+        c_momentum=0.9,
+        c_warmup_iters=100,  # warmup
+        c_freq=10,
+        c_freq_increase=5,  # d
+        c_freq_increase_freq=1,
+        c_lr_decay=4,  # strategy
+        c_lr_decay_param=1,  # param in the strategy
+        **kwargs):
+        
+        return super().train(
+            training_set=training_set,
+            valid_set=valid_set,
+            test_set=test_set,
+            c_lr=c_lr,
+            c_momentum=c_momentum,
+            c_warmup_iters=c_warmup_iters,  # warmup
+            c_freq=c_freq,
+            c_freq_increase=c_freq_increase,  # d
+            c_freq_increase_freq=c_freq_increase_freq,
+            c_lr_decay=c_lr_decay,  # strategy
+            c_lr_decay_param=c_lr_decay_param,  # param in the strategy
+            **kwargs)
+
+
+    def train_epoch(
+        self, dataset,
+        c_warmup_iters=0,  # warmup
+        c_session={},
+        **kwargs):
+        self.model.mode(Mode.TRAIN)
+#         self.cmodel.mode(Mode.TRAIN)
+        assert c_session
+        iter = c_session['iter']
+        self.model.train()
+        self.model.reset()
+        self.cmodel.train()
+        self.cmodel.reset()
+        for data in dataset:
+            if self.opt is not None:
+                self.opt.zero_grad()
+            if self.copt is not None:
+                self.copt.zero_grad()
+            mloss, metric, *output = self.model(data)  # output = (datanode, builder)
+            if iter < c_warmup_iters:
+                loss = mloss
+            else:
+                closs, *_ = self.cmodel(output[1])
+                if torch.is_tensor(closs):
+                    loss = mloss + self.beta * closs
+                else:
+                    loss = mloss
+            if self.opt is not None and loss:
+                loss.backward()
+                # for name, param in self.model.named_parameters():
+                #     if param.requires_grad:
+                #         print (name, param.grad)
+
+                self.opt.step()
+                iter += 1
+            
+            if (
+                self.copt is not None and
+                loss
+            ):
+                self.copt.step()
+            
+            yield (loss, metric, *output[:1])
+
+        c_session['iter'] = iter

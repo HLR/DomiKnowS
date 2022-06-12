@@ -182,16 +182,27 @@ class booleanMethods(ilpBooleanProcessor):
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
         super().__init__()
-
+        self.grad = False
+        
         self.myLogger = logging.getLogger(ilpConfig['log_name'])
         self.ifLog = ilpConfig['ifLog']
     
-    def ifNone(self, var):
+    # -- Consider None
+    def ifNone(self, var): # Used in all except countVar
         for v in var:
             if not torch.is_tensor(v):
                 return True
         
         return False
+    
+    def filterNone(self, var): # Used in countVar
+        filteredVar = []
+        for v in var:
+            if torch.is_tensor(v):
+                filteredVar.append(v)
+        
+        return filteredVar
+    #--
     
     def notVar(self, _, var, onlyConstrains = False):
         if self.ifNone([var]):
@@ -347,20 +358,14 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        if self.ifNone(var):
-            return None
+        var = self.filterNone(var)
         
-        limitTensor = torch.full([len(var[0])], limit)
+        limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
        
-        # Translate boolean to int
-        varInt = []
-        for v in var:
-            varInt.append(v.to(dtype=torch.int, copy=True))
-           
         # Calculate sum 
-        varSum = varInt[0]
-        for i in range(1, len(varInt)):
-            varSum += varInt[i]
+        varSum = var[0].int()
+        for i in range(1, len(var)):
+            varSum.add_(var[i].int())
 
         # Check condition
         if limitOp == '>=':

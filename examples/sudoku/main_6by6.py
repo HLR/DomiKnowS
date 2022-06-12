@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from regr.data.reader import RegrReader
-from regr.program.lossprogram import SampleLossProgram
+from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
 from regr.utils import setProductionLogMode
 
@@ -22,53 +22,47 @@ from random import sample
 
 class SudokuReader(RegrReader):
     def parse_file(self):
-        base  = 3
-        side  = base*base
+        # base  = 3
+        # side  = base*base
 
         # pattern for a baseline valid solution
-        def pattern(r,c): return (base*(r%base)+r//base+c)%side
+        # def pattern(r,c): return (base*(r%base)+r//base+c)%side
 
-        # randomize rows, columns and numbers (of valid base pattern)
-        from random import sample
-        def shuffle(s): return sample(s,len(s)) 
-        rBase = range(base) 
-        rows  = [ g*base + r for g in shuffle(rBase) for r in shuffle(rBase) ] 
-        cols  = [ g*base + c for g in shuffle(rBase) for c in shuffle(rBase) ]
-        nums  = shuffle(range(1,base*base+1))
+        # # randomize rows, columns and numbers (of valid base pattern)
+        # from random import sample
+        # def shuffle(s): return sample(s,len(s)) 
+        # rBase = range(base) 
+        # rows  = [ g*base + r for g in shuffle(rBase) for r in shuffle(rBase) ] 
+        # cols  = [ g*base + c for g in shuffle(rBase) for c in shuffle(rBase) ]
+        # nums  = shuffle(range(1,base*base+1))
 
-        # produce board using randomized baseline pattern
-        board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
-        F = []
-        for i in board:
-            F.append([])
-            for j in i:
-                F[-1].append(j)
-        squares = side*side
-        empties = squares * 3//4
-        for p in sample(range(squares),empties):
-            board[p//side][p%side] = 0
-        board = torch.tensor(board)
+        # # produce board using randomized baseline pattern
+        # board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
+        # F = []
+        # for i in board:
+        #     F.append([])
+        #     for j in i:
+        #         F[-1].append(j)
+        # squares = side*side
+        # empties = squares * 3//4
+        # for p in sample(range(squares),empties):
+        #     board[p//side][p%side] = 0
+        # board = torch.tensor(board)
 
-        board = torch.tensor([[6, 4, 0, 1, 0, 0, 8, 5, 9],
-                 [8, 9, 5, 6, 0, 4, 2, 7, 0],
-                 [0, 0, 0, 9, 0, 5, 0, 3, 4],
-                 [0, 3, 6, 0, 4, 8, 9, 2, 0],
-                 [9, 0, 2, 3, 0, 7, 0, 6, 5],
-                 [0, 7, 4, 0, 9, 6, 0, 8, 0],
-                 [4, 6, 0, 0, 2, 3, 5, 0, 8],
-                 [0, 0, 7, 0, 0, 9, 0, 4, 0],
-                 [3, 0, 8, 4, 0, 1, 0, 0, 0],
+        board = torch.tensor([[0, 4, 1, 0, 3, 0],
+                 [0, 0, 3, 5, 1, 0],
+                 [4, 1, 0, 0, 2, 5],
+                 [0, 3, 5, 4, 6, 0],
+                 [1, 0, 2, 6, 0, 3],
+                 [3, 0, 0, 0, 0, 2]
                  ])
 
-        F = torch.tensor([[6, 4, 3, 1, 7, 2, 8, 5, 9],
-                 [8, 9, 5, 6, 3, 4, 2, 7, 1],
-                 [7, 2, 1, 9, 8, 5, 6, 3, 4],
-                 [1, 3, 6, 5, 4, 8, 9, 2, 7],
-                 [9, 8, 2, 3, 1, 7, 4, 6, 5],
-                 [5, 7, 4, 2, 9, 6, 1, 8, 3],
-                 [4, 6, 9, 7, 2, 3, 5, 1, 8],
-                 [2, 1, 7, 8, 5, 9, 3, 4, 6],
-                 [3, 5, 8, 4, 6, 1, 7, 9, 2],
+        F = torch.tensor([[5, 4, 1, 2, 3, 6],
+                 [6, 2, 3, 5, 1, 4],
+                 [4, 1, 6, 3, 2, 5],
+                 [2, 3, 5, 4, 6, 1],
+                 [1, 5, 2, 6, 4, 3],
+                 [3, 6, 4, 1, 5, 2]
                  ])
     
         return [{"board": board, "F": F}]
@@ -82,7 +76,7 @@ class SudokuReader(RegrReader):
         return item['F']
     
     def getsizeval(self, item):
-        return 9, 9
+        return 6, 6
     
     
 trainreader = SudokuReader("randn", type="raw")
@@ -124,7 +118,7 @@ with Graph('global') as graph:
     (same_table_arg1, same_table_arg2) = same_table.has_a(table1=empty_entry, table2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, 
-                                    values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
+                                    values=["v1", "v2", "v3", "v4", "v5", "v6"])
     v = [getattr(empty_entry_label, a) for a in ('', *empty_entry_label.enum)]
 
     ### Constraints
@@ -139,15 +133,15 @@ with Graph('global') as graph:
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
-    for row_num in range(9):
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
+    for row_num in range(6):
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
 
-        # for j in range(1, 10):
-        #     exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
-        #     exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
-        #     exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
+        for j in range(1, 7):
+            exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
+            exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
+            exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
    
 import torch.nn as nn
 
@@ -169,7 +163,7 @@ class Conv2dSame(torch.nn.Module):
 class SudokuSolver(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W = torch.nn.Parameter(torch.rand((81,9)))
+        self.W = torch.nn.Parameter(torch.rand((36,6)))
         
     def __call__(self, X):
         
@@ -207,11 +201,12 @@ def makeSoduko(*prev, data):
     cols = cols.unsqueeze(0).repeat(num_rows, 1).reshape(num_rows*num_cols)
 
     tables = []
+    passing = int(num_cols/3)
     for i in range(data[0]*data[1]):
         row = rows[i]
         col = cols[i]
-        x = int((col.item() / 3)) * 3
-        x += int(row.item() / 3) 
+        x = int((col.item() / 3))
+        x += int(row.item() / 2) * passing
         tables.append(x)
     tables = torch.tensor(tables)
 
@@ -304,9 +299,19 @@ program = SampleLossProgram(
         
         sample = True,
         sampleSize=2000, 
-        sampleGlobalLoss = False,
-        beta=1,
+        sampleGlobalLoss = True,
+        beta=50
         )
+
+from regr.program.metric import PRF1Tracker, DatanodeCMMetric
+
+programRLoss = PrimalDualProgram(
+       graph, SolverModel, 
+       poi=(sudoku, empty_entry, same_row, same_col, same_table),
+       inferTypes=['local/argmax'],
+       loss=MacroAverageTracker(NBCrossEntropyLoss()),
+       metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+       )
 
 # program1 = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],
@@ -345,7 +350,7 @@ def testSudokuPrediction(entries, predictionP = None):
     if predictionP != None:
         prediction = predictionP
     else:
-        prediction = torch.zeros((9,9))
+        prediction = torch.zeros((6,6))
         for entry in entries:
             row = entry.getAttribute('rows').item()
             col = entry.getAttribute('cols').item()
@@ -355,7 +360,7 @@ def testSudokuPrediction(entries, predictionP = None):
           
     print("Prediction:\n %s"%(prediction))
      
-    fixedSud = torch.zeros((9,9)) #[[None for i in range(9)] for i in range(9)]
+    fixedSud = torch.zeros((6,6)) #[[None for i in range(6)] for i in range(6)]
     for entry in entries:
         # t = entry.getAttribute(empty_entry_label, 'ILP')
         row = entry.getAttribute('rows').item()
@@ -372,26 +377,26 @@ def testSudokuPrediction(entries, predictionP = None):
 
     print("fixedSud:\n %s"%(fixedSud))
 
-    for i in range(9):
-        if len(prediction[i][:].unique()) != 9:
+    for i in range(6):
+        if len(prediction[i][:].unique()) != 6:
             print("Prediction wrong at row %i - %s"%(i,prediction[i][:]))  
         
-        if len(prediction[:][i].unique()) != 9:
+        if len(prediction[:][i].unique()) != 6:
             print("Prediction wrong at col %i - %s"%(i,prediction[:][i]))
         
-        r, c = divmod(i, 3)   
-        r *=3
-        c *=3
-        rIndices = torch.tensor([r, r+1, r+2])
-        cIndices = torch.tensor([c, c+1, c+2])
+        # r, c = divmod(i, 3)   
+        # r *=3
+        # c *=3
+        # rIndices = torch.tensor([r, r+1, r+2])
+        # cIndices = torch.tensor([c, c+1, c+2])
 
-        currentTable = torch.index_select(prediction, 0, rIndices)
-        currentTable = torch.index_select(currentTable, 1, cIndices)
-        #print("currentTable:\n %s"%(currentTable))
+        # currentTable = torch.index_select(prediction, 0, rIndices)
+        # currentTable = torch.index_select(currentTable, 1, cIndices)
+        # #print("currentTable:\n %s"%(currentTable))
 
-        currentTable = torch.reshape(currentTable, (1,9))
-        if len(currentTable.unique()) != 9:
-            print("Prediction wrong at table %i - %s"%(i,currentTable))
+        # currentTable = torch.reshape(currentTable, (1,6))
+        # if len(currentTable.unique()) != 6:
+        #     print("Prediction wrong at table %i - %s"%(i,currentTable))
     
 for datanode in program1.populate(trainreader):
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
@@ -418,12 +423,12 @@ for datanode in program1.populate(trainreader):
 # program1.train(trainreader, train_epoch_num=100, 
 #                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
 
-trainingNo = 500
+trainingNo = 220
 for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.Adam(param, lr=0.01), collectLoss=None, device='auto')
+                    Optim=lambda param: torch.optim.Adam(param, lr=0.05), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")
@@ -435,7 +440,7 @@ for i in range(trainingNo):
         row_values = []
         col_values = []
         tab_values = []
-        for i in range(9):
+        for i in range(6):
             row_values.append([])
             col_values.append([])
             tab_values.append([])
@@ -459,20 +464,16 @@ for i in range(trainingNo):
         errors = 0
         for row_vals in row_values:
             un = set(row_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
         for col_vals in col_values:
             un = set(col_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
         for tab_vals in tab_values:
             un = set(tab_vals)
-            errors += 9 - len(un)
+            errors += 6 - len(un)
                 
-        print("Count of sudoku entries different from label- %s"%(count))
-        print("Count of sudoku violations- %s"%(errors))
-
-    if count == 0:
-        print("value achieved at step ", i)
-        break
+        print("Count of sudoku entries different from label - %s"%(count))
+        print("Count of sudoku violations - %s"%(errors))
         
 
 ### make the table
@@ -480,8 +481,8 @@ for datanode in program.populate(trainreader):
     datanode.inferILPResults(empty_entry_label, fun=None)
 
     print("Datanode %s"%(datanode))
-    table = torch.zeros(9, 9)
-    ilpTable = torch.zeros(9, 9)
+    table = torch.zeros(6, 6)
+    ilpTable = torch.zeros(6, 6)
 
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
     for entry in entries:
