@@ -5,18 +5,20 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram
+from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
 from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.model.pytorch import SolverModel
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.program.lossprogram import PrimalDualProgram
+from regr.program.model.pytorch import SolverModel, SolverModelDictLoss
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from regr.utils import setProductionLogMode
 
 from conll.data.data import SingletonDataLoader
+
 
 
 import spacy
@@ -85,7 +87,7 @@ class Classifier(torch.nn.Sequential):
         super().__init__(linear)
 
 
-def model():
+def model(device='auto'):
     from graph import graph, sentence, word, phrase, pair
     from graph import people, organization, location, other, o
     from graph import work_for, located_in, live_in, orgbase_on, kill
@@ -190,9 +192,24 @@ def model():
     pair[orgbase_on] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('OrgBased_In'), label=True)
     pair[kill] = FunctionalReaderSensor(pair[rel_pair_phrase1.reversed], pair[rel_pair_phrase2.reversed], keyword='relation', forward=find_relation('Kill'), label=True)
 
+    
+#     class DictCallBackProgram(CallbackProgram, PrimalDualProgram):
+#         pass
+    
     lbp = PrimalDualProgram(
-        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
-        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+        graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+        dictloss={
+            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5178,  0.5622]).to(device)),
+            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5193, 13.4837]).to(device)),
+            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5160, 19.1140]).to(device)), 
+            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5116, 22.0435]).to(device)),             
+            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5101, 25.1522]).to(device)), 
+            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6393, 2.9941]).to(device)), 
+            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6882, 2.4281]).to(device)), 
+            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6031, 3.1250]).to(device)), 
+            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6324, 2.3878]).to(device)), 
+            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5735, 4.9000]).to(device)), 
+            "default": NBCrossEntropyDictLoss()},
         tnorm = 'G', 
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -202,7 +219,7 @@ def model():
 
 def main(args):
     from graph import graph, sentence, word, phrase, pair
-    program = model()
+    program = model(device=args.gpu)
 
     split_id = args.split
     if args.number == 1:
@@ -215,15 +232,16 @@ def main(args):
     
     def save_epoch(program, epoch=1):
         if args.number == 1:
-            program.save(f'conll04-bert-pd-{split_id}-{epoch}.pt')
+            program.save(f'saves/conll04-bert-pd-{split_id}-{epoch}.pt')
         else:
-            program.save(f'conll04-bert-pd-{split_id}-{epoch}-size-{args.number}.pt')
+            program.save(f'saves/conll04-bert-pd-{split_id}-{epoch}-size-{args.number}.pt')
         return epoch + 1
 
     def compute_scores(item, criteria="P"):
         entities = ["location", "people", "organization", "other"]
         relations = ["work_for", "located_in", "live_in", "orgbase_on", "kill"]
-        instances = {"location": 931, "people": 793, "organization": 523, "other": 572, "work_for": 94, "located_in": 107, "live_in": 108, "orgbase_on": 93, "kill": 53}
+        instances = {"location": 937, "people": 774, "organization": 512, "other": 610, "work_for": 71, "located_in": 75, "live_in": 103, 
+                     "orgbase_on": 97, "kill": 55}
         sum_entity = 0
         sum_relations = 0
         precision_entity = 0
@@ -271,9 +289,9 @@ def main(args):
             best_epoch = epoch
             best_macro_f1 = score
             if args.number == 1:
-                program.save(f'conll04-bert-pd-{split_id}-best-macro-f1.pt')
+                program.save(f'saves/conll04-bert-pd-{split_id}-best-macro-f1.pt')
             else:
-                program.save(f'conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
+                program.save(f'saves/conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
         return epoch + 1, best_epoch, best_macro_f1
     
     if not args.load:
@@ -284,18 +302,18 @@ def main(args):
         
     if not args.load:
         if args.number == 1:
-            program.load(f'conll04-bert-pd-{split_id}-best-macro-f1.pt')
+            program.load(f'saves/conll04-bert-pd-{split_id}-best-macro-f1.pt')
         else:
-            program.load(f'conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
+            program.load(f'saves/conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program.test(test_reader, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     if args.number == 1:
-        program.save(f'conll04-bert-pd-{split_id}-{now}.pt')
+        program.save(f'saves/conll04-bert-pd-{split_id}-{now}.pt')
     else:
-        program.save(f'conll04-bert-pd-{split_id}-{now}_size_{args.number}.pt')
+        program.save(f'saves/conll04-bert-pd-{split_id}-{now}_size_{args.number}.pt')
         
 
 import argparse
@@ -317,7 +335,7 @@ def parse_arguments():
         help="Number of examples",
         type=float,
         required=False,
-        choices=[1, 0.25, 0.1],
+        choices=[1, 0.25, 0.1, 0.2],
         default=1,
     )
     parser.add_argument(
@@ -374,4 +392,5 @@ def parse_arguments():
 
 if __name__ == '__main__':
     args = parse_arguments()
+    setProductionLogMode()
     main(args)

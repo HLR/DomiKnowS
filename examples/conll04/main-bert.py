@@ -237,25 +237,26 @@ def model(device=None):
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-    lbp = DictCallBackProgram(
-        graph, poi=(phrase, pair), inferTypes=['local/argmax'],
-        dictloss={
-            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.3836,  0.5644]).to(device)),
-            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5197, 13.1628]).to(device)),
-            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5168, 15.3461]).to(device)), 
-            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5122, 21.0087]).to(device)),             
-            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5100, 25.3879]).to(device)), 
-            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6653, 2.0123]).to(device)), 
-            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6468, 2.2027]).to(device)), 
-            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6269, 2.5697]).to(device)), 
-            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6128, 2.7167]).to(device)), 
-            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5801, 3.6222]).to(device)), 
-            "default": NBCrossEntropyDictLoss()},
-        metric={
-            # 'ILP': PRF1Tracker(DatanodeCMMetric()),
-            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+#     lbp = DictCallBackProgram(
+#         graph, poi=(phrase, pair), inferTypes=['local/argmax'],
+#         dictloss={
+#             str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5178,  0.5622]).to(device)),
+#             str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5193, 13.4837]).to(device)),
+#             str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5160, 19.1140]).to(device)), 
+#             str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5116, 22.0435]).to(device)),             
+#             str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5101, 25.1522]).to(device)), 
+#             str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6393, 3.2941]).to(device)), 
+#             str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6882, 2.6281]).to(device)), 
+#             str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6031, 2.9250]).to(device)), 
+#             str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6324, 2.3878]).to(device)), 
+#             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5735, 5.1000]).to(device)), 
+#             "default": NBCrossEntropyDictLoss()},
+#         metric={
+#             # 'ILP': PRF1Tracker(DatanodeCMMetric()),
+#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     return lbp, lbp1
+        
 
 def main(args):
     program, program1 = model(device=args.gpu)
@@ -272,16 +273,16 @@ def main(args):
     
     def save_epoch(program, epoch=1):
         if args.number == 1:
-            program.save(f'conll04-bert-{split_id}-{epoch}.pt')
+            program.save(f'saves/conll04-bert-{split_id}-{epoch}.pt')
         else:
-            program.save(f'conll04-bert-{split_id}-{epoch}-size-{args.number}.pt')
+            program.save(f'saves/conll04-bert-{split_id}-{epoch}-size-{args.number}.pt')
         return epoch + 1
 
     def compute_scores(item, criteria="P"):
         entities = ["location", "people", "organization", "other"]
         relations = ["work_for", "located_in", "live_in", "orgbase_on", "kill"]
-        instances = {"location": 904, "people": 781, "organization": 482, "other": 656, "work_for": 55, "located_in": 88, "live_in": 129, 
-                     "orgbase_on": 102, "kill": 39}
+        instances = {"location": 937, "people": 774, "organization": 512, "other": 610, "work_for": 71, "located_in": 75, "live_in": 103, 
+                     "orgbase_on": 97, "kill": 55}
         sum_entity = 0
         sum_relations = 0
         precision_entity = 0
@@ -329,9 +330,9 @@ def main(args):
             best_epoch = epoch
             best_macro_f1 = score
             if args.number == 1:
-                program.save(f'conll04-bert-{split_id}-best-macro-f1.pt')
+                program.save(f'saves/conll04-bert-{split_id}-best-macro-f1.pt')
             else:
-                program.save(f'conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
+                program.save(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
         return epoch + 1, best_epoch, best_macro_f1
     
     if not args.load:
@@ -344,18 +345,18 @@ def main(args):
     
     if not args.load:
         if args.number == 1:
-            program1.load(f'conll04-bert-{split_id}-best-macro-f1.pt')
+            program1.load(f'saves/conll04-bert-{split_id}-best-macro-f1.pt')
         else:
-            program1.load(f'conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
+            program1.load(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     if args.number == 1:
-        program.save(f'conll04-bert-{split_id}-{now}.pt')
+        program.save(f'saves/conll04-bert-{split_id}-{now}.pt')
     else:
-        program.save(f'conll04-bert-{split_id}-{now}_size_{args.number}.pt')
+        program.save(f'saves/conll04-bert-{split_id}-{now}_size_{args.number}.pt')
 
 import argparse
 
@@ -376,7 +377,7 @@ def parse_arguments():
         help="Number of examples",
         type=float,
         required=False,
-        choices=[1, 0.25, 0.1],
+        choices=[1, 0.25, 0.1, 0.2],
         default=0.25,
     )
     parser.add_argument(

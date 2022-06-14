@@ -57,8 +57,14 @@ with Graph('global') as graph:
         kill = pair(name='kill')
         
         # Have exactly one label
-        ifL(entity, 
+        ifL(phrase, 
             exactL(people, organization, location, other, o,
+               active = LC_SET_BASED
+            )
+        )
+        
+        ifL(pair, 
+            exactL(work_for, live_in, located_in, orgbase_on, kill,
                active = LC_SET_BASED
             )
         )
