@@ -34,11 +34,11 @@ def main(args):
                   Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
                   , device=cur_device)
 
-    # classes = ["SuperSub", "SubSuper", "Coref", "NoRel",
-    #            "before", "after",
-    #            "EQUAL", "VAGUE"]
-    classes = ["before", "after",
+    classes = ["SuperSub", "SubSuper", "Coref", "NoRel",
+               "before", "after",
                "EQUAL", "VAGUE"]
+    # classes = ["before", "after",
+    #            "EQUAL", "VAGUE"]
     output_file = {"file": [], "eiid1": [], "eiid2": [], "actual": [], "argmax": [], "ILP": []}
     accuracy_argmax = 0
     accuracy_ILP = 0
