@@ -44,58 +44,60 @@ def main(args):
     program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                   Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
-    correct = 0
+    correct_ILP = 0
+    correct_softmax = 0
     result = {"premise": [],
               "hypothesis": [],
               "actual": [],
-              "predict": []}
+              "predict_softmax": [],
+              "predict_ILP": []}
     for datanode in program.populate(test_dataset, device=cur_device):
         for sentence in datanode.getChildDataNodes():
             result["premise"].append(sentence.getAttribute("premise"))
             result["hypothesis"].append(sentence.getAttribute("hypothesis"))
             result["actual"].append('entailment' if sentence.getAttribute(entailment, 'label')
                                     else 'neutral' if sentence.getAttribute(neutral, 'label') else 'contrast')
-            if not args.softmax:
-                result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
-                                         else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
+            result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
+                                     else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
 
-                correct += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
-                    sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
-                        sentence.getAttribute(contradiction, 'ILP').item()
-            else:
-                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
-                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
-                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
-                label = ["entailment", "neutral", "contrast"]
-                predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
-                result["predict"].append(predict)
-                actual_check = entailment if predict == "entailment" else \
-                    neutral if predict == "neutral" else contradiction
-                correct += 1 if sentence.getAttribute(actual_check, 'label') else 0
+            correct_ILP += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
+                sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
+                    sentence.getAttribute(contradiction, 'ILP').item()
 
-    correct_augment = 0
+            predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
+            predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
+            predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
+            label = ["entailment", "neutral", "contrast"]
+            predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
+            result["predict_softmax"].append(predict)
+            actual_check = entailment if predict == "entailment" else \
+                neutral if predict == "neutral" else contradiction
+            correct_softmax += 1 if sentence.getAttribute(actual_check, 'label') else 0
+
+    correct_augment_ILP = 0
+    correct_augment_softmax = 0
     count_augment = 0
     for datanode in program.populate(augment_dataset, device=cur_device):
         for sentence in datanode.getChildDataNodes():
-            if not args.softmax:
-                correct_augment += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
-                    sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
-                        sentence.getAttribute(contradiction, 'ILP').item()
-            else:
-                predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
-                predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
-                predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
-                label = ["entailment", "neutral", "contrast"]
-                predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
-                actual_check = entailment if predict == "entailment" else \
-                    neutral if predict == "neutral" else contradiction
-                correct_augment += 1 if sentence.getAttribute(actual_check, 'label') else 0
+            correct_augment_ILP += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
+                sentence.getAttribute(neutral, 'ILP').item() if sentence.getAttribute(neutral, 'label') else \
+                    sentence.getAttribute(contradiction, 'ILP').item()
+
+            predict_ent = sentence.getAttribute(entailment, 'local/softmax')[1].item()
+            predict_neu = sentence.getAttribute(neutral, 'local/softmax')[1].item()
+            predict_con = sentence.getAttribute(contradiction, 'local/softmax')[1].item()
+            label = ["entailment", "neutral", "contrast"]
+            predict = label[np.array([predict_ent, predict_neu, predict_con]).argmax()]
+            actual_check = entailment if predict == "entailment" else \
+                neutral if predict == "neutral" else contradiction
+            correct_augment_softmax += 1 if sentence.getAttribute(actual_check, 'label') else 0
             count_augment += 1
     print("Using Symmetric:", args.sym_relation)
-    print("Using ILP:", not args.softmax)
     print("Using PML:", args.primaldual)
-    print("Accuracy = %.3f%%" % (correct / len(result["predict"]) * 100))
-    print("Accuracy on augment data = %.3f%%" % (correct_augment * 100 / count_augment))
+    print("Accuracy Softmax = %.3f%%" % (correct_softmax / len(result["predict"]) * 100))
+    print("Accuracy ILP = %.3f%%" % (correct_softmax / len(result["predict"]) * 100))
+    print("Accuracy Softmax on augment data = %.3f%%" % (correct_augment_softmax * 100 / count_augment))
+    print("Accuracy ILP on augment data = %.3f%%" % (correct_augment_ILP * 100 / count_augment))
     result = pd.DataFrame(result)
     training_size = args.training_sample
     import os
@@ -132,7 +134,5 @@ if __name__ == "__main__":
                         type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
                         type=float)
-    parser.add_argument('--softmax', dest='softmax', default=False, help="using softmax or not",
-                        type=bool)
     args = parser.parse_args()
     main(args)
