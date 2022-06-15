@@ -6,7 +6,7 @@ class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
         epsilon = 1e-5
         input = input.view(-1, input.shape[-1])
-        input = input.clamp(min=epsilon, max=1-epsilon)
+#         input = input.clamp(min=epsilon, max=1-epsilon)
         target = target.view(-1).to(dtype=torch.long, device=input.device)
         return super().forward(input, target, *args, **kwargs)
     
@@ -15,7 +15,7 @@ class NBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
     def forward(self, builder, prop, input, target, *args, **kwargs):
         epsilon = 1e-5
         input = input.view(-1, input.shape[-1])
-        input = input.clamp(min=epsilon, max=1-epsilon)
+#         input = input.clamp(min=epsilon, max=1-epsilon)
         target = target.view(-1).to(dtype=torch.long, device=input.device)
         return super().forward(input, target, *args, **kwargs)
     
