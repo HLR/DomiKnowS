@@ -9,6 +9,7 @@ import torch
 
 # Gurobi
 from gurobipy import GRB, Model, Var, Env
+import gurobipy
 
 from regr.graph.concept import Concept, EnumConcept
 from regr.solver.ilpOntSolver import ilpOntSolver
@@ -82,47 +83,47 @@ class gurobiILPOntSolver(ilpOntSolver):
         Q = None
         
         # Create ILP variables 
-        for _conceptRelation in conceptsRelations: 
-            rootConcept = rootDn.findRootConceptOrRelation(_conceptRelation[0])
+        for currentConceptRelation in conceptsRelations: 
+            rootConcept = rootDn.findRootConceptOrRelation(currentConceptRelation[0])
             dns = rootDn.findDatanodes(select = rootConcept)
-            xkey = '<' + _conceptRelation[0].name + '>/ILP/x'  
+            xkey = '<' + currentConceptRelation[0].name + '>/ILP/x'  
        
             for dn in dns:
-                currentProbability = dnFun(dn, _conceptRelation, fun=fun, epsilon=epsilon)
+                currentProbability = dnFun(dn, currentConceptRelation, fun=fun, epsilon=epsilon)
                 
                 if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
-                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(_conceptRelation[0].name,dn.getInstanceID()))
+                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentConceptRelation[0].name,dn.getInstanceID()))
 
                     continue
                 
                 # Check if probability is NaN or if and has to be skipped
                 if self.valueToBeSkipped(currentProbability[1]):
-                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],_conceptRelation[1],dn.getInstanceID()))
+                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
                     continue
     
                 xNew = None
-                if _conceptRelation[2] is not None:
-                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
-                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                if currentConceptRelation[2] is not None:
+                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                 else:
-                    if (_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0) in x:
-                        xNew = x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
+                    if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0) in x:
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
                 
                 if xkey not in dn.attributes:
-                    dn.attributes[xkey] = [None] * _conceptRelation[3]
+                    dn.attributes[xkey] = [None] * currentConceptRelation[3]
                         
                 if xNew is None:
                     # Create variable
-                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), _conceptRelation[1])
+                    xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentConceptRelation[1])
                     xNew = m.addVar(vtype=GRB.BINARY,name=xVarName) 
                     
-                    if _conceptRelation[2] is not None:
-                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNew
+                    if currentConceptRelation[2] is not None:
+                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNew
                     else:
-                        x[_conceptRelation[0], _conceptRelation[1], dn.getInstanceID(), 0] = xNew
+                        x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
 
-                if _conceptRelation[2] is not None:
-                    dn.attributes[xkey][_conceptRelation[2]] = xNew
+                if currentConceptRelation[2] is not None:
+                    dn.attributes[xkey][currentConceptRelation[2]] = xNew
                 else:
                     dn.attributes[xkey][0] = xNew
                     
@@ -132,55 +133,44 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if self.valueToBeSkipped(currentProbability[0]):
                     currentProbability[0] = 1 - currentProbability[1]
                     self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"
-                                       %(dn.getInstanceID(), _conceptRelation[0].name, currentProbability[1]))
+                                       %(dn.getInstanceID(), currentConceptRelation[0].name, currentProbability[1]))
     
                 # Create negative variable for binary concept
-                if _conceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
+                if currentConceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
                     xNotNew  = None
                     
-                    if _conceptRelation[2] is not None:
-                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]) in x:
-                            xNotNew= x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]]
+                    if currentConceptRelation[2] is not None:
+                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]) in x:
+                            xNotNew= x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                     else:
-                        if (_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0) in x:
-                            xNotNew = x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0]
+                        if (currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0) in x:
+                            xNotNew = x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0]
                     
-                    notxkey = '<' + _conceptRelation[0].name + '>/ILP/notx'
+                    notxkey = '<' + currentConceptRelation[0].name + '>/ILP/notx'
                 
                     if notxkey not in dn.attributes:
-                        dn.attributes[notxkey] = [None] * _conceptRelation[3]
+                        dn.attributes[notxkey] = [None] * currentConceptRelation[3]
                         
                     if xNotNew is None:
-                        xNotNew = m.addVar(vtype=GRB.BINARY,name="x_%s_is_not_%s"%(dn.getInstanceID(),  _conceptRelation[1]))
-                        if _conceptRelation[2] is not None:
-                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), _conceptRelation[2]] = xNotNew
+                        xNotVarName = "%s_%s_is_not_%s"%(dn.getOntologyNode(), dn.getInstanceID(), currentConceptRelation[1])
+                        xNotNew = m.addVar(vtype=GRB.BINARY,name=xNotVarName)
+                        if currentConceptRelation[2] is not None:
+                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]] = xNotNew
                         else:
-                            x[_conceptRelation[0], 'Not_'+_conceptRelation[1], dn.getInstanceID(), 0] = xNotNew
+                            x[currentConceptRelation[0], 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0] = xNotNew
                         
-                    if _conceptRelation[2] is not None:
-                        dn.attributes[notxkey][_conceptRelation[2]] = xNotNew
+                    if currentConceptRelation[2] is not None:
+                        dn.attributes[notxkey][currentConceptRelation[2]] = xNotNew
                     else:
                         dn.attributes[notxkey][0] = xNotNew
                                         
                     Q += currentProbability[0] * xNotNew    
                 
-            if _conceptRelation[2] is not None:
-                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( _conceptRelation[1]))
+            if currentConceptRelation[2] is not None:
+                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
                 
         # Create constraint for multiclass exclusivity 
-        if _conceptRelation[2] is not None:
-            m.update()
-
-            for dn in dns:
-                var = []
-                for _conceptRelation in conceptsRelations: 
-                    currentV = dn.attributes[xkey][_conceptRelation[2]]
-                    
-                    if currentV:
-                        var.append(currentV)
-                
-                     
-                self.myIlpBooleanProcessor.countVar(m, *var, onlyConstrains = True, limitOp = '==', limit = 1, logicMethodName = "MultiClass")
+        self.addMulticlassExclusivity(conceptsRelations, rootDn, m)
 
         m.update()
 
@@ -191,6 +181,44 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return Q
     
+    def addMulticlassExclusivity(self, conceptsRelations, rootDn, m):
+        m.update()
+
+        multiclassDict = {}
+        
+        for c in conceptsRelations:
+            if c[2] is None:
+                continue
+            
+            if c[0] not in multiclassDict:
+                multiclassDict[c[0]] = []
+            
+            multiclassDict[c[0]].append(c)
+            
+        for mc in multiclassDict:
+            
+            rootConcept = rootDn.findRootConceptOrRelation(mc)
+            dns = rootDn.findDatanodes(select = rootConcept)
+            xkey = '<' + mc.name + '>/ILP/x'  
+            
+            for dn in dns:
+                var = []
+                for mlabel in multiclassDict[mc]: 
+                    
+                    if xkey not in dn.attributes:
+                        continue
+                    
+                    cILPs =  dn.attributes[xkey]
+                    cIndex = mlabel[2]
+                    
+                    currentV = cILPs[cIndex]
+                    
+                    if currentV:
+                        var.append(currentV)
+                     
+                if var: 
+                    self.myIlpBooleanProcessor.countVar(m, *var, onlyConstrains = True, limitOp = '==', limit = 1, logicMethodName = "MultiClass")
+
     def addGraphConstrains(self, m, rootDn, *conceptsRelations):
         # Add constraint based on probability 
         for _conceptRelation in conceptsRelations: 
@@ -563,9 +591,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         m.update()
         
-    def addLogicalConstrains(self, m, dn, lcs, p, key = None):
-        self.myLogger.info('Starting method')
-        
+    def addLogicalConstrains(self, m, dn, lcs, p, key = None):        
         if key == None:
             key = "/ILP/xP" # to get ILP variable from datanodes
         
@@ -586,7 +612,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             if result != None and isinstance(result, list):
                 self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
-                self.myLoggerTime.info('Processing time for Lc %s is: %ims'%(lc.lcName, elapsedInMsLC))
+                self.myLoggerTime.info('Processing time for %s is: %ims'%(lc.lcName, elapsedInMsLC))
             else:
                 self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
                 self.myLoggerTime.error('Failed to add Logical Constrain %s'%(lc.lcName))
@@ -840,18 +866,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 referredDns = lcVariablesDns[referredVariableName] # Get DataNodes for referred variables already defined in the logical constraint
                                 
                             # Get variables from dataNodes selected  based on referredVariableName
-                            for rDn in referredDns:
-                                eDns = []
+                            for listOfDataNodes in referredDns:
+                                eDns = [] 
                                 
-                                for _rDn in rDn:
-                                    if _rDn is None:
+                                for currentReferedDataNode in listOfDataNodes:
+                                    if currentReferedDataNode is None:
                                         continue
                                     
                                     # -- Get DataNodes for the edge defined by the path part of the v
                                     if isinstance(path, eqL):
-                                        _eDns = _rDn.getEdgeDataNode(v) 
+                                        _eDns = currentReferedDataNode.getEdgeDataNode(v) 
                                     else:
-                                        _eDns = _rDn.getEdgeDataNode(v[1:]) 
+                                        _eDns = currentReferedDataNode.getEdgeDataNode(v[1:]) 
                                     
                                     if _eDns and _eDns[0]:
                                         eDns.extend(_eDns)
@@ -859,9 +885,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
                                         if lc.__str__() != "fixedL":
                                             self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%
-                                                               (_rDn, vNames, lc.lcName, conceptName))
-                                        eDns.extend([None])
-                                        
+                                                               (currentReferedDataNode, vNames, lc.lcName, conceptName))
+                                if not eDns:
+                                    eDns = [None] # None - to keep track of candidates
+                                    
                                 dnsListForPaths[i].append(eDns)
                            
                         # -- Select a single dns list or Combine the collected lists of dataNodes based on paths 
@@ -956,7 +983,12 @@ class gurobiILPOntSolver(ilpOntSolver):
                                         
                                 vDn = _vDns.append(vDn)
                         
+                        if len(_vDns) == 0:
+                            #continue
+                            pass
+                        
                         vDns.append(_vDns)
+                        
                         if sample:
                             sampleInfoForVariable.append(_sampleInfoForVariable)
                         
@@ -1017,16 +1049,19 @@ class gurobiILPOntSolver(ilpOntSolver):
             
             return 
         
+        self.myLogger.info('Calculating ILP Inferencing ')
+        self.myLoggerTime.info('Calculating ILP Inferencing ')
+
         start = process_time() # timer()
 
         gurobiEnv = Env("logs/gurobi.log")
+        
         try:
             if self.reuse_model and self.model:
                 m = self.model['m']
                 x = self.model['x']
             else:
                 # Create a new Gurobi model
-                self.myIlpBooleanProcessor.resetCaches()
                 m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
                 m.params.outputflag = 0
                 x = {}
@@ -1036,7 +1071,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
-            self.myLoggerTime.info('ILP Variables Init - time: %ism'%(elapsedVariablesInMs))
+            self.myLoggerTime.info('ILP Variables Init - time: %ims'%(elapsedVariablesInMs))
 
             if self.model is None:
                 # Add constraints based on ontology and graph definition
@@ -1127,7 +1162,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             dns[0].attributes[xPkey][p][_x[3]] = mP.getVarByName(x[_x].VarName)
                             
                             pEnd= process_time() # timer()
-                            self.myLoggerTime.info('ILP Model init for p %i - time: %fs'%(p, pEnd - pStart))
+                            self.myLoggerTime.info('ILP Model init for p %i - time: %ims'%(p, (pEnd - pStart)*1000))
                 else:
                     mP = m
                     xP = x
@@ -1145,8 +1180,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # ----------- Add LC constraints to the ILP model
                 
                 endLogicalConstraintsPrep = process_time() # timer()
-                elapsedLogicalConstraintsPrepInMs = (endLogicalConstraintsPrep - endGraphAndOntologyConstraints)
-                self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %fs'%(elapsedLogicalConstraintsPrepInMs))
+                elapsedLogicalConstraintsPrepInMs = (endLogicalConstraintsPrep - endGraphAndOntologyConstraints)*1000
+                self.myLoggerTime.info('ILP Logical Constraints Preprocessing - time: %ims'%(elapsedLogicalConstraintsPrepInMs))
                 
                 if pUsed or self.model is None:
                     self.addLogicalConstrains(mP, dn, lcs, p, key = lckey) # <--- LC constraints
@@ -1160,8 +1195,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLoggerTime.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 endLogicalConstraints = process_time() # timer()
-                elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep)
-                self.myLoggerTime.info('ILP Logical Constraints - time: %fs'%(elapsedLogicalConstraintsInMs))
+                elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep) *1000
+                self.myLoggerTime.info('ILP Logical Constraints - time: %ims'%(elapsedLogicalConstraintsInMs))
             
                 #mP.update()
                 #mP.display() 
@@ -1198,15 +1233,20 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                     self.myLoggerTime.error('Optimal solution not was found for p - %i - error code %i'%(p,mP.status))
                  
-                # Print ILP model to log file if model is not solved or logger level is DEBUG
-                if (not solved or self.myLogger.level <= logging.INFO) and self.myLogger.filter(""):
-                    import sys
-                    so = sys.stdout 
-                    logFileName = self.myLogger.handlers[0].baseFilename
-                    log = open(logFileName, "a")
-                    sys.stdout = log
-                    mP.display() 
-                    sys.stdout = so
+                # Print ILP model to log file if model is not solved or logger level is DEBUG 
+                # -  check if Gurobi is version 9.1.1 or less; newer versions hang on mP.display() 
+                gurobiVersion = gurobipy.gurobi.version()
+                if (gurobiVersion[0] < 9) or \
+                   ((gurobiVersion[0] < 10) and (gurobiVersion[1] < 1)) or \
+                   ((gurobiVersion[0] < 10) and (gurobiVersion[1] < 2) and (gurobiVersion[2] < 2)):
+                    if (not solved or self.myLogger.level <= logging.INFO) and self.myLogger.filter(""):
+                        import sys
+                        so = sys.stdout 
+                        logFileName = self.myLogger.handlers[0].baseFilename
+                        log = open(logFileName, "a")
+                        sys.stdout = log
+                        mP.display() 
+                        sys.stdout = so
                     
                 if (not solved):
                     mP.computeIIS()
@@ -1311,8 +1351,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         elapsedInS = end - start
         
         if elapsedInS > 1:
-            self.myLogger.info('End ILP Inferencing - total time: %is'%(elapsedInS))
-            self.myLoggerTime.info('End ILP Inferencing - total time: %is'%(elapsedInS))
+            self.myLogger.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
         else:
             elapsedInMs = (end - start) *1000
             self.myLogger.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
@@ -1489,7 +1529,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if lossTensor[i] != lossTensor[i]:
                                 lossTensor[i] = entry
                             else:
-                                lossTensor[i] += entry
+                                lossTensor[i] += entry.item()
     
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['loss'] = torch.nansum(lossTensor).item()
@@ -1499,7 +1539,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 elapsedInMsLC = elapsedInNsLC/1000000
                 current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
 
-                self.myLoggerTime.info('Processing time for Lc %s with %i entries is: %ims'%(lcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
+                self.myLoggerTime.info('Processing time for %s with %i entries is: %ims'%(currentLcName, len(lossList),  current_lcLosses['elapsedInMsLC']))
                 [h.flush() for h in self.myLoggerTime.handlers]
             
         else: # -----------Sample
@@ -1577,7 +1617,6 @@ class gurobiILPOntSolver(ilpOntSolver):
             lcLosses["globalSuccessCountet"] = torch.nansum(globalSuccesses).item()
             self.myLoggerTime.info('Global success counter is %i '%(lcLosses["globalSuccessCountet"]))
             
-            
             for currentLcName in lcLosses:
                 if currentLcName in ["globalSuccessCountet", "globalSuccesses"]:
                     continue
@@ -1643,14 +1682,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses['elapsedInMsLC'] += elapsedInMsLC
 
                 if lc.sampleEntries:
-                    self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
-                                           %(lcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
+                    self.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims'
+                                           %(currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
                 if eliminateDuplicateSamples: 
-                    self.myLoggerTime.info('Processing time for Lc %s with %i entries, %i variables and %i unique samples is: %ims'
-                                           %(lcName, len(lossList), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
+                    self.myLoggerTime.info('Processing time for %s with %i entries, %i variables and %i unique samples is: %ims'
+                                           %(currentLcName, len(lossList), len(lcVariables), lcSampleSize, current_lcLosses['elapsedInMsLC']))
                 else:
-                    self.myLoggerTime.info('Processing time for Lc %s with %i entries and %i variables is: %ims'
-                                           %(lcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
+                    self.myLoggerTime.info('Processing time for %s with %i entries and %i variables is: %ims'
+                                           %(currentLcName, len(lossList), len(lcVariables), current_lcLosses['elapsedInMsLC']))
         
         self.myLogger.info('')
 
@@ -1660,8 +1699,15 @@ class gurobiILPOntSolver(ilpOntSolver):
         end = process_time() # timer()
         elapsedInS = end - start
         
-        self.myLogger.info('End Loss Calculation - total time: %is'%(elapsedInS))
-        self.myLoggerTime.info('End Loss Calculation - total time: %is'%(elapsedInS))
+        if elapsedInS > 1:
+            self.myLogger.info('End of Loss Calculation - total time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End of Loss Calculation - total time: %fs'%(elapsedInS))
+        else:
+            elapsedInMs = (end - start) *1000
+            self.myLogger.info('End of Loss Calculation - total time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End of Loss Calculation - total time: %ims'%(elapsedInMs))
+            
+        
         self.myLogger.info('')
         self.myLoggerTime.info('')
 
