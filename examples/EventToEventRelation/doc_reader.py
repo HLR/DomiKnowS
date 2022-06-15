@@ -162,6 +162,7 @@ def matres_reader(training_size, validation_size, testing_size):
     validation = []
     testing = []
     keys = list(file_to_event_trigger.keys())
+    tokenlizer = RobertaToken()
     for file in tqdm.tqdm(keys):
         file_name = file + ".tml"
         dirname = path_TB if file_name in TB_files else \
@@ -185,8 +186,8 @@ def matres_reader(training_size, validation_size, testing_size):
             x_sent_id = result_dict["event"][x]["sent_id"]
             y_sent_id = result_dict["event"][y]["sent_id"]
 
-            x_sent = result_dict["sentences"][x_sent_id]["content"]  # A
-            y_sent = result_dict["sentences"][y_sent_id]["content"]  # B
+            x_sent = tokenlizer(result_dict["sentences"][x_sent_id]["content"]).tolist()  # A
+            y_sent = tokenlizer(result_dict["sentences"][y_sent_id]["content"]).tolist()  # B
 
             x_position = result_dict["event"][x]["roberta_subword_id"]  # A_pos
             y_position = result_dict["event"][y]["roberta_subword_id"]  # B_pos
@@ -250,8 +251,8 @@ def create_data_loader(raw_data, batch_size=1):
                 append_data["file"].append(file_p)
                 append_data["eiids1"].append(str(eiid1_p))
                 append_data["eiids2"].append(str(eiid2_p))
-                append_data["x_sent_list"].append(x_sent)
-                append_data["y_sent_list"].append(y_sent)
+                append_data["x_sent_list"].append(str(x_sent))
+                append_data["y_sent_list"].append(str(y_sent))
                 append_data["x_position_list"].append(str(x_pos))
                 append_data["y_position_list"].append(str(y_pos))
                 append_data["relation_list"].append(relation)
@@ -282,8 +283,8 @@ def create_data_loader(raw_data, batch_size=1):
                     append_data["file"].append(file_p)
                     append_data["eiids1"].append(str(eiid1_p))
                     append_data["eiids2"].append(str(eiid2_p))
-                    append_data["x_sent_list"].append(x_sent)
-                    append_data["y_sent_list"].append(y_sent)
+                    append_data["x_sent_list"].append(str(x_sent))
+                    append_data["y_sent_list"].append(str(y_sent))
                     append_data["x_position_list"].append(str(x_pos))
                     append_data["y_position_list"].append(str(y_pos))
                     append_data["relation_list"].append(relation)
@@ -321,8 +322,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["file"].append(file_p)
                         append_data["eiids1"].append(str(eiid1_p))
                         append_data["eiids2"].append(str(eiid2_p))
-                        append_data["x_sent_list"].append(x_sent)
-                        append_data["y_sent_list"].append(y_sent)
+                        append_data["x_sent_list"].append(str(x_sent))
+                        append_data["y_sent_list"].append(str(y_sent))
                         append_data["x_position_list"].append(str(x_pos))
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["relation_list"].append(relation)
@@ -333,8 +334,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["file"].append(file_p)
                         append_data["eiids1"].append(str(eiid1_p))
                         append_data["eiids2"].append(str(eiid2_p))
-                        append_data["x_sent_list"].append(x_sent)
-                        append_data["y_sent_list"].append(y_sent)
+                        append_data["x_sent_list"].append(str(x_sent))
+                        append_data["y_sent_list"].append(str(y_sent))
                         append_data["x_position_list"].append(str(x_pos))
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["relation_list"].append(relation)

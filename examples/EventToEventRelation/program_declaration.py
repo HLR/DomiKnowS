@@ -34,14 +34,18 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
             flags.append(0 if int(rel_index[relation]) < 4 else 1)
         return str_to_int_list(rel), str_to_int_list(flags)
 
+    def str_to_token_list(x):
+        tokens_list = x.split("@@")
+        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
+
     def make_event(files, eiids1, eiids2, x_sent_list, y_sent_list,
                    x_position_list, y_position_list, relation_list):
         # Seperate them from batch to seperate dataset
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
         eiid1_list = str_to_int_list(eiids1.split("@@"))
         eiid2_list = str_to_int_list(eiids2.split("@@"))
-        x_sent = x_sent_list.split("@@")
-        y_sent = y_sent_list.split("@@")
+        x_sent = str_to_token_list(x_sent_list)
+        y_sent = str_to_token_list(y_sent_list)
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
         rel, flags = relation_str_to_list(relation_list.split("@@"))
@@ -67,10 +71,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
                        hidden_layer, num_layers=1, roberta_size=roberta_size)
     # out_model = Robert_Model()
-    event_relation["x_token"] = JointSensor(paragraph_contain, "x_sent", forward=RobertaToken(), device=cur_device)
-    event_relation["y_token"] = JointSensor(paragraph_contain, "y_sent", forward=RobertaToken(), device=cur_device)
-    event_relation["x_output"] = ModuleLearner("x_token", "x_pos", module=out_model, device=cur_device)
-    event_relation["y_output"] = ModuleLearner("y_token", "y_pos", module=out_model, device=cur_device)
+    event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
+    event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=out_model, device=cur_device)
 
     def make_MLP_input(_, x, y):
         subXY = torch.sub(x, y)

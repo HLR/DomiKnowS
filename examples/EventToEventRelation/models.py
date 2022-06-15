@@ -38,7 +38,7 @@ class RobertaToken:
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
         self.max_length = max_length
 
-    def __call__(self, _, content):
+    def __call__(self, content):
         encoded_input = self.tokenizer(content, padding="max_length", max_length=self.max_length)
         input_id = encoded_input["input_ids"]
         return torch.LongTensor(input_id)
