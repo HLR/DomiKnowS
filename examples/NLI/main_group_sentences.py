@@ -57,7 +57,7 @@ def main(args):
             result["hypothesis"].append(sentence.getAttribute("hypothesis"))
             result["actual"].append('entailment' if sentence.getAttribute(entailment, 'label')
                                     else 'neutral' if sentence.getAttribute(neutral, 'label') else 'contrast')
-            result["predict"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
+            result["predict_ILP"].append('entailment' if sentence.getAttribute(entailment, 'ILP')
                                      else 'neutral' if sentence.getAttribute(neutral, 'ILP') else 'contrast')
 
             correct_ILP += sentence.getAttribute(entailment, 'ILP').item() if sentence.getAttribute(entailment, 'label') else \
@@ -94,8 +94,8 @@ def main(args):
             count_augment += 1
     print("Using Symmetric:", args.sym_relation)
     print("Using PML:", args.primaldual)
-    print("Accuracy Softmax = %.3f%%" % (correct_softmax / len(result["predict"]) * 100))
-    print("Accuracy ILP = %.3f%%" % (correct_softmax / len(result["predict"]) * 100))
+    print("Accuracy Softmax = %.3f%%" % (correct_softmax / len(result["predict_softmax"]) * 100))
+    print("Accuracy ILP = %.3f%%" % (correct_softmax / len(result["predict_ILP"]) * 100))
     print("Accuracy Softmax on augment data = %.3f%%" % (correct_augment_softmax * 100 / count_augment))
     print("Accuracy ILP on augment data = %.3f%%" % (correct_augment_ILP * 100 / count_augment))
     result = pd.DataFrame(result)
