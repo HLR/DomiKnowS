@@ -1,6 +1,6 @@
 from regr.graph.concept import EnumConcept
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL, exactL, fixedL
+from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL, exactL, fixedL, eqL
 from regr.graph.relation import disjoint
 import config
 from itertools import product
@@ -43,7 +43,9 @@ with Graph(name='global') as graph:
     #exactL(*d1.attributes)
     #exactL(*s.attributes)
 
-    fixedL(s)
+    #fixedL(s)
+    FIXED = True
+    fixedL(s("x", eqL(images, "summationEquality", {True})), active = FIXED)
 
     for sum_val in range(config.summationRange):
         sum_combinations = []

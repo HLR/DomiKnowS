@@ -172,6 +172,7 @@ def build_program():
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
     images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
     images[s] = ReaderSensor(keyword='summation', label=True)
+    images['summationEquality'] = FunctionalSensor('summation_label', forward=lambda x: torch.ones(1))
 
     '''program = SolverPOIProgram(graph,
                          poi=(images,),
