@@ -1381,7 +1381,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
             self.myLoggerTime.info('End ILP Inferencing - total time: %fs'%(elapsedInS))
         else:
-            elapsedInMs = (end - start) *1000
+            elapsedInMs = elapsedInS *1000
             self.myLogger.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
             self.myLoggerTime.info('End ILP Inferencing - total time: %ims'%(elapsedInMs))
             
