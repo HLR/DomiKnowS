@@ -333,7 +333,7 @@ program = SampleLossProgram(
 
 
 # Disable Logging  
-productionMode = True  
+productionMode = False  
 if productionMode:
     setProductionLogMode()
 
@@ -396,6 +396,7 @@ def testSudokuPrediction(entries, predictionP = None):
 for datanode in program1.populate(trainreader):
     entries = datanode.getChildDataNodes(conceptName=empty_entry)
     
+    print("\n ILP Predicted Table")
     testSudokuPrediction(entries)
     
     _sud = list(trainreader)[0]['sudoku']

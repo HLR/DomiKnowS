@@ -46,7 +46,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v == None or self._isTensor(v) == 0:
-                varFixed.append(torch.tensor(0)) # Uses 0 for None
+                varFixed.append(torch.tensor(0.0, device=self.current_device, requires_grad=True)) # Uses 0 for None
             else:
                 varFixed.append(v)
         
@@ -77,7 +77,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         var1, var2 = self._fixVar((var1,var2))
 
         if self.tnorm =='L':
-            tZero =torch.zeros(1, device=self.current_device, requires_grad=True)
+            tZero = torch.zeros(1, device=self.current_device, requires_grad=True)
             and2Success = torch.maximum(tZero, torch.sub(torch.add(var1, var2), 1)) # max(0, var1 + var2 - 1)
         elif self.tnorm =='G':
             and2Success = torch.minimum(var1, var2) # min(var1, var2)

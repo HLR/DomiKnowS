@@ -153,6 +153,7 @@ class LogicalConstrain:
         for currentILPVars in v1:
             if not currentILPVars:
                 singleV.append([None])
+                continue
                 
             cSingleVar = []
             for cv in currentILPVars:
