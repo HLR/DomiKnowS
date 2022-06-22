@@ -245,7 +245,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
                 if self.ifLog: self.myLogger.debug("%s created constraint: %s - %s <= %i"%(logicMethodName,currentVar.VarName,varsInfo['varName'],0))
     
             m.addConstr(varsInfo['varSumLinExpr'] - varOR >= 0, name='Or:') # varSumLinExpr >= varOR
-            if self.ifLog: self.myLogger.debug("%s created constraint: %s - %s >= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],1-1))
+            if self.ifLog: self.myLogger.debug("%s created constraint: %s - %s >= %i"%(logicMethodName,varsInfo['varSumLinExprStr'],varsInfo['varName'],1-1))
     
             if self.ifLog: self.myLogger.debug("%s returns new variable: %s"%(logicMethodName,varsInfo['varName']))
             return varOR
