@@ -95,7 +95,7 @@ def main(args):
     print("Using Symmetric:", args.sym_relation)
     print("Using PML:", args.primaldual)
     print("Accuracy Softmax = %.3f%%" % (correct_softmax / len(result["predict_softmax"]) * 100))
-    print("Accuracy ILP = %.3f%%" % (correct_softmax / len(result["predict_ILP"]) * 100))
+    print("Accuracy ILP = %.3f%%" % (correct_ILP / len(result["predict_ILP"]) * 100))
     print("Accuracy Softmax on augment data = %.3f%%" % (correct_augment_softmax * 100 / count_augment))
     print("Accuracy ILP on augment data = %.3f%%" % (correct_augment_ILP * 100 / count_augment))
     result = pd.DataFrame(result)
