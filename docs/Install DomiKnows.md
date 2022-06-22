@@ -23,7 +23,7 @@ from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 
 sys.path.append("Domiknows/regr")
-sys.path.append("../../")
+sys.path.append("../..")
 
 Graph.clear()
 Concept.clear()
