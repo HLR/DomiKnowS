@@ -1,14 +1,16 @@
 from typing import Any
 import torch
+import numpy as np
 
-from regr.sensor.pytorch.sensors import TorchSensor, TorchEdgeSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, ConstantSensor, JointSensor
+from regr.sensor.pytorch.relation_sensors import EdgeSensor
+from regr.sensor.pytorch.learners import TorchLearner
 
 
-class TestSensor(TorchSensor):
-    def __init__(self, *pres, edges=None, label=False, expected_inputs=None, expected_outputs=None, **kwargs):
-        super().__init__(*pres, edges=edges, label=label)
+class BaseTestSensor(JointSensor, ConstantSensor):
+    def __init__(self, *args, expected_inputs=None, expected_outputs=None, **kwargs):
+        super().__init__(*args, data=expected_outputs, **kwargs)
         self._expected_inputs = expected_inputs
-        self._expected_outputs = expected_outputs
 
     @property
     def expected_inputs(self):
@@ -16,29 +18,35 @@ class TestSensor(TorchSensor):
 
     @property
     def expected_outputs(self):
-        return self._expected_outputs
+        return self.data
 
-    def forward(self,) -> Any:
+    def evaluate(self, inputs, expected_inputs):
+        assert len(inputs) == len(expected_inputs)
+        for input, expected_input in  zip(inputs, expected_inputs):
+            if (isinstance(input, (torch.Tensor,np.ndarray, np.generic)) or
+                isinstance(expected_input, (torch.Tensor,np.ndarray, np.generic))):
+                try:
+                    input = torch.tensor(input, device=self.device)
+                    expected_input = torch.tensor(expected_input, device=self.device)
+                except:
+                    pass
+                assert (input == expected_input).all()
+            else:
+                assert input == expected_input
+
+    def forward(self, *inputs) -> Any:
         if self.expected_inputs is not None:
-            assert self.inputs == self.expected_inputs
-        return self.expected_outputs
+            self.evaluate(inputs, self.expected_inputs)
+        return super().forward(*inputs)
 
 
-class TestEdgeSensor(TorchEdgeSensor):
-    def __init__(self, *pres, to, mode="forward", edges=None, label=False, expected_inputs=None, expected_outputs=None):
-        super().__init__(*pres, to=to, mode=mode, edges=edges)
-        self._expected_inputs = expected_inputs
-        self._expected_outputs = expected_outputs
+class TestSensor(BaseTestSensor):
+    pass
 
-    @property
-    def expected_inputs(self):
-        return self._expected_inputs
 
-    @property
-    def expected_outputs(self):
-        return self._expected_outputs
+class TestLearner(TestSensor, TorchLearner):
+    pass
 
-    def forward(self, *_) -> Any:
-        if self.expected_inputs is not None:
-            assert self.inputs == self.expected_inputs
-        return self.expected_outputs
+
+class TestEdgeSensor(BaseTestSensor, EdgeSensor):
+    pass

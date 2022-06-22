@@ -16,7 +16,7 @@ class ilpBooleanProcessor(object):
     # 1 - var == varNOT
     # if onlyConstrains then only construct constrain 1 - var >= 0
     @abc.abstractmethod
-    def notVar(m, _var, onlyConstrains = False): pass
+    def notVar(self, m, _var, onlyConstrains = False): pass
     
     # AND Conjunction with 2 variable
     # Create new variable varAND, create constrains:
@@ -26,7 +26,7 @@ class ilpBooleanProcessor(object):
     # return varAND
     # if onlyConstrains then only construct constrain var1 + var2 >= 2
     @abc.abstractmethod
-    def and2Var(m, _var1, _var2,  onlyConstrains = False): pass
+    def and2Var(self, m, _var1, _var2,  onlyConstrains = False): pass
         
     # AND Conjunction
     # Create new variable varAND, create constrains:
@@ -38,7 +38,7 @@ class ilpBooleanProcessor(object):
     # return varAND
     # if onlyConstrains then only construct constrain var1 + var2 + .. + varN >= N
     @abc.abstractmethod
-    def andVar(m, *_var, onlyConstrains = False): pass
+    def andVar(self, m, *_var, onlyConstrains = False): pass
        
     # OR Disjunction with 2 variables
     # Create new variable varOR, create constrains:
@@ -52,7 +52,7 @@ class ilpBooleanProcessor(object):
     # var1 + var2 - (limit - 1) >= varOR 
     # if onlyConstrains then only construct constrain var1 + var2 >= limit
     @abc.abstractmethod
-    def or2Var(m, _var1, _var2,  onlyConstrains = False, limit = 1): pass
+    def or2Var(self, m, _var1, _var2,  onlyConstrains = False): pass
         
     # OR Disjunction
     # Create new variable varOR, create constrains:
@@ -67,7 +67,7 @@ class ilpBooleanProcessor(object):
     # var1 + var2 + ... + varN - (limit - 1) >= varOR 
     # if onlyConstrains then only construct constrain var1 + var2 + ... + varN >= limit
     @abc.abstractmethod
-    def orVar(m, *_var, onlyConstrains = False, linit = 1): pass
+    def orVar(self, m, *_var, onlyConstrains = False): pass
 
     # NAND (Alternative denial) with 2 variables
     # Create new variable varNAND, create constrains:
@@ -77,7 +77,7 @@ class ilpBooleanProcessor(object):
     # return varNAND
     # if onlyConstrains then only construct constrain var1 + var2 <= 1
     @abc.abstractmethod
-    def nand2Var(m, _var1, _var2): pass
+    def nand2Var(self, m, _var1, _var2): pass
 
     # NAND (Alternative denial)
     # Create new variable varNAND, create constrains:
@@ -89,7 +89,7 @@ class ilpBooleanProcessor(object):
     # return varNAND
     # if onlyConstrains then only construct constrain var1 + var2 + ... + varN <= N -1
     @abc.abstractmethod
-    def nandVar(m, *_var, onlyConstrains = False): pass
+    def nandVar(self, m, *_var, onlyConstrains = False): pass
   
     # NOR (Joint Denial) 2 variables
     # Create new variable varNOR, create constrains:
@@ -99,7 +99,7 @@ class ilpBooleanProcessor(object):
     # return varNOR
     # if onlyConstrains then only construct constrain var1 + var2 <= 0
     @abc.abstractmethod
-    def nor2Var(m, _var1, _var2): pass
+    def nor2Var(self, m, _var1, _var2): pass
 
     # NOR (Joint Denial)
     # Create new variable varNOR, create constrains:
@@ -111,7 +111,7 @@ class ilpBooleanProcessor(object):
     # return varNOR
     # if onlyConstrains then only construct constrain var1 + var2 + ... + varN <= 0
     @abc.abstractmethod
-    def norVar(m, *_var, onlyConstrains = False): pass
+    def norVar(self, m, *_var, onlyConstrains = False): pass
 
     # XOR Exclusive Disjunction 
     # Create new variable varXOR, create constrains:
@@ -122,7 +122,7 @@ class ilpBooleanProcessor(object):
     # return varXOR
     # if onlyConstrains then only construct constrain var1 + var2 <= 1 and var1 + var2 >= 1 
     @abc.abstractmethod
-    def xorVar(m, _var1, _var2,  onlyConstrains = False): pass
+    def xorVar(self, m, _var1, _var2,  onlyConstrains = False): pass
 
     # IF Implication
     # Create new variable varIF, create constrains:
@@ -132,7 +132,7 @@ class ilpBooleanProcessor(object):
     # return varIF
     # if onlyConstrains then only construct constrain var1 <= var2
     @abc.abstractmethod
-    def ifVar(m, _var1, _var2,  onlyConstrains = False): pass
+    def ifVar(self, m, _var1, _var2,  onlyConstrains = False): pass
 
     # XNOR Equivalence (EQ)
     # Create new variable varEQ, create constrains:
@@ -143,4 +143,8 @@ class ilpBooleanProcessor(object):
     # return varEQ
     # if onlyConstrains then only construct constrain var1 >= var2 and var1 <= var2
     @abc.abstractmethod
-    def epqVar(m, _var1, _var2,  onlyConstrains = False): pass
+    def epqVar(self, m, _var1, _var2,  onlyConstrains = False): pass
+    
+    # Create constrain var == label, return 1
+    @abc.abstractmethod
+    def fixedVar(self, m, _var, onlyConstrains = False): pass

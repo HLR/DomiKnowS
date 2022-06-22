@@ -1,6 +1,5 @@
 import sys
-
-sys.path.append('.')
+sys.path.append("../..")
 
 import torch
 
@@ -52,8 +51,8 @@ twit['emb'] = SentenceRepSensor('raw')
 class Net(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.l1 = torch.nn.Linear(96,128)
-        self.l2 = torch.nn.Linear(128,2)
+        self.l1 = torch.nn.Linear(300,300)
+        self.l2 = torch.nn.Linear(300,2)
     def forward(self, x):
         a1 = self.l1(x)
         a1 = torch.nn.functional.relu(a1)
@@ -63,34 +62,23 @@ twit[PositiveLabel] = ModuleLearner('emb', module = Net())
 twit[NegativeLabel] = ModuleLearner('emb', module = Net())
 
 #The reader will return the whole list of learning examples each of which is a dictionary
-ReaderObjectsIterator = SentimentReader("examples/SentimentAnalysis/twitter_data/train5k.csv", "csv")
+ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 
 #The program takes the graph and learning approach as input
-program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+from regr.program import POIProgram, IMLProgram, SolverPOIProgram
+from regr.program.model.pytorch import PoiModel
+from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+from regr.program.loss import NBCrossEntropyLoss
+
+program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 # device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
 device = 'auto'
 
 #The program is ready:
-data_item = next(iter(ReaderObjectsIterator))
-datanode = program.populate_one(data_item, device=device)
-print('datanode:', datanode)
-print('positive:', datanode.getAttribute(PositiveLabel).softmax(-1))
-print('negative:', datanode.getAttribute(NegativeLabel).softmax(-1))
-datanode.inferILPConstrains(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
-print('inference positive:', datanode.getAttribute(PositiveLabel, 'ILP'))
-print('inference negative:', datanode.getAttribute(NegativeLabel, 'ILP'))
-
-print('-'*40)
 
 program.train(ReaderObjectsIterator, train_epoch_num=1, Optim=torch.optim.Adam, device=device)
-print('Training result:')
-print(program.model.loss)
-print(program.model.metric)
 
 print('-'*40)
 
 program.test(ReaderObjectsIterator, device=device)
-print('Testing result:')
-print(program.model.loss)
-print(program.model.metric)

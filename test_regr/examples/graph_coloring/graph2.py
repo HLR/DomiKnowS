@@ -1,8 +1,5 @@
-from itertools import permutations
-
 from regr.graph import Graph, Concept, Relation
-from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, eqL, atLeastL, atMostL, exactL
+from regr.graph.logicalConstrain import orL, andL, ifL, notL, existsL, eqL, atMostL, atLeastL, exactL
 
 
 Graph.clear()
@@ -19,17 +16,17 @@ with Graph('global') as graph2:
 
         firestationCity = city(name='firestationCity')
         
-        # No less then 1 firestationCity
-        atLeastL(1, ('x', ), firestationCity, ('x', ), p=90)
+        # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal True to city x and y is a firestationCity
+        orL(firestationCity('x'), existsL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}),  city2))))
         
-        # At most 1 firestationCity
-        atMostL(1, ('x', ), firestationCity, ('x', ), p=80)
+        # No less then 1 firestationCity in the world
+        atLeastL(firestationCity, p=90)
         
-        # Exactly 2 firestationCity
-        exactL(2, ('x', ), firestationCity, ('x', ), p=55)
+        # At most 3 firestationCity in the world
+        atMostL(firestationCity, 3, p=80)
         
-        # Constraints - For each city x either it is a firestationCity or exists a city y which is in cityLink relation with neighbor attribute equal 1 to city x and y is a firestationCity
-        orL(firestationCity, ('x',), existsL(('y',), andL(eqL(cityLink, 'neighbor', {1}), ('x', 'y'), firestationCity, ('y',))))
+        # Each city has no more then 4 neighbors which are not firestationCity
+        ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3), p=90)
 
-        # Each city has no more then 4 neighbors
-        atMostL(4, ('y', ), andL(firestationCity, ('x',), eqL(cityLink, 'neighbor', 1), ('x', 'y')))
+        # Exactly 2 firestationCity in the world 
+        exactL(firestationCity, 2, p=55)

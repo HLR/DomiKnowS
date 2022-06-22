@@ -1,17 +1,22 @@
 from typing import Dict, Any
-from itertools import product
 import torch
 
-from ...graph import DataNode, DataNodeBuilder, Concept, Property
-from .sensors import TorchSensor, FunctionalSensor, Sensor
+from .sensors import FunctionalSensor, FunctionalReaderSensor
 
 
 class QuerySensor(FunctionalSensor):
+    def __init__(self, *pres, **kwargs):
+        super().__init__(*pres, **kwargs)
+        self.kwinputs = {}
+
     @property
     def builder(self):
         builder = self.context_helper
+        from ...graph import DataNodeBuilder
+
         if not isinstance(builder, DataNodeBuilder):
-            raise TypeError('{} should work with DataNodeBuilder.'.format(type(self)))
+            raise TypeError(f'{type(self)} should work with DataNodeBuilder.'
+                            'For example, set `build` option to `True` when running the program')
         return builder
 
     @property
@@ -24,111 +29,42 @@ class QuerySensor(FunctionalSensor):
 
     def define_inputs(self):
         super().define_inputs()
-        if self.inputs is None:
-            self.inputs = []
+        datanodes = self.builder.findDataNodesInBuilder(select=self.concept)
+        self.kwinputs['datanodes'] = datanodes
 
-        root = self.builder.getDataNode()
-        datanodes = root.findDatanodes(select=self.concept)
-
-        self.inputs.insert(0, datanodes)
+    def forward_wrap(self):
+        value = self.forward(*self.inputs, **self.kwinputs)
+        if isinstance(value, torch.Tensor) and value.device is not self.device:
+            value = value.to(device=self.device)
+        return value
 
 
 class DataNodeSensor(QuerySensor):
     def forward_wrap(self):
-        datanodes = self.inputs[0]
+        from ...graph import Property
+        datanodes = self.kwinputs['datanodes']
+        assert len(self.inputs) == len(self.pres)
+        inputs = []
+        for input, pre in zip(self.inputs, self.pres):
+            if isinstance(pre, str):
+                try:
+                    pre = self.concept[pre]
+                except KeyError:
+                    pass
+            if isinstance(pre, Property) and pre.sup == self.concept:
+                assert len(input) == len(datanodes)
+                inputs.append(input)
+            else:
+                # otherwise, repeat the input
+                inputs.append([input] * len(datanodes))
 
-        return [self.forward(datanode, *self.inputs[1:]) for datanode in datanodes]
+        value = [self.forward(*input, datanode=datanode) for datanode, *input in zip(datanodes, *inputs)]
 
-
-class CandidateSensor(QuerySensor):
-    @property
-    def args(self):
-        return [rel.dst for rel in self.concept.has_a()]
-
-    def update_pre_context(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Any:
-        super().update_pre_context(data_item)
-        for concept in self.args:
-            concept['index'](data_item)  # call index property to make sure it is constructed
-    
-    def define_inputs(self):
-        super().define_inputs()
-        args = []
-        for concept in self.args:
-            root = self.builder.getDataNode()
-            datanodes = root.findDatanodes(select=concept)
-            args.append(datanodes)
-        self.inputs = self.inputs[:1] + args + self.inputs[1:]
-
-    def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
-        # args
-        args = self.inputs[1:len(self.args)+1]
-        # functional inputs
-        inputs = self.inputs[len(self.args)+1:]
-
-        arg_lists = []
-        dims = []
-        for arg_list in args:
-            arg_lists.append(enumerate(arg_list))
-            dims.append(len(arg_list))
-
-        output = torch.zeros(dims, dtype=torch.uint8)
-        for arg_enum in product(*arg_lists):
-            index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(datanodes, *arg_list, *inputs)
-        return output
-
-
-class InstantiateSensor(TorchSensor):
-    def __call__(
-        self,
-        data_item: Dict[str, Any]
-    ) -> Dict[str, Any]:
         try:
-            self.update_pre_context(data_item)
-        except:
-            print('Error during updating pre with sensor {}'.format(self.fullname))
-            raise
-        try:
-            return data_item[self.fullname]
-        except KeyError:
-            return data_item[self.sup.sup['index'].fullname]
+            return torch.tensor(value, device=self.device)
+        except (TypeError, RuntimeError, ValueError):
+            return value
 
 
-class CandidateReaderSensor(CandidateSensor):
-    def __init__(self, *pres, edges=None, forward=None, label=False, keyword=None):
-        super().__init__(*pres, edges=edges, forward=forward, label=label)
-        self.data = None
-        self.keyword = keyword
-        if keyword is None:
-            raise ValueError('{} "keyword" must be assign.'.format(type(self)))
-
-    def fill_data(self, data):
-        self.data = data[self.keyword]
-
-    def forward_wrap(self):
-        # current existing datanodes (if any)
-        datanodes = self.inputs[0]
-        # args
-        args = self.inputs[1:len(self.args)+1]
-        # functional inputs
-        inputs = self.inputs[len(self.args)+1:]
-
-        arg_lists = []
-        dims = []
-        for arg_list in args:
-            arg_lists.append(enumerate(arg_list))
-            dims.append(len(arg_list))
-
-        if self.data is None and self.keyword in self.context_helper:
-            self.data = self.context_helper[self.keyword]
-            
-        output = torch.zeros(dims, dtype=torch.uint8, names=('CandidateIdxOne','CandidateIdxTwo'))
-        for arg_enum in product(*arg_lists):
-            index, arg_list = zip(*arg_enum)
-            output[(*index,)] = self.forward(self.data, datanodes, *arg_list, *inputs)
-        return output
+class DataNodeReaderSensor(DataNodeSensor, FunctionalReaderSensor):
+    pass

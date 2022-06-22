@@ -6,8 +6,10 @@ sys.path.append('../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, TorchEdgeReaderSensor, ForwardEdgeSensor, ConstantSensor
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    import torch
+
+    from regr.sensor.pytorch.sensors import ReaderSensor
+    from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
     from regr.program import LearningBasedProgram
     from regr.program.model.pytorch import model_helper, PoiModel
 
@@ -18,21 +20,23 @@ def model_declaration():
 
     # --- City
     world['index'] = ReaderSensor(keyword='world')
-    world_contains_city['forward'] = TorchEdgeReaderSensor(to='index', keyword='city', mode='forward')
+    city['index'] = ReaderSensor(keyword='city')
+    city[world_contains_city] = EdgeSensor(city['index'], world['index'], relation=world_contains_city, forward=lambda x, _: torch.ones_like(x).unsqueeze(-1))
 
 
-    def readNeighbors(links, current_neighbers, city1, city2):
-        if city1.getAttribute('index') in links[int(city2.getAttribute('index'))]:
+    def readNeighbors(index, data, arg1, arg2):
+        city1, city2 = arg1, arg2
+        if city1.getAttribute('index') in data[int(city2.getAttribute('index'))]:
             return True
         else:
             return False
 
-    neighbor['index'] = CandidateReaderSensor(keyword='links', forward=readNeighbors)
+    neighbor[city1.reversed, city2.reversed] = CompositionCandidateReaderSensor(city['index'], keyword='links', relations=(city1.reversed, city2.reversed), forward=readNeighbors)
 
     # --- Learners
-    city[firestationCity] = DummyCityLearner('index', edges=[world_contains_city['forward']])
+    city[firestationCity] = DummyCityLearner('index')
     
-    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[city[firestationCity], neighbor['index']]))
+    program = LearningBasedProgram(graph, model_helper(PoiModel, poi=[world, city, city[firestationCity], neighbor]))
     return program
 
 
@@ -55,8 +59,8 @@ def test_graph_coloring_main():
             assert child_node.getAttribute('<' + firestationCity.name + '>')[1] == 1
 
         # call solver
-        conceptsRelations = (firestationCity, neighbor)  
-        datanode.inferILPConstrains(*conceptsRelations, fun=None, minimizeObjective=True) 
+        conceptsRelations = (firestationCity)  
+        datanode.inferILPResults(*conceptsRelations, fun=None, minimizeObjective=True) 
 
         result = []
         for child_node in datanode.getChildDataNodes():

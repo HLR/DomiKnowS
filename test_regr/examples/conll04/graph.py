@@ -2,7 +2,7 @@ from itertools import permutations
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, andL, nandL
+from regr.graph.logicalConstrain import ifL, andL, nandL, V, atMostL, notL
 
 
 Graph.clear()
@@ -23,18 +23,18 @@ with Graph('global') as graph:
         pair = Concept(name='pair')
         (rel_pair_word1, rel_pair_word2, ) = pair.has_a(arg1=word, arg2=word)
 
-    with Graph('application') as app_graph:
+    with Graph('application', auto_constraint=True) as app_graph:
         people = word(name='people')
         organization = word(name='organization')
         location = word(name='location')
         other = word(name='other')
         o = word(name='O')
 
-        disjoint(people, organization, location, other, o)
+        #disjoint(people, organization, location, other, o)
 
-        for c1, c2 in permutations((people, organization, location, other, o), r=2):
-            nandL(c1, c2)
-
+        # LC0
+        nandL(people, organization, active = False)
+        
         work_for = pair(name='work_for')
         located_in = pair(name='located_in')
         live_in = pair(name='live_in')
@@ -47,8 +47,9 @@ with Graph('global') as graph:
         orgbase_on.has_a(organization, location)
         kill.has_a(people, people)
 
-        #ifL(work_for, ('x', 'y'), andL(people, ('x',), organization, ('y',)))
-        #ifL(located_in, ('x', 'y'), andL(location, ('x',), location, ('y',)))
-        #ifL(live_in, ('x', 'y'), andL(people, ('x',), location, ('y',)))
-        #ifL(orgbase_on, ('x', 'y'), andL(organization, ('x',), location, ('y',)))
-        #ifL(kill, ('x', 'y'), andL(people, ('x',), people, ('y',)))
+        # LC2
+        ifL(work_for('x'), andL(people(path=('x', rel_pair_word1.name)), organization(path=('x', rel_pair_word2.name))), active = True)
+        
+        # LC3
+        ifL(word, atMostL(people, organization, location, other, o), active = True)
+        

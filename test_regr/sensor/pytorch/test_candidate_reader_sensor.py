@@ -11,7 +11,8 @@ def case():
         [random.random() > 0.5, random.random() > 0.5]]
     case = {
         'container': 'hello world',
-        'container_edge': ['hello', 'world'],
+        'container_edge': [[1], [1]],
+        'concept': ['hello', 'world'],
         'concept_feature': [
             'hello, {}'.format(random.random()),
             'world, {}'.format(random.random())],
@@ -30,8 +31,7 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
-    from regr.sensor.pytorch.query_sensor import InstantiateSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.graph import Graph, Concept, Relation, Property
 
     from .sensors import TestSensor, TestEdgeSensor
@@ -51,12 +51,16 @@ def graph(case):
             edge['concept2'] = Property('concept2')
 
     # model
-    container['index'] = ReaderSensor(keyword='container_keyword')
-    container_contains_concept['forward'] = TestEdgeSensor(
-        'index', mode='forward', to='index',
-        expected_inputs=[case.container,],
+    container['raw'] = ReaderSensor(keyword='container_keyword')
+    concept[container_contains_concept] = TestEdgeSensor(
+        container['raw'],
+        relation=container_contains_concept,
+        expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
-    concept['index'] = InstantiateSensor(edges=[container_contains_concept['forward']])
+    concept['raw'] = TestSensor(
+        container['raw'],
+        expected_inputs=(case.container,),
+        expected_outputs=case.concept)
 
     return graph
 
@@ -64,38 +68,40 @@ def graph(case):
 @pytest.fixture()
 def sensor(case, graph):
     from regr.graph import DataNode
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
+    from regr.sensor.pytorch.relation_sensors import CompositionCandidateReaderSensor
 
     concept = graph['sub/concept']
     edge = graph['sub/edge']
     (edge_concept1, edge_concept2,) = edge.has_a()
 
     collector = []
-    def forward(data, datanodes, datanode_concept1, datanode_concept2, constant):
+    def forward(constant, concept_raw, data, arg1, arg2):
         # update collector
         idx = len(collector)
-        collector.append((datanode_concept1, datanode_concept2))
-        # current existing datanodes
-        assert len(datanodes) == 0
+        collector.append((arg1, arg2))
         # test concept 1
-        assert isinstance(datanode_concept1, DataNode)
-        assert datanode_concept1.getOntologyNode() == concept
+        assert isinstance(arg1, DataNode)
+        assert arg1.getOntologyNode() == concept
         # test concept 2
-        assert isinstance(datanode_concept2, DataNode)
-        assert datanode_concept2.getOntologyNode() == concept
+        assert isinstance(arg2, DataNode)
+        assert arg2.getOntologyNode() == concept
         # other arguments are like functional sensor
         assert constant == case.constant
-        index1 = datanode_concept1.getAttributes().get('index')
-        index2 = datanode_concept2.getAttributes().get('index')
+        index1 = arg1.getAttribute('raw')
+        index2 = arg2.getAttribute('raw')
         return data[index1][index2]
-    sensor = CandidateReaderSensor(case.constant, forward=forward, keyword='edge_keyword')
-    edge['index'] = sensor
+    sensor = CompositionCandidateReaderSensor(
+        case.constant,
+        concept['raw'],
+        relations=(edge_concept1.reversed, edge_concept2.reversed),
+        forward=forward,
+        keyword='edge_keyword')
+    edge[edge_concept1.reversed, edge_concept2.reversed] = sensor
     return sensor
 
 @pytest.fixture()
 def context(case, graph):
     from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.query_sensor import CandidateReaderSensor
     from regr.graph import Property, DataNodeBuilder
 
     context = {
@@ -111,15 +117,17 @@ def context(case, graph):
     for prop in graph.traversal_apply(all_properties):
         for sensor in prop.find(ReaderSensor):
             sensor.fill_data(context)
-        for sensor in prop.find(CandidateReaderSensor):
-            sensor.fill_data(context)
     return context
 
 
 def test_functional_sensor(case, sensor, context):
     import torch
     output = sensor(context)
-    assert (output == torch.tensor(case.edge_value)).all()
+    n = torch.tensor(case.edge_value).sum()
+    assert len(output[0]) == n
+    assert len(output[1]) == n
+    for arg1, arg2 in zip(*output):
+        assert case.edge_value[arg1.argmax()][arg2.argmax()]
 
 
 if __name__ == '__main__':

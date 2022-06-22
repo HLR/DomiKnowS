@@ -10,6 +10,6 @@ class dummyILPOntSolver(ilpOntSolver):
         super().__init__(graph, ontologiesTuple, _ilpConfig=ilpConfig)
         self.myIlpBooleanProcessor = None
         
-    def calculateILPSelection(self, phrase, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
+    def calculateILPSelection(self, phrase, fun=None, epsilon = 0.00001, graphResultsForPhraseToken=None, graphResultsForPhraseRelation=None, graphResultsForPhraseTripleRelation=None):
         self.myLogger.info('Returning unchanged results')
         return graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForPhraseTripleRelation

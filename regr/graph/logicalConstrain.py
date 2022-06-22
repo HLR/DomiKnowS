@@ -1,54 +1,110 @@
-import logging
-from itertools import product
-
-import numpy
-import torch
- 
+from collections import namedtuple
 from regr.solver.ilpConfig import ilpConfig 
-   
+from regr.graph import Concept
+
+import logging
+import torch
 myLogger = logging.getLogger(ilpConfig['log_name'])
 ifLog =  ilpConfig['ifLog']
         
+V = namedtuple("V", ['name', 'v'], defaults= [None, None])
+
 class LogicalConstrain:
-    def __init__(self, *e, p=100):
-        self.headLC = True
+    def __init__(self, *e, p=100, active = True, sampleEntries  = False, name = None):
+        self.headLC = True # Indicate that it is head constrain and should be process individually
+        self.active = active
+        self.sampleEntries = sampleEntries
         
-        if p < 0:
-            self.p = 0
-            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 0"%(lcName,p))
-        elif p > 100:
-            self.p = 100
-            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 100"%(lcName,p))
+        if not e:
+            myLogger.error("Logical Constrain initialized is empty")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
+        
+        updatedE = []
+        for _, eItem in enumerate(e):
+            if isinstance(eItem, (LogicalConstrain, Concept)):
+                updatedE.append(eItem)
+            elif callable(eItem):
+                newEItem = eItem.__call__()
+                updatedE.extend(newEItem)
+            elif isinstance(eItem, list):
+                updatedE.extend(eItem)
+            else:
+                updatedE.append(eItem)
+                
+        self.e = updatedE
+        
+        updatedE = []
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, Concept):
+                updatedE.append((eItem, eItem.name, None, 1))
+            else:
+                updatedE.append(eItem)
+                
+        self.e = updatedE
+
+        # -- Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
+        self.graph = None
+       
+        conceptOrLc = None
+        
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, LogicalConstrain):
+                conceptOrLc = eItem
+                break
+            elif isinstance(eItem, tuple):
+                conceptOrLc = eItem[0]
+                break
+    
+        if conceptOrLc is None:
+            myLogger.error("Logical Constrain is incorrect")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect")
+            
+        if isinstance(conceptOrLc, Concept):
+            if self.__getContext(conceptOrLc):
+                self.graph = self.__getContext(conceptOrLc)[-1]
+        elif isinstance(conceptOrLc, str):
+            self.graph = None
         else:
-            self.p = p
+            self.graph = conceptOrLc.graph
+                
+        if self.graph == None:
+            myLogger.error("Logical Constrain initialized is not associated with graph")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is not associated with graph")
+                     
+        # Create logical constrain id based on number of existing logical constrain in the graph
+        self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
-        for e_item in e:
+        if name is not None:
+            self.name = name
+        else:
+            self.name = self.lcName
+            
+        # Add the constrain to the graph
+        self.graph.logicalConstrains[self.lcName] = self
+                
+        # Go though constrain, find nested constrains and change their property headLC to indicate that their are nested and should not be process individually
+        for e_item in self.e:
             if isinstance(e_item, LogicalConstrain):
                 e_item.headLC = False
                 
-        self.e = e
-        
-        if e:
-            if not isinstance(e[0], (tuple, int)):
-                contexts = self.__getContext(e[0])
-            elif len(e) > 1 and not isinstance(e[1], (tuple, int)):
-                contexts = self.__getContext(e[1])
-            elif len(e) > 2 and not isinstance(e[2], (tuple, int)):
-                contexts = self.__getContext(e[2])
-            else:
-                contexts = None
-
-            if contexts:
-                context = contexts[-1]
-            
-                self.lcName = "LC%i"%(len(context.logicalConstrains))
-                context.logicalConstrains[self.lcName] = self
+        # Check soft constrain is activated though p - if certainty in the validity of the constrain or the user preference is provided by p
+        if p < 0:
+            self.p = 0
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 0"%(self.lcName,p))
+        elif p > 100:
+            self.p = 100
+            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 100"%(self.lcName,p))
+        else:
+            self.p = p
      
+    class LogicalConstrainError(Exception):
+        pass
+    
     def __str__(self):
         return self.__class__.__name__
     
     def __repr__(self):
-        return self.__class__.__name__
+        return  self.lcName + '(' + self.__class__.__name__ + ')'
           
     def __call__(self, model, myIlpBooleanProcessor, v): 
         pass 
@@ -58,316 +114,361 @@ class LogicalConstrain:
             return self.__getContext(e.e[0])
         else:
             return e._context
+       
+    # Get string representation of  logical constraint
+    def strEs(self):
+        strsE = []
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, V):
+                new_V = []
+                if eItem[0] is not None:
+                    new_V.append(eItem[0])
+                    if eItem[1] is not None: new_V.append(',')
+                if eItem[1]:
+                    if isinstance(eItem[1], eqL):
+                        strsE.append("eql")
+                    else:
+                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
+                        new_V.append("path = {}".format(tuple(new_v)))
+                strsE.append("{}".format(tuple(new_V)))
+            elif isinstance(eItem, Concept):
+                strsE.append(eItem.name)
+            elif isinstance(eItem, LogicalConstrain):
+                strsE.append(eItem)
+            elif isinstance(eItem, tuple) and (len(eItem) == 3):
+                strsE.append(eItem[0].name)
         
-    def createILPConstrains(self, lcName, lcFun, model, v, resultVariableNames=None, headConstrain = False):
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
+        return strsE
+    
+    #------------
+    
+    def createSingleVarILPConstrains(self, lcName, lcFun, model, v, headConstrain):  
+        singleV = []
+                    
+        if len(v) != 1:
+            myLogger.error("%s Logical Constrain created with %i sets of variables which is not  one"%(lcName,len(v)))
+            return singleV
+    
+        v1 = list(v.values())[0]
+        for currentILPVars in v1:
+            if not currentILPVars:
+                singleV.append([None])
+                
+            cSingleVar = []
+            for cv in currentILPVars:
+                singleVar = lcFun(model, cv, onlyConstrains = headConstrain)
+                cSingleVar.append(singleVar)
+                
+            singleV.append(cSingleVar)
         
+        if headConstrain:
+            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+        
+        if model is not None:
+            model.update()
+        
+        return singleV
+    
+    # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
+    def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
+        
+        # Get set of ILP variables lists for the current variable name
+        cLcVariables = v[lcVariableName]
+        
+        # List of lists containing sets of ILP variables for particular position 
+        newLcVars = []
+        
+        # --- Update the lcVars setup with ILP variables from this iteration
+        
+        if not lcVars: # If ILP variables setup is not initialized yet - this is the first iteration of the _collectILPVariableSetups method
+            if cLcVariables is None:
+                newV = [[None]]
+                newLcVars.append(newV)
+            else:
+                for cV in cLcVariables:
+                    newV = []
+                    for cvElement in cV:
+                        if cvElement is None:
+                            pass
+                        newElement = [cvElement]
+                        newV.append(newElement)
+                    newLcVars.append(newV)
+        elif len(cLcVariables) == 1: # Single variable
+            for indexLcV, lcV in enumerate(lcVars):
+                newV = []
+                for lcVelement in lcV:
+                    newElemenet = lcVelement.copy()
+                    if cLcVariables is None:
+                        newElemenet.append(None)  
+                    else:
+                        if cLcVariables[0]:
+                            newElemenet.append(cLcVariables[0][0])
+                        else:
+                            newElemenet.append(None)
+                    newV.append(newElemenet)
+                                    
+                newLcVars.append(newV)                
+        else: # Many ILP variables in the current set
+            for indexLcV, lcV in enumerate(lcVars):
+                newV = []
+                for indexElement, lcVelement in enumerate(lcV):
+                    if cLcVariables is None:
+                        newLcVelement = lcVelement.copy()
+                        newLcVelement.append(None)
+                        
+                        newV.append(newLcVelement)
+                    elif len(lcV) == len(cLcVariables[indexLcV]):
+                        cV = cLcVariables[indexLcV][indexElement]
+                        newLcVelement = lcVelement.copy()
+                        newLcVelement.append(cV)
+                            
+                        newV.append(newLcVelement)
+                    else:
+                        for cV in cLcVariables[indexLcV]:
+                            newLcVelement = lcVelement.copy()
+                            newLcVelement.append(cV)
+                            
+                            newV.append(newLcVelement)
+                                
+                newLcVars.append(newV)                
+                            
+        if lcVariableNames:
+            # Recursive call - lcVars contains currently collected ILP variables setups
+            return self._collectILPVariableSetups(lcVariableNames[0], lcVariableNames[1:], v, lcVars=newLcVars)
+        else:
+            # Return collected setups
+            return newLcVars
+
+    # Method building ILP constraints
+    def createILPConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
             myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
             return None
         
-        # input variable names
-        vKeys = [next(iter(v[i])) for i in range(len(v))]
-        
-        # output variable names and variables
-        ilpV = {} # output variable names 
-        zVars = {} # output variables
-        
-        if len(v) == 2:
-            # Depending on size of variable names tuples from input variables
-            if len(vKeys[0]) == 1: # First variables names has one element
-                if len(vKeys[1]) == 1: # Second variables names has one elements
-                    if vKeys[0][0] == vKeys[1][0]: # The same variable names
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][v1]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else: # Different variables names
-                        ilpKey = (vKeys[0][0], vKeys[1][0])
-                        for v1 in v[0][vKeys[0]]:
-                            for v2 in v[1][vKeys[1]]:
-                                v1Var = v[0][vKeys[0]][v1]
-                                v2Var = v[1][vKeys[1]][v2]
-                                    
-                                zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                elif len(vKeys[1]) == 2: # Second variables names has two elements
-                    if vKeys[0][0] in vKeys[1]:
-                        ilpKey = vKeys[1]
-                            
-                        for v1 in v[1][vKeys[1]]:
-                           
-                            v1Var = v[0][vKeys[0]][(v1[0],)] 
-                            v2Var = v[1][vKeys[1]][v1]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else:
-                        pass
-                else:
-                    pass # Support only 2 elements now !
-            elif len(vKeys[0]) == 2:
-                if len(vKeys[1]) == 1: 
-                    if vKeys[0][0] == vKeys[1][0]: # First name match
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                           
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][(v1[0],)]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    elif vKeys[0][1] == vKeys[1][0]: # Second name match
-                        ilpKey = vKeys[0]
-                        
-                        for v1 in v[0][vKeys[0]]:
-                           
-                            v1Var = v[0][vKeys[0]][v1]
-                            v2Var = v[1][vKeys[1]][(v1[1],)]
-                                
-                            zVars[v1] = lcFun(model, v1Var, v2Var, onlyConstrains = headConstrain)
-                    else:  # Different variables names
-                        pass
-                elif len(vKeys[1]) == 2:
-                    if (vKeys[0] == vKeys[1]):
-                        ilpKey = vKeys[0]
-                    else:
-                        pass
-                else:
-                    pass # Support only 2 elements now !
-            else:
-                pass # Support only 2 elements in key now !
-        
-        if len(v) > 2: # Support more then 2 variables  if all are the same
-            equals = True
-            for k in vKeys:
-                if  len(k) > 1 or vKeys[0][0] != k[0]:
-                    equals = False
-                    break
-                
-                if equals:
-                    ilpKey = vKeys[0]
-                    
-                    for v1 in v[0][vKeys[0]]:
-                        _vars = []
-                        for i, _ in enumerate(vKeys):
-                            _vars.append(v[i][vKeys[0]][v1])
-                         
-                        zVars[v1] = lcFun(model, *_vars, onlyConstrains = headConstrain)
-
-        # Output
-        ilpV[ilpKey] = zVars
-        if model: model.update()
-
-        return ilpV
-    
-    def createILPCount(self, model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames=None, headConstrain = False, cVariable = None, cOperation = None, cLimit = 1): 
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcMethodName, [[[x if x is None or isinstance(x, (int, numpy.float64, numpy.int32)) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-        
-        if isinstance(self.e[0], tuple):
-            cVariable = self.e[0]
-                  
-        if not resultVariableNames:
-            resultVariableNames = ('x',)
-            
-        existsV = {}
-        
-        _v = v[0]
-        _vKey = next(iter(_v))
-        _v=next(iter(_v.values()))
-        
-        if cVariable is None:
-            existsVars = []
-            for currentToken in _v:
-                existsVars.append(_v[currentToken])
-        
-            existsVarResult = myIlpBooleanProcessor.countVar(model, *existsVars, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
-                
-            existsV[resultVariableNames] = {}
-            existsV[resultVariableNames][(0,)] = existsVarResult
-        elif isinstance(cVariable, tuple):
-            if len(cVariable) == 1:
-                if cVariable[0] in _vKey:
-                    n1Index = _vKey.index(cVariable[0]) 
-                    
-                    existsVars = {}
-                    for currentToken in _v:
-                        key = (currentToken[:n1Index] + currentToken[n1Index+1:])
-                        
-                        if key in existsVars:
-                            existsVars[key].append(_v[currentToken])
-                        else:
-                            existsVars[key] = [_v[currentToken]]
-                        
-                    existsV[resultVariableNames] = {}     
-                    for k in existsVars:
-                        existsVarResult = myIlpBooleanProcessor.countVar(model, *existsVars[k], onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit)
-        
-                        existsV[resultVariableNames][k] = existsVarResult
-                else:
-                    pass
-            elif len(cVariable) == 2:
-                pass
-            elif len(cVariable) == 3:
-                pass
-            else:
-                pass
-
-        if  headConstrain:
-            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcMethodName))
-        else:
-            #if ifLog: myLogger.debug("Exists Logical Constrain result - ILP variables created: %s"%([x.VarName for x in existsV]))
+        # Input variable names
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
             pass
-                 
-        model.update()
+                
+        lcVariableName0 = lcVariableNames[0] # First LC variable
+        lcVariableSet0 = v[lcVariableName0]
+
+        rVars = [] # Output variables
+
+        # Check consistency of provided sets of ILP variables
+        for cLcVariableName in lcVariableNames:
+            cLcVariableSet = v[cLcVariableName]
+
+            if len(cLcVariableSet) != len(lcVariableSet0):
+                myLogger.error("%s Logical Constrain has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
+                               %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
+                
+                return rVars
+            
+        # Collect variables setups for ILP constraints
+        sVar = self._collectILPVariableSetups(lcVariableName0, lcVariableNames[1:], v)
         
-        return existsV
+        # Apply collected setups and create ILP constraint
+        for z in sVar:
+            tVars = [] # Collect ILP constraints results
+            for t in z:
+                tVars.append(lcFun(model, *t, onlyConstrains = headConstrain))
+                
+            rVars.append(tVars)
+        
+        # Return results from created ILP constraints - 
+        # None if headConstrain is True or no ILP constraint created, ILP variable representing the value of ILP constraint, loss calculated
+        return rVars
+    
+    def createILPCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+        
+        if cLimit== None:
+            cLimit
+        lcVariableName0 = lcVariableNames[0] # First variable
+        lcVariableSet0 =  v[lcVariableName0]
+
+        zVars = [] # Output ILP variables
+        
+        varsSetup = []
+        for i, _ in enumerate(lcVariableSet0):
+            
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
+                
+            if len(var) == 0:
+                if not (headConstrain or integrate):
+                    varsSetup.append([None])
+                    
+                continue
+            
+            if headConstrain or integrate:
+                varsSetup.extend(var)
+            else:
+                varsSetup.append(var)
+             
+        # -- Use ILP variable setup to create constrains   
+        if headConstrain or integrate:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                         logicMethodName = logicMethodName)])
+        else:
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                             logicMethodName = logicMethodName)])
+           
+        if model is not None:
+            model.update()
+            
+        return zVars
+        
+
+def use_grad(grad):
+    if not grad:
+        torch.no_grad()
+        
+# ----------------- Logical Single Variable
+
+class notL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createSingleVarILPConstrains("Not", myIlpBooleanProcessor.notVar, model, v, headConstrain)
+
+# ----------------- Logical
 
 class andL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, resultVariableNames, headConstrain)        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('And', myIlpBooleanProcessor.andVar, model, v, headConstrain)        
 
 class orL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False):
-        return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, resultVariableNames, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('Or', myIlpBooleanProcessor.orVar, model, v, headConstrain)
     
 class nandL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, resultVariableNames, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('Nand', myIlpBooleanProcessor.nandVar, model, v, headConstrain)
         
 class ifL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): #use_grad(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('If', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
     
 class norL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('Nor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
 
 class xorL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPConstrains('Xor', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
     
 class epqL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
     
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, resultVariableNames, headConstrain)
-        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
+            return self.createILPConstrains('Epq', myIlpBooleanProcessor.ifVar, model, v, headConstrain)
+     
+# ----------------- Auxiliary
+     
 class eqL(LogicalConstrain):
-    def __init__(self, *e):
+    def __init__(self, *e, active = True, sampleEntries = False, name = None):
         LogicalConstrain.__init__(self, *e, p=100)
-      
-class notL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+        self.headLC = False
+    
+class fixedL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames= None, headConstrain = False): 
-        lcName = 'notL'
-        if ifLog: myLogger.debug("%s Logical Constrain invoked with variables: %s"%(lcName, [[[x if not isinstance(x, torch.Tensor) else x.VarName for _, x in t.items()] for _, t in v1.items()] for v1 in v]))
-              
-        if not resultVariableNames:
-            resultVariableNames = ('x',)
-            
-        notV = {}
-                    
-        if len(v) > 1:
-            myLogger.error("Not Logical Constrain created with %i sets of variables which is more then one"%(len(v)))
-            return notV
-        
-        _v = v[0]
-        _vKey = next(iter(_v))
-        _v=next(iter(_v.values()))
-        
-        notV[resultVariableNames] = {}
-
-        for currentToken in _v:
-            currentILPVar = _v[currentToken]
-            
-            notVar = myIlpBooleanProcessor.notVar(model, currentILPVar, onlyConstrains = headConstrain)
-            notV[resultVariableNames][currentToken] = notVar
-        
-        if headConstrain:
-            if ifLog: myLogger.debug("Not Logical Constrain is the head constrain - only ILP constrain created")
-        else:
-            if ifLog: myLogger.debug("Not Logical Constrain result - ILP variable created: %s"%(notVar.VarName))
-            
-        model.update()
-        
-        return notV
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False):
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad): 
+            return self.createSingleVarILPConstrains("Fixed", myIlpBooleanProcessor.fixedVar, model, v, headConstrain)
+    
+# ----------------- Counting
 
 class exactL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
+
+        cOperation = '=='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+
+class existsL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        cLimit = 1
+
+        cOperation = '>='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+
+class atLeastL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
         else:
             cLimit = 1
             
-        cVariable = self.e[1]
-        lcMethodName = 'exactL'
-        cOperation = '='
+        cOperation = '>='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
-
-class existsL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        cLimit = 1
-
-        cVariable = self.e[1]
-        lcMethodName = 'existsL'
-        cOperation = '>'
-        
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
-
-class atLeastL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
-        
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
-            
-        cVariable = self.e[1]
-        lcMethodName = 'atLeastL'
-        cOperation = '>'
-        
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
     
 class atMostL(LogicalConstrain):
-    def __init__(self, *e, p=100):
-        LogicalConstrain.__init__(self, *e, p=p)
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
         
-    def __call__(self, model, myIlpBooleanProcessor, v, resultVariableNames=None, headConstrain = False): 
-        if isinstance(self.e[0], int):
-            cLimit = self.e[0]
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
             
-        cVariable = self.e[1]
-        lcMethodName = 'atMostL'
-        cOperation = '<'
+        cOperation = '<='
         
-        return self.createILPCount(model, myIlpBooleanProcessor, lcMethodName, v, resultVariableNames, headConstrain, cVariable, cOperation, cLimit)
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))

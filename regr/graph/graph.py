@@ -11,7 +11,7 @@ else:
 
 @BaseGraphTree.localize_namespace
 class Graph(BaseGraphTree):
-    def __init__(self, name=None, ontology=None, iri=None, local=None):
+    def __init__(self, name=None, ontology=None, iri=None, local=None, auto_constraint=None, reuse_model=False):
         BaseGraphTree.__init__(self, name)
         if ontology is None:
             self.ontology = (iri, local)
@@ -19,6 +19,8 @@ class Graph(BaseGraphTree):
             self.ontology = ontology
         elif isinstance(ontology, str):
             self.ontology = (ontology, local)
+        self.auto_constraint = auto_constraint
+        self.reuse_model = reuse_model
         self._concepts = OrderedDict()
         self._logicalConstrains = OrderedDict()
         self._relations = OrderedDict()
@@ -31,7 +33,17 @@ class Graph(BaseGraphTree):
     @property
     def ontology(self):
         return self._ontology
-    
+
+    @property
+    def auto_constraint(self):
+        if self._auto_constraint is None and self.sup:
+            return self.sup.auto_constraint
+        return self._auto_constraint or False  # if None, return False instead
+
+    @auto_constraint.setter
+    def auto_constraint(self, value):
+        self._auto_constraint = value
+
     @ontology.setter
     def ontology(self, ontology):
         if isinstance(ontology, Graph.Ontology):
@@ -80,13 +92,48 @@ class Graph(BaseGraphTree):
             # TODO: what are other cases
             pass
 
+
+    def visualize(self, filename, open_image=False):
+        import graphviz
+        concept_graph = graphviz.Digraph(name=f"{self.name}")
+        concept_graph.attr(label=f"Graph: {self.name}") 
+
+        for concept_name, concept in self.concepts.items():
+            concept_graph.node(concept_name)
+
+        for subgraph_name, subgraph in self.subgraphs.items():
+            sub_graph_viz = subgraph.visualize(filename=None)
+            sub_graph_viz.name = 'cluster_' + sub_graph_viz.name
+            concept_graph.subgraph(sub_graph_viz)
+
+        for relation_name, relation in self.relations.items():
+            if not relation.name.endswith('reversed') and not ('not_a' in relation.name):
+                # add case for HasA
+                concept_graph.edge(relation.src.name, relation.dst.name, label=relation.__class__.__name__)
+
+        if filename is not None:
+            concept_graph.render(filename, format='png', view=open_image)
+        else:
+            return concept_graph
+
+    @property
+    def subgraphs(self):
+        return OrderedDict(self)
+
     @property
     def concepts(self):
         return self._concepts
-    
+
     @property
     def logicalConstrains(self):
         return self._logicalConstrains
+
+    @property
+    def logicalConstrainsRecursive(self):
+        def func(node):
+            if isinstance(node, Graph):
+                yield from node.logicalConstrains.items()
+        yield from self.traversal_apply(func)
 
     @property
     def relations(self):

@@ -199,6 +199,7 @@ def objective(emr_input, results, lazy_not=True):
     return obj
 
 
+@pytest.mark.skip(reason="fix datanode passed to solver")
 @pytest.mark.slow
 @pytest.mark.gurobi
 def test_compare_emr(emr_graph, emr_input, solvers):
@@ -217,6 +218,7 @@ def test_compare_emr(emr_graph, emr_input, solvers):
                 assert (aa[key] == bb[key]).all()
 
 
+@pytest.mark.skip(reason="fix datanode passed to solver")
 @pytest.mark.slow
 @pytest.mark.gurobi
 @pytest.mark.benchmark

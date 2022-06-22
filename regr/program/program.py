@@ -2,7 +2,7 @@ import logging
 import torch
 from tqdm import tqdm
 
-from ..utils import consume
+from ..utils import consume, entuple, detuple
 from .model.base import Mode
 from ..sensor.pytorch.sensors import TorchSensor
 
@@ -13,16 +13,168 @@ def get_len(dataset, default=None):
     except TypeError:  # `generator` does not have __len__
         return default
 
+
+class dbUpdate():
+    def getTimeStamp(self):
+        from datetime import datetime, timezone, timedelta
+
+        timeNow = datetime.now(tz=timezone.utc)
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
+        timestamp_micros = (timeNow - epoch) // timedelta(microseconds=1)
+
+        return timestamp_micros
+
+    def __init__(self, graph):
+        self.experimentID = "startAt_%d"%(self.getTimeStamp())
+
+        import os
+        self.cwd = os.getcwd()
+        self.cwd = os.path.basename(self.cwd)
+
+        import __main__
+        if hasattr(__main__, '__file__'):
+            self.programName = os.path.basename(__main__.__file__)
+            if self.programName.index('.') >= 0:
+                self.programName = self.programName[:self.programName.index('.')]
+        else:
+            self.programName = ''
+
+        try:
+            import os
+            from pathlib import Path
+
+            _dir_path = Path(os.path.realpath(__file__))
+            dir_path = _dir_path.parent.parent.parent
+
+            mongoDBPermFile = 'MongoDB-DK.pem'
+            mongoDBPermPath = None
+
+            for root, dir, files in os.walk(dir_path):
+                if mongoDBPermFile in files:
+                    mongoDBPermPath= os.path.join(root, mongoDBPermFile)
+
+            if mongoDBPermPath is None:
+                self.dbClient = None
+                return
+
+            from pymongo import MongoClient
+            uri = "mongodb+srv://cluster0.us5bm.mongodb.net/Cluster0?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority"
+            self.dbClient = MongoClient(uri,
+                                        tls=True,
+                                        tlsCertificateKeyFile=mongoDBPermPath)
+        except Exception as ex:
+            self.dbClient = None
+            return
+
+        self.db = self.dbClient.mlResults
+        self.results = self.db.results
+
+        self.activeLCs = []
+        for _, lc in graph.logicalConstrains.items():
+            if lc.headLC:
+                self.activeLCs.append(lc.name)
+
+    def __calculateMetricTotal(self, metricResult):
+
+        if not isinstance(metricResult, dict):
+            return None
+
+        pT= 0
+        rT = 0
+
+        for _, v in metricResult.items():
+            if not isinstance(v, dict):
+                return None
+
+            if not ({'P', 'R'} <= v.keys()):
+                return None
+
+            pT += v['P']
+            rT += v['R']
+
+        pT = pT/len(metricResult.keys())
+        rT = rT/len(metricResult.keys())
+
+        total = {}
+        if pT + rT:
+            f1T = 2 * pT * rT / (pT + rT) # F1 score is the harmonic mean of precision and recall
+            total['F1'] = f1T
+        else:
+            return None
+
+        total['P'] = pT
+        total['R'] = rT
+
+        return total
+
+    def __call__(self, stepName, metricName, metricResult):
+
+        if self.dbClient is None:
+            return
+
+        upatedmetricResult = {}
+        for k, r in metricResult.value().items():
+            if torch.is_tensor(r):
+                upatedmetricResult[k] = r.item()
+            elif isinstance(r, dict):
+                updatedDict = {}
+
+                for j, e in r.items():
+                    if torch.is_tensor(e):
+                        updatedDict[j] = e.item()
+                    else:
+                        updatedDict[j] = e
+
+                upatedmetricResult[k] = updatedDict
+            else:
+                upatedmetricResult[k] = r
+
+        mlResult = {
+            'experimentID' : self.experimentID,
+            'experimant'   : self.cwd,
+            'program'      : self.programName,
+            'usedLCs'      : self.activeLCs,
+            'timestamp'    : self.getTimeStamp(),
+            'step'         : stepName,
+            'metric'       : metricName,
+            'results'      : upatedmetricResult
+        }
+
+        metricTotal = self.__calculateMetricTotal(upatedmetricResult)
+
+        if metricTotal is not None:
+            mlResult['metricTotal'] = metricTotal
+
+        #Step 3: Insert business object directly into MongoDB via isnert_one
+        try:
+            result = self.results.insert_one(mlResult)
+        except Exception as e:
+            return
+
+        if result.inserted_id:
+            pass
+
+
 class LearningBasedProgram():
-    logger = logging.getLogger(__name__)
-
-    def __init__(self, graph, Model, **kwargs):
+    def __init__(self, graph, Model, logger=None, db=False, **kwargs):
         self.graph = graph
-        self.model = Model(graph, **kwargs)
-        self.opt = None
 
-    def update_nominals(self, dataset):
-        pass
+        self.logger = logger or logging.getLogger(__name__)
+        self.dbUpdate = None if db else dbUpdate(graph)
+
+        from inspect import signature
+        modelSignature = signature(Model.__init__)
+        
+        modelKwargs = {}
+        for param in modelSignature.parameters.values():
+            paramName = param.name
+            if paramName in kwargs:
+                modelKwargs[paramName] = kwargs[paramName]
+                
+        self.model = Model(graph, **modelKwargs)
+        self.opt = None
+        self.epoch = None
+        self.stop = None
 
     def to(self, device='auto'):
         if device == 'auto':
@@ -37,6 +189,64 @@ class LearningBasedProgram():
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
 
+            self.model.device = self.device
+
+    def calculateMetricDelta(self, metric1, metric2):
+        metricDelta = {}
+        for k, v in metric1.value().items():
+            metricDelta[k] = {}
+            for m, _ in v.items():
+                if k in metric2.value() and m in metric2.value()[k]:
+                    metricDelta[k][m] = v[m] - metric2.value()[k][m]
+                else:
+                    metricDelta[k][m] = None
+
+        return metricDelta
+
+    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+        if dataset is not None:
+            self.logger.info(f'{name}:')
+            desc = name if self.epoch is None else f'Epoch {self.epoch} {name}'
+
+            consume(tqdm(epoch_fn(dataset, **kwargs), total=get_len(dataset), desc=desc))
+
+            if self.model.loss:
+                self.logger.info(' - loss:')
+                self.logger.info(self.model.loss)
+
+                metricName = 'loss'
+                metricResult = self.model.loss
+
+                if self.dbUpdate is not None:
+                    self.dbUpdate(desc, metricName, metricResult)
+
+            ilpMetric = None
+            softmaxMetric = None
+
+            if self.model.metric:
+                self.logger.info(' - metric:')
+                for key, metric in self.model.metric.items():
+                    self.logger.info(f' - - {key}')
+                    self.logger.info(metric)
+
+                    metricName = key
+                    metricResult = metric
+                    if self.dbUpdate is not None:
+                        self.dbUpdate(desc, metricName, metricResult)
+
+                    if key == 'ILP':
+                        ilpMetric = metric
+
+                    if key == 'softmax':
+                        softmaxMetric = metric
+
+            """if ilpMetric is not None and softmaxMetric is not None:
+                metricDelta = self.calculateMetricDelta(ilpMetric, softmaxMetric)
+                metricDeltaKey = 'ILP' + '_' + 'softmax' + '_delta'
+
+                self.logger.info(f' - - {metricDeltaKey}')
+                self.logger.info(metricDelta)"""
+
     def train(
         self,
         training_set,
@@ -44,39 +254,30 @@ class LearningBasedProgram():
         test_set=None,
         device=None,
         train_epoch_num=1,
-        Optim=None):
+        test_every_epoch=False,
+        Optim=None,
+        **kwargs):
         if device is not None:
             self.to(device)
         if Optim is not None and list(self.model.parameters()):
             self.opt = Optim(self.model.parameters())
         else:
             self.opt = None
-        for epoch in range(train_epoch_num):
-            self.logger.info('Epoch: %d', epoch)
-
-            if training_set is not None:
-                self.logger.info('Training:')
-                consume(tqdm(self.train_epoch(training_set), total=get_len(training_set), desc='Epoch {} Training'.format(epoch)))
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
-                self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
-
-            if valid_set is not None:
-                self.logger.info('Validation:')
-                consume(tqdm(self.test_epoch(valid_set), total=get_len(valid_set), desc='Epoch {} Validation'.format(epoch)))
-                self.logger.info(' - loss:')
-                self.logger.info(self.model.loss)
-                self.logger.info(' - metric:')
-                self.logger.info(self.model.metric)
-
-        if test_set is not None:
-            self.logger.info('Testing:')
-            consume(tqdm(self.test_epoch(test_set), total=get_len(test_set), desc='Epoch {} Testing'.format(epoch)))
-            self.logger.info(' - loss:')
-            self.logger.info(self.model.loss)
-            self.logger.info(' - metric:')
-            self.logger.info(self.model.metric)
+        self.train_epoch_num = train_epoch_num
+        self.epoch = 0
+        self.stop = False
+        while self.epoch < self.train_epoch_num and not self.stop:
+            self.epoch += 1
+            self.logger.info('Epoch: %d', self.epoch)
+            self.call_epoch('Training', training_set, self.train_epoch, **kwargs)
+            self.call_epoch('Validation', valid_set, self.test_epoch, **kwargs)
+            if test_every_epoch:
+                self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
+        if not test_every_epoch:
+            self.call_epoch('Testing', test_set, self.test_epoch, **kwargs)
+        # reset epoch after everything
+        self.epoch = None
+        self.stop = None
 
     def train_epoch(self, dataset):
         self.model.mode(Mode.TRAIN)
@@ -84,42 +285,43 @@ class LearningBasedProgram():
         for data_item in dataset:
             if self.opt is not None:
                 self.opt.zero_grad()
-            loss, metric, output = self.model(data_item)
+            loss, metric, *output = self.model(data_item)
             if self.opt and loss:
                 loss.backward()
                 self.opt.step()
-            yield loss, metric, output
+            yield (loss, metric, *output[:1])
 
-    def test(self, dataset, device=None):
+    def test(self, dataset, device=None, **kwargs):
         if device is not None:
             self.to(device)
-        self.logger.info('Testing:')
-        consume(tqdm(self.test_epoch(dataset), total=get_len(dataset), desc='Testing'))
-        self.logger.info(' - loss:')
-        self.logger.info(self.model.loss)
-        self.logger.info(' - metric:')
-        self.logger.info(self.model.metric)
+        self.call_epoch('Testing', dataset, self.test_epoch, **kwargs)
 
-    def test_epoch(self, dataset, device=None):
+    def test_epoch(self, dataset):
         self.model.mode(Mode.TEST)
         self.model.reset()
         with torch.no_grad():
             for data_item in dataset:
-                loss, metric, output = self.model(data_item)
-                yield loss, metric, output
+                loss, metric, *output = self.model(data_item)
+                yield (loss, metric, *output[:1])
 
     def populate(self, dataset, device=None):
         if device is not None:
             self.to(device)
-        yield from self.populate_epoch(dataset, device)
+        yield from self.populate_epoch(dataset)
 
-    def populate_one(self, data_item, device=None):
-        return next(self.populate([data_item], device))
-
-    def populate_epoch(self, dataset, device=None):
+    def populate_epoch(self, dataset):
         self.model.mode(Mode.POPULATE)
         self.model.reset()
         with torch.no_grad():
-            for data_item in dataset:
-                _, _, output = self.model(data_item)
-                yield output
+            for i, data_item in enumerate(dataset):
+                _, _, *output = self.model(data_item)
+                yield detuple(*output[:1])
+
+    def populate_one(self, data_item):
+        return next(self.populate_epoch([data_item]))
+
+    def save(self, path, **kwargs):
+        torch.save(self.model.state_dict(), path, **kwargs)
+
+    def load(self, path, **kwargs):
+        self.model.load_state_dict(torch.load(path, **kwargs))

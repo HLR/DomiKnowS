@@ -30,7 +30,7 @@ In addition to the concepts, we have to introduce the relationships between conc
 on last thing that we have to introduce inside our graph declaration is the set of rules we want to apply on the inference.
 We add the following line to the previous code.
 ``` python 
-orL(firestationCity, ('x',), existsL(('y',), andL(neighbor, ('x', 'y'), firestationCity, ('y',))), ('x',))
+orL(firestationCity('x'), existsL(firestationCity('y', path=('x', neighbor.name, city2.name))))
 ```
 This constraint is expressing that each city is either of type `firestationcity` or `has_a` `neighbor` that is a `firestationCity`.
 More constraint notion usage can be find in [Constraint](docs/KNOWLEDGE.md#constraints) section of the documentation.
@@ -70,7 +70,7 @@ We should define an Edge sensor connecting the world instances to the cities rea
 ```python
 class DummyCityEdgeSensor(TorchEdgeSensor): # Get world to city edge  
   def forward(self,) -> Any:  
-        self.inputs.append(self.context_helper[self.edges[0].fullname])  
+        self.inputs.append(self.context_helper[self.edges[0]])  
         return self.inputs[0]
 ```
 This sensor  maps a world instance to a set of cities. 

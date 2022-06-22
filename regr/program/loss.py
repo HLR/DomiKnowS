@@ -4,8 +4,19 @@ from torch.nn import functional as F
 
 class NBCrossEntropyLoss(torch.nn.CrossEntropyLoss):
     def forward(self, input, target, *args, **kwargs):
+        epsilon = 1e-5
         input = input.view(-1, input.shape[-1])
-        target = target.view(-1)
+#         input = input.clamp(min=epsilon, max=1-epsilon)
+        target = target.view(-1).to(dtype=torch.long, device=input.device)
+        return super().forward(input, target, *args, **kwargs)
+    
+
+class NBCrossEntropyDictLoss(torch.nn.CrossEntropyLoss):
+    def forward(self, builder, prop, input, target, *args, **kwargs):
+        epsilon = 1e-5
+        input = input.view(-1, input.shape[-1])
+#         input = input.clamp(min=epsilon, max=1-epsilon)
+        target = target.view(-1).to(dtype=torch.long, device=input.device)
         return super().forward(input, target, *args, **kwargs)
 
 
@@ -98,6 +109,7 @@ class BCEWithLogitsIMLoss(torch.nn.Module):
         # make sure target is float
         target = target.to(dtype=logp.dtype)
         inference = inference.to(dtype=logp.dtype)
+        inference = inference.to(device=logp.device)
         # FL(p_t) = - alpha_t * (1 - p_t) ** gamma  * log(p_t)
         loss = - (1 - (1 - self.lmbd) * inference) * target * logp
         loss += - (self.lmbd + (1 - self.lmbd) * inference) * (1 - target) * lognp
@@ -111,3 +123,11 @@ class BCEWithLogitsIMLoss(torch.nn.Module):
             return loss.sum
 
         raise ValueError('Unknown reduction method "{}"'.format(self.reduction))
+
+
+class NBCrossEntropyIMLoss(BCEWithLogitsIMLoss):
+    def forward(self, input, inference, target, weight=None):
+        num_classes = input.shape[-1]
+        target = target.to(dtype=torch.long)
+        target = F.one_hot(target, num_classes=num_classes)
+        return super().forward(input, inference, target, weight=weight)

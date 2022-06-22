@@ -1,12 +1,9 @@
 from collections import OrderedDict
-from collections.abc import Iterable
 from itertools import chain, product
-from typing import Tuple, Type
+from typing import Type
 from .base import Scoped, BaseGraphTree
-from .trial import Trial
 from ..utils import enum
 
-from .dataNode import DataNode
 
 @Scoped.class_scope
 @BaseGraphTree.localize_namespace
@@ -19,12 +16,12 @@ class Concept(BaseGraphTree):
             if name is not None:
                 Rel.name = classmethod(lambda cls: name)
 
-            def create(src, *args, **kwargs):
+            def create(src, *args, auto_constraint=None, **kwargs):
                 # add one-by-one
                 rels = []
                 for argument_name, dst in chain(enum(args, cls=Concept, offset=len(src._out)), enum(kwargs, cls=Concept)):
                     # will be added to _in and _out in Rel constructor
-                    rel_inst = Rel(src, dst, argument_name=argument_name)
+                    rel_inst = Rel(src, dst, argument_name=argument_name, auto_constraint=auto_constraint)
                     rels.append(rel_inst)
                 return rels
 
@@ -45,17 +42,51 @@ class Concept(BaseGraphTree):
     def __str__(self):
         return self.name
     
-    def __call__(self, *args, **kwargs):
-        from .relation import IsA, HasA
+    def __rept__(self):
+        return type(self) + ":" + self.name
+    
+    def processLCArgs(self, *args, conceptT=None, **kwargs):
+        from regr.graph.logicalConstrain import eqL, V
+        if len(args) > 1 and isinstance(args[1], eqL):
+            nameX = args[0]
+            path = (nameX, args[1])
+                                    
+            return [conceptT, V(name=nameX, v=path)]
+        elif len(args) and isinstance(args[0], str):
+            name = args[0]
+            
+            if "path" in kwargs:
+                path = kwargs['path']
+                
+                return [conceptT, V(name=name, v=path)]
+            else:
+                return [conceptT, V(name=name)]
+        elif "path" in kwargs:
+            path = kwargs['path']
+                                    
+            return [conceptT, V(name=None, v=path)]
+        else:
+            return [conceptT]
 
-        if (len(args) + len(kwargs) == 0 or
-                ('name' in kwargs) or
-                (len(args)==1 and isinstance(args[0], str))):
-            new_concept = Concept(*args, **kwargs)
-            new_concept.is_a(self)
+    def __call__(self, *args, name=None, ConceptClass=None, auto_constraint=None, **kwargs):
+        from .relation import IsA, HasA
+        if ConceptClass is None:
+            ConceptClass = Concept
+            
+        if (name is None and len(args) and isinstance(args[0], str)) or ("path" in kwargs):
+            if isinstance(self, EnumConcept):
+                conceptT = (self, self.name, None, len(self.enum))
+            else:
+                conceptT = (self, self.name, None, 1)
+
+            return self.processLCArgs(*args, conceptT=conceptT, **kwargs)
+            
+        if (not args and not kwargs) or name is not None:
+            new_concept = ConceptClass(name=name, *args, **kwargs)
+            new_concept.is_a(self, auto_constraint=auto_constraint)
             return new_concept
         else:
-            return self.has_a(*args, **kwargs)
+            return self.has_a(*args, auto_constraint=auto_constraint, **kwargs)
 
     def relate_to(self, concept, *tests):
         from .relation import Relation
@@ -87,6 +118,20 @@ class Concept(BaseGraphTree):
                 retval.append(rel)
         return retval
 
+    def __getitem__(self, name):
+        try:
+            return self.get_sub(name)
+        except KeyError as e:
+            raise type(e)(name)
+
+    def __setitem__(self, name, obj):
+        if isinstance(name, tuple):
+            # for name_, obj_ in zip(name, obj):
+            #     self[name_] = obj_
+            # return self.__setitem__('joint_'+'_'.join(map(str, name)), obj)
+            return self.set_apply(name, obj)
+        return super().__setitem__(name, obj)
+
     def set_apply(self, name, sub):
         from ..sensor import Sensor
         from .property import Property
@@ -110,10 +155,22 @@ class Concept(BaseGraphTree):
         '''
         cls = type(self)  # bind to the real class
 
+        try:
+            Rel = cls._rels[rel]
+        except KeyError as e:
+            if  isinstance(self, EnumConcept):
+                if rel in self.enum:
+                    def ecHandle(*args, **kwargs):
+                        conceptT = (self, rel, self.get_index(rel), len(self.enum))
+                        return self.processLCArgs(*args, conceptT=conceptT, **kwargs)
+                    
+                    return ecHandle
+            else:
+                raise AttributeError(*e.args)
         def handle(*args, **kwargs):
             if not args and not kwargs:
                 return self._out.setdefault(rel, [])
-            return cls._rels[rel](self, *args, **kwargs)
+            return Rel(self, *args, **kwargs)
         return handle
 
     def get_multiassign(self):
@@ -217,36 +274,7 @@ class Concept(BaseGraphTree):
             confs.extend(rconfs)
         return vals, confs
 
-    # Find datanode in data graph of the given concept 
-    def __findDataNodes(self, dns, concept):
-        if (dns is None) or (len(dns) == 0):
-            return []
-         
-        returnDns = []
-        for dn in dns:
-            if str(dn.ontologyNode) == concept:
-               returnDns.append(dn) 
-               
-        if len(returnDns) > 0:
-            return returnDns
-        
-        # Test if fist dn from dns has child of the given concept type (dns are children of s single dn parent - they should have consistent children)
-        dns0CDN = dns[0].getChildDataNodes(conceptName=concept)
-        if (dns0CDN is not None) and (len(dns0CDN) > 0):
-            for dn in dns:
-                dnCN = dn.getChildDataNodes(conceptName=concept)
-                
-                if dnCN is not None:
-                    returnDns = returnDns + dn.getChildDataNodes(conceptName=concept)
-                else:
-                    pass
-        else:
-            for dn in dns:
-                returnDns = returnDns + self.__findDataNodes(dn.getChildDataNodes(), concept)
-    
-        return returnDns
-
-    def candidates(self, root_data, query=None):
+    def candidates(self, root_data, query=None, logger = None):
         def basetype(concept):
             # get inheritance rank
             basetypes = []
@@ -265,12 +293,14 @@ class Concept(BaseGraphTree):
             return basetypes[-1] or (concept,)
 
         base = basetype(self)
+
         assert len(set(base)) == 1  # homogenous base type
 
         def get_base_data(root_data, single_base):
-            base_data = [root_data,]
-            base_data = self.__findDataNodes(base_data, single_base.name)
-            
+            from .dataNode import DataNode
+            assert isinstance(root_data, DataNode)
+            base_data = root_data.findDatanodes(select = single_base.name)
+                
             return base_data
         
             while True:
@@ -279,6 +309,13 @@ class Concept(BaseGraphTree):
                 base_data = list(chain(*(bd.getChildDataNodes() for bd in base_data)))
 
         base_data = get_base_data(root_data, base[0])
+        
+        if not base_data:
+            if logger:
+                logger.info('Found base type - %s - for current concept - %s -'%(base[0],self.name))
+                conceptNames, relationNames = root_data.findConceptsNamesInDatanodes()
+                logger.warning('Found no candidates for - %s -, existing concepts in DataNode are - %s, relations - %s'%(base[0],conceptNames,relationNames))
+            
         if query:
             return filter(query, product(base_data, repeat=len(base)))
         else:
@@ -290,3 +327,33 @@ class Concept(BaseGraphTree):
             node = node.sup
         return node
 
+
+class EnumConcept(Concept):
+    def __init__(self, name=None, values=[]):
+        super().__init__(name=name)
+        self.enum = values
+
+    @property
+    def enum(self):
+        return [e.name for e in self._enum]
+    
+    @property
+    def attributes(self):
+        return [(self, e.name, self.get_index(e.name), len(self.enum)) for e in self._enum]
+
+    @enum.setter
+    def enum(self, values):
+        from enum import Enum
+        self._enum = Enum(self.name, values, start=0)
+
+    def get_index(self, value):
+        return self._enum[value].value
+
+    def get_value(self, index):
+        try:
+            t = self._enum(index) 
+            return t.name
+        except ValueError:
+            return None
+        
+        

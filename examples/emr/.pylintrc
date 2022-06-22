@@ -1,2 +1,0 @@
-[TYPECHECK]
-generated-members=numpy.*,torch.*,emr.utils.Namespace.*

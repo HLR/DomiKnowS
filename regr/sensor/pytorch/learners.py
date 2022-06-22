@@ -5,19 +5,23 @@ import warnings
 
 import torch
 
-from .sensors import TorchSensor, ModuleSensor
+from .. import Learner
+from .sensors import TorchSensor, FunctionalSensor, ModuleSensor
 from .learnerModels import PyTorchFC, LSTMModel, PyTorchFCRelu
 
 
-class TorchLearner(TorchSensor):
+class TorchLearner(Learner, FunctionalSensor):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, *pre, edges=None, loss=None, metric=None, label=False, device='auto'):
-        self.model = None
         self.updated = False
         super(TorchLearner, self).__init__(*pre, edges=edges, label=label, device=device)
         self._loss = loss
         self._metric = metric
+
+    @property
+    def model(self):
+        return None
 
     @property
     @abc.abstractmethod
@@ -33,7 +37,7 @@ class TorchLearner(TorchSensor):
     @device.setter
     def device(self, device):
         if self.model is not None:
-            self.parameters.to(deivce)
+            self.parameters.to(device)
         self._device = device
 
     def update_parameters(self):
@@ -77,19 +81,9 @@ class TorchLearner(TorchSensor):
 class ModuleLearner(ModuleSensor, TorchLearner):
     def __init__(self, *pres, module, edges=None, loss=None, metric=None, label=False, **kwargs):
         super().__init__(*pres, module=module, edges=edges, label=label, **kwargs)
-        self.model = self.module
-        self.updated = True  # no need to update
         self._loss = loss
         self._metric = metric
-
-    @property
-    def device(self):
-        return self._device
-
-    @device.setter
-    def device(self, device):
-        self.module.to(device)
-        self._device = device
+        self.updated = True  # no need to update
 
     def update_parameters(self):
         pass

@@ -7,8 +7,9 @@ def case():
     import random
 
     case = {
-        'container': 'hello world',
-        'container_edge': ['hello', 'world'],
+        'container': ['hello world'],
+        'container_edge': [[1], [1]],
+        'concept': ['hello', 'world'],
         'reader1': [
             'hello, {}'.format(random.random()),
             'world, {}'.format(random.random())],
@@ -25,7 +26,7 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeReaderSensor
+    from regr.sensor.pytorch.sensors import ReaderSensor
     from regr.graph import Graph, Concept, Relation
 
     from .sensors import TestSensor, TestEdgeSensor
@@ -41,18 +42,23 @@ def graph(case):
             (container_contains_concept,) = container.contains(concept)
 
     # model
-    container['index'] = ReaderSensor(keyword='container_keyword')
-    container_contains_concept['forward'] = TestEdgeSensor(
-        'index', mode='forward', to='index',
-        expected_inputs=[case.container,],
+    container['raw'] = ReaderSensor(keyword='container_keyword')
+    concept[container_contains_concept] = TestEdgeSensor(
+        container['raw'],
+        relation=container_contains_concept,
+        expected_inputs=(case.container,),
         expected_outputs=case.container_edge)
+    concept['raw'] = TestSensor(
+        container['raw'],
+        expected_inputs=(case.container,),
+        expected_outputs=case.concept)
     concept['reader1'] = TestSensor(
-        'index', edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
+        'raw',
+        expected_inputs=(case.concept,),
         expected_outputs=case.reader1)
     concept['reader2'] = TestSensor(
-        'index', edges=[container_contains_concept['forward']],
-        expected_inputs=[case.container_edge,],
+        'raw',
+        expected_inputs=(case.concept,),
         expected_outputs=case.reader2)
 
     return graph
@@ -66,19 +72,19 @@ def sensor(case, graph):
     concept = graph['sub/concept']
 
     datanodes = []
-    def forward(datanode, reader1, reader2, constant):
+    def forward(reader1, reader2, constant, datanode):
         idx = len(datanodes)
         assert idx < 2
         datanodes.append(datanode)
         # unlike query sensor that takes the list
         # here datanode is a datanode,
         assert isinstance(datanode, DataNode)
-        assert datanode.getAttributes().get('index') == case.container_edge[idx]
+        assert datanode.getAttributes().get('raw') == case.concept[idx]
         assert datanode.getAttributes().get('reader1') == case.reader1[idx]
         assert datanode.getAttributes().get('reader2') == case.reader2[idx]
         # other arguments are like functional sensor
-        assert reader1 == case.reader1
-        assert reader2 == case.reader2
+        assert reader1 == case.reader1[idx]
+        assert reader2 == case.reader2[idx]
         assert constant == case.constant
         return case.output[idx]
     sensor = DataNodeSensor('reader1', concept['reader2'], case.constant, forward=forward)

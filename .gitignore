@@ -219,3 +219,12 @@ dmypy.json
 .pyre/
 
 # End of https://www.gitignore.io/api/code,python,pycharm,jupyternotebooks
+/MongoDB-DK.pem
+/logs/
+
+# IMDB Dataset
+examples/IMDB/data/*
+examples/IMDB/logs/*
+examples/IMDB/.vector_cache/*
+# typeset example resources
+/examples/Typenet/resources/*

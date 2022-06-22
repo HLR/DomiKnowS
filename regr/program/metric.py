@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any
 
+import numpy as np
 import torch
 from torch.nn import functional as F
 
@@ -8,13 +9,14 @@ from ..base import AutoNamed
 from ..utils import wrap_batch
 
 
-class BinaryCMWithLogitsMetric(torch.nn.Module):
-    def forward(self, input, target, weight=None, dim=None):
+class CMWithLogitsMetric(torch.nn.Module):
+    def forward(self, input, target, data_item, prop, weight=None):
         if weight is None:
             weight = torch.tensor(1, device=input.device)
-        preds = (input > 0).clone().detach().to(dtype=weight.dtype)
+        else:
+            weight = weight.to(input.device)
+        preds = input.argmax(dim=-1).clone().detach().to(dtype=weight.dtype)
         labels = target.clone().detach().to(dtype=weight.dtype, device=input.device)
-        assert (0 <= labels).all() and (labels <= 1).all()
         tp = (preds * labels * weight).sum()
         fp = (preds * (1 - labels) * weight).sum()
         tn = ((1 - preds) * (1 - labels) * weight).sum()
@@ -22,29 +24,66 @@ class BinaryCMWithLogitsMetric(torch.nn.Module):
         return {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn}
 
 
-class CMWithLogitsMetric(BinaryCMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
-        num_classes = input.shape[-1]
-        input = input.view(-1, num_classes)
-        target = F.one_hot(target.view(-1), num_classes=num_classes)
-        return super().forward(input, target, weight)
+class BinaryCMWithLogitsMetric(CMWithLogitsMetric):
+    def forward(self, input, target, data_item, prop, weight=None):
+        target = target.argmax(dim=-1)
+        return super().forward(input, target, data_item, prop, weight)
 
 
-class PRF1WithLogitsMetric(CMWithLogitsMetric):
-    def forward(self, input, target, weight=None):
-        CM = super().forward(input, target, weight)
-        tp = CM['TP'].float()
-        fp = CM['FP'].float()
-        fn = CM['FN'].float()
-        if CM['TP']:
-            p = tp / (tp + fp)
-            r = tp / (tp + fn)
-            f1 = 2 * p * r / (p + r)
+class MultiClassCMWithLogitsMetric(CMWithLogitsMetric):
+    def __init__(self, num_classes, weight=None):
+        super().__init__()
+        self.num_classes = num_classes
+        self.weight = weight
+
+    def forward(self, input, target, data_item, prop, weight=None):
+        from torch.nn import functional
+        target = functional.one_hot(target, num_classes=self.num_classes)
+        input = functional.one_hot(input.argmax(dim=-1), num_classes=self.num_classes)
+        input = torch.stack((-input, input), dim=-1)
+        if weight is None:
+            weight = self.weight
+        return super().forward(input, target, data_item, prop, weight)
+
+
+def calc_TP_FP_TN_FN_for_single_class(val):
+    y = val["labels"]
+    p = val["preds"]
+    TP,FP,TN,FN=0,0,0,0
+    for i,j in zip(y,p):
+        if i==j and i==1:
+            TP+=1
+        elif i==j and i==0:
+            TN+=1
+        elif not i==j and i==1:
+            FN+=1
+        elif not i == j and i == 0:
+            FP += 1
+    return {"TP": TP, 'FP': FP, 'TN': TN, 'FN': FN}
+
+
+class DatanodeCMMetric(torch.nn.Module):
+    def __init__(self, inferType='ILP'):
+        super().__init__()
+        self.inferType = inferType
+
+    def forward(self, input, target, data_item, prop, weight=None):
+        if (data_item.needsBatchRootDN()):
+            data_item.addBatchRootDN()
+        datanode = data_item.getDataNode()
+        result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
+        if len(result.keys())==2:
+            if str(prop.name) in result:
+                val =  result[str(prop.name)]
+                return calc_TP_FP_TN_FN_for_single_class(val)
+            else:
+                return None
         else:
-            p = torch.zeros_like(tp)
-            r = torch.zeros_like(tp)
-            f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+            names=list(result.keys())
+            names.remove("Total")
+            if names:
+                names.remove(str(prop.name))
+                return {"class_names":names,"labels":result[str(prop.name)]["labels"],"preds":result[str(prop.name)]["preds"]}
 
 
 class MetricTracker(torch.nn.Module):
@@ -121,22 +160,88 @@ class ValueTracker(MetricTracker):
     def forward(self, values):
         return values
 
+def frp_from_matrix(i,matrix):
+    matrix=np.array(matrix)
+    TP=matrix[i][i]
+    TN=matrix.sum()-matrix[i].sum()-matrix[i].sum()-matrix[:,i].sum()+matrix[i][i]
+    FN=matrix[i].sum()-matrix[i][i]
+    FP=matrix[:,i].sum()-matrix[i][i]
+    return TP,TN,FP,FN
 
 class PRF1Tracker(MetricTracker):
-    def __init__(self):
-        super().__init__(CMWithLogitsMetric())
+    def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=True):
+        super().__init__(metric)
+        self.confusion_matrix=confusion_matrix
 
     def forward(self, values):
-        CM = wrap_batch(values)
-        tp = CM['TP'].sum().float()
-        fp = CM['FP'].sum().float()
-        fn = CM['FN'].sum().float()
-        if tp:
-            p = tp / (tp + fp)
-            r = tp / (tp + fn)
-            f1 = 2 * p * r / (p + r)
+        if not "class_names" in values[0]:
+
+            CM = wrap_batch(values)
+
+            if isinstance(CM['TP'], list):
+                tp = sum(CM['TP'])
+            else:
+                tp = CM['TP'].sum().float()
+
+            if isinstance(CM['FP'], list):
+                fp = sum(CM['FP'])
+            else:
+                fp = CM['FP'].sum().float()
+
+            if isinstance(CM['FN'], list):
+                fn = sum(CM['FN'])
+            else:
+                fn = CM['FN'].sum().float()
+
+            if isinstance(CM['TN'], list):
+                tn = sum(CM['TN'])
+            else:
+                tn = CM['TN'].sum().float()
+
+            if tp:
+                p = tp / (tp + fp)
+                r = tp / (tp + fn)
+                f1 = 2 * p * r / (p + r)
+            else:
+                p = torch.zeros_like(torch.tensor(tp))
+                r = torch.zeros_like(torch.tensor(tp))
+                f1 = torch.zeros_like(torch.tensor(tp))
+            if (tp + fp + fn + tn):
+                accuracy=(tp + tn) / (tp + fp + fn + tn)
+            return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}
         else:
-            p = torch.zeros_like(tp)
-            r = torch.zeros_like(tp)
-            f1 = torch.zeros_like(tp)
-        return {'P': p, 'R': r, 'F1': f1}
+            output={}
+            names=values[0]["class_names"][:]
+            n=len(names)
+
+            matrix=[[0 for i in range(n)] for j in range(n)]
+            for batch in values:
+                for label,pred in zip(batch["labels"],batch["preds"]):
+                    matrix[label][pred]+=1
+            if self.confusion_matrix:
+                output[str(names)]=matrix
+            for name in names:
+                TP,TN,FP,FN=frp_from_matrix(names.index(name),matrix)
+                if (TP+FP):
+                    output[name+" Precision"]=TP/(TP+FP)
+                else:
+                    output[name + " Precision"] = 0
+                if (TP+FN):
+                    output[name + " Recall"] =TP/(TP+FN)
+                else:
+                    output[name + " Recall"]=0
+                if (output[name+" Precision"]+output[name + " Recall"]):
+                    output[name + " F1"] =2*(output[name+" Precision"]*output[name + " Recall"])/(output[name+" Precision"]+output[name + " Recall"])
+                else:
+                    output[name + " F1"]=0
+                if (TP+TN+FP+FN):
+                    output[name + " Accuracy"] =(TP+TN)/(TP+TN+FP+FN)
+                else:
+                    output[name + " Accuracy"]=0
+            output["Total Accuracy of All Classes"]=sum([matrix[i][i] for i in range(n)])/sum([sum(matrix[i]) for i in range(n)])
+            return output
+
+
+class BinaryPRF1Tracker(PRF1Tracker):
+    def __init__(self, metric=BinaryCMWithLogitsMetric()):
+        super().__init__(metric)
