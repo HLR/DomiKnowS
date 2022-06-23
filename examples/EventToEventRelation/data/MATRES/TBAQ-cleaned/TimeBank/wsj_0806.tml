@@ -1,0 +1,50 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0806</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-27" temporalFunction="false" functionInDocument="CREATION_TIME">10/27/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891027-0089 = 891027 891027-0089.
+Financing Business: @ Healthdyne Inc. 10/27/89 WALL STREET JOURNAL (J) HDYN STOCK MARKET, OFFERINGS (STK) INITIAL STOCK OFFERINGS (INI)
+</EXTRAINFO>
+
+<TEXT>
+HEALTHDYNE Inc., Atlanta, <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> its subsidiary, Home Nutritional Services Inc., <EVENT eid="e2" class="OCCURRENCE" stem="register">registered</EVENT> with the Securities and Exchange Commission an initial public <EVENT eid="e3" class="OCCURRENCE" stem="offer">offering</EVENT> of four million shares of common. The in-home health care services provider <EVENT eid="e4" class="REPORTING" stem="say">said</EVENT> it will <EVENT eid="e5" class="OCCURRENCE" stem="sell">sell</EVENT> 1.8 million of the new shares, while Home Nutritional Services will <EVENT eid="e7" class="OCCURRENCE" stem="sell">sell</EVENT> the remaining 2.2 million. The company <EVENT eid="e8" class="I_STATE" stem="estimate">estimates</EVENT> the offering price at between $14 and $16 a share. The company <EVENT eid="e9" class="REPORTING" stem="say">said</EVENT> it <EVENT eid="e10" class="I_STATE" stem="expect">expects</EVENT> to <EVENT eid="e12" class="OCCURRENCE" stem="use">use</EVENT> the proceeds to <EVENT eid="e14" class="OCCURRENCE" stem="repay">repay</EVENT> certain bank debt and for general corporate purposes, including <EVENT eid="e15" class="OCCURRENCE" stem="establish">establishing</EVENT> new operating centers and possible <EVENT eid="e16" class="OCCURRENCE" stem="acquisition">acquisitions</EVENT>. Home Nutritional <TIMEX3 tid="t23" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">currently</TIMEX3> <EVENT eid="e17" class="STATE" stem="have">has</EVENT> 10 million shares outstanding. It will <EVENT eid="e24" class="STATE" stem="have">have</EVENT> 11.8 million shares outstanding after the offering, with Healthdyne <EVENT eid="e20" class="STATE" stem="own">owning</EVENT> about 65% of the total.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei112" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei124" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e14" eiid="ei123" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei115" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei121" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei117" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei126" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei118" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei120" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei127" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei116" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei114" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e20" eiid="ei129" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e16" eiid="ei125" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e2" eiid="ei113" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei122" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l1" relType="SIMULTANEOUS" eventInstanceID="ei129" relatedToEventInstance="ei127" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei112" relatedToTime="t0" />
+<TLINK lid="l3" relType="BEGINS" eventInstanceID="ei113" relatedToEventInstance="ei114" />
+<TLINK lid="l4" relType="IDENTITY" eventInstanceID="ei115" relatedToEventInstance="ei112" />
+<TLINK lid="l5" relType="SIMULTANEOUS" eventInstanceID="ei116" relatedToEventInstance="ei117" />
+<TLINK lid="l6" relType="INCLUDES" eventInstanceID="ei118" relatedToTime="t0" />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei120" relatedToEventInstance="ei112" />
+<TLINK lid="l8" relType="IS_INCLUDED" eventInstanceID="ei126" relatedToTime="t23" />
+<TLINK lid="l10" relType="AFTER" eventInstanceID="ei127" relatedToEventInstance="ei126" />
+<SLINK lid="l12" relType="EVIDENTIAL" eventInstanceID="ei112" subordinatedEventInstance="ei113" />
+<SLINK lid="l13" relType="EVIDENTIAL" eventInstanceID="ei115" subordinatedEventInstance="ei116" />
+<SLINK lid="l15" relType="EVIDENTIAL" eventInstanceID="ei120" subordinatedEventInstance="ei121" />
+<SLINK lid="l16" relType="MODAL" eventInstanceID="ei121" subordinatedEventInstance="ei122" />
+<SLINK lid="l17" relType="MODAL" eventInstanceID="ei122" subordinatedEventInstance="ei123" />
+<SLINK lid="l18" relType="MODAL" eventInstanceID="ei122" subordinatedEventInstance="ei124" />
+<SLINK lid="l19" relType="MODAL" eventInstanceID="ei122" subordinatedEventInstance="ei125" />
+
+</TimeML>

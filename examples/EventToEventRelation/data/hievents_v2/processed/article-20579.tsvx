@@ -1,0 +1,37 @@
+Text	A Russian-made Soyuz craft carrying three astronauts has docked with the International Space Station, putting the crew in place for the imminent arrival of the first ever privately owned cargo ship to the orbiting lab. The Soyuz eased into position over the Mongolian-Kazakh border after a two-day trip that began with the launch from the Russian-leased Baikonur cosmodrome in southern Kazakhstan. Nasa astronaut Joseph Acaba and Russian cosmonauts Gennady Padalka and Sergei Revin are set for a four-and-half-month stay in space. Their arrival comes just two days ahead of the planned launch of the privately owned SpaceX's Dragon Capsule from Cape Canaveral. The space station is currently occupied by Russian cosmonaut Oleg Kononenko, Nasa astronaut Don Pettit and Holland's Andre Kuipers. 
+Event	1	docked	Occurrence	57
+Event	2	putting	Occurrence	102
+Event	3	eased	Occurrence	229
+Event	4	trip	Occurrence	298
+Event	5	began	I_Action	308
+Event	6	launch	Occurrence	323
+Event	7	arrival	Occurrence	537
+Event	8	comes	Occurrence	545
+Relation	1	2	NoRel	true	docked	putting
+Relation	1	3	Coref	true	docked	eased
+Relation	1	4	SubSuper	true	docked	trip
+Relation	1	5	NoRel	true	docked	began
+Relation	1	6	NoRel	true	docked	launch
+Relation	1	7	NoRel	true	docked	arrival
+Relation	1	8	NoRel	true	docked	comes
+Relation	2	3	NoRel	true	putting	eased
+Relation	2	4	SubSuper	true	putting	trip
+Relation	2	5	NoRel	true	putting	began
+Relation	2	6	NoRel	true	putting	launch
+Relation	2	7	Coref	true	putting	arrival
+Relation	2	8	NoRel	true	putting	comes
+Relation	3	4	SubSuper	true	eased	trip
+Relation	3	5	NoRel	true	eased	began
+Relation	3	6	NoRel	true	eased	launch
+Relation	3	7	NoRel	true	eased	arrival
+Relation	3	8	NoRel	true	eased	comes
+Relation	4	5	NoRel	true	trip	began
+Relation	4	6	SuperSub	true	trip	launch
+Relation	4	7	SuperSub	true	trip	arrival
+Relation	4	8	NoRel	true	trip	comes
+Relation	5	6	NoRel	true	began	launch
+Relation	5	7	NoRel	true	began	arrival
+Relation	5	8	NoRel	true	began	comes
+Relation	6	7	NoRel	true	launch	arrival
+Relation	6	8	NoRel	true	launch	comes
+Relation	7	8	NoRel	true	arrival	comes

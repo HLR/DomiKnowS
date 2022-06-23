@@ -1,0 +1,191 @@
+Text	Fierce clashes overnight shook the northern port city and sporadic fighting continued on Monday. Machineguns and rocket propelled grenades were used. Tension between the Alawite and Sunni communities in Tripoli has been fuelled by the unrest in neighboring Syria, where Assad is seeking to crush a 14-month-old uprising which began with largely peaceful protests against his rule but has become increasingly militarized. Read the full story. A Sunni Muslim gunman carries a machinegun during clashes at the Sunni Muslim Bab al-Tebbaneh neighbourhood in Tripoli, northern Lebanon, on May 14. Two men were killed and at least 20 were wounded in clashes between Alawite supporters of Syrian President Bashar al-Assad and Sunni Muslim fighters in the Lebanese city of Tripoli, medical sources said on Monday. Fierce clashes overnight shook the northern port city and sporadic fighting continued on Monday morning, with fighters firing machineguns and rocket propelled grenades. 
+Event	1	clashes	Occurrence	7
+Event	2	shook	I_Action	25
+Event	3	fighting	Occurrence	67
+Event	4	used	Occurrence	144
+Event	5	seeking	I_Action	279
+Event	6	uprising	Occurrence	311
+Event	7	began	I_Action	326
+Event	8	protests	Occurrence	354
+Event	9	become	StateChange	388
+Event	10	carries	Occurrence	464
+Event	11	clashes	Occurrence	492
+Event	12	killed	Occurrence	604
+Event	13	wounded	Occurrence	632
+Event	14	clashes	Occurrence	643
+Event	15	said	Reporting	789
+Event	16	clashes	Occurrence	812
+Event	17	shook	I_Action	830
+Event	18	fighting	Occurrence	872
+Event	19	firing	Occurrence	924
+Relation	1	2	NoRel	true	clashes	shook
+Relation	1	3	NoRel	true	clashes	fighting
+Relation	1	4	SuperSub	true	clashes	used
+Relation	1	5	NoRel	true	clashes	seeking
+Relation	1	6	NoRel	true	clashes	uprising
+Relation	1	7	NoRel	true	clashes	began
+Relation	1	8	NoRel	true	clashes	protests
+Relation	1	9	NoRel	true	clashes	become
+Relation	1	10	SuperSub	true	clashes	carries
+Relation	1	11	Coref	true	clashes	clashes
+Relation	1	12	SuperSub	true	clashes	killed
+Relation	1	13	SuperSub	true	clashes	wounded
+Relation	1	14	Coref	true	clashes	clashes
+Relation	1	15	NoRel	true	clashes	said
+Relation	1	16	Coref	true	clashes	clashes
+Relation	1	17	NoRel	true	clashes	shook
+Relation	1	18	NoRel	true	clashes	fighting
+Relation	1	19	SuperSub	true	clashes	firing
+Relation	2	3	NoRel	true	shook	fighting
+Relation	2	4	NoRel	true	shook	used
+Relation	2	5	NoRel	true	shook	seeking
+Relation	2	6	NoRel	true	shook	uprising
+Relation	2	7	NoRel	true	shook	began
+Relation	2	8	NoRel	true	shook	protests
+Relation	2	9	NoRel	true	shook	become
+Relation	2	10	NoRel	true	shook	carries
+Relation	2	11	NoRel	true	shook	clashes
+Relation	2	12	NoRel	true	shook	killed
+Relation	2	13	NoRel	true	shook	wounded
+Relation	2	14	NoRel	true	shook	clashes
+Relation	2	15	NoRel	true	shook	said
+Relation	2	16	NoRel	true	shook	clashes
+Relation	2	17	NoRel	true	shook	shook
+Relation	2	18	NoRel	true	shook	fighting
+Relation	2	19	NoRel	true	shook	firing
+Relation	3	4	NoRel	true	fighting	used
+Relation	3	5	NoRel	true	fighting	seeking
+Relation	3	6	NoRel	true	fighting	uprising
+Relation	3	7	NoRel	true	fighting	began
+Relation	3	8	NoRel	true	fighting	protests
+Relation	3	9	NoRel	true	fighting	become
+Relation	3	10	NoRel	true	fighting	carries
+Relation	3	11	NoRel	true	fighting	clashes
+Relation	3	12	NoRel	true	fighting	killed
+Relation	3	13	NoRel	true	fighting	wounded
+Relation	3	14	NoRel	true	fighting	clashes
+Relation	3	15	NoRel	true	fighting	said
+Relation	3	16	NoRel	true	fighting	clashes
+Relation	3	17	NoRel	true	fighting	shook
+Relation	3	18	Coref	true	fighting	fighting
+Relation	3	19	NoRel	true	fighting	firing
+Relation	4	5	NoRel	true	used	seeking
+Relation	4	6	NoRel	true	used	uprising
+Relation	4	7	NoRel	true	used	began
+Relation	4	8	NoRel	true	used	protests
+Relation	4	9	NoRel	true	used	become
+Relation	4	10	NoRel	true	used	carries
+Relation	4	11	SubSuper	true	used	clashes
+Relation	4	12	NoRel	true	used	killed
+Relation	4	13	NoRel	true	used	wounded
+Relation	4	14	SubSuper	true	used	clashes
+Relation	4	15	NoRel	true	used	said
+Relation	4	16	SubSuper	true	used	clashes
+Relation	4	17	NoRel	true	used	shook
+Relation	4	18	NoRel	true	used	fighting
+Relation	4	19	Coref	true	used	firing
+Relation	5	6	NoRel	true	seeking	uprising
+Relation	5	7	NoRel	true	seeking	began
+Relation	5	8	NoRel	true	seeking	protests
+Relation	5	9	NoRel	true	seeking	become
+Relation	5	10	NoRel	true	seeking	carries
+Relation	5	11	NoRel	true	seeking	clashes
+Relation	5	12	NoRel	true	seeking	killed
+Relation	5	13	NoRel	true	seeking	wounded
+Relation	5	14	NoRel	true	seeking	clashes
+Relation	5	15	NoRel	true	seeking	said
+Relation	5	16	NoRel	true	seeking	clashes
+Relation	5	17	NoRel	true	seeking	shook
+Relation	5	18	NoRel	true	seeking	fighting
+Relation	5	19	NoRel	true	seeking	firing
+Relation	6	7	NoRel	true	uprising	began
+Relation	6	8	SuperSub	true	uprising	protests
+Relation	6	9	SuperSub	true	uprising	become
+Relation	6	10	NoRel	true	uprising	carries
+Relation	6	11	NoRel	true	uprising	clashes
+Relation	6	12	NoRel	true	uprising	killed
+Relation	6	13	NoRel	true	uprising	wounded
+Relation	6	14	NoRel	true	uprising	clashes
+Relation	6	15	NoRel	true	uprising	said
+Relation	6	16	NoRel	true	uprising	clashes
+Relation	6	17	NoRel	true	uprising	shook
+Relation	6	18	NoRel	true	uprising	fighting
+Relation	6	19	NoRel	true	uprising	firing
+Relation	7	8	NoRel	true	began	protests
+Relation	7	9	NoRel	true	began	become
+Relation	7	10	NoRel	true	began	carries
+Relation	7	11	NoRel	true	began	clashes
+Relation	7	12	NoRel	true	began	killed
+Relation	7	13	NoRel	true	began	wounded
+Relation	7	14	NoRel	true	began	clashes
+Relation	7	15	NoRel	true	began	said
+Relation	7	16	NoRel	true	began	clashes
+Relation	7	17	NoRel	true	began	shook
+Relation	7	18	NoRel	true	began	fighting
+Relation	7	19	NoRel	true	began	firing
+Relation	8	9	NoRel	true	protests	become
+Relation	8	10	NoRel	true	protests	carries
+Relation	8	11	NoRel	true	protests	clashes
+Relation	8	12	NoRel	true	protests	killed
+Relation	8	13	NoRel	true	protests	wounded
+Relation	8	14	NoRel	true	protests	clashes
+Relation	8	15	NoRel	true	protests	said
+Relation	8	16	NoRel	true	protests	clashes
+Relation	8	17	NoRel	true	protests	shook
+Relation	8	18	NoRel	true	protests	fighting
+Relation	8	19	NoRel	true	protests	firing
+Relation	9	10	NoRel	true	become	carries
+Relation	9	11	NoRel	true	become	clashes
+Relation	9	12	NoRel	true	become	killed
+Relation	9	13	NoRel	true	become	wounded
+Relation	9	14	NoRel	true	become	clashes
+Relation	9	15	NoRel	true	become	said
+Relation	9	16	NoRel	true	become	clashes
+Relation	9	17	NoRel	true	become	shook
+Relation	9	18	NoRel	true	become	fighting
+Relation	9	19	NoRel	true	become	firing
+Relation	10	11	SubSuper	true	carries	clashes
+Relation	10	12	NoRel	true	carries	killed
+Relation	10	13	NoRel	true	carries	wounded
+Relation	10	14	SubSuper	true	carries	clashes
+Relation	10	15	NoRel	true	carries	said
+Relation	10	16	SubSuper	true	carries	clashes
+Relation	10	17	NoRel	true	carries	shook
+Relation	10	18	NoRel	true	carries	fighting
+Relation	10	19	NoRel	true	carries	firing
+Relation	11	12	SuperSub	true	clashes	killed
+Relation	11	13	SuperSub	true	clashes	wounded
+Relation	11	14	Coref	true	clashes	clashes
+Relation	11	15	NoRel	true	clashes	said
+Relation	11	16	Coref	true	clashes	clashes
+Relation	11	17	NoRel	true	clashes	shook
+Relation	11	18	NoRel	true	clashes	fighting
+Relation	11	19	SuperSub	true	clashes	firing
+Relation	12	13	NoRel	true	killed	wounded
+Relation	12	14	SubSuper	true	killed	clashes
+Relation	12	15	NoRel	true	killed	said
+Relation	12	16	SubSuper	true	killed	clashes
+Relation	12	17	NoRel	true	killed	shook
+Relation	12	18	NoRel	true	killed	fighting
+Relation	12	19	NoRel	true	killed	firing
+Relation	13	14	SubSuper	true	wounded	clashes
+Relation	13	15	NoRel	true	wounded	said
+Relation	13	16	SubSuper	true	wounded	clashes
+Relation	13	17	NoRel	true	wounded	shook
+Relation	13	18	NoRel	true	wounded	fighting
+Relation	13	19	NoRel	true	wounded	firing
+Relation	14	15	NoRel	true	clashes	said
+Relation	14	16	Coref	true	clashes	clashes
+Relation	14	17	NoRel	true	clashes	shook
+Relation	14	18	NoRel	true	clashes	fighting
+Relation	14	19	SuperSub	true	clashes	firing
+Relation	15	16	NoRel	true	said	clashes
+Relation	15	17	NoRel	true	said	shook
+Relation	15	18	NoRel	true	said	fighting
+Relation	15	19	NoRel	true	said	firing
+Relation	16	17	NoRel	true	clashes	shook
+Relation	16	18	NoRel	true	clashes	fighting
+Relation	16	19	SuperSub	true	clashes	firing
+Relation	17	18	NoRel	true	shook	fighting
+Relation	17	19	NoRel	true	shook	firing
+Relation	18	19	NoRel	true	fighting	firing

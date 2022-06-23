@@ -1,0 +1,159 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0927</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-26" temporalFunction="false" functionInDocument="CREATION_TIME">10/26/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891026-0131 = 891026 891026-0131.
+Who's News: @ U.S. Trust Names @ Schwarz Chief, @ Maurer President @ ---- @ By James T. Areddy @ Staff Reporter of The Wall Street Journal 10/26/89 WALL STREET JOURNAL (J) USTC WNEWS NEW YORK
+</EXTRAINFO>
+
+<TEXT>
+H. Marshall Schwarz was <EVENT eid="e1" class="OCCURRENCE">named</EVENT> chairman and chief executive officer of U.S. Trust Corp., a private-banking firm with assets under management of about $17 billion.
+
+Mr. Schwarz, 52 years old, will <EVENT eid="e3" class="OCCURRENCE">succeed</EVENT> Daniel P. Davison <TIMEX3 tid="t89" type="DATE" value="1990-02-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Feb. 1</TIMEX3>, soon after Mr. Davison <EVENT eid="e4" class="I_STATE">reaches</EVENT> the company's mandatory retirement age of 65. Mr. Schwarz, who is president of U.S. Trust, will be <EVENT eid="e5" class="OCCURRENCE">succeeded</EVENT> in that post by Jeffrey S. Maurer, 42, who is executive vice president in charge of the company's asset-management group.
+
+U.S. Trust, a 136-year-old institution that is one of the earliest high-net worth banks in the U.S., has <EVENT eid="e8" class="I_ACTION">faced</EVENT> intensifying competition from other firms that have <EVENT eid="e12" class="OCCURRENCE">established</EVENT>, and heavily <EVENT eid="e13" class="OCCURRENCE">promoted</EVENT>, private-banking businesses of their own. As a result, U.S. Trust's earnings have been <EVENT eid="e16" class="OCCURRENCE">hurt</EVENT>.
+
+But Mr. Schwarz <EVENT eid="e17" class="I_ACTION">welcomes</EVENT> the competition in U.S. Trust's flagship businesses, <EVENT eid="e93" class="I_ACTION">calling</EVENT> it "flattery." Mr. Schwarz <EVENT eid="e22" class="REPORTING">says</EVENT> the competition "<EVENT eid="e24" class="OCCURRENCE">broadens</EVENT> the base of opportunity for us." Other firms "are <EVENT eid="e25" class="OCCURRENCE">dealing</EVENT> with the masses. I don't <EVENT eid="e26" class="I_STATE">believe</EVENT> they <EVENT eid="e28" class="I_STATE">have</EVENT> the culture" to adequately <EVENT eid="e29" class="OCCURRENCE">service</EVENT> high-net-worth individuals, he <EVENT eid="e30" class="REPORTING">adds</EVENT>. U.S. Trust <TIMEX3 tid="t95" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">recently</TIMEX3> <EVENT eid="e31" class="OCCURRENCE">introduced</EVENT> certain mutual-fund products, which allow it to serve customers with minimum deposits of $250,000. Previously, the company <EVENT eid="e35" class="OCCURRENCE">advertised</EVENT> at the $2 million level.
+
+"We have always <EVENT eid="e37" class="OCCURRENCE">taken</EVENT> smaller accounts, but <TIMEX3 tid="t97" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> we are <EVENT eid="e39" class="OCCURRENCE">looking</EVENT> for smaller accounts that will grow," Mr. Schwarz <EVENT eid="e42" class="REPORTING">says</EVENT>. "Our bread and butter is still the $2 million to $20 million account," he <EVENT eid="e2136" class="REPORTING">says</EVENT>. The new services <EVENT eid="e47" class="I_STATE">allow</EVENT> U.S. Trust to <EVENT eid="e49" class="OCCURRENCE">cater</EVENT> to the "new wealth," Mr. Schwarz <EVENT eid="e50" class="REPORTING">says</EVENT>.
+
+<TIMEX3 tid="t98" type="DURATION" value="P3M" temporalFunction="false" functionInDocument="NONE">Quarterly</TIMEX3> net income <TIMEX3 tid="t99" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3> has <EVENT eid="e51" class="OCCURRENCE">risen</EVENT> just over comparable periods in <TIMEX3 tid="t104" type="DATE" value="1988" temporalFunction="false" functionInDocument="NONE">1988</TIMEX3>, when year-end net was <EVENT eid="e2372" class="STATE">below</EVENT> the <TIMEX3 tid="t2194" type="DATE" value="1987" temporalFunction="false" functionInDocument="NONE">1987</TIMEX3> level. In <TIMEX3 tid="t111" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year's third quarter</TIMEX3>, for example, net was $10.5 million, or $1.05 a share, compared with $10.3 million, or $1.02 a share, <TIMEX3 tid="t112" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t111">a year earlier</TIMEX3>. Assets as of <TIMEX3 tid="t113" type="DATE" value="1989-09-30" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sept. 30</TIMEX3> <EVENT eid="e54" class="OCCURRENCE">fell</EVENT> to $2.46 billion from about $2.77 billion. "We will <EVENT eid="e55" class="STATE">have</EVENT> a reasonably flat year <TIMEX3 tid="t122" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3>," Mr. Schwarz <EVENT eid="e56" class="REPORTING">says</EVENT>. Mr. Schwarz also <EVENT eid="e57" class="REPORTING">said</EVENT> costs associated with U.S. Trust's planned move to midtown Manhattan from Wall Street will <EVENT eid="e60" class="ASPECTUAL">continue</EVENT> to be a <EVENT eid="e2370" class="OCCURRENCE">drag</EVENT> on earnings through <TIMEX3 tid="t116" type="DATE" value="1990" temporalFunction="false" functionInDocument="NONE">1990</TIMEX3>.
+
+Mr. Schwarz's great-grandfather <EVENT eid="e62" class="OCCURRENCE">founded</EVENT> the New York toy store F.A.O. Schwarz, but his family no longer <EVENT eid="e64" class="STATE">has</EVENT> ties to the company. Mr. Schwarz's father was a U.S. Trust <EVENT eid="e2371" class="STATE">trustee</EVENT> until <TIMEX3 tid="t127" type="DATE" value="1974" temporalFunction="false" functionInDocument="NONE">1974</TIMEX3>.
+
+U.S. Trust also <EVENT eid="e65" class="I_ACTION">created</EVENT> a four-member office of the chairman, effective <TIMEX3 tid="t131" type="DATE" value="1990-02-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Feb. 1</TIMEX3>. It will include Messrs. Schwarz and Maurer. Donald M. Roberts, 54, treasurer, and Frederick S. Wonham, 58, who takes responsibility for the funds-service group, were <EVENT eid="e69" class="I_ACTION">named</EVENT> vice chairmen and will <EVENT eid="e71" class="OCCURRENCE">serve</EVENT> in the office of the chairman. Mr. Roberts <EVENT eid="e72" class="ASPECTUAL">continues</EVENT> as <EVENT eid="e132" class="STATE">treasurer</EVENT>, and Mr. Wonham <EVENT eid="e73" class="ASPECTUAL">remains</EVENT> <EVENT eid="e133" class="STATE">responsible</EVENT> for the offices of comptroller, planning, marketing and general services.
+
+Frederick B. Taylor, 48, also was <EVENT eid="e77" class="I_ACTION">named</EVENT> a vice chairman and chief investment <EVENT eid="e135" class="STATE">officer</EVENT>, a new post. He previously <EVENT eid="e2364" class="STATE">held</EVENT> similar responsibilities. Mr. Taylor also was <EVENT eid="e80" class="I_ACTION">named</EVENT> a <EVENT eid="e136" class="STATE">director</EVENT>, <EVENT eid="e137" class="OCCURRENCE">increasing</EVENT> the board to 22, but is not part of the new office of the chairman.
+
+James E. Bacon, 58, executive vice president, who has <EVENT eid="e84" class="OCCURRENCE">directed</EVENT> the funds-service group, will <EVENT eid="e85" class="OCCURRENCE">retire</EVENT>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei2408" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei2409" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei2410" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei2412" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei2413" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei2415" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei2416" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei2417" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei2418" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e93" eiid="ei2420" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2421" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei2423" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei2424" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e26" eiid="ei2425" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e28" eiid="ei2426" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei2427" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e30" eiid="ei2428" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e31" eiid="ei2429" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei2430" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei2431" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei2432" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e42" eiid="ei2433" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2136" eiid="ei2434" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e47" eiid="ei2435" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei2436" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei2437" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e51" eiid="ei2438" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei2444" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei2447" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e56" eiid="ei2448" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e57" eiid="ei2449" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei2450" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e62" eiid="ei2452" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e64" eiid="ei2453" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e65" eiid="ei2455" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e69" eiid="ei2457" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e71" eiid="ei2459" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e72" eiid="ei2460" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e132" eiid="ei2461" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e73" eiid="ei2462" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e133" eiid="ei2463" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e77" eiid="ei2464" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e135" eiid="ei2465" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e2364" eiid="ei2466" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e80" eiid="ei2467" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e136" eiid="ei2468" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e137" eiid="ei2469" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e84" eiid="ei2471" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e85" eiid="ei2472" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2370" eiid="ei2478" tense="NONE" aspect="NONE" polarity="POS" pos="OTHER" />
+<MAKEINSTANCE eventID="e2371" eiid="ei2479" tense="NONE" aspect="NONE" polarity="POS" pos="OTHER" />
+<MAKEINSTANCE eventID="e2372" eiid="ei2480" tense="PAST" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<TLINK lid="l83" relType="INCLUDES" eventInstanceID="ei2461" relatedToEventInstance="ei2460" />
+<TLINK lid="l82" relType="SIMULTANEOUS" eventInstanceID="ei2463" relatedToEventInstance="ei2460" />
+<TLINK lid="l81" relType="BEFORE" eventInstanceID="ei2479" relatedToTime="t127" />
+<TLINK lid="l80" relType="INCLUDES" eventInstanceID="ei2478" relatedToEventInstance="ei2450" />
+<TLINK lid="l75" relType="IS_INCLUDED" eventInstanceID="ei2480" relatedToTime="t2194" />
+<TLINK lid="l74" relType="SIMULTANEOUS" eventInstanceID="ei2427" relatedToEventInstance="ei2424" />
+<TLINK lid="l1" relType="AFTER" eventInstanceID="ei2472" relatedToEventInstance="ei2464" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei2408" relatedToTime="t0" />
+<TLINK lid="l3" relType="AFTER" eventInstanceID="ei2409" relatedToTime="t0" />
+<TLINK lid="l4" relType="IS_INCLUDED" eventInstanceID="ei2409" relatedToTime="t89" />
+<TLINK lid="l5" relType="IAFTER" eventInstanceID="ei2409" relatedToEventInstance="ei2410"  />
+<TLINK lid="l6" relType="AFTER" eventInstanceID="ei2410" relatedToTime="t0" />
+<TLINK lid="l7" relType="SIMULTANEOUS" eventInstanceID="ei2412" relatedToEventInstance="ei2409" />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei2413" relatedToTime="t0" />
+<TLINK lid="l11" relType="SIMULTANEOUS" eventInstanceID="ei2415" relatedToEventInstance="ei2416" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei2415" relatedToEventInstance="ei2417" />
+<TLINK lid="l13" relType="BEFORE" eventInstanceID="ei2416" relatedToEventInstance="ei2417" />
+<TLINK lid="l14" relType="INCLUDES" eventInstanceID="ei2418" relatedToTime="t0" />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei2420" relatedToEventInstance="ei2418" />
+<TLINK lid="l16" relType="BEFORE" eventInstanceID="ei2421" relatedToTime="t0" />
+<TLINK lid="l18" relType="INCLUDES" eventInstanceID="ei2424" relatedToTime="t0" />
+<TLINK lid="l19" relType="IS_INCLUDED" eventInstanceID="ei2428" relatedToEventInstance="ei2421" />
+<TLINK lid="l20" relType="IS_INCLUDED" eventInstanceID="ei2429" relatedToTime="t95" />
+<TLINK lid="l21" relType="BEFORE" eventInstanceID="ei2430" relatedToEventInstance="ei2429"  />
+<TLINK lid="l22" relType="IDENTITY" eventInstanceID="ei2433" relatedToEventInstance="ei2421" />
+<TLINK lid="l23" relType="BEFORE" eventInstanceID="ei2431" relatedToEventInstance="ei2432" />
+<TLINK lid="l24" relType="INCLUDES" timeID="t97" relatedToEventInstance="ei2432" />
+<TLINK lid="l25" relType="BEFORE" eventInstanceID="ei2431" relatedToTime="t0" />
+<TLINK lid="l26" relType="IDENTITY" eventInstanceID="ei2434" relatedToEventInstance="ei2421" />
+<TLINK lid="l27" relType="IDENTITY" eventInstanceID="ei2434" relatedToEventInstance="ei2437" />
+<TLINK lid="l28" relType="IS_INCLUDED" timeID="t98" relatedToTime="t99" />
+<TLINK lid="l29" relType="DURING" timeID="t98" relatedToEventInstance="ei2438" />
+<TLINK lid="l31" relType="ENDED_BY" eventInstanceID="ei2444" relatedToTime="t113"  />
+<TLINK lid="l32" relType="IDENTITY" eventInstanceID="ei2448" relatedToEventInstance="ei2433" />
+<TLINK lid="l33" relType="IS_INCLUDED" eventInstanceID="ei2447" relatedToTime="t122" />
+<TLINK lid="l34" relType="IDENTITY" eventInstanceID="ei2449" relatedToEventInstance="ei2448" />
+<TLINK lid="l35" relType="DURING" eventInstanceID="ei2450" relatedToTime="t116"  />
+<TLINK lid="l36" relType="BEFORE" eventInstanceID="ei2452" relatedToTime="t0" />
+<TLINK lid="l37" relType="BEFORE" eventInstanceID="ei2452" relatedToEventInstance="ei2433" />
+<TLINK lid="l38" relType="BEFORE" eventInstanceID="ei2431" relatedToEventInstance="ei2433" />
+<TLINK lid="l39" relType="INCLUDES" eventInstanceID="ei2432" relatedToEventInstance="ei2433" />
+<TLINK lid="l40" relType="BEFORE" eventInstanceID="ei2452" relatedToEventInstance="ei2431" />
+<TLINK lid="l41" relType="BEFORE" eventInstanceID="ei2452" relatedToEventInstance="ei2453" />
+<TLINK lid="l42" relType="INCLUDES" eventInstanceID="ei2453" relatedToTime="t0" />
+<TLINK lid="l43" relType="AFTER" eventInstanceID="ei2455" relatedToEventInstance="ei2452" />
+<TLINK lid="l44" relType="BEFORE" eventInstanceID="ei2457" relatedToTime="t0" />
+<TLINK lid="l45" relType="AFTER" eventInstanceID="ei2459" relatedToTime="t0" />
+<TLINK lid="l46" relType="SIMULTANEOUS" eventInstanceID="ei2460" relatedToEventInstance="ei2462" />
+<TLINK lid="l47" relType="BEGINS" eventInstanceID="ei2464" relatedToEventInstance="ei2465" />
+<TLINK lid="l48" relType="BEFORE" eventInstanceID="ei2466" relatedToEventInstance="ei2464"  />
+<TLINK lid="l49" relType="SIMULTANEOUS" eventInstanceID="ei2467" relatedToEventInstance="ei2464" />
+<TLINK lid="l50" relType="SIMULTANEOUS" eventInstanceID="ei2467" relatedToEventInstance="ei2457" />
+<TLINK lid="l51" relType="BEGINS" eventInstanceID="ei2467" relatedToEventInstance="ei2468" />
+<TLINK lid="l52" relType="BEFORE" eventInstanceID="ei2467" relatedToEventInstance="ei2469" />
+<TLINK lid="l54" relType="BEFORE" eventInstanceID="ei2471" relatedToTime="t0" />
+<TLINK lid="l55" relType="BEFORE" eventInstanceID="ei2471" relatedToEventInstance="ei2464" />
+<SLINK lid="l72" relType="MODAL" eventInstanceID="ei2467" subordinatedEventInstance="ei2468" />
+<SLINK lid="l71" relType="FACTIVE" eventInstanceID="ei2464" subordinatedEventInstance="ei2465" />
+<SLINK lid="l70" relType="MODAL" eventInstanceID="ei2426" subordinatedEventInstance="ei2427" />
+<SLINK lid="l58" relType="EVIDENTIAL" eventInstanceID="ei2421" subordinatedEventInstance="ei2423" />
+<SLINK lid="l59" relType="EVIDENTIAL" eventInstanceID="ei2421" subordinatedEventInstance="ei2424" />
+<SLINK lid="l60" relType="EVIDENTIAL" eventInstanceID="ei2428" subordinatedEventInstance="ei2425" />
+<SLINK lid="l61" relType="MODAL" eventInstanceID="ei2425" subordinatedEventInstance="ei2426" />
+<SLINK lid="l62" relType="EVIDENTIAL" eventInstanceID="ei2433" subordinatedEventInstance="ei2431" />
+<SLINK lid="l63" relType="EVIDENTIAL" eventInstanceID="ei2437" subordinatedEventInstance="ei2435" />
+<SLINK lid="l64" relType="MODAL" eventInstanceID="ei2435" subordinatedEventInstance="ei2436" />
+<SLINK lid="l65" relType="EVIDENTIAL" eventInstanceID="ei2448" subordinatedEventInstance="ei2447" />
+<SLINK lid="l66" relType="EVIDENTIAL" eventInstanceID="ei2449" subordinatedEventInstance="ei2450" />
+<ALINK lid="l69" relType="CONTINUES" eventInstanceID="ei2450" relatedToEventInstance="ei2478" />
+<ALINK lid="l67" relType="CONTINUES" eventInstanceID="ei2460" relatedToEventInstance="ei2461" />
+<ALINK lid="l68" relType="CONTINUES" eventInstanceID="ei2462" relatedToEventInstance="ei2463" />
+
+</TimeML>

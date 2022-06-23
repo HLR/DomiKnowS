@@ -1,0 +1,232 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0768</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-27" temporalFunction="true" functionInDocument="CREATION_TIME">10/27/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891027-0127 = 891027 891027-0127.
+Mutual Funds: @ Investors Yank Billions From Junk Funds @ ---- @ By Michael Siconolfi @ Staff Reporter of The Wall Street Journal 10/27/89 WALL STREET JOURNAL (J) TROW MUTUAL AND MONEY-MARKET FUNDS (FND) BOND MARKET NEWS (BON) NEW YORK
+</EXTRAINFO>
+
+<TEXT>
+Billions of investors' dollars are <EVENT eid="e2" class="OCCURRENCE">pouring</EVENT> out of the nation's junk-bond mutual funds, <EVENT eid="e3" class="OCCURRENCE">undermining</EVENT> a pillar of support in the already reeling junk market.
+
+<TIMEX3 tid="t174" type="DATE" value="1989-WXX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Last week</TIMEX3> alone, an eye-popping $1.6 billion <EVENT eid="e7" class="OCCURRENCE">flowed</EVENT> out of the junk funds, or nearly 5% of their total assets, <EVENT eid="e167" class="REPORTING">according</EVENT> to estimates by Dalbar Financial Services Inc., a Boston research firm.
+
+In <TIMEX3 tid="t175" type="DURATION" value="P2M" temporalFunction="true" functionInDocument="NONE" endPoint="t0">the past two months</TIMEX3> the nation's 88 junk funds have <EVENT eid="e9" class="OCCURRENCE">lost</EVENT> a total of about $6 billion -- more than 15% of assets -- through <EVENT eid="e168" class="OCCURRENCE">sales</EVENT> or <EVENT eid="e169" class="OCCURRENCE">transfers</EVENT> of junk-fund shares, Dalbar <EVENT eid="e11" class="REPORTING">says</EVENT>. It made the estimates based on data collected from more than a dozen big junk funds.
+
+<EVENT eid="e16" class="OCCURRENCE">Interviews</EVENT> with three major fund groups -- Fidelity Investments, Vanguard Group Inc. and T. Rowe Price Associates Inc. -- <EVENT eid="e17" class="REPORTING">confirm</EVENT> the <EVENT eid="e170" class="OCCURRENCE">trend</EVENT>. Their junk funds combined have had net <EVENT eid="e19" class="OCCURRENCE">outflows</EVENT> totaling nearly $500 million, or about 13% of their junk fund assets, in <TIMEX3 tid="t176" type="DURATION" value="P2M" temporalFunction="true" functionInDocument="NONE" endPoint="t0">the past two months</TIMEX3>.
+
+Some fund managers <EVENT eid="e22" class="REPORTING">say</EVENT> negative publicity has <EVENT eid="e24" class="OCCURRENCE">exacerbated</EVENT> investors' concern about <TIMEX3 tid="t185" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">recent</TIMEX3> <EVENT eid="e179" class="OCCURRENCE">declines</EVENT> in junk-bond prices. "People have been seeing headline after headline after headline and saying: `I can't take it anymore -- I'm getting out,'" <EVENT eid="e37" class="REPORTING">says</EVENT> Kurt Brouwer of Brouwer amp Janachowski, a San Francisco investment adviser.
+
+The <EVENT eid="e38" class="OCCURRENCE">withdrawals</EVENT> could <EVENT eid="e39" class="STATE">spell</EVENT> trouble for the $200 billion junk market. If the heavy <EVENT eid="e43" class="OCCURRENCE">outflows</EVENT> <EVENT eid="e44" class="ASPECTUAL">continue</EVENT>, fund managers will <EVENT eid="e46" class="I_ACTION">face</EVENT> increasing <EVENT eid="e180" class="STATE">pressure</EVENT> to <EVENT eid="e49" class="OCCURRENCE">sell</EVENT> off some of their junk to <EVENT eid="e51" class="OCCURRENCE">pay</EVENT> departing investors in <TIMEX3 tid="t186" type="DURATION" value="PXW" temporalFunction="true" functionInDocument="NONE" beginPoint="t0">the weeks ahead</TIMEX3>. Such <EVENT eid="e53" class="OCCURRENCE">selling</EVENT> could <EVENT eid="e54" class="OCCURRENCE">erode</EVENT> prices of high-yield junk bonds, already <EVENT eid="e57" class="OCCURRENCE">weakened</EVENT> by a rash of corporate credit problems.
+
+Mutual fund groups haven't <EVENT eid="e58" class="OCCURRENCE">lost</EVENT> control of much of the outgoing money, <EVENT eid="e61" class="REPORTING">says</EVENT> Louis Harvey, Dalbar's president. Mutual fund officials <EVENT eid="e62" class="REPORTING">say</EVENT> that investors have <EVENT eid="e63" class="OCCURRENCE">transferred</EVENT> most of it into their money market accounts, and to a lesser extent, government-bond funds. So the <EVENT eid="e66" class="OCCURRENCE">impact</EVENT> on the $950 billion mutual fund industry as a whole probably will be slight.
+
+But tremors are likely in the junk-bond market, which has <EVENT eid="e70" class="OCCURRENCE">helped</EVENT> to <EVENT eid="e72" class="I_ACTION">finance</EVENT> the takeover <EVENT eid="e73" class="OCCURRENCE">boom</EVENT> of <TIMEX3 tid="t196" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">recent years</TIMEX3>. Mutual funds are the among the largest holders of junk, accounting for more than a quarter of the entire high-yield, high-risk market. The 88 mutual funds investing solely in junk bonds hold assets of about $32 billion. Other funds hold a smattering of junk bonds, too.
+
+The $1.5 billion Fidelity High Income Fund has had a net <EVENT eid="e82" class="OCCURRENCE">outflow</EVENT> of about $150 million in <TIMEX3 tid="t198" type="DURATION" value="P2M" mod="BEFORE" temporalFunction="true" functionInDocument="NONE" endPoint="t0">the past two months</TIMEX3>. About $60 million <EVENT eid="e83" class="OCCURRENCE">streamed</EVENT> out <TIMEX3 tid="t199" type="DATE" value="1989-WXX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last week</TIMEX3> alone, double the level of the <TIMEX3 tid="t201" type="DATE" value="1989-WXX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t200">week</TIMEX3> following <TIMEX3 tid="t200" type="DATE" value="1989-09" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last month</TIMEX3>'s Campeau Corp. credit <EVENT eid="e189" class="OCCURRENCE">squeeze</EVENT>. About 98% of the outflow was <EVENT eid="e86" class="OCCURRENCE">transferred</EVENT> to other Fidelity funds, <EVENT eid="e87" class="REPORTING">says</EVENT> Neal Litvack, a Fidelity vice president, marketing, with most <EVENT eid="e89" class="OCCURRENCE">going</EVENT> into money market funds.
+
+"You get a news item, it hits, you have strong <EVENT eid="e3000" class="OCCURRENCE">redemptions</EVENT> that day and for two days following -- then go back to normal," <EVENT eid="e96" class="REPORTING">says</EVENT> Mr. Litvack. The fund, with a cash cushion of more than 10%, has " met all the redemptions without having to sell one thing," Mr. Litvack says. He <EVENT eid="e105" class="REPORTING">adds</EVENT>: "Our fund has had {positive} net <EVENT eid="e195" class="STATE">sales</EVENT> <TIMEX3 tid="t2332" type="SET" value="P1M" temporalFunction="false" functionInDocument="NONE" quant="EVERY">every month</TIMEX3> for <TIMEX3 tid="t204" type="DURATION" value="P3Y" temporalFunction="true" functionInDocument="NONE">the last three years</TIMEX3> -- until <TIMEX3 tid="t205" type="DATE" value="1989-10" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this month</TIMEX3>."
+
+Vanguard's $1 billion High Yield Bond Portfolio has <EVENT eid="e109" class="PERCEPTION">seen</EVENT> $161 million <EVENT eid="e110" class="OCCURRENCE">flow</EVENT> out since <TIMEX3 tid="t206" type="DATE" value="1989-09" mod="START" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">early September</TIMEX3>; $14 million of that <EVENT eid="e208" class="OCCURRENCE">seeped</EVENT> out <TIMEX3 tid="t210" type="DATE" value="1989-10-13" temporalFunction="true" functionInDocument="NONE">Friday Oct. 13</TIMEX3> alone. Still, two-thirds of the <EVENT eid="e2371" class="OCCURRENCE">outflow</EVENT> has been <EVENT eid="e112" class="OCCURRENCE">steered</EVENT> into other Vanguard portfolios, <EVENT eid="e113" class="REPORTING">says</EVENT> Brian Mattes, a vice president. The fund <TIMEX3 tid="t211" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> <EVENT eid="e116" class="STATE">holds</EVENT> a cash position of about 15%.
+
+At the $932 million T. Rowe Price High Yield Fund, investors <EVENT eid="e117" class="OCCURRENCE">yanked</EVENT> out about $182 million in <TIMEX3 tid="t213" type="DURATION" value="P2M" temporalFunction="true" functionInDocument="NONE" endPoint="t0">the past two months</TIMEX3>. Those <EVENT eid="e118" class="OCCURRENCE">withdrawals</EVENT>, most of which were <EVENT eid="e119" class="OCCURRENCE">transferred</EVENT> to other T. Rowe Price funds, followed little <EVENT eid="e121" class="OCCURRENCE">change</EVENT> in the fund's sales picture <TIMEX3 tid="t214" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3> through <TIMEX3 tid="t216" type="DATE" value="1989-08" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">August</TIMEX3>. "<TIMEX3 tid="t217" type="DURATION" value="P2M" temporalFunction="true" functionInDocument="NONE" endPoint="t0">The last two months</TIMEX3> have been the whole ball <EVENT eid="e124" class="OCCURRENCE">game</EVENT>," <EVENT eid="e125" class="REPORTING">says</EVENT> Steven Norwitz, a vice president.
+
+Junk-fund holders have barely <EVENT eid="e127" class="OCCURRENCE">broken</EVENT> even <TIMEX3 tid="t1997" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3>, as fat interest payments barely <EVENT eid="e129" class="OCCURRENCE">managed</EVENT> to offset declining prices. Through <TIMEX3 tid="t1998" type="DATE" value="1989-10-19" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Oct. 19</TIMEX3>, high-yield funds <EVENT eid="e1992" class="STATE">had</EVENT> an average 0.85% total return (the price change plus dividends on fund shares), <EVENT eid="e1993" class="REPORTING">according</EVENT> to Lipper Analytical Services Inc. That's even less than the 4.35% total return of the Merrill Lynch High-Yield Index.
+
+Fidelity's junk fund has <EVENT eid="e133" class="OCCURRENCE">fallen</EVENT> 2.08% <TIMEX3 tid="t2000" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3> through <TIMEX3 tid="t2001" type="DATE" value="1989-10-19" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Oct. 19</TIMEX3>, Lipper <EVENT eid="e134" class="REPORTING">says</EVENT>; the Vanguard fund <EVENT eid="e135" class="OCCURRENCE">rose</EVENT> 1.84%; and the T. Rowe Price fund <EVENT eid="e137" class="OCCURRENCE">edged</EVENT> up 0.66%.
+
+People who <EVENT eid="e138" class="STATE">remain</EVENT> in junk funds <TIMEX3 tid="t2003" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE">now</TIMEX3> could <EVENT eid="e140" class="OCCURRENCE">get</EVENT> <EVENT eid="e142" class="STATE">hit</EVENT> again, some analysts and fund specialists <EVENT eid="e143" class="REPORTING">say</EVENT>. Many funds in <TIMEX3 tid="t2004" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">recent weeks and months</TIMEX3> have been <EVENT eid="e144" class="OCCURRENCE">selling</EVENT> their highest-quality junk issues, such as RJR Nabisco, to <EVENT eid="e146" class="OCCURRENCE">raise</EVENT> cash to <EVENT eid="e149" class="OCCURRENCE">meet</EVENT> expected <EVENT eid="e150" class="OCCURRENCE">redemptions</EVENT>.
+
+Funds might be <EVENT eid="e152" class="I_STATE">forced</EVENT> to <EVENT eid="e155" class="I_ACTION">accept</EVENT> lower prices if they <EVENT eid="e157" class="I_ACTION">expand</EVENT> their <EVENT eid="e1996" class="OCCURRENCE">selling</EVENT> to the securities of less-creditworthy borrowers. And then, asset values of the funds could <EVENT eid="e160" class="OCCURRENCE">plunge</EVENT> more than they have so far.
+
+Says Michael Hirsch, chief investment officer of Republic National Bank and manager of the FundTrust Group in New York: "It's a time bomb just waiting to go off."
+</TEXT>
+
+<MAKEINSTANCE eventID="e2" eiid="ei2578" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei2579" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei2580" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e167" eiid="ei2581" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei2582" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e168" eiid="ei2583" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e169" eiid="ei2584" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e11" eiid="ei2585" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei2586" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e17" eiid="ei2587" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e170" eiid="ei2588" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e19" eiid="ei2589" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2590" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei2591" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e179" eiid="ei2592" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e37" eiid="ei2593" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e38" eiid="ei2594" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e39" eiid="ei2595" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e43" eiid="ei2597" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e44" eiid="ei2598" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e46" eiid="ei2599" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e180" eiid="ei2600" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e49" eiid="ei2601" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e51" eiid="ei2602" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e53" eiid="ei2603" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e54" eiid="ei2604" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e57" eiid="ei2605" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei2607" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e61" eiid="ei2608" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e62" eiid="ei2609" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e63" eiid="ei2610" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e66" eiid="ei2611" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e70" eiid="ei2612" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e72" eiid="ei2613" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e73" eiid="ei2614" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e82" eiid="ei2615" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e83" eiid="ei2616" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e189" eiid="ei2619" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e86" eiid="ei2620" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e87" eiid="ei2621" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e89" eiid="ei2622" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e96" eiid="ei2623" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e105" eiid="ei2627" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e195" eiid="ei2628" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e109" eiid="ei2629" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e110" eiid="ei2630" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e208" eiid="ei2631" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2371" eiid="ei2632" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e112" eiid="ei2633" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e113" eiid="ei2634" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e116" eiid="ei2635" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e117" eiid="ei2636" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e118" eiid="ei2637" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e119" eiid="ei2638" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e121" eiid="ei2639" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e124" eiid="ei2640" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e125" eiid="ei2641" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e127" eiid="ei2642" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e129" eiid="ei2643" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1992" eiid="ei2644" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1993" eiid="ei2645" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e133" eiid="ei2646" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e134" eiid="ei2647" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e135" eiid="ei2648" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e137" eiid="ei2649" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e138" eiid="ei2650" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e140" eiid="ei2651" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e142" eiid="ei2652" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e143" eiid="ei2653" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e144" eiid="ei2654" tense="PRESENT" aspect="PERFECTIVE_PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e146" eiid="ei2655" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e149" eiid="ei2657" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e150" eiid="ei2659" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e152" eiid="ei2660" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="might" />
+<MAKEINSTANCE eventID="e155" eiid="ei2661" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e157" eiid="ei2663" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1996" eiid="ei2664" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e160" eiid="ei2665" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" modality="could" />
+<TLINK lid="l119" relType="IS_INCLUDED" eventInstanceID="ei2653" relatedToTime="t0" />
+<TLINK lid="l118" relType="IS_INCLUDED" eventInstanceID="ei2641" relatedToTime="t0" />
+<TLINK lid="l117" relType="IS_INCLUDED" eventInstanceID="ei2634" relatedToTime="t0" />
+<TLINK lid="l115" relType="IS_INCLUDED" eventInstanceID="ei2609" relatedToTime="t0" />
+<TLINK lid="l114" relType="IS_INCLUDED" eventInstanceID="ei2608" relatedToTime="t0" />
+<TLINK lid="l113" relType="IS_INCLUDED" eventInstanceID="ei2585" relatedToTime="t0" />
+<TLINK lid="l112" relType="IS_INCLUDED" eventInstanceID="ei2581" relatedToTime="t0" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei2660" relatedToEventInstance="ei2665"  />
+<TLINK lid="l2" relType="INCLUDES" eventInstanceID="ei2578" relatedToTime="t0" />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei2578" relatedToEventInstance="ei2579" />
+<TLINK lid="l4" relType="INCLUDES" timeID="t174" relatedToEventInstance="ei2580" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei2580" relatedToTime="t0" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei2582" relatedToTime="t175"  />
+<TLINK lid="l7" relType="BEFORE" eventInstanceID="ei2583" relatedToEventInstance="ei2582" />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei2584" relatedToEventInstance="ei2582" />
+<TLINK lid="l9" relType="BEFORE" eventInstanceID="ei2582" relatedToTime="t0" />
+<TLINK lid="l10" relType="BEFORE" eventInstanceID="ei2586" relatedToTime="t0" />
+<TLINK lid="l11" relType="BEGINS" eventInstanceID="ei2586" relatedToEventInstance="ei2587" />
+<TLINK lid="l12" relType="IS_INCLUDED" eventInstanceID="ei2589" relatedToTime="t176"  />
+<TLINK lid="l13" relType="BEFORE" eventInstanceID="ei2589" relatedToTime="t0" />
+<TLINK lid="l14" relType="IS_INCLUDED" eventInstanceID="ei2592" relatedToTime="t185" />
+<TLINK lid="l15" relType="BEFORE" eventInstanceID="ei2592" relatedToEventInstance="ei2591" />
+<TLINK lid="l16" relType="INCLUDES" eventInstanceID="ei2590" relatedToEventInstance="ei2593" />
+<TLINK lid="l17" relType="IDENTITY" eventInstanceID="ei2594" relatedToEventInstance="ei2578" />
+<TLINK lid="l18" relType="BEFORE" eventInstanceID="ei2594" relatedToEventInstance="ei2595" />
+<TLINK lid="l20" relType="IS_INCLUDED" eventInstanceID="ei2597" relatedToEventInstance="ei2594" />
+<TLINK lid="l21" relType="IS_INCLUDED" eventInstanceID="ei2589" relatedToEventInstance="ei2594" />
+<TLINK lid="l22" relType="BEFORE" eventInstanceID="ei2598" relatedToEventInstance="ei2599" />
+<TLINK lid="l23" relType="IS_INCLUDED" eventInstanceID="ei2602" relatedToTime="t186"  />
+<TLINK lid="l24" relType="AFTER" eventInstanceID="ei2595" relatedToTime="t0" />
+<TLINK lid="l25" relType="IDENTITY" eventInstanceID="ei2603" relatedToEventInstance="ei2601" />
+<TLINK lid="l26" relType="BEFORE" eventInstanceID="ei2603" relatedToEventInstance="ei2604" />
+<TLINK lid="l27" relType="BEFORE" eventInstanceID="ei2605" relatedToTime="t0"  />
+<TLINK lid="l29" relType="BEFORE" eventInstanceID="ei2607" relatedToTime="t0" />
+<TLINK lid="l30" relType="AFTER" eventInstanceID="ei2611" relatedToTime="t0" />
+<TLINK lid="l31" relType="BEFORE" eventInstanceID="ei2612" relatedToTime="t0" />
+<TLINK lid="l32" relType="BEFORE" eventInstanceID="ei2613" relatedToEventInstance="ei2614" />
+<TLINK lid="l33" relType="IS_INCLUDED" eventInstanceID="ei2614" relatedToTime="t196" />
+<TLINK lid="l34" relType="IS_INCLUDED" eventInstanceID="ei2615" relatedToTime="t198"  />
+<TLINK lid="l35" relType="BEFORE" eventInstanceID="ei2615" relatedToTime="t0" />
+<TLINK lid="l36" relType="IS_INCLUDED" eventInstanceID="ei2616" relatedToTime="t199" />
+<TLINK lid="l39" relType="IS_INCLUDED" eventInstanceID="ei2619" relatedToTime="t200" />
+<TLINK lid="l41" relType="INCLUDES" eventInstanceID="ei2615" relatedToEventInstance="ei2620" />
+<TLINK lid="l42" relType="SIMULTANEOUS" eventInstanceID="ei2623" relatedToEventInstance="ei2621" />
+<TLINK lid="l45" relType="ENDED_BY" eventInstanceID="ei2628" relatedToTime="t205"  />
+<TLINK lid="l46" relType="IS_INCLUDED" eventInstanceID="ei2628" relatedToTime="t2332" />
+<TLINK lid="l47" relType="IS_INCLUDED" timeID="t2332" relatedToTime="t204"  />
+<TLINK lid="l48" relType="BEGINS" eventInstanceID="ei2629" relatedToTime="t206"  />
+<TLINK lid="l49" relType="INCLUDES" eventInstanceID="ei2630" relatedToEventInstance="ei2631" />
+<TLINK lid="l50" relType="IS_INCLUDED" eventInstanceID="ei2631" relatedToTime="t210" />
+<TLINK lid="l51" relType="IS_INCLUDED" eventInstanceID="ei2633" relatedToEventInstance="ei2630" />
+<TLINK lid="l52" relType="IDENTITY" eventInstanceID="ei2632" relatedToEventInstance="ei2630" />
+<TLINK lid="l53" relType="AFTER" eventInstanceID="ei2635" relatedToEventInstance="ei2632" />
+<TLINK lid="l54" relType="SIMULTANEOUS" eventInstanceID="ei2635" relatedToTime="t211" />
+<TLINK lid="l55" relType="INCLUDES" eventInstanceID="ei2635" relatedToTime="t0" />
+<TLINK lid="l56" relType="IS_INCLUDED" eventInstanceID="ei2636" relatedToTime="t213"  />
+<TLINK lid="l57" relType="IDENTITY" eventInstanceID="ei2637" relatedToEventInstance="ei2636" />
+<TLINK lid="l58" relType="IS_INCLUDED" eventInstanceID="ei2638" relatedToEventInstance="ei2637" />
+<TLINK lid="l59" relType="AFTER" eventInstanceID="ei2637" relatedToEventInstance="ei2639"  />
+<TLINK lid="l60" relType="IS_INCLUDED" eventInstanceID="ei2639" relatedToTime="t214" />
+<TLINK lid="l61" relType="ENDS" eventInstanceID="ei2639" relatedToTime="t216"  />
+<TLINK lid="l62" relType="DURING" eventInstanceID="ei2640" relatedToTime="t217" />
+<TLINK lid="l63" relType="IS_INCLUDED" eventInstanceID="ei2642" relatedToTime="t1997" />
+<TLINK lid="l64" relType="SIMULTANEOUS" eventInstanceID="ei2642" relatedToEventInstance="ei2643"  />
+<TLINK lid="l65" relType="ENDS" eventInstanceID="ei2644" relatedToTime="t1998"  />
+<TLINK lid="l66" relType="SIMULTANEOUS" eventInstanceID="ei2647" relatedToEventInstance="ei2645" />
+<TLINK lid="l67" relType="IS_INCLUDED" eventInstanceID="ei2646" relatedToTime="t2000" />
+<TLINK lid="l68" relType="ENDS" eventInstanceID="ei2646" relatedToTime="t2001"  />
+<TLINK lid="l69" relType="SIMULTANEOUS" eventInstanceID="ei2648" relatedToEventInstance="ei2649" />
+<TLINK lid="l70" relType="BEFORE" eventInstanceID="ei2648" relatedToTime="t0" />
+<TLINK lid="l71" relType="SIMULTANEOUS" eventInstanceID="ei2650" relatedToTime="t2003" />
+<TLINK lid="l72" relType="BEFORE" eventInstanceID="ei2650" relatedToEventInstance="ei2651" />
+<TLINK lid="l73" relType="BEGINS" eventInstanceID="ei2651" relatedToEventInstance="ei2652" />
+<TLINK lid="l74" relType="IS_INCLUDED" eventInstanceID="ei2654" relatedToTime="t2004"  />
+<TLINK lid="l77" relType="BEGINS" eventInstanceID="ei2619" relatedToTime="t201"  />
+<SLINK lid="l111" relType="CONDITIONAL" eventInstanceID="ei2663" subordinatedEventInstance="ei2660"  />
+<SLINK lid="l109" relType="FACTIVE" eventInstanceID="ei2613" subordinatedEventInstance="ei2614" />
+<SLINK lid="l79" relType="CONDITIONAL" eventInstanceID="ei2598" subordinatedEventInstance="ei2599"  />
+<SLINK lid="l80" relType="EVIDENTIAL" eventInstanceID="ei2581" subordinatedEventInstance="ei2580" />
+<SLINK lid="l81" relType="EVIDENTIAL" eventInstanceID="ei2585" subordinatedEventInstance="ei2582" />
+<SLINK lid="l82" relType="EVIDENTIAL" eventInstanceID="ei2587" subordinatedEventInstance="ei2588" />
+<SLINK lid="l83" relType="EVIDENTIAL" eventInstanceID="ei2590" subordinatedEventInstance="ei2591" />
+<SLINK lid="l84" relType="FACTIVE" eventInstanceID="ei2599" subordinatedEventInstance="ei2600" />
+<SLINK lid="l85" relType="MODAL" eventInstanceID="ei2600" subordinatedEventInstance="ei2601" />
+<SLINK lid="l86" relType="MODAL" eventInstanceID="ei2601" subordinatedEventInstance="ei2602" />
+<SLINK lid="l87" relType="EVIDENTIAL" eventInstanceID="ei2608" subordinatedEventInstance="ei2607" />
+<SLINK lid="l88" relType="EVIDENTIAL" eventInstanceID="ei2609" subordinatedEventInstance="ei2610" />
+<SLINK lid="l89" relType="FACTIVE" eventInstanceID="ei2612" subordinatedEventInstance="ei2613" />
+<SLINK lid="l90" relType="EVIDENTIAL" eventInstanceID="ei2621" subordinatedEventInstance="ei2620" />
+<SLINK lid="l91" relType="EVIDENTIAL" eventInstanceID="ei2621" subordinatedEventInstance="ei2622" />
+<SLINK lid="l93" relType="EVIDENTIAL" eventInstanceID="ei2627" subordinatedEventInstance="ei2628" />
+<SLINK lid="l94" relType="EVIDENTIAL" eventInstanceID="ei2629" subordinatedEventInstance="ei2630" />
+<SLINK lid="l95" relType="EVIDENTIAL" eventInstanceID="ei2634" subordinatedEventInstance="ei2633" />
+<SLINK lid="l96" relType="EVIDENTIAL" eventInstanceID="ei2641" subordinatedEventInstance="ei2640" />
+<SLINK lid="l97" relType="EVIDENTIAL" eventInstanceID="ei2645" subordinatedEventInstance="ei2644" />
+<SLINK lid="l98" relType="EVIDENTIAL" eventInstanceID="ei2647" subordinatedEventInstance="ei2646" />
+<SLINK lid="l99" relType="EVIDENTIAL" eventInstanceID="ei2653" subordinatedEventInstance="ei2651" />
+<SLINK lid="l100" relType="MODAL" eventInstanceID="ei2654" subordinatedEventInstance="ei2655" />
+<SLINK lid="l101" relType="MODAL" eventInstanceID="ei2655" subordinatedEventInstance="ei2657" />
+<SLINK lid="l102" relType="FACTIVE" eventInstanceID="ei2657" subordinatedEventInstance="ei2659" />
+<SLINK lid="l103" relType="MODAL" eventInstanceID="ei2660" subordinatedEventInstance="ei2661" />
+<SLINK lid="l105" relType="MODAL" eventInstanceID="ei2661" subordinatedEventInstance="ei2663"  />
+<SLINK lid="l106" relType="FACTIVE" eventInstanceID="ei2663" subordinatedEventInstance="ei2664" />
+<ALINK lid="l108" relType="CONTINUES" eventInstanceID="ei2598" relatedToEventInstance="ei2597" />
+
+</TimeML>

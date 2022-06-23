@@ -1,0 +1,201 @@
+,premise,hypothesis,actual,predict
+0,People checking out a car with all its doors open in a parking lot in the city.,Someone is blowing up the car with bombs,useless,useless
+1,"Two men stand in a lift as four others, all dressed in black and bright yellow stripes, look up on them.","Six men are dressed in black and yellow, two of which are lifting.",useless,useful
+2,Casually dressed young males and females are sitting and laying on a grassy area with bicycles and other personal belongings reading on a sunny day.,A bunch of people are hanging out in the park in the middle of classes.,useless,useless
+3,A young girl standing in front of a row of yellow chairs.,A human standing.,useful,useful
+4,A woman and child are on a boat and the woman is looking out into the ocean through a scope.,A lady and a child are on a boat and the lady is looking out into the ocean through a scope.,useful,useful
+5,"An older man is kneeling and talking to a group of younger children, all in soccer uniforms.",a coach teaches his kids,useless,useless
+6,A man in a blue shirt and tan shorts has his feet in the steps of an exercise bicycle and is working on the control panel of the machine.,The man is old,useless,useless
+7,A person sweeping stairs in a park.,A person outside.,useful,useful
+8,A woman in black walks down the street in front of a graffited wall.,A lady walks down the street.,useful,useful
+9,A dog carries an object in the snow.,A dog is asleep in its dog house.,useless,useless
+10,2 kids who look related are hanging out with 1 of them looking very emotional and hugging the other.,Two kids were hugging.,useful,useful
+11,A woman is using a small scissors on a large net.,A woman is using small scissors on a basketball net.,useless,useful
+12,A choir made up of varying ages of people are performing.,The choir is doing a Christmas program.,useless,useless
+13,A woman with brown hair wearing a white shirt is standing in a doorway surrounded by baskets as a woman in a red shirt passes by.,A woman is wearing a white shirt.,useful,useful
+14,"A woman poses with sunglasses shaped like dollar signs and a silver suitcase labelled ""LUCKY"" full of bills.",A woman is posing for a photograph.,useful,useful
+15,"A man wearing dark jeans, an orange shirt, and an orange apron is next to a bunch of plants and flowers and a woman with a blue top.",The woman is wearing a red top.,useless,useful
+16,A white woman waiting in line.,There is a female waiting for a friend.,useless,useless
+17,The girls walk down the street.,Girls set down in the street.,useless,useful
+18,A street performer is entertaining a gathered audience with the help of a young boy.,A boy is performing on stage.,useless,useful
+19,"Five people standing on a stage, getting ready to perform, who are unrecognizable due to the lack of lighting.","At a rock concert, the audience screams and cries at the handsome singer and his bass guitarist.",useless,useless
+20,Eight tourists stand at a railing looking at an attraction.,The tourists stood at the railing looking down at the city,useless,useful
+21,A guy surfing in a lake or river while a boat is pulling him,The man is surfing outdoors.,useful,useful
+22,"A man wearing and Army shirt is on the ground in a push-up position, while a man in uniform squats beside him.",There is a shirt.,useful,useful
+23,"Three people wearing black blindfolds near a ""Salvar O Planeta"" sign.",there are 3 people with blindfolds,useful,useful
+24,A short-haired man is jumping while on top of a huge boulder.,The man is on the rock.,useful,useful
+25,A man wearing a brightly green camouflage patterned denim jacket and boots walks by a building labeled Lottery Ticket Centre.,A man is near a building labeled Lottery Ticket Centre.,useful,useful
+26,A woman is observing pictures on a camera.,A women cradling a baby.,useless,useless
+27,Four men wearing orange vests are putting in a steel beam on the ground.,Humans in orange,useful,useless
+28,A young blond child eats chocolate cake with his fingers while holding the spoon in their other hand.,a child has chocolate all over his hand,useful,useful
+29,"A girl reaches up to kiss a cat, which is sitting on the counter.",A girl is petting her dog.,useless,useless
+30,A young man dressed up with a yellow tie jumps against a wall and one foot is left against the wall to push away.,The young man dressed with a yellow tie is dancing at a party.,useless,useless
+31,A grim looking man with sunglasses pilots a boat.,There is a man on a boat.,useful,useful
+32,A dark-haired man wearing a black and white t-shirt eats in a park surrounded by people.,A man is eating.,useful,useful
+33,Someone in green pants is on a white snowboard in the air.,The person is snowboarding.,useful,useful
+34,A man in dress pants and a blue dress shirt is walking in the shadows of nature.,a man walking around in nature,useful,useful
+35,A man in a jacket wearing black boots walking on the truck of a fallen tree over a ravine.,A man walks outdoors.,useful,useful
+36,A teen is standing in a field and is in the upswing position after hitting a golf ball.,The teenager is riding a horse in a steeplechase competition.,useless,useless
+37,Children are petting small turtles in the grass.,The children are playing with turtles.,useful,useful
+38,"A man on stage in the act of jumping, with a little boy in the background really enjoying it.",A boy watches boats on a lake.,useless,useless
+39,An elderly man talking to a young boy by a table of produce.,a old man was talking,useful,useful
+40,A man with a white beard speaks into a microphone wearing a long-sleeved gray button down shirt.,A man with a white beard is sitting quietly on a couch.,useless,useless
+41,A girl with a bowing throwing a wet sponge.,The girl is not throwing anything.,useless,useful
+42,A young woman in white working in a professional kitchen.,A young woman dressed in white works in a very good kitchen,useful,useful
+43,"Two men in costumes with fake carrot noses, top hats, sunglasses and white fur coats that contain white electrical lights.",Tall people in costumes,useless,useful
+44,the man is in the middle of a pole vault,The man is concentrating.,useless,useful
+45,A man plays a piano painted with an image of a woman on it.,A man plays the clarinet for his family.,useless,useless
+46,A group of people are buying fruits and vegetables from a stand located in a street market.,The people are buying clothing at a stall in the street market.,useless,useless
+47,A man with a pinstriped shirt and tan slacks adjust his tie while looking at a apple laptop computer.,A man adjusts his new tie in front of a laptop,useful,useful
+48,"Two guys one in a red jacket the other in a leaf print shirt cutting cakes, they look ready to dig in.",The guy's jacket is red.,useful,useful
+49,Person fishing in river.,The man is shopping at the mall,useless,useless
+50,A dog is running in the waves at the beach.,An animal is running outside.,useful,useful
+51,A group of people are gathered on a sidewalk in front of a store nearby a littered street.,A group of people are considering whether to shop at the store.,useless,useless
+52,A man running in a race passes by spectators.,A man is running by people who are watching.,useful,useful
+53,Man in traditional costume holding small guitar with a silver bike behind him.,A woman sits on the floor near a blue bike.,useless,useless
+54,Man recording a video of a woman.,A woman is unknowing being recorded by a man.,useless,useful
+55,Bicycles are littering the road as boy pull door.,A boy tries to open the door to his apartment near where other apartment dwellers park their bicycles.,useless,useless
+56,The small dog is running across the lawn.,A mammal is running through the yard.,useful,useful
+57,"A dark-skinned person, crouched while painting a sign.",A person is painting.,useful,useful
+58,A man and woman are taking a picture of themselves while a woman in a scarf walks by them.,A man and woman take selfies of themselves.,useful,useful
+59,"Two men holding a Chinese lantern that's yellow and red, one man has a drill and the other is smiling.",A father and son hold a Chinese lantern and prepare to hang it up.,useless,useless
+60,Three people hiking up a mountain with a river and other mountains in the background.,Hikers in the mountains.,useful,useful
+61,A little boy punching out flashcards from the cardboard they came in.,A boy punches his new flashcards from the carboard they came i.,useful,useless
+62,A white dog next to a basement window.,A Pomeranian next to a window,useless,useful
+63,A man sitting outside playing a musical instrument.,The man is playing music outdoors.,useful,useful
+64,Walkers on a concrete boardwalk under a blue sky.,walkers inside the mall,useless,useless
+65,A girl in a black sweater and jeans pours water into an empty soda bottle.,A girl pours water into an empty coca cola bottle,useless,useful
+66,A group of boys playing street soccer.,A group of boys are sitting down.,useless,useless
+67,A smiling man and a baby girl posing for photo.,A girl poses for a selfie with her mother.,useless,useless
+68,two women in lingerie with green feathers around waist,A woman wears lingerie.,useful,useful
+69,several brides wearing white dresses are holding red roses,They are sisters.,useless,useless
+70,White dog playing in the snow.,The dog enjoys the snow.,useful,useful
+71,An elderly woman with a tan nun uniform on and glasses is taking a picture with her camera.,A woman is trying to take pictures of the world's largest tree,useless,useless
+72,A man sitting on steps with a child as a bystander walks by.,A man and a child sitting on steps saw a bystander.,useful,useful
+73,Someone in a white and black polka dot outfit handing out small cartons of orange juice behind caution tape on a street.,A monkey is passing out orange juice in the middle of the forest.,useless,useless
+74,A woman is chatting as she drinks her coffee.,The woman is chatting with her friend.,useless,useful
+75,A man wearing a hat and boots is digging for something in the snow.,A man is digging the snow outside.,useful,useful
+76,A child is surrounded by a field of sunflowers.,A happy kid and some flowers.,useless,useful
+77,An elderly male is blowing air into an object.,The elderly man gave up blowing air into the object,useless,useful
+78,skateboarder sliding down a ramp,A skateboarder is doing a trick.,useful,useless
+79,A man is riding a bicycle in the street.,a man is suntanning on a cave,useless,useless
+80,A lady wearing a straw hat and gold hoop earrings is pointing a finger.,A woman points at the man she is talking about.,useless,useless
+81,Young boy smiles at the camera from the tire swing.,He is barefoot.,useless,useless
+82,Two men wearing black smile while a seated woman behind them looks tired.,The woman looks like she's full of energy.,useless,useless
+83,A girl in a white knit hat and winter gear rubs her tongue over her braces.,It is the winter season.,useless,useless
+84,A group of kids is splashing in deep water nearby a rock formation.,They are wearing lifejackets,useless,useless
+85,Two men pouring concrete onto another truck.,The men are eating lunch,useless,useless
+86,The man is performing a trick on a motorcycle high in the air.,A woman is performing a speech for her workers.,useless,useless
+87,Two friends having a laugh.,Two friends are having a picnic.,useless,useless
+88,A young girl in a red top is running through a grassy area with large buildings in the background.,The girl is driving in the city.,useless,useless
+89,A woman in a white dress with a white umbrellas is giving something to a woman in dark blue.,Two sisters are flipping each other off.,useless,useless
+90,A group of Chinese people sitting and laying down together on what appears to be a front porch.,The Chinese people on the porch are family members.,useless,useless
+91,"A lady, dressed in a costume, is posing with an axe in the middle of the woods.",A lady is posing as a woodsman for a photoshoot.,useless,useless
+92,a brown and black attack dog being trained by a man holding a stick,A dog is being put down at the vet clinic.,useless,useless
+93,A man in a boom lift bucket welds.,A man is working.,useful,useful
+94,"Adults and children share in the looking at something, and some young ladies stand to the side.",Some children are sleeping,useless,useless
+95,A group of people examine a boat with an orange flag that is sitting on sand next to a body of water.,People sit on a beach to tan.,useless,useless
+96,Several members of a community are celebrating with music and costumes during a festival or party.,People are celebrating with music and costumes.,useful,useful
+97,A man is smiling at a woman in a white dress.,The man is on the moon.,useless,useless
+98,a man in a red shirt is laying on the grass reaching out to another person.,A man in red is holding out his hand.,useful,useful
+99,The female soccer team is getting last minute instruction from their coach.,The soccer team is listening to their coach for their last play to win the soccer game.,useless,useless
+100,A guy in a red jacket is snowboarding in midair.,A guy is doing snowboard tricks,useful,useful
+101,Elderly woman climbing up the stairs.,The young lady was walking down the stairs.,useless,useful
+102,"The festivities of the Latin celebration has brought many visitors and enthusiastic, colorful, performers to the city.",Many visitors have fun at the Latin celebration.,useless,useful
+103,In front is a guy singing and playing guitar and a white shirted drummer in the back.,The people are sleeping.,useless,useless
+104,"Two guys walking, one carrying a skateboard",The men are walking to the park.,useless,useless
+105,"A man in a white shirt and gray slack hitting a golf ball on a golf course, with trees and power lines in the background.",The man is a poor golfer.,useless,useless
+106,People stand along a train track and take pictures.,Some people are walking to the train station.,useless,useful
+107,a man in a red shirt is laying on the grass reaching out to another person.,The man is sunbathing and doesn't have on anything but his swim trunks.,useless,useless
+108,A small girl with short brown hair is pushing a pink scooter over grass with brown leaves with threes in the background,The girl is on a beach.,useless,useless
+109,A sitting man is holding a partially carved stone in front a partially painted wall.,The man is a sculptor.,useless,useless
+110,A young girl running on grass,The girl is not standing still.,useful,useless
+111,A boy hits a tennis ball on a court.,A boy is hitting a ball.,useful,useful
+112,"Two college football players battle it out outdoors on the field during game day, where one is the quarterback trying to throw the ball, and the other player is in action about to sack the quarterback.",Two teams from rival colleges are in the fourth quarter of a game.,useless,useless
+113,a boy in a beige shirt is sleeping in a car.,A person is in a vehicle,useful,useful
+114,"Two men scrimmage in soccer, as a referee looks on.",the ref is watching the two men play soccer before he goes home,useless,useless
+115,An old man with a package poses in front of an advertisement.,A man poses in front of an ad for beer.,useless,useful
+116,The small dog is running across the lawn.,A dog is chasing a ball.,useless,useless
+117,Little kids play a game of running around a pole.,The kids are fighting outside.,useless,useful
+118,A group of female athletes are huddled together and excited.,The group of athletes all can breathe underwater.,useless,useless
+119,Three people are making transactions at an automated teller machine.,A line of people at an ATM.,useful,useful
+120,Two scuba divers inspecting a large metal object in the water.,Two scuba divers are underwater.,useful,useful
+121,A woman with a navy sweater is looking through a blue telescope at a statue of a dinosaur.,The woman is in an outdoor park,useless,useless
+122,A group of young people pose for a picture in a field,They are taking a class photo.,useless,useful
+123,A man in a grassy field throws a stick for a group of three brown dogs.,The man enjoys dogs.,useless,useful
+124,A man in an argyle shirt bends down to look at the goodies through the glass in an Asian shop.,A man is blowing out his birthday cake.,useless,useless
+125,A man in a red shirt is sitting on top of a rocky mountain.,A rugged man sits atop a mountain.,useless,useful
+126,A woman in a green suit walking towards an escalator.,A woman sits beside the escalator.,useless,useful
+127,A boy runs as others play on a homemade slip and slide.,A boy is running outside.,useful,useful
+128,A man takes a drink in the doorway of a home.,The man is sitting at the table.,useless,useless
+129,Two young girls hang tinsel on a Christmas tree in a room with blue curtains.,Two girls are in a room with red curtains.,useless,useful
+130,A number of cute asian children playing tambourines,A group of cute Asian children are playing tambourines,useful,useful
+131,Two people are riding at once on one single bicycle.,Two people riding on a bicyle down a small dirt road.,useless,useless
+132,A woman is holding a large check for Kids Food Basket.,She is stealing from them.,useless,useless
+133,a mass of people looking and moving in the same general direction.,A few people walked in random directions.,useless,useful
+134,A photographer carefully sets up his camera on a tripod and prepares to take the shot amidst the scenic background.,A photographer gets ready to take a landscape shot.,useless,useful
+135,A man hammering nails on a shed.,The man is making repairs.,useless,useless
+136,"Five young men are in a loft, with one holding a whiteboard and one making a shaka sign in front of the television.",Five men watch tv.,useless,useful
+137,Some kids are wrestling on an inflatable raft,Some kids playing with a jet-ski.,useless,useless
+138,A policeman is sitting in a van looking out the window.,The policeman is standing.,useless,useful
+139,"A woman in a scarf, laughing, being licked by a dog.",A woman and a dog enjoy time together,useful,useless
+140,"Two street people and a dog sitting on the ground and one is holding an ""out of luck"" sign.",people with a dog,useful,useful
+141,A goofy looking woman is singing on stage.,A woman is singing.,useful,useful
+142,A black dog is running through a marsh-like area.,A dog is running through a marshy area.,useful,useful
+143,A moving truck with a ramp still attached.,A truck with a ramp attached.,useful,useful
+144,A man wearing a shite short-sleeved shirt kisses a woman wearing a light pink jacket while standing on a public street.,A man is kissing a woman,useful,useful
+145,Man racing a quad on a dirt racetrack.,A man races on a four wheeler in a charity event.,useless,useless
+146,A moving truck with a ramp still attached.,A truck with a ramp attached.,useful,useful
+147,A white dog holds a tennis ball in its mouth in a field.,There is a dog with a ball outside.,useful,useful
+148,lady in black skirt is getting excited.,A lady is sad after the tragedy.,useless,useless
+149,A man wearing a blue apron and long rubber boots is dragging a flotation device from a long row of flotation devices.,A man in rubber boots and a work apron is rubbing his face in between pulling floating objects.,useful,useful
+150,A dog leaps into the air for a tennis ball.,A dog is outside.,useless,useful
+151,A man holding a picture of a small dog is painting a small dog in near life size on a white canvas.,A man holding a picture of a small dog is painting a small dog in near life size on a white canvas,useful,useless
+152,A man in an Alaska sweatshirt stands behind a counter.,The man is wearing a tank top.,useless,useless
+153,"A child wearing a brown coat, red hat and snow boots on top of a snow pile near a tree on the corner of a street intersection.",A little boy thowing a snowball from the top of a snow pile.,useless,useless
+154,A dog attacking a man wearing protective gear.,He was training a police dog.,useless,useless
+155,A group of runners are running towards two identical skyscrapers.,The runners are running towards the large buildings.,useful,useful
+156,Two dogs in a grassy field.,Two dogs are on a sandy beach.,useless,useless
+157,A woman wearing a bright orange blouse is weaving.,A woman is wearing a bright orange blouse and a green hat.,useless,useful
+158,"A bearded man, using a wooden pole, stirs bowl-like objects around in a large metal box filled with water.",A man is testing out his new miniature boats.,useless,useless
+159,"Man sitting on a bench, reading a book.",A man is going for a run.,useless,useless
+160,two dogs run across the woods.,The dogs laid down on the rug,useless,useless
+161,Two men working on the roof of an apartment building with a nice looking skyline behind them.,Two men working on the roof of an apartment building,useful,useful
+162,A man standing on a street with a suitcase in front of him while another man bends down to look at what is displayed on top of it.,Two men lie on tables in the morgue.,useless,useless
+163,A motorist gets some air over a rough hill.,A motorist is riding his bike in a competition.,useless,useless
+164,An old black man sitting on a couple of grocery crates playing the string guitar during the day.,The man has been playing the blues.,useless,useless
+165,3 people are shopping in a market.,The three people are shopping for a party they are going to throw.,useless,useless
+166,"An older man is kneeling and talking to a group of younger children, all in soccer uniforms.",a man talks to kids,useful,useful
+167,A boy on a bicycle in midair,A boy is sailing on a boat.,useless,useless
+168,A man with white hair wearing a gray suit speaks into a microphone with a metal jug sitting in front of him.,A man is giving a speech on personal finance.,useless,useless
+169,"A juggler wearing a plaid kilt and a green shirt, juggling.",A person juggles in a kilt.,useful,useful
+170,A man with a half mask over his face is holding a toy helicopter in his left hand and a controller in is his right hand.,A person is holding two objects.,useful,useful
+171,A worker is preparing fish to be sold at a market.,A person is slicing up a fish to sell.,useless,useful
+172,people looking at dirty water.,A mountain is full of snow.,useless,useless
+173,A woman in a blue jacket dragging a child on a sled through the snow.,The woman in the blue jacket has three legs and two heads.,useless,useless
+174,A young man at a bowling alley posing on the scoring machine.,A young man is bowling.,useless,useful
+175,"3 cyclists are racing ahead of a red BMW, with the leader wearing solid white helmet and black cycling pants",Three people are riding horses across a course.,useless,useless
+176,"Two basketball players on opposing teams, one in white, the other in red, are mid-game, running down the court, white-uniform player with ball-in-hand.",The white team is winning a basketball game.,useless,useless
+177,Man on bike with female standing on rear of back with arms around his neck.,There are two people near a bike.,useful,useful
+178,The brown and black dogs are carrying a big log in the meadow.,brown and black dogs carrying a big log in the meadow to show their owner.,useless,useful
+179,"A woman poses with sunglasses shaped like dollar signs and a silver suitcase labelled ""LUCKY"" full of bills.",A woman is posing for a photograph.,useful,useful
+180,A woman sitting in an office.,A women outside,useless,useful
+181,"The young Asian woman is using an umbrella, and is in front of a brightly colored patch of flowers in the back.",A woman is not using an umbrella.,useless,useful
+182,A motorist gets some air over a rough hill.,A motorist is riding his bike in a competition.,useless,useless
+183,A man in a yellow shirt and helmet mountain biking down a dusty path.,A woman is jogging down a road.,useless,useless
+184,A few young boys throwing a football over a volleyball net.,A boy plays with a yoyo.,useless,useless
+185,A man is ducking down between the red tulips in a flower field.,The man is hiding from his friend.,useless,useless
+186,"Four women and two men are in a kitchen, cooking near a long table with a white tablecloth.",Tall people cooking,useless,useful
+187,"Two woman, one wearing a blue striped shirt and the other wearing a flowered shirt, are riding horses.",Women are outside at a riding competition where they watch men compete.,useless,useless
+188,A man is using what looks to be a fax machine.,A woman is using what looks to be a fax machine.,useless,useful
+189,A man in a construction vest is looking at a vehicle.,A man in a sweater vest is looking at a limo.,useless,useful
+190,"Two African American men laughing with aprons on, while a third man wearing a chef jacket is on a cellular phone.",Three Asian men work at a bar.,useless,useless
+191,A man and a woman walk at a flea market.,The couple are shopping for deals.,useless,useless
+192,A picture of an artwork that depicts a man being flown by birds that is in font of a construction area.,An artist has painted a picture of a man being flown high in the sky by a flock of birds.,useless,useless
+193,Men sitting on the side of a brick road.,me are sitting on the side of a road,useful,useful
+194,A man draws a caricature of a woman.,A man painting a car.,useless,useless
+195,A little boy in a gray and white striped sweater and tan pants is playing on a piece of playground equipment.,A boy is on a playground.,useful,useful
+196,Many people have decided to take a rest on the steps.,The people are on the famous steps Rocky runs up in a training montage.,useless,useless
+197,"A woman in a yellow skirt is dancing with a man in a white shirt, with another couple dancing in the background.",Two men dance together in the middle,useless,useful
+198,A performer plays an instrument for the audience.,The performer is making music.,useless,useful
+199,"Five individuals standing on grass next to a brick building, holding their own string instrument.",The people are seated next to a building.,useless,useful

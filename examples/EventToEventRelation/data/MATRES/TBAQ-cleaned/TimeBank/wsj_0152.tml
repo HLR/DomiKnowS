@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0152</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0039 = 891102 891102-0039.
+Business Brief -- Dow Jones amp Co.: @ Offer for Telerate Common @ Is Extended Until Nov. 9 11/02/89 WALL STREET JOURNAL (J) DJ TLR TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) MEDIA, PUBLISHING, BROADCASTING, ELECTRONIC PUBLISHING (MED)
+</EXTRAINFO>
+
+<TEXT>
+Dow Jones amp Co. <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> it <EVENT eid="e2" class="I_ACTION" stem="extend">extended</EVENT> its $18-a-share <EVENT eid="e3" class="OCCURRENCE" stem="offer">offer</EVENT> for Telerate Inc. common stock until <TIMEX3 tid="t27" type="TIME" value="1989-11-09T17:00" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">5 p.m. EST Nov. 9</TIMEX3>.
+
+The <EVENT eid="e4" class="OCCURRENCE" stem="offer">offer</EVENT>, valued at about $576 million for the 33% of Telerate that Dow Jones doesn't already own, had been <EVENT eid="e8" class="I_ACTION" stem="set">set</EVENT> to <EVENT eid="e10" class="OCCURRENCE" stem="expire">expire</EVENT> <TIMEX3 tid="t28" type="DATE" value="1989-11-06" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 6</TIMEX3>.
+
+Dow Jones, which owns about 64 million of Telerate's 95 million common shares outstanding, <EVENT eid="e12" class="REPORTING" stem="say">said</EVENT> that about 24,000 shares have been <EVENT eid="e13" class="OCCURRENCE" stem="tender">tendered</EVENT> under its <EVENT eid="e14" class="OCCURRENCE" stem="offer">offer</EVENT>.
+
+Telerate's two independent directors have <EVENT eid="e15" class="OCCURRENCE" stem="reject">rejected</EVENT> the <EVENT eid="e16" class="OCCURRENCE" stem="offer">offer</EVENT> as inadequate. In composite trading on the New York Stock Exchange, Telerate shares <EVENT eid="e18" class="OCCURRENCE" stem="close">closed</EVENT> at $19.50, up 12.5 cents.
+
+Telerate provides an electronic financial information network. Dow Jones publishes The Wall Street Journal, Barron's magazine, and community newspapers and operates financial news services and computer data bases.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei120" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei121" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei122" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei123" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e8" eiid="ei124" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei125" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei126" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei127" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei128" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e15" eiid="ei129" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei130" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e18" eiid="ei131" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l17" relType="BEFORE" eventInstanceID="ei124" relatedToEventInstance="ei121" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei131" relatedToTime="t0" origin="USER" />
+<TLINK lid="l2" relType="AFTER" eventInstanceID="ei120" relatedToTime="t0" origin="USER" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei122" relatedToEventInstance="ei123" origin="USER" />
+<TLINK lid="l4" relType="SIMULTANEOUS" eventInstanceID="ei125" relatedToTime="t28" origin="USER" />
+<TLINK lid="l5" relType="BEFORE" timeID="t28" relatedToTime="t27" origin="USER" />
+<TLINK lid="l6" relType="ENDED_BY" timeID="t27" relatedToEventInstance="ei122"  origin="USER" />
+<TLINK lid="l7" relType="SIMULTANEOUS" eventInstanceID="ei126" relatedToEventInstance="ei120" origin="USER" />
+<TLINK lid="l8" relType="IS_INCLUDED" eventInstanceID="ei127" relatedToEventInstance="ei128" origin="USER" />
+<TLINK lid="l9" relType="IDENTITY" eventInstanceID="ei128" relatedToEventInstance="ei122" origin="USER" />
+<TLINK lid="l10" relType="IDENTITY" eventInstanceID="ei130" relatedToEventInstance="ei122" origin="USER" />
+<TLINK lid="l11" relType="AFTER" eventInstanceID="ei129" relatedToEventInstance="ei127" origin="USER" />
+<SLINK lid="l12" relType="EVIDENTIAL" eventInstanceID="ei120" subordinatedEventInstance="ei121" />
+<SLINK lid="l13" relType="FACTIVE" eventInstanceID="ei121" subordinatedEventInstance="ei122" />
+<SLINK lid="l14" relType="MODAL" eventInstanceID="ei124" subordinatedEventInstance="ei125" />
+<SLINK lid="l15" relType="EVIDENTIAL" eventInstanceID="ei126" subordinatedEventInstance="ei127" />
+<SLINK lid="l16" relType="FACTIVE" eventInstanceID="ei129" subordinatedEventInstance="ei130" />
+
+</TimeML>

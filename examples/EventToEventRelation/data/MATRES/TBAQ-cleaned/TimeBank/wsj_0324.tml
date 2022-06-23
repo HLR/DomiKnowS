@@ -1,0 +1,48 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0324</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-01" temporalFunction="false" functionInDocument="CREATION_TIME">11/01/89 </TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891101-0040 = 891101 891101-0040.
+Business Brief -- QVC Network Inc.: @ Acquisition of CVN Cos. @ Is Completed by Company
+11/01/89 
+WALL STREET JOURNAL (J) QVCN CAVN TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) MEDIA, PUBLISHING, BROADCASTING, ELECTRONIC PUBLISHING (MED) RETAILING (RET)
+</EXTRAINFO>
+
+<TEXT>
+QVC Network Inc. <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> it <EVENT eid="e2" class="OCCURRENCE" stem="complete">completed</EVENT> its <EVENT eid="e10" class="OCCURRENCE" stem="acquisition">acquisition</EVENT> of CVN Cos. for about $423 million.
+
+QVC <EVENT eid="e3" class="I_ACTION" stem="agree">agreed</EVENT> to <EVENT eid="e4" class="OCCURRENCE" stem="pay">pay</EVENT> $19 and one-eighth QVC share for each of CVN's 20 million fully diluted shares.
+
+The <EVENT eid="e11" class="OCCURRENCE" stem="acquisition">acquisition</EVENT> <EVENT eid="e5" class="OCCURRENCE" stem="bring">brings</EVENT> together the two largest competitors to Home Shopping Network Inc., which <TIMEX3 tid="t49" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> <EVENT eid="e59" class="STATE" stem="reach">reaches</EVENT> more viewers than any other company in the video shopping industry. Among them, Home Shopping, QVC and CVN already <EVENT eid="e12" class="STATE" stem="control">control</EVENT> most of that young and fast-growing market, which <TIMEX3 tid="t64" type="DATE" value="1988" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last year</TIMEX3> <EVENT eid="e13" class="OCCURRENCE" stem="have">had</EVENT> <EVENT eid="e14" class="OCCURRENCE" stem="sale">sales</EVENT> of about $1.4 billion.
+</TEXT>
+
+<MAKEINSTANCE eventID="e10" eiid="ei1992" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e59" eiid="ei1997" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei1993" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei1990" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei1999" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei1991" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei1995" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e5" eiid="ei1996" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei1994" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei1998" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei2000" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei1996" relatedToTime="t0" />
+<TLINK lid="l14" relType="AFTER" eventInstanceID="ei1994" relatedToTime="t0" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei1990" relatedToTime="t0" />
+<TLINK lid="l2" relType="IDENTITY" eventInstanceID="ei1992" relatedToEventInstance="ei1995" />
+<TLINK lid="l3" relType="IDENTITY" timeID="t49" relatedToEventInstance="ei1990" />
+<TLINK lid="l4" relType="IS_INCLUDED" eventInstanceID="ei1998" relatedToTime="t49" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei1997" relatedToTime="t49" />
+<TLINK lid="l6" relType="INCLUDES" timeID="t64" relatedToEventInstance="ei1999" />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei1999" relatedToEventInstance="ei2000" />
+<SLINK lid="l13" relType="MODAL" eventInstanceID="ei1993" subordinatedEventInstance="ei1994" />
+<SLINK lid="l8" relType="EVIDENTIAL" eventInstanceID="ei1990" subordinatedEventInstance="ei1991" />
+<SLINK lid="l9" relType="EVIDENTIAL" eventInstanceID="ei1990" subordinatedEventInstance="ei1993" />
+<ALINK lid="l10" relType="CULMINATES" eventInstanceID="ei1991" relatedToEventInstance="ei1992" />
+
+</TimeML>

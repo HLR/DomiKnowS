@@ -1,0 +1,121 @@
+Text	Egyptian police have said that five protesters were killed when they were attacked by an armed group near the Defense Ministry building in Cairo. The statement said that early this morning, the armed group attacked the demonstrators who have for days been staging their protest against the military government. Many protesters are supporters of an ultraconservative Islamist candidate in elections, whose candidature was expelled from the election race when it was discovered that his mother held dual Egyptian-U.S. citizenship. Police said that the attack on Wednesday wounded at least 50 protesters, and that the attackers "used stones, sticks and Molotov cocktails". 
+Event	1	said	Reporting	21
+Event	2	killed	Occurrence	52
+Event	3	attacked	Occurrence	74
+Event	4	said	Reporting	160
+Event	5	attacked	Occurrence	206
+Event	6	staging	I_Action	256
+Event	7	protest	Occurrence	270
+Event	8	elections	Occurrence	388
+Event	9	expelled	I_Action	421
+Event	10	race	Occurrence	448
+Event	11	discovered	Occurrence	465
+Event	12	said	Reporting	536
+Event	13	attack	Occurrence	550
+Event	14	wounded	Occurrence	570
+Event	15	used	Occurrence	626
+Relation	1	2	NoRel	true	said	killed
+Relation	1	3	NoRel	true	said	attacked
+Relation	1	4	NoRel	true	said	said
+Relation	1	5	NoRel	true	said	attacked
+Relation	1	6	NoRel	true	said	staging
+Relation	1	7	NoRel	true	said	protest
+Relation	1	8	NoRel	true	said	elections
+Relation	1	9	NoRel	true	said	expelled
+Relation	1	10	NoRel	true	said	race
+Relation	1	11	NoRel	true	said	discovered
+Relation	1	12	NoRel	true	said	said
+Relation	1	13	NoRel	true	said	attack
+Relation	1	14	NoRel	true	said	wounded
+Relation	1	15	NoRel	true	said	used
+Relation	2	3	SubSuper	true	killed	attacked
+Relation	2	4	NoRel	true	killed	said
+Relation	2	5	SubSuper	true	killed	attacked
+Relation	2	6	NoRel	true	killed	staging
+Relation	2	7	SubSuper	true	killed	protest
+Relation	2	8	NoRel	true	killed	elections
+Relation	2	9	NoRel	true	killed	expelled
+Relation	2	10	NoRel	true	killed	race
+Relation	2	11	NoRel	true	killed	discovered
+Relation	2	12	NoRel	true	killed	said
+Relation	2	13	SubSuper	true	killed	attack
+Relation	2	14	NoRel	true	killed	wounded
+Relation	2	15	NoRel	true	killed	used
+Relation	3	4	NoRel	true	attacked	said
+Relation	3	5	Coref	true	attacked	attacked
+Relation	3	6	NoRel	true	attacked	staging
+Relation	3	7	SubSuper	true	attacked	protest
+Relation	3	8	NoRel	true	attacked	elections
+Relation	3	9	NoRel	true	attacked	expelled
+Relation	3	10	NoRel	true	attacked	race
+Relation	3	11	NoRel	true	attacked	discovered
+Relation	3	12	NoRel	true	attacked	said
+Relation	3	13	Coref	true	attacked	attack
+Relation	3	14	SuperSub	true	attacked	wounded
+Relation	3	15	SuperSub	true	attacked	used
+Relation	4	5	NoRel	true	said	attacked
+Relation	4	6	NoRel	true	said	staging
+Relation	4	7	NoRel	true	said	protest
+Relation	4	8	NoRel	true	said	elections
+Relation	4	9	NoRel	true	said	expelled
+Relation	4	10	NoRel	true	said	race
+Relation	4	11	NoRel	true	said	discovered
+Relation	4	12	NoRel	true	said	said
+Relation	4	13	NoRel	true	said	attack
+Relation	4	14	NoRel	true	said	wounded
+Relation	4	15	NoRel	true	said	used
+Relation	5	6	NoRel	true	attacked	staging
+Relation	5	7	SubSuper	true	attacked	protest
+Relation	5	8	NoRel	true	attacked	elections
+Relation	5	9	NoRel	true	attacked	expelled
+Relation	5	10	NoRel	true	attacked	race
+Relation	5	11	NoRel	true	attacked	discovered
+Relation	5	12	NoRel	true	attacked	said
+Relation	5	13	Coref	true	attacked	attack
+Relation	5	14	SuperSub	true	attacked	wounded
+Relation	5	15	SuperSub	true	attacked	used
+Relation	6	7	NoRel	true	staging	protest
+Relation	6	8	NoRel	true	staging	elections
+Relation	6	9	NoRel	true	staging	expelled
+Relation	6	10	NoRel	true	staging	race
+Relation	6	11	NoRel	true	staging	discovered
+Relation	6	12	NoRel	true	staging	said
+Relation	6	13	NoRel	true	staging	attack
+Relation	6	14	NoRel	true	staging	wounded
+Relation	6	15	NoRel	true	staging	used
+Relation	7	8	NoRel	true	protest	elections
+Relation	7	9	NoRel	true	protest	expelled
+Relation	7	10	NoRel	true	protest	race
+Relation	7	11	NoRel	true	protest	discovered
+Relation	7	12	NoRel	true	protest	said
+Relation	7	13	SuperSub	true	protest	attack
+Relation	7	14	SuperSub	true	protest	wounded
+Relation	7	15	SuperSub	true	protest	used
+Relation	8	9	NoRel	true	elections	expelled
+Relation	8	10	Coref	true	elections	race
+Relation	8	11	SuperSub	true	elections	discovered
+Relation	8	12	NoRel	true	elections	said
+Relation	8	13	NoRel	true	elections	attack
+Relation	8	14	NoRel	true	elections	wounded
+Relation	8	15	NoRel	true	elections	used
+Relation	9	10	NoRel	true	expelled	race
+Relation	9	11	NoRel	true	expelled	discovered
+Relation	9	12	NoRel	true	expelled	said
+Relation	9	13	NoRel	true	expelled	attack
+Relation	9	14	NoRel	true	expelled	wounded
+Relation	9	15	NoRel	true	expelled	used
+Relation	10	11	SuperSub	true	race	discovered
+Relation	10	12	NoRel	true	race	said
+Relation	10	13	NoRel	true	race	attack
+Relation	10	14	NoRel	true	race	wounded
+Relation	10	15	NoRel	true	race	used
+Relation	11	12	NoRel	true	discovered	said
+Relation	11	13	NoRel	true	discovered	attack
+Relation	11	14	NoRel	true	discovered	wounded
+Relation	11	15	NoRel	true	discovered	used
+Relation	12	13	NoRel	true	said	attack
+Relation	12	14	NoRel	true	said	wounded
+Relation	12	15	NoRel	true	said	used
+Relation	13	14	SuperSub	true	attack	wounded
+Relation	13	15	SuperSub	true	attack	used
+Relation	14	15	NoRel	true	wounded	used

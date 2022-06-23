@@ -1,0 +1,137 @@
+Text	No one has been arrested over Sunday's attack in Kabul and the Taliban have denied any involvement. The shooting has been strongly condemned by the government. Afghan presidential spokesman Aimal Faizi said, "This is shocking news for the Afghan people, for the government of Afghanistan and for the president. The Afghan government strongly condemns this attack. Arsala Rahmani has been killed by enemies of Afghanistan. The killers are enemies of peace and stability." Both NATO and the US embassy in Kabul have also condemned the assassination. Rahmani was one of about 70 influential Afghans and former Taliban members appointed to the High Peace Council. Its aim is to convince insurgent leaders to reconcile with the government. But the Taliban have so far refused direct contact with the council, which they see as being too close to Hamid Karzai's government. With the war now in its 11th year, the council appears to be making little progress. The killing strikes yet another blow to efforts to find a political resolution.
+Event	1	attack	Occurrence	39
+Event	2	denied	I_Action	76
+Event	3	shooting	Occurrence	104
+Event	4	condemned	I_Action	131
+Event	5	said	Reporting	202
+Event	6	condemns	I_Action	342
+Event	7	attack	Occurrence	356
+Event	8	killed	Occurrence	388
+Event	9	condemned	I_Action	519
+Event	10	assassination	Occurrence	533
+Event	11	appointed	Occurrence	623
+Event	12	refused	I_Action	763
+Event	13	see	Perception	815
+Event	14	war	Occurrence	877
+Event	15	killing	Occurrence	957
+Event	16	strikes	I_Action	965
+Relation	1	2	NoRel	true	attack	denied
+Relation	1	3	SuperSub	true	attack	shooting
+Relation	1	4	NoRel	true	attack	condemned
+Relation	1	5	NoRel	true	attack	said
+Relation	1	6	NoRel	true	attack	condemns
+Relation	1	7	Coref	true	attack	attack
+Relation	1	8	SuperSub	true	attack	killed
+Relation	1	9	NoRel	true	attack	condemned
+Relation	1	10	SuperSub	true	attack	assassination
+Relation	1	11	NoRel	true	attack	appointed
+Relation	1	12	NoRel	true	attack	refused
+Relation	1	13	NoRel	true	attack	see
+Relation	1	14	SubSuper	true	attack	war
+Relation	1	15	SuperSub	true	attack	killing
+Relation	1	16	NoRel	true	attack	strikes
+Relation	2	3	NoRel	true	denied	shooting
+Relation	2	4	NoRel	true	denied	condemned
+Relation	2	5	NoRel	true	denied	said
+Relation	2	6	NoRel	true	denied	condemns
+Relation	2	7	NoRel	true	denied	attack
+Relation	2	8	NoRel	true	denied	killed
+Relation	2	9	NoRel	true	denied	condemned
+Relation	2	10	NoRel	true	denied	assassination
+Relation	2	11	NoRel	true	denied	appointed
+Relation	2	12	NoRel	true	denied	refused
+Relation	2	13	NoRel	true	denied	see
+Relation	2	14	NoRel	true	denied	war
+Relation	2	15	NoRel	true	denied	killing
+Relation	2	16	NoRel	true	denied	strikes
+Relation	3	4	NoRel	true	shooting	condemned
+Relation	3	5	NoRel	true	shooting	said
+Relation	3	6	NoRel	true	shooting	condemns
+Relation	3	7	SubSuper	true	shooting	attack
+Relation	3	8	SuperSub	true	shooting	killed
+Relation	3	9	NoRel	true	shooting	condemned
+Relation	3	10	SuperSub	true	shooting	assassination
+Relation	3	11	NoRel	true	shooting	appointed
+Relation	3	12	NoRel	true	shooting	refused
+Relation	3	13	NoRel	true	shooting	see
+Relation	3	14	SubSuper	true	shooting	war
+Relation	3	15	SuperSub	true	shooting	killing
+Relation	3	16	NoRel	true	shooting	strikes
+Relation	4	5	NoRel	true	condemned	said
+Relation	4	6	NoRel	true	condemned	condemns
+Relation	4	7	NoRel	true	condemned	attack
+Relation	4	8	NoRel	true	condemned	killed
+Relation	4	9	NoRel	true	condemned	condemned
+Relation	4	10	NoRel	true	condemned	assassination
+Relation	4	11	NoRel	true	condemned	appointed
+Relation	4	12	NoRel	true	condemned	refused
+Relation	4	13	NoRel	true	condemned	see
+Relation	4	14	NoRel	true	condemned	war
+Relation	4	15	NoRel	true	condemned	killing
+Relation	4	16	NoRel	true	condemned	strikes
+Relation	5	6	NoRel	true	said	condemns
+Relation	5	7	NoRel	true	said	attack
+Relation	5	8	NoRel	true	said	killed
+Relation	5	9	NoRel	true	said	condemned
+Relation	5	10	NoRel	true	said	assassination
+Relation	5	11	NoRel	true	said	appointed
+Relation	5	12	NoRel	true	said	refused
+Relation	5	13	NoRel	true	said	see
+Relation	5	14	NoRel	true	said	war
+Relation	5	15	NoRel	true	said	killing
+Relation	5	16	NoRel	true	said	strikes
+Relation	6	7	NoRel	true	condemns	attack
+Relation	6	8	NoRel	true	condemns	killed
+Relation	6	9	NoRel	true	condemns	condemned
+Relation	6	10	NoRel	true	condemns	assassination
+Relation	6	11	NoRel	true	condemns	appointed
+Relation	6	12	NoRel	true	condemns	refused
+Relation	6	13	NoRel	true	condemns	see
+Relation	6	14	NoRel	true	condemns	war
+Relation	6	15	NoRel	true	condemns	killing
+Relation	6	16	NoRel	true	condemns	strikes
+Relation	7	8	SuperSub	true	attack	killed
+Relation	7	9	NoRel	true	attack	condemned
+Relation	7	10	SuperSub	true	attack	assassination
+Relation	7	11	NoRel	true	attack	appointed
+Relation	7	12	NoRel	true	attack	refused
+Relation	7	13	NoRel	true	attack	see
+Relation	7	14	SubSuper	true	attack	war
+Relation	7	15	SuperSub	true	attack	killing
+Relation	7	16	NoRel	true	attack	strikes
+Relation	8	9	NoRel	true	killed	condemned
+Relation	8	10	Coref	true	killed	assassination
+Relation	8	11	NoRel	true	killed	appointed
+Relation	8	12	NoRel	true	killed	refused
+Relation	8	13	NoRel	true	killed	see
+Relation	8	14	SubSuper	true	killed	war
+Relation	8	15	Coref	true	killed	killing
+Relation	8	16	NoRel	true	killed	strikes
+Relation	9	10	NoRel	true	condemned	assassination
+Relation	9	11	NoRel	true	condemned	appointed
+Relation	9	12	NoRel	true	condemned	refused
+Relation	9	13	NoRel	true	condemned	see
+Relation	9	14	NoRel	true	condemned	war
+Relation	9	15	NoRel	true	condemned	killing
+Relation	9	16	NoRel	true	condemned	strikes
+Relation	10	11	NoRel	true	assassination	appointed
+Relation	10	12	NoRel	true	assassination	refused
+Relation	10	13	NoRel	true	assassination	see
+Relation	10	14	SubSuper	true	assassination	war
+Relation	10	15	Coref	true	assassination	killing
+Relation	10	16	NoRel	true	assassination	strikes
+Relation	11	12	NoRel	true	appointed	refused
+Relation	11	13	NoRel	true	appointed	see
+Relation	11	14	SubSuper	true	appointed	war
+Relation	11	15	NoRel	true	appointed	killing
+Relation	11	16	NoRel	true	appointed	strikes
+Relation	12	13	NoRel	true	refused	see
+Relation	12	14	NoRel	true	refused	war
+Relation	12	15	NoRel	true	refused	killing
+Relation	12	16	NoRel	true	refused	strikes
+Relation	13	14	NoRel	true	see	war
+Relation	13	15	NoRel	true	see	killing
+Relation	13	16	NoRel	true	see	strikes
+Relation	14	15	SuperSub	true	war	killing
+Relation	14	16	NoRel	true	war	strikes
+Relation	15	16	NoRel	true	killing	strikes
