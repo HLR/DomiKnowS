@@ -27,7 +27,7 @@ def main(args):
     training_file = "train.csv"
     testing_file = "test.csv"
 
-    augment_file = "data/snli_genadv_1000_dev.jsonl"
+    augment_file = "data/snli_genadv_1000_test.jsonl"
     # Loading Test and Train data
     test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
                                            batch_size=args.batch_size, augment_file=augment_file)
@@ -36,7 +36,7 @@ def main(args):
                                             batch_size=args.batch_size)
     # Load Augmentation data
     augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
-                                              augment_file="data/snli_genadv_1000_test.jsonl")
+                                              augment_file=augment_file)
     # Declare Program
     program = program_declaration(cur_device, sym_relation=args.sym_relation, tran_relation=args.tran_relation,
                                   primaldual=args.primaldual, sample=args.sampleloss, beta=args.beta)
