@@ -3,6 +3,7 @@ from transformers import RobertaTokenizer, RobertaModel
 from utils import *
 from torch import nn
 import torch.nn.functional as F
+import numpy as np
 
 
 class Roberta_Tokenizer:
@@ -97,7 +98,7 @@ class Robert_Model(nn.Module):
 
 
 class common_sense_from_NN:
-    def __init__(self, pre_emb, pre_NN, ratio=0.3, layer=1, emb_size=512):
+    def __init__(self, pre_emb, pre_NN, ratio=0.3, layer=1, emb_size=512, deviice="cpu"):
         self.verb_map = {}
         verb_emb_file = open(pre_emb)
         lines = verb_emb_file.readlines()
@@ -106,11 +107,12 @@ class common_sense_from_NN:
             self.verb_map[verb] = ind
         verb_emb_file.close()
         self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer)
-        # pre_train = torch.load(pre_NN)
-        # self.model.load_state_dict(pre_train['model_state_dict'])
+        pre_train = torch.load(pre_NN)
+        self.model.load_state_dict(pre_train['model_state_dict'])
+        self.cur_device = deviice
 
     def eval(self, verb1, verb2):
-        return torch.FloatTensor(0)
+        return self.model(torch.from_numpy(np.array([[self.verb_map[verb1], self.verb_map[verb2]]])).to(self.cur_device))
 
     def getCommonSense(self, verb1, verb2):
         if verb1 not in self.verb_map or verb2 not in self.verb_map:

@@ -86,7 +86,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     emb_size = 256
     granularity = 0.05
     bigramStats_dim = 2
-    common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size)
+    common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size, cur_device=cur_device)
     common_sense_EMB = nn.Embedding(int(1.0/granularity) * bigramStats_dim, emb_size)
 
     def common_sense_emb(_, verbs1, verbs2):
