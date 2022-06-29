@@ -27,19 +27,24 @@ with Graph('Useful_arg') as graph:
     symmetric = Concept(name="symmetric")
     s_sent1, s_sent2 = symmetric.has_a(arg1=sentence, arg2=sentence)
     # Ent(X1, X2) => !CON(X2, X1)
-    ifL(andL(entailment('x'), symmetric('s', path=('x', symmetric))),
+    ifL(andL(entailment('x'), existsL(symmetric('s', path=('x', symmetric)))),
         notL(contradiction(path=('s', s_sent2))))
+    #orL(notL(andL(entailment('x'), symmetric('s', path=('x', symmetric)))), notL(contradiction(path=('s', s_sent2))))
 
     # Neu(X1, X2) => !CON(X2, X1)
-    ifL(andL(neutral('x'), symmetric('s', path=('x', symmetric))),
+    ifL(andL(neutral('x'), existsL(symmetric('s', path=('x', symmetric)))),
         notL(contradiction(path=('s', s_sent2))))
+    #orL(notL(andL(neutral('x'), symmetric('s', path=('x', symmetric)))), notL(contradiction(path=('s', s_sent2))))
 
     # CON(X1, X2) => CON(X2, X1)
-    ifL(andL(contradiction('x'), symmetric('s', path=('x', symmetric))),
+    ifL(andL(contradiction('x'), existsL(symmetric('s', path=('x', symmetric)))),
         contradiction(path=('s', s_sent2)))
+    #orL(notL(andL(contradiction('x'), symmetric('s', path=('x', symmetric)))), contradiction(path=('s', s_sent2)))
+
 
     # Ent(X1, X2) + Ent(X2, X3) => Ent(X1, X3)
     transitive = Concept("transitive")
     t_sent1, t_sent2, t_sent3 = transitive.has_a(arg11=sentence, arg22=sentence, arg33=sentence)
-    ifL(andL(entailment('x'), entailment(path=('x', transitive, t_sent2))), entailment(path=('x', transitive, t_sent3)))
+    ifL(andL(entailment('x'), existsL(transitive("t", path=('x', transitive))), entailment(path=('t', t_sent2))),
+        entailment(path=('t', t_sent3)))
 

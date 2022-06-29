@@ -35,11 +35,14 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         for _, item in sample.iterrows():
             data_id_sample[index] = (item, False)
             index += 1
-
+    count = 0
     if augment_file:
         for _, item in df_augment.iterrows():
             data_id_sample[index] = (item, True)
             index += 1
+            count += 1
+            if count == 4:
+                break
 
     symmetric = {}
     check_id = {}

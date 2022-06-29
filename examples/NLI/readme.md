@@ -51,8 +51,8 @@ Training sample size | epoch | learning rate | model | using constrain | Accurac
 --- | :---: | :---: | :---: | :---: | :---: | ---:
 Paper | ? | 1e-5 | ? | ESIM w/ Non-Regularize | 87.25 | 60.78
 Paper | ? | 1e-5 | ? | ESIM w/ Regularize | 87.55 | 73.32
-550146 | 3 | 1e-5 | POI | w/o constrain | 89.65 | 71.600
 550146 | 3 | 1e-5 | Pytorch | w/o constrain | 90.01 | 72.900
+550146 | 3 | 1e-5 | POI | w/o constrain | 89.65 | 71.600
 550146 | 3 | 1e-5 | POI | w/ constrain | 90.214 | 74.05
 550146 | 3 | 1e-5 | SampleLoss(1) | w/ constrain | 90.27 | 74.450
 550146 | 3 | 1e-5 | ILP | w/ constrains | 90.32 | 81.650

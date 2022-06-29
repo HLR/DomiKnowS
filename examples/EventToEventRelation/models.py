@@ -2,6 +2,7 @@ import torch
 from transformers import RobertaTokenizer, RobertaModel
 from utils import *
 from torch import nn
+import torch.nn.functional as F
 
 
 class Roberta_Tokenizer:
@@ -34,7 +35,7 @@ class Roberta_Tokenizer:
 
 
 class RobertaToken:
-    def __init__(self, max_length= 512):
+    def __init__(self, max_length=512):
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base', unk_token='<unk>')
         self.max_length = max_length
 
@@ -73,7 +74,7 @@ class BiLSTM(nn.Module):
 class BiLSTM_MLP(nn.Module):
     def __init__(self, BiLSTM_last_hidden_size, MLP_size, output_classes):
         super(BiLSTM_MLP, self).__init__()
-        self.start = nn.Linear(BiLSTM_last_hidden_size * 4, MLP_size * 2)
+        self.start = nn.Linear(BiLSTM_last_hidden_size * 5, MLP_size * 2)
         self.final = nn.Linear(MLP_size * 2, output_classes)
 
     def forward(self, x):
@@ -93,3 +94,40 @@ class Robert_Model(nn.Module):
     def forward(self, input_sent, pos):
         last_hidden_state = self.model(input_sent)[0]
         return torch.flatten(last_hidden_state[0, pos.long(), :].unsqueeze(0), start_dim=0, end_dim=1)
+
+
+class common_sense_from_NN:
+    def __init__(self, pre_emb, pre_NN, ratio=0.3, layer=1, emb_size=512):
+        self.verb_map = {}
+        verb_emb_file = open(pre_emb)
+        lines = verb_emb_file.readlines()
+        for ind, line in enumerate(lines):
+            verb = line.split()[0]
+            self.verb_map[verb] = ind
+        verb_emb_file.close()
+        self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer)
+        # pre_train = torch.load(pre_NN)
+        # self.model.load_state_dict(pre_train['model_state_dict'])
+
+    def eval(self, verb1, verb2):
+        return torch.FloatTensor(0)
+
+    def getCommonSense(self, verb1, verb2):
+        if verb1 not in self.verb_map or verb2 not in self.verb_map:
+            return torch.FloatTensor([0, 0]).view(1, -1)
+        return torch.FloatTensor([0, 0]).view(1, -1).view(1, -1)
+
+
+class VerbNN(nn.Module):
+    def __init__(self, vocab_size, ratio=0.5, emb_size=512, layer=1):
+        super(VerbNN, self).__init__()
+        self.emb_size = emb_size * 2  # Bi-direction
+        self.emb_layer = nn.Embedding(vocab_size, self.emb_size)
+        self.linear1 = nn.Linear(self.emb_size, int(self.emb_size * ratio))
+        self.linear2 = nn.Linear(int(self.emb_size * ratio), 1)
+
+    def forward(self, verb):
+        x_emb = self.emb_layer(verb)
+        fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1)
+        layer1 = F.relu(self.linear1(F.dropout(fullX, p=0.3, training=True)))
+        return torch.sigmoid(self.fc2(layer1))
