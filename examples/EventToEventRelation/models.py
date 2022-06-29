@@ -125,11 +125,11 @@ class VerbNN(nn.Module):
         super(VerbNN, self).__init__()
         self.emb_size = emb_size * 2  # Bi-direction
         self.emb_layer = nn.Embedding(vocab_size, self.emb_size)
-        self.linear1 = nn.Linear(self.emb_size, int(self.emb_size * ratio))
-        self.linear2 = nn.Linear(int(self.emb_size * ratio), 1)
+        self.fc1 = nn.Linear(self.emb_size, int(self.emb_size * ratio))
+        self.fc2 = nn.Linear(int(self.emb_size * ratio), 1)
 
     def forward(self, verb):
         x_emb = self.emb_layer(verb)
         fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1)
-        layer1 = F.relu(self.linear1(F.dropout(fullX, p=0.3, training=True)))
+        layer1 = F.relu(self.fc1(F.dropout(fullX, p=0.3, training=True)))
         return torch.sigmoid(self.fc2(layer1))

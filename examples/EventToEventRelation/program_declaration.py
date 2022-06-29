@@ -83,11 +83,12 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     mdl_path = "common_sense/pairwise_model_0.3_200_1.pt"
     ratio = 0.3
     layer = 1
-    emb_size = 256
+    emb_size = 100
+    final_size = 256
     granularity = 0.05
     bigramStats_dim = 2
     common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size, device=cur_device)
-    common_sense_EMB = nn.Embedding(int(1.0/granularity) * bigramStats_dim, emb_size)
+    common_sense_EMB = nn.Embedding(int(1.0/granularity) * bigramStats_dim, final_size)
 
     def common_sense_emb(_, verbs1, verbs2):
         common_sense_embs = []
