@@ -16,8 +16,8 @@ class LogicalConstrain:
         self.sampleEntries = sampleEntries
         
         if not e:
-            myLogger.error("Logical Constrain initialized is empty")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is empty")
+            myLogger.error("Logical Constraint initialized is empty")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constraint initialized is empty")
         
         updatedE = []
         for _, eItem in enumerate(e):
@@ -42,7 +42,7 @@ class LogicalConstrain:
                 
         self.e = updatedE
 
-        # -- Find the graph for this logical constrain - based on context defined in the concept used in constrain definition
+        # -- Find the graph for this Logical Constraint - based on context defined in the concept used in constrain definition
         self.graph = None
        
         conceptOrLc = None
@@ -56,8 +56,8 @@ class LogicalConstrain:
                 break
     
         if conceptOrLc is None:
-            myLogger.error("Logical Constrain is incorrect")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constrain is incorrect")
+            myLogger.error("Logical Constraint is incorrect")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constraint is incorrect")
             
         if isinstance(conceptOrLc, Concept):
             if self.__getContext(conceptOrLc):
@@ -68,10 +68,10 @@ class LogicalConstrain:
             self.graph = conceptOrLc.graph
                 
         if self.graph == None:
-            myLogger.error("Logical Constrain initialized is not associated with graph")
-            raise LogicalConstrain.LogicalConstrainError("Logical Constrain initialized is not associated with graph")
+            myLogger.error("Logical Constraint initialized is not associated with graph")
+            raise LogicalConstrain.LogicalConstrainError("Logical Constraint initialized is not associated with graph")
                      
-        # Create logical constrain id based on number of existing logical constrain in the graph
+        # Create Logical Constraint id based on number of existing Logical Constraint in the graph
         self.lcName = "LC%i"%(len(self.graph.logicalConstrains))
         
         if name is not None:
@@ -90,10 +90,10 @@ class LogicalConstrain:
         # Check soft constrain is activated though p - if certainty in the validity of the constrain or the user preference is provided by p
         if p < 0:
             self.p = 0
-            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 0"%(self.lcName,p))
+            myLogger.warning("%s Logical Constraint created with p equal %i sets it to 0"%(self.lcName,p))
         elif p > 100:
             self.p = 100
-            myLogger.warning("%s Logical Constrain created with p equal %i sets it to 100"%(self.lcName,p))
+            myLogger.warning("%s Logical Constraint created with p equal %i sets it to 100"%(self.lcName,p))
         else:
             self.p = p
      
@@ -115,7 +115,8 @@ class LogicalConstrain:
         else:
             return e._context
        
-    # Get string representation of  logical constraint
+
+    # Get string representation of  Logical Constraintt
     def strEs(self):
         strsE = []
         for _, eItem in enumerate(self.e):
@@ -123,22 +124,36 @@ class LogicalConstrain:
                 new_V = []
                 if eItem[0] is not None:
                     new_V.append(eItem[0])
-                    if eItem[1] is not None: new_V.append(',')
+                    #if eItem[1] is not None: new_V.append(',')
                 if eItem[1]:
                     if isinstance(eItem[1], eqL):
                         strsE.append("eql")
                     else:
-                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain)) else v.name for v in eItem[1]]
-                        new_V.append("path = {}".format(tuple(new_v)))
+                        from regr.graph import Relation
+                        new_v = [v if isinstance(v, (str, tuple, LogicalConstrain, Relation)) else v.name for v in eItem[1]]
+                        new_V.append("path={}".format(tuple(new_v)))
                 strsE.append("{}".format(tuple(new_V)))
             elif isinstance(eItem, Concept):
                 strsE.append(eItem.name)
             elif isinstance(eItem, LogicalConstrain):
-                strsE.append(eItem)
-            elif isinstance(eItem, tuple) and (len(eItem) == 3):
+                strsE.append(eItem.__repr__())
+            elif isinstance(eItem, tuple) and (len(eItem) == 4):
                 strsE.append(eItem[0].name)
-        
-        return strsE
+             
+        newStrsE = "["
+        for s in strsE:
+            newStrsE+= s
+            newStrsE+= ", "
+            
+        newStrsE = newStrsE[:-2]
+        newStrsE=newStrsE.replace(",)", ")")
+        newStrsE=newStrsE.replace("'", "")
+        newStrsE=newStrsE.replace('"', '')
+        newStrsE=newStrsE.replace("'", "")
+        newStrsE=newStrsE.replace(", (", "(")
+        newStrsE +="]"
+            
+        return newStrsE
     
     #------------
     
@@ -146,7 +161,7 @@ class LogicalConstrain:
         singleV = []
                     
         if len(v) != 1:
-            myLogger.error("%s Logical Constrain created with %i sets of variables which is not  one"%(lcName,len(v)))
+            myLogger.error("%s Logical Constraint created with %i sets of variables which is not  one"%(lcName,len(v)))
             return singleV
     
         v1 = list(v.values())[0]
@@ -163,14 +178,14 @@ class LogicalConstrain:
             singleV.append(cSingleVar)
         
         if headConstrain:
-            if ifLog: myLogger.debug("%s Logical Constrain is the head constrain - only ILP constrain created"%(lcName))
+            if ifLog: myLogger.debug("%s Logical Constraint is the head constrain - only ILP constrain created"%(lcName))
         
         if model is not None:
             model.update()
         
         return singleV
     
-    # Collects setups of ILP variables for logical methods calls for the created Logical constrain - recursive method
+    # Collects setups of ILP variables for logical methods calls for the created Logical Constraint - recursive method
     def _collectILPVariableSetups(self, lcVariableName, lcVariableNames, v, lcVars = []): 
         
         # Get set of ILP variables lists for the current variable name
@@ -243,7 +258,7 @@ class LogicalConstrain:
     # Method building ILP constraints
     def createILPConstrains(self, lcName, lcFun, model, v, headConstrain):
         if len(v) < 2:
-            myLogger.error("%s Logical Constrain created with %i sets of variables which is less then two"%(lcName, len(v)))
+            myLogger.error("%s Logical Constraint created with %i sets of variables which is less then two"%(lcName, len(v)))
             return None
         
         # Input variable names
@@ -262,7 +277,7 @@ class LogicalConstrain:
             cLcVariableSet = v[cLcVariableName]
 
             if len(cLcVariableSet) != len(lcVariableSet0):
-                myLogger.error("%s Logical Constrain has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
+                myLogger.error("%s Logical Constraint has no equal number of elements in provided sets: %s has %i elements and %s as %i elements"
                                %(lcName, lcVariableName0, len(v[lcVariableName0]), cLcVariableName, len(cLcVariableSet)))
                 
                 return rVars

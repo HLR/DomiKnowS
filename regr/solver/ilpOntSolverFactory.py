@@ -96,7 +96,7 @@ class ilpOntSolverFactory:
             if ontologiesTuple:
                 instance.myLogger.info("Returning new ilpOntSolver for %s using %s"%(ontologiesTuple,_ilpConfig['ilpSolver']))
             else:
-                instance.myLogger.info("Returning generic (not based on ontology) ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
+                instance.myLogger.debug("Returning generic (not based on ontology) ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
 
             return instance
         else:
@@ -104,6 +104,6 @@ class ilpOntSolverFactory:
             if ontologiesTuple:
                 instance.myLogger.info("Returning existing ilpOntSolver for %s using %s"%(ontologiesTuple,_ilpConfig['ilpSolver']))
             else:
-                instance.myLogger.info("Returning existing generic ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
+                instance.myLogger.debug("Returning existing generic ilpOntSolver using %s"%(_ilpConfig['ilpSolver']))
 
             return instance

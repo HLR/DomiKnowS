@@ -167,7 +167,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     Q += currentProbability[0] * xNotNew    
                 
             if currentConceptRelation[2] is not None:
-                self.myLogger.info("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
+                self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
                 
         # Create constraint for multiclass exclusivity 
         self.addMulticlassExclusivity(conceptsRelations, rootDn, m)
@@ -597,25 +597,34 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         for lc in lcs:   
             startLC = process_time_ns() # timer()
+            m.update()
+            startNumConstrs = m.NumConstrs
             
             if lc.active:
-                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
+                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
             else:
-                self.myLogger.info('Skipping not active Logical Constrain %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
+                self.myLogger.debug('Skipping not active Logical Constraint %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 continue
 
             result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
             
+            m.update()
+            endNumConstrs = m.NumConstrs
+            newNumConstrs = endNumConstrs - startNumConstrs
             endLC = process_time_ns() # timer()
             elapsedInNsLC = endLC - startLC
             elapsedInMsLC = elapsedInNsLC/1000000
             
             if result != None and isinstance(result, list):
-                self.myLogger.info('Successfully added Logical Constrain %s'%(lc.lcName))
-                self.myLoggerTime.info('Processing time for %s is: %ims'%(lc.lcName, elapsedInMsLC))
+                if newNumConstrs:
+                    self.myLogger.info('Successfully added Logical Constraint %s - created %i new ILP constraint\n'%(lc.lcName,newNumConstrs))
+                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - created %i new ILP constraint'%(lc.lcName, lc, elapsedInMsLC,newNumConstrs))
+                else:
+                    self.myLogger.info('Finished processing Logical Constraint %s - no new ILP constraint was created for it\n'%(lc.lcName))
+                    self.myLoggerTime.info('Processing time for %s(%s) is: %ims - no new ILP constraint was created'%(lc.lcName, lc, elapsedInMsLC))
             else:
-                self.myLogger.error('Failed to add Logical Constrain %s'%(lc.lcName))
-                self.myLoggerTime.error('Failed to add Logical Constrain %s'%(lc.lcName))
+                self.myLogger.error('Failed to add Logical Constraint %s\n'%(lc.lcName))
+                self.myLoggerTime.error('Failed to add Logical Constraint %s'%(lc.lcName))
 
     def isVariableFixed(self, dn, conceptName, e):
         fixedAttribute= None
@@ -911,8 +920,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                     elif not isinstance(path, eqL):
                                         vNames = [v if isinstance(v, str) else v.name for v in v[1:]]
                                         if lc.__str__() != "fixedL":
-                                            self.myLogger.info('The graph node %s has no path %s requested by logical constraint %s for concept %s '%
-                                                               (currentReferedDataNode, vNames, lc.lcName, conceptName))
+                                            self.myLogger.info('%s has no path %s requested by %s for concept %s'%(currentReferedDataNode, vNames, lc.lcName, conceptName))
                                 if not eDns:
                                     eDns = [None] # None - to keep track of candidates
                                     
@@ -1032,7 +1040,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         sampleInfo[variableName] = sampleInfoForVariable
                 
                 elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
-                    self.myLogger.info('Processing Nested Logical Constrain %s(%s) - %s'%(e.lcName, e, e.strEs()))
+                    self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
                                                                                lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
@@ -1042,8 +1050,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                                                                  lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                     
                     if vDns == None:
-                        self.myLogger.warning('Not found data for %s(%s) nested logical Constrain required to build Logical Constrain %s(%s) - skipping this constraint'%
-                                              (e.lcName,e,lc.lcName,lc))
+                        self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
                         
                     lcVariables[variableName] = vDns   
@@ -1059,7 +1066,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     pass # error!
             else:
-                self.myLogger.error('Logical Constrain %s has incorrect element %s'%(lc,e))
+                self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
                 return None
         if sample:
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo
@@ -1145,7 +1152,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             # Sort constraints according to their p
             lcP = OrderedDict(sorted(_lcP.items(), key=lambda t: t[0], reverse = True))
             for p in lcP:
-                self.myLogger.info('Found %i logical constraints with p %i - %s'%(len(lcP[p]),p,lcP[p]))
+                self.myLogger.info('Found %i logical constraints with p %i - %s\n'%(len(lcP[p]),p,lcP[p]))
                 self.myLoggerTime.info('Starting ILP inferencing - Found %i logical constraints'%(len(lcP[p])))
             
             # Search through set of logical constraints for subset satisfying and the mmax/min calculated objective value
@@ -1220,8 +1227,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         self.model['m'] = mP
                         self.model['x'] = xP
                 
-                self.myLogger.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
-                self.myLoggerTime.info('Optimizing model for lCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLogger.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
+                self.myLoggerTime.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
                 endLogicalConstraints = process_time() # timer()
                 elapsedLogicalConstraintsInMs = (endLogicalConstraints - endLogicalConstraintsPrep) *1000
@@ -1517,7 +1524,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                     continue
                     
                 lcCounter +=  1
-                self.myLogger.info('Processing Logical Constrain %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
+                self.myLogger.info('\n')
+                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
                 
                 lcName = lc.lcName
                     

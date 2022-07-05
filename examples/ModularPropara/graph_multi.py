@@ -127,8 +127,10 @@ with Graph('global') as graph:
         # then either
         orL(
             # step j associated with entity e, which is before step i cannot be associated with destroy action a2
-            step('j', path=(('i', before_arg2.reversed, before_arg1))), 
-            notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed)))), 
+            ifL(
+                step('j', path=(('i', before_arg2.reversed, before_arg1))), 
+                notL(action_label.destroy('a2', path=(('j', action_step.reversed), ('e', action_entity.reversed))))
+            ),
             # or if  
             ifL(
                 # step j1 which is before step i is associated with destroy action a2
