@@ -338,8 +338,7 @@ def main(args):
     if not args.load:
         program.after_train_epoch = [ProgramStorageCallback(program, save_epoch)]
         program.after_test_epoch = [ProgramStorageCallback(program, save_best)]
-        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: 
-                      torch.optim.SGD(param, lr=.001), device=args.gpu)
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
     else:
         program1.load(args.path)
     

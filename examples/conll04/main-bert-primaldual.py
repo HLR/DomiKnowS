@@ -9,6 +9,7 @@ from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgr
 from regr.program.callbackprogram import ProgramStorageCallback
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.lossprogram import PrimalDualProgram
+# from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.pytorch import SolverModel, SolverModelDictLoss
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
 from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, FunctionalReaderSensor, cache, TorchCache
@@ -16,6 +17,7 @@ from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, EdgeSensor, CompositionCandidateReaderSensor
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 from regr.utils import setProductionLogMode
+from examples.conll04.CallBackModel import CallbackPrimalProgram
 
 from conll.data.data import SingletonDataLoader
 
@@ -196,20 +198,21 @@ def model(device='auto'):
 #     class DictCallBackProgram(CallbackProgram, PrimalDualProgram):
 #         pass
     
-    lbp = PrimalDualProgram(
-        graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
-        dictloss={
-            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5178,  0.5622]).to(device)),
-            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5193, 13.4837]).to(device)),
-            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5160, 19.1140]).to(device)), 
-            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5116, 22.0435]).to(device)),             
-            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5101, 25.1522]).to(device)), 
-            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6393, 2.9941]).to(device)), 
-            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6882, 2.4281]).to(device)), 
-            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6031, 3.1250]).to(device)), 
-            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6324, 2.3878]).to(device)), 
-            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5735, 4.9000]).to(device)), 
-            "default": NBCrossEntropyDictLoss()},
+    lbp = CallbackPrimalProgram(
+        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
+#         dictloss={
+#             str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5178,  0.5622]).to(device)),
+#             str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5193, 13.4837]).to(device)),
+#             str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5160, 19.1140]).to(device)), 
+#             str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5116, 22.0435]).to(device)),             
+#             str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5101, 25.1522]).to(device)), 
+#             str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6393, 2.9941]).to(device)), 
+#             str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6882, 2.4281]).to(device)), 
+#             str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6031, 3.1250]).to(device)), 
+#             str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6324, 2.3878]).to(device)), 
+#             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5735, 4.9000]).to(device)), 
+#             "default": NBCrossEntropyDictLoss()},
+        loss = MacroAverageTracker(NBCrossEntropyLoss()),
         tnorm = 'G', 
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -295,8 +298,10 @@ def main(args):
         return epoch + 1, best_epoch, best_macro_f1
     
     if not args.load:
-        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu,
-                      train_epoch_callbacks=[ProgramStorageCallback(program, save_epoch)], valid_epoch_callbacks=[ProgramStorageCallback(program, save_best)])
+        program.after_train_epoch = [ProgramStorageCallback(program, save_epoch)]
+        program.after_test_epoch = [ProgramStorageCallback(program, save_best)]
+        program.train(train_reader, valid_set=valid_reader, test_set=test_reader, train_epoch_num=args.iteration, Optim=lambda param: torch.optim.SGD(param, lr=.001), device=args.gpu)
+#         train_epoch_callbacks=[ProgramStorageCallback(program, save_epoch)], valid_epoch_callbacks=[ProgramStorageCallback(program, save_best)])
     else:
         program.load(args.path)
         
