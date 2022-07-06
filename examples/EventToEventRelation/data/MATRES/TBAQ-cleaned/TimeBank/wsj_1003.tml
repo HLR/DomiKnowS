@@ -1,0 +1,238 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_1003</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-26" temporalFunction="false" functionInDocument="CREATION_TIME">10/26/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891026-0053 = 891026 891026-0053.
+Bethlehem Steel @ Net Fell 54% @ In 3rd Period @ --- @ Higher Costs, Less Volume @ Are Cited; 2 Others Post @ Lower Operating Profits @ ---- @ By Clare Ansberry @ Staff Reporter of The Wall Street Journal 10/26/89 WALL STREET JOURNAL (J) BS AS NII STEEL MANUFACTURERS (STL) EARNINGS (ERN)
+</EXTRAINFO>
+
+<TEXT>
+Bethlehem Steel Corp., <EVENT eid="e1" class="OCCURRENCE">hammered</EVENT> by higher costs and lower shipments to key automotive and service-center customers, <EVENT eid="e5" class="REPORTING">posted</EVENT> a 54% drop in <TIMEX3 tid="t180" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> profit.
+
+Separately, two more of the nation's top steelmakers -- Armco Inc. and National Intergroup Inc. -- <EVENT eid="e7" class="REPORTING">reported</EVENT> lower operating earnings in their steel businesses, <EVENT eid="e10" class="OCCURRENCE">marking</EVENT> what is generally <EVENT eid="e11" class="OCCURRENCE">believed</EVENT> to be the end of a <TIMEX3 tid="t283" type="DURATION" value="P2Y" temporalFunction="false" functionInDocument="NONE">two-year</TIMEX3> <EVENT eid="e13" class="OCCURRENCE">boom</EVENT> in the industry.
+
+Wall Street analysts <EVENT eid="e16" class="I_STATE">expect</EVENT> the disappointing <EVENT eid="e310" class="STATE">trend</EVENT> to <EVENT eid="e18" class="ASPECTUAL">continue</EVENT> into <TIMEX3 tid="t182" type="DATE" value="1989-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the fourth quarter</TIMEX3> and through at least the <TIMEX3 tid="t183" type="DATE" value="1990-H1" temporalFunction="false" functionInDocument="NONE">first two quarters of 1990</TIMEX3>, when the industry will increasingly <EVENT eid="e21" class="PERCEPTION">see</EVENT> the effect of price <EVENT eid="e185" class="OCCURRENCE">erosion</EVENT> in major product lines, such as rolled sheet used for cars, appliances and construction.
+
+"It doesn't <EVENT eid="e26" class="OCCURRENCE">bode</EVENT> well for <TIMEX3 tid="t190" type="DATE" value="FUTURE_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">coming quarters</TIMEX3>," <EVENT eid="e29" class="REPORTING">said</EVENT> John Jacobson, who follows the steel industry for AUS Consultants. In fact, he <EVENT eid="e33" class="I_STATE">thinks</EVENT> several steelmakers will <EVENT eid="e34" class="REPORTING">report</EVENT> actual <EVENT eid="e191" class="OCCURRENCE">losses</EVENT> through <TIMEX3 tid="t192" type="DATE" value="1990-Q3" temporalFunction="false" functionInDocument="NONE">the third quarter of 1990</TIMEX3>.
+
+Bethlehem, the nation's second largest steelmaker, <EVENT eid="e35" class="OCCURRENCE">earned</EVENT> $46.9 million, or 54 cents a share. The figures <EVENT eid="e373" class="STATE">include</EVENT> $15 million in costs related to a blast furnace <EVENT eid="e375" class="OCCURRENCE">outage</EVENT> and $8 million in losses from unauthorized work <EVENT eid="e377" class="OCCURRENCE">outages</EVENT> at the company's coal operations. In the <TIMEX3 tid="t196" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t180">year-ago period</TIMEX3>, Bethlehem <EVENT eid="e44" class="OCCURRENCE">earned</EVENT> $101.4 million, or $1.27 a share, including a $3.8 million <EVENT eid="e197" class="OCCURRENCE">gain</EVENT> from early retirement of debt.
+
+<TIMEX3 tid="t198" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Third-quarter</TIMEX3> sales <EVENT eid="e47" class="OCCURRENCE">dropped</EVENT> 11% to $1.27 billion from $1.43 billion <TIMEX3 tid="t199" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t198">a year ago</TIMEX3>.
+
+In composite trading on the New York Stock Exchange, Bethlehem shares <EVENT eid="e49" class="OCCURRENCE">rose</EVENT> 50 cents to $17.375.
+
+Of all the major steelmakers, Bethlehem would <EVENT eid="e50" class="PERCEPTION">seem</EVENT> to be the most <EVENT eid="e201" class="I_STATE">vulnerable</EVENT> to a <EVENT eid="e53" class="OCCURRENCE">slowdown</EVENT>. It hasn't <EVENT eid="e490" class="OCCURRENCE">diversified</EVENT> beyond steel, nor has it <EVENT eid="e56" class="OCCURRENCE">linked</EVENT> up with a joint venture partner to <EVENT eid="e59" class="OCCURRENCE">share</EVENT> costs and risks.
+
+However, in spite of the difficult industrywide environment of high cost and low volume, Bethlehem "<EVENT eid="e206" class="OCCURRENCE">had</EVENT> pretty good earnings numbers," <EVENT eid="e63" class="REPORTING">said</EVENT> Michelle Galanter Applebaum, an analyst with Salomon Brothers Inc. Ms. Applebaum had <EVENT eid="e64" class="OCCURRENCE">estimated</EVENT> <TIMEX3 tid="t207" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> earnings of 55 cents a share, but <EVENT eid="e67" class="REPORTING">said</EVENT> the losses for the unusual items were <EVENT eid="e548" class="STATE">larger</EVENT> than <EVENT eid="e68" class="I_STATE">expected</EVENT>.
+
+Still, Bethlehem's core basic steel operations <EVENT eid="e70" class="OCCURRENCE">experienced</EVENT> a steep <EVENT eid="e210" class="OCCURRENCE">drop</EVENT> in operating profit to $58.6 million from $186.4 million <TIMEX3 tid="t211" type="DATE" value="1988-10-26" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">a year ago</TIMEX3>, when the industry <EVENT eid="e74" class="OCCURRENCE">enjoyed</EVENT> strong demand and pricing. The company <EVENT eid="e76" class="REPORTING">said</EVENT> its shipments <EVENT eid="e78" class="OCCURRENCE">declined</EVENT> as a result of a <EVENT eid="e80" class="OCCURRENCE">reduction</EVENT> in inventories by service centers, a lackluster automotive market and <EVENT eid="e84" class="OCCURRENCE">increasing</EVENT> competitive pressures in the construction market.
+
+At the same time, production costs, compared with <TIMEX3 tid="t215" type="DATE" value="1988-10-26" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">a year ago</TIMEX3>, were <EVENT eid="e89" class="OCCURRENCE">boosted</EVENT> by higher raw material and employment costs, which <EVENT eid="e91" class="OCCURRENCE">resulted</EVENT> from the company's new labor <EVENT eid="e92" class="OCCURRENCE">pact</EVENT> effective <TIMEX3 tid="t219" type="DATE" value="1990-06-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">June 1</TIMEX3>.
+
+"We <EVENT eid="e93" class="I_STATE">anticipate</EVENT> that steel market conditions will <EVENT eid="e94" class="OCCURRENCE">exhibit</EVENT> a further moderate <EVENT eid="e222" class="OCCURRENCE">decline</EVENT> in <TIMEX3 tid="t220" type="DATE" value="1989-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the fourth quarter</TIMEX3> as the automotive sector <EVENT eid="e95" class="STATE">remains</EVENT> weak and customers <EVENT eid="e96" class="ASPECTUAL">continue</EVENT> to <EVENT eid="e98" class="OCCURRENCE">adjust</EVENT> inventories," <EVENT eid="e100" class="REPORTING">said</EVENT> Bethlehem Chairman Walter F. Williams. He <EVENT eid="e223" class="REPORTING">noted</EVENT>, however, that the company's order entry has <EVENT eid="e104" class="OCCURRENCE">increased</EVENT> from the low levels of <TIMEX3 tid="t224" type="DATE" value="1989-SU" mod="START" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the early summer</TIMEX3>, <EVENT eid="e106" class="OCCURRENCE">following</EVENT> the end of labor <EVENT eid="e107" class="OCCURRENCE">negotiations</EVENT>.
+
+Steel business, <EVENT eid="e109" class="REPORTING">said</EVENT> <TIMEX3 tid="t225" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> net income <EVENT eid="e110" class="OCCURRENCE">dropped</EVENT> 8% to $33 million, or 35 cents a share, from $36 million, or 39 cents a share in <TIMEX3 tid="t227" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t225">the year-ago quarter</TIMEX3>. Sales <EVENT eid="e112" class="OCCURRENCE">dropped</EVENT> to $441.1 million from $820.4 million, because the company no longer <EVENT eid="e114" class="OCCURRENCE">consolidates</EVENT> its Eastern Steel division, which is <TIMEX3 tid="t730" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> a joint <EVENT eid="e115" class="OCCURRENCE">venture</EVENT> with Kawasaki Steel Corp.
+
+Along with reduced volume, analysts <EVENT eid="e116" class="REPORTING">said</EVENT> the nation's fifth largest steelmaker was <EVENT eid="e117" class="OCCURRENCE">hurt</EVENT> by <EVENT eid="e118" class="OCCURRENCE">holding</EVENT> higher-cost inventory when raw material costs of such key products as nickel <EVENT eid="e122" class="OCCURRENCE">dropped</EVENT>. Operating profit <EVENT eid="e123" class="OCCURRENCE">dropped</EVENT> 46% in its specialty flat-rolled steel segment. Moreover, the company <EVENT eid="e125" class="REPORTING">said</EVENT> higher sales and shipments to service centers from its Armco Steel Co. joint venture <EVENT eid="e129" class="I_ACTION">failed</EVENT> to <EVENT eid="e231" class="OCCURRENCE">offset</EVENT> weakness in the automotive market, higher production costs and a poorer product mix.
+
+Armco shares <EVENT eid="e133" class="OCCURRENCE">closed</EVENT> unchanged at $10.625 in composite trading on the New York Stock Exchange.
+
+National Intergroup, which <EVENT eid="e136" class="STATE">owns</EVENT> 50% of the nation's sixth largest steelmaker -- National Steel Corp. -- <EVENT eid="e137" class="OCCURRENCE">posted</EVENT> net income for the <TIMEX3 tid="t234" type="DATE" value="1989-Q2" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">fiscal second-quarter</TIMEX3> of $8.6 million, or 33 cents a share, compared with a net loss of $50.3 million. Sales <EVENT eid="e141" class="OCCURRENCE">increased</EVENT> in the <TIMEX3 tid="t236" type="DATE" value="1989-QX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t235">quarter</TIMEX3> <EVENT eid="e142" class="ASPECTUAL">ended</EVENT> <TIMEX3 tid="t235" type="DATE" value="1989-09-30" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sept. 30</TIMEX3> to $747.8 million from $623.5 million <TIMEX3 tid="t239" type="DATE" value="1988-QX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t236">a year ago</TIMEX3>. <TIMEX3 tid="t240" type="DATE" value="1989-Q2" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t234">The latest period</TIMEX3> <EVENT eid="e143" class="OCCURRENCE">includes</EVENT> gains of $9.1 million from early retirement of debt and tax loss carry-forward. <TIMEX3 tid="t838" type="DATE" value="1988-Q2" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t240">Last year</TIMEX3>'s results were <EVENT eid="e148" class="OCCURRENCE">hurt</EVENT> by $41.3 million in restructuring charges.
+
+National Intergroup stock <EVENT eid="e151" class="OCCURRENCE">closed</EVENT> at $15, unchanged in composite trading on the New York Stock Exchange.
+
+The company <EVENT eid="e154" class="REPORTING">noted</EVENT> that its Fox-Meyer Drug Co., Ben Franklin Stores Inc. and Permian Corp. operations <EVENT eid="e155" class="I_ACTION">showed</EVENT> <EVENT eid="e156" class="OCCURRENCE">improvements</EVENT> as a result of restructuring <EVENT eid="e158" class="OCCURRENCE">moves</EVENT>. However, its equity in the net income of National Steel <EVENT eid="e159" class="OCCURRENCE">declined</EVENT> to $6.3 million from $10.9 million as a result of softer demand and lost orders following prolonged labor <EVENT eid="e164" class="OCCURRENCE">talks</EVENT> and a <EVENT eid="e249" class="I_ACTION">threatened</EVENT> <EVENT eid="e165" class="OCCURRENCE">strike</EVENT>. National Intergroup is <EVENT eid="e166" class="OCCURRENCE">negotiating</EVENT> for the <EVENT eid="e167" class="OCCURRENCE">sale</EVENT> of its 50% interest in National Steel to <EVENT eid="e250" class="OCCURRENCE">concentrate</EVENT> more fully on drug distribution operations.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei929" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei930" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei932" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei933" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei934" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei936" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e16" eiid="ei937" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e310" eiid="ei938" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e18" eiid="ei939" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e21" eiid="ei940" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e185" eiid="ei942" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e26" eiid="ei943" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei944" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei945" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei946" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e191" eiid="ei947" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e35" eiid="ei948" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e373" eiid="ei949" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e375" eiid="ei950" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e377" eiid="ei952" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e44" eiid="ei953" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e197" eiid="ei955" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e47" eiid="ei957" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei960" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei962" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e201" eiid="ei963" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e53" eiid="ei964" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e490" eiid="ei965" tense="PAST" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e56" eiid="ei966" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e59" eiid="ei967" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e206" eiid="ei968" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e63" eiid="ei969" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e64" eiid="ei970" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e67" eiid="ei971" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e548" eiid="ei973" tense="PAST" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e68" eiid="ei974" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e70" eiid="ei975" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e210" eiid="ei976" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e74" eiid="ei979" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e76" eiid="ei982" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e78" eiid="ei983" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e80" eiid="ei984" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e84" eiid="ei985" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e89" eiid="ei986" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei987" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e92" eiid="ei988" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e93" eiid="ei990" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e94" eiid="ei991" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e222" eiid="ei992" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e95" eiid="ei993" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e96" eiid="ei994" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e98" eiid="ei995" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e100" eiid="ei996" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e223" eiid="ei997" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e104" eiid="ei998" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e106" eiid="ei999" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e107" eiid="ei1000" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e109" eiid="ei1001" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e110" eiid="ei1002" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e112" eiid="ei1005" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e114" eiid="ei1008" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e115" eiid="ei1009" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e116" eiid="ei1011" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e117" eiid="ei1012" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e118" eiid="ei1013" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e122" eiid="ei1014" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e123" eiid="ei1015" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e125" eiid="ei1016" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e129" eiid="ei1017" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e231" eiid="ei1018" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e133" eiid="ei1019" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e136" eiid="ei1021" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e137" eiid="ei1022" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e141" eiid="ei1024" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e142" eiid="ei1025" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e143" eiid="ei1028" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e148" eiid="ei1032" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e151" eiid="ei1034" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e154" eiid="ei1036" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e155" eiid="ei1037" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e156" eiid="ei1038" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e158" eiid="ei1040" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e159" eiid="ei1041" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e164" eiid="ei1048" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e249" eiid="ei1049" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e165" eiid="ei1050" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e166" eiid="ei1051" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e167" eiid="ei1052" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e250" eiid="ei1053" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l145" relType="BEFORE" eventInstanceID="ei1036" relatedToTime="t0" />
+<TLINK lid="l142" relType="BEFORE" eventInstanceID="ei1016" relatedToTime="t0" />
+<TLINK lid="l139" relType="BEFORE" eventInstanceID="ei1011" relatedToTime="t0" />
+<TLINK lid="l138" relType="BEFORE" eventInstanceID="ei1005" relatedToTime="t0" />
+<TLINK lid="l137" relType="IS_INCLUDED" eventInstanceID="ei1008" relatedToTime="t0" />
+<TLINK lid="l134" relType="IDENTITY" eventInstanceID="ei997" relatedToEventInstance="ei996" />
+<TLINK lid="l133" relType="BEFORE" eventInstanceID="ei996" relatedToTime="t0" />
+<TLINK lid="l132" relType="DURING" eventInstanceID="ei995" relatedToTime="t220" />
+<TLINK lid="l131" relType="BEFORE" eventInstanceID="ei982" relatedToTime="t0" />
+<TLINK lid="l128" relType="IS_INCLUDED" eventInstanceID="ei962" relatedToTime="t0" />
+<TLINK lid="l125" relType="IS_INCLUDED" eventInstanceID="ei945" relatedToTime="t0" />
+<TLINK lid="l124" relType="BEFORE" eventInstanceID="ei944" relatedToTime="t0" />
+<TLINK lid="l123" relType="IS_INCLUDED" eventInstanceID="ei937" relatedToTime="t0" />
+<TLINK lid="l1" relType="DURING" eventInstanceID="ei929" relatedToTime="t0" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei930" relatedToTime="t0" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei932" relatedToTime="t0" />
+<TLINK lid="l6" relType="SIMULTANEOUS" eventInstanceID="ei932" relatedToEventInstance="ei933" />
+<TLINK lid="l7" relType="DURING" eventInstanceID="ei934" relatedToTime="t0" />
+<TLINK lid="l8" relType="DURING" eventInstanceID="ei936" relatedToTime="t283" />
+<TLINK lid="l9" relType="INCLUDES" eventInstanceID="ei938" relatedToTime="t182" />
+<TLINK lid="l10" relType="INCLUDES" eventInstanceID="ei938" relatedToTime="t183" />
+<TLINK lid="l11" relType="IS_INCLUDED" eventInstanceID="ei940" relatedToTime="t183"  />
+<TLINK lid="l13" relType="AFTER" timeID="t190" relatedToTime="t0" />
+<TLINK lid="l14" relType="AFTER" eventInstanceID="ei946" relatedToTime="t0" />
+<TLINK lid="l15" relType="BEFORE" eventInstanceID="ei947" relatedToEventInstance="ei946" />
+<TLINK lid="l16" relType="INCLUDES" eventInstanceID="ei946" relatedToTime="t192" />
+<TLINK lid="l17" relType="BEFORE" eventInstanceID="ei948" relatedToTime="t0" />
+<TLINK lid="l18" relType="SIMULTANEOUS" eventInstanceID="ei949" relatedToEventInstance="ei948" />
+<TLINK lid="l19" relType="AFTER" eventInstanceID="ei948" relatedToEventInstance="ei950" />
+<TLINK lid="l22" relType="INCLUDES" timeID="t196" relatedToEventInstance="ei953" />
+<TLINK lid="l24" relType="BEFORE" eventInstanceID="ei955" relatedToEventInstance="ei953" />
+<TLINK lid="l26" relType="ENDED_BY" timeID="t198" relatedToEventInstance="ei957" />
+<TLINK lid="l28" relType="BEFORE" eventInstanceID="ei960" relatedToTime="t0" />
+<TLINK lid="l29" relType="BEFORE" eventInstanceID="ei965" relatedToTime="t0" />
+<TLINK lid="l30" relType="BEFORE" eventInstanceID="ei966" relatedToTime="t0" />
+<TLINK lid="l31" relType="AFTER" eventInstanceID="ei969" relatedToEventInstance="ei968" />
+<TLINK lid="l32" relType="BEFORE" eventInstanceID="ei969" relatedToTime="t0" />
+<TLINK lid="l33" relType="BEFORE" eventInstanceID="ei970" relatedToTime="t207" />
+<TLINK lid="l34" relType="SIMULTANEOUS" eventInstanceID="ei971" relatedToEventInstance="ei969" />
+<TLINK lid="l36" relType="BEFORE" eventInstanceID="ei974" relatedToEventInstance="ei971" />
+<TLINK lid="l37" relType="SIMULTANEOUS" eventInstanceID="ei975" relatedToEventInstance="ei976" />
+<TLINK lid="l38" relType="IS_INCLUDED" eventInstanceID="ei979" relatedToTime="t211"  />
+<TLINK lid="l41" relType="AFTER" eventInstanceID="ei983" relatedToEventInstance="ei984" />
+<TLINK lid="l42" relType="AFTER" eventInstanceID="ei983" relatedToEventInstance="ei985" />
+<TLINK lid="l43" relType="AFTER" eventInstanceID="ei986" relatedToTime="t215" />
+<TLINK lid="l44" relType="SIMULTANEOUS" eventInstanceID="ei987" relatedToEventInstance="ei986" />
+<TLINK lid="l45" relType="SIMULTANEOUS" eventInstanceID="ei986" relatedToEventInstance="ei983"  />
+<TLINK lid="l46" relType="AFTER" eventInstanceID="ei987" relatedToEventInstance="ei988" />
+<TLINK lid="l48" relType="AFTER" eventInstanceID="ei991" relatedToTime="t0" />
+<TLINK lid="l49" relType="INCLUDES" timeID="t220" relatedToEventInstance="ei992" />
+<TLINK lid="l50" relType="DURING" eventInstanceID="ei993" relatedToTime="t220" />
+<TLINK lid="l51" relType="DURING" eventInstanceID="ei994" relatedToTime="t220" />
+<TLINK lid="l52" relType="AFTER" timeID="t224" relatedToEventInstance="ei998" />
+<TLINK lid="l53" relType="SIMULTANEOUS" eventInstanceID="ei999" relatedToEventInstance="ei998" />
+<TLINK lid="l54" relType="AFTER" eventInstanceID="ei1000" relatedToEventInstance="ei998" />
+<TLINK lid="l55" relType="BEFORE" eventInstanceID="ei1001" relatedToTime="t0" />
+<TLINK lid="l56" relType="ENDED_BY" timeID="t225" relatedToEventInstance="ei1002" />
+<TLINK lid="l57" relType="DURING" eventInstanceID="ei1009" relatedToTime="t730" />
+<TLINK lid="l59" relType="BEFORE" eventInstanceID="ei1013" relatedToEventInstance="ei1012" />
+<TLINK lid="l60" relType="DURING" eventInstanceID="ei1013" relatedToEventInstance="ei1014"  />
+<TLINK lid="l61" relType="BEFORE" eventInstanceID="ei1015" relatedToTime="t0" />
+<TLINK lid="l62" relType="BEFORE" eventInstanceID="ei1019" relatedToTime="t0" />
+<TLINK lid="l64" relType="DURING" eventInstanceID="ei1021" relatedToTime="t0" />
+<TLINK lid="l65" relType="AFTER" eventInstanceID="ei1022" relatedToTime="t234" />
+<TLINK lid="l67" relType="IS_INCLUDED" eventInstanceID="ei1024" relatedToTime="t236" />
+<TLINK lid="l68" relType="ENDED_BY" timeID="t236" relatedToEventInstance="ei1025" />
+<TLINK lid="l69" relType="SIMULTANEOUS" eventInstanceID="ei1025" relatedToTime="t235" />
+<TLINK lid="l70" relType="SIMULTANEOUS" timeID="t240" relatedToEventInstance="ei1028" />
+<TLINK lid="l74" relType="INCLUDES" timeID="t838" relatedToEventInstance="ei1032" />
+<TLINK lid="l85" relType="DURING" eventInstanceID="ei1051" relatedToTime="t0" />
+<TLINK lid="l86" relType="AFTER" eventInstanceID="ei1052" relatedToEventInstance="ei1051" />
+<SLINK lid="l121" relType="EVIDENTIAL" eventInstanceID="ei1001" subordinatedEventInstance="ei1002" />
+<SLINK lid="l117" relType="FACTIVE" eventInstanceID="ei975" subordinatedEventInstance="ei976" />
+<SLINK lid="l88" relType="MODAL" eventInstanceID="ei937" subordinatedEventInstance="ei939" />
+<SLINK lid="l91" relType="EVIDENTIAL" eventInstanceID="ei944" subordinatedEventInstance="ei943" />
+<SLINK lid="l92" relType="MODAL" eventInstanceID="ei945" subordinatedEventInstance="ei946" />
+<SLINK lid="l93" relType="EVIDENTIAL" eventInstanceID="ei946" subordinatedEventInstance="ei947" />
+<SLINK lid="l94" relType="MODAL" eventInstanceID="ei962" subordinatedEventInstance="ei963" />
+<SLINK lid="l95" relType="MODAL" eventInstanceID="ei963" subordinatedEventInstance="ei964" />
+<SLINK lid="l96" relType="MODAL" eventInstanceID="ei966" subordinatedEventInstance="ei967" />
+<SLINK lid="l97" relType="EVIDENTIAL" eventInstanceID="ei969" subordinatedEventInstance="ei968" />
+<SLINK lid="l98" relType="EVIDENTIAL" eventInstanceID="ei971" subordinatedEventInstance="ei973" />
+<SLINK lid="l99" relType="EVIDENTIAL" eventInstanceID="ei982" subordinatedEventInstance="ei983" />
+<SLINK lid="l100" relType="MODAL" eventInstanceID="ei990" subordinatedEventInstance="ei991" />
+<SLINK lid="l101" relType="FACTIVE" eventInstanceID="ei991" subordinatedEventInstance="ei992" />
+<SLINK lid="l102" relType="EVIDENTIAL" eventInstanceID="ei996" subordinatedEventInstance="ei990" />
+<SLINK lid="l103" relType="EVIDENTIAL" eventInstanceID="ei997" subordinatedEventInstance="ei998" />
+<SLINK lid="l104" relType="EVIDENTIAL" eventInstanceID="ei1011" subordinatedEventInstance="ei1012" />
+<SLINK lid="l105" relType="EVIDENTIAL" eventInstanceID="ei1016" subordinatedEventInstance="ei1017" />
+<SLINK lid="l106" relType="COUNTER_FACTIVE" eventInstanceID="ei1017" subordinatedEventInstance="ei1018" />
+<SLINK lid="l107" relType="EVIDENTIAL" eventInstanceID="ei1036" subordinatedEventInstance="ei1037" />
+<SLINK lid="l108" relType="EVIDENTIAL" eventInstanceID="ei1037" subordinatedEventInstance="ei1038" />
+<SLINK lid="l109" relType="MODAL" eventInstanceID="ei1049" subordinatedEventInstance="ei1050" />
+<SLINK lid="l110" relType="MODAL" eventInstanceID="ei1051" subordinatedEventInstance="ei1052" />
+<SLINK lid="l111" relType="MODAL" eventInstanceID="ei1052" subordinatedEventInstance="ei1053" />
+<ALINK lid="l113" relType="CONTINUES" eventInstanceID="ei939" relatedToEventInstance="ei938" />
+<ALINK lid="l114" relType="CONTINUES" eventInstanceID="ei994" relatedToEventInstance="ei995" />
+
+</TimeML>

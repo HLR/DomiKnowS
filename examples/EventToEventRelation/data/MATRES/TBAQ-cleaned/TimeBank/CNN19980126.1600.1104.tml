@@ -1,0 +1,66 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>CNN19980126.1600.1104</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1998-01-26" temporalFunction="false" functionInDocument="CREATION_TIME">19980126</TIMEX3></DCT>
+
+<EXTRAINFO>
+CNN19980126.1600.1104 NEWS STORY
+</EXTRAINFO>
+
+<TEXT>
+Major job cuts at AT and T. The long distance giant <EVENT eid="e1" class="OCCURRENCE">slashing</EVENT> up to eighteen thousand jobs, freezing executive salaries and <EVENT eid="e3" class="OCCURRENCE">shaking</EVENT> up management. The <EVENT eid="e39" class="ASPECTUAL">changes</EVENT> are part of a one point six billion dollar cost cutting initiative to <EVENT eid="e4" class="OCCURRENCE">revitalize</EVENT> its position in the telecommunications business. Earlier AT and T also <EVENT eid="e7" class="REPORTING">announced</EVENT> an eighteen percent <EVENT eid="e42" class="OCCURRENCE">drop</EVENT> in profits for <TIMEX3 tid="t32" type="DURATION" value="1997-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the fourth quarter</TIMEX3>. The company's sales force <EVENT eid="e9" class="I_ACTION">applauded</EVENT> the shake up.
+
+It's not something we're not <EVENT eid="e206" class="STATE">used</EVENT> to in the industry. But I <EVENT eid="e14" class="I_STATE">think</EVENT> right <TIMEX3 tid="t34" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3>, for AT and T and the people here, it's fairly <EVENT eid="e46" class="STATE">intense</EVENT> as you might w- well imagine.
+
+I mean look at the stock. You know, since he's been here the stock <EVENT eid="e22" class="OCCURRENCE">skyrocketed</EVENT> so, Yeah I <EVENT eid="e48" class="I_STATE">think</EVENT> he's <EVENT eid="e24" class="OCCURRENCE">doing</EVENT> the right thing.
+
+I <EVENT eid="e25" class="I_STATE">think</EVENT> it's a good thing that they're finally going to be <EVENT eid="e27" class="OCCURRENCE">downsizing</EVENT> you know some management because there is a whole lot of waste.
+
+Good news for AT and T <TIMEX3 tid="t33" type="DATE" value="1998-01-26" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">today</TIMEX3>. I <EVENT eid="e29" class="I_STATE">think</EVENT> it's <EVENT eid="e204" class="STATE">excellent</EVENT> for the company.
+
+But investors are <EVENT eid="e30" class="I_ACTION">approaching</EVENT> the <EVENT eid="e52" class="OCCURRENCE">changes</EVENT> with caution shares of AT and T down nearly four at sixty-one and a half.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei255" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei257" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei258" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei261" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei262" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e42" eiid="ei263" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e9" eiid="ei265" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei268" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e46" eiid="ei269" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e22" eiid="ei274" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e48" eiid="ei275" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei276" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei277" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e27" eiid="ei279" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei282" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e204" eiid="ei283" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e30" eiid="ei284" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e52" eiid="ei285" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e206" eiid="ei288" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<TLINK lid="l41" relType="BEFORE" eventInstanceID="ei288" relatedToTime="t0" />
+<TLINK lid="l40" relType="AFTER" eventInstanceID="ei265" relatedToEventInstance="ei262" />
+<TLINK lid="l1" relType="SIMULTANEOUS" eventInstanceID="ei268" relatedToTime="t34" />
+<TLINK lid="l2" relType="INCLUDES" timeID="t34" relatedToTime="t0" />
+<TLINK lid="l3" relType="INCLUDES" timeID="t34" relatedToEventInstance="ei269" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei274" relatedToTime="t0" />
+<TLINK lid="l5" relType="SIMULTANEOUS" eventInstanceID="ei275" relatedToEventInstance="ei268" />
+<TLINK lid="l8" relType="IDENTITY" timeID="t33" relatedToTime="t0" />
+<TLINK lid="l9" relType="SIMULTANEOUS" eventInstanceID="ei282" relatedToEventInstance="ei277" />
+<TLINK lid="l10" relType="BEFORE" eventInstanceID="ei284" relatedToTime="t0" />
+<TLINK lid="l11" relType="AFTER" eventInstanceID="ei284" relatedToEventInstance="ei285" />
+<TLINK lid="l13" relType="IDENTITY" eventInstanceID="ei285" relatedToEventInstance="ei258" />
+<TLINK lid="l14" relType="IS_INCLUDED" eventInstanceID="ei255" relatedToEventInstance="ei258" />
+<TLINK lid="l17" relType="AFTER" eventInstanceID="ei262" relatedToEventInstance="ei263" />
+<TLINK lid="l21" relType="IS_INCLUDED" eventInstanceID="ei257" relatedToEventInstance="ei258" />
+<SLINK lid="l36" relType="FACTIVE" eventInstanceID="ei284" subordinatedEventInstance="ei285" />
+<SLINK lid="l33" relType="MODAL" eventInstanceID="ei268" subordinatedEventInstance="ei269" />
+<SLINK lid="l31" relType="EVIDENTIAL" eventInstanceID="ei262" subordinatedEventInstance="ei263" />
+<SLINK lid="l26" relType="MODAL" eventInstanceID="ei275" subordinatedEventInstance="ei276" />
+<SLINK lid="l27" relType="MODAL" eventInstanceID="ei282" subordinatedEventInstance="ei283" />
+
+</TimeML>

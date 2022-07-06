@@ -1,0 +1,211 @@
+Text	JPMorgan had informed the UK's Financial Services Authority (FSA) of the situation, but this was a regulatory requirement and there was no indication at this stage that the regulator would take any action, a source familiar with the situation said. In a Securities and Exchange Commission filing, JPMorgan reported that since the end of March, its chief investment office has had significant mark-to-market losses in its synthetic credit portfolio. While other gains partially offset the trading loss, the bank estimates the business unit will post a loss of $800 million in the current quarter, excluding private equity results and litigation expenses. The bank previously forecast the unit would make a profit of about $200 million. "It could cost us as much as $1 billion or more," in addition to the loss estimated so far, Dimon said. The dollar loss, though, could be less significant than the hit to Dimon and the reputation of a bank which was strong enough to take over investment bank Bear Stearns and consumer bank Washington Mutual when they collapsed in 2008. JPMorgan had $2.32 trillion of assets supported by $190 billion of shareholder equity at the end of March — an equity ratio of almost 13%. That is four times the industry mean and ahead of 10-11% at Citigroup and Bank of America Corp. JPMorgan has been earning more than $4 billion each quarter, on average, for the past two years. "Jamie has always styled himself as one of the kings of Wall Street," said Nancy Bush, a longtime bank analyst and contributing editor at SNL Financial. "I don't know how this went so bad so quickly with his knowledge and aversion to risk." Ekta Kapoor files case against Dirty Picture remake
+Event	1	informed	Occurrence	13
+Event	2	said	Reporting	243
+Event	3	filing	Occurrence	289
+Event	4	reported	Reporting	306
+Event	5	losses	HalfGeneric	407
+Event	6	gains	HalfGeneric	461
+Event	7	offset	I_Action	477
+Event	8	loss	Occurrence	496
+Event	9	estimates	Occurrence	511
+Event	10	loss	Occurrence	551
+Event	11	forecast	Occurrence	674
+Event	12	loss	Occurrence	804
+Event	13	said	Reporting	833
+Event	14	loss	Occurrence	850
+Event	15	hit	Occurrence	899
+Event	16	take	Occurrence	968
+Event	17	collapsed	Occurrence	1053
+Event	18	said	Reporting	1474
+Event	19	went	Occurrence	1580
+Event	20	files	Occurrence	1657
+Relation	1	2	NoRel	true	informed	said
+Relation	1	3	SubSuper	true	informed	filing
+Relation	1	4	NoRel	true	informed	reported
+Relation	1	5	NoRel	true	informed	losses
+Relation	1	6	NoRel	true	informed	gains
+Relation	1	7	NoRel	true	informed	offset
+Relation	1	8	NoRel	true	informed	loss
+Relation	1	9	NoRel	true	informed	estimates
+Relation	1	10	NoRel	true	informed	loss
+Relation	1	11	NoRel	true	informed	forecast
+Relation	1	12	NoRel	true	informed	loss
+Relation	1	13	NoRel	true	informed	said
+Relation	1	14	NoRel	true	informed	loss
+Relation	1	15	NoRel	true	informed	hit
+Relation	1	16	NoRel	true	informed	take
+Relation	1	17	NoRel	true	informed	collapsed
+Relation	1	18	NoRel	true	informed	said
+Relation	1	19	NoRel	true	informed	went
+Relation	1	20	NoRel	true	informed	files
+Relation	2	3	NoRel	true	said	filing
+Relation	2	4	NoRel	true	said	reported
+Relation	2	5	NoRel	true	said	losses
+Relation	2	6	NoRel	true	said	gains
+Relation	2	7	NoRel	true	said	offset
+Relation	2	8	NoRel	true	said	loss
+Relation	2	9	NoRel	true	said	estimates
+Relation	2	10	NoRel	true	said	loss
+Relation	2	11	NoRel	true	said	forecast
+Relation	2	12	NoRel	true	said	loss
+Relation	2	13	NoRel	true	said	said
+Relation	2	14	NoRel	true	said	loss
+Relation	2	15	NoRel	true	said	hit
+Relation	2	16	NoRel	true	said	take
+Relation	2	17	NoRel	true	said	collapsed
+Relation	2	18	NoRel	true	said	said
+Relation	2	19	NoRel	true	said	went
+Relation	2	20	NoRel	true	said	files
+Relation	3	4	NoRel	true	filing	reported
+Relation	3	5	NoRel	true	filing	losses
+Relation	3	6	NoRel	true	filing	gains
+Relation	3	7	NoRel	true	filing	offset
+Relation	3	8	NoRel	true	filing	loss
+Relation	3	9	SuperSub	true	filing	estimates
+Relation	3	10	NoRel	true	filing	loss
+Relation	3	11	NoRel	true	filing	forecast
+Relation	3	12	NoRel	true	filing	loss
+Relation	3	13	NoRel	true	filing	said
+Relation	3	14	NoRel	true	filing	loss
+Relation	3	15	NoRel	true	filing	hit
+Relation	3	16	NoRel	true	filing	take
+Relation	3	17	NoRel	true	filing	collapsed
+Relation	3	18	NoRel	true	filing	said
+Relation	3	19	NoRel	true	filing	went
+Relation	3	20	NoRel	true	filing	files
+Relation	4	5	NoRel	true	reported	losses
+Relation	4	6	NoRel	true	reported	gains
+Relation	4	7	NoRel	true	reported	offset
+Relation	4	8	NoRel	true	reported	loss
+Relation	4	9	NoRel	true	reported	estimates
+Relation	4	10	NoRel	true	reported	loss
+Relation	4	11	NoRel	true	reported	forecast
+Relation	4	12	NoRel	true	reported	loss
+Relation	4	13	NoRel	true	reported	said
+Relation	4	14	NoRel	true	reported	loss
+Relation	4	15	NoRel	true	reported	hit
+Relation	4	16	NoRel	true	reported	take
+Relation	4	17	NoRel	true	reported	collapsed
+Relation	4	18	NoRel	true	reported	said
+Relation	4	19	NoRel	true	reported	went
+Relation	4	20	NoRel	true	reported	files
+Relation	5	6	NoRel	true	losses	gains
+Relation	5	7	NoRel	true	losses	offset
+Relation	5	8	Coref	true	losses	loss
+Relation	5	9	NoRel	true	losses	estimates
+Relation	5	10	Coref	true	losses	loss
+Relation	5	11	NoRel	true	losses	forecast
+Relation	5	12	Coref	true	losses	loss
+Relation	5	13	NoRel	true	losses	said
+Relation	5	14	Coref	true	losses	loss
+Relation	5	15	SuperSub	true	losses	hit
+Relation	5	16	NoRel	true	losses	take
+Relation	5	17	NoRel	true	losses	collapsed
+Relation	5	18	NoRel	true	losses	said
+Relation	5	19	NoRel	true	losses	went
+Relation	5	20	NoRel	true	losses	files
+Relation	6	7	NoRel	true	gains	offset
+Relation	6	8	NoRel	true	gains	loss
+Relation	6	9	NoRel	true	gains	estimates
+Relation	6	10	NoRel	true	gains	loss
+Relation	6	11	NoRel	true	gains	forecast
+Relation	6	12	NoRel	true	gains	loss
+Relation	6	13	NoRel	true	gains	said
+Relation	6	14	NoRel	true	gains	loss
+Relation	6	15	NoRel	true	gains	hit
+Relation	6	16	NoRel	true	gains	take
+Relation	6	17	NoRel	true	gains	collapsed
+Relation	6	18	NoRel	true	gains	said
+Relation	6	19	NoRel	true	gains	went
+Relation	6	20	NoRel	true	gains	files
+Relation	7	8	NoRel	true	offset	loss
+Relation	7	9	NoRel	true	offset	estimates
+Relation	7	10	NoRel	true	offset	loss
+Relation	7	11	NoRel	true	offset	forecast
+Relation	7	12	NoRel	true	offset	loss
+Relation	7	13	NoRel	true	offset	said
+Relation	7	14	NoRel	true	offset	loss
+Relation	7	15	NoRel	true	offset	hit
+Relation	7	16	NoRel	true	offset	take
+Relation	7	17	NoRel	true	offset	collapsed
+Relation	7	18	NoRel	true	offset	said
+Relation	7	19	NoRel	true	offset	went
+Relation	7	20	NoRel	true	offset	files
+Relation	8	9	NoRel	true	loss	estimates
+Relation	8	10	Coref	true	loss	loss
+Relation	8	11	NoRel	true	loss	forecast
+Relation	8	12	Coref	true	loss	loss
+Relation	8	13	NoRel	true	loss	said
+Relation	8	14	Coref	true	loss	loss
+Relation	8	15	SuperSub	true	loss	hit
+Relation	8	16	NoRel	true	loss	take
+Relation	8	17	NoRel	true	loss	collapsed
+Relation	8	18	NoRel	true	loss	said
+Relation	8	19	NoRel	true	loss	went
+Relation	8	20	NoRel	true	loss	files
+Relation	9	10	NoRel	true	estimates	loss
+Relation	9	11	NoRel	true	estimates	forecast
+Relation	9	12	NoRel	true	estimates	loss
+Relation	9	13	NoRel	true	estimates	said
+Relation	9	14	NoRel	true	estimates	loss
+Relation	9	15	NoRel	true	estimates	hit
+Relation	9	16	NoRel	true	estimates	take
+Relation	9	17	NoRel	true	estimates	collapsed
+Relation	9	18	NoRel	true	estimates	said
+Relation	9	19	NoRel	true	estimates	went
+Relation	9	20	NoRel	true	estimates	files
+Relation	10	11	NoRel	true	loss	forecast
+Relation	10	12	Coref	true	loss	loss
+Relation	10	13	NoRel	true	loss	said
+Relation	10	14	Coref	true	loss	loss
+Relation	10	15	SuperSub	true	loss	hit
+Relation	10	16	NoRel	true	loss	take
+Relation	10	17	NoRel	true	loss	collapsed
+Relation	10	18	NoRel	true	loss	said
+Relation	10	19	NoRel	true	loss	went
+Relation	10	20	NoRel	true	loss	files
+Relation	11	12	NoRel	true	forecast	loss
+Relation	11	13	NoRel	true	forecast	said
+Relation	11	14	NoRel	true	forecast	loss
+Relation	11	15	NoRel	true	forecast	hit
+Relation	11	16	NoRel	true	forecast	take
+Relation	11	17	NoRel	true	forecast	collapsed
+Relation	11	18	NoRel	true	forecast	said
+Relation	11	19	NoRel	true	forecast	went
+Relation	11	20	NoRel	true	forecast	files
+Relation	12	13	NoRel	true	loss	said
+Relation	12	14	Coref	true	loss	loss
+Relation	12	15	SuperSub	true	loss	hit
+Relation	12	16	NoRel	true	loss	take
+Relation	12	17	NoRel	true	loss	collapsed
+Relation	12	18	NoRel	true	loss	said
+Relation	12	19	NoRel	true	loss	went
+Relation	12	20	NoRel	true	loss	files
+Relation	13	14	NoRel	true	said	loss
+Relation	13	15	NoRel	true	said	hit
+Relation	13	16	NoRel	true	said	take
+Relation	13	17	NoRel	true	said	collapsed
+Relation	13	18	NoRel	true	said	said
+Relation	13	19	NoRel	true	said	went
+Relation	13	20	NoRel	true	said	files
+Relation	14	15	SuperSub	true	loss	hit
+Relation	14	16	NoRel	true	loss	take
+Relation	14	17	NoRel	true	loss	collapsed
+Relation	14	18	NoRel	true	loss	said
+Relation	14	19	NoRel	true	loss	went
+Relation	14	20	NoRel	true	loss	files
+Relation	15	16	NoRel	true	hit	take
+Relation	15	17	NoRel	true	hit	collapsed
+Relation	15	18	NoRel	true	hit	said
+Relation	15	19	NoRel	true	hit	went
+Relation	15	20	NoRel	true	hit	files
+Relation	16	17	NoRel	true	take	collapsed
+Relation	16	18	NoRel	true	take	said
+Relation	16	19	NoRel	true	take	went
+Relation	16	20	NoRel	true	take	files
+Relation	17	18	NoRel	true	collapsed	said
+Relation	17	19	NoRel	true	collapsed	went
+Relation	17	20	NoRel	true	collapsed	files
+Relation	18	19	NoRel	true	said	went
+Relation	18	20	NoRel	true	said	files
+Relation	19	20	NoRel	true	went	files

@@ -1,0 +1,94 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0527</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-30" temporalFunction="false" functionInDocument="CREATION_TIME">10/30/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891030-0174 = 891030 891030-0174.
+Crossland Savings Stock Plunges as Firm @ Recommends Suspension of Dividends @ ---- @ By Udayan Gupta @ Staff Reporter of The Wall Street Journal 10/30/89 WALL STREET JOURNAL (J) CRL DIVIDENDS (DIV) FINANCIAL, ACCOUNTING, LEASING (FIN) EARNINGS (ERN) NEW YORK
+</EXTRAINFO>
+
+<TEXT>
+Crossland Savings Bank's stock <EVENT eid="e1" class="OCCURRENCE">plummeted</EVENT> after management <EVENT eid="e4" class="I_ACTION">recommended</EVENT> a <EVENT eid="e82" class="OCCURRENCE">suspension</EVENT> of dividend payments on both its common and preferred stock because Crossland may not <EVENT eid="e6" class="I_STATE">meet</EVENT> the new government capital criteria effective <TIMEX3 tid="t85" type="DATE" value="1989-12-07" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Dec. 7</TIMEX3>.
+
+In composite trading on the New York Stock Exchange <TIMEX3 tid="t86" type="DATE" value="1989-10-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3>, Crossland <EVENT eid="e11" class="OCCURRENCE">closed</EVENT> at $5.25, down $1.875, a 26% decline.
+
+A spokesman <EVENT eid="e12" class="REPORTING">said</EVENT> the savings bank may not <EVENT eid="e13" class="I_STATE">qualify</EVENT> for the capital requirements because, under the proposed guidelines, its $380 million of preferred stock doesn't <EVENT eid="e18" class="I_STATE">meet</EVENT> the "core capital" criteria outlined under the new Financial Institutions Reform, Recovery and Enforcement Act of <TIMEX3 tid="t89" type="DATE" value="1989" temporalFunction="false" functionInDocument="NONE">1989</TIMEX3>. He <EVENT eid="e22" class="REPORTING">added</EVENT> that final guidelines to be <EVENT eid="e25" class="OCCURRENCE">published</EVENT> in <TIMEX3 tid="t191" type="DATE" value="1989-11" mod="START" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">early November</TIMEX3> will <EVENT eid="e26" class="OCCURRENCE">determine</EVENT> whether the bank is in compliance.
+
+Crossland <EVENT eid="e29" class="REPORTING">said</EVENT> it <EVENT eid="e30" class="OCCURRENCE">retained</EVENT> three investment bankers to <EVENT eid="e32" class="I_ACTION">assist</EVENT> it in <EVENT eid="e34" class="I_ACTION">developing</EVENT> and <EVENT eid="e35" class="I_ACTION">implementing</EVENT> a financial restructuring plan. It wouldn't <EVENT eid="e36" class="OCCURRENCE">identify</EVENT> the bankers.
+
+Additionally, Crossland <EVENT eid="e39" class="REPORTING">reported</EVENT> a <TIMEX3 tid="t92" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> <EVENT eid="e40" class="STATE">loss</EVENT> of $175.5 million, or $13.44 a share, compared with net income of $27.1 million, or $1.16 a share, <TIMEX3 tid="t95" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t92">a year ago</TIMEX3>. A major factor in the <TIMEX3 tid="t98" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">third-quarter</TIMEX3> <EVENT eid="e43" class="STATE">loss</EVENT> was the write-down of $143.6 million of goodwill.
+
+The spokesman <EVENT eid="e45" class="REPORTING">said</EVENT> that the proposed guidelines <EVENT eid="e47" class="OCCURRENCE">caused</EVENT> Crossland to <EVENT eid="e49" class="OCCURRENCE">revise</EVENT> its business objectives and, consequently, to <EVENT eid="e50" class="OCCURRENCE">write</EVENT> down the asset value of some previous acquisitions. Crossland <EVENT eid="e52" class="I_ACTION">recorded</EVENT> an additional $20 million in loan loss reserves in <TIMEX3 tid="t105" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the third quarter</TIMEX3>.
+
+Net interest income for <TIMEX3 tid="t104" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the third quarter</TIMEX3> declined to $35.6 million from $70.1 million <TIMEX3 tid="t111" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t104">a year ago</TIMEX3>. However, non-interest income <EVENT eid="e55" class="OCCURRENCE">rose</EVENT> to $23.5 million from $22 million. <TIMEX3 tid="t116" type="DATE" value="1989-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Third-quarter</TIMEX3> loan originations <EVENT eid="e57" class="OCCURRENCE">dropped</EVENT> sharply to $663 million from $1 billion <TIMEX3 tid="t122" type="DATE" value="1988-Q3" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">a year ago</TIMEX3>.
+
+Standard amp Poor's Corp. <EVENT eid="e58" class="OCCURRENCE">lowered</EVENT> the rating on Crossland's preferred stock to double-C from single-B-minus and <EVENT eid="e60" class="OCCURRENCE">placed</EVENT> it on CreditWatch for possible further downgrade. It also <EVENT eid="e61" class="OCCURRENCE">placed</EVENT> on CreditWatch for possible downgrade other securities, including the double-B-minus/B rating of Crossland's certificates of deposit and the single-B rating of its senior subordinated capital notes. About $518 million of debt is affected.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei1990" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei1991" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e82" eiid="ei1992" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e6" eiid="ei1993" tense="NONE" aspect="NONE" polarity="NEG" pos="VERB" modality="may" />
+<MAKEINSTANCE eventID="e11" eiid="ei1995" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei1997" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei1998" tense="NONE" aspect="NONE" polarity="NEG" pos="VERB" modality="may" />
+<MAKEINSTANCE eventID="e18" eiid="ei2000" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2002" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei2003" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e26" eiid="ei2004" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei2006" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e30" eiid="ei2007" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e32" eiid="ei2008" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei2009" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei2010" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e36" eiid="ei2012" tense="NONE" aspect="NONE" polarity="NEG" pos="VERB" modality="would" />
+<MAKEINSTANCE eventID="e39" eiid="ei2013" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei2014" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e43" eiid="ei2016" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e45" eiid="ei2018" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e47" eiid="ei2019" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei2020" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei2021" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e52" eiid="ei2022" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei2027" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e57" eiid="ei2030" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei2033" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei2034" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e61" eiid="ei2035" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l48" relType="IS_INCLUDED" eventInstanceID="ei2027" relatedToTime="t104" />
+<TLINK lid="l45" relType="IS_INCLUDED" eventInstanceID="ei2022" relatedToTime="t92" />
+<TLINK lid="l44" relType="IS_INCLUDED" eventInstanceID="ei2003" relatedToTime="t191" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei1990" relatedToTime="t0" />
+<TLINK lid="l2" relType="AFTER" eventInstanceID="ei1990" relatedToEventInstance="ei1991"  />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei1993" relatedToEventInstance="ei1991" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei1995" relatedToTime="t86" />
+<TLINK lid="l7" relType="BEFORE" eventInstanceID="ei1997" relatedToTime="t0" />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei2000" relatedToEventInstance="ei1998" />
+<TLINK lid="l10" relType="SIMULTANEOUS" eventInstanceID="ei2002" relatedToEventInstance="ei1997" />
+<TLINK lid="l11" relType="SIMULTANEOUS" eventInstanceID="ei2009" relatedToEventInstance="ei2010" />
+<TLINK lid="l12" relType="IS_INCLUDED" eventInstanceID="ei2006" relatedToEventInstance="ei2012" />
+<TLINK lid="l13" relType="SIMULTANEOUS" eventInstanceID="ei2013" relatedToEventInstance="ei2006" />
+<TLINK lid="l14" relType="DURING" eventInstanceID="ei2014" relatedToTime="t92" />
+<TLINK lid="l16" relType="DURING" eventInstanceID="ei2016" relatedToTime="t98" />
+<TLINK lid="l17" relType="IDENTITY" eventInstanceID="ei2016" relatedToEventInstance="ei2014" />
+<TLINK lid="l19" relType="IDENTITY" eventInstanceID="ei2018" relatedToEventInstance="ei1997" />
+<TLINK lid="l20" relType="BEFORE" eventInstanceID="ei2019" relatedToEventInstance="ei2020" />
+<TLINK lid="l21" relType="BEFORE" eventInstanceID="ei2019" relatedToEventInstance="ei2021" />
+<TLINK lid="l24" relType="DURING" timeID="t116" relatedToEventInstance="ei2030" />
+<TLINK lid="l25" relType="SIMULTANEOUS" eventInstanceID="ei2033" relatedToEventInstance="ei2034" />
+<TLINK lid="l26" relType="BEFORE" eventInstanceID="ei2033" relatedToTime="t0" />
+<TLINK lid="l27" relType="SIMULTANEOUS" eventInstanceID="ei2035" relatedToEventInstance="ei2034" />
+<SLINK lid="l28" relType="MODAL" eventInstanceID="ei1991" subordinatedEventInstance="ei1992" />
+<SLINK lid="l30" relType="EVIDENTIAL" eventInstanceID="ei1997" subordinatedEventInstance="ei1998" />
+<SLINK lid="l33" relType="EVIDENTIAL" eventInstanceID="ei2002" subordinatedEventInstance="ei2004" />
+<SLINK lid="l35" relType="EVIDENTIAL" eventInstanceID="ei2006" subordinatedEventInstance="ei2007" />
+<SLINK lid="l36" relType="MODAL" eventInstanceID="ei2007" subordinatedEventInstance="ei2008" />
+<SLINK lid="l37" relType="MODAL" eventInstanceID="ei2008" subordinatedEventInstance="ei2009" />
+<SLINK lid="l39" relType="MODAL" eventInstanceID="ei2008" subordinatedEventInstance="ei2010" />
+<SLINK lid="l41" relType="EVIDENTIAL" eventInstanceID="ei2013" subordinatedEventInstance="ei2014" />
+<SLINK lid="l42" relType="EVIDENTIAL" eventInstanceID="ei2018" subordinatedEventInstance="ei2019" />
+
+</TimeML>

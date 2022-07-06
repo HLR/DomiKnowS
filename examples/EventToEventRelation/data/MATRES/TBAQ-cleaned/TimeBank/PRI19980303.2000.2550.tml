@@ -1,0 +1,148 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>PRI19980303.2000.2550</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1998-03-03" temporalFunction="false" functionInDocument="CREATION_TIME">19980303</TIMEX3></DCT>
+
+<EXTRAINFO>
+PRI19980303.2000.2550 NEWS STORY
+</EXTRAINFO>
+
+<TEXT>
+<TIMEX3 tid="t135" type="DATE" value="1998-03-04" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Tomorrow</TIMEX3> the board of supervisors of Loudon county, Virginia, will <EVENT eid="e136" class="I_ACTION">vote</EVENT> on whether a school <TIMEX3 tid="t138" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> <EVENT eid="e3" class="OCCURRENCE">located</EVENT> in Mount Vernon can <EVENT eid="e4" class="OCCURRENCE">relocate</EVENT> to their county. In some respects, that's typical county business, but <TIMEX3 tid="t139" type="DATE" value="1998-03-04" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">tomorrow</TIMEX3>'s <EVENT eid="e8" class="OCCURRENCE">vote</EVENT> has international implications. The board will <EVENT eid="e10" class="I_ACTION">decide</EVENT> whether the Islamic Saudi Academy, <EVENT eid="e11" class="STATE">funded</EVENT> by the government of Saudi Arabia, can <EVENT eid="e12" class="OCCURRENCE">move</EVENT> to Ashburn village, Virginia. But local residents have not exactly <EVENT eid="e14" class="I_ACTION">laid</EVENT> out the red carpet for their would be neighbors. The World's Nancy Marshalll <EVENT eid="e3000" class="STATE">has</EVENT> our story.
+
+Inside the Islamic Saudi academy in Mount Vernon, Virginia, many of the girls wear head scarves and some of the neatly dressed children are in uniforms. The instruction is in English for most classes, in Arabic for language and religious studies. The school says it teaches the children to be good Muslims and good students. They're learning a civics lesson from the residents of Loudon county. The Islamic Saudi Academy has twelve hundred mostly American students but would <EVENT eid="e29" class="OCCURRENCE">take</EVENT> thirty-five hundred if it <EVENT eid="e32" class="STATE">had</EVENT> the room. The academy <EVENT eid="e33" class="OCCURRENCE">bought</EVENT> a hundred acres in Loudon county, Virginia, and <EVENT eid="e34" class="I_ACTION">asked</EVENT> for permission to <EVENT eid="e37" class="OCCURRENCE">build</EVENT> a fifty million dollar campus. In the nearby suburban housing tracts, someone <EVENT eid="e38" class="OCCURRENCE">dropped</EVENT> off leaflets <EVENT eid="e39" class="I_ACTION">warning</EVENT> the school could <EVENT eid="e40" class="OCCURRENCE">bring</EVENT> thousands of Middle Eastern strangers and terrorists. Some residents of the mostly white, mostly middle class area <EVENT eid="e42" class="I_STATE">became</EVENT> alarmed. James Zogby of the Arab American Institute <EVENT eid="e147" class="REPORTING">says</EVENT> it's a familiar story.
+
+There is, a- at a very deep level in our culture, um I <EVENT eid="e146" class="I_STATE">think</EVENT>, a sense of, of ignorance about Islam, a fear about who Muslims are and what they're doing.
+
+Many local residents <EVENT eid="e50" class="I_ACTION">denounced</EVENT> the bigotry, but opposition to the school then <EVENT eid="e52" class="ASPECTUAL">shifted</EVENT>. <TIMEX3 tid="t346" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Now</TIMEX3> critics of the academy are <EVENT eid="e53" class="OCCURRENCE">targeting</EVENT> its owner, the Saudi government. Pastor James Allmen of the fellowship church and school in Ashburn has <EVENT eid="e54" class="OCCURRENCE">led</EVENT> the anti-Saudi <EVENT eid="e55" class="OCCURRENCE">campaign</EVENT>. James Allmen <EVENT eid="e56" class="REPORTING">says</EVENT> he <EVENT eid="e57" class="STATE">has</EVENT> no problem with a privately funded academy, but he <EVENT eid="e59" class="STATE">has</EVENT> a big problem with a Saudi funded school.
+
+The Saudi Arabian government has an atrocious record on human rights and is known to be one of the worst offending countries when it comes to religious persecution.
+
+That's correct.
+
+And that is a condition of the application, then.
+
+At a public <EVENT eid="e69" class="OCCURRENCE">hearing</EVENT> on the Islamic Saudi Academy's application, the <EVENT eid="e71" class="STATE">split</EVENT> in county opinion was obvious, supporters of the academy, including Ann Robinson, <EVENT eid="e72" class="REPORTING">said</EVENT> the Saudis were just <EVENT eid="e73" class="OCCURRENCE">providing</EVENT> a service and it was <EVENT eid="e153" class="I_STATE">unfair</EVENT> to <EVENT eid="e76" class="OCCURRENCE">penalize</EVENT> children.
+
+We do not <EVENT eid="e155" class="OCCURRENCE">further</EVENT> the purpose of human rights in the world by <EVENT eid="e78" class="OCCURRENCE">violating</EVENT> the human rights under our own constitution.
+
+But opponents <EVENT eid="e80" class="REPORTING">said</EVENT> the school might be a target for terrorist <EVENT eid="e83" class="OCCURRENCE">attacks</EVENT>, <EVENT eid="e84" class="I_ACTION">complained</EVENT> about its tax exempt status, and <EVENT eid="e85" class="I_ACTION">wondered</EVENT> why the Saudis are not <EVENT eid="e86" class="I_ACTION">compelled</EVENT> to <EVENT eid="e89" class="I_ACTION">allow</EVENT> Christians to <EVENT eid="e90" class="OCCURRENCE">worship</EVENT> in their country. Virginia Welch <EVENT eid="e91" class="REPORTING">delivered</EVENT> this message to the county board of supervisors.
+
+I <EVENT eid="e94" class="I_ACTION">urge</EVENT> you to <EVENT eid="e96" class="OCCURRENCE">do</EVENT> the right thing and <EVENT eid="e98" class="I_ACTION">send</EVENT> a message to the Saudis that the citizens of Loudon county <EVENT eid="e100" class="STATE">embrace</EVENT> religious and human freedom.
+
+Loudon county officials <EVENT eid="e101" class="REPORTING">say</EVENT> they'll <EVENT eid="e102" class="OCCURRENCE">rule</EVENT> on the application based only on land use issues and <EVENT eid="e108" class="I_ACTION">ignore</EVENT> all the other objections. What's really behind those objections, some <EVENT eid="e111" class="REPORTING">say</EVENT>, is Loudon county's <EVENT eid="e112" class="OCCURRENCE">collision</EVENT> with a new reality in America that the country is <EVENT eid="e160" class="OCCURRENCE">changing</EVENT> religiously as surely as it is racially and ethnically. <EVENT eid="e161" class="I_STATE">According</EVENT> to the Arab American institute, Islam will <TIMEX3 tid="t163" type="DATE" value="FUTURE_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">one day</TIMEX3> be the second largest religion in the country. For an indication of the problems that could face Muslims as they integrate into American life, one need look no farther than Loudon county, Virginia. For The World, I'm Nancy Marshalll.
+</TEXT>
+
+<MAKEINSTANCE eventID="e136" eiid="ei539" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei540" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei541" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="can" />
+<MAKEINSTANCE eventID="e8" eiid="ei542" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei544" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei545" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei546" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="can" />
+<MAKEINSTANCE eventID="e14" eiid="ei547" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei553" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e32" eiid="ei554" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei555" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei556" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei558" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e38" eiid="ei559" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei560" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei561" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e42" eiid="ei562" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e147" eiid="ei564" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e146" eiid="ei565" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei568" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e52" eiid="ei571" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e53" eiid="ei572" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei573" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e55" eiid="ei574" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e56" eiid="ei575" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e57" eiid="ei576" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e59" eiid="ei577" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e69" eiid="ei578" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e71" eiid="ei579" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e72" eiid="ei580" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e73" eiid="ei581" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e153" eiid="ei582" tense="PAST" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e76" eiid="ei583" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e155" eiid="ei584" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e78" eiid="ei585" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e80" eiid="ei586" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e83" eiid="ei588" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e84" eiid="ei589" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e85" eiid="ei591" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e86" eiid="ei592" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e89" eiid="ei593" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e90" eiid="ei594" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei595" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e94" eiid="ei596" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e96" eiid="ei597" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e98" eiid="ei598" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e100" eiid="ei599" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e101" eiid="ei600" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e102" eiid="ei601" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e108" eiid="ei603" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e111" eiid="ei606" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e112" eiid="ei607" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e160" eiid="ei608" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e161" eiid="ei609" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l80" relType="IS_INCLUDED" eventInstanceID="ei606" relatedToTime="t0" />
+<TLINK lid="l79" relType="IS_INCLUDED" eventInstanceID="ei600" relatedToTime="t0" />
+<TLINK lid="l78" relType="BEFORE" eventInstanceID="ei595" relatedToTime="t0" />
+<TLINK lid="l2" relType="INCLUDES" timeID="t135" relatedToEventInstance="ei539" />
+<TLINK lid="l3" relType="IS_INCLUDED" eventInstanceID="ei540" relatedToTime="t138" />
+<TLINK lid="l4" relType="INCLUDES" timeID="t138" relatedToTime="t0" />
+<TLINK lid="l5" relType="INCLUDES" timeID="t139" relatedToEventInstance="ei542"  />
+<TLINK lid="l6" relType="IDENTITY" eventInstanceID="ei542" relatedToEventInstance="ei539" />
+<TLINK lid="l7" relType="IDENTITY" timeID="t135" relatedToTime="t139" />
+<TLINK lid="l9" relType="IDENTITY" eventInstanceID="ei544" relatedToEventInstance="ei539" />
+<TLINK lid="l10" relType="INCLUDES" eventInstanceID="ei545" relatedToTime="t0" />
+<TLINK lid="l11" relType="INCLUDES" eventInstanceID="ei545" relatedToEventInstance="ei540" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei547" relatedToTime="t0" />
+<TLINK lid="l19" relType="AFTER" eventInstanceID="ei553" relatedToEventInstance="ei554" />
+<TLINK lid="l20" relType="BEFORE" eventInstanceID="ei555" relatedToTime="t0" />
+<TLINK lid="l21" relType="BEFORE" eventInstanceID="ei555" relatedToEventInstance="ei556" />
+<TLINK lid="l22" relType="AFTER" eventInstanceID="ei559" relatedToEventInstance="ei556" />
+<TLINK lid="l23" relType="SIMULTANEOUS" eventInstanceID="ei559" relatedToEventInstance="ei560" />
+<TLINK lid="l24" relType="BEFORE" eventInstanceID="ei559" relatedToEventInstance="ei562" />
+<TLINK lid="l25" relType="BEFORE" eventInstanceID="ei564" relatedToTime="t0" />
+<TLINK lid="l26" relType="AFTER" eventInstanceID="ei568" relatedToEventInstance="ei559" />
+<TLINK lid="l27" relType="BEFORE" eventInstanceID="ei568" relatedToEventInstance="ei571" />
+<TLINK lid="l29" relType="DURING" timeID="t346" relatedToEventInstance="ei572" />
+<TLINK lid="l31" relType="BEFORE" eventInstanceID="ei575" relatedToTime="t0" />
+<TLINK lid="l32" relType="BEFORE" eventInstanceID="ei578" relatedToTime="t0" />
+<TLINK lid="l33" relType="INCLUDES" eventInstanceID="ei578" relatedToEventInstance="ei579" />
+<TLINK lid="l34" relType="IS_INCLUDED" eventInstanceID="ei580" relatedToEventInstance="ei578" />
+<TLINK lid="l35" relType="AFTER" eventInstanceID="ei584" relatedToEventInstance="ei585" />
+<TLINK lid="l36" relType="IS_INCLUDED" eventInstanceID="ei586" relatedToEventInstance="ei578" />
+<TLINK lid="l37" relType="SIMULTANEOUS" eventInstanceID="ei586" relatedToEventInstance="ei589" />
+<TLINK lid="l38" relType="SIMULTANEOUS" eventInstanceID="ei591" relatedToEventInstance="ei589" />
+<TLINK lid="l41" relType="AFTER" eventInstanceID="ei607" relatedToEventInstance="ei608" />
+<TLINK lid="l43" relType="BEFORE" eventInstanceID="ei609" relatedToTime="t0" />
+<SLINK lid="l44" relType="CONDITIONAL" eventInstanceID="ei554" subordinatedEventInstance="ei553"  />
+<SLINK lid="l45" relType="MODAL" eventInstanceID="ei539" subordinatedEventInstance="ei541" />
+<SLINK lid="l46" relType="MODAL" eventInstanceID="ei544" subordinatedEventInstance="ei546" />
+<SLINK lid="l50" relType="MODAL" eventInstanceID="ei560" subordinatedEventInstance="ei561" />
+<SLINK lid="l51" relType="EVIDENTIAL" eventInstanceID="ei564" subordinatedEventInstance="ei565" />
+<SLINK lid="l55" relType="FACTIVE" eventInstanceID="ei573" subordinatedEventInstance="ei574" />
+<SLINK lid="l56" relType="EVIDENTIAL" eventInstanceID="ei575" subordinatedEventInstance="ei576" />
+<SLINK lid="l57" relType="EVIDENTIAL" eventInstanceID="ei575" subordinatedEventInstance="ei577" />
+<SLINK lid="l58" relType="EVIDENTIAL" eventInstanceID="ei580" subordinatedEventInstance="ei581" />
+<SLINK lid="l59" relType="EVIDENTIAL" eventInstanceID="ei580" subordinatedEventInstance="ei582" />
+<SLINK lid="l60" relType="FACTIVE" eventInstanceID="ei582" subordinatedEventInstance="ei583" />
+<SLINK lid="l61" relType="EVIDENTIAL" eventInstanceID="ei580" subordinatedEventInstance="ei584" />
+<SLINK lid="l65" relType="MODAL" eventInstanceID="ei591" subordinatedEventInstance="ei592" />
+<SLINK lid="l66" relType="MODAL" eventInstanceID="ei592" subordinatedEventInstance="ei593" />
+<SLINK lid="l67" relType="MODAL" eventInstanceID="ei593" subordinatedEventInstance="ei594" />
+<SLINK lid="l68" relType="EVIDENTIAL" eventInstanceID="ei595" subordinatedEventInstance="ei596" />
+<SLINK lid="l69" relType="MODAL" eventInstanceID="ei596" subordinatedEventInstance="ei597" />
+<SLINK lid="l70" relType="MODAL" eventInstanceID="ei596" subordinatedEventInstance="ei598" />
+<SLINK lid="l71" relType="MODAL" eventInstanceID="ei598" subordinatedEventInstance="ei599" />
+<SLINK lid="l72" relType="EVIDENTIAL" eventInstanceID="ei600" subordinatedEventInstance="ei601" />
+<SLINK lid="l73" relType="EVIDENTIAL" eventInstanceID="ei600" subordinatedEventInstance="ei603" />
+<SLINK lid="l75" relType="EVIDENTIAL" eventInstanceID="ei606" subordinatedEventInstance="ei607" />
+
+</TimeML>

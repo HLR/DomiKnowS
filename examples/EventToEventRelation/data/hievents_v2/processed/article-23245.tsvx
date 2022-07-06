@@ -1,0 +1,154 @@
+Text	A rider has been killed at Northern Ireland's top motorcycle race, the North West 200. He was named as Mark Buckley, a 35-year-old competitor from Lough Lowland in Scotland. The married man died from his injuries in hospital after an incident near York Corner, outside Portstewart, Co Derry, said organisers. The motorcyclist had been taking part in the third race, the Superstock race, on Saturday afternoon. It was the last day of the international race series. Organisers have not fully established the cause of the crash yet, and are investigating the circumstances along with the Motorcycle Union of Ireland (MCUI). Mervyn Whyte, North West 200 event director, said everybody was devastated by Mr Buckley's death. "Our thoughts and prayers are with his wife Jayne and we extend our deepest sympathies to the entire family circle," he said. "There were no other riders involved in the incident." The annual event is reputed to be one of the fastest motorcycle road races in the world. A number of competitors have been killed during its more than 80-year history. Mr Buckley was a regular competitor at the North West 200 and was expecting to compete at the TT races in the Isle of man in June.
+Event	1	killed	Occurrence	17
+Event	2	race	Occurrence	61
+Event	3	died	Occurrence	190
+Event	4	incident	Occurrence	234
+Event	5	said	Reporting	292
+Event	6	taking	Occurrence	335
+Event	7	race	Occurrence	360
+Event	8	race	Occurrence	381
+Event	9	series	Occurrence	456
+Event	10	crash	Occurrence	519
+Event	11	investigating	Occurrence	538
+Event	12	said	Reporting	666
+Event	13	devastated	StateChange	685
+Event	14	death	Occurrence	712
+Event	15	said	Reporting	839
+Event	16	incident	Occurrence	889
+Event	17	killed	HalfGeneric	1023
+Relation	1	2	SubSuper	true	killed	race
+Relation	1	3	Coref	true	killed	died
+Relation	1	4	SubSuper	true	killed	incident
+Relation	1	5	NoRel	true	killed	said
+Relation	1	6	SubSuper	true	killed	taking
+Relation	1	7	SubSuper	true	killed	race
+Relation	1	8	SubSuper	true	killed	race
+Relation	1	9	SubSuper	true	killed	series
+Relation	1	10	SubSuper	true	killed	crash
+Relation	1	11	NoRel	true	killed	investigating
+Relation	1	12	NoRel	true	killed	said
+Relation	1	13	NoRel	true	killed	devastated
+Relation	1	14	Coref	true	killed	death
+Relation	1	15	NoRel	true	killed	said
+Relation	1	16	SubSuper	true	killed	incident
+Relation	1	17	NoRel	true	killed	killed
+Relation	2	3	SuperSub	true	race	died
+Relation	2	4	SuperSub	true	race	incident
+Relation	2	5	NoRel	true	race	said
+Relation	2	6	SuperSub	true	race	taking
+Relation	2	7	SuperSub	true	race	race
+Relation	2	8	SuperSub	true	race	race
+Relation	2	9	SubSuper	true	race	series
+Relation	2	10	SuperSub	true	race	crash
+Relation	2	11	NoRel	true	race	investigating
+Relation	2	12	NoRel	true	race	said
+Relation	2	13	NoRel	true	race	devastated
+Relation	2	14	SuperSub	true	race	death
+Relation	2	15	NoRel	true	race	said
+Relation	2	16	SuperSub	true	race	incident
+Relation	2	17	NoRel	true	race	killed
+Relation	3	4	SubSuper	true	died	incident
+Relation	3	5	NoRel	true	died	said
+Relation	3	6	SubSuper	true	died	taking
+Relation	3	7	SubSuper	true	died	race
+Relation	3	8	SubSuper	true	died	race
+Relation	3	9	SubSuper	true	died	series
+Relation	3	10	SubSuper	true	died	crash
+Relation	3	11	NoRel	true	died	investigating
+Relation	3	12	NoRel	true	died	said
+Relation	3	13	NoRel	true	died	devastated
+Relation	3	14	Coref	true	died	death
+Relation	3	15	NoRel	true	died	said
+Relation	3	16	SubSuper	true	died	incident
+Relation	3	17	NoRel	true	died	killed
+Relation	4	5	NoRel	true	incident	said
+Relation	4	6	SubSuper	true	incident	taking
+Relation	4	7	SubSuper	true	incident	race
+Relation	4	8	SubSuper	true	incident	race
+Relation	4	9	SubSuper	true	incident	series
+Relation	4	10	Coref	true	incident	crash
+Relation	4	11	NoRel	true	incident	investigating
+Relation	4	12	NoRel	true	incident	said
+Relation	4	13	NoRel	true	incident	devastated
+Relation	4	14	SuperSub	true	incident	death
+Relation	4	15	NoRel	true	incident	said
+Relation	4	16	Coref	true	incident	incident
+Relation	4	17	NoRel	true	incident	killed
+Relation	5	6	NoRel	true	said	taking
+Relation	5	7	NoRel	true	said	race
+Relation	5	8	NoRel	true	said	race
+Relation	5	9	NoRel	true	said	series
+Relation	5	10	NoRel	true	said	crash
+Relation	5	11	NoRel	true	said	investigating
+Relation	5	12	NoRel	true	said	said
+Relation	5	13	NoRel	true	said	devastated
+Relation	5	14	NoRel	true	said	death
+Relation	5	15	NoRel	true	said	said
+Relation	5	16	NoRel	true	said	incident
+Relation	5	17	NoRel	true	said	killed
+Relation	6	7	SubSuper	true	taking	race
+Relation	6	8	SubSuper	true	taking	race
+Relation	6	9	SubSuper	true	taking	series
+Relation	6	10	SuperSub	true	taking	crash
+Relation	6	11	NoRel	true	taking	investigating
+Relation	6	12	NoRel	true	taking	said
+Relation	6	13	NoRel	true	taking	devastated
+Relation	6	14	SuperSub	true	taking	death
+Relation	6	15	NoRel	true	taking	said
+Relation	6	16	SuperSub	true	taking	incident
+Relation	6	17	NoRel	true	taking	killed
+Relation	7	8	Coref	true	race	race
+Relation	7	9	SubSuper	true	race	series
+Relation	7	10	SuperSub	true	race	crash
+Relation	7	11	NoRel	true	race	investigating
+Relation	7	12	NoRel	true	race	said
+Relation	7	13	NoRel	true	race	devastated
+Relation	7	14	SuperSub	true	race	death
+Relation	7	15	NoRel	true	race	said
+Relation	7	16	SuperSub	true	race	incident
+Relation	7	17	NoRel	true	race	killed
+Relation	8	9	SubSuper	true	race	series
+Relation	8	10	SuperSub	true	race	crash
+Relation	8	11	NoRel	true	race	investigating
+Relation	8	12	NoRel	true	race	said
+Relation	8	13	NoRel	true	race	devastated
+Relation	8	14	SuperSub	true	race	death
+Relation	8	15	NoRel	true	race	said
+Relation	8	16	SuperSub	true	race	incident
+Relation	8	17	NoRel	true	race	killed
+Relation	9	10	SuperSub	true	series	crash
+Relation	9	11	NoRel	true	series	investigating
+Relation	9	12	NoRel	true	series	said
+Relation	9	13	NoRel	true	series	devastated
+Relation	9	14	SuperSub	true	series	death
+Relation	9	15	NoRel	true	series	said
+Relation	9	16	SuperSub	true	series	incident
+Relation	9	17	NoRel	true	series	killed
+Relation	10	11	NoRel	true	crash	investigating
+Relation	10	12	NoRel	true	crash	said
+Relation	10	13	NoRel	true	crash	devastated
+Relation	10	14	SuperSub	true	crash	death
+Relation	10	15	NoRel	true	crash	said
+Relation	10	16	Coref	true	crash	incident
+Relation	10	17	NoRel	true	crash	killed
+Relation	11	12	NoRel	true	investigating	said
+Relation	11	13	NoRel	true	investigating	devastated
+Relation	11	14	NoRel	true	investigating	death
+Relation	11	15	NoRel	true	investigating	said
+Relation	11	16	NoRel	true	investigating	incident
+Relation	11	17	NoRel	true	investigating	killed
+Relation	12	13	NoRel	true	said	devastated
+Relation	12	14	NoRel	true	said	death
+Relation	12	15	NoRel	true	said	said
+Relation	12	16	NoRel	true	said	incident
+Relation	12	17	NoRel	true	said	killed
+Relation	13	14	NoRel	true	devastated	death
+Relation	13	15	NoRel	true	devastated	said
+Relation	13	16	NoRel	true	devastated	incident
+Relation	13	17	NoRel	true	devastated	killed
+Relation	14	15	NoRel	true	death	said
+Relation	14	16	SubSuper	true	death	incident
+Relation	14	17	NoRel	true	death	killed
+Relation	15	16	NoRel	true	said	incident
+Relation	15	17	NoRel	true	said	killed
+Relation	16	17	NoRel	true	incident	killed

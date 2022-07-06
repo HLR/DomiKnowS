@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0650</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-30" temporalFunction="false" functionInDocument="CREATION_TIME">10/30/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891030-0048 = 891030 891030-0048.
+Sun Microsystems Debentures 10/30/89 WALL STREET JOURNAL (J) SUNW BOND MARKET NEWS (BON) MOUNTAIN VIEW, Calif.
+</EXTRAINFO>
+
+<TEXT>
+Sun Microsystems Inc., a computer maker, <EVENT eid="e1" class="REPORTING">announced</EVENT> the effectiveness of its registration statement for $125 million of 6 3/8% convertible subordinated debentures <EVENT eid="e12" class="STATE">due</EVENT> <TIMEX3 tid="t14" type="DATE" value="1999-10-15" temporalFunction="false" functionInDocument="NONE">Oct. 15, 1999</TIMEX3>.
+
+The company <EVENT eid="e3" class="REPORTING">said</EVENT> the debentures are being <EVENT eid="e5" class="OCCURRENCE">issued</EVENT> at an issue price of $849 for each $1,000 principal amount and are <EVENT eid="e17" class="STATE">convertible</EVENT> at any time prior to <EVENT eid="e16" class="STATE">maturity</EVENT> at a conversion price of $25 a share.
+
+The debentures are available through Goldman, Sachs amp Co.
+</TEXT>
+
+<MAKEINSTANCE eventID="e16" eiid="ei63" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e17" eiid="ei62" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e3" eiid="ei60" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei59" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e5" eiid="ei61" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei57" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei62" relatedToEventInstance="ei63"  />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei57" relatedToTime="t0" />
+<TLINK lid="l3" relType="ENDED_BY" eventInstanceID="ei59" relatedToTime="t14" />
+<TLINK lid="l4" relType="IDENTITY" eventInstanceID="ei60" relatedToEventInstance="ei57" />
+<SLINK lid="l6" relType="EVIDENTIAL" eventInstanceID="ei57" subordinatedEventInstance="ei59" />
+<SLINK lid="l7" relType="EVIDENTIAL" eventInstanceID="ei60" subordinatedEventInstance="ei61" />
+<SLINK lid="l8" relType="EVIDENTIAL" eventInstanceID="ei60" subordinatedEventInstance="ei62" />
+
+</TimeML>

@@ -1,0 +1,172 @@
+Text	Britain's Prince Charles on a trip to Scotland took on a role that is not normally part of the heir to the throne's strict duties. The royal visit to the BBC's Glasgow office was standard enough. For Scottish lunchtime viewers, a gloomy weather forecast would have been no surprise. The stand-in weatherman however might have come as a shock. "Well it is an unsettled picture as we head towards the end of the week," said the prince as he went live on air after being introduced by the news presenter. "This afternoon will be cold, wet and windy across most of Scotland. We are under the influence of low pressure and this weather front pushing northwards is bringing cloud and outbreaks of rain." As the weather chart went through its animation process behind him, there were hints that the script had been slightly adapted for the royal occasion. "In the west the rain will be lighter and patchier, there may be a few drier interludes over Dumfries House in Ayrshire... ah ha!... there will be snow for the higher ground of the Highlands and Aberdeenshire. The potential for a few flurries over Balmoral... who the hell wrote this script?" exclaimed Charles to laughter. Scotland's royal residences also featured as the Duchess of Cornwall later tried her hand as a weather girl. The royal couple were visiting Scotland as part of their annual Holyrood week. 
+Event	1	trip	Occurrence	30
+Event	2	took	Occurrence	47
+Event	3	visit	Occurrence	141
+Event	4	said	Reporting	417
+Event	5	went	Occurrence	439
+Event	6	introduced	Occurrence	468
+Event	7	pushing	Occurrence	637
+Event	8	bringing	Occurrence	659
+Event	9	went	I_Action	719
+Event	10	process	Occurrence	746
+Event	11	hints	HalfGeneric	777
+Event	12	adapted	I_Action	817
+Event	13	occasion	Occurrence	839
+Event	14	exclaimed	I_Action	1142
+Event	15	laughter	Occurrence	1163
+Event	16	featured	Occurrence	1206
+Event	17	tried	Occurrence	1248
+Event	18	visiting	Occurrence	1304
+Relation	1	2	SuperSub	true	trip	took
+Relation	1	3	SuperSub	true	trip	visit
+Relation	1	4	NoRel	true	trip	said
+Relation	1	5	SuperSub	true	trip	went
+Relation	1	6	SuperSub	true	trip	introduced
+Relation	1	7	NoRel	true	trip	pushing
+Relation	1	8	NoRel	true	trip	bringing
+Relation	1	9	NoRel	true	trip	went
+Relation	1	10	SuperSub	true	trip	process
+Relation	1	11	SuperSub	true	trip	hints
+Relation	1	12	NoRel	true	trip	adapted
+Relation	1	13	SuperSub	true	trip	occasion
+Relation	1	14	NoRel	true	trip	exclaimed
+Relation	1	15	SuperSub	true	trip	laughter
+Relation	1	16	NoRel	true	trip	featured
+Relation	1	17	NoRel	true	trip	tried
+Relation	1	18	Coref	true	trip	visiting
+Relation	2	3	SubSuper	true	took	visit
+Relation	2	4	NoRel	true	took	said
+Relation	2	5	SuperSub	true	took	went
+Relation	2	6	SuperSub	true	took	introduced
+Relation	2	7	NoRel	true	took	pushing
+Relation	2	8	NoRel	true	took	bringing
+Relation	2	9	NoRel	true	took	went
+Relation	2	10	SuperSub	true	took	process
+Relation	2	11	SuperSub	true	took	hints
+Relation	2	12	NoRel	true	took	adapted
+Relation	2	13	Coref	true	took	occasion
+Relation	2	14	NoRel	true	took	exclaimed
+Relation	2	15	SuperSub	true	took	laughter
+Relation	2	16	NoRel	true	took	featured
+Relation	2	17	NoRel	true	took	tried
+Relation	2	18	SubSuper	true	took	visiting
+Relation	3	4	NoRel	true	visit	said
+Relation	3	5	SuperSub	true	visit	went
+Relation	3	6	SuperSub	true	visit	introduced
+Relation	3	7	NoRel	true	visit	pushing
+Relation	3	8	NoRel	true	visit	bringing
+Relation	3	9	NoRel	true	visit	went
+Relation	3	10	SuperSub	true	visit	process
+Relation	3	11	SuperSub	true	visit	hints
+Relation	3	12	NoRel	true	visit	adapted
+Relation	3	13	SuperSub	true	visit	occasion
+Relation	3	14	NoRel	true	visit	exclaimed
+Relation	3	15	SuperSub	true	visit	laughter
+Relation	3	16	NoRel	true	visit	featured
+Relation	3	17	NoRel	true	visit	tried
+Relation	3	18	SubSuper	true	visit	visiting
+Relation	4	5	NoRel	true	said	went
+Relation	4	6	NoRel	true	said	introduced
+Relation	4	7	NoRel	true	said	pushing
+Relation	4	8	NoRel	true	said	bringing
+Relation	4	9	NoRel	true	said	went
+Relation	4	10	NoRel	true	said	process
+Relation	4	11	NoRel	true	said	hints
+Relation	4	12	NoRel	true	said	adapted
+Relation	4	13	NoRel	true	said	occasion
+Relation	4	14	NoRel	true	said	exclaimed
+Relation	4	15	NoRel	true	said	laughter
+Relation	4	16	NoRel	true	said	featured
+Relation	4	17	NoRel	true	said	tried
+Relation	4	18	NoRel	true	said	visiting
+Relation	5	6	NoRel	true	went	introduced
+Relation	5	7	NoRel	true	went	pushing
+Relation	5	8	NoRel	true	went	bringing
+Relation	5	9	NoRel	true	went	went
+Relation	5	10	NoRel	true	went	process
+Relation	5	11	NoRel	true	went	hints
+Relation	5	12	NoRel	true	went	adapted
+Relation	5	13	SubSuper	true	went	occasion
+Relation	5	14	NoRel	true	went	exclaimed
+Relation	5	15	NoRel	true	went	laughter
+Relation	5	16	NoRel	true	went	featured
+Relation	5	17	NoRel	true	went	tried
+Relation	5	18	SubSuper	true	went	visiting
+Relation	6	7	NoRel	true	introduced	pushing
+Relation	6	8	NoRel	true	introduced	bringing
+Relation	6	9	NoRel	true	introduced	went
+Relation	6	10	NoRel	true	introduced	process
+Relation	6	11	NoRel	true	introduced	hints
+Relation	6	12	NoRel	true	introduced	adapted
+Relation	6	13	SubSuper	true	introduced	occasion
+Relation	6	14	NoRel	true	introduced	exclaimed
+Relation	6	15	NoRel	true	introduced	laughter
+Relation	6	16	NoRel	true	introduced	featured
+Relation	6	17	NoRel	true	introduced	tried
+Relation	6	18	SubSuper	true	introduced	visiting
+Relation	7	8	SuperSub	true	pushing	bringing
+Relation	7	9	NoRel	true	pushing	went
+Relation	7	10	NoRel	true	pushing	process
+Relation	7	11	NoRel	true	pushing	hints
+Relation	7	12	NoRel	true	pushing	adapted
+Relation	7	13	NoRel	true	pushing	occasion
+Relation	7	14	NoRel	true	pushing	exclaimed
+Relation	7	15	NoRel	true	pushing	laughter
+Relation	7	16	NoRel	true	pushing	featured
+Relation	7	17	NoRel	true	pushing	tried
+Relation	7	18	NoRel	true	pushing	visiting
+Relation	8	9	NoRel	true	bringing	went
+Relation	8	10	NoRel	true	bringing	process
+Relation	8	11	NoRel	true	bringing	hints
+Relation	8	12	NoRel	true	bringing	adapted
+Relation	8	13	NoRel	true	bringing	occasion
+Relation	8	14	NoRel	true	bringing	exclaimed
+Relation	8	15	NoRel	true	bringing	laughter
+Relation	8	16	NoRel	true	bringing	featured
+Relation	8	17	NoRel	true	bringing	tried
+Relation	8	18	NoRel	true	bringing	visiting
+Relation	9	10	NoRel	true	went	process
+Relation	9	11	NoRel	true	went	hints
+Relation	9	12	NoRel	true	went	adapted
+Relation	9	13	NoRel	true	went	occasion
+Relation	9	14	NoRel	true	went	exclaimed
+Relation	9	15	NoRel	true	went	laughter
+Relation	9	16	NoRel	true	went	featured
+Relation	9	17	NoRel	true	went	tried
+Relation	9	18	NoRel	true	went	visiting
+Relation	10	11	SuperSub	true	process	hints
+Relation	10	12	NoRel	true	process	adapted
+Relation	10	13	SubSuper	true	process	occasion
+Relation	10	14	NoRel	true	process	exclaimed
+Relation	10	15	SuperSub	true	process	laughter
+Relation	10	16	NoRel	true	process	featured
+Relation	10	17	NoRel	true	process	tried
+Relation	10	18	SubSuper	true	process	visiting
+Relation	11	12	NoRel	true	hints	adapted
+Relation	11	13	SubSuper	true	hints	occasion
+Relation	11	14	NoRel	true	hints	exclaimed
+Relation	11	15	NoRel	true	hints	laughter
+Relation	11	16	NoRel	true	hints	featured
+Relation	11	17	NoRel	true	hints	tried
+Relation	11	18	SubSuper	true	hints	visiting
+Relation	12	13	NoRel	true	adapted	occasion
+Relation	12	14	NoRel	true	adapted	exclaimed
+Relation	12	15	NoRel	true	adapted	laughter
+Relation	12	16	NoRel	true	adapted	featured
+Relation	12	17	NoRel	true	adapted	tried
+Relation	12	18	NoRel	true	adapted	visiting
+Relation	13	14	NoRel	true	occasion	exclaimed
+Relation	13	15	SuperSub	true	occasion	laughter
+Relation	13	16	NoRel	true	occasion	featured
+Relation	13	17	NoRel	true	occasion	tried
+Relation	13	18	SubSuper	true	occasion	visiting
+Relation	14	15	NoRel	true	exclaimed	laughter
+Relation	14	16	NoRel	true	exclaimed	featured
+Relation	14	17	NoRel	true	exclaimed	tried
+Relation	14	18	NoRel	true	exclaimed	visiting
+Relation	15	16	NoRel	true	laughter	featured
+Relation	15	17	NoRel	true	laughter	tried
+Relation	15	18	SubSuper	true	laughter	visiting
+Relation	16	17	SuperSub	true	featured	tried
+Relation	16	18	NoRel	true	featured	visiting
+Relation	17	18	NoRel	true	tried	visiting

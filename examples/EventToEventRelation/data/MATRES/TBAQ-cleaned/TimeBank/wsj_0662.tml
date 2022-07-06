@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0662</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-30" temporalFunction="false" functionInDocument="CREATION_TIME">10/30/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891030-0035 = 891030 891030-0035.
+Business Brief -- Jayark Corp.: @ Firm Agrees to Buy Kofcoh @ For Cash, Debt and Stock 10/30/89 WALL STREET JOURNAL (J) JAYA TENDER OFFERS, MERGERS, ACQUISITIONS (TNM)
+</EXTRAINFO>
+
+<TEXT>
+Jayark Corp. <EVENT eid="e1" class="I_STATE">agreed</EVENT> to <EVENT eid="e3" class="OCCURRENCE">pay</EVENT> $4 million in cash, $2 million of 12% convertible debentures, and 1.6 million common shares to <EVENT eid="e7" class="OCCURRENCE">acquire</EVENT> closely held Kofcoh Imports Inc.
+
+In over-the-counter <EVENT eid="e9" class="OCCURRENCE">trading</EVENT> <TIMEX3 tid="t32" type="DATE" value="1989-10-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3>, Jayark was <EVENT eid="e10" class="OCCURRENCE">quoted</EVENT> at 87.5 cents bid, down 15.625 cents. At the market price, the <EVENT eid="e3000" class="OCCURRENCE">transaction</EVENT> has a total indicated value of $7.4 million.
+
+Kofcoh is a New York holding company for Rosalco Inc., which imports furniture and other items. David L. Koffman, president and chief executive officer of Jayark, holds about 40% of Kofcoh, Jayark <EVENT eid="e16" class="REPORTING">said</EVENT>.
+
+Jayark, New York, distributes and rents audio-visual equipment and prints promotional ads for retailers. In <TIMEX3 tid="t36" type="DATE" value="1989-Q2" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t35">the quarter</TIMEX3> ended <TIMEX3 tid="t35" type="DATE" value="1989-07-31" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">July 31</TIMEX3>, Jayark had an average of 5.6 million shares outstanding.
+
+The transaction is subject to <EVENT eid="e23" class="OCCURRENCE">approval</EVENT> by a panel of disinterested directors, the company said, adding that shareholder approval isn't <EVENT eid="e27" class="I_STATE">needed</EVENT>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei116" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei117" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei118" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei119" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei120" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei122" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei126" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e27" eiid="ei130" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<TLINK lid="l15" relType="IDENTITY" eventInstanceID="ei122" relatedToEventInstance="ei120" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei116" relatedToTime="t0" />
+<TLINK lid="l2" relType="IS_INCLUDED" eventInstanceID="ei119" relatedToTime="t32" />
+<TLINK lid="l3" relType="INCLUDES" eventInstanceID="ei119" relatedToEventInstance="ei120" />
+<TLINK lid="l4" relType="ENDED_BY" timeID="t36" relatedToTime="t35"  />
+<SLINK lid="l8" relType="MODAL" eventInstanceID="ei116" subordinatedEventInstance="ei117" />
+<SLINK lid="l9" relType="MODAL" eventInstanceID="ei117" subordinatedEventInstance="ei118" />
+
+</TimeML>

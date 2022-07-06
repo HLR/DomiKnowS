@@ -1,0 +1,67 @@
+Text	The extreme climber known to some as Spiderman has struck again: this time, on France's new tallest building. Alain Robert scaled the recently heightened First Tower in the La Defense business district west of Paris today. Hundreds of onlookers peered out of its windows or craned their necks as he went up. The Frenchman has ascended more than 100 skyscrapers and monuments over his 15-year career of daredevil climbs using no support equipment. Often his climbs are illegal, but not this time: today's feat up the 758ft (231m) building was given the go-ahead by its owner. Robert said he does not battle fear on the way up because "I really don't have time to be afraid, I really have other things to do."
+Event	1	struck	Occurrence	51
+Event	2	scaled	Occurrence	123
+Event	3	peered	Occurrence	245
+Event	4	craned	Occurrence	274
+Event	5	went	Occurrence	299
+Event	6	ascended	HalfGeneric	326
+Event	7	climbs	HalfGeneric	412
+Event	8	climbs	HalfGeneric	457
+Event	9	feat	Occurrence	504
+Event	10	given	Occurrence	542
+Event	11	said	Reporting	582
+Relation	1	2	Coref	true	struck	scaled
+Relation	1	3	SuperSub	true	struck	peered
+Relation	1	4	SuperSub	true	struck	craned
+Relation	1	5	Coref	true	struck	went
+Relation	1	6	SubSuper	true	struck	ascended
+Relation	1	7	SubSuper	true	struck	climbs
+Relation	1	8	NoRel	true	struck	climbs
+Relation	1	9	Coref	true	struck	feat
+Relation	1	10	NoRel	true	struck	given
+Relation	1	11	NoRel	true	struck	said
+Relation	2	3	SuperSub	true	scaled	peered
+Relation	2	4	SuperSub	true	scaled	craned
+Relation	2	5	Coref	true	scaled	went
+Relation	2	6	SubSuper	true	scaled	ascended
+Relation	2	7	SubSuper	true	scaled	climbs
+Relation	2	8	NoRel	true	scaled	climbs
+Relation	2	9	Coref	true	scaled	feat
+Relation	2	10	NoRel	true	scaled	given
+Relation	2	11	NoRel	true	scaled	said
+Relation	3	4	NoRel	true	peered	craned
+Relation	3	5	SubSuper	true	peered	went
+Relation	3	6	SubSuper	true	peered	ascended
+Relation	3	7	SubSuper	true	peered	climbs
+Relation	3	8	NoRel	true	peered	climbs
+Relation	3	9	SubSuper	true	peered	feat
+Relation	3	10	NoRel	true	peered	given
+Relation	3	11	NoRel	true	peered	said
+Relation	4	5	SubSuper	true	craned	went
+Relation	4	6	SubSuper	true	craned	ascended
+Relation	4	7	SubSuper	true	craned	climbs
+Relation	4	8	NoRel	true	craned	climbs
+Relation	4	9	SubSuper	true	craned	feat
+Relation	4	10	NoRel	true	craned	given
+Relation	4	11	NoRel	true	craned	said
+Relation	5	6	SubSuper	true	went	ascended
+Relation	5	7	SubSuper	true	went	climbs
+Relation	5	8	NoRel	true	went	climbs
+Relation	5	9	Coref	true	went	feat
+Relation	5	10	NoRel	true	went	given
+Relation	5	11	NoRel	true	went	said
+Relation	6	7	Coref	true	ascended	climbs
+Relation	6	8	SuperSub	true	ascended	climbs
+Relation	6	9	SuperSub	true	ascended	feat
+Relation	6	10	NoRel	true	ascended	given
+Relation	6	11	NoRel	true	ascended	said
+Relation	7	8	SuperSub	true	climbs	climbs
+Relation	7	9	SuperSub	true	climbs	feat
+Relation	7	10	NoRel	true	climbs	given
+Relation	7	11	NoRel	true	climbs	said
+Relation	8	9	NoRel	true	climbs	feat
+Relation	8	10	NoRel	true	climbs	given
+Relation	8	11	NoRel	true	climbs	said
+Relation	9	10	NoRel	true	feat	given
+Relation	9	11	NoRel	true	feat	said
+Relation	10	11	NoRel	true	given	said

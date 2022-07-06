@@ -1,0 +1,73 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0026</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0167 = 891102 891102-0167.
+Duty-Free Status Cleared @ For Certain Watch Imports 11/02/89 WALL STREET JOURNAL (J) MONETARY NEWS, FOREIGN EXCHANGE, TRADE (MON) EXECUTIVE (EXE) WASHINGTON
+</EXTRAINFO>
+
+<TEXT>
+The White House <EVENT eid="e1" class="REPORTING">said</EVENT> President Bush has <EVENT eid="e2" class="I_ACTION">approved</EVENT> duty-free <EVENT eid="e25" class="STATE">treatment</EVENT> for imports of certain types of watches that aren't <EVENT eid="e3" class="OCCURRENCE">produced</EVENT> in "significant quantities" in the U.S., the Virgin Islands and other U.S. possessions.
+
+The <EVENT eid="e26" class="OCCURRENCE">action</EVENT> <EVENT eid="e5" class="OCCURRENCE">came</EVENT> in response to a petition <EVENT eid="e6" class="OCCURRENCE">filed</EVENT> by Timex Inc. for changes in the U.S. Generalized System of Preferences for imports from developing nations. Previously, watch imports were <EVENT eid="e10" class="I_ACTION">denied</EVENT> such duty-free <EVENT eid="e29" class="STATE">treatment</EVENT>.
+
+Timex had <EVENT eid="e11" class="OCCURRENCE">requested</EVENT> duty-free treatment for many types of watches, covered by 58 different U.S. tariff classifications. The White House <EVENT eid="e13" class="REPORTING">said</EVENT> Mr. Bush <EVENT eid="e14" class="I_ACTION">decided</EVENT> to <EVENT eid="e15" class="OCCURRENCE">grant</EVENT> duty-free status for 18 categories, but <EVENT eid="e16" class="I_ACTION">turned</EVENT> down such <EVENT eid="e31" class="STATE">treatment</EVENT> for other types of watches "because of the potential for material injury to watch producers located in the U.S. and the Virgin Islands."
+
+Timex is a major U.S. <EVENT eid="e32" class="STATE">producer</EVENT> and <EVENT eid="e33" class="STATE">seller</EVENT> of watches, including low-priced battery-operated watches assembled in the Philippines and other developing nations covered by the U.S. tariff preferences.
+
+U.S. trade officials <EVENT eid="e22" class="REPORTING">said</EVENT> the Philippines and Thailand would be the main <EVENT eid="e123" class="STATE">beneficiaries</EVENT> of the president's <EVENT eid="e34" class="OCCURRENCE">action</EVENT>.
+
+Imports of the types of watches that <TIMEX3 tid="t38" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">now</TIMEX3> will be <EVENT eid="e39" class="STATE">eligible</EVENT> for duty-free treatment <EVENT eid="e23" class="I_ACTION">totaled</EVENT> about $37.3 million in <TIMEX3 tid="t37" type="DATE" value="1988" temporalFunction="false" functionInDocument="NONE">1988</TIMEX3>, a relatively small share of the $1.5 billion in U.S. watch imports <TIMEX3 tid="t1000" type="DATE" value="1988" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t37">that year</TIMEX3>, <EVENT eid="e40" class="REPORTING">according</EVENT> to an aide to U.S. Trade Representative Carla Hills.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei1989" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei1990" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei1991" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e3" eiid="ei1992" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e26" eiid="ei1993" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e5" eiid="ei1994" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei1995" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei1996" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei1997" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e11" eiid="ei1998" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei1999" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei2000" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei2001" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei2002" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e31" eiid="ei2003" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e32" eiid="ei2004" tense="PRESENT" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e33" eiid="ei2005" tense="PRESENT" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e22" eiid="ei2006" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e123" eiid="ei2007" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" modality="would" />
+<MAKEINSTANCE eventID="e34" eiid="ei2008" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e39" eiid="ei2009" tense="FUTURE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e23" eiid="ei2010" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei2011" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l25" relType="IS_INCLUDED" eventInstanceID="ei2011" relatedToTime="t0" />
+<TLINK lid="l24" relType="BEFORE" eventInstanceID="ei2002" relatedToEventInstance="ei1999" />
+<TLINK lid="l2" relType="AFTER" timeID="t0" relatedToEventInstance="ei1989" />
+<TLINK lid="l3" relType="IDENTITY" eventInstanceID="ei2008" relatedToEventInstance="ei1993" />
+<TLINK lid="l5" relType="BEFORE" eventInstanceID="ei1999" relatedToTime="t0" />
+<TLINK lid="l7" relType="IDENTITY" eventInstanceID="ei1993" relatedToEventInstance="ei1990" />
+<TLINK lid="l8" relType="BEGUN_BY" eventInstanceID="ei1993" relatedToEventInstance="ei1994" />
+<TLINK lid="l9" relType="BEGUN_BY" eventInstanceID="ei2009" relatedToTime="t38" />
+<TLINK lid="l10" relType="AFTER" eventInstanceID="ei1994" relatedToEventInstance="ei1995" />
+<TLINK lid="l11" relType="BEFORE" eventInstanceID="ei2006" relatedToTime="t0" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei1996" relatedToEventInstance="ei1993"  />
+<TLINK lid="l13" relType="BEFORE" eventInstanceID="ei2008" relatedToEventInstance="ei2007" />
+<TLINK lid="l14" relType="BEFORE" eventInstanceID="ei1998" relatedToEventInstance="ei1990" />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei2010" relatedToTime="t37" />
+<SLINK lid="l16" relType="EVIDENTIAL" eventInstanceID="ei1989" subordinatedEventInstance="ei1990" />
+<SLINK lid="l17" relType="MODAL" eventInstanceID="ei1990" subordinatedEventInstance="ei1991" />
+<SLINK lid="l18" relType="EVIDENTIAL" eventInstanceID="ei2006" subordinatedEventInstance="ei2007" />
+<SLINK lid="l19" relType="COUNTER_FACTIVE" eventInstanceID="ei2002" subordinatedEventInstance="ei2003" />
+<SLINK lid="l20" relType="MODAL" eventInstanceID="ei2000" subordinatedEventInstance="ei2001" />
+<SLINK lid="l21" relType="EVIDENTIAL" eventInstanceID="ei1999" subordinatedEventInstance="ei2000" />
+<SLINK lid="l22" relType="EVIDENTIAL" eventInstanceID="ei2011" subordinatedEventInstance="ei2010" />
+<SLINK lid="l23" relType="NEG_EVIDENTIAL" eventInstanceID="ei1996" subordinatedEventInstance="ei1997" />
+
+</TimeML>

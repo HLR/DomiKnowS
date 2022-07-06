@@ -1,0 +1,170 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0973</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-26" temporalFunction="false" functionInDocument="CREATION_TIME">10/26/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891026-0085 = 891026 891026-0085.
+Westinghouse @ Sees Big Gains @ For Next Year @ --- @ Boost in Operating Margins, @ Double-Digit Per-Share @ Growth Forecast by Firm @ ---- @ By Gregory Stricharchuk @ Staff Reporter of The Wall Street Journal 10/26/89 WALL STREET JOURNAL (J) WX ELECTRICAL COMPONENTS AND EQUIPMENT (ELQ) NEW YORK
+</EXTRAINFO>
+
+<TEXT>
+Westinghouse Electric Corp., <EVENT eid="e1" class="OCCURRENCE">capitalizing</EVENT> on a major restructuring program, <EVENT eid="e3" class="I_STATE">expects</EVENT> operating margins of more than 10% and double-digit per-share earnings growth <TIMEX3 tid="t119" type="DATE" value="1990" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">next year</TIMEX3>, top officers <EVENT eid="e4" class="REPORTING">told</EVENT> securities analysts here.
+
+John C. Marous, chairman and chief executive officer, also <EVENT eid="e6" class="REPORTING">said</EVENT> the company <EVENT eid="e7" class="I_STATE">expects</EVENT> sales from continuing businesses to <EVENT eid="e12" class="OCCURRENCE">rise</EVENT> 8.5% annually through <TIMEX3 tid="t121" type="DURATION" value="P3Y" temporalFunction="true" functionInDocument="NONE" beginPoint="t0">the next three years</TIMEX3>.
+
+In <TIMEX3 tid="t122" type="DATE" value="1988" temporalFunction="false" functionInDocument="NONE">1988</TIMEX3>, the company <EVENT eid="e13" class="OCCURRENCE">earned</EVENT> $822.8 million, or $5.66 a share, on sales of $12.49 billion.
+
+Since <TIMEX3 tid="t126" type="DATE" value="1983" temporalFunction="false" functionInDocument="NONE">1983</TIMEX3>, Westinghouse has <EVENT eid="e15" class="OCCURRENCE">shed</EVENT> 70 businesses that it didn't <EVENT eid="e17" class="I_STATE">expect</EVENT> to <EVENT eid="e20" class="OCCURRENCE">produce</EVENT> 10% operating margins while <EVENT eid="e22" class="OCCURRENCE">acquiring</EVENT> 55 businesses.
+
+In <TIMEX3 tid="t127" type="DURATION" value="P20M" temporalFunction="true" functionInDocument="NONE" endPoint="t0">the past 20 months</TIMEX3> alone, Paul E. Lego, president and chief operating officer, <EVENT eid="e24" class="REPORTING">said</EVENT> the divestiture of $300 million of slow-growth, low-profit businesses has been more than <EVENT eid="e467" class="OCCURRENCE">offset</EVENT> by $600 million in profitable acquisitions.
+
+Westinghouse <EVENT eid="e31" class="I_STATE">expects</EVENT> to <EVENT eid="e33" class="OCCURRENCE">meet</EVENT> its corporate goals despite a softening in the economy. Even if the gross national product is either flat or in the growth range of 2% to 2.5%, "we can <EVENT eid="e37" class="OCCURRENCE">handle</EVENT> that," Mr. Marous <EVENT eid="e39" class="REPORTING">said</EVENT>. GNP is the total value of the nation's output of goods and services.
+
+A bright spot is the company's power-generation business, which is <EVENT eid="e44" class="I_STATE">experiencing</EVENT> a surge of <EVENT eid="e134" class="OCCURRENCE">growth</EVENT> for the first time in <TIMEX3 tid="t136" type="DURATION" value="PXY" temporalFunction="false" functionInDocument="NONE">years</TIMEX3>. Mr. Marous <EVENT eid="e47" class="REPORTING">said</EVENT> the business will <EVENT eid="e49" class="OCCURRENCE">achieve</EVENT> higher sales <TIMEX3 tid="t137" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3> than the company's target goal of 8.5%.
+
+While Westinghouse hasn't <EVENT eid="e138" class="STATE">had</EVENT> a nuclear power plant order from a U.S. utility in <TIMEX3 tid="t141" type="DURATION" value="P1E" mod="APPROX" temporalFunction="false" functionInDocument="NONE">about a decade</TIMEX3>, excess capacity is <EVENT eid="e52" class="ASPECTUAL">beginning</EVENT> to <EVENT eid="e54" class="OCCURRENCE">shrink</EVENT>. Mr. Lego <EVENT eid="e55" class="REPORTING">said</EVENT> the company <EVENT eid="e56" class="I_STATE">foresees</EVENT> the need for a major <EVENT eid="e57" class="OCCURRENCE">boost</EVENT> in new-generation capability throughout <TIMEX3 tid="t144" type="DURATION" value="199" temporalFunction="false" functionInDocument="NONE">the 1990s</TIMEX3>.
+
+Westinghouse also is well <EVENT eid="e58" class="I_STATE">positioned</EVENT> to <EVENT eid="e60" class="OCCURRENCE">sell</EVENT> steam turbine and gas turbine plants to independent power producers. The company's ability to respond to energy needs world-wide will be <EVENT eid="e65" class="OCCURRENCE">enhanced</EVENT> through a <TIMEX3 tid="t145" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">recently</TIMEX3> announced <EVENT eid="e66" class="OCCURRENCE">venture</EVENT> with Mitsubishi Heavy Industries, Mr. Lego <EVENT eid="e68" class="REPORTING">said</EVENT>.
+
+He <EVENT eid="e69" class="REPORTING">said</EVENT> the independent power segment could <EVENT eid="e70" class="OCCURRENCE">grow</EVENT> to <EVENT eid="e73" class="OCCURRENCE">provide</EVENT> as much as 50% of near-term generation capacity, <EVENT eid="e74" class="REPORTING">adding</EVENT>: "We <EVENT eid="e75" class="I_STATE">expect</EVENT> to <EVENT eid="e77" class="OCCURRENCE">supply</EVENT> a significant share of this market."
+
+Westinghouse also <EVENT eid="e79" class="I_STATE">expects</EVENT> its international sales to <TIMEX3 tid="t147" type="DATE" value="FUTURE_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">soon</TIMEX3> <EVENT eid="e81" class="OCCURRENCE">grow</EVENT> to 25% of total corporate sales from 20% <TIMEX3 tid="t150" type="DATE" value="1988" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last year</TIMEX3>. The company is <EVENT eid="e82" class="OCCURRENCE">negotiating</EVENT> with the Soviets to <EVENT eid="e84" class="OCCURRENCE">build</EVENT> a Thermo King truck-refrigeration plant that would <EVENT eid="e85" class="OCCURRENCE">produce</EVENT> about 10,000 units annually.
+
+Mr. Marous <EVENT eid="e87" class="REPORTING">said</EVENT> Westinghouse would <EVENT eid="e154" class="STATE">own</EVENT> 70% of the facility. The <EVENT eid="e466" class="OCCURRENCE">deal</EVENT>, which will <EVENT eid="e89" class="I_STATE">involve</EVENT> an initial $20 million <EVENT eid="e90" class="OCCURRENCE">investment</EVENT>, was <EVENT eid="e91" class="OCCURRENCE">struck</EVENT> with a <EVENT eid="e155" class="OCCURRENCE">handshake</EVENT>, he <EVENT eid="e93" class="REPORTING">added</EVENT>.
+
+Company officials also <EVENT eid="e94" class="REPORTING">said</EVENT> that any gain from the <EVENT eid="e95" class="OCCURRENCE">sale</EVENT> of Westinghouse's 55% stake in its transmission and distribution venture with the Swiss firm of Asea Brown Boveri will be <EVENT eid="e101" class="OCCURRENCE">offset</EVENT> by a restructuring charge in <TIMEX3 tid="t157" type="DATE" value="1989-Q4" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">the fourth quarter</TIMEX3>. The executives didn't <EVENT eid="e102" class="OCCURRENCE">disclose</EVENT> the size of the expected gain.
+
+Capital expenditure in <TIMEX3 tid="t158" type="DATE" value="1990" temporalFunction="false" functionInDocument="NONE">1990</TIMEX3> will <EVENT eid="e105" class="OCCURRENCE">rise</EVENT> slightly, Mr. Marous <EVENT eid="e106" class="REPORTING">said</EVENT>, from an estimated $470 million <TIMEX3 tid="t163" type="DATE" value="1989" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">this year</TIMEX3>.
+</TEXT>
+
+<MAKEINSTANCE eventID="e93" eiid="ei2049" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e94" eiid="ei2050" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e66" eiid="ei2027" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e79" eiid="ei2035" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e70" eiid="ei2030" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e17" eiid="ei2000" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e155" eiid="ei2048" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e69" eiid="ei2029" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei1996" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e31" eiid="ei2005" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei2018" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e44" eiid="ei2011" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e101" eiid="ei2052" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1" eiid="ei1991" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e95" eiid="ei2051" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e90" eiid="ei2046" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e466" eiid="ei2044" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e65" eiid="ei2025" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei1999" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e89" eiid="ei2045" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei2003" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei2023" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e75" eiid="ei2033" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei2047" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e74" eiid="ei2032" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e52" eiid="ei2017" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei2010" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e85" eiid="ei2041" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" modality="would" />
+<MAKEINSTANCE eventID="e134" eiid="ei2012" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e55" eiid="ei2019" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2002" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e82" eiid="ei2039" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e77" eiid="ei2034" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei1995" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e56" eiid="ei2020" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei1998" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei2014" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei1992" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e84" eiid="ei2040" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei2024" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e138" eiid="ei2015" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e37" eiid="ei2009" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" modality="can" />
+<MAKEINSTANCE eventID="e33" eiid="ei2006" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei2001" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei1994" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e102" eiid="ei2053" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e106" eiid="ei2055" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei1997" tense="INFINITIVE" aspect="NONE" polarity="POS" cardinality="3" pos="VERB" />
+<MAKEINSTANCE eventID="e154" eiid="ei2043" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" modality="would" />
+<MAKEINSTANCE eventID="e73" eiid="ei2031" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e87" eiid="ei2042" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e68" eiid="ei2028" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e81" eiid="ei2036" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e105" eiid="ei2054" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e47" eiid="ei2013" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e57" eiid="ei2022" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e467" eiid="ei2058" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="OTHER" />
+<TLINK lid="l84" relType="IDENTITY" eventInstanceID="ei2044" relatedToEventInstance="ei2039" />
+<TLINK lid="l83" relType="IDENTITY" eventInstanceID="ei2049" relatedToEventInstance="ei2042" />
+<TLINK lid="l82" relType="IS_INCLUDED" eventInstanceID="ei2039" relatedToTime="t0" />
+<TLINK lid="l80" relType="IS_INCLUDED" eventInstanceID="ei2035" relatedToTime="t0" />
+<TLINK lid="l79" relType="BEFORE" eventInstanceID="ei2019" relatedToTime="t0" />
+<TLINK lid="l78" relType="IS_INCLUDED" eventInstanceID="ei2018" relatedToTime="t0" />
+<TLINK lid="l77" relType="BEFORE" eventInstanceID="ei2010" relatedToTime="t0" />
+<TLINK lid="l75" relType="IS_INCLUDED" eventInstanceID="ei2058" relatedToTime="t127" />
+<TLINK lid="l74" relType="IDENTITY" eventInstanceID="ei2003" relatedToEventInstance="ei1994" />
+<TLINK lid="l1" relType="BEGUN_BY" eventInstanceID="ei1999" relatedToTime="t126"  />
+<TLINK lid="l2" relType="AFTER" eventInstanceID="ei1999" relatedToEventInstance="ei2000" />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei1999" relatedToEventInstance="ei2002"  />
+<TLINK lid="l4" relType="BEGUN_BY" eventInstanceID="ei2002" relatedToTime="t126"  />
+<TLINK lid="l5" relType="INCLUDES" eventInstanceID="ei2005" relatedToTime="t0" />
+<TLINK lid="l6" relType="DURING" eventInstanceID="ei2022" relatedToTime="t144"  />
+<TLINK lid="l7" relType="INCLUDES" eventInstanceID="ei2023" relatedToTime="t0" />
+<TLINK lid="l8" relType="AFTER" eventInstanceID="ei2025" relatedToEventInstance="ei2027" />
+<TLINK lid="l11" relType="SIMULTANEOUS" eventInstanceID="ei1991" relatedToEventInstance="ei1992" />
+<TLINK lid="l12" relType="IDENTITY" eventInstanceID="ei2029" relatedToEventInstance="ei2028" />
+<TLINK lid="l13" relType="IS_INCLUDED" eventInstanceID="ei2032" relatedToEventInstance="ei2029" />
+<TLINK lid="l14" relType="IS_INCLUDED" eventInstanceID="ei2036" relatedToTime="t147" />
+<TLINK lid="l17" relType="BEFORE" eventInstanceID="ei2040" relatedToEventInstance="ei2041" />
+<TLINK lid="l18" relType="IDENTITY" eventInstanceID="ei2042" relatedToEventInstance="ei1995" />
+<TLINK lid="l19" relType="AFTER" eventInstanceID="ei2045" relatedToTime="t0" />
+<TLINK lid="l20" relType="IDENTITY" eventInstanceID="ei2045" relatedToEventInstance="ei2046" />
+<TLINK lid="l21" relType="IS_INCLUDED" eventInstanceID="ei1995" relatedToEventInstance="ei1994" />
+<TLINK lid="l22" relType="IDENTITY" eventInstanceID="ei2047" relatedToEventInstance="ei2048" />
+<TLINK lid="l23" relType="INCLUDES" eventInstanceID="ei1992" relatedToEventInstance="ei1994" />
+<TLINK lid="l24" relType="INCLUDES" eventInstanceID="ei2011" relatedToTime="t0" />
+<TLINK lid="l25" relType="BEFORE" eventInstanceID="ei1994" relatedToTime="t0" />
+<TLINK lid="l26" relType="IDENTITY" eventInstanceID="ei2050" relatedToEventInstance="ei1994" />
+<TLINK lid="l27" relType="AFTER" eventInstanceID="ei2052" relatedToEventInstance="ei2051" />
+<TLINK lid="l28" relType="IS_INCLUDED" eventInstanceID="ei2052" relatedToTime="t157"  />
+<TLINK lid="l29" relType="IS_INCLUDED" eventInstanceID="ei1998" relatedToTime="t122"  />
+<TLINK lid="l30" relType="IS_INCLUDED" eventInstanceID="ei2053" relatedToEventInstance="ei2050" />
+<TLINK lid="l31" relType="IS_INCLUDED" eventInstanceID="ei2054" relatedToTime="t158"  />
+<TLINK lid="l32" relType="IDENTITY" eventInstanceID="ei2055" relatedToEventInstance="ei2042" />
+<TLINK lid="l35" relType="INCLUDES" eventInstanceID="ei1992" relatedToTime="t0" />
+<TLINK lid="l36" relType="INCLUDES" eventInstanceID="ei2017" relatedToTime="t0" />
+<TLINK lid="l37" relType="IS_INCLUDED" eventInstanceID="ei2015" relatedToTime="t141"  />
+<TLINK lid="l38" relType="DURING" eventInstanceID="ei1997" relatedToTime="t121"  />
+<TLINK lid="l40" relType="IS_INCLUDED" eventInstanceID="ei2014" relatedToTime="t137" />
+<TLINK lid="l41" relType="IDENTITY" eventInstanceID="ei2013" relatedToEventInstance="ei1995" />
+<TLINK lid="l42" relType="IS_INCLUDED" eventInstanceID="ei2012" relatedToTime="t136"  />
+<SLINK lid="l72" relType="FACTIVE" eventInstanceID="ei2047" subordinatedEventInstance="ei2044" />
+<SLINK lid="l71" relType="EVIDENTIAL" eventInstanceID="ei2003" subordinatedEventInstance="ei2058" />
+<SLINK lid="l70" relType="EVIDENTIAL" eventInstanceID="ei1994" subordinatedEventInstance="ei1992" />
+<SLINK lid="l44" relType="EVIDENTIAL" eventInstanceID="ei2019" subordinatedEventInstance="ei2020" />
+<SLINK lid="l47" relType="MODAL" eventInstanceID="ei2000" subordinatedEventInstance="ei2001" />
+<SLINK lid="l48" relType="MODAL" eventInstanceID="ei2005" subordinatedEventInstance="ei2006" />
+<SLINK lid="l49" relType="MODAL" eventInstanceID="ei2023" subordinatedEventInstance="ei2024" />
+<SLINK lid="l51" relType="EVIDENTIAL" eventInstanceID="ei2028" subordinatedEventInstance="ei2025" />
+<SLINK lid="l52" relType="EVIDENTIAL" eventInstanceID="ei2029" subordinatedEventInstance="ei2030" />
+<SLINK lid="l53" relType="MODAL" eventInstanceID="ei2030" subordinatedEventInstance="ei2031" />
+<SLINK lid="l54" relType="EVIDENTIAL" eventInstanceID="ei2032" subordinatedEventInstance="ei2033" />
+<SLINK lid="l55" relType="MODAL" eventInstanceID="ei2033" subordinatedEventInstance="ei2034" />
+<SLINK lid="l56" relType="MODAL" eventInstanceID="ei2035" subordinatedEventInstance="ei2036" />
+<SLINK lid="l57" relType="MODAL" eventInstanceID="ei2039" subordinatedEventInstance="ei2040" />
+<SLINK lid="l58" relType="EVIDENTIAL" eventInstanceID="ei2042" subordinatedEventInstance="ei2043" />
+<SLINK lid="l59" relType="EVIDENTIAL" eventInstanceID="ei2010" subordinatedEventInstance="ei2009" />
+<SLINK lid="l60" relType="EVIDENTIAL" eventInstanceID="ei1995" subordinatedEventInstance="ei1996" />
+<SLINK lid="l61" relType="EVIDENTIAL" eventInstanceID="ei2049" subordinatedEventInstance="ei2047" />
+<SLINK lid="l62" relType="EVIDENTIAL" eventInstanceID="ei2050" subordinatedEventInstance="ei2052" />
+<SLINK lid="l63" relType="MODAL" eventInstanceID="ei1996" subordinatedEventInstance="ei1997" />
+<SLINK lid="l65" relType="EVIDENTIAL" eventInstanceID="ei2055" subordinatedEventInstance="ei2054" />
+<SLINK lid="l66" relType="EVIDENTIAL" eventInstanceID="ei2013" subordinatedEventInstance="ei2014" />
+<SLINK lid="l67" relType="FACTIVE" eventInstanceID="ei2011" subordinatedEventInstance="ei2012" />
+<ALINK lid="l68" relType="CULMINATES" eventInstanceID="ei2047" relatedToEventInstance="ei2044" />
+<ALINK lid="l69" relType="INITIATES" eventInstanceID="ei2017" relatedToEventInstance="ei2018" />
+
+</TimeML>

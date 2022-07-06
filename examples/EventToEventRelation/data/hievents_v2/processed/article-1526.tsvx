@@ -1,0 +1,106 @@
+Text	A woman has been arrested in connection with the murder of Ciaran Noonan. The woman, 24, was detained in Dublin this afternoon and taken to Store Street Garda station. She is being held and questioned under section 30 of the Offences against the State Act. It is the eighth arrest over the killing of the 29-year-old father of one, whose body was found on farmland in Co Meath earlier this month. No one has yet been charged. Mr Noonan, who it is believed owed a drug debt, was kidnapped from the East Wall area of Dublin on October 20. He was murdered before being dumped in a field at Tullaghmeaden, about six miles outside Trim, Co Meath. His body was not discovered until November 4 after a tip-off. 
+Event	1	arrested	Occurrence	17
+Event	2	murder	Occurrence	49
+Event	3	detained	Occurrence	93
+Event	4	taken	Occurrence	131
+Event	5	held	Occurrence	181
+Event	6	questioned	Occurrence	190
+Event	7	arrest	Occurrence	274
+Event	8	killing	Occurrence	290
+Event	9	found	Occurrence	347
+Event	10	kidnapped	Occurrence	478
+Event	11	murdered	Occurrence	544
+Event	12	dumped	Occurrence	566
+Event	13	discovered	Occurrence	659
+Event	14	tip	Occurrence	695
+Relation	1	2	NoRel	true	arrested	murder
+Relation	1	3	Coref	true	arrested	detained
+Relation	1	4	SuperSub	true	arrested	taken
+Relation	1	5	Coref	true	arrested	held
+Relation	1	6	SuperSub	true	arrested	questioned
+Relation	1	7	Coref	true	arrested	arrest
+Relation	1	8	NoRel	true	arrested	killing
+Relation	1	9	NoRel	true	arrested	found
+Relation	1	10	NoRel	true	arrested	kidnapped
+Relation	1	11	NoRel	true	arrested	murdered
+Relation	1	12	NoRel	true	arrested	dumped
+Relation	1	13	NoRel	true	arrested	discovered
+Relation	1	14	NoRel	true	arrested	tip
+Relation	2	3	NoRel	true	murder	detained
+Relation	2	4	NoRel	true	murder	taken
+Relation	2	5	NoRel	true	murder	held
+Relation	2	6	NoRel	true	murder	questioned
+Relation	2	7	NoRel	true	murder	arrest
+Relation	2	8	Coref	true	murder	killing
+Relation	2	9	NoRel	true	murder	found
+Relation	2	10	NoRel	true	murder	kidnapped
+Relation	2	11	Coref	true	murder	murdered
+Relation	2	12	NoRel	true	murder	dumped
+Relation	2	13	NoRel	true	murder	discovered
+Relation	2	14	NoRel	true	murder	tip
+Relation	3	4	SuperSub	true	detained	taken
+Relation	3	5	Coref	true	detained	held
+Relation	3	6	SuperSub	true	detained	questioned
+Relation	3	7	Coref	true	detained	arrest
+Relation	3	8	NoRel	true	detained	killing
+Relation	3	9	NoRel	true	detained	found
+Relation	3	10	NoRel	true	detained	kidnapped
+Relation	3	11	NoRel	true	detained	murdered
+Relation	3	12	NoRel	true	detained	dumped
+Relation	3	13	NoRel	true	detained	discovered
+Relation	3	14	NoRel	true	detained	tip
+Relation	4	5	SubSuper	true	taken	held
+Relation	4	6	NoRel	true	taken	questioned
+Relation	4	7	SubSuper	true	taken	arrest
+Relation	4	8	NoRel	true	taken	killing
+Relation	4	9	NoRel	true	taken	found
+Relation	4	10	NoRel	true	taken	kidnapped
+Relation	4	11	NoRel	true	taken	murdered
+Relation	4	12	NoRel	true	taken	dumped
+Relation	4	13	NoRel	true	taken	discovered
+Relation	4	14	NoRel	true	taken	tip
+Relation	5	6	SuperSub	true	held	questioned
+Relation	5	7	Coref	true	held	arrest
+Relation	5	8	NoRel	true	held	killing
+Relation	5	9	NoRel	true	held	found
+Relation	5	10	NoRel	true	held	kidnapped
+Relation	5	11	NoRel	true	held	murdered
+Relation	5	12	NoRel	true	held	dumped
+Relation	5	13	NoRel	true	held	discovered
+Relation	5	14	NoRel	true	held	tip
+Relation	6	7	SubSuper	true	questioned	arrest
+Relation	6	8	NoRel	true	questioned	killing
+Relation	6	9	NoRel	true	questioned	found
+Relation	6	10	NoRel	true	questioned	kidnapped
+Relation	6	11	NoRel	true	questioned	murdered
+Relation	6	12	NoRel	true	questioned	dumped
+Relation	6	13	NoRel	true	questioned	discovered
+Relation	6	14	NoRel	true	questioned	tip
+Relation	7	8	NoRel	true	arrest	killing
+Relation	7	9	NoRel	true	arrest	found
+Relation	7	10	NoRel	true	arrest	kidnapped
+Relation	7	11	NoRel	true	arrest	murdered
+Relation	7	12	NoRel	true	arrest	dumped
+Relation	7	13	NoRel	true	arrest	discovered
+Relation	7	14	NoRel	true	arrest	tip
+Relation	8	9	NoRel	true	killing	found
+Relation	8	10	NoRel	true	killing	kidnapped
+Relation	8	11	Coref	true	killing	murdered
+Relation	8	12	NoRel	true	killing	dumped
+Relation	8	13	NoRel	true	killing	discovered
+Relation	8	14	NoRel	true	killing	tip
+Relation	9	10	NoRel	true	found	kidnapped
+Relation	9	11	NoRel	true	found	murdered
+Relation	9	12	NoRel	true	found	dumped
+Relation	9	13	Coref	true	found	discovered
+Relation	9	14	NoRel	true	found	tip
+Relation	10	11	NoRel	true	kidnapped	murdered
+Relation	10	12	NoRel	true	kidnapped	dumped
+Relation	10	13	NoRel	true	kidnapped	discovered
+Relation	10	14	NoRel	true	kidnapped	tip
+Relation	11	12	NoRel	true	murdered	dumped
+Relation	11	13	NoRel	true	murdered	discovered
+Relation	11	14	NoRel	true	murdered	tip
+Relation	12	13	NoRel	true	dumped	discovered
+Relation	12	14	NoRel	true	dumped	tip
+Relation	13	14	NoRel	true	discovered	tip

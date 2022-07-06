@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0122</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME">11/02/89 </TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0069 = 891102 891102-0069.
+Young's Market Co. to Merge
+11/02/89 
+WALL STREET JOURNAL (J) TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) LOS ANGELES
+</EXTRAINFO>
+
+<TEXT>
+Young's Market Co., a wholesaler of spirits, wines and other goods, <EVENT eid="e1" class="REPORTING" stem="say">said</EVENT> it will <EVENT eid="e2" class="OCCURRENCE" stem="merge">merge</EVENT> with a new corporation <EVENT eid="e3" class="OCCURRENCE" stem="form">formed</EVENT> by the Underwood family, which controls Young's.
+
+Under terms of the <EVENT eid="e11" class="OCCURRENCE" stem="agreement">agreement</EVENT>, shareholders other than the Underwoods will <EVENT eid="e5" class="OCCURRENCE" stem="receive">receive</EVENT> $3,500 a share at <EVENT eid="e6" class="OCCURRENCE" stem="close">closing</EVENT>, which is <EVENT eid="e8" class="OCCURRENCE" stem="expect">expected</EVENT> in <TIMEX3 tid="t13" type="DATE" value="1989-12" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">December</TIMEX3>. The Underwood family <EVENT eid="e9" class="REPORTING" stem="say">said</EVENT> that holders of more than a majority of the stock of the company have <EVENT eid="e10" class="OCCURRENCE" stem="approve">approved</EVENT> the <EVENT eid="e14" class="OCCURRENCE" stem="transaction">transaction</EVENT> by written consent.
+</TEXT>
+
+<MAKEINSTANCE eventID="e9" eiid="ei88" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei84" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e5" eiid="ei85" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei87" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei82" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei90" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e6" eiid="ei86" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e1" eiid="ei81" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei83" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei89" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei84" relatedToTime="t0" />
+<TLINK lid="l14" relType="IS_INCLUDED" eventInstanceID="ei87" relatedToTime="t0" />
+<TLINK lid="l1" relType="SIMULTANEOUS" eventInstanceID="ei90" relatedToEventInstance="ei82" />
+<TLINK lid="l2" relType="BEFORE" eventInstanceID="ei89" relatedToEventInstance="ei88" />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei88" relatedToEventInstance="ei81" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei81" relatedToTime="t0" />
+<TLINK lid="l5" relType="INCLUDES" timeID="t13" relatedToEventInstance="ei86" />
+<TLINK lid="l6" relType="IAFTER" eventInstanceID="ei85" relatedToEventInstance="ei86" />
+<TLINK lid="l7" relType="AFTER" eventInstanceID="ei82" relatedToEventInstance="ei83" />
+<SLINK lid="l13" relType="EVIDENTIAL" eventInstanceID="ei88" subordinatedEventInstance="ei89" />
+<SLINK lid="l12" relType="MODAL" eventInstanceID="ei87" subordinatedEventInstance="ei86" />
+<SLINK lid="l8" relType="MODAL" eventInstanceID="ei89" subordinatedEventInstance="ei90" />
+<SLINK lid="l10" relType="MODAL" eventInstanceID="ei84" subordinatedEventInstance="ei85" />
+<SLINK lid="l11" relType="EVIDENTIAL" eventInstanceID="ei81" subordinatedEventInstance="ei82" />
+
+</TimeML>

@@ -1,0 +1,79 @@
+Text	The U.S. Federal Trade Commission has reached out to Google Inc and Twitter in an investigation into Facebook Inc's $1 billion acquisition of photo-sharing service Instagram, a source familiar with the probe told Reuters. It was not immediately clear what specific information the FTC was looking for, the source said. The Commission automatically initiates a review of any acquisition of significant size. The acquisition of the top photo-sharing service on the Internet is a crucial part of Facebook's strategy to bolster its mobile offerings, at a time when consumers are increasingly accessing the Internet through smarpthones. Facebook had said it hopes to complete the deal -- the largest in Facebook's history -- in the second quarter, but some observers think that may be an ambitious target, given the size of the deal and Facebook's status as the world's No.1 Internet social network with roughly 900 million users. The FTC's review of the deal comes as Facebook is preparing to raise as much as $12 billion in a record-breaking initial public offering that could occur as soon as next week. Some investors have cited Facebook's limited advertising revenue from the mobile versions of its service as a potential concern with regards to the company's long-term growth potential. Facebook and Twitter declined to comment. Google was not immediately available for comment.
+Event	1	reached	Occurrence	38
+Event	2	investigation	Occurrence	82
+Event	3	acquisition	Occurrence	127
+Event	4	told	Reporting	208
+Event	5	looking	Occurrence	289
+Event	6	said	Reporting	313
+Event	7	acquisition	Occurrence	411
+Event	8	said	Reporting	645
+Event	9	comes	Occurrence	955
+Event	10	preparing	I_Action	976
+Event	11	cited	Reporting	1122
+Event	12	declined	I_Action	1309
+Relation	1	2	SubSuper	true	reached	investigation
+Relation	1	3	NoRel	true	reached	acquisition
+Relation	1	4	NoRel	true	reached	told
+Relation	1	5	SubSuper	true	reached	looking
+Relation	1	6	NoRel	true	reached	said
+Relation	1	7	NoRel	true	reached	acquisition
+Relation	1	8	NoRel	true	reached	said
+Relation	1	9	NoRel	true	reached	comes
+Relation	1	10	NoRel	true	reached	preparing
+Relation	1	11	NoRel	true	reached	cited
+Relation	1	12	NoRel	true	reached	declined
+Relation	2	3	NoRel	true	investigation	acquisition
+Relation	2	4	NoRel	true	investigation	told
+Relation	2	5	SuperSub	true	investigation	looking
+Relation	2	6	NoRel	true	investigation	said
+Relation	2	7	NoRel	true	investigation	acquisition
+Relation	2	8	NoRel	true	investigation	said
+Relation	2	9	SuperSub	true	investigation	comes
+Relation	2	10	NoRel	true	investigation	preparing
+Relation	2	11	NoRel	true	investigation	cited
+Relation	2	12	NoRel	true	investigation	declined
+Relation	3	4	NoRel	true	acquisition	told
+Relation	3	5	NoRel	true	acquisition	looking
+Relation	3	6	NoRel	true	acquisition	said
+Relation	3	7	Coref	true	acquisition	acquisition
+Relation	3	8	NoRel	true	acquisition	said
+Relation	3	9	NoRel	true	acquisition	comes
+Relation	3	10	NoRel	true	acquisition	preparing
+Relation	3	11	NoRel	true	acquisition	cited
+Relation	3	12	NoRel	true	acquisition	declined
+Relation	4	5	NoRel	true	told	looking
+Relation	4	6	NoRel	true	told	said
+Relation	4	7	NoRel	true	told	acquisition
+Relation	4	8	NoRel	true	told	said
+Relation	4	9	NoRel	true	told	comes
+Relation	4	10	NoRel	true	told	preparing
+Relation	4	11	NoRel	true	told	cited
+Relation	4	12	NoRel	true	told	declined
+Relation	5	6	NoRel	true	looking	said
+Relation	5	7	NoRel	true	looking	acquisition
+Relation	5	8	NoRel	true	looking	said
+Relation	5	9	NoRel	true	looking	comes
+Relation	5	10	NoRel	true	looking	preparing
+Relation	5	11	NoRel	true	looking	cited
+Relation	5	12	NoRel	true	looking	declined
+Relation	6	7	NoRel	true	said	acquisition
+Relation	6	8	NoRel	true	said	said
+Relation	6	9	NoRel	true	said	comes
+Relation	6	10	NoRel	true	said	preparing
+Relation	6	11	NoRel	true	said	cited
+Relation	6	12	NoRel	true	said	declined
+Relation	7	8	NoRel	true	acquisition	said
+Relation	7	9	NoRel	true	acquisition	comes
+Relation	7	10	NoRel	true	acquisition	preparing
+Relation	7	11	NoRel	true	acquisition	cited
+Relation	7	12	NoRel	true	acquisition	declined
+Relation	8	9	NoRel	true	said	comes
+Relation	8	10	NoRel	true	said	preparing
+Relation	8	11	NoRel	true	said	cited
+Relation	8	12	NoRel	true	said	declined
+Relation	9	10	NoRel	true	comes	preparing
+Relation	9	11	NoRel	true	comes	cited
+Relation	9	12	NoRel	true	comes	declined
+Relation	10	11	NoRel	true	preparing	cited
+Relation	10	12	NoRel	true	preparing	declined
+Relation	11	12	NoRel	true	cited	declined

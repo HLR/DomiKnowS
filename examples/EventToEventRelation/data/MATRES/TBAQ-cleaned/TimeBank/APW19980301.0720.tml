@@ -1,0 +1,185 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>APW19980301.0720</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="TIME" value="1998-03-01T14:11:00" temporalFunction="false" functionInDocument="CREATION_TIME">03/01/1998 14:11:00</TIMEX3></DCT>
+
+<EXTRAINFO>
+APW19980301.0720 NEWS STORY 03/01/1998 14:11:00
+w1219 Cx1f wstmu i Cx13 Cx11 BC-Israel-Lebanon 03-01 0570
+BC-Israel-Lebanon
+Political momentum gathers for Israeli pullout from Lebanon
+UR Eds: INCORPORATES Israel-Syria; ADDS background and additional comment Sunday QL
+</EXTRAINFO>
+
+<TEXT>
+JERUSALEM (AP)_ Top Israeli officials <EVENT eid="e1" class="OCCURRENCE">sent</EVENT> strong new signals <TIMEX3 tid="t123" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sunday</TIMEX3> that Israel <EVENT eid="e3" class="I_STATE">wants</EVENT> to <EVENT eid="e5" class="OCCURRENCE">withdraw</EVENT> from southern Lebanon, where a costly <EVENT eid="e6" class="OCCURRENCE">war</EVENT> of attrition has been steadily <EVENT eid="e7" class="I_ACTION">claiming</EVENT> soldiers' lives. Prime Minister Benjamin Netanyahu <EVENT eid="e8" class="REPORTING">told</EVENT> his Cabinet on <TIMEX3 tid="t125" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sunday</TIMEX3> that Israel was <EVENT eid="e1990" class="I_STATE">willing</EVENT> to <EVENT eid="e10" class="OCCURRENCE">withdraw</EVENT> from southern Lebanon provided Israel's northern frontier could be <EVENT eid="e12" class="OCCURRENCE">secured</EVENT>. ``If the Lebanese government will <EVENT eid="e14" class="OCCURRENCE">cooperate</EVENT> with us in <EVENT eid="e16" class="OCCURRENCE">making</EVENT> appropriate security arrangements in south Lebanon, we will be happy to <EVENT eid="e18" class="OCCURRENCE">get</EVENT> out of Lebanon in the framework of implementation of U.N. Resolution 425,'' Netanyahu <EVENT eid="e20" class="REPORTING">told</EVENT> his ministers. That <TIMEX3 tid="t128" type="DATE" value="1978" temporalFunction="false" functionInDocument="NONE">1978</TIMEX3> resolution <EVENT eid="e22" class="OCCURRENCE">calls</EVENT> for Israel's unconditional <EVENT eid="e23" class="OCCURRENCE">withdrawal</EVENT> from the self-declared security zone it <EVENT eid="e24" class="OCCURRENCE">occupies</EVENT> in south Lebanon, and for the <EVENT eid="e25" class="OCCURRENCE">deployment</EVENT> of the Lebanese army and U.N. forces to <EVENT eid="e27" class="OCCURRENCE">ensure</EVENT> security along the Lebanese-Israeli border. On <TIMEX3 tid="t127" type="DATE" value="1998-02-27" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Friday</TIMEX3>, Netanyahu <EVENT eid="e29" class="REPORTING">said</EVENT> he <EVENT eid="e30" class="OCCURRENCE">had</EVENT> ``no qualms'' about <EVENT eid="e32" class="OCCURRENCE">implementing</EVENT> the U.N. resolution, as long as Israel <EVENT eid="e33" class="OCCURRENCE">had</EVENT> ``the necessary security safeguards.'' Cabinet minister Michael Eitan <EVENT eid="e35" class="REPORTING">said</EVENT> <TIMEX3 tid="t129" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sunday</TIMEX3> that Netanyahu's <EVENT eid="e36" class="OCCURRENCE">remarks</EVENT> <EVENT eid="e37" class="OCCURRENCE">marked</EVENT> a substantive <EVENT eid="e38" class="OCCURRENCE">change</EVENT> in Israel's position. ``We will <EVENT eid="e39" class="OCCURRENCE">defend</EVENT> our north from the international border,'' <EVENT eid="e40" class="REPORTING">said</EVENT> Eitan, the science minister. ``No one <EVENT eid="e41" class="I_STATE">wants</EVENT> to <EVENT eid="e43" class="OCCURRENCE">stay</EVENT> in Lebanon; thus we <EVENT eid="e44" class="I_STATE">think</EVENT> it better to <EVENT eid="e46" class="OCCURRENCE">withdraw</EVENT>.'' Uri Lubrani, Israel's top official for Lebanon affairs, also <EVENT eid="e47" class="OCCURRENCE">suggested</EVENT> Israel was <EVENT eid="e132" class="I_STATE">willing</EVENT> to <EVENT eid="e49" class="OCCURRENCE">modify</EVENT> its political goals in Lebanon. ``This is a new thing...it means that we are <EVENT eid="e133" class="I_STATE">willing</EVENT> to <EVENT eid="e54" class="OCCURRENCE">talk</EVENT> <TIMEX3 tid="t134" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">today</TIMEX3> _ full stop _ about security,'' Lubrani <EVENT eid="e57" class="REPORTING">told</EVENT> Israel's Channel One. ``We have <EVENT eid="e58" class="OCCURRENCE">gotten</EVENT> off the issue of peace, off the issue of normalization.'' As the death toll in Lebanon has <EVENT eid="e60" class="OCCURRENCE">mounted</EVENT>, the Israeli government has been <EVENT eid="e61" class="OCCURRENCE">faced</EVENT> with a growing grassroots <EVENT eid="e62" class="OCCURRENCE">movement</EVENT> <EVENT eid="e63" class="OCCURRENCE">calling</EVENT> for Israel's unilateral <EVENT eid="e64" class="OCCURRENCE">withdrawal</EVENT> from Lebanon. Since <TIMEX3 tid="t1979" type="DATE" value="1985" temporalFunction="false" functionInDocument="NONE">1985</TIMEX3> _ when the Israelis <EVENT eid="e66" class="OCCURRENCE">created</EVENT> a security buffer zone southern Lebanon _ nearly 200 Israeli soldiers have been <EVENT eid="e67" class="OCCURRENCE">killed</EVENT> <EVENT eid="e68" class="OCCURRENCE">fighting</EVENT> Hezbollah and other guerrillas. <TIMEX3 tid="t1980" type="DATE" value="1998-W08" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Last week</TIMEX3>, Hezbollah fighters <EVENT eid="e69" class="OCCURRENCE">killed</EVENT> three Israeli soldiers and seriously <EVENT eid="e70" class="OCCURRENCE">wounded</EVENT> six others. The Israelis <EVENT eid="e71" class="OCCURRENCE">suffered</EVENT> a record 39 deaths in southern Lebanon <TIMEX3 tid="t1981" type="DURATION" value="1997" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last year</TIMEX3>. In addition, 73 soldiers were <EVENT eid="e75" class="OCCURRENCE">killed</EVENT> en route to Lebanon when two military helicopters <EVENT eid="e77" class="OCCURRENCE">crashed</EVENT> <TIMEX3 tid="t1982" type="DATE" value="1997-02" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last February</TIMEX3>. The Maariv newspaper <EVENT eid="e78" class="REPORTING">said</EVENT> <TIMEX3 tid="t1983" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sunday</TIMEX3> that Netanyahu's comments <TIMEX3 tid="t1985" type="DATE" value="1998-W08" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last week</TIMEX3> were in response to signals from Syria that it <EVENT eid="e81" class="I_STATE">wants</EVENT> to <EVENT eid="e83" class="ASPECTUAL">renew</EVENT> the long-stalled peace <EVENT eid="e84" class="OCCURRENCE">talks</EVENT> between the two countries. The newspaper, <EVENT eid="e85" class="OCCURRENCE">quoting</EVENT> ``secret reports,'' <EVENT eid="e87" class="REPORTING">said</EVENT> Syria had <EVENT eid="e88" class="I_ACTION">indicated</EVENT> its interest in <EVENT eid="e90" class="OCCURRENCE">resuming</EVENT> <EVENT eid="e91" class="OCCURRENCE">talks</EVENT> in <EVENT eid="e92" class="OCCURRENCE">remarks</EVENT> <EVENT eid="e94" class="OCCURRENCE">made</EVENT> <TIMEX3 tid="t1986" type="DATE" value="1998-W08" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">last week</TIMEX3> by the Syrian ambassador to Washington, Walid Mualem, in a <EVENT eid="e95" class="OCCURRENCE">lecture</EVENT> to a closed forum in Baltimore. Two top aides to Netanyahu, political adviser Uzi Arad and Cabinet Secretary Danny Naveh, <EVENT eid="e97" class="OCCURRENCE">left</EVENT> for Europe on <TIMEX3 tid="t1987" type="DATE" value="1998-03-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Sunday</TIMEX3>, apparently to <EVENT eid="e98" class="I_ACTION">investigate</EVENT> the Syrian issue, the newspaper <EVENT eid="e99" class="REPORTING">said</EVENT>. Israel-Syrian <EVENT eid="e100" class="OCCURRENCE">talks</EVENT> have been <EVENT eid="e101" class="OCCURRENCE">cut</EVENT> off for <TIMEX3 tid="t1988" type="DURATION" value="P2Y" mod="EQUAL_OR_LESS" temporalFunction="false" functionInDocument="NONE">nearly two years</TIMEX3>. Defense Minister Yitzhak Mordechai was the first senior Israeli official to <EVENT eid="e102" class="OCCURRENCE">refer</EVENT> to U.N. resolution 425 in a <EVENT eid="e103" class="OCCURRENCE">speech</EVENT> <TIMEX3 tid="t1989" type="DATE" value="1998-W02" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">six weeks ago</TIMEX3>, <EVENT eid="e105" class="REPORTING">saying</EVENT> at <TIMEX3 tid="t1993" type="DATE" value="PAST_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t1989">the time</TIMEX3> he was <EVENT eid="e1994" class="I_STATE">willing</EVENT> to <EVENT eid="e109" class="OCCURRENCE">withdraw</EVENT> troops in exchange for guarantees that Israel would not be <EVENT eid="e113" class="OCCURRENCE">attacked</EVENT>.
+</TEXT>
+
+<LASTEXTRAINFO>
+UR (pvs-dh-lk) (PROFILE (WS SL:BC-Israel-Lebanon; CT:i; (REG:MEST;) (REG:ENGL;) (REG:EURO;) (REG:BRIT;) (REG:SCAN;) (LANG:ENGLISH;)) )
+AP-NY-03-01-98 1411EST
+</LASTEXTRAINFO>
+
+<MAKEINSTANCE eventID="e1" eiid="ei1998" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei2000" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e5" eiid="ei2001" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei2002" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e7" eiid="ei2003" tense="PRESENT" aspect="PERFECTIVE_PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei2004" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1990" eiid="ei2005" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e10" eiid="ei2006" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei2007" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="could" />
+<MAKEINSTANCE eventID="e14" eiid="ei2008" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei2009" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei2010" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei2011" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei2013" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei2014" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e24" eiid="ei2015" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei2016" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e27" eiid="ei2017" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei2018" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e30" eiid="ei2019" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e32" eiid="ei2020" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e33" eiid="ei2021" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei2022" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e36" eiid="ei2023" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e37" eiid="ei2024" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e38" eiid="ei2025" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e39" eiid="ei2026" tense="FUTURE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei2027" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e41" eiid="ei2028" tense="PRESENT" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e43" eiid="ei2029" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e44" eiid="ei2030" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e46" eiid="ei2032" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e47" eiid="ei2033" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e132" eiid="ei2034" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei2035" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e133" eiid="ei2036" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e54" eiid="ei2037" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e57" eiid="ei2038" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e58" eiid="ei2039" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e60" eiid="ei2040" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e61" eiid="ei2041" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e62" eiid="ei2042" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e63" eiid="ei2043" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e64" eiid="ei2044" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e66" eiid="ei2045" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e67" eiid="ei2046" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e68" eiid="ei2047" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e69" eiid="ei2048" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e70" eiid="ei2049" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e71" eiid="ei2050" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e75" eiid="ei2052" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e77" eiid="ei2053" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e78" eiid="ei2054" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e81" eiid="ei2057" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e83" eiid="ei2058" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e84" eiid="ei2059" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e85" eiid="ei2060" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e87" eiid="ei2062" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e88" eiid="ei2063" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e90" eiid="ei2064" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e91" eiid="ei2065" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e92" eiid="ei2066" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e94" eiid="ei2067" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e95" eiid="ei2068" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e97" eiid="ei2069" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e98" eiid="ei2070" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e99" eiid="ei2071" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e100" eiid="ei2072" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e101" eiid="ei2073" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e102" eiid="ei2074" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e103" eiid="ei2075" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e105" eiid="ei2076" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e1994" eiid="ei2077" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e109" eiid="ei2078" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e113" eiid="ei2081" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="would" />
+<TLINK lid="l99" relType="IS_INCLUDED" eventInstanceID="ei2071" relatedToTime="t1986" />
+<TLINK lid="l98" relType="BEFORE" eventInstanceID="ei2059" relatedToTime="t125" />
+<TLINK lid="l97" relType="IS_INCLUDED" eventInstanceID="ei2038" relatedToTime="t129" />
+<TLINK lid="l96" relType="IS_INCLUDED" eventInstanceID="ei2033" relatedToTime="t129" />
+<TLINK lid="l94" relType="IS_INCLUDED" eventInstanceID="ei2027" relatedToTime="t129" />
+<TLINK lid="l93" relType="IS_INCLUDED" eventInstanceID="ei2011" relatedToTime="t125" />
+<TLINK lid="l92" relType="IS_INCLUDED" eventInstanceID="ei2003" relatedToEventInstance="ei2002" />
+<TLINK lid="l4" relType="IS_INCLUDED" eventInstanceID="ei2076" relatedToTime="t1993" />
+<TLINK lid="l5" relType="SIMULTANEOUS" eventInstanceID="ei2076" relatedToEventInstance="ei2074" />
+<TLINK lid="l6" relType="INCLUDES" timeID="t1989" relatedToEventInstance="ei2075" />
+<TLINK lid="l7" relType="INCLUDES" eventInstanceID="ei2075" relatedToEventInstance="ei2074" />
+<TLINK lid="l8" relType="DURING" eventInstanceID="ei2073" relatedToTime="t1988" />
+<TLINK lid="l9" relType="INCLUDES" timeID="t1987" relatedToEventInstance="ei2069" />
+<TLINK lid="l10" relType="INCLUDES" timeID="t1986" relatedToEventInstance="ei2068" />
+<TLINK lid="l11" relType="INCLUDES" eventInstanceID="ei2068" relatedToEventInstance="ei2066" />
+<TLINK lid="l12" relType="INCLUDES" timeID="t1986" relatedToEventInstance="ei2066" />
+<TLINK lid="l13" relType="SIMULTANEOUS" eventInstanceID="ei2067" relatedToEventInstance="ei2066" />
+<TLINK lid="l14" relType="INCLUDES" eventInstanceID="ei2066" relatedToEventInstance="ei2063" />
+<TLINK lid="l15" relType="AFTER" eventInstanceID="ei2064" relatedToEventInstance="ei2063" />
+<TLINK lid="l17" relType="SIMULTANEOUS" eventInstanceID="ei2062" relatedToEventInstance="ei2060" />
+<TLINK lid="l21" relType="INCLUDES" timeID="t1983" relatedToEventInstance="ei2054" />
+<TLINK lid="l22" relType="INCLUDES" timeID="t1982" relatedToEventInstance="ei2052" />
+<TLINK lid="l23" relType="SIMULTANEOUS" eventInstanceID="ei2053" relatedToEventInstance="ei2052" />
+<TLINK lid="l24" relType="INCLUDES" timeID="t1981" relatedToEventInstance="ei2050" />
+<TLINK lid="l26" relType="IS_INCLUDED" eventInstanceID="ei2049" relatedToTime="t1980" />
+<TLINK lid="l27" relType="IS_INCLUDED" eventInstanceID="ei2048" relatedToTime="t1980" />
+<TLINK lid="l28" relType="SIMULTANEOUS" eventInstanceID="ei2047" relatedToEventInstance="ei2046" />
+<TLINK lid="l29" relType="AFTER" eventInstanceID="ei2046" relatedToTime="t1979" />
+<TLINK lid="l30" relType="IS_INCLUDED" eventInstanceID="ei2045" relatedToTime="t1979"  />
+<TLINK lid="l31" relType="SIMULTANEOUS" eventInstanceID="ei2043" relatedToEventInstance="ei2042" />
+<TLINK lid="l32" relType="DURING" eventInstanceID="ei2042" relatedToTime="t0" />
+<TLINK lid="l33" relType="DURING" timeID="t0" relatedToEventInstance="ei2041" />
+<TLINK lid="l34" relType="AFTER" eventInstanceID="ei2041" relatedToEventInstance="ei2040" />
+<TLINK lid="l35" relType="AFTER" timeID="t0" relatedToEventInstance="ei2040" />
+<TLINK lid="l36" relType="BEFORE" timeID="t0" relatedToEventInstance="ei2039" />
+<TLINK lid="l37" relType="INCLUDES" timeID="t134" relatedToEventInstance="ei2037" />
+<TLINK lid="l38" relType="SIMULTANEOUS" eventInstanceID="ei2025" relatedToEventInstance="ei2024" />
+<TLINK lid="l39" relType="SIMULTANEOUS" eventInstanceID="ei2024" relatedToEventInstance="ei2023" />
+<TLINK lid="l40" relType="IS_INCLUDED" eventInstanceID="ei2022" relatedToTime="t129" />
+<TLINK lid="l41" relType="SIMULTANEOUS" eventInstanceID="ei2021" relatedToEventInstance="ei2020" />
+<TLINK lid="l42" relType="IS_INCLUDED" eventInstanceID="ei2018" relatedToTime="t127" />
+<TLINK lid="l43" relType="AFTER" eventInstanceID="ei2017" relatedToEventInstance="ei2016" />
+<TLINK lid="l44" relType="DURING" eventInstanceID="ei2015" relatedToTime="t0" />
+<TLINK lid="l45" relType="DURING" eventInstanceID="ei2013" relatedToTime="t0" />
+<TLINK lid="l47" relType="AFTER" eventInstanceID="ei2010" relatedToEventInstance="ei2008" />
+<TLINK lid="l48" relType="SIMULTANEOUS" eventInstanceID="ei2009" relatedToEventInstance="ei2008" />
+<TLINK lid="l49" relType="BEFORE" timeID="t0" relatedToEventInstance="ei2008" />
+<TLINK lid="l50" relType="SIMULTANEOUS" eventInstanceID="ei2007" relatedToEventInstance="ei2005" />
+<TLINK lid="l51" relType="INCLUDES" timeID="t125" relatedToEventInstance="ei2004" />
+<TLINK lid="l52" relType="INCLUDES" eventInstanceID="ei2002" relatedToTime="t0" />
+<TLINK lid="l53" relType="DURING" eventInstanceID="ei2000" relatedToTime="t0" />
+<TLINK lid="l54" relType="INCLUDES" timeID="t123" relatedToEventInstance="ei1998" />
+<SLINK lid="l89" relType="FACTIVE" eventInstanceID="ei2041" subordinatedEventInstance="ei2042" />
+<SLINK lid="l88" relType="EVIDENTIAL" eventInstanceID="ei2038" subordinatedEventInstance="ei2039" />
+<SLINK lid="l86" relType="CONDITIONAL" eventInstanceID="ei2021" subordinatedEventInstance="ei2019" />
+<SLINK lid="l85" relType="MODAL" eventInstanceID="ei2016" subordinatedEventInstance="ei2017" />
+<SLINK lid="l84" relType="MODAL" eventInstanceID="ei2008" subordinatedEventInstance="ei2009" />
+<SLINK lid="l55" relType="MODAL" eventInstanceID="ei2077" subordinatedEventInstance="ei2078" />
+<SLINK lid="l56" relType="EVIDENTIAL" eventInstanceID="ei2076" subordinatedEventInstance="ei2077" />
+<SLINK lid="l57" relType="EVIDENTIAL" eventInstanceID="ei2071" subordinatedEventInstance="ei2070" />
+<SLINK lid="l58" relType="EVIDENTIAL" eventInstanceID="ei2071" subordinatedEventInstance="ei2069" />
+<SLINK lid="l59" relType="MODAL" eventInstanceID="ei2069" subordinatedEventInstance="ei2070" />
+<SLINK lid="l60" relType="EVIDENTIAL" eventInstanceID="ei2062" subordinatedEventInstance="ei2063" />
+<SLINK lid="l61" relType="MODAL" eventInstanceID="ei2057" subordinatedEventInstance="ei2058" />
+<SLINK lid="l63" relType="MODAL" eventInstanceID="ei2043" subordinatedEventInstance="ei2044" />
+<SLINK lid="l64" relType="EVIDENTIAL" eventInstanceID="ei2038" subordinatedEventInstance="ei2036" />
+<SLINK lid="l65" relType="MODAL" eventInstanceID="ei2034" subordinatedEventInstance="ei2035" />
+<SLINK lid="l66" relType="MODAL" eventInstanceID="ei2033" subordinatedEventInstance="ei2034" />
+<SLINK lid="l67" relType="EVIDENTIAL" eventInstanceID="ei2027" subordinatedEventInstance="ei2030" />
+<SLINK lid="l68" relType="EVIDENTIAL" eventInstanceID="ei2027" subordinatedEventInstance="ei2028" />
+<SLINK lid="l69" relType="MODAL" eventInstanceID="ei2028" subordinatedEventInstance="ei2029" />
+<SLINK lid="l70" relType="EVIDENTIAL" eventInstanceID="ei2027" subordinatedEventInstance="ei2026" />
+<SLINK lid="l71" relType="EVIDENTIAL" eventInstanceID="ei2022" subordinatedEventInstance="ei2024" />
+<SLINK lid="l72" relType="EVIDENTIAL" eventInstanceID="ei2018" subordinatedEventInstance="ei2020" />
+<SLINK lid="l73" relType="EVIDENTIAL" eventInstanceID="ei2018" subordinatedEventInstance="ei2019" />
+<SLINK lid="l74" relType="MODAL" eventInstanceID="ei2013" subordinatedEventInstance="ei2016" />
+<SLINK lid="l75" relType="MODAL" eventInstanceID="ei2013" subordinatedEventInstance="ei2014" />
+<SLINK lid="l76" relType="MODAL" eventInstanceID="ei2005" subordinatedEventInstance="ei2006" />
+<SLINK lid="l77" relType="MODAL" eventInstanceID="ei2000" subordinatedEventInstance="ei2001" />
+<SLINK lid="l78" relType="MODAL" eventInstanceID="ei2036" subordinatedEventInstance="ei2037" />
+<SLINK lid="l79" relType="EVIDENTIAL" eventInstanceID="ei2004" subordinatedEventInstance="ei2005" />
+<ALINK lid="l81" relType="TERMINATES" eventInstanceID="ei2073" relatedToEventInstance="ei2072" />
+<ALINK lid="l82" relType="REINITIATES" eventInstanceID="ei2064" relatedToEventInstance="ei2065" />
+<ALINK lid="l83" relType="REINITIATES" eventInstanceID="ei2058" relatedToEventInstance="ei2059" />
+
+</TimeML>
