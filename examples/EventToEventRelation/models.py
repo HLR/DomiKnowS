@@ -98,7 +98,7 @@ class Robert_Model(nn.Module):
 
 
 class common_sense_from_NN:
-    def __init__(self, pre_emb, pre_NN, ratio=0.3, layer=1, emb_size=512, device="cpu"):
+    def __init__(self, pre_emb, pre_NN, ratio=0.3, layer=1, emb_size=200, device="cpu"):
         self.verb_map = {}
         verb_emb_file = open(pre_emb)
         lines = verb_emb_file.readlines()
@@ -106,7 +106,7 @@ class common_sense_from_NN:
             verb = line.split()[0]
             self.verb_map[verb] = ind
         verb_emb_file.close()
-        self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer)
+        self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer, device=device)
         pre_train = torch.load(pre_NN)
         self.model.load_state_dict(pre_train['model_state_dict'])
         self.cur_device = device
@@ -117,19 +117,20 @@ class common_sense_from_NN:
     def getCommonSense(self, verb1, verb2):
         if verb1 not in self.verb_map or verb2 not in self.verb_map:
             return torch.FloatTensor([0, 0]).view(1, -1)
-        return torch.FloatTensor([0, 0]).view(1, -1).view(1, -1)
+        return torch.cat((self.eval(verb1, verb2), self.eval(verb2, verb1)), 1).view(1, -1)
 
 
 class VerbNN(nn.Module):
-    def __init__(self, vocab_size, ratio=0.5, emb_size=512, layer=1):
+    def __init__(self, vocab_size, ratio=0.5, emb_size=200, layer=1, device="cpu"):
         super(VerbNN, self).__init__()
-        self.emb_size = emb_size * 2  # Bi-direction
-        self.emb_layer = nn.Embedding(vocab_size, self.emb_size)
-        self.fc1 = nn.Linear(self.emb_size, int(self.emb_size * ratio))
-        self.fc2 = nn.Linear(int(self.emb_size * ratio), 1)
+        self.emb_size = emb_size  # Bi-direction
+        self.emb_layer = nn.Embedding(vocab_size, self.emb_size).to(device)
+        self.fc1 = nn.Linear(self.emb_size*2, int(self.emb_size * 2 * ratio)).to(device)
+        self.fc2 = nn.Linear(int(self.emb_size* 2 * ratio), 1).to(device)
+        self.device = device
 
     def forward(self, verb):
-        x_emb = self.emb_layer(verb)
-        fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1)
+        x_emb = self.emb_layer(verb.to(self.device))
+        fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1).to(self.device)
         layer1 = F.relu(self.fc1(F.dropout(fullX, p=0.3, training=True)))
         return torch.sigmoid(self.fc2(layer1))

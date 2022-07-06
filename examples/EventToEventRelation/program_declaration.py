@@ -20,6 +20,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     paragraph["y_position_list"] = ReaderSensor(keyword="y_position_list", device=cur_device)
     paragraph["x_event_list"] = ReaderSensor(keyword="x_event_list", device=cur_device)
     paragraph["y_event_list"] = ReaderSensor(keyword="y_event_list", device=cur_device)
+    paragraph["x_sent_pos_list"] = ReaderSensor(keyword="x_sent_pos_list", device=cur_device)
+    paragraph["y_sent_pos_list"] = ReaderSensor(keyword="y_sent_pos_list", device=cur_device)
     paragraph["relation_list"] = ReaderSensor(keyword="relation_list", device=cur_device)
 
     def str_to_int_list(x):
@@ -40,8 +42,12 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         tokens_list = x.split("@@")
         return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
 
+    def str_to_POS_list(x):
+        tokens_list = x.split("@@")
+        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
+
     def make_event(files, eiids1, eiids2, x_sent_list, y_sent_list,
-                   x_position_list, y_position_list, x_event_list, y_event_list, relation_list):
+                   x_position_list, y_position_list, x_event_list, y_event_list, x_POS_list, y_POS_list, relation_list):
         # Seperate them from batch to seperate dataset
         # Note that x_tokens_list need to use split -> eval -> torch.tensor
         eiid1_list = str_to_int_list(eiids1.split("@@"))
@@ -50,17 +56,20 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         y_sent = str_to_token_list(y_sent_list)
         x_pos_list = str_to_int_list(x_position_list.split("@@"))
         y_pos_list = str_to_int_list(y_position_list.split("@@"))
+        x_pos_tag = str_to_POS_list(x_POS_list)
+        y_pos_tag = str_to_POS_list(y_POS_list)
         rel, flags = relation_str_to_list(relation_list.split("@@"))
         return torch.ones(len(files.split("@@")), 1), files.split("@@"), \
                eiid1_list, eiid2_list, x_sent, y_sent, x_pos_list, y_pos_list, x_event_list.split("@@"), \
-               y_event_list.split("@@"), rel, flags
+               y_event_list.split("@@"), x_pos_tag, y_pos_tag, rel, flags
 
     event_relation[paragraph_contain,
-                   "file", "eiid1", "eiid2", "x_sent", "y_sent", "x_pos", "y_pos", "x_event", "y_event", "rel_", "flags"] = \
+                   "file", "eiid1", "eiid2", "x_sent", "y_sent", "x_pos", "y_pos", "x_event", "y_event", "x_pos_tag", "y_pos_tag", "rel_", "flags"] = \
         JointSensor(paragraph["files"], paragraph["eiids1"], paragraph["eiids2"],
                     paragraph["x_sent_list"], paragraph["y_sent_list"],
                     paragraph["x_position_list"], paragraph["y_position_list"],
                     paragraph["x_event_list"], paragraph["y_event_list"],
+                    paragraph["x_sent_pos_list"], paragraph["y_sent_pos_list"],
                     paragraph["relation_list"], forward=make_event, device=cur_device)
 
     def label_reader(_, label):
@@ -83,7 +92,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     mdl_path = "common_sense/pairwise_model_0.3_200_1.pt"
     ratio = 0.3
     layer = 1
-    emb_size = 100
+    emb_size = 200
     final_size = 256
     granularity = 0.05
     bigramStats_dim = 2
