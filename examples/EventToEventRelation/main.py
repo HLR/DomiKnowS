@@ -30,40 +30,48 @@ def main(args):
     # Declare Program
     program = program_declaration(cur_device, PMD=args.PMD, sampleloss=args.sampleloss)
 
-    program.train(train_dataset, train_epoch_num=args.epoch,
-                  Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
-                  , device=cur_device)
+    base_round = 10
+    round = args.epoch // base_round + (1 if args.epoch % base_round else 0)
+    remain_epoch = args.epoch
+    count_round = 0
+    for _ in range(round):
+        program.train(train_dataset, train_epoch_num=base_round if remain_epoch >= base_round else remain_epoch,
+                      Optim=lambda params: torch.optim.Adam(params, lr=args.learning_rate, amsgrad=True)
+                      , device=cur_device)
+        count_round += base_round if base_round < remain_epoch else remain_epoch
+        remain_epoch -= base_round
+        classes = ["SuperSub", "SubSuper", "Coref", "NoRel",
+                   "before", "after",
+                   "EQUAL", "VAGUE"]
 
-    classes = ["SuperSub", "SubSuper", "Coref", "NoRel",
-               "before", "after",
-               "EQUAL", "VAGUE"]
-    # classes = ["before", "after",
-    #            "EQUAL", "VAGUE"]
-    output_file = {"file": [], "eiid1": [], "eiid2": [], "actual": [], "argmax": [], "ILP": []}
-    accuracy_argmax = 0
-    accuracy_ILP = 0
-    total = 0
-    for datanode in program.populate(test_dataset, device=cur_device):
-        for event_relation in datanode.getChildDataNodes():
-            actual_class = classes[int(event_relation.getAttribute(relation_classes, "label"))]
-            pred_argmax = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "local/argmax")))]
-            pred_ILP = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "ILP")))]
-            output_file["file"].append(event_relation.getAttribute("file"))
-            output_file["eiid1"].append(int(event_relation.getAttribute("eiid1")))
-            output_file["eiid2"].append(int(event_relation.getAttribute("eiid2")))
-            output_file["actual"].append(actual_class)
-            output_file["argmax"].append(pred_argmax)
-            output_file["ILP"].append(pred_ILP)
-            accuracy_argmax += 1 if actual_class == pred_argmax else 0
-            accuracy_ILP += 1 if actual_class == pred_ILP else 0
-            total += 1
-    output_file = pd.DataFrame(output_file)
-    output_file.to_csv("result.csv")
-    print("Result:")
-    print("EPOCH:", args.epoch, "\nlearning rate:", args.learning_rate, "\nPMD:", args.PMD, "\nSample Loss:",
-          args.sampleloss)
-    print("Argmax accuracy =", accuracy_argmax * 100 / total, "%")
-    print("ILP accuracy =", accuracy_ILP * 100 / total, "%")
+        output_file = {"file": [], "eiid1": [], "eiid2": [], "actual": [], "argmax": [], "ILP": []}
+        accuracy_argmax = 0
+        accuracy_ILP = 0
+        total = 0
+        for datanode in program.populate(test_dataset, device=cur_device):
+            for event_relation in datanode.getChildDataNodes():
+                actual_class = classes[int(event_relation.getAttribute(relation_classes, "label"))]
+                pred_argmax = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "local/argmax")))]
+                pred_ILP = classes[int(torch.argmax(event_relation.getAttribute(relation_classes, "ILP")))]
+                output_file["file"].append(event_relation.getAttribute("file"))
+                output_file["eiid1"].append(int(event_relation.getAttribute("eiid1")))
+                output_file["eiid2"].append(int(event_relation.getAttribute("eiid2")))
+                output_file["actual"].append(actual_class)
+                output_file["argmax"].append(pred_argmax)
+                output_file["ILP"].append(pred_ILP)
+                accuracy_argmax += 1 if actual_class == pred_argmax else 0
+                accuracy_ILP += 1 if actual_class == pred_ILP else 0
+                total += 1
+        output_file = pd.DataFrame(output_file)
+        output_file.to_csv("result_epoch" + str(count_round) + ".csv")
+        file = open("result_run.txt", "a")
+        file.write("Result:\n")
+        explain = "EPOCH: " + str(count_round) + "\nlearning rate: " + str(args.learning_rate) \
+        + "\nPMD: " + str(args.PMD) + "\nSample Loss: " + str(args.sampleloss) + "\n"
+        file.write(explain)
+        file.write("Argmax accuracy = " + str(accuracy_argmax * 100 / total) + "%" + "\n")
+        file.write("ILP accuracy = " + str(accuracy_ILP * 100 / total) + "%" + "\n")
+        file.close()
 
 
 if __name__ == "__main__":

@@ -222,6 +222,7 @@ def create_data_loader(raw_data, batch_size=1):
     group_data = {}
     data_dict = {}
     total = 0
+    POS_tag = set()
     append_data = {"file": [],
                    "eiids1": [],
                    "eiids2": [],
@@ -231,6 +232,8 @@ def create_data_loader(raw_data, batch_size=1):
                    "y_position_list": [],
                    "x_event_list": [],
                    "y_event_list": [],
+                   "x_sent_pos_list": [],
+                   "y_sent_pos_list": [],
                    "relation_list": []}
     for data in raw_data:
         file, x_sent, y_sent, x_pos, y_pos, x_sent_pos, y_sent_pos, eiid1, eiid2, x_event, y_event, relation = data
@@ -242,7 +245,6 @@ def create_data_loader(raw_data, batch_size=1):
             group_data[file][eiid1] = {}
         group_data[file][eiid1][eiid2] = False
         data_dict[file][eiid1][eiid2] = data
-
     count = 0
     for file in group_data.keys():
         for eiid1 in group_data[file].keys():
@@ -262,6 +264,8 @@ def create_data_loader(raw_data, batch_size=1):
                 append_data["y_position_list"].append(str(y_pos))
                 append_data["x_event_list"].append(x_event)
                 append_data["y_event_list"].append(y_event)
+                append_data["x_sent_pos_list"].append(str(x_sent_pos))
+                append_data["y_sent_pos_list"].append(str(y_sent_pos))
                 append_data["relation_list"].append(relation)
                 group_data[file][eiid1][eiid2] = True
                 count += 1
@@ -277,6 +281,8 @@ def create_data_loader(raw_data, batch_size=1):
                         "y_position_list": "@@".join(append_data["y_position_list"]),
                         "x_event_list": "@@".join(append_data["x_event_list"]),
                         "y_event_list": "@@".join(append_data["y_event_list"]),
+                        "x_sent_pos_list": "@@".join(append_data["x_sent_pos_list"]),
+                        "y_sent_pos_list": "@@".join(append_data["y_sent_pos_list"]),
                         "relation_list": "@@".join(append_data["relation_list"])
                     })
                     count = 0
@@ -298,6 +304,8 @@ def create_data_loader(raw_data, batch_size=1):
                     append_data["y_position_list"].append(str(y_pos))
                     append_data["x_event_list"].append(x_event)
                     append_data["y_event_list"].append(y_event)
+                    append_data["x_sent_pos_list"].append(str(x_sent_pos))
+                    append_data["y_sent_pos_list"].append(str(y_sent_pos))
                     append_data["relation_list"].append(relation)
                     group_data[file][eiid2][eiid1] = True
                     count += 1
@@ -313,6 +321,8 @@ def create_data_loader(raw_data, batch_size=1):
                             "y_position_list": "@@".join(append_data["y_position_list"]),
                             "x_event_list": "@@".join(append_data["x_event_list"]),
                             "y_event_list": "@@".join(append_data["y_event_list"]),
+                            "x_sent_pos_list": "@@".join(append_data["x_sent_pos_list"]),
+                            "y_sent_pos_list": "@@".join(append_data["y_sent_pos_list"]),
                             "relation_list": "@@".join(append_data["relation_list"])
                         })
                         count = 0
@@ -341,6 +351,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["x_event_list"].append(x_event)
                         append_data["y_event_list"].append(y_event)
+                        append_data["x_sent_pos_list"].append(str(x_sent_pos))
+                        append_data["y_sent_pos_list"].append(str(y_sent_pos))
                         append_data["relation_list"].append(relation)
                         group_data[file][eiid2][eiid3] = True
 
@@ -355,6 +367,8 @@ def create_data_loader(raw_data, batch_size=1):
                         append_data["y_position_list"].append(str(y_pos))
                         append_data["x_event_list"].append(x_event)
                         append_data["y_event_list"].append(y_event)
+                        append_data["x_sent_pos_list"].append(str(x_sent_pos))
+                        append_data["y_sent_pos_list"].append(str(y_sent_pos))
                         append_data["relation_list"].append(relation)
                         group_data[file][eiid1][eiid3] = True
 
@@ -371,6 +385,8 @@ def create_data_loader(raw_data, batch_size=1):
                                 "y_position_list": "@@".join(append_data["y_position_list"]),
                                 "x_event_list": "@@".join(append_data["x_event_list"]),
                                 "y_event_list": "@@".join(append_data["y_event_list"]),
+                                "x_sent_pos_list": "@@".join(append_data["x_sent_pos_list"]),
+                                "y_sent_pos_list": "@@".join(append_data["y_sent_pos_list"]),
                                 "relation_list": "@@".join(append_data["relation_list"])
                             })
                             count = 0
@@ -391,6 +407,8 @@ def create_data_loader(raw_data, batch_size=1):
                     "y_position_list": "@@".join(append_data["y_position_list"]),
                     "x_event_list": "@@".join(append_data["x_event_list"]),
                     "y_event_list": "@@".join(append_data["y_event_list"]),
+                    "x_sent_pos_list": "@@".join(append_data["x_sent_pos_list"]),
+                    "y_sent_pos_list": "@@".join(append_data["y_sent_pos_list"]),
                     "relation_list": "@@".join(append_data["relation_list"])
                 })
     return dataset
