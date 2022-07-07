@@ -145,9 +145,9 @@ class common_sense_from_NN:
             verb = line.split()[0]
             self.verb_map[verb] = ind
         verb_emb_file.close()
-        self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer, device=device)
-        # pre_train = torch.load(pre_NN)
-        # self.model.load_state_dict(pre_train['model_state_dict'])
+        self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer).to(device)
+        pre_train = torch.load(pre_NN)
+        self.model.load_state_dict(pre_train['model_state_dict'])
         self.cur_device = device
 
     def eval(self, verb1, verb2):
@@ -160,16 +160,15 @@ class common_sense_from_NN:
 
 
 class VerbNN(nn.Module):
-    def __init__(self, vocab_size, ratio=0.5, emb_size=200, layer=1, device="cpu"):
+    def __init__(self, vocab_size, ratio=0.5, emb_size=200, layer=1):
         super(VerbNN, self).__init__()
         self.emb_size = emb_size  # Bi-direction
-        self.emb_layer = nn.Embedding(vocab_size, self.emb_size).to(device)
-        self.fc1 = nn.Linear(self.emb_size*2, int(self.emb_size * 2 * ratio)).to(device)
-        self.fc2 = nn.Linear(int(self.emb_size* 2 * ratio), 1).to(device)
-        self.device = device
+        self.emb_layer = nn.Embedding(vocab_size, self.emb_size)
+        self.fc1 = nn.Linear(self.emb_size*2, int(self.emb_size * 2 * ratio))
+        self.fc2 = nn.Linear(int(self.emb_size* 2 * ratio), 1)
 
     def forward(self, verb):
-        x_emb = self.emb_layer(verb.to(self.device))
-        fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1).to(self.device)
+        x_emb = self.emb_layer(verb)
+        fullX = torch.cat((x_emb[:, 0, :], x_emb[:, 1, :]), dim=1)
         layer1 = F.relu(self.fc1(F.dropout(fullX, p=0.3, training=True)))
         return torch.sigmoid(self.fc2(layer1))
