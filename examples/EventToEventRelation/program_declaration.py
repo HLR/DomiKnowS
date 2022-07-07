@@ -4,6 +4,8 @@ from regr.sensor.pytorch.learners import ModuleLearner, LSTMLearner
 from models import *
 from utils import *
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from sklearn import preprocessing
+import numpy as np
 
 
 def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sampleSize=1):
@@ -42,9 +44,23 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
         tokens_list = x.split("@@")
         return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
 
+    # POS One HOT
+    POS_tag = ['PRON', 'X', 'DET', 'AUX', 'CCONJ', 'PART', 'NUM', 'None',
+               'VERB', 'INTJ', 'ADV', 'PROPN', 'NOUN', 'ADP', 'ADJ', 'PUNCT', 'SCONJ', 'SYM']
+    POS_tag = np.array(POS_tag)
+    ont_hot_encode = preprocessing.OneHotEncoder()
+    ont_hot_encode.fit(POS_tag.reshape(len(POS_tag), 1))
+
     def str_to_POS_list(x):
-        tokens_list = x.split("@@")
-        return torch.IntTensor([[int(i) for i in eval(tokens)] for tokens in tokens_list]).to(cur_device)
+        pos_tags_list = x.split("@@")
+        pos_tags = eval(pos_tags_list[0])
+        pos_tags = torch.IntTensor([ont_hot_encode.transform(np.array(pos_tags).reshape(len(pos_tags), 1)).toarray().tolist()])
+        pos_tags_sensor = pos_tags
+        for pos_tags in pos_tags_list[1:]:
+            pos_tags = eval(pos_tags)
+            pos_tags = torch.IntTensor([ont_hot_encode.transform(np.array(pos_tags).reshape(len(pos_tags), 1)).toarray().tolist()])
+            pos_tags_sensor = torch.cat((pos_tags_sensor, pos_tags))
+        return pos_tags_sensor.to(cur_device)
 
     def make_event(files, eiids1, eiids2, x_sent_list, y_sent_list,
                    x_position_list, y_position_list, x_event_list, y_event_list, x_POS_list, y_POS_list, relation_list):
@@ -81,50 +97,13 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     # BiLSTM setting
     hidden_layer = 256
     roberta_size = 'roberta-base'
-    out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
-                       hidden_layer, num_layers=1, roberta_size=roberta_size)
+    # out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
+    #                    hidden_layer, num_layers=1, roberta_size=roberta_size)
     # out_model = Robert_Model()
-    event_relation["x_output"] = ModuleLearner("x_sent", "x_pos", module=out_model, device=cur_device)
-    event_relation["y_output"] = ModuleLearner("y_sent", "y_pos", module=out_model, device=cur_device)
 
-
-    emb_path = "common_sense/common_sense.txt"
-    mdl_path = "common_sense/pairwise_model_0.3_200_1.pt"
-    ratio = 0.3
-    layer = 1
-    emb_size = 200
-    final_size = 256
-    granularity = 0.05
-    bigramStats_dim = 2
-    common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size, device=cur_device)
-    common_sense_EMB = nn.Embedding(int(1.0/granularity) * bigramStats_dim, final_size)
-
-    def common_sense_emb(_, verbs1, verbs2):
-        common_sense_embs = []
-        for ind, v1 in enumerate(verbs1):
-            v2 = verbs2[ind]
-            bigramstats = common_sense_model.getCommonSense(v1, v2)
-            common_sense_emb = common_sense_EMB(torch.LongTensor(
-                [min(int(1.0 / granularity) - 1, int(bigramstats[0][0] / granularity))])).view(1, -1)
-            for i in range(1, bigramStats_dim):
-                tmp = common_sense_EMB(torch.LongTensor([(i - 1) * int(1.0 / granularity) + min(
-                    int(1.0 / granularity) - 1, int(bigramstats[0][i] / granularity))])).view(1, -1)
-                common_sense_emb = torch.cat((common_sense_emb, tmp), 1)
-            common_sense_embs.append(common_sense_emb.tolist()[0])
-        return torch.Tensor(common_sense_embs)
-
-    def make_MLP_input(_, x, y, common_sense):
-        subXY = torch.sub(x, y)
-        mulXY = torch.mul(x, y)
-        return_input = torch.cat((x, y, subXY, mulXY, common_sense), 1)
-        return return_input
-
-    event_relation["common_sense"] = FunctionalSensor(paragraph_contain, "x_event", "y_event",
-                                                      forward=common_sense_emb, device=cur_device)
-    event_relation["MLP_input"] = FunctionalSensor(paragraph_contain, "x_output", "y_output", "common_sense",
-                                                   forward=make_MLP_input, device=cur_device)
-
-    event_relation[relation_classes] = ModuleLearner("MLP_input", module=BiLSTM_MLP(out_model.last_layer_size, 512, 8),
+    event_relation[relation_classes] = ModuleLearner("x_sent", "x_pos", "x_event", "x_pos_tag",
+                                                     "y_sent", "y_pos", "y_event", "y_pos_tag",
+                                                     module=BiLSTM_MLP(hidden_layer, 1, roberta_size, 512, 8, device=cur_device),
                                                      device=cur_device)
 
     from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker

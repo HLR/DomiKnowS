@@ -222,6 +222,7 @@ def create_data_loader(raw_data, batch_size=1):
     group_data = {}
     data_dict = {}
     total = 0
+    POS_tag = set()
     append_data = {"file": [],
                    "eiids1": [],
                    "eiids2": [],
@@ -244,7 +245,6 @@ def create_data_loader(raw_data, batch_size=1):
             group_data[file][eiid1] = {}
         group_data[file][eiid1][eiid2] = False
         data_dict[file][eiid1][eiid2] = data
-
     count = 0
     for file in group_data.keys():
         for eiid1 in group_data[file].keys():
