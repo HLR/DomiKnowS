@@ -200,19 +200,19 @@ def model(device='auto'):
     
     lbp = CallbackPrimalProgram(
         graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
-#         dictloss={
-#             str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5178,  0.5622]).to(device)),
-#             str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5193, 13.4837]).to(device)),
-#             str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5160, 19.1140]).to(device)), 
-#             str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5116, 22.0435]).to(device)),             
-#             str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5101, 25.1522]).to(device)), 
-#             str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6393, 2.9941]).to(device)), 
-#             str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6882, 2.4281]).to(device)), 
-#             str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6031, 3.1250]).to(device)), 
-#             str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6324, 2.3878]).to(device)), 
-#             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5735, 4.9000]).to(device)), 
-#             "default": NBCrossEntropyDictLoss()},
-        loss = MacroAverageTracker(NBCrossEntropyLoss()),
+        dictloss={
+            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5341,  0.5620]).to(device)),
+            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5194, 13.3925]).to(device)),
+            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5156, 16.5134]).to(device)), 
+            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5120, 21.4100]).to(device)),             
+            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5098, 25.8953]).to(device)), 
+            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6277, 2.4578]).to(device)), 
+            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6270, 2.4677]).to(device)), 
+            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6748, 1.9306]).to(device)), 
+            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6309, 2.4094]).to(device)), 
+            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 3.9231]).to(device)), 
+            "default": NBCrossEntropyDictLoss()},
+#         loss = MacroAverageTracker(NBCrossEntropyLoss()),
         tnorm = 'G', 
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
