@@ -3,7 +3,6 @@ import logging
 import torch
 
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
-from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 
 from regr.solver.ilpConfig import ilpConfig 
 
@@ -194,14 +193,6 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 return True
         
         return False
-    
-    def filterNone(self, var): # Used in countVar
-        filteredVar = []
-        for v in var:
-            if torch.is_tensor(v):
-                filteredVar.append(v)
-        
-        return filteredVar
     #--
     
     def notVar(self, _, var, onlyConstrains = False):
@@ -358,14 +349,29 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        var = self.filterNone(var)
-        
-        limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
+        # -- Consider None
+        fixedVar = []
+        for v in var:
+            if torch.is_tensor(v):
+                fixedVar.append(v)
+            else:
+                if limitOp == '>=':
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                elif limitOp == '<=':
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                elif limitOp == '==':
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+        # --
+         
+        limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
-        varSum = var[0].int()
-        for i in range(1, len(var)):
-            varSum.add_(var[i].int())
+        varSum = torch.zeros([self.sampleSize], device=self.current_device)
+        if fixedVar:
+            varSum = fixedVar[0].int()
+            
+        for i in range(1, len(fixedVar)):
+            varSum.add_(fixedVar[i].int())
 
         # Check condition
         if limitOp == '>=':

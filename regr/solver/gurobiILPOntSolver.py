@@ -1497,6 +1497,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             p = sampleSize
             
             myBooleanMethods = self.myLcLossSampleBooleanMethods
+            myBooleanMethods.sampleSize = sampleSize
                     
             self.myLogger.info('Calculating sample loss with sample size: %i'%(p))
             self.myLoggerTime.info('Calculating sample loss with sample size: %i'%(p))
