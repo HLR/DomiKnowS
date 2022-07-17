@@ -32,9 +32,9 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     def relation_str_to_list(relations):
         rel = []
         flags = []  # 0 for temporal, otherwise 1
-        rel_index = {"BEFORE": '4', "AFTER": '5', "EQUAL": '6', "VAGUE": '7',
-                     "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
-        # rel_index = {"BEFORE": '0', "AFTER": '1', "EQUAL": '2', "VAGUE": '3'}
+        # rel_index = {"BEFORE": '4', "AFTER": '5', "EQUAL": '6', "VAGUE": '7',
+        #              "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
+        rel_index = {"BEFORE": '0', "AFTER": '1', "EQUAL": '2', "VAGUE": '3'}
         for relation in relations:
             rel += [rel_index[relation]]
             flags.append(0 if int(rel_index[relation]) < 4 else 1)
@@ -103,7 +103,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
 
     event_relation[relation_classes] = ModuleLearner("x_sent", "x_pos", "x_event", "x_pos_tag",
                                                      "y_sent", "y_pos", "y_event", "y_pos_tag",
-                                                     module=BiLSTM_MLP(hidden_layer, 1, roberta_size, 512, 8, device=cur_device),
+                                                     module=BiLSTM_MLP(hidden_layer, 1, roberta_size, 512, 4, device=cur_device),
                                                      device=cur_device)
 
     from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
@@ -118,12 +118,12 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     HierCo = 758.0
     HierNo = 63755.0
     HierTo = HierPC + HierCP + HierCo + HierNo  # total number of event pairs
-    weights = torch.FloatTensor([0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP,
-                                 0.25 * HierTo / HierCo, 0.25 * HierTo / HierNo,
-                                 0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
-                                 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
-    # weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
+    # weights = torch.FloatTensor([0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP,
+    #                              0.25 * HierTo / HierCo, 0.25 * HierTo / HierNo,
+    #                              0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
     #                              0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
+    weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
+                                 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
 
     # Initial program using only ILP
     symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(

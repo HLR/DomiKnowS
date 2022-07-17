@@ -40,8 +40,7 @@ def main(args):
                       , device=cur_device)
         count_round += base_round if base_round < remain_epoch else remain_epoch
         remain_epoch -= base_round
-        classes = ["SuperSub", "SubSuper", "Coref", "NoRel",
-                   "before", "after",
+        classes = ["before", "after",
                    "EQUAL", "VAGUE"]
 
         output_file = {"file": [], "eiid1": [], "eiid2": [], "actual": [], "argmax": [], "ILP": []}

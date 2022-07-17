@@ -146,8 +146,8 @@ class common_sense_from_NN:
             self.verb_map[verb] = ind
         verb_emb_file.close()
         self.model = VerbNN(len(self.verb_map), ratio=ratio, emb_size=emb_size, layer=layer).to(device)
-        pre_train = torch.load(pre_NN)
-        self.model.load_state_dict(pre_train['model_state_dict'])
+        # pre_train = torch.load(pre_NN)
+        # self.model.load_state_dict(pre_train['model_state_dict'])
         self.cur_device = device
 
     def eval(self, verb1, verb2):
