@@ -42,10 +42,6 @@ def read_data(batch_size=16,sample_size=10000000):
                 facts = []
                 labels = []
                 sample_counter+=1
-                if sample_counter>=sample_size:
-                    break
-        if sample_counter >= sample_size:
-            break
         if not len(facts) == 0:
             silver_data.append({"name": i, "facts": [facts], "labels": [labels]})
             sample_counter += 1
