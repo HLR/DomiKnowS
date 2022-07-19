@@ -15,7 +15,7 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 
 logging.basicConfig(level=logging.INFO)
 calibration_data,silver_data,constraints=read_data(batch_size=32,sample_size=100000)
-device='cuda:0'
+device='cpu'
 
 def guess_pair(sentence, arg1, arg2):
 

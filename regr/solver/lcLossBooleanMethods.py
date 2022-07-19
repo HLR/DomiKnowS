@@ -114,7 +114,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         elif self.tnorm =='P':
             andSuccess = torch.clone(var[0])
             for v in var[1:]:
-                andSuccess.mul_(v)
+                try:
+                    andSuccess.mul_(v)
+                except:
+                    print('andSuccess %s'%(andSuccess))
+                    print('v %s'%(v))
 
         if onlyConstrains:
             andLoss = 1 - andSuccess

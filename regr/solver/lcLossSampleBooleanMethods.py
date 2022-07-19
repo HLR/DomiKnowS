@@ -6,7 +6,7 @@ from regr.solver.ilpBooleanMethods import ilpBooleanProcessor
 
 from regr.solver.ilpConfig import ilpConfig 
 
-class booleanMethods(ilpBooleanProcessor):
+class booleanMethods(ilpBooleanProcessor): # Not use now - can be use to verify  - consider None !
     def notVar(self, _, var, onlyConstrains = False):
         notSuccess = 1 - var
 

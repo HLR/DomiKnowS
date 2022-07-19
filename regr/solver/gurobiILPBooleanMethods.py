@@ -421,6 +421,7 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
         hasNone = False
         if var1 is None: # antecedent 
             antecedent = 1 # when None
+            
             self.myLogger.info("%s called with antecedent equals None"%(logicMethodName))
             self.myLogger.info("%s called with consequent equals %s"%(logicMethodName,var2))
 
@@ -430,9 +431,11 @@ class gurobiILPBooleanProcessor(ilpBooleanProcessor):
 
         if var2 is None: # consequent
             consequent = 0 # when None
+            
             if not hasNone: # not yet
                 self.myLogger.info("%s called with antecedent equals %s"%(logicMethodName,var1))
                 self.myLogger.info("%s called with consequent equals None"%(logicMethodName))
+                
                 hasNone = True
         else:
             consequent = var2
