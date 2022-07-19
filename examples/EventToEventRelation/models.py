@@ -78,8 +78,8 @@ class BiLSTM_MLP(nn.Module):
         super(BiLSTM_MLP, self).__init__()
         self.BiLSTM = BiLSTM(768 if BiLSTM_roberta_size == 'roberta-base' else 1024,
                              hidden_layer_BiLSTM, num_layers=BiLSTM_layer, roberta_size=BiLSTM_roberta_size)
-        self.start = nn.Linear(self.BiLSTM.last_layer_size * 5, MLP_size)
-        self.final = nn.Linear(MLP_size, output_classes)
+        self.start = nn.Linear(self.BiLSTM.last_layer_size * 5, MLP_size*2)
+        self.final = nn.Linear(MLP_size*2, output_classes)
 
         # Common Sense Part
         emb_path = "common_sense/common_sense.txt"
