@@ -96,7 +96,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
 
     # BiLSTM setting
     hidden_layer = 256
-    roberta_size = 'roberta-base'
+    roberta_size = 'roberta-large'
     # out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
     #                    hidden_layer, num_layers=1, roberta_size=roberta_size)
     # out_model = Robert_Model()
