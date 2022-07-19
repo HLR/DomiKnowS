@@ -5,6 +5,7 @@ import numpy as np
 from .model.base import Mode
 from .program import LearningBasedProgram
 from .model.primaldual import PrimalDualModel
+from .model.base import Mode
 
 
 # Primal-dual need multiple backward through constraint loss.
