@@ -35,6 +35,8 @@ class BBRobert(torch.nn.Module):
     def __init__(self):
         super(BBRobert, self).__init__()
         self.bert = RobertaModel.from_pretrained('roberta-base')
+        for name, param in list(self.bert.named_parameters())[:-32]:
+            param.requires_grad = False
         self.last_layer_size = self.bert.config.hidden_size
         self.head=RobertaClassificationHead(self.last_layer_size)
 
