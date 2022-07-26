@@ -92,6 +92,7 @@ def program_declaration(cur_device, *,
                                     inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     beta=beta,
+                                    device=cur_device,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     elif sample:
