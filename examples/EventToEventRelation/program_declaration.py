@@ -5,6 +5,7 @@ from models import *
 from utils import *
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from sklearn import preprocessing
+from transformers import RobertaModel
 import numpy as np
 
 
@@ -105,7 +106,7 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     granularity = 0.05
     bigramStats_dim = 2
     common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size)
-    common_sense_EMB = nn.Embedding(int(1.0 / granularity) * bigramStats_dim, final_size)
+    common_sense_EMB = nn.Embedding(int(1.0 / granularity) * bigramStats_dim, final_size).to(cur_device)
 
     def common_sense_emb(_, verbs1, verbs2):
         common_sense_embs = []
