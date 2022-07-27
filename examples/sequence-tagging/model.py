@@ -20,6 +20,8 @@
 import torch
 from torch import nn
 import numpy as np
+import gurobipy as gp
+from gurobipy import GRB
 
 class RNNTagger(nn.Module):
     
@@ -97,10 +99,110 @@ class RNNTagger(nn.Module):
 
         # Select the top-scoring labels. The shape is now (max_len, n_sentences).
         predicted = scores.argmax(dim=2)
-
         # We transpose the prediction to (n_sentences, max_len), and convert it
         # to a NumPy matrix.
-        return predicted.t().cpu().numpy()
+        return predicted.t().cpu().numpy(), scores.view(-1, scores.size(-1)).cpu().numpy()
+
+    
+    # def ilp_decoder(tag_matrix, label_vocab):
+    #     try:
+    #         label_dict = label_vocab.stoi
+    #         new_label_dict = {value:key for key, value in label_dict.items()}
+    #         m = gp.Model("mip1")
+    #         m.setParam('OutputFlag', 0)
+    #         binary_parameters = []
+    #         predicates = []
+    #         label_predicates = []
+    #         object_sum = 0.0
+
+    #         # build 1-0 ILP
+    #         for row_num in range(tag_matrix.shape[0]):
+    #             temp = []
+    #             for column_num in range(tag_matrix.shape[1]):
+    #                 each_parameter = m.addVar(vtype=GRB.BINARY,name = "x%s_%s" % (row_num,column_num))
+    #                 object_sum += each_parameter * tag_matrix[row_num][column_num]
+    #                 temp.append(each_parameter)
+    #             binary_parameters.append(temp)
+            
+    #         # set objective
+    #         m.setObjective(object_sum, GRB.MAXIMIZE)
+    #         m.update() 
+
+    #         # add constraints
+    #         B_V_sum_constrint = 0
+    #         arg0_sum_constraint = 0
+    #         arg1_sum_constraint = 0
+    #         arg2_sum_constraint = 0
+    #         arg3_sum_constraint = 0
+
+    #         B_start_label = []
+    #         B_R_start_label = []
+    #         all_sum_dict = {}
+
+    #         for each_label in label_dict.keys():
+    #             if "B-ARG" in each_label or "B-ARGM" in each_label:
+    #                 B_start_label.append(each_label)
+    #             elif "B-R" in each_label:
+    #                 B_R_start_label.append(each_label)
+
+            
+    #         for each_B_start_label in B_start_label:
+    #             all_sum_consrtaint = 0
+    #             for row_id, each_row in enumerate(binary_parameters):
+    #                 all_sum_consrtaint += each_row[label_dict[each_B_start_label]]
+    #             all_sum_dict[each_B_start_label] = all_sum_consrtaint
+
+    #         for row_id, each_row in enumerate(binary_parameters):
+    #             # to make sure each token at least has one label
+    #             m.addConstr(sum(each_row) == 1,name = "c%s" % row_id)
+    #             # each sentence at least contain a "B-V"
+    #             B_V_sum_constrint += each_row[label_dict['B-V']]
+
+    #             arg0_sum_constraint += each_row[label_dict['B-MISC']]
+    #             arg1_sum_constraint += each_row[label_dict['B-ORG']]
+    #             arg2_sum_constraint += each_row[label_dict['B-LOC']]
+    #             arg3_sum_constraint += each_row[label_dict['B-PER']]
+                
+
+    #             for column_id, each_column in enumerate(each_row):
+    #                 # the label for the first token could not be I
+    #                 if row_id == 0:
+    #                     if new_label_dict[column_id][0] == "I":
+    #                         m.addConstr(binary_parameters[row_id][column_id]== 0, name = "BIO%s_%s" % (row_id, column_id))
+    #                 # BI constrints
+    #                 if new_label_dict[column_id][0] == "I":
+    #                     BIO_i_label = label_dict["B"+new_label_dict[column_id][1:]]
+    #                     BIO_b_label = column_id
+    #                     m.addConstr(binary_parameters[row_id-1][BIO_i_label] + binary_parameters[row_id-1][BIO_b_label] >= each_column,name = "BIO%s_%s" % (row_id, column_id))
+    #                 #B-R constraints
+    #                 for each_B_R in B_R_start_label:
+    #                     if new_label_dict[column_id] == each_B_R:
+    #                         new_each_B_R = each_B_R.split('-')
+    #                         del  new_each_B_R[1]
+    #                         m.addConstr(all_sum_dict["-".join(new_each_B_R)] >= each_column,name = "%s_%s_%s" % (each_B_R, row_id, column_id))
+            
+    
+    #         m.addConstr( B_V_sum_constrint >= 1, name = "B_V_constriant")
+    #         m.addConstr( all_sum_dict['B-ARG0'] <= 1, name = "arg0_constriant")
+    #         m.addConstr( all_sum_dict['B-ARG1'] <= 1, name = "arg1_constriant")
+    #         m.addConstr( all_sum_dict['B-ARG2'] <= 1, name = "arg2_constriant")
+    #         m.addConstr( all_sum_dict['B-ARG3'] <= 1, name = "arg3_constriant")
+    #         m.update()
+    #         m.optimize()
+    #         for each_binary_list in binary_parameters:
+    #             for value_id, each_value in enumerate(each_binary_list):
+    #                 if each_value.x == 1:
+    #                     predicates.append(value_id)
+    #                     label_predicates.append(new_label_dict[value_id])
+    #     except gp.GurobiError as e:
+    #         print('Error code ' + str(e.errno) + ': ' + str(e))
+
+    #     except AttributeError:
+    #         print('Encountered an attribute error')
+
+    #     #return predicates
+    #     return label_predicates, label_predicates.index('B-V')
+
 
 
 

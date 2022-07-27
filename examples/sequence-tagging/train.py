@@ -5,6 +5,7 @@ from torch import nn
 import time
 import torchtext
 import numpy as np
+import numpy
 
 # from torchtext.legacy import data
 
@@ -61,6 +62,52 @@ class Tagger:
                 for tokens, pred_sen in zip(sentences, predicted):
                     out.append([self.LABEL.vocab.itos[pred_id] for _, pred_id in zip(tokens, pred_sen[1:])])
         return out
+
+    ###### bio constraints start
+
+    def get_transition_params(self, label_strs):
+        '''Construct transtion scoresd (0 for allowed, -inf for invalid).
+        Args:
+            label_strs: A [num_tags,] sequence of BIO-tags.
+        Returns:
+            A [num_tags, num_tags] matrix of transition scores.  
+        '''
+        num_tags = len(label_strs)
+        transition_params = numpy.zeros([num_tags, num_tags], dtype=numpy.float32)
+        for i, prev_label in enumerate(label_strs):
+            for j, label in enumerate(label_strs):
+                # if i != j and label[0] == 'I' and not prev_label == 'B' + label[1:]:
+                    # transition_params[i,j] = 0
+                if i != j and label[0] == 'B' and not prev_label == 'I' + label[1:]:
+                    transition_params[i,j] = numpy.NINF
+        return transition_params
+
+    def viterbi_decode(self, score, transition_params):
+        """ Adapted from Tensorflow implementation.
+        Decode the highest scoring sequence of tags outside of TensorFlow.
+        This should only be used at test time.
+        Args:
+            score: A [seq_len, num_tags] matrix of unary potentials.
+            transition_params: A [num_tags, num_tags] matrix of binary potentials.
+        Returns:
+            viterbi: A [seq_len] list of integers containing the highest scoring tag
+                indicies.
+            viterbi_score: A float containing the score for the Viterbi sequence.
+        """
+        trellis = numpy.zeros_like(score)
+        backpointers = numpy.zeros_like(score, dtype=numpy.int32)
+        trellis[0] = score[0]
+        for t in range(1, score.shape[0]):
+            v = numpy.expand_dims(trellis[t - 1], 1) + transition_params
+            trellis[t] = score[t] + numpy.max(v, 0)
+            backpointers[t] = numpy.argmax(v, 0)
+        viterbi = [numpy.argmax(trellis[-1])]
+        for bp in reversed(backpointers[1:]):
+            viterbi.append(bp[viterbi[-1]])
+        viterbi.reverse()
+        viterbi_score = numpy.max(trellis[-1])
+        return viterbi, viterbi_score
+    ###### bio constraints end
                 
     def train(self):
         # Read training and validation data according to the predefined split.
@@ -68,6 +115,7 @@ class Tagger:
         # valid_examples = read_data('data/eng.valid.iob', self.fields)
         train_examples = read_data('data/eng.train', self.fields)
         valid_examples = read_data('data/eng.testa', self.fields)
+        test_examples = read_data('data/eng.testb', self.fields)
 
         # Count the number of words and sentences.
         n_tokens_train = 0
@@ -78,20 +126,24 @@ class Tagger:
         n_tokens_valid = 0       
         for ex in valid_examples:
             n_tokens_valid += len(ex.text)
+        
+        n_tokens_test = 0       
+        for ex in test_examples:
+            n_tokens_test += len(ex.text)
 
         # Load the pre-trained embeddings that come with the torchtext library.
         use_pretrained = True
         if use_pretrained:
             print('We are using pre-trained word embeddings.')
-            self.TEXT.build_vocab(train_examples, vectors="/data/hlr/glove840B/glove.840B.300d")
+            self.TEXT.build_vocab(train_examples, vectors="glove.840B.300d")
         else:  
             print('We are training word embeddings from scratch.')
             self.TEXT.build_vocab(train_examples, max_size=5000)
         self.LABEL.build_vocab(train_examples)
     
         # Create one of the models defined above.
-        # self.model = RNNTagger(self.TEXT, self.LABEL, emb_dim=300, rnn_size=128, update_pretrained=False)
-        self.model = RNNCRFTagger(self.TEXT, self.LABEL, emb_dim=300, rnn_size=128, update_pretrained=False)
+        self.model = RNNTagger(self.TEXT, self.LABEL, emb_dim=300, rnn_size=128, update_pretrained=False)
+        # self.model = RNNCRFTagger(self.TEXT, self.LABEL, emb_dim=300, rnn_size=128, update_pretrained=False)
     
         self.model.to(self.device)
     
@@ -112,14 +164,25 @@ class Tagger:
         valid_iterator = torchtext.legacy.data.BucketIterator(
             valid_examples,
             device=self.device,
-            batch_size=64,
+            batch_size=64, ### 64
             sort_key=lambda x: len(x.text),
             repeat=False,
             train=False,
             sort=True)
+
+        test_iterator = torchtext.legacy.data.BucketIterator(
+            valid_examples,
+            device=self.device,
+            batch_size=1,
+            sort_key=lambda x: len(x.text),
+            repeat=False,
+            train=False,
+            sort=True)   
+        
     
         train_batches = list(train_iterator)
         valid_batches = list(valid_iterator)
+        test_batches = list(test_iterator)
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-5)
 
@@ -127,10 +190,13 @@ class Tagger:
         # print(self.LABEL.vocab.itos)
         # # ['<pad>', '<bos>', '<eos>', 'O', 'I-PER', 'I-ORG', 'I-LOC', 'I-MISC', 'B-MISC', 'B-ORG', 'B-LOC']
         # print(n_labels) ### 11
+        ### chen label start
+        # label_list = ['<pad>', '<bos>', '<eos>', 'O', 'I-PER', 'I-ORG', 'I-LOC', 'I-MISC', 'B-MISC', 'B-ORG', 'B-LOC']
+        ### chen label end
 
         history = defaultdict(list)    
         
-        n_epochs = 25
+        n_epochs = 20
         
         for i in range(1, n_epochs + 1):
 
@@ -160,7 +226,7 @@ class Tagger:
                 with torch.no_grad():
                     for batch in valid_batches:
                         # Predict the model's output on a batch.
-                        predicted = self.model.predict(batch.text)                   
+                        predicted, tmp_scores = self.model.predict(batch.text)                   
                         # Update the evaluation statistics.
                         evaluate_iob(predicted, batch.label, self.LABEL, stats)
             
@@ -174,7 +240,64 @@ class Tagger:
            
         # After the final evaluation, we print more detailed evaluation statistics, including
         # precision, recall, and F-scores for the different types of named entities.
-        print()
+        ###########################################################################
+        ### after adding constraints during the inference time
+        ###########################################################################
+        print('after adding constraints during the inference time:')
+
+        self.model.eval()
+        with torch.no_grad():
+            for batch in test_batches:
+                # Predict the model's output on a batch.
+                predicted, tmp_scores = self.model.predict(batch.text)
+                # print(predicted)                  
+                # Update the evaluation statistics.
+                evaluate_iob(predicted, batch.label, self.LABEL, stats)
+        ### adding constraints end
+        print('Final evaluation on the test set:')
+        p, r, f1 = prf(stats['total'])
+        print(f'Overall: P = {p:.4f}, R = {r:.4f}, F1 = {f1:.4f}')
+        for label in stats:
+            if label != 'total':
+                p, r, f1 = prf(stats[label])
+                print(f'{label:4s}: P = {p:.4f}, R = {r:.4f}, F1 = {f1:.4f}')
+
+
+        ###########################################################################
+        ### before adding constraints during the inference time
+        ###########################################################################
+        print('\n\n\nbefore adding constraints during the inference time:')
+        ### adding constraints start
+        stats = defaultdict(Counter)
+        label_list = ['<pad>', '<bos>', '<eos>', 'O', 'I-PER', 'I-ORG', 'I-LOC', 'I-MISC', 'B-MISC', 'B-ORG', 'B-LOC']
+        # label_list = ['<bos>', '<eos>', 'O', 'I-PER', 'I-ORG', 'I-LOC', 'I-MISC', 'B-MISC', 'B-ORG', 'B-LOC']
+        bio_constraints = self.get_transition_params(label_list) ### 2d matrix
+        # print(bio_constraints)
+        # [[  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf   0. -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf   0.]
+        # [  0.   0.   0.   0.   0.   0.   0.   0.   0. -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0.   0. -inf -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf   0. -inf]
+        # [  0.   0.   0.   0.   0.   0.   0.   0. -inf -inf   0.]]
+
+        self.model.eval()
+        with torch.no_grad():
+            for batch in test_batches:
+                # Predict the model's output on a batch.
+                predicted_tagging, predicted_score = self.model.predict(batch.text)
+                final_predict, _ = self.viterbi_decode(predicted_score, bio_constraints)
+                len_final_predict = len(final_predict)
+                final_predict = numpy.array(final_predict)
+                final_predict = final_predict.reshape((1, len_final_predict))
+                # print(final_predict)
+                # Update the evaluation statistics.
+                evaluate_iob(final_predict, batch.label, self.LABEL, stats)
+        ### adding constraints end
         print('Final evaluation on the test set:')
         p, r, f1 = prf(stats['total'])
         print(f'Overall: P = {p:.4f}, R = {r:.4f}, F1 = {f1:.4f}')

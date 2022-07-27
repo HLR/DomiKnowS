@@ -42,7 +42,8 @@ def read_data(corpus_file, datafields):
                 columns = line.split()
                 words.append(columns[0])
                 labels.append(columns[-1])
-        return torchtext.legacy.data.Dataset(examples, datafields)
+        print(len(examples))
+        return torchtext.legacy.data.Dataset(examples[0:len(examples)//10*1], datafields)
 
 
 
@@ -127,6 +128,10 @@ def evaluate_iob(predicted, gold, label_field, stats):
     # Compute spans for the gold standard and prediction.
     gold_spans = to_spans(gold_cpu, label_field.vocab.itos)
     pred_spans = to_spans(pred_cpu, label_field.vocab.itos)
+    # print(gold_spans)
+    # print(pred_spans)
+    # import sys
+    # sys.exit()
 
     # Finally, update the counts for correct, predicted and gold-standard spans.
     compare(gold_spans, pred_spans, stats)
