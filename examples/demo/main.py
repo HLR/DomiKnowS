@@ -131,16 +131,20 @@ for node in program.populate(reader, device=device):
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
         print(' - organization:', word_node.getAttribute(organization), 'ILP:', word_node.getAttribute(organization, 'ILP'))
     
-    
-    print("\nILP results for people - %s"%(node.collectInferredResults(people, "ILP")))
-    print("SofMax results for people - %s"%(node.collectInferredResults(people, "softmax")))
+    print("\nSofMax results for people - %s"%(node.collectInferredResults(people, "softmax")))
     print("ArgMax results for people - %s"%(node.collectInferredResults(people, "argmax")))
 
-
-    print("\nILP results for organization - %s"%(node.collectInferredResults(organization, "ILP")))
-    print("SofMax results for organization - %s"%(node.collectInferredResults(organization, "softmax")))
+    print("\nSofMax results for organization - %s"%(node.collectInferredResults(organization, "softmax")))
     print("ArgMax results for organization - %s"%(node.collectInferredResults(organization, "argmax")))
+       
+    print("\nLocal/SofMax results for people - %s"%(node.collectInferredResults(people, "local/softmax").cpu()))
+    print("Local/ArgMax results for people   - %s"%(node.collectInferredResults(people, "local/argmax").cpu()))
+    print("ILP results for people            - %s"%(node.collectInferredResults(people, "ILP"))) 
     
+    print("\nLocal/SofMax results for organization - %s"%(node.collectInferredResults(organization, "local/softmax").cpu()))
+    print("Local/ArgMax results for organization   - %s"%(node.collectInferredResults(organization, "local/argmax").cpu()))
+    print("ILP results for organization            - %s"%(node.collectInferredResults(organization, "ILP")))
+         
     print("\nVerify Learned Results:")
     verifyResult = node.verifyResultsLC()
     if verifyResult:

@@ -708,6 +708,8 @@ class gurobiILPOntSolver(ilpOntSolver):
         if not loss: # ------- If ILP inference
             if "xP" in xPkey:
                 vDn = dn.getAttribute(xPkey)[p][e[2]] # Get ILP variable for the concept
+            if "local/argmax" in xPkey:
+                vDn = dn.getAttribute(xPkey)[e[1]] # Get ILP variable for the concep
             else:
                 vDn = dn.getAttribute(xPkey)[e[2]] # Get ILP variable for the concept
                 
