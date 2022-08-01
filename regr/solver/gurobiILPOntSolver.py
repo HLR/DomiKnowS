@@ -16,6 +16,7 @@ from regr.solver.ilpOntSolver import ilpOntSolver
 from regr.solver.gurobiILPBooleanMethods import gurobiILPBooleanProcessor
 from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
+from regr.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
 
 from regr.graph import LogicalConstrain, V, fixedL
 from _functools import reduce
@@ -27,6 +28,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myIlpBooleanProcessor = gurobiILPBooleanProcessor()
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
+        self.booleanMethodsCalculator = booleanMethodsCalculator()
 
         self.reuse_model = reuse_model
         self.model = None
@@ -677,6 +679,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         if dn == None:
             raise Exception("No datanode provided")
                         
+        if (e[2] and ('>/argmax' in xPkey)):
+            xPkey = xPkey.replace('>/argmax', '>/local/argmax')
+            
         sampleKey = '<' + conceptName + ">/sample" 
         if sample and sampleKey not in dn.getAttributes():
             dn.getAttributes()[sampleKey] = {}
@@ -1751,3 +1756,78 @@ class gurobiILPOntSolver(ilpOntSolver):
         [h.flush() for h in self.myLoggerTime.handlers]
             
         return lcLosses
+    
+    # -- Calculated loss values for logical constraints
+    def verifyResultsLC(self, dn, key = "/argmax"):
+        start = process_time() # timer()
+
+        m = None 
+        p = 0
+        
+        myBooleanMethods = self.booleanMethodsCalculator
+        myBooleanMethods.current_device = dn.current_device
+
+        self.myLogger.info('Calculating verify ')
+        self.myLoggerTime.info('Calculating verify ')
+        
+        lcCounter = 0 # Count processed lcs
+        lcVerifyResult = {}
+        for graph in self.myGraph: # Loop through graphs
+            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+                startLC = process_time_ns() # timer()
+
+                if not lc.headLC or not lc.active: # Process only active and head lcs
+                    continue
+                    
+                if type(lc) is fixedL: # Skip fixedL lc
+                    continue
+                    
+                lcCounter +=  1
+                self.myLogger.info('\n')
+                self.myLogger.info('Processing %s(%s) - %s'%(lc.lcName, lc, lc.strEs()))
+                
+                lcName = lc.lcName
+                    
+                lcVerifyResult[lcName] = {}
+                current_verifyResult = lcVerifyResult[lcName]
+                
+                # lossList will contain float result for lc loss calculation
+                verifyList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = False, sample = False)
+                current_verifyResult['verifyList'] = verifyList
+                
+                verifyListLen = 0
+                verifyListSatisfied = 0
+                for vl in verifyList:
+                    verifyListLen += len(vl)
+                    verifyListSatisfied += sum(vl)
+                
+                if verifyListLen:
+                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) *100
+                else:
+                    current_verifyResult['satisfied'] = 100
+
+                endLC = process_time_ns() # timer()
+                elapsedInNsLC = endLC - startLC
+                elapsedInMsLC = elapsedInNsLC/1000000
+                current_verifyResult['elapsedInMsLC'] = elapsedInMsLC
+        
+        self.myLogger.info('Processed %i logical constraints'%(lcCounter))
+        self.myLoggerTime.info('Processed %i logical constraints'%(lcCounter))
+            
+        end = process_time() # timer()
+        elapsedInS = end - start
+        
+        if elapsedInS > 1:
+            self.myLogger.info('End of Verify Calculation - total time: %fs'%(elapsedInS))
+            self.myLoggerTime.info('End of Verify Calculation - total time: %fs'%(elapsedInS))
+        else:
+            elapsedInMs = (end - start) *1000
+            self.myLogger.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
+            self.myLoggerTime.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
+            
+        
+        self.myLogger.info('')
+        self.myLoggerTime.info('')
+
+        [h.flush() for h in self.myLoggerTime.handlers]
+        return lcVerifyResult

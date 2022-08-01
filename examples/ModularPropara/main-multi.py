@@ -295,6 +295,19 @@ def main():
         final_output['actions_before'] = final_output['actions_before'].view(len(entities_instances), len(steps_instances), 4)
 
         all_updates.append(final_output)
+        
+        print("\nVerify Learned Results:")
+        verifyResult = datanode.verifyResultsLC()
+        if verifyResult:
+            for lc in verifyResult:
+                print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+
+        print("\nVerify ILP Results:")
+        verifyResultILP = datanode.verifyResultsLC(key = "/ILP")
+        if verifyResultILP:
+            for lc in verifyResultILP:
+                print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+    
     return all_updates
 
 

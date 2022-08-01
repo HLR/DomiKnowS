@@ -39,7 +39,7 @@ with Graph('example') as graph:
     work_for = pair(name='work_for')
 
     nandL(people, organization)
-    ifL(work_for, V(name='x'), andL(people, V(v=('x', arg1)), organization, V(v=('x', arg2))))
+    ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
 
 SAMPLE = {
     'text': ['John works for IBM'],
@@ -140,5 +140,18 @@ for node in program.populate(reader, device=device):
     print("\nILP results for organization - %s"%(node.collectInferredResults(organization, "ILP")))
     print("SofMax results for organization - %s"%(node.collectInferredResults(organization, "softmax")))
     print("ArgMax results for organization - %s"%(node.collectInferredResults(organization, "argmax")))
+    
+    print("\nVerify Learned Results:")
+    verifyResult = node.verifyResultsLC()
+    if verifyResult:
+        for lc in verifyResult:
+            print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+            
+    print("\nVerify ILP Results:")
+    verifyResultILP = node.verifyResultsLC(key = "/ILP")
+    if verifyResultILP:
+        for lc in verifyResultILP:
+            print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+
 
 

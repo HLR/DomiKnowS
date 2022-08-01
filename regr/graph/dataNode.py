@@ -1117,20 +1117,14 @@ class DataNode:
         self.inferLocal()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
-    def verifySelection(self, *_conceptsRelations):
-        
-        # --- Update !
-        
-        if not _conceptsRelations:
-            _conceptsRelations = ()
-            
-        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
-            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getLabel)
-            
-        if not myilpOntSolver:
-            return False
-        
-        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
+    # Calculate the percentage of results satisfying each logical constraint 
+    def verifyResultsLC(self, key = "/argmax"):
+                
+        myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
+
+        self.inferLocal()
+        self.infer()
+        verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
         
         return verifyResult
     
@@ -1534,6 +1528,31 @@ class DataNodeBuilder(dict):
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True
 
+    def __isRootDn(self, testedDn, checkedDns, visitedDns):
+        if visitedDns == None:
+            visitedDns = set()
+            
+        visitedDns.add(testedDn)
+        
+        if not testedDn.impactLinks and testedDn in checkedDns:
+            return False
+        
+        isRoot = True    
+        for _, iDnList in testedDn.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
+            if iDnList:
+                for iDn in iDnList:
+                    if iDn in visitedDns:
+                        continue
+                    
+                    if not self.__isRootDn(iDn, checkedDns, visitedDns):
+                        isRoot = False
+                        break
+                    
+            if not isRoot:
+                break
+            
+        return isRoot
+    
     def __updateRootDataNodeList(self, *dns):
         if not dns:
             return
@@ -1563,7 +1582,9 @@ class DataNodeBuilder(dict):
         else:
             flattenDns = dns
             
-        dnsRoots.extend(flattenDns) 
+        for fd in flattenDns:
+            if fd not in dnsRoots:
+                dnsRoots.append(fd)
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots:            
@@ -1571,18 +1592,7 @@ class DataNodeBuilder(dict):
                 if dnE not in newDnsRoots: # Not yet in the new Root list
                     newDnsRoots.append(dnE)  
             else:
-                found = False
-                for _, iDnList in dnE.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
-                    if iDnList:
-                        for iDn in iDnList:
-                            if iDn in newDnsRoots:
-                                found = True
-                                break
-                            
-                    if found:
-                        break
-                    
-                if not found and dnE not in newDnsRoots:       
+                if self.__isRootDn(dnE, dnsRoots, visitedDns = None):
                     newDnsRoots.append(dnE)  
 
         # Set the updated root list 
