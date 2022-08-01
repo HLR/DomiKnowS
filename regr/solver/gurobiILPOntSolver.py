@@ -678,9 +678,6 @@ class gurobiILPOntSolver(ilpOntSolver):
     def getMLResult(self, dn, conceptName, xPkey, e, p, loss = False, sample = False):
         if dn == None:
             raise Exception("No datanode provided")
-                        
-        if (e[2] and ('>/argmax' in xPkey)):
-            xPkey = xPkey.replace('>/argmax', '>/local/argmax')
             
         sampleKey = '<' + conceptName + ">/sample" 
         if sample and sampleKey not in dn.getAttributes():

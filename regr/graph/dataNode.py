@@ -1118,7 +1118,7 @@ class DataNode:
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
     # Calculate the percentage of results satisfying each logical constraint 
-    def verifyResultsLC(self, key = "/argmax"):
+    def verifyResultsLC(self, key = "/local/argmax"):
                 
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
