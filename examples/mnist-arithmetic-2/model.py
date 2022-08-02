@@ -174,7 +174,8 @@ def build_program():
     #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
 
     # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
-    images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
+    #images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
+    images[s] = FunctionalSensor(forward=lambda: torch.zeros(1, config.summationRange))  # dummy values to populate
     images[s] = ReaderSensor(keyword='summation', label=True)
     images['summationEquality'] = FunctionalSensor('summation_label', forward=lambda x: torch.ones(1))
 
