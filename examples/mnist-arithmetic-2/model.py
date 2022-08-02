@@ -31,7 +31,9 @@ class Net(torch.nn.Module):
 
         self.relu = nn.ReLU()
 
-        self.drop = nn.Dropout(p=0.5)
+        self.drop = nn.Dropout(p=0.2)
+
+        self.norm = nn.LayerNorm(256)
 
     def forward(self, x):
         x = torch.squeeze(x, dim=0)
@@ -47,6 +49,8 @@ class Net(torch.nn.Module):
         x = self.pool(x)
 
         x = x.reshape(2, -1)
+
+        x = self.norm(x)
 
         x = self.lin1(x)
         x = self.relu(x)
