@@ -18,6 +18,7 @@ from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 from regr import setProductionLogMode
 import os
+from itertools import chain
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
@@ -46,6 +47,8 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         'label': []
     }
 
+    satisfied = {}
+
     for suffix in infer_suffixes:
         digits_results[suffix] = []
         summation_results[suffix] = []
@@ -64,6 +67,14 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results['label'].append(node.getAttribute('digit1_label').item())
         summation_results['label'].append(node.getAttribute('<summations>/label').item())
 
+        verifyResult = node.verifyResultsLC()
+        if verifyResult:
+            for lc in verifyResult:
+                if lc not in satisfied:
+                    satisfied[lc] = []
+                satisfied[lc].append(verifyResult[lc]['satisfied'])
+                print(lc + ':', verifyResult[lc]['satisfied'])
+
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
 
@@ -80,6 +91,9 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
         print('==========================================')
 
+    sat_values = list(chain(*satisfied.values()))
+    print('Average constraint violations: %f' % (sum(sat_values)/len(sat_values)))
+
 
 graph, images = build_program()
 
@@ -90,8 +104,10 @@ program = SolverPOIProgram(graph,
                             metric={})
 
 # load model.pth
-program.model.load_state_dict(torch.load('../../../results_new/direct_10k/epoch4/model.pth'))
+model_path = '../../../results_new/baseline_10k/epoch5/model.pth'
+program.model.load_state_dict(torch.load(model_path))
 
+print('loaded model from %s' % model_path)
 
 # verify validation accuracy
 print("validation evaluation")

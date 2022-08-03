@@ -10,9 +10,9 @@ import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
-from regr.program import IMLProgram, SolverPOIProgram
+from regr.program import IMLProgram, SolverPOIProgram, CallbackProgram
 from regr.program.callbackprogram import hook
-from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from regr.program.lossprogram import PrimalDualProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
@@ -30,6 +30,7 @@ trainloader, trainloader_mini, validloader, testloader = get_readers()
 def get_pred_from_node(node, suffix):
     digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
     digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
+    #print(node.getAttributes())
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -50,7 +51,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
+    for i, (loss, metric, node) in tqdm(enumerate(program.test_epoch(reader)), total=total, position=0, leave=True):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
@@ -84,7 +85,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 graph, images = build_program()
 
 
-class CallbackProgram(SampleLossProgram):
+class PrimalDualCallbackProgram(PrimalDualProgram):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
@@ -97,14 +98,10 @@ class CallbackProgram(SampleLossProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = CallbackProgram(graph, SolverModel,
+program = PrimalDualCallbackProgram(graph, SolverModel,
                     poi=(images,),
                     inferTypes=['local/argmax'],
-                    metric={},
-                    sample=True,
-                    sampleSize=100,
-                    sampleGlobalLoss=True,
-                    beta=1)
+                    metric={})
 
 
 '''class Program(CallbackProgram, IMLProgram):
@@ -120,13 +117,13 @@ program = Program(graph,
 epoch_num = 1
 
 
-def post_epoch_metrics(kwargs, interval=1, train=False, valid=True):
+def post_epoch_metrics(kwargs, interval=1, train=True, valid=True):
     global epoch_num
 
     if epoch_num % interval == 0:
         if train:
             print("train evaluation")
-            get_classification_report(program, trainloader_mini, total=config.num_valid, verbose=False)
+            get_classification_report(program, trainloader, total=config.num_valid, verbose=False)
 
         if valid:
             print("validation evaluation")
@@ -166,7 +163,7 @@ program.after_train_epoch = [save_model, post_epoch_metrics]
 
 def test_adam(params):
     print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.0005)
+    return torch.optim.Adam(params, lr=0.0001)
 
 
 program.train(trainloader,
@@ -175,6 +172,7 @@ program.train(trainloader,
               device='auto',
               test_every_epoch=True,
               c_warmup_iters=0)
+
 
 #optim = program.model.params()
 
