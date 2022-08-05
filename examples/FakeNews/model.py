@@ -65,20 +65,20 @@ def model_declaration(device):
     category = graph["Category"]
     parent_tags = graph["ParentTag"]
 
-    category["Text"] = ReaderSensor(keyword="Text", device=device)
-    category["BinaryLabel"] = ReaderSensor(keyword="Label", device=device)
-    category["ParentTexts"] = ReaderSensor(keyword="Parent Text", device=device)
-    category["ParentLabels"] = ReaderSensor(keyword="Parent Labels", device=device)
+    text_sequence["Text"] = ReaderSensor(keyword="Text", device=device)
+    text_sequence["BinaryLabel"] = ReaderSensor(keyword="Label", device=device)
+    text_sequence["ParentTexts"] = ReaderSensor(keyword="Parent Text", device=device)
+    text_sequence["ParentLabels"] = ReaderSensor(keyword="Parent Labels", device=device)
     
-    category["TokenText"] = FunctionalSensor("Text", forward=tokenize_text)
-    category["TokenParentTexts"] = FunctionalSensor("Parent Text", forward=tokenize_parent_texts)
+    text_sequence["TokenText"] = FunctionalSensor("Text", forward=tokenize_text)
+    #category["TokenParentTexts"] = FunctionalSensor("Parent Text", forward=tokenize_parent_texts)
 
-    category["BinaryLabel"] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
-    category["ParentLabels"] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
+    text_sequence["BinaryLabel"] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
+    #category["ParentLabels"] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
 
     text_sequence[category] = ModuleLearner("TokenText", module=RobertaClassifier(num_outputs=1))
 
-    program = SolverPOIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    program = SolverPOIProgram(graph,poi=[text_sequence,text_sequence[category]], loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
     return program
 

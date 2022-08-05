@@ -10,8 +10,8 @@ def load_annodata(anno_data):
         parent_texts = [text] * 12
         parent_labels = row[4:16].tolist()
 
-        anno_dict["Text"] = text
-        anno_dict["Label"] = binary_label
+        anno_dict["Text"] = [text]
+        anno_dict["Label"] = [binary_label]
         anno_dict["Parent Text"] = [parent_texts]
         anno_dict["Parent Labels"] = [parent_labels]
         
