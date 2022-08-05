@@ -3,7 +3,7 @@ import sys
 sys.path.append("../")
 sys.path.append("../../")
 from graph import graph
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
+from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
@@ -23,8 +23,9 @@ from dataset import load_annodata
 tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
 def tokenize_text(text):
-    return tokenizer(text, padding='max_length', max_length=192, 
-                     truncation=True, return_tensors="pt") 
+    t=tokenizer(text, padding='max_length', max_length=192,
+                     truncation=True, return_tensors="pt")
+    return t["input_ids"],t["attention_mask"]
 
 def tokenize_parent_texts(parent_texts):
     return [tokenizer(text, padding='max_length', max_length=192, 
@@ -70,13 +71,13 @@ def model_declaration(device):
     text_sequence["ParentTexts"] = ReaderSensor(keyword="Parent Text", device=device)
     text_sequence["ParentLabels"] = ReaderSensor(keyword="Parent Labels", device=device)
     
-    text_sequence["TokenText"] = FunctionalSensor("Text", forward=tokenize_text)
+    text_sequence["TokenText","mask"] = JointSensor("Text", forward=tokenize_text)
     #category["TokenParentTexts"] = FunctionalSensor("Parent Text", forward=tokenize_parent_texts)
 
-    text_sequence["BinaryLabel"] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
+    text_sequence[category] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
     #category["ParentLabels"] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
 
-    text_sequence[category] = ModuleLearner("TokenText", module=RobertaClassifier(num_outputs=1))
+    text_sequence[category] = ModuleLearner("TokenText","mask", module=RobertaClassifier(num_outputs=2))
 
     program = SolverPOIProgram(graph,poi=[text_sequence,text_sequence[category]], loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
