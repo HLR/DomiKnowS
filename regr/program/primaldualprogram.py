@@ -41,6 +41,9 @@ class PrimalDualProgram(LearningBasedProgram):
         self.cmodel = CModel(graph)
         self.copt = None
         self.beta = beta
+        if "device" in kwargs:
+            self.device=kwargs["device"]
+
 
     def to(self, device):
         super().to(device=device)

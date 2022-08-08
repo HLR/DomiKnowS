@@ -29,9 +29,9 @@ parser.add_argument('--samplenum', dest='samplenum', default=15, help='sample si
 
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
+parser.add_argument('--sam', dest='SAM', default=True, help='whether or not to use sampling learning',type=bool)
 
-parser.add_argument('--batch', dest='batch_size', default=128, help='batch size for neural network training',type=int)
+parser.add_argument('--batch', dest='batch_size', default=16, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
 
@@ -93,14 +93,14 @@ subject['facts'] = ReaderSensor(keyword='facts')
 subject['labels'] = ReaderSensor(keyword='labels')
 
 facts[subject_facts_contains,"name", "sentence", 'label'] = JointSensor(\
-    subject['name'], subject['facts'], subject['labels'],forward=make_facts)
-facts[fact_check] = FunctionalSensor(subject_facts_contains, "label", forward=label_reader, label=True)
+    subject['name'], subject['facts'], subject['labels'],forward=make_facts,device=device)
+facts[fact_check] = FunctionalSensor(subject_facts_contains, "label", forward=label_reader, label=True,device=device)
 
-implication[i_arg1.reversed, i_arg2.reversed] = CompositionCandidateSensor(facts['sentence'],relations=(i_arg1.reversed, i_arg2.reversed),forward=guess_pair_yes)
-nimplication[ni_arg1.reversed, ni_arg2.reversed] = CompositionCandidateSensor(facts['sentence'],relations=(ni_arg1.reversed, ni_arg2.reversed),forward=guess_pair_no)
+implication[i_arg1.reversed, i_arg2.reversed] = CompositionCandidateSensor(facts['sentence'],relations=(i_arg1.reversed, i_arg2.reversed),forward=guess_pair_yes,device=device)
+nimplication[ni_arg1.reversed, ni_arg2.reversed] = CompositionCandidateSensor(facts['sentence'],relations=(ni_arg1.reversed, ni_arg2.reversed),forward=guess_pair_no,device=device)
 
 facts["token_ids", "Mask"] = JointSensor("name", "sentence", forward=RobertaTokenizer(),device=device)
-facts[fact_check] = ModuleLearner("token_ids", "Mask", module=BBRobert())
+facts[fact_check] = ModuleLearner("token_ids", "Mask", module=BBRobert(),device=device)
 
 if not args.primaldual and not args.IML and not args.SAM:
     program = SolverPOIProgram(graph, poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],\
