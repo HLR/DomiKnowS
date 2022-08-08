@@ -27,7 +27,7 @@ parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epoc
 parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning rate of the adam optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
+parser.add_argument('--sam', dest='SAM', default=True, help='whether or not to use sampling learning',type=bool)
 
 parser.add_argument('--samplenum', dest='samplenum', default=800, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=64, help='batch size for neural network training',type=int)
@@ -98,7 +98,7 @@ if args.SAM:
                                 inferTypes=['ILP', 'local/argmax'],
                                 metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=300,
-                                sampleGlobalLoss=True)
+                                sampleGlobalLoss=True,device=device)
 
 for i in range(args.cur_epoch):
     program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
