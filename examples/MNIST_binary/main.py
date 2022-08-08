@@ -87,11 +87,11 @@ if args.primaldual:
     print("PD")
     program = PrimalDualProgram(graph,SolverModel,inferTypes=['ILP','local/argmax'],\
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
-                                                'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.beta)
+                                                'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.beta,device=device)
 if args.IML:
     print("IML program")
     program = IMLProgram(graph, poi=[image[Zero],image[One],image[Two],image[Three],image[Four],image[Five],image[Six],image[Seven],image[Eight],image[Nine]],\
-                                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+                                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker(),device=device)
 
 if args.SAM:
     program = SampleLossProgram(graph, SolverModel, poi=[image[Zero],image[One],image[Two],image[Three],image[Four],image[Five],image[Six],image[Seven],image[Eight],image[Nine]],
