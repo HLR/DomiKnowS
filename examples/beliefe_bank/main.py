@@ -1,10 +1,10 @@
 import sys
 
-from regr.program.lossprogram import SampleLossProgram
+
 
 sys.path.append('.')
 sys.path.append('../..')
-
+from regr.program.lossprogram import SampleLossProgram
 import torch,argparse
 from transformers import AdamW
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
