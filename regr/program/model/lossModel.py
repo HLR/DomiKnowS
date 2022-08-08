@@ -237,8 +237,8 @@ class SampleLosslModel(torch.nn.Module):
 
             satisfied_num = len( set(constr_loss.keys()) - set(key_losses.keys()) )
             unsatisfied_num = len(set(constr_loss.keys())) - satisfied_num
-            self.logger.info(f'-- number of satisfied constraints are {satisfied_num}')
-            self.logger.info(f'-- number of unstatisfied constraints are {unsatisfied_num}')
+            #self.logger.info(f'-- number of satisfied constraints are {satisfied_num}')
+            #self.logger.info(f'-- number of unstatisfied constraints are {unsatisfied_num}')
             for key in key_losses:
                 if replace_mul:
                     loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
