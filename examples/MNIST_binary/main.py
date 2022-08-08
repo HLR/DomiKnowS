@@ -41,7 +41,7 @@ mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transf
 
 
 mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,args.batch_size)
-mnist_testset_reader=create_readers(mnist_testset,args.samplenum,args.batch_size)
+mnist_testset_reader=create_readers(mnist_testset,99999,args.batch_size)
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
@@ -75,8 +75,8 @@ for number,i in enumerate(labels):
     image[i] = FunctionalSensor(image_group_contains, Numbers[number], forward=label_reader, label=True)
 
 for number, i in enumerate(labels):
-    new_model=MNISTLinear()
-    #new_model=MNISTCNN((1, 28, 28),2,number)
+    #new_model=MNISTLinear()
+    new_model=MNISTCNN((1, 28, 28),2,number)
     image[i] = ModuleLearner('pixels', module=new_model)
 
 print("POI")
