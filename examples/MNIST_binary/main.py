@@ -31,7 +31,7 @@ parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to 
 
 parser.add_argument('--samplenum', dest='samplenum', default=800, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=64, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--beta', dest='beta', default=0.01, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 transform_mnist=transform=torchvision.transforms.Compose([torchvision.transforms.ToTensor(),torchvision.transforms.Normalize((0.1307,), (0.3081,))])
@@ -100,8 +100,8 @@ if args.SAM:
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=300,
                                 sampleGlobalLoss=True,device=device,beta=args.beta)
 
-for i in range(args.cur_epoch):
-    program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+#for i in range(args.cur_epoch):
+program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
     #,valid_set=mnist_testset_reader
-    program.save(args.namesave+"_"+str(i))
+program.save(args.namesave)
     #program.test(mnist_testset_reader)
