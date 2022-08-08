@@ -103,5 +103,5 @@ if args.SAM:
 for i in range(args.cur_epoch):
     program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
     #,valid_set=mnist_testset_reader
-    program.namesave(args.namesave+"_"+str(i))
+    program.save(args.namesave+"_"+str(i))
     #program.test(mnist_testset_reader)
