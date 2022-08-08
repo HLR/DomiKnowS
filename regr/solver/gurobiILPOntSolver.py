@@ -1094,8 +1094,9 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         start = process_time() # timer()
 
-        gurobiEnv = Env("logs/gurobi.log")
-        
+        gurobiEnv = Env("logs/gurobi.log",empty=True)
+        gurobiEnv.setParam('OutputFlag', 0)
+        gurobiEnv.start()
         try:
             if self.reuse_model and self.model:
                 m = self.model['m']

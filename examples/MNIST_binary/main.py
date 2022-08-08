@@ -1,9 +1,8 @@
 import sys
 
-from regr.program.lossprogram import SampleLossProgram
-
 sys.path.append('.')
 sys.path.append('../..')
+from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 from regr.program.primaldualprogram import PrimalDualProgram
 
