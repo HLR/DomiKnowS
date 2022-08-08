@@ -5,7 +5,19 @@ def create_readers(dataset,sample_size,batch_size):
                5:"Five", 6:"Six", 7:"Seven", 8:"Eight", 9:"Nine"}
     reader=[]
     instance = {}
+    dist=[i[1] for i in dataset]
+    max_size=min([sum([i == j for i in dist]) for j in range(10)])
+    max_size-=max_size%batch_size
+    image_groups=[[] for i in range(10)]
+    for i in dataset:
+        image_groups[ i[1] ].append(i)
+    dataset=[]
+    for i in range(max_size):
+        for j in range(10):
+            dataset.append(image_groups[j][i])
+
     for number,i in enumerate(dataset):
+
         if not "pixels" in instance:
             instance["pixels"]=[i[0]]
         else:
