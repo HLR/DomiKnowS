@@ -25,7 +25,7 @@ Relation.clear()
 
 
 #
-# graph
+# Graph Definition
 #
 with Graph('example') as graph:
     sentence = Concept(name='sentence')
@@ -38,9 +38,20 @@ with Graph('example') as graph:
     (arg1, arg2) = pair.has_a(arg1=word, arg2=word)
     work_for = pair(name='work_for')
 
-    nandL(people, organization)
-    ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
 
+#
+# Logical Constraints
+#
+    # word can not be both people and organization
+    nandL(people, organization)
+    
+    # if pair is work_for then its first pair element is people and the second is organization
+    ifL(work_for('x'), andL(people(path=('x', arg1)), organization(path=('x', arg2))))
+    
+
+#
+# Data Sample with labels
+#
 SAMPLE = {
     'text': ['John works for IBM'],
     'peop': [1, 0, 0, 0],
@@ -48,10 +59,12 @@ SAMPLE = {
     'wf': [(0,3)]
 }
 
+
 #
 # Reader as a list
 #
 reader = [SAMPLE]
+
 
 #
 # Reader as minimal required interface
@@ -63,10 +76,9 @@ class Reader():
     def __len__(self):  # optional
         return 0 # some magic number
 
-# reader = Reader()
 
 #
-# Sesnor / Learner
+# Sensors / Learner
 #
 sentence['text'] = ReaderSensor(keyword='text')
 
@@ -87,18 +99,21 @@ pair[work_for] = ModuleLearner('emb', module=Classifier(200))
 
 pair[work_for] = FunctionalReaderSensor(pair[arg1.reversed], pair[arg2.reversed], keyword='wf', forward=pair_label, label=True)
 
+
 #
-# Program
+# Defined the program
 #
 program = POIProgram(graph, loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
 
 # device options are 'cpu', 'cuda', 'cuda:x', torch.device instance, 'auto', None
 device = 'auto'
 
+# configure logging
 logging.basicConfig(level=logging.INFO)
 
+
 #
-# train
+# Train
 #
 program.train(reader, train_epoch_num=10, Optim=torch.optim.Adam, device=device)
 print('Training result:')
@@ -107,8 +122,9 @@ print(program.model.metric)
 
 print('-'*40)
 
+
 #
-# test
+# Test
 #
 program.test(reader, device=device)
 print('Testing result:')
@@ -120,8 +136,10 @@ linearsoftmax = torch.nn.Sequential(
     torch.nn.Linear(100,4),
     torch.nn.Softmax()
 )
+
+
 #
-# datanode
+# Access learned information from Datanode 
 #
 for node in program.populate(reader, device=device):
     node.infer()
@@ -144,7 +162,11 @@ for node in program.populate(reader, device=device):
     print("\nLocal/SofMax results for organization - %s"%(node.collectInferredResults(organization, "local/softmax").cpu()))
     print("Local/ArgMax results for organization   - %s"%(node.collectInferredResults(organization, "local/argmax").cpu()))
     print("ILP results for organization            - %s"%(node.collectInferredResults(organization, "ILP")))
-         
+       
+#
+# Verify if the learned results obey the logical constraints
+#
+  
     print("\nVerify Learned Results:")
     verifyResult = node.verifyResultsLC()
     if verifyResult:
@@ -156,6 +178,3 @@ for node in program.populate(reader, device=device):
     if verifyResultILP:
         for lc in verifyResultILP:
             print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
-
-
-

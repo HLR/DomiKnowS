@@ -1,7 +1,3 @@
-import sys
-from itertools import product
-#sys.path.append('../..')
-
 import pytest
 import math
 
@@ -12,21 +8,6 @@ def test_case():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
-    # pcw = torch.tensor([[1, 0, 0, 0],
-    #                     [0, 1, 1, 0],
-    #                     [0, 0, 0, 1,]], device=device)
-    # pairs_link = torch.randn(4, 4, device=device)
-    # pairs_link *= 1 - torch.eye(4, 4, device=device)
-    # pairs_link[3, 0] = 1  # make sure John - IBM
-    # pairs_link = pairs_link > 0
-    # arg1, arg2 = pairs_link.nonzero(as_tuple=True)
-    # pa1 = torch.zeros(arg1.shape[0], 4, device=device)
-    # pa1.scatter_(1, arg1.unsqueeze(-1), 1)
-    # pa2 = torch.zeros(arg2.shape[0], 4, device=device)
-    # pa2.scatter_(1, arg2.unsqueeze(-1), 1)
-    # pa1_emb = pa1.matmul(word_emb)
-    # pa2_emb = pa2.matmul(word_emb)
-    # pair_emb = torch.cat((pa1_emb, pa2_emb), dim=-1)
 
     case = {
         'sentence': {
@@ -92,8 +73,8 @@ def test_case():
                 torch.cat((word_emb[3], word_emb[3]), dim=0),
             ]),
             'work_for': torch.tensor([[0.60, 0.40],         [0.80, 0.20],         [0.80, 0.20], [float("nan"), float("nan")],  # John
-                                      [0.5, 0.5], [0.5, 0.5], [0.60, 0.40], [0.70, 0.30],  # works
-                                      #[float("nan"), float("nan")], [float("nan"), float("nan")], [0.60, 0.40], [0.70, 0.30],  # works
+                                      #[0.5, 0.5], [0.5, 0.5], [0.60, 0.40], [0.70, 0.30],  # works
+                                      [float("nan"), float("nan")], [float("nan"), float("nan")], [0.60, 0.40], [0.70, 0.30],  # works
                                       [0.98, 0.02],         [0.70, 0.03],         [0.95, 0.05], [0.90, 0.10],  # for
                                       [0.5, 0.5],         [0.80, 0.20],         [0.90, 0.10], [0.70, 0.30],  # IBM
                                      ], device=device),
@@ -125,8 +106,10 @@ def test_case():
                                                0.5000, 0.6457, 0.7191, 0.0000], 
                                                device=device),
                            
-                           "P" : torch.tensor([0.3350, 0.4013, 0.5254, 0.2639, 0.6900, 0.7803, 0.8065, 0.4637, 0.5000,
-        0.7102, 0.7309, 0.3800,    float("nan"), 0.5000, 0.5470, 0.1350], 
+                           "P" : torch.tensor([0.3350, 0.4013, 0.5254, 0.2639,       
+                                               0.6900, 0.7803, 0.8065, 0.4637, 
+                                               0.5000, 0.7102, 0.7309, 0.3800, 
+                                               float("nan"), 0.5000, 0.5470, 0.1350], 
                                                device=device)
                            }
     }
@@ -323,8 +306,6 @@ def test_main_conll04(case):
     data = {}
 
     _, _, datanode, _ = lbp.model(data)
-
-    datanode.infer()
     
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
@@ -358,38 +339,13 @@ def test_main_conll04(case):
     conceptsRelationsEmpty = []
     
     conceptsRelationsVariants = [conceptsRelationsEmpty, conceptsRelationsStrings, conceptsRelationsConcepts, conceptsRelationsMix]
-    
-    sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
-    
+        
     for conceptsRelations in conceptsRelationsVariants:
         
-        # ------------ Calculate logical constraints losses 
-        for tnorm in ['L', 'G', "P"]:
-            lcResult = datanode.calculateLcLoss(tnorm=tnorm)
-                    
-            break
-        
-            if 'LC0' in lcResult:                     
-                for i in range(3):
-                    assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
-    
-            ifLLCid = 'LC22'
-            if ifLLCid not in lcResult:
-                ifLLCid = 'LC2'
-                
-            if ifLLCid in lcResult:                     
-                for i in range(15):  
-                    if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
-                        if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
-                            assert True
-                        else:
-                            assert False
-                    else:
-                        assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
-
         # ------------ Call the ILP Solver
         datanode.inferILPResults(*conceptsRelations, fun=None)
-        
+        datanode.infer()
+
         # ------------ Concepts Results
         
         # Get value of attribute people/ILP for word 0
@@ -471,7 +427,9 @@ def test_main_conll04(case):
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 0
         #assert sum(pairResult['work_for'][1]) == 1
-        assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1})]) == 0
+        assert sum([dn.getAttribute(work_for, 'ILP').item() if dn.getAttribute(work_for, 'ILP').item() == dn.getAttribute(work_for, 'ILP').item() else 0
+                    for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 1}) 
+                    ]) == 0
         
         # Sum all value of attribute work_for/ILP  for the pair relation from 1
         #assert sum(pairResult['work_for'][0]) == 0
@@ -485,5 +443,34 @@ def test_main_conll04(case):
         # Sum all value of attribute work_for/ILP  for the pair relation from 3
         #assert sum(pairResult['work_for'][3]) == 0
         assert sum([dn.getAttribute(work_for, 'ILP').item() for dn in datanode.findDatanodes(select = pair, indexes = {"arg1" : 3})]) == 0
+        
+        # ------------ Calculate logical constraints losses 
+        for tnorm in ['L', 'G', "P"]:
+            lcResult = datanode.calculateLcLoss(tnorm=tnorm)
+                    
+            break
+        
+            if 'LC0' in lcResult:                     
+                for i in range(3):
+                    assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
+    
+            ifLLCid = 'LC22'
+            if ifLLCid not in lcResult:
+                ifLLCid = 'LC2'
+                
+            if ifLLCid in lcResult:                     
+                for i in range(15):  
+                    if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] or case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
+                        if lcResult[ifLLCid]['lossTensor'][i] != lcResult[ifLLCid]['lossTensor'][i] and case.lc2LossTensor[tnorm][i] != case.lc2LossTensor[tnorm][i]:
+                            assert True
+                        else:
+                            assert False
+                    else:
+                        assert round(lcResult[ifLLCid]['lossTensor'][i].item(), 4) == round(case.lc2LossTensor[tnorm][i].item(), 4)
+        
+        #------- Calculate sample logical constraints losses 
+        sampleResult = datanode.calculateLcLoss(sample = True, sampleSize = 1000)
+
+                        
 if __name__ == '__main__':
     pytest.main([__file__])
