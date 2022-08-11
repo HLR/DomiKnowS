@@ -117,7 +117,7 @@ class RobertaTokenizer:
         return torch.LongTensor(input_ids),torch.LongTensor(attention_mask)
 
 batch_size=128
-calibration_data,silver_data,_,_=read_data(batch_size=batch_size,sample_size=7)
+calibration_data,silver_data,_,_=read_data(batch_size=batch_size,sample_size=4)
 train_size=len(calibration_data)*3//4
 calibration_data_dev=calibration_data[train_size:]
 calibration_data=calibration_data[:train_size]
@@ -139,7 +139,7 @@ import torch.optim as optim
 
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=2e-4,)
-epoch_number=20
+epoch_number=30
 for epoch_i in range(epoch_number):
     model.train()
     ac_=0
