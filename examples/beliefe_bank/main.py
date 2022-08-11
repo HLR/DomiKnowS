@@ -118,8 +118,8 @@ elif args.SAM:
     program = SampleLossProgram(graph, SolverModel,poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
 
-program.train(calibration_data,valid_set=calibration_data_dev,test_set=silver_data, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ), c_warmup_iters=0,device=device)
-
+program.train(calibration_data,valid_set=calibration_data_dev,test_set=silver_data, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
+#, c_warmup_iters=0
 _,silver_data_test,constraints_yes,constraints_no=read_data(batch_size=32*16,sample_size=40)
 
 program.test(silver_data_test, device=device)
