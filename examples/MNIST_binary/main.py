@@ -101,7 +101,8 @@ if args.SAM:
                                 sampleGlobalLoss=True,device=device,beta=args.beta)
 
 #for i in range(args.cur_epoch):
-program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate), c_warmup_iters=0,device=device)
+program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+    #, c_warmup_iters=0
     #,valid_set=mnist_testset_reader
 #program.save(args.namesave)
     #program.test(mnist_testset_reader)
