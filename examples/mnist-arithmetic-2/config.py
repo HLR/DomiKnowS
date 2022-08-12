@@ -5,4 +5,4 @@ num_valid = 1000
 num_train = 10000
 num_test = 5000
 
-epochs = 10
+epochs = 1
