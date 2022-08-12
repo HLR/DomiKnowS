@@ -58,7 +58,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
             digits_results[suffix].append(digit0_pred.cpu().item())
             digits_results[suffix].append(digit1_pred.cpu().item())
 
-            summation_results[suffix].append(summation_pred.cpu().item())
+            summation_results[suffix].append(summation_pred)
 
         digits_results['label'].append(node.getAttribute('digit0_label').item())
         digits_results['label'].append(node.getAttribute('digit1_label').item())
