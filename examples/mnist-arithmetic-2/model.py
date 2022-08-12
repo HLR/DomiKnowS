@@ -120,7 +120,7 @@ class SumLayerExplicit(torch.nn.Module):
         d = torch.matmul(digit0, digit1)
         d = d.repeat(1, 1, 1, 1)
         f = torch.flip(torch.eye(10), dims=(0,)).repeat(1, 1, 1, 1)
-        conv_diag_sums = F.conv2d(d, f, padding=(9, 0), groups=1)[..., 0]
+        conv_diag_sums = F.conv2d(d, f.to(config.device), padding=(9, 0), groups=1)[..., 0]
 
         out = torch.squeeze(conv_diag_sums, dim=0)
 

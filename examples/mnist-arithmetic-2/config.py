@@ -6,3 +6,5 @@ num_train = 10000
 num_test = 5000
 
 epochs = 1
+
+device = 'cuda'
