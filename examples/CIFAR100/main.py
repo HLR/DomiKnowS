@@ -1,11 +1,11 @@
 import argparse
 import sys
 
-from regr.program.model.pytorch import SolverModel
-from regr.program.primaldualprogram import PrimalDualProgram
 
 sys.path.append('.')
 sys.path.append('../..')
+from regr.program.model.pytorch import SolverModel
+from regr.program.primaldualprogram import PrimalDualProgram
 
 import torch
 from torchvision.models import resnet18
