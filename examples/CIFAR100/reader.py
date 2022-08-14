@@ -59,9 +59,9 @@ def create_readers(train_num=50000,test_num=10000,batch_size=64):
         instance['fine_label_name'] = fine_names[(test_data[b'fine_labels'][i])].decode('ascii')
         test_reader.append(instance)
 
-    for i in range(0,train_num,batch_size):
+    for i in range(0,test_num,batch_size):
         pixels_group,coarse_names_group,fine_names_group=[],[],[]
-        for i_ in range(i,min(i+batch_size,train_num)):
+        for i_ in range(i,min(i+batch_size,test_num)):
             pixels_group.append(test_reader[i_]['pixels'])
             coarse_names_group.append(test_reader[i_]['corase_label'])
             fine_names_group.append(test_reader[i_]['fine_label'])
