@@ -42,6 +42,7 @@ def main():
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
+    parser.add_argument('--test', dest='test', default=False, help='test the final resultss', type=bool)
 
     args = parser.parse_args()
 
@@ -88,11 +89,17 @@ def main():
         print("sam")
         program = SampleLossProgram(graph, SolverModel,inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
+    if args.test:
+        train_reader, test_reader = create_readers(train_num=2)
+        for i in range(args.epochs):
+            program.load(str(args.solver) + "_" + str(args.samplenum) + "_" + str(i) + "_" + str(args.beta))
+            program.test(test_reader)
+    else:
+        train_reader,test_reader=create_readers(train_num=args.samplenum)
+        for i in range(args.epochs):
+            program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+            program.save(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta))
 
-    train_reader,test_reader=create_readers(train_num=args.samplenum)
-    for i in range(args.epochs):
-        program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
-        program.save(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta))
     guessed_tag = {
         "local/softmax": [],
         "ILP": []
