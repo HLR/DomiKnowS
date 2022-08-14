@@ -56,8 +56,8 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
 
-            digits_results[suffix].append(digit0_pred)
-            digits_results[suffix].append(digit1_pred)
+            digits_results[suffix].append(digit0_pred.cpu().item())
+            digits_results[suffix].append(digit1_pred.cpu().item())
 
             summation_results[suffix].append(summation_pred)
 
