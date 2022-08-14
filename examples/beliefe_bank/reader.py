@@ -3,7 +3,6 @@ import json
 def read_data(batch_size=16,sample_size=10000000):
     f = open("data/calibration_facts.json")
     f = json.load(f)
-
     sample_counter=0
     calibration_data = []
     for i in f.keys():

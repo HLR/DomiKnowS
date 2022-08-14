@@ -23,7 +23,7 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code')
 
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=30, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 
 parser.add_argument('--samplenum', dest='samplenum', default=15, help='sample sizes for low data regime 10,20,40 max 37',type=int)
 
