@@ -85,8 +85,8 @@ program = SolverPOIProgram(graph,poi=[image[Zero],image[One],image[Two],image[Th
 
 if args.primaldual:
     print("PD")
-    program = PrimalDualProgram(graph,SolverModel,inferTypes=['ILP','local/argmax'],\
-                    loss=MacroAverageTracker(NBCrossEntropyLoss()),metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
+    program = PrimalDualProgram(graph,SolverModel,inferTypes=['local/argmax'],\
+                    loss=MacroAverageTracker(NBCrossEntropyLoss()),metric={#'ILP': PRF1Tracker(DatanodeCMMetric()),\
                                                 'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.beta,device=device)
 if args.IML:
     print("IML program")
@@ -95,7 +95,7 @@ if args.IML:
 
 if args.SAM:
     program = SampleLossProgram(graph, SolverModel, poi=[image[Zero],image[One],image[Two],image[Three],image[Four],image[Five],image[Six],image[Seven],image[Eight],image[Nine]],
-                                inferTypes=['ILP', 'local/argmax'],
+                                inferTypes=['local/argmax'],
                                 metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=50,
                                 sampleGlobalLoss=True,device=device,beta=args.beta)
@@ -104,5 +104,6 @@ if args.SAM:
 program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
     #, c_warmup_iters=0
     #,valid_set=mnist_testset_reader
+program.save("test ILP")
 #program.save(args.namesave)
     #program.test(mnist_testset_reader)
