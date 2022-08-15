@@ -73,7 +73,7 @@ def main():
     image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
     image[category] = ModuleLearner('emb', module=nn.Linear(1000, 20))
     image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
-    f = open(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta)+".txt", "w")
+    f = open(str(args.solver)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
     if args.solver=="poi":
         print("POI")
         program = SolverPOIProgram(graph,inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss())\
