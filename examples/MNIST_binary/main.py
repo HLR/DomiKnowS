@@ -106,7 +106,7 @@ if args.SAM:
 
 
 for i in range(args.cur_epoch):
-    program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+    program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
     program.save(args.namesave+"_"+str(i))
     import numpy as np
 
@@ -122,5 +122,5 @@ for i in range(args.cur_epoch):
         ac_ += np.sum(verify_vector == 45)
         t_ += verify_vector.shape[0]
 
-    print(ac_ / t_ * 100)
+    print("constraint accuracy: ",ac_ / t_ * 100)
 
