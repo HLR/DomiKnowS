@@ -55,6 +55,7 @@ with Graph('global') as graph:
 
         orgbase_on = pair(name='orgbase_on')
         kill = pair(name='kill')
+        kill.has_a(people, people, auto_constraint=None)
         
         # Have exactly one label
         ifL(phrase, 
@@ -75,14 +76,14 @@ with Graph('global') as graph:
             andL(people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))), 
             active = LC_SET_BASED
             )
-        #ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))), work_for(path=('x')))
+#         ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), organization(path=('x', rel_pair_phrase2))), work_for(path=('x')))
         
         #  rel_pair_phrase2 is organization - > pair is  work_for
-        ifL(
-            andL(pair('x'), organization(path=('x', rel_pair_phrase2))),
-            work_for(path=('x')), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), organization(path=('x', rel_pair_phrase2))),
+#             work_for(path=('x')), 
+#             active = LC_SET_REL
+#             )
 
         # located_in -> location, location
         ifL(
@@ -90,14 +91,14 @@ with Graph('global') as graph:
             andL(location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), 
             active = LC_SET_BASED
             )
-        #ifL(andL(pair('x'), location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), located_in(path=('x')))
+#         ifL(andL(pair('x'), location(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), located_in(path=('x')))
         
         # rel_pair_phrase1 is location -> pair is located_in
-        ifL(
-            andL(pair('x'), location(path=('x', rel_pair_phrase1))), 
-            located_in(path=('x')), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), location(path=('x', rel_pair_phrase1))), 
+#             located_in(path=('x')), 
+#             active = LC_SET_REL
+#             )
 
         # live_in <-> people, location
         ifL(
@@ -106,11 +107,11 @@ with Graph('global') as graph:
             active = LC_SET_BASED
             )
         
-        ifL(
-            andL(pair('x'), people(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), 
-            live_in(path=('x')), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), people(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), 
+#             live_in(path=('x')), 
+#             active = LC_SET_REL
+#             )
 
         # orgbase_on <-> organization, location
         ifL(
@@ -119,14 +120,14 @@ with Graph('global') as graph:
             active = LC_SET_BASED
             )
         
-        #ifL(andL(pair('x'), organization(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), orgbase_on(path=('x')))
+#         ifL(andL(pair('x'), organization(path=('x', rel_pair_phrase1)), location(path=('x', rel_pair_phrase2))), orgbase_on(path=('x')))
         
         # rel_pair_phrase1 is organization -> pair is orgbase_on
-        ifL(
-            andL(pair('x'), organization(path=('x', rel_pair_phrase1))), 
-            orgbase_on(path=('x')), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), organization(path=('x', rel_pair_phrase1))), 
+#             orgbase_on(path=('x')), 
+#             active = LC_SET_REL
+#             )
        
         # kill -> people, people
         ifL(
@@ -134,35 +135,35 @@ with Graph('global') as graph:
             andL(people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))), 
             active = LC_SET_BASED
             )
-        #ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))), kill(path=('x')))
+#         ifL(andL(pair('x'), people(path=('x', rel_pair_phrase1)), people(path=('x', rel_pair_phrase2))), kill(path=('x')))
         
         # rel_pair_phrase2 is  people -> pair is kill
-        ifL(
-            andL(pair('x'), people(path=('x', rel_pair_phrase2))), 
-            kill(path=('x')), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), people(path=('x', rel_pair_phrase2))), 
+#             kill(path=('x')), 
+#             active = LC_SET_REL
+#             )
 
         
         # rel_pair_phrase1 is people -> pair is work_for or kill or live_in
-        ifL(
-            andL(pair('x'), people(path=('x', rel_pair_phrase1)) ), 
-            orL(work_for(path=('x')), kill(path=('x')), live_in(path=('x'))), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), people(path=('x', rel_pair_phrase1)) ), 
+#             orL(work_for(path=('x')), kill(path=('x')), live_in(path=('x'))), 
+#             active = LC_SET_REL
+#             )
         
         # rel_pair_phrase2 is location -> pair is live_in or orgbase_on or located_in
-        ifL(
-            andL(pair('x'), location(path=('x', rel_pair_phrase2))), 
-            orL(live_in(path=('x')), orgbase_on(path=('x')), located_in(path=('x'))), 
-            active = LC_SET_REL
-            )
+#         ifL(
+#             andL(pair('x'), location(path=('x', rel_pair_phrase2))), 
+#             orL(live_in(path=('x')), orgbase_on(path=('x')), located_in(path=('x'))), 
+#             active = LC_SET_REL
+#             )
         
         # people - at most 1 live in relation with people
-        ifL(
-            people('p'), 
-            atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
-            active = LC_SET_ADDITIONAL
-            )
+#         ifL(
+#             people('p'), 
+#             atMostL(live_in(path=('p', rel_pair_phrase1.reversed))),
+#             active = LC_SET_ADDITIONAL
+#             )
         
         
