@@ -28,8 +28,9 @@ parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning r
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
+parser.add_argument('--simple_model', dest='simple_model', default=False, help='use a simple base;ine',type=bool)
 
-parser.add_argument('--samplenum', dest='samplenum', default=6, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=800, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=64, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.005, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
@@ -41,7 +42,7 @@ mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transf
 
 
 mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,args.batch_size)
-mnist_testset_reader=create_readers(mnist_testset,5,args.batch_size)
+mnist_testset_reader=create_readers(mnist_testset,9999999,args.batch_size)
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
@@ -75,8 +76,10 @@ for number,i in enumerate(labels):
     image[i] = FunctionalSensor(image_group_contains, Numbers[number], forward=label_reader, label=True)
 
 for number, i in enumerate(labels):
-    #new_model=MNISTLinear()
-    new_model=MNISTCNN((1, 28, 28),2,number)
+    if args.simple_model:
+        new_model=MNISTLinear()
+    else:
+        new_model=MNISTCNN((1, 28, 28),2,number)
     image[i] = ModuleLearner('pixels', module=new_model)
 
 print("POI")
@@ -104,6 +107,7 @@ if args.SAM:
 program.test(mnist_trainset_reader)
 for i in range(args.cur_epoch):
     program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+    program.save(args.namesave+"_"+str(i))
     import numpy as np
 
     ac_, t_ = 0, 0
@@ -120,8 +124,3 @@ for i in range(args.cur_epoch):
 
     print(ac_ / t_ * 100)
 
-    #, c_warmup_iters=0
-    #,valid_set=mnist_testset_reader
-#program.save("test ILP")
-#program.save(args.namesave)
-    #program.test(mnist_testset_reader)
