@@ -133,7 +133,14 @@ class LossProgram(LearningBasedProgram):
                 for key, metric in self.model.metric.items():
                     self.logger.info(f' - - {key}')
                     self.logger.info(metric)
-
+                    try:
+                        self.f.write(f' - - {name}')
+                        self.f.write(f' - - {key}')
+                        self.f.write("\n")
+                        self.f.write(str(metric))
+                        self.f.write("\n")
+                    except:
+                        pass
                     metricName = key
                     metricResult = metric
                     if self.dbUpdate is not None:

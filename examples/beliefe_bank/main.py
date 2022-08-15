@@ -23,11 +23,11 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code')
 
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=2, help='number of epochs you want your model to train on',type=int)
 
-parser.add_argument('--samplenum', dest='samplenum', default=15, help='sample sizes for low data regime 10,20,40 max 37',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=5, help='sample sizes for low data regime 10,20,40 max 37',type=int)
 
-parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
+parser.add_argument('--pd', dest='primaldual', default=True, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
 
@@ -101,15 +101,15 @@ nimplication[ni_arg1.reversed, ni_arg2.reversed] = CompositionCandidateSensor(fa
 
 facts["token_ids", "Mask"] = JointSensor("name", "sentence", forward=RobertaTokenizer(),device=device)
 facts[fact_check] = ModuleLearner("token_ids", "Mask", module=BBRobert(),device=device)
-
+f=open("salam.txt","w")
 if not args.primaldual and not args.IML and not args.SAM:
     program = SolverPOIProgram(graph, poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],\
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
-                                                'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+                                                'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},f=f)
 elif args.primaldual:
     program = PrimalDualProgram(graph,SolverModel, poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],\
                     loss=MacroAverageTracker(NBCrossEntropyLoss()),metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
-                                               'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.beta,device=device)
+                                               'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.beta,device=device,f=f)
 elif args.IML:
     program = IMLProgram(graph, poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],\
                    loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
@@ -118,8 +118,9 @@ elif args.SAM:
     program = SampleLossProgram(graph, SolverModel,poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
 
-program.train(calibration_data,valid_set=calibration_data_dev,test_set=silver_data, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
-#, c_warmup_iters=0
+program.train(calibration_data,valid_set=calibration_data_dev, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
+#, c_warmup_iters=0,test_set=silver_data
+f.close()
 _,silver_data_test,constraints_yes,constraints_no=read_data(batch_size=32*16,sample_size=40)
 
 program.test(silver_data_test, device=device)

@@ -73,17 +73,18 @@ def main():
     image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
     image[category] = ModuleLearner('emb', module=nn.Linear(1000, 20))
     image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
+    f = open(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta)+".txt", "w")
     if args.solver=="poi":
         print("POI")
         program = SolverPOIProgram(graph,inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss())\
-                               ,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+                               ,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},f=f)
     elif args.solver=="primal_dual":
 
         print("PrimalDualProgram")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                            'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue)
+                                            'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
     elif args.solver=="sam":
 
         print("sam")
