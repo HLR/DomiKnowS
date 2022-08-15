@@ -3,181 +3,8 @@ import logging
 import torch
 
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
-from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 
 from regr.solver.ilpConfig import ilpConfig 
-
-class booleanMethods(ilpBooleanProcessor):
-    def notVar(self, _, var, onlyConstrains = False):
-        notSuccess = 1 - var
-
-        if onlyConstrains:
-            notLoss = 1 - notSuccess
-            
-            return notLoss
-        else:            
-            return notSuccess
-    
-    def and2Var(self, _, var1, var2, onlyConstrains = False):
-        and2Success = 0
-        if var1 + var2 == 2:
-            and2Success = 1
-            
-        if onlyConstrains:
-            and2Loss = 1 - and2Success
-            
-            return and2Loss
-        else:            
-            return and2Success    
-            
-    def andVar(self, _, *var, onlyConstrains = False):
-        andSuccess = 0
-        if sum(var) == len(var):
-            andSuccess = 1
-            
-        if onlyConstrains:
-            andLoss = 1 - andSuccess
-            
-            return andLoss
-        else:            
-            return andSuccess    
-    
-    def or2Var(self, _, var1, var2, onlyConstrains = False):
-        or2Success = 0
-        if var1 + var2 > 0:
-            or2Success = 1
-            
-        if onlyConstrains:
-            or2Loss = 1 - or2Success
-            
-            return or2Loss
-        else:            
-            return or2Success   
-    
-    def orVar(self, _, *var, onlyConstrains = False):
-        orSuccess = 0
-        if sum(var) > 0:
-            orSuccess = 1
-            
-        if onlyConstrains:
-            orLoss = 1 - orSuccess
-            
-            return orLoss
-        else:            
-            return orSuccess    
-            
-    def nand2Var(self, _, var1, var2, onlyConstrains = False):
-        #results = self.notVar(_, self.and2Var(_, var1, var2,))
-        
-        nand2Success = 1
-        if var1 + var2 == 2:
-            nand2Success = 0
-            
-        if onlyConstrains:
-            nand2Loss = 1 - nand2Success
-            
-            return nand2Loss
-        else:            
-            return nand2Success         
-         
-    def nandVar(self, _, *var, onlyConstrains = False):
-        #results = self.notVar(_, self.andVar(_, var))
-            
-        nandSuccess = 1
-        if sum(var) == len(var):
-            nandSuccess = 0
-            
-        if onlyConstrains:
-            nandLoss = 1 - nandSuccess
-            
-            return nandLoss
-        else:            
-            return nandSuccess     
-        
-    def ifVar(self, _, var1, var2, onlyConstrains = False):
-        #results = self.and2Var(_, self.andVar(_, var1), var2)
-        
-        ifSuccess = 1
-        if var1 - var2 == 1:
-            ifSuccess = 0
-            
-        if onlyConstrains:
-            ifLoss = 1 - ifSuccess
-            
-            return ifLoss
-        else:            
-            return ifSuccess 
-    
-    def norVar(self, _, *var, onlyConstrains = False):
-        #results = self.notVar(_, self.orVar(_, var))
-            
-        norSuccess = 1
-        if sum(var) > 0:
-            norSuccess = 0
-            
-        if onlyConstrains:
-            norLoss = 1 - norSuccess
-            
-            return norLoss
-        else:            
-            return norSuccess
-           
-    def xorVar(self, _, var1, var2, onlyConstrains = False):
-        xorSuccess = 0
-        if var1 + var2 == 1:
-            xorSuccess = 1
-            
-        if onlyConstrains:
-            xorLoss = 1 - xorSuccess
-            
-            return xorLoss
-        else:            
-            return xorSuccess
-    
-    def epqVar(self, _, var1, var2, onlyConstrains = False):
-        epqSuccess = 0
-        if var1 - var2 == 0:
-            epqSuccess = 1
-            
-        if onlyConstrains:
-            epqLoss = 1 - epqSuccess
-            
-            return epqLoss
-        else:       
-            return epqSuccess     
-    
-    def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        var = var[0]
-        countSuccess = 0
-
-        varSum = sum(list(var))
-
-        if limitOp == '>=':
-            if varSum >= limit:
-                countSuccess = 1
-        elif limitOp == '<=':
-            if varSum <= limit:
-                countSuccess = 1
-        elif limitOp == '==':
-            if varSum == limit:
-                countSuccess = 1
-                
-        if onlyConstrains:
-            countLoss = 1 - countSuccess
-            
-            return countLoss
-        else:       
-            return countSuccess    
-        
-    def fixedVar(self, _, _var, onlyConstrains = False):
-        fixedSuccess = 1
-        
-        if onlyConstrains:
-            fixedLoss = 1 - fixedSuccess
-    
-            return fixedLoss
-        else:
-            return fixedSuccess
    
 class lcLossSampleBooleanMethods(ilpBooleanProcessor):
     def __init__(self, _ildConfig = ilpConfig) -> None:
@@ -194,14 +21,6 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 return True
         
         return False
-    
-    def filterNone(self, var): # Used in countVar
-        filteredVar = []
-        for v in var:
-            if torch.is_tensor(v):
-                filteredVar.append(v)
-        
-        return filteredVar
     #--
     
     def notVar(self, _, var, onlyConstrains = False):
@@ -358,14 +177,29 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
             return epqSuccess     
     
     def countVar(self, _, *var, onlyConstrains = False, limitOp = '==', limit = 1, logicMethodName = "COUNT"):
-        var = self.filterNone(var)
-        
-        limitTensor = torch.full([len(var[0])], limit, device = var[0].device)
+        # -- Consider None
+        fixedVar = []
+        for v in var:
+            if torch.is_tensor(v):
+                fixedVar.append(v)
+            else:
+                if limitOp == '>=':
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
+                elif limitOp == '<=':
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                elif limitOp == '==':
+                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+        # --
+         
+        limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
        
         # Calculate sum 
-        varSum = var[0].int()
-        for i in range(1, len(var)):
-            varSum.add_(var[i].int())
+        varSum = torch.zeros([self.sampleSize], device=self.current_device)
+        if fixedVar:
+            varSum = fixedVar[0].int()
+            
+        for i in range(1, len(fixedVar)):
+            varSum.add_(fixedVar[i].int())
 
         # Check condition
         if limitOp == '>=':

@@ -2,7 +2,9 @@ digitRange = 10
 summationRange = digitRange * 2 - 1
 
 num_valid = 1000
-num_train = 5000
-num_test = 10
+num_train = 10000
+num_test = 5000
 
-epochs = 20
+epochs = 1
+
+device = 'cuda'

@@ -2,8 +2,10 @@ import logging
 import torch
 import numpy as np
 
+from .model.base import Mode
 from .program import LearningBasedProgram
 from .model.primaldual import PrimalDualModel
+from .model.base import Mode
 
 
 # Primal-dual need multiple backward through constraint loss.
@@ -39,6 +41,9 @@ class PrimalDualProgram(LearningBasedProgram):
         self.cmodel = CModel(graph)
         self.copt = None
         self.beta = beta
+        if "device" in kwargs:
+            self.device=kwargs["device"]
+
 
     def to(self, device):
         super().to(device=device)
@@ -53,7 +58,7 @@ class PrimalDualProgram(LearningBasedProgram):
         # COptim=None,  # SGD only
         c_lr=0.05,
         c_momentum=0.9,
-        c_warmup_iters=100,  # warmup
+        c_warmup_iters=40,  # warmup
         c_freq=10,
         c_freq_increase=5,  # d
         c_freq_increase_freq=1,

@@ -24,6 +24,11 @@ def validate(program, reader):
         print(f'{x}+{y}={z}')
         if x + y != z:
             print("False\n")
+            
+        verifyResult = node.verifyResultsLC()
+        if verifyResult:
+            for lc in verifyResult:
+                print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
 
 def main():
    

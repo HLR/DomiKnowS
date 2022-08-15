@@ -5,6 +5,7 @@ from models import *
 from utils import *
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from sklearn import preprocessing
+from transformers import RobertaModel
 import numpy as np
 
 
@@ -32,9 +33,9 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     def relation_str_to_list(relations):
         rel = []
         flags = []  # 0 for temporal, otherwise 1
-        rel_index = {"BEFORE": '4', "AFTER": '5', "EQUAL": '6', "VAGUE": '7',
-                     "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
-        # rel_index = {"BEFORE": '0', "AFTER": '1', "EQUAL": '2', "VAGUE": '3'}
+        # rel_index = {"BEFORE": '4', "AFTER": '5', "EQUAL": '6', "VAGUE": '7',
+        #              "SuperSub": '0', "SubSuper": '1', "Coref": '2', "NoRel": '3'}
+        rel_index = {"BEFORE": '0', "AFTER": '1', "EQUAL": '2', "VAGUE": '3'}
         for relation in relations:
             rel += [rel_index[relation]]
             flags.append(0 if int(rel_index[relation]) < 4 else 1)
@@ -94,16 +95,63 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     event_relation[relation_classes] = FunctionalSensor(paragraph_contain, "rel_",
                                                         forward=label_reader, label=True, device=cur_device)
 
+
+    # Common Sense Part
+    emb_path = "common_sense/common_sense.txt"
+    mdl_path = "common_sense/pairwise_model_0.3_200_1.pt"
+    ratio = 0.3
+    layer = 1
+    emb_size = 200
+    final_size = 256
+    granularity = 0.05
+    bigramStats_dim = 2
+    common_sense_model = common_sense_from_NN(emb_path, mdl_path, ratio, layer, emb_size)
+    common_sense_EMB = nn.Embedding(int(1.0 / granularity) * bigramStats_dim, final_size).to(cur_device)
+
+    def common_sense_emb(_, verbs1, verbs2):
+        common_sense_embs = []
+        for ind, v1 in enumerate(verbs1):
+            v2 = verbs2[ind]
+            bigramstats = common_sense_model.getCommonSense(v1, v2)
+            common_sense_emb = common_sense_EMB(torch.LongTensor(
+                [min(int(1.0 / granularity) - 1, int(bigramstats[0][0] / granularity))]).to(cur_device)).view(1, -1)
+            for i in range(1, bigramStats_dim):
+                tmp = common_sense_EMB(torch.LongTensor([(i - 1) * int(1.0 / granularity) + min(
+                    int(1.0 / granularity) - 1, int(bigramstats[0][i] / granularity))]).to(cur_device)).view(1, -1)
+                common_sense_emb = torch.cat((common_sense_emb, tmp), 1)
+            common_sense_embs.append(common_sense_emb.tolist()[0])
+        return torch.Tensor(common_sense_embs)
+
+    event_relation["common_sense"] = FunctionalSensor(paragraph_contain, "x_event", "y_event",
+                                                      forward=common_sense_emb, device=cur_device)
+
     # BiLSTM setting
     hidden_layer = 256
     roberta_size = 'roberta-base'
+    roberta_dim = 768
     # out_model = BiLSTM(768 if roberta_size == 'roberta-base' else 1024,
     #                    hidden_layer, num_layers=1, roberta_size=roberta_size)
     # out_model = Robert_Model()
+    out_model = BiLSTM_MLP(hidden_layer, 1, roberta_size, 512, 4, device=cur_device)
 
-    event_relation[relation_classes] = ModuleLearner("x_sent", "x_pos", "x_event", "x_pos_tag",
-                                                     "y_sent", "y_pos", "y_event", "y_pos_tag",
-                                                     module=BiLSTM_MLP(hidden_layer, 1, roberta_size, 512, 8, device=cur_device),
+    roberta_model = RobertaModel.from_pretrained(roberta_size).to(cur_device)
+
+    def sent_token(_, sents):
+        return_list = []
+        for sent in sents:
+            return_list.append(roberta_model(sent.unsqueeze(0))[0].view(-1, roberta_dim))
+        return torch.stack(return_list)
+
+    event_relation["x_sent_roberta"] = FunctionalSensor(paragraph_contain, "x_sent",
+                                                     forward=sent_token, device=cur_device)
+
+    event_relation["y_sent_roberta"] = FunctionalSensor(paragraph_contain, "y_sent",
+                                                     forward=sent_token, device=cur_device)
+
+    event_relation[relation_classes] = ModuleLearner("x_sent_roberta", "x_pos", "x_pos_tag",
+                                                     "y_sent_roberta", "y_pos", "y_pos_tag",
+                                                     "common_sense",
+                                                     module=out_model,
                                                      device=cur_device)
 
     from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
@@ -118,12 +166,12 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
     HierCo = 758.0
     HierNo = 63755.0
     HierTo = HierPC + HierCP + HierCo + HierNo  # total number of event pairs
-    weights = torch.FloatTensor([0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP,
-                                 0.25 * HierTo / HierCo, 0.25 * HierTo / HierNo,
-                                 0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
-                                 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
-    # weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
+    # weights = torch.FloatTensor([0.25 * HierTo / HierPC, 0.25 * HierTo / HierCP,
+    #                              0.25 * HierTo / HierCo, 0.25 * HierTo / HierNo,
+    #                              0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
     #                              0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
+    weights = torch.FloatTensor([0.25 * 818.0 / 412.0, 0.25 * 818.0 / 263.0,
+                                 0.25 * 818.0 / 30.0, 0.25 * 818.0 / 113.0]).to(cur_device)
 
     # Initial program using only ILP
     symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(
@@ -142,7 +190,8 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
                                     loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    device=cur_device)
     elif sampleloss:
         program = SampleLossProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=inferList,
@@ -151,13 +200,15 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     sample=True,
                                     sampleSize=sampleSize,
-                                    sampleGlobalLoss=True)
+                                    sampleGlobalLoss=True,
+                                    device=cur_device)
     else:
         program = SolverPOIProgram(graph,
                                    poi=poi_list,
                                    inferTypes=inferList,
                                    loss=MacroAverageTracker(NBCrossEntropyLoss(weight=weights)),
                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                           'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+                                           'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                   device=cur_device)
 
     return program

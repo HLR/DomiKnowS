@@ -162,7 +162,6 @@ def matres_reader(training_size, validation_size, testing_size):
     validation = []
     testing = []
     keys = list(file_to_event_trigger.keys())
-    tokenlizer = RobertaToken()
     for file in tqdm.tqdm(keys):
         file_name = file + ".tml"
         dirname = path_TB if file_name in TB_files else \
@@ -186,8 +185,8 @@ def matres_reader(training_size, validation_size, testing_size):
             x_sent_id = result_dict["event"][x]["sent_id"]
             y_sent_id = result_dict["event"][y]["sent_id"]
 
-            x_sent = tokenlizer(result_dict["sentences"][x_sent_id]["content"]).tolist()  # A
-            y_sent = tokenlizer(result_dict["sentences"][y_sent_id]["content"]).tolist()  # B
+            x_sent = padding(result_dict["sentences"][x_sent_id]["roberta_subword_to_ID"]).tolist()  # A
+            y_sent = padding(result_dict["sentences"][y_sent_id]["roberta_subword_to_ID"]).tolist()  # B
 
             x_position = result_dict["event"][x]["roberta_subword_id"]  # A_pos
             y_position = result_dict["event"][y]["roberta_subword_id"]  # B_pos
