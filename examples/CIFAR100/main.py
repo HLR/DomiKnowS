@@ -12,13 +12,13 @@ from regr.program.primaldualprogram import PrimalDualProgram
 import torch
 from torchvision.models import resnet18
 
-from regr.program import SolverPOIProgram
+from regr.program import SolverPOIProgram, IMLProgram
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from reader import create_readers
 import torch.nn as nn
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from graph import graph, image_group_contains,image,category,Label,image_group
 
 
@@ -36,11 +36,11 @@ def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
-    parser.add_argument('--solver', help='the model solver', default='sam')
+    parser.add_argument('--solver', help='the model solver', default='poi')
     parser.add_argument('--samplenum', dest='samplenum', default=5000,help='number of samples to choose from the dataset',type=int)
-    parser.add_argument('--epochs', dest='epochs', default=5, help='number of training epoch', type=int)
+    parser.add_argument('--epochs', dest='epochs', default=10, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
-    parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning rate of the adam optimiser',type=float)
+    parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
     parser.add_argument('--test', dest='test', default=False, help='test the final resultss', type=bool)
 
@@ -89,16 +89,18 @@ def main():
         print("sam")
         program = SampleLossProgram(graph, SolverModel,inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
-    if args.test:
-        train_reader, test_reader = create_readers(train_num=2)
-        for i in range(args.epochs):
-            program.load(str(args.solver) + "_" + str(args.samplenum) + "_" + str(i) + "_" + str(args.beta))
-            program.test(test_reader)
-    else:
-        train_reader,test_reader=create_readers(train_num=args.samplenum)
-        for i in range(args.epochs):
-            program.train(train_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
-            program.save(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta))
+
+    elif args.solver=="iml":
+
+        print("iml")
+        program = IMLProgram(graph, inferTypes=['ILP', 'local/argmax'], \
+                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),metric={'ILP': PRF1Tracker(DatanodeCMMetric()), \
+                                     'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+
+    train_reader,test_reader=create_readers(train_num=args.samplenum)
+    for i in range(args.epochs):
+        program.train(train_reader,valid_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+        program.save(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta))
 
     guessed_tag = {
         "local/softmax": [],
