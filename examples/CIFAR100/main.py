@@ -102,7 +102,7 @@ def main():
     for i in range(args.epochs):
         program.train(train_reader,valid_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
         program.save(str(args.solver)+"_"+str(args.samplenum)+"_"+str(i)+"_"+str(args.beta))
-
+    f.close()
     guessed_tag = {
         "local/softmax": [],
         "ILP": []
