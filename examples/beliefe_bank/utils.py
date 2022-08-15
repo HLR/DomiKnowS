@@ -75,4 +75,4 @@ class SimpleTokenizer:
 
     def __call__(self,name, sentence):
         preprocessed=[i+" "+j.replace("IsA" ,"is a").replace("CapableOf" ,"is capable of").replace("HasPart" ,"has the part").replace("HasA" ,"has").replace("," ," ").replace("MadeOf" ,"is made of ").replace("HasProperty" ,"Has the Property of") for i,j in zip(name, sentence)]
-        return torch.FloatTensor([self.nlp(i).vector.tolist() for i in preprocessed])
+        return torch.FloatTensor([self.nlp(i).vector.tolist() for i in preprocessed]).to(device)

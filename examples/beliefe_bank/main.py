@@ -103,7 +103,7 @@ if not args.simple_model:
     facts["token_ids", "Mask"] = JointSensor("name", "sentence", forward=RobertaTokenizer(),device=device)
     facts[fact_check] = ModuleLearner("token_ids", "Mask", module=BBRobert(),device=device)
 else:
-    facts["emb"] = JointSensor("name", "sentence", forward=SimpleTokenizer(),device=device)
+    facts["emb"] = JointSensor("name", "sentence", forward=SimpleTokenizer(device),device=device)
     facts[fact_check] = ModuleLearner("emb", module=torch.nn.Linear(96, 2),device=device)
 
 f=open("salam.txt","w")
