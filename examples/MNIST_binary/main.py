@@ -29,7 +29,7 @@ parser.add_argument('--pd', dest='primaldual', default=False, help='whether or n
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
 
-parser.add_argument('--samplenum', dest='samplenum', default=800, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=6, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=64, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.005, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
@@ -41,7 +41,7 @@ mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transf
 
 
 mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,args.batch_size)
-mnist_testset_reader=create_readers(mnist_testset,99999,args.batch_size)
+mnist_testset_reader=create_readers(mnist_testset,5,args.batch_size)
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
@@ -100,10 +100,26 @@ if args.SAM:
                                 loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=50,
                                 sampleGlobalLoss=True,device=device,beta=args.beta)
 
-program.load("test ILP")
+
 program.test(mnist_trainset_reader)
-#for i in range(args.cur_epoch):
-#program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+for i in range(args.cur_epoch):
+    program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=args.cur_epoch, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+    import numpy as np
+
+    ac_, t_ = 0, 0
+    for datanode in program.populate(mnist_testset_reader, device="cpu"):
+        #     tdatanode = datanode.findDatanodes(select = context)[0]
+        #     print(len(datanode.findDatanodes(select = context)))
+        #     print(tdatanode.getChildDataNodes(conceptName=step))
+        datanode.inferILPResults()
+        verifyResult = datanode.verifyResultsLC()
+        verifyResultILP = datanode.verifyResultsLC()
+        verify_vector = np.sum([verifyResultILP[lc]['verifyList'] for lc in verifyResultILP], axis=0)
+        ac_ += np.sum(verify_vector == 45)
+        t_ += verify_vector.shape[0]
+
+    print(ac_ / t_ * 100)
+
     #, c_warmup_iters=0
     #,valid_set=mnist_testset_reader
 #program.save("test ILP")

@@ -6,7 +6,7 @@ sys.path.append("../..")
 sys.path.append(".")
 
 from itertools import combinations
-from regr.graph import Graph, Concept, Relation
+from regr.graph import Graph, Concept, Relation, EnumConcept
 from regr.graph.logicalConstrain import nandL, orL, notL, ifL
 
 Graph.clear()
@@ -17,6 +17,8 @@ with Graph('MNISTGraph') as graph:
     image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
+    label=image(name="category", ConceptClass=EnumConcept,
+                     values=[f"n{i}" for i in range(0, 10)])
 
     Zero = image(name='zerohandwriting')
     One = image(name='onehandwriting')

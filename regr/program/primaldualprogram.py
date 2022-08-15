@@ -58,7 +58,7 @@ class PrimalDualProgram(LearningBasedProgram):
         # COptim=None,  # SGD only
         c_lr=0.05,
         c_momentum=0.9,
-        c_warmup_iters=40,  # warmup
+        c_warmup_iters=10,  # warmup
         c_freq=10,
         c_freq_increase=5,  # d
         c_freq_increase_freq=1,
@@ -90,7 +90,7 @@ class PrimalDualProgram(LearningBasedProgram):
     def train_epoch(
         self, dataset,
         c_lr=1,
-        c_warmup_iters=100,  # warmup
+        c_warmup_iters=10,  # warmup
         c_freq_increase=1,  # d
         c_freq_increase_freq=1,
         c_lr_decay=0,  # strategy
