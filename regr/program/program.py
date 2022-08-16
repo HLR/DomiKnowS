@@ -175,6 +175,8 @@ class LearningBasedProgram():
         self.opt = None
         self.epoch = None
         self.stop = None
+        if "f" in kwargs:
+            self.f=kwargs["f"]
 
     def to(self, device='auto'):
         if device == 'auto':
@@ -188,6 +190,8 @@ class LearningBasedProgram():
         if self.device is not None:
             for sensor in self.graph.get_sensors(TorchSensor):
                 sensor.device = self.device
+
+            self.model.device = self.device
 
     def calculateMetricDelta(self, metric1, metric2):
         metricDelta = {}
@@ -226,6 +230,15 @@ class LearningBasedProgram():
                 for key, metric in self.model.metric.items():
                     self.logger.info(f' - - {key}')
                     self.logger.info(metric)
+
+                    try:
+                        self.f.write(f' - - {name}')
+                        self.f.write(f' - - {key}')
+                        self.f.write("\n")
+                        self.f.write(str(metric))
+                        self.f.write("\n")
+                    except:
+                        pass
 
                     metricName = key
                     metricResult = metric

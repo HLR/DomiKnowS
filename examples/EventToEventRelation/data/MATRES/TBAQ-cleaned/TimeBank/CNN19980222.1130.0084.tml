@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>CNN19980222.1130.0084</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1998-02-22" temporalFunction="false" functionInDocument="CREATION_TIME">19980222</TIMEX3></DCT>
+
+<EXTRAINFO>
+CNN19980222.1130.0084 NEWS STORY
+</EXTRAINFO>
+
+<TEXT>
+CNN headline news, I'm Sachi Koto. Diplomacy <EVENT eid="e1" class="I_STATE">appears</EVENT> to be <EVENT eid="e2" class="I_ACTION">making</EVENT> headway in <EVENT eid="e4" class="I_ACTION">resolving</EVENT> the united nation's <EVENT eid="e96" class="OCCURRENCE">standoff</EVENT> with Iraq. A UN spokesman <EVENT eid="e5" class="REPORTING">says</EVENT> UN secretary general Kofi Annan is on the verge of a breakthrough, but <EVENT eid="e6" class="REPORTING">added</EVENT> it's not <EVENT eid="e7" class="OCCURRENCE">done</EVENT> yet. Annan <EVENT eid="e8" class="ASPECTUAL">wrapped</EVENT> up a <TIMEX3 tid="t122" type="DURATION" value="PT3H" temporalFunction="false" functionInDocument="NONE">three hour</TIMEX3> <EVENT eid="e35" class="OCCURRENCE">meeting</EVENT> with Iraqi president Saddam Hussein in Baghdad <TIMEX3 tid="t18" type="DATE" value="1998-02-22" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">today</TIMEX3>. He's <EVENT eid="e9" class="I_STATE">expected</EVENT> to <EVENT eid="e73" class="OCCURRENCE">meet</EVENT> with Iraqi deputy prime minister Tariq Aziz <TIMEX3 tid="t64" type="TIME" value="1998-02-22TAF" mod="END" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">later this afternoon</TIMEX3>. One major sticking point has been Iraq's <EVENT eid="e129" class="I_ACTION">proposal</EVENT> to <EVENT eid="e46" class="OCCURRENCE">open</EVENT> it's presidential sites for <TIMEX3 tid="t70" type="DURATION" value="P60D" mod="EQUAL_OR_LESS" temporalFunction="false" functionInDocument="NONE">no more than sixty days</TIMEX3>. The UN security council <EVENT eid="e13" class="I_ACTION">insists</EVENT> any <EVENT eid="e140" class="I_ACTION">deal</EVENT> must <EVENT eid="e14" class="I_STATE">allow</EVENT> UN inspectors unrestricted access to all suspected weapons sites.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei156" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei157" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei158" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e96" eiid="ei159" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e5" eiid="ei160" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei162" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei163" tense="PRESENT" aspect="NONE" polarity="NEG" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e8" eiid="ei164" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei165" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e9" eiid="ei166" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e73" eiid="ei167" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e129" eiid="ei168" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e46" eiid="ei169" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei170" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e140" eiid="ei171" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e14" eiid="ei172" tense="NONE" aspect="NONE" polarity="POS" pos="VERB" modality="must" />
+<TLINK lid="l23" relType="IS_INCLUDED" eventInstanceID="ei172" relatedToEventInstance="ei171" />
+<TLINK lid="l22" relType="IS_INCLUDED" eventInstanceID="ei170" relatedToTime="t64" />
+<TLINK lid="l21" relType="IS_INCLUDED" eventInstanceID="ei166" relatedToTime="t64" />
+<TLINK lid="l19" relType="IS_INCLUDED" eventInstanceID="ei156" relatedToTime="t0" />
+<TLINK lid="l1" relType="SIMULTANEOUS" eventInstanceID="ei160" relatedToEventInstance="ei162" />
+<TLINK lid="l2" relType="DURING" eventInstanceID="ei165" relatedToTime="t122" />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei157" relatedToEventInstance="ei158" />
+<TLINK lid="l4" relType="BEFORE" eventInstanceID="ei168" relatedToTime="t0" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei167" relatedToTime="t64" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei164" relatedToTime="t18" />
+<TLINK lid="l7" relType="DURING" eventInstanceID="ei169" relatedToTime="t70" />
+<SLINK lid="l18" relType="FACTIVE" eventInstanceID="ei172" subordinatedEventInstance="ei171" />
+<SLINK lid="l9" relType="MODAL" eventInstanceID="ei168" subordinatedEventInstance="ei169" />
+<SLINK lid="l10" relType="MODAL" eventInstanceID="ei166" subordinatedEventInstance="ei167" />
+<SLINK lid="l11" relType="FACTIVE" eventInstanceID="ei158" subordinatedEventInstance="ei159" />
+<SLINK lid="l12" relType="MODAL" eventInstanceID="ei170" subordinatedEventInstance="ei172" />
+<SLINK lid="l13" relType="MODAL" eventInstanceID="ei156" subordinatedEventInstance="ei157" />
+<SLINK lid="l14" relType="EVIDENTIAL" eventInstanceID="ei162" subordinatedEventInstance="ei163" />
+<ALINK lid="l16" relType="TERMINATES" eventInstanceID="ei158" relatedToEventInstance="ei159" />
+<ALINK lid="l15" relType="CULMINATES" eventInstanceID="ei164" relatedToEventInstance="ei165" />
+
+</TimeML>

@@ -1,0 +1,232 @@
+Text	Australia appealed for leniency after its citizen was sentenced Wednesday to 500 lashes and a year in prison by a Saudi Arabian court. Mansor Almaribe, 45, was found guilty of blasphemy after he was arrested last month in Medina while on a pilgrimage, Australian officials said. It's unclear what Almaribe, a Shia Muslim from Victoria state, said or did to get arrested. "The ambassador has urgently contacted Saudi authorities and will make strong representations, including to key figures in the Saudi government, seeking leniency," said Kate Sieper, a foreign affairs spokeswoman. Family members said they are worried about his health. "He is sick, and he has back injuries and he has diabetes," his son, Issam Almaribe, told CNN affiliate 9 News Australia. Consular officials have contacted Almaribe several times by phone since his arrest in mid-November, and were in the courtroom during the reading of the verdict. Australian officials said they were informed he was convicted of blasphemy and "making comments insulting to prophet Mohammed's relatives." His sentence was originally two years imprisonment along with the 500 lashes, but the court reduced the sentence by a year, consular officials said. It was unclear when the lashing punishment will be carried out. Blasphemy is punishable by up to a death sentence under the strict Muslim law in Saudi Arabia.
+Event	1	appealed	Occurrence	10
+Event	2	sentenced	Occurrence	54
+Event	3	found	Occurrence	160
+Event	4	arrested	Occurrence	199
+Event	5	pilgrimage	Occurrence	240
+Event	6	said	Reporting	273
+Event	7	said	Reporting	342
+Event	8	did	I_Action	350
+Event	9	arrested	Occurrence	361
+Event	10	contacted	Occurrence	400
+Event	11	said	Reporting	535
+Event	12	said	Reporting	599
+Event	13	told	Reporting	724
+Event	14	contacted	Occurrence	785
+Event	15	arrest	Occurrence	837
+Event	16	reading	Reporting	898
+Event	17	said	Reporting	943
+Event	18	informed	Reporting	958
+Event	19	convicted	I_Action	974
+Event	20	reduced	Occurrence	1154
+Event	21	said	Reporting	1205
+Relation	1	2	NoRel	true	appealed	sentenced
+Relation	1	3	NoRel	true	appealed	found
+Relation	1	4	NoRel	true	appealed	arrested
+Relation	1	5	NoRel	true	appealed	pilgrimage
+Relation	1	6	NoRel	true	appealed	said
+Relation	1	7	NoRel	true	appealed	said
+Relation	1	8	NoRel	true	appealed	did
+Relation	1	9	NoRel	true	appealed	arrested
+Relation	1	10	SuperSub	true	appealed	contacted
+Relation	1	11	NoRel	true	appealed	said
+Relation	1	12	NoRel	true	appealed	said
+Relation	1	13	NoRel	true	appealed	told
+Relation	1	14	NoRel	true	appealed	contacted
+Relation	1	15	NoRel	true	appealed	arrest
+Relation	1	16	NoRel	true	appealed	reading
+Relation	1	17	NoRel	true	appealed	said
+Relation	1	18	NoRel	true	appealed	informed
+Relation	1	19	NoRel	true	appealed	convicted
+Relation	1	20	NoRel	true	appealed	reduced
+Relation	1	21	NoRel	true	appealed	said
+Relation	2	3	SubSuper	true	sentenced	found
+Relation	2	4	NoRel	true	sentenced	arrested
+Relation	2	5	NoRel	true	sentenced	pilgrimage
+Relation	2	6	NoRel	true	sentenced	said
+Relation	2	7	NoRel	true	sentenced	said
+Relation	2	8	NoRel	true	sentenced	did
+Relation	2	9	NoRel	true	sentenced	arrested
+Relation	2	10	NoRel	true	sentenced	contacted
+Relation	2	11	NoRel	true	sentenced	said
+Relation	2	12	NoRel	true	sentenced	said
+Relation	2	13	NoRel	true	sentenced	told
+Relation	2	14	NoRel	true	sentenced	contacted
+Relation	2	15	NoRel	true	sentenced	arrest
+Relation	2	16	NoRel	true	sentenced	reading
+Relation	2	17	NoRel	true	sentenced	said
+Relation	2	18	NoRel	true	sentenced	informed
+Relation	2	19	NoRel	true	sentenced	convicted
+Relation	2	20	Coref	true	sentenced	reduced
+Relation	2	21	NoRel	true	sentenced	said
+Relation	3	4	NoRel	true	found	arrested
+Relation	3	5	NoRel	true	found	pilgrimage
+Relation	3	6	NoRel	true	found	said
+Relation	3	7	NoRel	true	found	said
+Relation	3	8	NoRel	true	found	did
+Relation	3	9	NoRel	true	found	arrested
+Relation	3	10	NoRel	true	found	contacted
+Relation	3	11	NoRel	true	found	said
+Relation	3	12	NoRel	true	found	said
+Relation	3	13	NoRel	true	found	told
+Relation	3	14	NoRel	true	found	contacted
+Relation	3	15	NoRel	true	found	arrest
+Relation	3	16	NoRel	true	found	reading
+Relation	3	17	NoRel	true	found	said
+Relation	3	18	NoRel	true	found	informed
+Relation	3	19	NoRel	true	found	convicted
+Relation	3	20	SuperSub	true	found	reduced
+Relation	3	21	NoRel	true	found	said
+Relation	4	5	SubSuper	true	arrested	pilgrimage
+Relation	4	6	NoRel	true	arrested	said
+Relation	4	7	NoRel	true	arrested	said
+Relation	4	8	NoRel	true	arrested	did
+Relation	4	9	Coref	true	arrested	arrested
+Relation	4	10	NoRel	true	arrested	contacted
+Relation	4	11	NoRel	true	arrested	said
+Relation	4	12	NoRel	true	arrested	said
+Relation	4	13	NoRel	true	arrested	told
+Relation	4	14	NoRel	true	arrested	contacted
+Relation	4	15	Coref	true	arrested	arrest
+Relation	4	16	NoRel	true	arrested	reading
+Relation	4	17	NoRel	true	arrested	said
+Relation	4	18	NoRel	true	arrested	informed
+Relation	4	19	NoRel	true	arrested	convicted
+Relation	4	20	NoRel	true	arrested	reduced
+Relation	4	21	NoRel	true	arrested	said
+Relation	5	6	NoRel	true	pilgrimage	said
+Relation	5	7	NoRel	true	pilgrimage	said
+Relation	5	8	NoRel	true	pilgrimage	did
+Relation	5	9	SuperSub	true	pilgrimage	arrested
+Relation	5	10	NoRel	true	pilgrimage	contacted
+Relation	5	11	NoRel	true	pilgrimage	said
+Relation	5	12	NoRel	true	pilgrimage	said
+Relation	5	13	NoRel	true	pilgrimage	told
+Relation	5	14	NoRel	true	pilgrimage	contacted
+Relation	5	15	SuperSub	true	pilgrimage	arrest
+Relation	5	16	NoRel	true	pilgrimage	reading
+Relation	5	17	NoRel	true	pilgrimage	said
+Relation	5	18	NoRel	true	pilgrimage	informed
+Relation	5	19	NoRel	true	pilgrimage	convicted
+Relation	5	20	NoRel	true	pilgrimage	reduced
+Relation	5	21	NoRel	true	pilgrimage	said
+Relation	6	7	NoRel	true	said	said
+Relation	6	8	NoRel	true	said	did
+Relation	6	9	NoRel	true	said	arrested
+Relation	6	10	NoRel	true	said	contacted
+Relation	6	11	NoRel	true	said	said
+Relation	6	12	NoRel	true	said	said
+Relation	6	13	NoRel	true	said	told
+Relation	6	14	NoRel	true	said	contacted
+Relation	6	15	NoRel	true	said	arrest
+Relation	6	16	NoRel	true	said	reading
+Relation	6	17	NoRel	true	said	said
+Relation	6	18	NoRel	true	said	informed
+Relation	6	19	NoRel	true	said	convicted
+Relation	6	20	NoRel	true	said	reduced
+Relation	6	21	NoRel	true	said	said
+Relation	7	8	NoRel	true	said	did
+Relation	7	9	NoRel	true	said	arrested
+Relation	7	10	NoRel	true	said	contacted
+Relation	7	11	NoRel	true	said	said
+Relation	7	12	NoRel	true	said	said
+Relation	7	13	NoRel	true	said	told
+Relation	7	14	NoRel	true	said	contacted
+Relation	7	15	NoRel	true	said	arrest
+Relation	7	16	NoRel	true	said	reading
+Relation	7	17	NoRel	true	said	said
+Relation	7	18	NoRel	true	said	informed
+Relation	7	19	NoRel	true	said	convicted
+Relation	7	20	NoRel	true	said	reduced
+Relation	7	21	NoRel	true	said	said
+Relation	8	9	NoRel	true	did	arrested
+Relation	8	10	NoRel	true	did	contacted
+Relation	8	11	NoRel	true	did	said
+Relation	8	12	NoRel	true	did	said
+Relation	8	13	NoRel	true	did	told
+Relation	8	14	NoRel	true	did	contacted
+Relation	8	15	NoRel	true	did	arrest
+Relation	8	16	NoRel	true	did	reading
+Relation	8	17	NoRel	true	did	said
+Relation	8	18	NoRel	true	did	informed
+Relation	8	19	NoRel	true	did	convicted
+Relation	8	20	NoRel	true	did	reduced
+Relation	8	21	NoRel	true	did	said
+Relation	9	10	NoRel	true	arrested	contacted
+Relation	9	11	NoRel	true	arrested	said
+Relation	9	12	NoRel	true	arrested	said
+Relation	9	13	NoRel	true	arrested	told
+Relation	9	14	NoRel	true	arrested	contacted
+Relation	9	15	Coref	true	arrested	arrest
+Relation	9	16	NoRel	true	arrested	reading
+Relation	9	17	NoRel	true	arrested	said
+Relation	9	18	NoRel	true	arrested	informed
+Relation	9	19	NoRel	true	arrested	convicted
+Relation	9	20	NoRel	true	arrested	reduced
+Relation	9	21	NoRel	true	arrested	said
+Relation	10	11	NoRel	true	contacted	said
+Relation	10	12	NoRel	true	contacted	said
+Relation	10	13	NoRel	true	contacted	told
+Relation	10	14	NoRel	true	contacted	contacted
+Relation	10	15	NoRel	true	contacted	arrest
+Relation	10	16	NoRel	true	contacted	reading
+Relation	10	17	NoRel	true	contacted	said
+Relation	10	18	NoRel	true	contacted	informed
+Relation	10	19	NoRel	true	contacted	convicted
+Relation	10	20	NoRel	true	contacted	reduced
+Relation	10	21	NoRel	true	contacted	said
+Relation	11	12	NoRel	true	said	said
+Relation	11	13	NoRel	true	said	told
+Relation	11	14	NoRel	true	said	contacted
+Relation	11	15	NoRel	true	said	arrest
+Relation	11	16	NoRel	true	said	reading
+Relation	11	17	NoRel	true	said	said
+Relation	11	18	NoRel	true	said	informed
+Relation	11	19	NoRel	true	said	convicted
+Relation	11	20	NoRel	true	said	reduced
+Relation	11	21	NoRel	true	said	said
+Relation	12	13	NoRel	true	said	told
+Relation	12	14	NoRel	true	said	contacted
+Relation	12	15	NoRel	true	said	arrest
+Relation	12	16	NoRel	true	said	reading
+Relation	12	17	NoRel	true	said	said
+Relation	12	18	NoRel	true	said	informed
+Relation	12	19	NoRel	true	said	convicted
+Relation	12	20	NoRel	true	said	reduced
+Relation	12	21	NoRel	true	said	said
+Relation	13	14	NoRel	true	told	contacted
+Relation	13	15	NoRel	true	told	arrest
+Relation	13	16	NoRel	true	told	reading
+Relation	13	17	NoRel	true	told	said
+Relation	13	18	NoRel	true	told	informed
+Relation	13	19	NoRel	true	told	convicted
+Relation	13	20	NoRel	true	told	reduced
+Relation	13	21	NoRel	true	told	said
+Relation	14	15	NoRel	true	contacted	arrest
+Relation	14	16	NoRel	true	contacted	reading
+Relation	14	17	NoRel	true	contacted	said
+Relation	14	18	NoRel	true	contacted	informed
+Relation	14	19	NoRel	true	contacted	convicted
+Relation	14	20	NoRel	true	contacted	reduced
+Relation	14	21	NoRel	true	contacted	said
+Relation	15	16	NoRel	true	arrest	reading
+Relation	15	17	NoRel	true	arrest	said
+Relation	15	18	NoRel	true	arrest	informed
+Relation	15	19	NoRel	true	arrest	convicted
+Relation	15	20	NoRel	true	arrest	reduced
+Relation	15	21	NoRel	true	arrest	said
+Relation	16	17	NoRel	true	reading	said
+Relation	16	18	NoRel	true	reading	informed
+Relation	16	19	NoRel	true	reading	convicted
+Relation	16	20	NoRel	true	reading	reduced
+Relation	16	21	NoRel	true	reading	said
+Relation	17	18	NoRel	true	said	informed
+Relation	17	19	NoRel	true	said	convicted
+Relation	17	20	NoRel	true	said	reduced
+Relation	17	21	NoRel	true	said	said
+Relation	18	19	NoRel	true	informed	convicted
+Relation	18	20	NoRel	true	informed	reduced
+Relation	18	21	NoRel	true	informed	said
+Relation	19	20	NoRel	true	convicted	reduced
+Relation	19	21	NoRel	true	convicted	said
+Relation	20	21	NoRel	true	reduced	said

@@ -1,0 +1,137 @@
+Text	Two Pakistani air force planes crashed in a residential area in northwestern Pakistan on Thursday, killing all four pilots on board and injuring five people on the ground, police said. Residents of Nowshera city, where the planes went down, reported that the aircraft collided before they crashed, but the air force is still investigating, said police official Fazil Khan. The planes took off from an air force academy in nearby Risalpur, said Mohammad Hussain, the Nowshera police chief. Local TV footage showed the twisted metal wreckage from one of the planes among a group of houses in Nowshera. The air force has suffered a series of crashes over the past year that it has said were the result of technical problems. 
+Event	1	crashed	Occurrence	31
+Event	2	killing	Occurrence	99
+Event	3	injuring	Occurrence	136
+Event	4	said	Reporting	179
+Event	5	went	Occurrence	230
+Event	6	reported	Reporting	241
+Event	7	collided	Occurrence	268
+Event	8	crashed	Occurrence	289
+Event	9	investigating	Occurrence	325
+Event	10	said	Reporting	340
+Event	11	took	Occurrence	384
+Event	12	said	Reporting	439
+Event	13	showed	Occurrence	506
+Event	14	suffered	I_Action	618
+Event	15	crashes	HalfGeneric	639
+Event	16	said	Reporting	678
+Relation	1	2	SuperSub	true	crashed	killing
+Relation	1	3	SuperSub	true	crashed	injuring
+Relation	1	4	NoRel	true	crashed	said
+Relation	1	5	Coref	true	crashed	went
+Relation	1	6	NoRel	true	crashed	reported
+Relation	1	7	NoRel	true	crashed	collided
+Relation	1	8	Coref	true	crashed	crashed
+Relation	1	9	NoRel	true	crashed	investigating
+Relation	1	10	NoRel	true	crashed	said
+Relation	1	11	NoRel	true	crashed	took
+Relation	1	12	NoRel	true	crashed	said
+Relation	1	13	NoRel	true	crashed	showed
+Relation	1	14	NoRel	true	crashed	suffered
+Relation	1	15	SubSuper	true	crashed	crashes
+Relation	1	16	NoRel	true	crashed	said
+Relation	2	3	NoRel	true	killing	injuring
+Relation	2	4	NoRel	true	killing	said
+Relation	2	5	SubSuper	true	killing	went
+Relation	2	6	NoRel	true	killing	reported
+Relation	2	7	NoRel	true	killing	collided
+Relation	2	8	SubSuper	true	killing	crashed
+Relation	2	9	NoRel	true	killing	investigating
+Relation	2	10	NoRel	true	killing	said
+Relation	2	11	NoRel	true	killing	took
+Relation	2	12	NoRel	true	killing	said
+Relation	2	13	NoRel	true	killing	showed
+Relation	2	14	NoRel	true	killing	suffered
+Relation	2	15	SubSuper	true	killing	crashes
+Relation	2	16	NoRel	true	killing	said
+Relation	3	4	NoRel	true	injuring	said
+Relation	3	5	SubSuper	true	injuring	went
+Relation	3	6	NoRel	true	injuring	reported
+Relation	3	7	NoRel	true	injuring	collided
+Relation	3	8	SubSuper	true	injuring	crashed
+Relation	3	9	NoRel	true	injuring	investigating
+Relation	3	10	NoRel	true	injuring	said
+Relation	3	11	NoRel	true	injuring	took
+Relation	3	12	NoRel	true	injuring	said
+Relation	3	13	NoRel	true	injuring	showed
+Relation	3	14	NoRel	true	injuring	suffered
+Relation	3	15	SubSuper	true	injuring	crashes
+Relation	3	16	NoRel	true	injuring	said
+Relation	4	5	NoRel	true	said	went
+Relation	4	6	NoRel	true	said	reported
+Relation	4	7	NoRel	true	said	collided
+Relation	4	8	NoRel	true	said	crashed
+Relation	4	9	NoRel	true	said	investigating
+Relation	4	10	NoRel	true	said	said
+Relation	4	11	NoRel	true	said	took
+Relation	4	12	NoRel	true	said	said
+Relation	4	13	NoRel	true	said	showed
+Relation	4	14	NoRel	true	said	suffered
+Relation	4	15	NoRel	true	said	crashes
+Relation	4	16	NoRel	true	said	said
+Relation	5	6	NoRel	true	went	reported
+Relation	5	7	NoRel	true	went	collided
+Relation	5	8	Coref	true	went	crashed
+Relation	5	9	NoRel	true	went	investigating
+Relation	5	10	NoRel	true	went	said
+Relation	5	11	NoRel	true	went	took
+Relation	5	12	NoRel	true	went	said
+Relation	5	13	NoRel	true	went	showed
+Relation	5	14	NoRel	true	went	suffered
+Relation	5	15	SubSuper	true	went	crashes
+Relation	5	16	NoRel	true	went	said
+Relation	6	7	NoRel	true	reported	collided
+Relation	6	8	NoRel	true	reported	crashed
+Relation	6	9	NoRel	true	reported	investigating
+Relation	6	10	NoRel	true	reported	said
+Relation	6	11	NoRel	true	reported	took
+Relation	6	12	NoRel	true	reported	said
+Relation	6	13	NoRel	true	reported	showed
+Relation	6	14	NoRel	true	reported	suffered
+Relation	6	15	NoRel	true	reported	crashes
+Relation	6	16	NoRel	true	reported	said
+Relation	7	8	NoRel	true	collided	crashed
+Relation	7	9	NoRel	true	collided	investigating
+Relation	7	10	NoRel	true	collided	said
+Relation	7	11	NoRel	true	collided	took
+Relation	7	12	NoRel	true	collided	said
+Relation	7	13	NoRel	true	collided	showed
+Relation	7	14	NoRel	true	collided	suffered
+Relation	7	15	NoRel	true	collided	crashes
+Relation	7	16	NoRel	true	collided	said
+Relation	8	9	NoRel	true	crashed	investigating
+Relation	8	10	NoRel	true	crashed	said
+Relation	8	11	NoRel	true	crashed	took
+Relation	8	12	NoRel	true	crashed	said
+Relation	8	13	NoRel	true	crashed	showed
+Relation	8	14	NoRel	true	crashed	suffered
+Relation	8	15	SubSuper	true	crashed	crashes
+Relation	8	16	NoRel	true	crashed	said
+Relation	9	10	NoRel	true	investigating	said
+Relation	9	11	NoRel	true	investigating	took
+Relation	9	12	NoRel	true	investigating	said
+Relation	9	13	NoRel	true	investigating	showed
+Relation	9	14	NoRel	true	investigating	suffered
+Relation	9	15	NoRel	true	investigating	crashes
+Relation	9	16	NoRel	true	investigating	said
+Relation	10	11	NoRel	true	said	took
+Relation	10	12	NoRel	true	said	said
+Relation	10	13	NoRel	true	said	showed
+Relation	10	14	NoRel	true	said	suffered
+Relation	10	15	NoRel	true	said	crashes
+Relation	10	16	NoRel	true	said	said
+Relation	11	12	NoRel	true	took	said
+Relation	11	13	NoRel	true	took	showed
+Relation	11	14	NoRel	true	took	suffered
+Relation	11	15	NoRel	true	took	crashes
+Relation	11	16	NoRel	true	took	said
+Relation	12	13	NoRel	true	said	showed
+Relation	12	14	NoRel	true	said	suffered
+Relation	12	15	NoRel	true	said	crashes
+Relation	12	16	NoRel	true	said	said
+Relation	13	14	NoRel	true	showed	suffered
+Relation	13	15	NoRel	true	showed	crashes
+Relation	13	16	NoRel	true	showed	said
+Relation	14	15	NoRel	true	suffered	crashes
+Relation	14	16	NoRel	true	suffered	said
+Relation	15	16	NoRel	true	crashes	said

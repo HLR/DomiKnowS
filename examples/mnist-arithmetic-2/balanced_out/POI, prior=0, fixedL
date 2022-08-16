@@ -1,0 +1,425 @@
+/Users/alexanderwan/miniconda3/envs/domiknows/bin/python /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/train.py
+* Owlready2 * Warning: optimized Cython parser module 'owlready2_optimized' is not available, defaulting to slower Python implementation
+Log file for dataNode is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/datanode.log
+INFO:regr.program.program:Epoch: 1
+INFO:regr.program.program:Training:
+Epoch 1 Training:   0%|          | 0/10000 [00:00<?, ?it/s]initializing optimizer
+Epoch 1 Training: 100%|██████████| 10000/10000 [01:04<00:00, 154.80it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.4016)}
+INFO:regr.program.program:Epoch: 2
+INFO:regr.program.program:Training:
+Epoch 2 Training: 100%|██████████| 10000/10000 [01:08<00:00, 146.68it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1718)}
+INFO:regr.program.program:Epoch: 3
+INFO:regr.program.program:Training:
+Epoch 3 Training: 100%|██████████| 10000/10000 [01:05<00:00, 152.53it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1440)}
+INFO:regr.program.program:Epoch: 4
+INFO:regr.program.program:Training:
+Epoch 4 Training: 100%|██████████| 10000/10000 [01:05<00:00, 152.42it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1286)}
+INFO:regr.program.program:Epoch: 5
+INFO:regr.program.program:Training:
+  0%|          | 0/1000 [00:00<?, ?it/s]train evaluation
+Log file for ilpOntSolver is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+Log file for ilpOntSolverTime is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+Academic license - for non-commercial use only - expires 2022-09-17
+Using license file /Users/alexanderwan/gurobi.lic
+INFO:gurobipy.gurobipy:Academic license - for non-commercial use only - expires 2022-09-17
+INFO:gurobipy.gurobipy:Using license file /Users/alexanderwan/gurobi.lic
+100%|██████████| 1000/1000 [00:53<00:00, 18.58it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.99      1.00      1.00       182
+           1       0.99      0.98      0.99       238
+           2       0.98      0.98      0.98       207
+           3       0.99      0.99      0.99       207
+           4       1.00      0.99      1.00       192
+           5       0.99      0.99      0.99       156
+           6       0.98      1.00      0.99       179
+           7       0.98      0.96      0.97       212
+           8       0.99      0.98      0.98       209
+           9       0.97      0.99      0.98       218
+
+    accuracy                           0.98      2000
+   macro avg       0.99      0.99      0.99      2000
+weighted avg       0.99      0.98      0.98      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       1.00      1.00      1.00        18
+           2       1.00      1.00      1.00        34
+           3       1.00      1.00      1.00        46
+           4       1.00      1.00      1.00        49
+           5       1.00      1.00      1.00        59
+           6       1.00      1.00      1.00        72
+           7       1.00      1.00      1.00        77
+           8       1.00      1.00      1.00        87
+           9       1.00      1.00      1.00       110
+          10       1.00      1.00      1.00       105
+          11       1.00      1.00      1.00        79
+          12       1.00      1.00      1.00        68
+          13       1.00      1.00      1.00        33
+          14       1.00      1.00      1.00        41
+          15       1.00      1.00      1.00        41
+          16       1.00      1.00      1.00        35
+          17       1.00      1.00      1.00        28
+          18       1.00      1.00      1.00        14
+
+    accuracy                           1.00      1000
+   macro avg       1.00      1.00      1.00      1000
+weighted avg       1.00      1.00      1.00      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+              precision    recall  f1-score   support
+
+           0       0.97      1.00      0.99       182
+           1       0.98      0.98      0.98       238
+           2       0.94      0.95      0.95       207
+           3       0.99      0.93      0.96       207
+           4       0.98      0.96      0.97       192
+           5       0.96      0.97      0.97       156
+           6       0.98      0.99      0.99       179
+           7       0.97      0.92      0.94       212
+           8       0.96      0.96      0.96       209
+           9       0.91      0.98      0.94       218
+
+    accuracy                           0.96      2000
+   macro avg       0.96      0.96      0.96      2000
+weighted avg       0.96      0.96      0.96      2000
+
+              precision    recall  f1-score   support
+
+           0       0.80      1.00      0.89         4
+           1       0.90      1.00      0.95        18
+           2       0.94      0.94      0.94        34
+           3       0.91      0.93      0.92        46
+           4       0.94      0.96      0.95        49
+           5       0.98      0.93      0.96        59
+           6       0.97      0.94      0.96        72
+           7       0.96      0.87      0.91        77
+           8       0.97      0.95      0.96        87
+           9       0.94      0.93      0.94       110
+          10       0.92      0.90      0.91       105
+          11       0.94      0.94      0.94        79
+          12       0.93      0.93      0.93        68
+          13       0.78      0.97      0.86        33
+          14       0.83      0.95      0.89        41
+          15       0.93      0.93      0.93        41
+          16       0.89      0.89      0.89        35
+          17       0.96      0.86      0.91        28
+          18       0.81      0.93      0.87        14
+
+    accuracy                           0.93      1000
+   macro avg       0.91      0.93      0.92      1000
+weighted avg       0.93      0.93      0.93      1000
+
+==========================================
+validation evaluation
+100%|██████████| 1000/1000 [00:52<00:00, 19.05it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.99      1.00      0.99       190
+           1       0.99      1.00      0.99       209
+           2       0.99      0.98      0.99       194
+           3       0.99      0.99      0.99       202
+           4       0.99      0.99      0.99       216
+           5       0.99      0.98      0.99       195
+           6       0.99      0.98      0.99       199
+           7       0.99      0.97      0.98       225
+           8       0.99      0.98      0.98       188
+           9       0.96      0.99      0.97       182
+
+    accuracy                           0.99      2000
+   macro avg       0.99      0.99      0.99      2000
+weighted avg       0.99      0.99      0.99      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        10
+           1       1.00      1.00      1.00        17
+           2       1.00      1.00      1.00        28
+           3       1.00      1.00      1.00        48
+           4       1.00      1.00      1.00        44
+           5       1.00      1.00      1.00        56
+           6       1.00      1.00      1.00        82
+           7       1.00      1.00      1.00        72
+           8       1.00      1.00      1.00        85
+           9       1.00      1.00      1.00       123
+          10       1.00      1.00      1.00        82
+          11       1.00      1.00      1.00        96
+          12       1.00      1.00      1.00        59
+          13       1.00      1.00      1.00        50
+          14       1.00      1.00      1.00        43
+          15       1.00      1.00      1.00        51
+          16       1.00      1.00      1.00        28
+          17       1.00      1.00      1.00        20
+          18       1.00      1.00      1.00         6
+
+    accuracy                           1.00      1000
+   macro avg       1.00      1.00      1.00      1000
+weighted avg       1.00      1.00      1.00      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+              precision    recall  f1-score   support
+
+           0       0.99      0.99      0.99       190
+           1       0.97      1.00      0.98       209
+           2       0.97      0.98      0.98       194
+           3       0.98      0.96      0.97       202
+           4       0.99      0.95      0.97       216
+           5       0.96      0.95      0.96       195
+           6       0.99      0.99      0.99       199
+           7       0.97      0.94      0.95       225
+           8       0.98      0.94      0.96       188
+           9       0.87      0.97      0.92       182
+
+    accuracy                           0.97      2000
+   macro avg       0.97      0.97      0.97      2000
+weighted avg       0.97      0.97      0.97      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        10
+           1       1.00      0.94      0.97        17
+           2       1.00      1.00      1.00        28
+           3       0.91      1.00      0.95        48
+           4       0.95      0.95      0.95        44
+           5       0.98      0.98      0.98        56
+           6       0.99      0.95      0.97        82
+           7       0.94      0.94      0.94        72
+           8       0.96      0.92      0.94        85
+           9       0.95      0.90      0.92       123
+          10       0.92      0.96      0.94        82
+          11       0.96      0.91      0.93        96
+          12       0.87      0.90      0.88        59
+          13       0.85      0.92      0.88        50
+          14       0.93      0.86      0.89        43
+          15       0.91      0.94      0.92        51
+          16       0.86      0.89      0.88        28
+          17       0.87      1.00      0.93        20
+          18       0.71      0.83      0.77         6
+
+    accuracy                           0.93      1000
+   macro avg       0.92      0.94      0.93      1000
+weighted avg       0.94      0.93      0.93      1000
+
+==========================================
+Epoch 5 Training: 100%|██████████| 10000/10000 [02:51<00:00, 58.29it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:None
+INFO:regr.program.program:Epoch: 6
+INFO:regr.program.program:Training:
+Epoch 6 Training: 100%|██████████| 10000/10000 [01:06<00:00, 150.84it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1286)}
+INFO:regr.program.program:Epoch: 7
+INFO:regr.program.program:Training:
+Epoch 7 Training: 100%|██████████| 10000/10000 [01:05<00:00, 152.76it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1213)}
+INFO:regr.program.program:Epoch: 8
+INFO:regr.program.program:Training:
+Epoch 8 Training: 100%|██████████| 10000/10000 [01:05<00:00, 151.64it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1350)}
+INFO:regr.program.program:Epoch: 9
+INFO:regr.program.program:Training:
+Epoch 9 Training: 100%|██████████| 10000/10000 [01:03<00:00, 156.57it/s]
+INFO:regr.program.program: - loss:
+INFO:regr.program.program:{'summations': tensor(2.1309)}
+INFO:regr.program.program:Epoch: 10
+INFO:regr.program.program:Training:
+  0%|          | 0/1000 [00:00<?, ?it/s]train evaluation
+100%|██████████| 1000/1000 [00:51<00:00, 19.25it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.99      1.00      0.99       182
+           1       0.99      0.98      0.99       238
+           2       0.96      0.98      0.97       207
+           3       0.98      1.00      0.99       207
+           4       1.00      0.96      0.98       192
+           5       0.97      0.98      0.97       156
+           6       0.98      0.97      0.97       179
+           7       0.97      0.96      0.97       212
+           8       0.98      0.98      0.98       209
+           9       0.96      0.98      0.97       218
+
+    accuracy                           0.98      2000
+   macro avg       0.98      0.98      0.98      2000
+weighted avg       0.98      0.98      0.98      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       1.00      1.00      1.00        18
+           2       1.00      1.00      1.00        34
+           3       1.00      1.00      1.00        46
+           4       1.00      1.00      1.00        49
+           5       1.00      1.00      1.00        59
+           6       1.00      1.00      1.00        72
+           7       1.00      1.00      1.00        77
+           8       1.00      1.00      1.00        87
+           9       1.00      1.00      1.00       110
+          10       1.00      1.00      1.00       105
+          11       1.00      1.00      1.00        79
+          12       1.00      1.00      1.00        68
+          13       1.00      1.00      1.00        33
+          14       1.00      1.00      1.00        41
+          15       1.00      1.00      1.00        41
+          16       1.00      1.00      1.00        35
+          17       1.00      1.00      1.00        28
+          18       1.00      1.00      1.00        14
+
+    accuracy                           1.00      1000
+   macro avg       1.00      1.00      1.00      1000
+weighted avg       1.00      1.00      1.00      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+              precision    recall  f1-score   support
+
+           0       1.00      0.99      1.00       182
+           1       1.00      0.95      0.97       238
+           2       0.93      0.97      0.95       207
+           3       0.99      0.96      0.97       207
+           4       0.99      0.90      0.95       192
+           5       0.95      0.99      0.97       156
+           6       0.98      0.98      0.98       179
+           7       0.97      0.93      0.95       212
+           8       0.94      0.97      0.96       209
+           9       0.89      0.99      0.94       218
+
+    accuracy                           0.96      2000
+   macro avg       0.96      0.96      0.96      2000
+weighted avg       0.96      0.96      0.96      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00         4
+           1       1.00      0.94      0.97        18
+           2       1.00      0.88      0.94        34
+           3       0.94      0.96      0.95        46
+           4       0.98      0.92      0.95        49
+           5       0.98      0.93      0.96        59
+           6       0.93      0.93      0.93        72
+           7       0.96      0.86      0.90        77
+           8       0.93      0.92      0.92        87
+           9       0.93      0.96      0.95       110
+          10       0.92      0.89      0.90       105
+          11       0.91      0.90      0.90        79
+          12       0.92      0.99      0.95        68
+          13       0.80      0.97      0.88        33
+          14       0.90      0.90      0.90        41
+          15       0.85      0.95      0.90        41
+          16       0.89      0.89      0.89        35
+          17       0.87      0.93      0.90        28
+          18       0.93      1.00      0.97        14
+
+    accuracy                           0.92      1000
+   macro avg       0.93      0.93      0.93      1000
+weighted avg       0.93      0.92      0.92      1000
+
+==========================================
+validation evaluation
+100%|██████████| 1000/1000 [00:51<00:00, 19.33it/s]
+============== RESULTS FOR: /ILP ==============
+              precision    recall  f1-score   support
+
+           0       0.98      1.00      0.99       190
+           1       1.00      0.99      0.99       209
+           2       0.97      0.98      0.97       194
+           3       0.99      0.99      0.99       202
+           4       0.99      0.97      0.98       216
+           5       0.99      0.99      0.99       195
+           6       1.00      0.98      0.99       199
+           7       0.98      0.96      0.97       225
+           8       0.98      0.98      0.98       188
+           9       0.95      0.98      0.96       182
+
+    accuracy                           0.98      2000
+   macro avg       0.98      0.98      0.98      2000
+weighted avg       0.98      0.98      0.98      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        10
+           1       1.00      1.00      1.00        17
+           2       1.00      1.00      1.00        28
+           3       1.00      1.00      1.00        48
+           4       1.00      1.00      1.00        44
+           5       1.00      1.00      1.00        56
+           6       1.00      1.00      1.00        82
+           7       1.00      1.00      1.00        72
+           8       1.00      1.00      1.00        85
+           9       1.00      1.00      1.00       123
+          10       1.00      1.00      1.00        82
+          11       1.00      1.00      1.00        96
+          12       1.00      1.00      1.00        59
+          13       1.00      1.00      1.00        50
+          14       1.00      1.00      1.00        43
+          15       1.00      1.00      1.00        51
+          16       1.00      1.00      1.00        28
+          17       1.00      1.00      1.00        20
+          18       1.00      1.00      1.00         6
+
+    accuracy                           1.00      1000
+   macro avg       1.00      1.00      1.00      1000
+weighted avg       1.00      1.00      1.00      1000
+
+==========================================
+============== RESULTS FOR: /local/argmax ==============
+              precision    recall  f1-score   support
+
+           0       0.99      0.99      0.99       190
+           1       1.00      0.97      0.98       209
+           2       0.94      0.97      0.95       194
+           3       0.98      0.97      0.97       202
+           4       1.00      0.89      0.94       216
+           5       0.96      0.98      0.97       195
+           6       0.98      0.98      0.98       199
+           7       0.97      0.94      0.95       225
+           8       0.97      0.95      0.96       188
+           9       0.83      0.98      0.90       182
+
+    accuracy                           0.96      2000
+   macro avg       0.96      0.96      0.96      2000
+weighted avg       0.96      0.96      0.96      2000
+
+              precision    recall  f1-score   support
+
+           0       1.00      0.90      0.95        10
+           1       1.00      0.94      0.97        17
+           2       0.96      0.89      0.93        28
+           3       0.96      0.98      0.97        48
+           4       0.91      0.91      0.91        44
+           5       0.96      0.98      0.97        56
+           6       0.99      0.95      0.97        82
+           7       0.94      0.92      0.93        72
+           8       0.96      0.88      0.92        85
+           9       0.90      0.90      0.90       123
+          10       0.95      0.94      0.94        82
+          11       0.94      0.94      0.94        96
+          12       0.86      0.93      0.89        59
+          13       0.89      0.84      0.87        50
+          14       0.81      0.88      0.84        43
+          15       0.92      0.94      0.93        51
+          16       0.87      0.93      0.90        28
+          17       0.91      1.00      0.95        20
+          18       0.60      1.00      0.75         6
+
+    accuracy                           0.92      1000
+   macro avg       0.91      0.93      0.92      1000
+weighted avg       0.93      0.92      0.92      1000
+
+==========================================

@@ -17,6 +17,9 @@ from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 from regr.utils import setProductionLogMode
 
+
+from random import sample
+
 class SudokuReader(RegrReader):
     def parse_file(self):
         base  = 3
@@ -35,27 +38,57 @@ class SudokuReader(RegrReader):
 
         # produce board using randomized baseline pattern
         board = [ [nums[pattern(r,c)] for c in cols] for r in rows ]
+        F = []
+        for i in board:
+            F.append([])
+            for j in i:
+                F[-1].append(j)
         squares = side*side
         empties = squares * 3//4
         for p in sample(range(squares),empties):
             board[p//side][p%side] = 0
         board = torch.tensor(board)
+
+        board = torch.tensor([[6, 4, 0, 1, 0, 0, 8, 5, 9],
+                 [8, 9, 5, 6, 0, 4, 2, 7, 0],
+                 [0, 0, 0, 9, 0, 5, 0, 3, 4],
+                 [0, 3, 6, 0, 4, 8, 9, 2, 0],
+                 [9, 0, 2, 3, 0, 7, 0, 6, 5],
+                 [0, 7, 4, 0, 9, 6, 0, 8, 0],
+                 [4, 6, 0, 0, 2, 3, 5, 0, 8],
+                 [0, 0, 7, 0, 0, 9, 0, 4, 0],
+                 [3, 0, 8, 4, 0, 1, 0, 0, 0],
+                 ])
+
+        F = torch.tensor([[6, 4, 3, 1, 7, 2, 8, 5, 9],
+                 [8, 9, 5, 6, 3, 4, 2, 7, 1],
+                 [7, 2, 1, 9, 8, 5, 6, 3, 4],
+                 [1, 3, 6, 5, 4, 8, 9, 2, 7],
+                 [9, 8, 2, 3, 1, 7, 4, 6, 5],
+                 [5, 7, 4, 2, 9, 6, 1, 8, 3],
+                 [4, 6, 9, 7, 2, 3, 5, 1, 8],
+                 [2, 1, 7, 8, 5, 9, 3, 4, 6],
+                 [3, 5, 8, 4, 6, 1, 7, 9, 2],
+                 ])
     
-        return [{"board": board}]
+        return [{"board": board, "F": F}]
     
     def getidval(self, item):
         return [1]
-    
     def getwhole_sudokuval(self, item):
         return item['board']
-            
+    
+    def getsudokuval(self, item):
+        return item['F']
+    
     def getsizeval(self, item):
         return 9, 9
+    
     
 trainreader = SudokuReader("randn", type="raw")
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL
+from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL, exactL
 from regr.graph import EnumConcept
 
 Graph.clear()
@@ -78,7 +111,7 @@ with Graph('global') as graph:
     
     same_row = Concept(name="same_row")
 #     same_row_mixed = Concept(name="same_row_mixed")
-    (same_row_arg1, same_row_arg2) = same_row.has_a(arg1=empty_entry, arg2=empty_entry)
+    (same_row_arg1, same_row_arg2) = same_row.has_a(row1=empty_entry, row2=empty_entry)
 #     (same_row_mixed_arg1, same_row_mixed_arg2) = same_row_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
     
     same_col = Concept(name="same_col")
@@ -88,10 +121,11 @@ with Graph('global') as graph:
 #     (same_col_mixed_arg1, same_col_mixed_arg2) = same_col_mixed.has_a(arg1=empty_entry, arg2=fixed_entry)
 
     same_table = Concept(name="same_table")
-    (same_table_arg1, same_table_arg2) = same_table.has_a(entry1=empty_entry, entry2=empty_entry)
+    (same_table_arg1, same_table_arg2) = same_table.has_a(table1=empty_entry, table2=empty_entry)
     
     empty_entry_label = empty_entry(name="empty_entry_label", ConceptClass=EnumConcept, 
                                     values=["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
+    v = [getattr(empty_entry_label, a) for a in ('', *empty_entry_label.enum)]
 
     ### Constraints
     # entry = concept(name="entry")
@@ -101,80 +135,20 @@ with Graph('global') as graph:
     
     FIXED = True
     
-    existsL_LCs = False
-    atMostL_LCs = True
-    
-    SAME_ROW = existsL_LCs
-    SAME_ROW_New = atMostL_LCs
-    
-    SAME_COLUMNE = existsL_LCs
-    SAME_COLUMNE_New = atMostL_LCs
-    
-    SAME_TABLE = existsL_LCs
-    SAME_TABLE_New = atMostL_LCs
+    # ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True, sampleEntries = True)
     
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
-    #fixedL(empty_entry_label("x", path=('x', eqL(empty_entry, "fixed", {True}))))
-    
-    for val in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:        
-        ### No same number in the same row between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_row('z', path=("x", same_row_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2))
-                ))
-        ), active = SAME_ROW, name = "LC_SAME_ROW_ExistL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                andL(
-                    same_row('z', path=("x", same_row_arg1.reversed)), 
-                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_row_arg2)
-                )
-            )
-        ), active = SAME_ROW_New, name = "LC_SAME_ROW_atMostL_for_" + f'v{val}')
-        
-        ### No same number in the same column between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_col('z', path=("x", same_col_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2))
-                ))
-        ), active = SAME_COLUMNE, name = "LC_SAME_COLUMNE_existsL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                andL(
-                    same_col('z', path=("x", same_col_arg1.reversed)), 
-                    getattr(empty_entry_label, f'v{val}')('y', path=("z", same_col_arg2)
-                )
-            )
-        ), active = SAME_COLUMNE_New, name = "LC_SAME_COLUMNE_atMostL_for_" + f'v{val}')
-        
-        ### No same number in the same table between empty entries and empty entries
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            notL(
-                existsL(
-                    andL(
-                        same_table('z', path=("x", same_table_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2))
-                ))
-        ), active = SAME_TABLE, name = "LC_SAME_TABLE_existsL_for_" + f'v{val}')
-        
-        ifL(getattr(empty_entry_label, f'v{val}')('x'), 
-            atMostL(
-                    andL(
-                        same_table('z', path=("x", same_table_arg1.reversed)), 
-                        getattr(empty_entry_label, f'v{val}')('y', path=("z", same_table_arg2)
-                    )
-            )
-        ), active = SAME_TABLE_New, name = "LC_SAME_TABLE_atMostL_for_" + f'v{val}')
-        
+    for row_num in range(9):
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
+        andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
+
+        # for j in range(1, 10):
+        #     exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
+        #     exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
+        #     exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
+   
 import torch.nn as nn
 
 class Conv2dSame(torch.nn.Module):
@@ -220,7 +194,7 @@ def getfixed(*prev, data):
     for i, j in zip(rows.detach().tolist(), cols.detach().tolist()):
         fix[i][j] = 1
         vals[i][j] = data[i][j]
-        
+                
     return fix.reshape(fix.shape[0]*fix.shape[1]), vals.reshape(vals.shape[0]*vals.shape[1])
 
 def makeSoduko(*prev, data):
@@ -231,10 +205,20 @@ def makeSoduko(*prev, data):
     
     cols = torch.arange(num_rows)
     cols = cols.unsqueeze(0).repeat(num_rows, 1).reshape(num_rows*num_cols)
+
+    tables = []
+    for i in range(data[0]*data[1]):
+        row = rows[i]
+        col = cols[i]
+        x = int((col.item() / 3)) * 3
+        x += int(row.item() / 3) 
+        tables.append(x)
+    tables = torch.tensor(tables)
+
     
     rel = torch.ones(data[0]*data[1], 1)
     
-    return rows, cols, rel
+    return rows, cols, tables, rel
 
 def getlabel(*prev, data):
     rows, cols = torch.where(data != 0)
@@ -249,7 +233,7 @@ def createSudoku(*prev, data):
 
 sudoku['index'] = FunctionalReaderSensor(keyword='size', forward=createSudoku)
     
-empty_entry['rows', 'cols', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
+empty_entry['rows', 'cols', 'tables', empty_rel] = JointFunctionalReaderSensor(sudoku['index'], keyword='size', forward=makeSoduko)
 empty_entry['fixed', 'val'] = JointFunctionalReaderSensor('rows', 'cols', empty_rel, keyword='whole_sudoku', forward=getfixed)
 
 empty_entry[empty_entry_label] = ModuleLearner('val', module=SudokuSolver())
@@ -265,8 +249,8 @@ same_col[same_col_arg1.reversed, same_col_arg2.reversed] = CompositionCandidateS
     relations=(same_col_arg1.reversed, same_col_arg2.reversed),
     forward=filter_col)
 
-def filter_row(*inputs, arg1, arg2):
-    if arg1.getAttribute('rows').item() == arg2.getAttribute('rows').item() and arg1.instanceID != arg2.instanceID:
+def filter_row(*inputs, row1, row2):
+    if row1.getAttribute('rows').item() == row2.getAttribute('rows').item() and row1.instanceID != row2.instanceID:
         return True
     return False
     
@@ -275,10 +259,10 @@ same_row[same_row_arg1.reversed, same_row_arg2.reversed] = CompositionCandidateS
     relations=(same_row_arg1.reversed, same_row_arg2.reversed),
     forward=filter_row)
 
-def filter_table(*inputs, entry1, entry2):
-    if entry1.instanceID != entry2.instanceID:
-        if int(entry1.getAttribute('rows').item() / 3) == int(entry2.getAttribute('rows').item() / 3) and \
-           int(entry1.getAttribute('cols').item() / 3) == int(entry2.getAttribute('cols').item() / 3):
+def filter_table(*inputs, table1, table2):
+    if table1.instanceID != table2.instanceID:
+        if int(table1.getAttribute('rows').item() / 3) == int(table2.getAttribute('rows').item() / 3) and \
+           int(table1.getAttribute('cols').item() / 3) == int(table2.getAttribute('cols').item() / 3):
             return True
         
     return False
@@ -298,7 +282,7 @@ from regr.program.metric import MacroAverageTracker
 from regr.program.loss import NBCrossEntropyLoss
 
 program1 = SolverPOIProgram(
-        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', "ILP"],
+        graph, poi=(sudoku, empty_entry, same_row, same_col, same_table), inferTypes=['local/argmax', 'ILP'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
 #         metric={
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
@@ -317,17 +301,18 @@ program = SampleLossProgram(
         #        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))
         #       },
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-        
         sample = True,
-        sampleSize=1, 
-        sampleGlobalLoss = False
+        sampleSize=2000, 
+        sampleGlobalLoss = False,
+        beta=1,
         )
 
-# program = SolverPOIProgram(
-#         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],
+# program1 = SolverPOIProgram(
+#         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-#         metric={
-#             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        # metric={
+        #     'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+            # )
 
 # program = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry, same_col, same_row, same_table), inferTypes=['ILP', 'local/argmax'],
@@ -346,53 +331,170 @@ program = SampleLossProgram(
 #     print("sudokuLoss - %s"%(sudokuLoss))
 
 
-# Disable Logging    
-setProductionLogMode()
+# Disable Logging  
+productionMode = False  
+if productionMode:
+    setProductionLogMode()
 
 # program1.train(trainreader, train_epoch_num=1, Optim=lambda param: torch.optim.SGD(param, lr=1), device='auto')
 
 ### test to see whether the FixedL is working, 
+def testSudokuPrediction(entries, predictionP = None):
+    
+    if predictionP != None:
+        prediction = predictionP
+    else:
+        prediction = torch.zeros((9,9))
+        for entry in entries:
+            row = entry.getAttribute('rows').item()
+            col = entry.getAttribute('cols').item()
+    
+            val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+            prediction[row][col] = val
+          
+    print("Prediction:\n %s"%(prediction))
+     
+    fixedSud = torch.zeros((9,9)) #[[None for i in range(9)] for i in range(9)]
+    for entry in entries:
+        # t = entry.getAttribute(empty_entry_label, 'ILP')
+        row = entry.getAttribute('rows').item()
+        col = entry.getAttribute('cols').item()
+        fixed = entry.getAttribute('fixed').item()
+        label = int(entry.getAttribute(empty_entry_label, 'label').item()) + 1
 
-if  existsL_LCs:
-    print("\nUsing constraints with fixedL and existL")
-elif atMostL_LCs:
-    print("\nUsing constraints with fixedL and atMostL")
-else:
-    print("\nUsing only fixedL constraintsL")
+        if fixed == 1 and label > -1:
+            fixedSud[row][col] = label
+
+            if prediction[row][col] != label:
+                print("Prediction fixed wrong at %i:%i is %i should be %i"%(row,col,prediction[row][col],label))            
+            
+
+    print("fixedSud:\n %s"%(fixedSud))
+
+    for i in range(9):
+        if len(prediction[i][:].unique()) != 9:
+            print("Prediction wrong at row %i - %s"%(i,prediction[i][:]))  
+        
+        if len(prediction[:][i].unique()) != 9:
+            print("Prediction wrong at col %i - %s"%(i,prediction[:][i]))
+        
+        r, c = divmod(i, 3)   
+        r *=3
+        c *=3
+        rIndices = torch.tensor([r, r+1, r+2])
+        cIndices = torch.tensor([c, c+1, c+2])
+
+        currentTable = torch.index_select(prediction, 0, rIndices)
+        currentTable = torch.index_select(currentTable, 1, cIndices)
+        #print("currentTable:\n %s"%(currentTable))
+
+        currentTable = torch.reshape(currentTable, (1,9))
+        if len(currentTable.unique()) != 9:
+            print("Prediction wrong at table %i - %s"%(i,currentTable))
     
-# for datanode in program1.populate(trainreader):
-#     datanode.inferILPResults(empty_entry_label, fun=None)
-#     entries = datanode.getChildDataNodes(conceptName=empty_entry)
-#     for entry in entries:
-#         t = entry.getAttribute(empty_entry_label, 'ILP')
-#         print(t)
-#         predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-#         if entry.getAttribute('fixed').item() == 1:
-#             assert entry.getAttribute('val').item() == predicted
-#     break
+for datanode in program1.populate(trainreader):
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
     
-program.train(trainreader, train_epoch_num=1, c_warmup_iters=0, 
-              Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+    print("\n ILP Predicted Table")
+    testSudokuPrediction(entries)
+    
+    _sud = list(trainreader)[0]['sudoku']
+    
+    # for entry in entries:
+    #     # t = entry.getAttribute(empty_entry_label, 'ILP')
+    #     row = entry.getAttribute('rows').item()
+    #     col = entry.getAttribute('cols').item()
+    #     val = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+      #     assert val == _sud[row][col]
+        # print(t)
+        # predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+        # if entry.getAttribute('fixed').item() == 1:
+        #     assert entry.getAttribute('val').item() == predicted
+    break
+    
+# program.train(trainreader, train_epoch_num=150, c_warmup_iters=0, 
+#               Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+
+# program1.train(trainreader, train_epoch_num=100, 
+#                     Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+
+trainingNo = 500
+for i in range(trainingNo):
+    print("Training - %i"%(i))
+    
+    program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
+                    Optim=lambda param: torch.optim.Adam(param, lr=0.01), collectLoss=None, device='auto')
+    check = False
+    if program.model.loss.value()['empty_entry_label'].item() == 0:
+        print("loss is zero")
+        check = True
+    for datanode in program.populate(trainreader):
+        count = 0
+        _sud = list(trainreader)[0]['sudoku']
+        entries = datanode.getChildDataNodes(conceptName=empty_entry)
+        row_values = []
+        col_values = []
+        tab_values = []
+        for i in range(9):
+            row_values.append([])
+            col_values.append([])
+            tab_values.append([])
+        for entry in entries:
+            row = entry.getAttribute('rows').item()
+            col = entry.getAttribute('cols').item()
+            tab = entry.getAttribute('tables').item()
+            val = entry.getAttribute(empty_entry_label, 'local/argmax').argmax(dim=-1).item() + 1
+            row_values[row].append(val)
+            col_values[col].append(val)
+            tab_values[tab].append(val)
+            if check:
+                print("checking fixed stuff", entry.getAttribute('fixed').item())
+                if entry.getAttribute('fixed').item() == 1:
+                    print(entry.getAttribute('val').item(), val)
+                    assert entry.getAttribute('val').item() == val
+                    
+            if val != _sud[row][col]:
+                count += 1
+        
+        errors = 0
+        for row_vals in row_values:
+            un = set(row_vals)
+            errors += 9 - len(un)
+        for col_vals in col_values:
+            un = set(col_vals)
+            errors += 9 - len(un)
+        for tab_vals in tab_values:
+            un = set(tab_vals)
+            errors += 9 - len(un)
+                
+        print("Count of sudoku entries different from label- %s"%(count))
+        print("Count of sudoku violations- %s"%(errors))
+
+    if count == 0:
+        print("value achieved at step ", i)
+        break
+        
 
 ### make the table
 for datanode in program.populate(trainreader):
-    print(datanode)
+    datanode.inferILPResults(empty_entry_label, fun=None)
+
+    print("Datanode %s"%(datanode))
     table = torch.zeros(9, 9)
-    
-    # entries = datanode.getChildDataNodes(conceptName=empty_entry)
-    # for entry in entries:
-    #     t = entry.getAttribute(empty_entry_label, 'local/argmax')
-    #     predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
-    #     table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
-    #     print(predicted)
-    #     if entry.getAttribute('fixed').item() == 1:
-    #         pass
-    #         # assert entry.getAttribute('val').item() == predicted
-    #     print("---")
-    # break
-    
+    ilpTable = torch.zeros(9, 9)
 
-print(table)
+    entries = datanode.getChildDataNodes(conceptName=empty_entry)
+    for entry in entries:
+        t = entry.getAttribute(empty_entry_label, 'local/argmax')
+        predicted = (t == 1).nonzero(as_tuple=True)[0].item() + 1
+        table[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = predicted
+        
+        ilpPredicted = entry.getAttribute(empty_entry_label, 'ILP').argmax(dim=-1).item() + 1
+        ilpTable[entry.getAttribute('rows').item()][entry.getAttribute('cols').item()] = ilpPredicted
 
-program.train(trainreader, train_epoch_num=5, c_warmup_iters=0, 
-              Optim=lambda param: torch.optim.SGD(param, lr=0.01), device='auto')
+    print("Argmax Predicted Table")
+    testSudokuPrediction(entries, predictionP = table)
+    
+    print("\n ILP Predicted Table")
+    testSudokuPrediction(entries, predictionP = ilpTable)
+    break

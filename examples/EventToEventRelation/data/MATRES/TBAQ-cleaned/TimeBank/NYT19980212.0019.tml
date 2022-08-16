@@ -1,0 +1,93 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>NYT19980212.0019</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="TIME" value="1998-02-12T01:58:00" temporalFunction="false" functionInDocument="CREATION_TIME">02/12/1998 01:58:00</TIMEX3></DCT>
+
+<EXTRAINFO>
+NYT19980212.0019 NEWS STORY 02/12/1998 01:58:00
+A4195 Cx1f taf-z u a Cx13 Cx11 BC-NY-LAUNDRY-MURDER-NYT 02-12 0207
+BC-NY-LAUNDRY-MURDER-NYT
+WOMAN KILLED AT BROOKLYN LAUNDROMAT
+(lh) QL UR c.1998 N.Y. Times News Service LR QC QL
+</EXTRAINFO>
+
+<TEXT>
+NEW YORK _ A Brooklyn woman who was <EVENT eid="e1" class="OCCURRENCE">watching</EVENT> her clothes dry in a laundromat was <EVENT eid="e2" class="OCCURRENCE">killed</EVENT> <TIMEX3 tid="t44" type="TIME" value="1998-02-12TEV" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Thursday evening</TIMEX3> when two would-be robbers <EVENT eid="e4" class="OCCURRENCE">emptied</EVENT> their pistols into the store, the police <EVENT eid="e6" class="REPORTING">said</EVENT>. The men <EVENT eid="e7" class="OCCURRENCE">appeared</EVENT> in the store at 469 Vermont St. in Brownsville <TIMEX3 tid="t46" type="TIME" value="1998-02-12T19:15" mod="APPROX" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t44">around 7:15 p.m.</TIMEX3>, after the victim, Linda Sanders, 35, had <EVENT eid="e9" class="ASPECTUAL">finished</EVENT> her <EVENT eid="e49" class="OCCURRENCE">cleaning</EVENT> and was <EVENT eid="e10" class="OCCURRENCE">waiting</EVENT> for her clothes to <EVENT eid="e11" class="OCCURRENCE">dry</EVENT>, detectives <EVENT eid="e12" class="REPORTING">said</EVENT>. ``It <EVENT eid="e13" class="PERCEPTION">looks</EVENT> as though they <EVENT eid="e14" class="OCCURRENCE">panicked</EVENT>,'' a detective, <EVENT eid="e15" class="OCCURRENCE">speaking</EVENT> on condition of anonymity, <EVENT eid="e17" class="REPORTING">said</EVENT> of the robbers. ``They <EVENT eid="e18" class="I_ACTION">intended</EVENT> to <EVENT eid="e19" class="OCCURRENCE">rob</EVENT> the place. There were four or five people inside, and they just <EVENT eid="e20" class="ASPECTUAL">started</EVENT> <EVENT eid="e50" class="OCCURRENCE">firing</EVENT>.'' Ms. Sanders was <EVENT eid="e21" class="OCCURRENCE">hit</EVENT> several times and was <EVENT eid="e22" class="I_ACTION">pronounced</EVENT> <EVENT eid="e51" class="STATE">dead</EVENT> at the scene. The other customers <EVENT eid="e25" class="OCCURRENCE">fled</EVENT>, and the police <EVENT eid="e26" class="REPORTING">said</EVENT> it did not <EVENT eid="e27" class="I_ACTION">appear</EVENT> that anyone else was <EVENT eid="e29" class="OCCURRENCE">injured</EVENT>. The men <EVENT eid="e30" class="OCCURRENCE">took</EVENT> no money from their victim or from the establishment, <EVENT eid="e34" class="REPORTING">said</EVENT> Detective Joseph Pentangelo, a Police Department spokesman. Victor Miranda, who <EVENT eid="e35" class="OCCURRENCE">lives</EVENT> in Ms. Sanders' apartment building at 405 Williams Ave., <EVENT eid="e36" class="REPORTING">said</EVENT> the laundry machines in the building were <EVENT eid="e39" class="OCCURRENCE">removed</EVENT> <TIMEX3 tid="t47" type="DATE" value="199X" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">a few years ago</TIMEX3> to <EVENT eid="e40" class="I_ACTION">make</EVENT> room for management offices.
+</TEXT>
+
+<LASTEXTRAINFO>
+NYT-02-12-98 0158EST
+</LASTEXTRAINFO>
+
+<MAKEINSTANCE eventID="e1" eiid="ei210" tense="PAST" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei211" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e4" eiid="ei212" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei213" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e7" eiid="ei214" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei215" tense="PAST" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei216" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei217" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e11" eiid="ei218" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei219" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei220" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei221" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei222" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e17" eiid="ei223" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei224" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e19" eiid="ei225" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei226" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e50" eiid="ei227" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e21" eiid="ei228" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e22" eiid="ei229" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e51" eiid="ei230" tense="NONE" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e25" eiid="ei231" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e26" eiid="ei232" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e27" eiid="ei233" tense="PAST" aspect="NONE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei234" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e30" eiid="ei235" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei236" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e35" eiid="ei237" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e36" eiid="ei238" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e39" eiid="ei239" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e40" eiid="ei240" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l37" relType="BEFORE" eventInstanceID="ei236" relatedToTime="t0" />
+<TLINK lid="l36" relType="BEFORE" eventInstanceID="ei224" relatedToTime="t46" />
+<TLINK lid="l35" relType="ENDED_BY" eventInstanceID="ei216" relatedToEventInstance="ei215" />
+<TLINK lid="l1" relType="DURING" eventInstanceID="ei237" relatedToTime="t0" />
+<TLINK lid="l2" relType="IS_INCLUDED" eventInstanceID="ei239" relatedToTime="t47" />
+<TLINK lid="l3" relType="BEFORE" eventInstanceID="ei239" relatedToEventInstance="ei238" />
+<TLINK lid="l4" relType="ENDED_BY" eventInstanceID="ei210" relatedToEventInstance="ei211" />
+<TLINK lid="l5" relType="IS_INCLUDED" eventInstanceID="ei211" relatedToTime="t44" />
+<TLINK lid="l6" relType="IS_INCLUDED" eventInstanceID="ei210" relatedToTime="t44" />
+<TLINK lid="l7" relType="SIMULTANEOUS" eventInstanceID="ei211" relatedToEventInstance="ei212"  />
+<TLINK lid="l8" relType="BEFORE" eventInstanceID="ei213" relatedToTime="t0" />
+<TLINK lid="l9" relType="IS_INCLUDED" eventInstanceID="ei214" relatedToTime="t46" />
+<TLINK lid="l10" relType="AFTER" eventInstanceID="ei214" relatedToEventInstance="ei215"  />
+<TLINK lid="l11" relType="AFTER" eventInstanceID="ei217" relatedToEventInstance="ei215" />
+<TLINK lid="l12" relType="BEFORE" eventInstanceID="ei219" relatedToTime="t0" />
+<TLINK lid="l13" relType="SIMULTANEOUS" eventInstanceID="ei222" relatedToEventInstance="ei223" />
+<TLINK lid="l14" relType="IDENTITY" eventInstanceID="ei227" relatedToEventInstance="ei212" />
+<TLINK lid="l15" relType="IS_INCLUDED" eventInstanceID="ei228" relatedToEventInstance="ei227" />
+<TLINK lid="l16" relType="AFTER" eventInstanceID="ei229" relatedToEventInstance="ei228" />
+<TLINK lid="l17" relType="AFTER" eventInstanceID="ei231" relatedToEventInstance="ei226" />
+<TLINK lid="l18" relType="BEFORE" eventInstanceID="ei232" relatedToTime="t0" />
+<SLINK lid="l34" relType="EVIDENTIAL" eventInstanceID="ei219" subordinatedEventInstance="ei226" />
+<SLINK lid="l33" relType="EVIDENTIAL" eventInstanceID="ei219" subordinatedEventInstance="ei224" />
+<SLINK lid="l19" relType="MODAL" eventInstanceID="ei239" subordinatedEventInstance="ei240" />
+<SLINK lid="l20" relType="EVIDENTIAL" eventInstanceID="ei238" subordinatedEventInstance="ei239" />
+<SLINK lid="l21" relType="EVIDENTIAL" eventInstanceID="ei213" subordinatedEventInstance="ei211" />
+<SLINK lid="l22" relType="MODAL" eventInstanceID="ei217" subordinatedEventInstance="ei218" />
+<SLINK lid="l23" relType="EVIDENTIAL" eventInstanceID="ei219" subordinatedEventInstance="ei214" />
+<SLINK lid="l24" relType="MODAL" eventInstanceID="ei220" subordinatedEventInstance="ei221" />
+<SLINK lid="l25" relType="EVIDENTIAL" eventInstanceID="ei223" subordinatedEventInstance="ei220" />
+<SLINK lid="l26" relType="MODAL" eventInstanceID="ei224" subordinatedEventInstance="ei225" />
+<SLINK lid="l27" relType="FACTIVE" eventInstanceID="ei229" subordinatedEventInstance="ei230" />
+<SLINK lid="l28" relType="EVIDENTIAL" eventInstanceID="ei232" subordinatedEventInstance="ei233" />
+<SLINK lid="l29" relType="MODAL" eventInstanceID="ei233" subordinatedEventInstance="ei234" />
+<SLINK lid="l30" relType="EVIDENTIAL" eventInstanceID="ei236" subordinatedEventInstance="ei235" />
+<ALINK lid="l31" relType="CULMINATES" eventInstanceID="ei215" relatedToEventInstance="ei216" />
+<ALINK lid="l32" relType="INITIATES" eventInstanceID="ei226" relatedToEventInstance="ei227" />
+
+</TimeML>

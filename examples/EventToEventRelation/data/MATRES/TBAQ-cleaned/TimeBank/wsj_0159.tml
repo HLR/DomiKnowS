@@ -1,0 +1,69 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0159</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-11-02" temporalFunction="false" functionInDocument="CREATION_TIME"> 11/02/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891102-0032 = 891102 891102-0032.
+Business Brief -- Dunkin' Donuts Inc.: @ DD Acquisition Extended @ Its $45-a-Share Takeover Bid  11/02/89 WALL STREET JOURNAL (J) UNI.A DUNK T.CAO TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) RESTAURANTS, SUPERMARKETS AND DRUGSTORES (RFD)
+</EXTRAINFO>
+
+<TEXT>
+DD Acquisition Corp., a partnership of Unicorp Canada Corp.'s Kingsbridge Capital Group and Cara Operations Ltd., <EVENT eid="e2" class="OCCURRENCE">extended</EVENT> to <TIMEX3 tid="t41" type="DATE" value="1989-11-20" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 20</TIMEX3> its $45-a-share <EVENT eid="e3000" class="OCCURRENCE">offer</EVENT> for all Dunkin' Donuts Inc. shares outstanding.
+
+The offer, which was <EVENT eid="e49" class="I_STATE">due</EVENT> to <EVENT eid="e6" class="OCCURRENCE">expire</EVENT> <TIMEX3 tid="t44" type="DATE" value="1989-11-01" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">yesterday</TIMEX3>, is <EVENT eid="e45" class="I_STATE">conditional</EVENT> on 50.1% of Dunkin' common shares, on a fully diluted basis, being <EVENT eid="e7" class="OCCURRENCE">tendered</EVENT> and on the <EVENT eid="e8" class="OCCURRENCE">withdrawal</EVENT> of the company's poison pill rights plan.
+
+Acquisition has <EVENT eid="e11" class="OCCURRENCE">launched</EVENT> a suit in a Delaware court <EVENT eid="e13" class="I_ACTION">seeking</EVENT> the <EVENT eid="e14" class="OCCURRENCE">withdrawal</EVENT> of Dunkin's poison pill rights and employee stock ownership plans, which it <EVENT eid="e50" class="REPORTING">claims</EVENT> were <EVENT eid="e208" class="OCCURRENCE">put</EVENT> in place to <EVENT eid="e18" class="OCCURRENCE">deter</EVENT> bidders. Acquisition <EVENT eid="e20" class="REPORTING">said</EVENT> 2.2 million shares, or about 38.5% of the shares outstanding, have been <EVENT eid="e21" class="OCCURRENCE">tendered</EVENT> under its offer. The partners <EVENT eid="e23" class="REPORTING">said</EVENT> they <TIMEX3 tid="t51" type="DATE" value="PRESENT_REF" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">already</TIMEX3> <EVENT eid="e24" class="STATE">hold</EVENT> 15% of all shares outstanding.
+
+Dunkin' has <EVENT eid="e25" class="I_ACTION">set</EVENT> <TIMEX3 tid="t52" type="DATE" value="1989-11-10" temporalFunction="true" functionInDocument="NONE" anchorTimeID="t0">Nov. 10</TIMEX3> as the deadline for the receipt of any competing bids. DD Acquisition <EVENT eid="e28" class="REPORTING">said</EVENT> the <EVENT eid="e29" class="OCCURRENCE">extension</EVENT> is to <EVENT eid="e206" class="I_ACTION">allow</EVENT> this process to be <EVENT eid="e34" class="ASPECTUAL">completed</EVENT>. Dunkin' is based in Randolph, Mass. Cara, a food services chain operator and Unicorp, a holding company, are based in Toronto.
+</TEXT>
+
+<MAKEINSTANCE eventID="e2" eiid="ei217" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e49" eiid="ei218" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei219" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e45" eiid="ei220" tense="PRESENT" aspect="NONE" polarity="POS" pos="ADJECTIVE" />
+<MAKEINSTANCE eventID="e7" eiid="ei221" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e8" eiid="ei222" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e11" eiid="ei223" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei225" tense="PRESPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e14" eiid="ei226" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e50" eiid="ei227" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei229" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei230" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e21" eiid="ei231" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e23" eiid="ei232" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e24" eiid="ei233" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e25" eiid="ei234" tense="PRESENT" aspect="PERFECTIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e28" eiid="ei236" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e29" eiid="ei237" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e206" eiid="ei238" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e34" eiid="ei239" tense="PASTPART" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e208" eiid="ei241" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<TLINK lid="l34" relType="IS_INCLUDED" eventInstanceID="ei227" relatedToTime="t0" />
+<TLINK lid="l33" relType="BEFORE" eventInstanceID="ei241" relatedToEventInstance="ei229" />
+<TLINK lid="l31" relType="AFTER" eventInstanceID="ei221" relatedToEventInstance="ei220" />
+<TLINK lid="l29" relType="IS_INCLUDED" eventInstanceID="ei218" relatedToTime="t44" />
+<TLINK lid="l1" relType="AFTER" timeID="t0" relatedToEventInstance="ei217" />
+<TLINK lid="l2" relType="ENDED_BY" eventInstanceID="ei217" relatedToTime="t41"  />
+<TLINK lid="l3" relType="SIMULTANEOUS" eventInstanceID="ei219" relatedToTime="t44" />
+<TLINK lid="l4" relType="BEFORE" timeID="t44" relatedToTime="t0" />
+<TLINK lid="l5" relType="AFTER" timeID="t0" relatedToEventInstance="ei223" />
+<TLINK lid="l7" relType="BEFORE" eventInstanceID="ei230" relatedToTime="t0" />
+<TLINK lid="l8" relType="SIMULTANEOUS" eventInstanceID="ei230" relatedToEventInstance="ei232" />
+<TLINK lid="l9" relType="SIMULTANEOUS" timeID="t51" relatedToEventInstance="ei233" />
+<TLINK lid="l10" relType="BEFORE" timeID="t51" relatedToTime="t0" />
+<TLINK lid="l11" relType="BEFORE" eventInstanceID="ei234" relatedToTime="t0" />
+<TLINK lid="l13" relType="BEFORE" eventInstanceID="ei236" relatedToTime="t0" />
+<SLINK lid="l27" relType="MODAL" eventInstanceID="ei227" subordinatedEventInstance="ei241" />
+<SLINK lid="l14" relType="MODAL" eventInstanceID="ei238" subordinatedEventInstance="ei239" />
+<SLINK lid="l15" relType="MODAL" eventInstanceID="ei218" subordinatedEventInstance="ei219" />
+<SLINK lid="l17" relType="MODAL" eventInstanceID="ei225" subordinatedEventInstance="ei226" />
+<SLINK lid="l18" relType="EVIDENTIAL" eventInstanceID="ei230" subordinatedEventInstance="ei231" />
+<SLINK lid="l19" relType="EVIDENTIAL" eventInstanceID="ei232" subordinatedEventInstance="ei233" />
+<SLINK lid="l20" relType="EVIDENTIAL" eventInstanceID="ei236" subordinatedEventInstance="ei237" />
+<SLINK lid="l21" relType="MODAL" eventInstanceID="ei237" subordinatedEventInstance="ei238" />
+<SLINK lid="l24" relType="MODAL" eventInstanceID="ei241" subordinatedEventInstance="ei229" />
+
+</TimeML>

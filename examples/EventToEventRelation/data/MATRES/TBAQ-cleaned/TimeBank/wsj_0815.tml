@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<TimeML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://timeml.org/timeMLdocs/TimeML_1.2.1.xsd">
+
+<DOCID>wsj_0815</DOCID>
+
+<DCT><TIMEX3 tid="t0" type="DATE" value="1989-10-27" temporalFunction="false" functionInDocument="CREATION_TIME">10/27/89</TIMEX3></DCT>
+
+<EXTRAINFO>
+WSJ891027-0079 = 891027 891027-0079.
+Di Giorgio Corp.
+Seeks @ To Sell Certain Units 10/27/89 WALL STREET JOURNAL (J) DIG TENDER OFFERS, MERGERS, ACQUISITIONS (TNM) SAN FRANCISCO
+</EXTRAINFO>
+
+<TEXT>
+Di Giorgio Corp. <EVENT eid="e1" class="REPORTING">said</EVENT> it's <EVENT eid="e2" class="ASPECTUAL">continuing</EVENT> <EVENT eid="e3" class="OCCURRENCE">talks</EVENT> with potential buyers of certain units, but has <EVENT eid="e4" class="OCCURRENCE">reached</EVENT> no agreement on any <EVENT eid="e6" class="OCCURRENCE">deals</EVENT>.
+
+Di Giorgio, a food wholesaler and building products maker, is <EVENT eid="e8" class="I_STATE">seeking</EVENT> alternatives to an unsolicited $32-a-share tender <EVENT eid="e9" class="OCCURRENCE">offer</EVENT> of DIG Acquisition Corp., a unit of Rose Partners Limited Partnership. DIG is the vehicle being <EVENT eid="e10" class="OCCURRENCE">used</EVENT> to <EVENT eid="e12" class="I_ACTION">pursue</EVENT> to <EVENT eid="e13" class="OCCURRENCE">acquisition</EVENT>.
+
+Robert Mellor, Di Giorgio's executive vice president, <EVENT eid="e15" class="REPORTING">said</EVENT> the company <EVENT eid="e16" class="I_STATE">stands</EVENT> to <EVENT eid="e18" class="OCCURRENCE">reap</EVENT> more money through the <EVENT eid="e20" class="OCCURRENCE">sale</EVENT> of individual units to others than by <EVENT eid="e22" class="I_ACTION">accepting</EVENT> DIG's offer.
+</TEXT>
+
+<MAKEINSTANCE eventID="e1" eiid="ei132" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e2" eiid="ei133" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e3" eiid="ei134" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e4" eiid="ei135" tense="PRESENT" aspect="PERFECTIVE" polarity="NEG" pos="VERB" />
+<MAKEINSTANCE eventID="e6" eiid="ei137" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e8" eiid="ei138" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e9" eiid="ei141" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e10" eiid="ei142" tense="PRESENT" aspect="PROGRESSIVE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e12" eiid="ei143" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e13" eiid="ei144" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e15" eiid="ei145" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e16" eiid="ei146" tense="PRESENT" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e18" eiid="ei147" tense="INFINITIVE" aspect="NONE" polarity="POS" pos="VERB" />
+<MAKEINSTANCE eventID="e20" eiid="ei148" tense="NONE" aspect="NONE" polarity="POS" pos="NOUN" />
+<MAKEINSTANCE eventID="e22" eiid="ei149" tense="NONE" aspect="NONE" polarity="NEG" pos="NOUN" />
+<TLINK lid="l21" relType="BEFORE" eventInstanceID="ei145" relatedToTime="t0" />
+<TLINK lid="l1" relType="BEFORE" eventInstanceID="ei132" relatedToTime="t0" />
+<TLINK lid="l2" relType="AFTER" eventInstanceID="ei135" relatedToEventInstance="ei134" />
+<TLINK lid="l4" relType="INCLUDES" eventInstanceID="ei138" relatedToTime="t0" />
+<TLINK lid="l5" relType="SIMULTANEOUS" eventInstanceID="ei138" relatedToEventInstance="ei133" />
+<TLINK lid="l6" relType="AFTER" eventInstanceID="ei138" relatedToEventInstance="ei141" />
+<TLINK lid="l8" relType="INCLUDES" eventInstanceID="ei142" relatedToTime="t0" />
+<TLINK lid="l9" relType="AFTER" eventInstanceID="ei147" relatedToEventInstance="ei148" />
+<TLINK lid="l10" relType="AFTER" eventInstanceID="ei147" relatedToEventInstance="ei149" />
+<SLINK lid="l11" relType="EVIDENTIAL" eventInstanceID="ei132" subordinatedEventInstance="ei133" />
+<SLINK lid="l12" relType="EVIDENTIAL" eventInstanceID="ei132" subordinatedEventInstance="ei135" />
+<SLINK lid="l15" relType="MODAL" eventInstanceID="ei142" subordinatedEventInstance="ei143" />
+<SLINK lid="l16" relType="MODAL" eventInstanceID="ei143" subordinatedEventInstance="ei144" />
+<SLINK lid="l17" relType="EVIDENTIAL" eventInstanceID="ei145" subordinatedEventInstance="ei146" />
+<SLINK lid="l18" relType="MODAL" eventInstanceID="ei146" subordinatedEventInstance="ei147" />
+<ALINK lid="l20" relType="CONTINUES" eventInstanceID="ei133" relatedToEventInstance="ei134" />
+
+</TimeML>

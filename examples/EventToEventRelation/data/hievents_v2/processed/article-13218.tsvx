@@ -1,0 +1,106 @@
+Text	Support group One in Four says that new allegations surrounding the role of Cardinal Sean Brady in the Brendan Smyth affair require an explanation from the Cardinal. A BBC documentary last night claimed that information was given to an investigating team of clerics - including Cardinal Brady - in 1975 about other children who were being abused at the time but was not passed on. In a statement released before the programme aired last night a spokesman for the Cardinal said the then-Father Brady was a notetaker for the inquiry. He added that it was not his responsibility to inform the civil authorities. Darragh McIntyre was the journalist behind the documentary last night. He told Breakfast here on Newstalk he made contact with the other children who were named in the internal inquiry as victims of Brendan Smyth.
+Event	1	says	Reporting	26
+Event	2	affair	Occurrence	117
+Event	3	claimed	Reporting	195
+Event	4	given	Occurrence	224
+Event	5	abused	HalfGeneric	339
+Event	6	released	Occurrence	396
+Event	7	aired	Occurrence	426
+Event	8	said	Reporting	472
+Event	9	inquiry	Occurrence	523
+Event	10	added	Reporting	535
+Event	11	told	Reporting	683
+Event	12	made	I_Action	718
+Event	13	contact	Occurrence	723
+Event	14	inquiry	Occurrence	786
+Relation	1	2	NoRel	true	says	affair
+Relation	1	3	NoRel	true	says	claimed
+Relation	1	4	NoRel	true	says	given
+Relation	1	5	NoRel	true	says	abused
+Relation	1	6	NoRel	true	says	released
+Relation	1	7	NoRel	true	says	aired
+Relation	1	8	NoRel	true	says	said
+Relation	1	9	NoRel	true	says	inquiry
+Relation	1	10	NoRel	true	says	added
+Relation	1	11	NoRel	true	says	told
+Relation	1	12	NoRel	true	says	made
+Relation	1	13	NoRel	true	says	contact
+Relation	1	14	NoRel	true	says	inquiry
+Relation	2	3	NoRel	true	affair	claimed
+Relation	2	4	NoRel	true	affair	given
+Relation	2	5	NoRel	true	affair	abused
+Relation	2	6	NoRel	true	affair	released
+Relation	2	7	NoRel	true	affair	aired
+Relation	2	8	NoRel	true	affair	said
+Relation	2	9	NoRel	true	affair	inquiry
+Relation	2	10	NoRel	true	affair	added
+Relation	2	11	NoRel	true	affair	told
+Relation	2	12	NoRel	true	affair	made
+Relation	2	13	NoRel	true	affair	contact
+Relation	2	14	NoRel	true	affair	inquiry
+Relation	3	4	NoRel	true	claimed	given
+Relation	3	5	NoRel	true	claimed	abused
+Relation	3	6	NoRel	true	claimed	released
+Relation	3	7	NoRel	true	claimed	aired
+Relation	3	8	NoRel	true	claimed	said
+Relation	3	9	NoRel	true	claimed	inquiry
+Relation	3	10	NoRel	true	claimed	added
+Relation	3	11	NoRel	true	claimed	told
+Relation	3	12	NoRel	true	claimed	made
+Relation	3	13	NoRel	true	claimed	contact
+Relation	3	14	NoRel	true	claimed	inquiry
+Relation	4	5	NoRel	true	given	abused
+Relation	4	6	NoRel	true	given	released
+Relation	4	7	NoRel	true	given	aired
+Relation	4	8	NoRel	true	given	said
+Relation	4	9	NoRel	true	given	inquiry
+Relation	4	10	NoRel	true	given	added
+Relation	4	11	NoRel	true	given	told
+Relation	4	12	NoRel	true	given	made
+Relation	4	13	NoRel	true	given	contact
+Relation	4	14	NoRel	true	given	inquiry
+Relation	5	6	NoRel	true	abused	released
+Relation	5	7	NoRel	true	abused	aired
+Relation	5	8	NoRel	true	abused	said
+Relation	5	9	NoRel	true	abused	inquiry
+Relation	5	10	NoRel	true	abused	added
+Relation	5	11	NoRel	true	abused	told
+Relation	5	12	NoRel	true	abused	made
+Relation	5	13	NoRel	true	abused	contact
+Relation	5	14	NoRel	true	abused	inquiry
+Relation	6	7	NoRel	true	released	aired
+Relation	6	8	NoRel	true	released	said
+Relation	6	9	NoRel	true	released	inquiry
+Relation	6	10	NoRel	true	released	added
+Relation	6	11	NoRel	true	released	told
+Relation	6	12	NoRel	true	released	made
+Relation	6	13	NoRel	true	released	contact
+Relation	6	14	NoRel	true	released	inquiry
+Relation	7	8	NoRel	true	aired	said
+Relation	7	9	NoRel	true	aired	inquiry
+Relation	7	10	NoRel	true	aired	added
+Relation	7	11	NoRel	true	aired	told
+Relation	7	12	NoRel	true	aired	made
+Relation	7	13	NoRel	true	aired	contact
+Relation	7	14	NoRel	true	aired	inquiry
+Relation	8	9	NoRel	true	said	inquiry
+Relation	8	10	NoRel	true	said	added
+Relation	8	11	NoRel	true	said	told
+Relation	8	12	NoRel	true	said	made
+Relation	8	13	NoRel	true	said	contact
+Relation	8	14	NoRel	true	said	inquiry
+Relation	9	10	NoRel	true	inquiry	added
+Relation	9	11	NoRel	true	inquiry	told
+Relation	9	12	NoRel	true	inquiry	made
+Relation	9	13	NoRel	true	inquiry	contact
+Relation	9	14	Coref	true	inquiry	inquiry
+Relation	10	11	NoRel	true	added	told
+Relation	10	12	NoRel	true	added	made
+Relation	10	13	NoRel	true	added	contact
+Relation	10	14	NoRel	true	added	inquiry
+Relation	11	12	NoRel	true	told	made
+Relation	11	13	NoRel	true	told	contact
+Relation	11	14	NoRel	true	told	inquiry
+Relation	12	13	NoRel	true	made	contact
+Relation	12	14	NoRel	true	made	inquiry
+Relation	13	14	NoRel	true	contact	inquiry

@@ -65,7 +65,9 @@ _DataNodeBulder__Logger.setLevel(logLevel)
 _DataNodeBulder__Logger.addHandler(ch)
 # Don't propagate
 _DataNodeBulder__Logger.propagate = False
-        
+
+_DataNodeBulder__Logger.info('--- Starting new run ---')
+
 # Class representing single data instance with relation links to other data nodes
 class DataNode:
     def __init__(self, instanceID = None, instanceValue = None, ontologyNode = None, relationLinks = {}, attributes = {}):
@@ -84,6 +86,8 @@ class DataNode:
             self.attributes = attributes                 # Dictionary with node's attributes
         else:
             self.attributes = {}
+            
+        self.current_device = 'auto'
                      
     class DataNodeError(Exception):
         pass
@@ -787,6 +791,8 @@ class DataNode:
     #     path can contain eqL statement selecting DataNodes from the DataNodes collecting on the path
     def getEdgeDataNode(self, path):
         # Path is empty
+        if isinstance(path, eqL):
+            path = [path]
         if len(path) == 0:
             return [self]
 
@@ -806,24 +812,28 @@ class DataNode:
         else:
             path0 = path[0]
 
+        relDns = None         
         if self.isRelation(path0):
             relDns = self.getDnsForRelation(path0)
-        else:
+        else: # if not relation then has to be attribute in eql
             attributeValue = self.getAttribute(path[0].e[1]).item()
-            if attributeValue == 1:
-                attributeValue = True
-            else:
-                attributeValue = False
-            if attributeValue in  path[0].e[2]:
+            requiredValue = path[0].e[2]
+             
+            if attributeValue in requiredValue:
                 return [self]
+            elif (True in  requiredValue ) and attributeValue == 1:
+                return [self]
+            elif (False in  requiredValue ) and attributeValue == 0:
+                attributeValue = False
             else:
                 return [None]
-                    
+          
+        # Check if it is a valid relation link  with not empty set of connected datanodes      
         if relDns is None or len(relDns) == 0 or relDns[0] is None:
             return [None]
             relDns = []
             
-        # Filter DataNode through eqL
+        # if eqL then filter DataNode  
         if isinstance(path[0], eqL):
             _cDns = []
             for cDn in relDns:
@@ -1062,23 +1072,7 @@ class DataNode:
                     continue
                 
                 v = dn.getAttribute(c[0])
-                
-                if v is None:
-                    continue
-                elif not torch.is_tensor(v):
-                    continue
-                
-                vClone = torch.clone(v).double()
-                tExp = torch.exp(vClone)
-                for i, e in enumerate(tExp):
-                    if e == float("inf"):
-                        tExp[i] = 1.0
-                        
-                tExpSum = torch.sum(tExp).item()
-            
-                vSoftmax = [(tExp[i]/tExpSum).item() for i in range(len(v))]
-                    
-                vSoftmaxT = torch.as_tensor(vSoftmax) 
+                vSoftmaxT = torch.nn.functional.softmax(v, dim=-1)
                 
                 # Replace nan with 1/len
                 #for i, s in enumerate(vSoftmaxT):
@@ -1123,32 +1117,26 @@ class DataNode:
         self.inferLocal()
         myilpOntSolver.calculateILPSelection(self, *conceptsRelations, fun=fun, epsilon = epsilon, minimizeObjective = minimizeObjective, ignorePinLCs = ignorePinLCs)    
         
-    def verifySelection(self, *_conceptsRelations):
-        
-        # --- Update !
-        
-        if not _conceptsRelations:
-            _conceptsRelations = ()
-            
-        myilpOntSolver, infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains, candidates_currentConceptOrRelation = \
-            self.__prepareILPData(*_conceptsRelations, dnFun = self.__getLabel)
-            
-        if not myilpOntSolver:
-            return False
-        
-        verifyResult = myilpOntSolver.verifySelection(infer_candidatesID, graphResultsForPhraseToken, graphResultsForPhraseRelation, graphResultsForTripleRelations, hardConstrains=hardConstrains)
+    # Calculate the percentage of results satisfying each logical constraint 
+    def verifyResultsLC(self, key = "/local/argmax"):
+                
+        myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
+
+        self.inferLocal()
+        self.infer()
+        verifyResult = myilpOntSolver.verifyResultsLC(self, key = key)
         
         return verifyResult
     
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
     #tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
-    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0):
+    def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
         
         myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss)
         
         return lcResult
 
@@ -1540,6 +1528,31 @@ class DataNodeBuilder(dict):
             if conceptInfo['relationAttrs']["dst"] == conceptInfo['concept']:
                 conceptInfo['relationAttrData'] = True
 
+    def __isRootDn(self, testedDn, checkedDns, visitedDns):
+        if visitedDns == None:
+            visitedDns = set()
+            
+        visitedDns.add(testedDn)
+        
+        if not testedDn.impactLinks and testedDn in checkedDns:
+            return False
+        
+        isRoot = True    
+        for _, iDnList in testedDn.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
+            if iDnList:
+                for iDn in iDnList:
+                    if iDn in visitedDns:
+                        continue
+                    
+                    if not self.__isRootDn(iDn, checkedDns, visitedDns):
+                        isRoot = False
+                        break
+                    
+            if not isRoot:
+                break
+            
+        return isRoot
+    
     def __updateRootDataNodeList(self, *dns):
         if not dns:
             return
@@ -1569,7 +1582,9 @@ class DataNodeBuilder(dict):
         else:
             flattenDns = dns
             
-        dnsRoots.extend(flattenDns) 
+        for fd in flattenDns:
+            if fd not in dnsRoots:
+                dnsRoots.append(fd)
         
         # Update list of existing root dataNotes     
         for dnE in dnsRoots:            
@@ -1577,18 +1592,7 @@ class DataNodeBuilder(dict):
                 if dnE not in newDnsRoots: # Not yet in the new Root list
                     newDnsRoots.append(dnE)  
             else:
-                found = False
-                for _, iDnList in dnE.impactLinks.items(): # Check if its impacts are connected to Dn in the new Root list
-                    if iDnList:
-                        for iDn in iDnList:
-                            if iDn in newDnsRoots:
-                                found = True
-                                break
-                            
-                    if found:
-                        break
-                    
-                if not found and dnE not in newDnsRoots:       
+                if self.__isRootDn(dnE, dnsRoots, visitedDns = None):
                     newDnsRoots.append(dnE)  
 
         # Set the updated root list 
@@ -2246,7 +2250,7 @@ class DataNodeBuilder(dict):
             raise ValueError('DataNode Builder has no DataNode started yet')   
         
     # Method returning constructed DataNode - the fist in the list
-    def getDataNode(self):
+    def getDataNode(self, device='auto'):
         self.__addGetDataNodeCounter()
         
         if dict.__contains__(self, 'dataNode'):
@@ -2255,6 +2259,13 @@ class DataNodeBuilder(dict):
             if len(_dataNode) > 0:  
                 returnDn = _dataNode[0]
                 
+                # Set the torch device
+                returnDn.current_device = device
+                if returnDn.current_device=='auto': # if not set use cpu or cuda if available
+                    returnDn.current_device = 'cpu'
+                    if torch.cuda.is_available():
+                        returnDn.current_device = 'cuda'
+                    
                 if len(_dataNode) == 1:
                     _DataNodeBulder__Logger.info('Returning dataNode with id %s of type %s'%(returnDn.instanceID,returnDn.getOntologyNode().name))
                 else:

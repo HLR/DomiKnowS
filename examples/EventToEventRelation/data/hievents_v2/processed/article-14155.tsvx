@@ -1,0 +1,37 @@
+Text	As part of an operation involving the Garda National Drugs Unit, Gardai from the Kilkenny Division and Regional Support Units a search was carried out at double warehouse in Kildalton, Piltown, Co. Kilkenny, this evening. During the search two Cannabis grow houses were discovered. Cannabis plants at various stages of growth and Herbal Cannabis with a combined estimated street value of €3 million (subject to analysis) have been seized. Three males aged in their 30s were arrested at the scene and are currently detained under Section 2 of the Criminal Justice (Drug Trafficking) Act, 1996, at Thomastown and Kilkenny Garda Stations. 
+Event	1	operation	Occurrence	14
+Event	2	search	Occurrence	128
+Event	3	carried	I_Action	139
+Event	4	search	Occurrence	233
+Event	5	discovered	Occurrence	270
+Event	6	seized	Occurrence	431
+Event	7	arrested	Occurrence	474
+Event	8	detained	Occurrence	514
+Relation	1	2	SuperSub	true	operation	search
+Relation	1	3	NoRel	true	operation	carried
+Relation	1	4	SuperSub	true	operation	search
+Relation	1	5	SuperSub	true	operation	discovered
+Relation	1	6	SuperSub	true	operation	seized
+Relation	1	7	SuperSub	true	operation	arrested
+Relation	1	8	NoRel	true	operation	detained
+Relation	2	3	NoRel	true	search	carried
+Relation	2	4	Coref	true	search	search
+Relation	2	5	SuperSub	true	search	discovered
+Relation	2	6	SuperSub	true	search	seized
+Relation	2	7	NoRel	true	search	arrested
+Relation	2	8	NoRel	true	search	detained
+Relation	3	4	NoRel	true	carried	search
+Relation	3	5	NoRel	true	carried	discovered
+Relation	3	6	NoRel	true	carried	seized
+Relation	3	7	NoRel	true	carried	arrested
+Relation	3	8	NoRel	true	carried	detained
+Relation	4	5	SuperSub	true	search	discovered
+Relation	4	6	SuperSub	true	search	seized
+Relation	4	7	NoRel	true	search	arrested
+Relation	4	8	NoRel	true	search	detained
+Relation	5	6	NoRel	true	discovered	seized
+Relation	5	7	NoRel	true	discovered	arrested
+Relation	5	8	NoRel	true	discovered	detained
+Relation	6	7	NoRel	true	seized	arrested
+Relation	6	8	NoRel	true	seized	detained
+Relation	7	8	NoRel	true	arrested	detained

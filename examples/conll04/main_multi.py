@@ -132,11 +132,16 @@ def main():
             
             print("ILP metrics Total %s"%(ILPmetrics['Total']))
             
-            
             #assert phrase_node.getAttribute(entity_label, 'ILP') >= 0
+            
+            verifyResult = node.verifyResultsLC()
+            if verifyResult:
+                for lc in verifyResult:
+                    print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
         else:
             print("%s phrases have no values for attribute people"%(node.getAttribute('text')))
             break
+        
 
 if __name__ == '__main__':
     main()

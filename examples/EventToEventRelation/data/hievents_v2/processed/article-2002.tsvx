@@ -1,0 +1,191 @@
+Text	A suicide bomber sent back to his car to disarm the device by Somali police detonated it instead and killed four people.The blast was near the former Egyptian Embassy in Mogadishu.Officer Abdi Hassan said a would-be suicide car bomb was intercepted hours before the blast and the bomber arrested.But Hassan police returned him to his vehicle under orders that he disarm the explosives. Instead, he was able to trigger the bomb.Police commanders did not answer phone calls seeking comment after the blast. One police official said that supervisors told them no one was to talk to journalists about the explosion.Al-Shabab militants have stepped up a campaign of roadside bombs and suicide car bomb attacks in Mogadishu in recent weeks. The militants were almost entirely pushed out of the Somali capital earlier this year in an offensive by African Union forces. 
+Event	1	sent	I_Action	17
+Event	2	detonated	Occurrence	76
+Event	3	killed	Occurrence	101
+Event	4	blast	Occurrence	124
+Event	5	said	Reporting	200
+Event	6	intercepted	Occurrence	237
+Event	7	blast	Occurrence	266
+Event	8	arrested	Occurrence	287
+Event	9	returned	Occurrence	314
+Event	10	trigger	Occurrence	410
+Event	11	calls	Occurrence	466
+Event	12	blast	Occurrence	498
+Event	13	said	Reporting	525
+Event	14	told	Reporting	547
+Event	15	explosion	Occurrence	601
+Event	16	stepped	StateChange	636
+Event	17	attacks	HalfGeneric	697
+Event	18	pushed	Occurrence	770
+Event	19	offensive	Occurrence	827
+Relation	1	2	NoRel	true	sent	detonated
+Relation	1	3	NoRel	true	sent	killed
+Relation	1	4	NoRel	true	sent	blast
+Relation	1	5	NoRel	true	sent	said
+Relation	1	6	NoRel	true	sent	intercepted
+Relation	1	7	NoRel	true	sent	blast
+Relation	1	8	NoRel	true	sent	arrested
+Relation	1	9	NoRel	true	sent	returned
+Relation	1	10	NoRel	true	sent	trigger
+Relation	1	11	NoRel	true	sent	calls
+Relation	1	12	NoRel	true	sent	blast
+Relation	1	13	NoRel	true	sent	said
+Relation	1	14	NoRel	true	sent	told
+Relation	1	15	NoRel	true	sent	explosion
+Relation	1	16	NoRel	true	sent	stepped
+Relation	1	17	NoRel	true	sent	attacks
+Relation	1	18	NoRel	true	sent	pushed
+Relation	1	19	NoRel	true	sent	offensive
+Relation	2	3	SuperSub	true	detonated	killed
+Relation	2	4	Coref	true	detonated	blast
+Relation	2	5	NoRel	true	detonated	said
+Relation	2	6	NoRel	true	detonated	intercepted
+Relation	2	7	Coref	true	detonated	blast
+Relation	2	8	NoRel	true	detonated	arrested
+Relation	2	9	NoRel	true	detonated	returned
+Relation	2	10	Coref	true	detonated	trigger
+Relation	2	11	NoRel	true	detonated	calls
+Relation	2	12	Coref	true	detonated	blast
+Relation	2	13	NoRel	true	detonated	said
+Relation	2	14	NoRel	true	detonated	told
+Relation	2	15	Coref	true	detonated	explosion
+Relation	2	16	NoRel	true	detonated	stepped
+Relation	2	17	SubSuper	true	detonated	attacks
+Relation	2	18	NoRel	true	detonated	pushed
+Relation	2	19	NoRel	true	detonated	offensive
+Relation	3	4	SubSuper	true	killed	blast
+Relation	3	5	NoRel	true	killed	said
+Relation	3	6	NoRel	true	killed	intercepted
+Relation	3	7	SubSuper	true	killed	blast
+Relation	3	8	NoRel	true	killed	arrested
+Relation	3	9	NoRel	true	killed	returned
+Relation	3	10	SubSuper	true	killed	trigger
+Relation	3	11	NoRel	true	killed	calls
+Relation	3	12	SubSuper	true	killed	blast
+Relation	3	13	NoRel	true	killed	said
+Relation	3	14	NoRel	true	killed	told
+Relation	3	15	SubSuper	true	killed	explosion
+Relation	3	16	NoRel	true	killed	stepped
+Relation	3	17	SubSuper	true	killed	attacks
+Relation	3	18	NoRel	true	killed	pushed
+Relation	3	19	NoRel	true	killed	offensive
+Relation	4	5	NoRel	true	blast	said
+Relation	4	6	NoRel	true	blast	intercepted
+Relation	4	7	Coref	true	blast	blast
+Relation	4	8	NoRel	true	blast	arrested
+Relation	4	9	NoRel	true	blast	returned
+Relation	4	10	Coref	true	blast	trigger
+Relation	4	11	NoRel	true	blast	calls
+Relation	4	12	Coref	true	blast	blast
+Relation	4	13	NoRel	true	blast	said
+Relation	4	14	NoRel	true	blast	told
+Relation	4	15	Coref	true	blast	explosion
+Relation	4	16	NoRel	true	blast	stepped
+Relation	4	17	SubSuper	true	blast	attacks
+Relation	4	18	NoRel	true	blast	pushed
+Relation	4	19	NoRel	true	blast	offensive
+Relation	5	6	NoRel	true	said	intercepted
+Relation	5	7	NoRel	true	said	blast
+Relation	5	8	NoRel	true	said	arrested
+Relation	5	9	NoRel	true	said	returned
+Relation	5	10	NoRel	true	said	trigger
+Relation	5	11	NoRel	true	said	calls
+Relation	5	12	NoRel	true	said	blast
+Relation	5	13	NoRel	true	said	said
+Relation	5	14	NoRel	true	said	told
+Relation	5	15	NoRel	true	said	explosion
+Relation	5	16	NoRel	true	said	stepped
+Relation	5	17	NoRel	true	said	attacks
+Relation	5	18	NoRel	true	said	pushed
+Relation	5	19	NoRel	true	said	offensive
+Relation	6	7	NoRel	true	intercepted	blast
+Relation	6	8	NoRel	true	intercepted	arrested
+Relation	6	9	NoRel	true	intercepted	returned
+Relation	6	10	NoRel	true	intercepted	trigger
+Relation	6	11	NoRel	true	intercepted	calls
+Relation	6	12	NoRel	true	intercepted	blast
+Relation	6	13	NoRel	true	intercepted	said
+Relation	6	14	NoRel	true	intercepted	told
+Relation	6	15	NoRel	true	intercepted	explosion
+Relation	6	16	NoRel	true	intercepted	stepped
+Relation	6	17	NoRel	true	intercepted	attacks
+Relation	6	18	NoRel	true	intercepted	pushed
+Relation	6	19	NoRel	true	intercepted	offensive
+Relation	7	8	NoRel	true	blast	arrested
+Relation	7	9	NoRel	true	blast	returned
+Relation	7	10	Coref	true	blast	trigger
+Relation	7	11	NoRel	true	blast	calls
+Relation	7	12	Coref	true	blast	blast
+Relation	7	13	NoRel	true	blast	said
+Relation	7	14	NoRel	true	blast	told
+Relation	7	15	Coref	true	blast	explosion
+Relation	7	16	NoRel	true	blast	stepped
+Relation	7	17	SubSuper	true	blast	attacks
+Relation	7	18	NoRel	true	blast	pushed
+Relation	7	19	NoRel	true	blast	offensive
+Relation	8	9	NoRel	true	arrested	returned
+Relation	8	10	NoRel	true	arrested	trigger
+Relation	8	11	NoRel	true	arrested	calls
+Relation	8	12	NoRel	true	arrested	blast
+Relation	8	13	NoRel	true	arrested	said
+Relation	8	14	NoRel	true	arrested	told
+Relation	8	15	NoRel	true	arrested	explosion
+Relation	8	16	NoRel	true	arrested	stepped
+Relation	8	17	NoRel	true	arrested	attacks
+Relation	8	18	NoRel	true	arrested	pushed
+Relation	8	19	NoRel	true	arrested	offensive
+Relation	9	10	NoRel	true	returned	trigger
+Relation	9	11	NoRel	true	returned	calls
+Relation	9	12	NoRel	true	returned	blast
+Relation	9	13	NoRel	true	returned	said
+Relation	9	14	NoRel	true	returned	told
+Relation	9	15	NoRel	true	returned	explosion
+Relation	9	16	NoRel	true	returned	stepped
+Relation	9	17	NoRel	true	returned	attacks
+Relation	9	18	NoRel	true	returned	pushed
+Relation	9	19	NoRel	true	returned	offensive
+Relation	10	11	NoRel	true	trigger	calls
+Relation	10	12	Coref	true	trigger	blast
+Relation	10	13	NoRel	true	trigger	said
+Relation	10	14	NoRel	true	trigger	told
+Relation	10	15	Coref	true	trigger	explosion
+Relation	10	16	NoRel	true	trigger	stepped
+Relation	10	17	SubSuper	true	trigger	attacks
+Relation	10	18	NoRel	true	trigger	pushed
+Relation	10	19	NoRel	true	trigger	offensive
+Relation	11	12	NoRel	true	calls	blast
+Relation	11	13	NoRel	true	calls	said
+Relation	11	14	NoRel	true	calls	told
+Relation	11	15	NoRel	true	calls	explosion
+Relation	11	16	NoRel	true	calls	stepped
+Relation	11	17	NoRel	true	calls	attacks
+Relation	11	18	NoRel	true	calls	pushed
+Relation	11	19	NoRel	true	calls	offensive
+Relation	12	13	NoRel	true	blast	said
+Relation	12	14	NoRel	true	blast	told
+Relation	12	15	Coref	true	blast	explosion
+Relation	12	16	NoRel	true	blast	stepped
+Relation	12	17	SubSuper	true	blast	attacks
+Relation	12	18	NoRel	true	blast	pushed
+Relation	12	19	NoRel	true	blast	offensive
+Relation	13	14	NoRel	true	said	told
+Relation	13	15	NoRel	true	said	explosion
+Relation	13	16	NoRel	true	said	stepped
+Relation	13	17	NoRel	true	said	attacks
+Relation	13	18	NoRel	true	said	pushed
+Relation	13	19	NoRel	true	said	offensive
+Relation	14	15	NoRel	true	told	explosion
+Relation	14	16	NoRel	true	told	stepped
+Relation	14	17	NoRel	true	told	attacks
+Relation	14	18	NoRel	true	told	pushed
+Relation	14	19	NoRel	true	told	offensive
+Relation	15	16	NoRel	true	explosion	stepped
+Relation	15	17	SubSuper	true	explosion	attacks
+Relation	15	18	NoRel	true	explosion	pushed
+Relation	15	19	NoRel	true	explosion	offensive
+Relation	16	17	SubSuper	true	stepped	attacks
+Relation	16	18	NoRel	true	stepped	pushed
+Relation	16	19	NoRel	true	stepped	offensive
+Relation	17	18	NoRel	true	attacks	pushed
+Relation	17	19	NoRel	true	attacks	offensive
+Relation	18	19	SubSuper	true	pushed	offensive
