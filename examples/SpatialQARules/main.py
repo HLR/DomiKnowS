@@ -30,7 +30,8 @@ def main(args):
     training_set = DomiKnowS_reader("DataSet/train_with_rules.json", "YN",
                                     size=args.train_size, upward_level=8, train=True, batch_size=args.batch_size)
 
-    testing_set = DomiKnowS_reader("DataSet/test.json", "YN", size=args.test_size,
+    test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" else "DataSet/test.json"
+    testing_set = DomiKnowS_reader(test_file, "YN", size=args.test_size,
                                    train=False, batch_size=args.batch_size)
 
     if args.loaded:

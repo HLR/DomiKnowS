@@ -171,18 +171,18 @@ def test_reader(file, question_type, size=None):
                 continue
             # Variable need
             candidates = question['candidate_answers']
-            asked_relation = question['question_info']['asked_relation'][0] \
-                if isinstance(question['question_info']['asked_relation'], list) \
-                else question['question_info']['asked_relation']
-            asked_relation = asked_relation.upper()
-            obj1, obj2 = question['query']
-            asked_question = (obj1, obj2, asked_relation)
-            current_key = create_key(*asked_question)
+            # asked_relation = question['question_info']['asked_relation'][0] \
+            #     if isinstance(question['question_info']['asked_relation'], list) \
+            #     else question['question_info']['asked_relation']
+            # asked_relation = asked_relation.upper()
+            # obj1, obj2 = question['query']
+            # asked_question = (obj1, obj2, asked_relation)
+            # current_key = create_key(*asked_question)
             label = question["answer"][0]
-            if current_key not in question_id:
-                question_id[current_key] = run_id
-                run_id += 1
-            dataset.append([[question_txt, story_txt, q_type, candidates, "", label, question_id[current_key]]])
+            if label != "Yes" and label != "No":
+                continue
+            dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
+            run_id += 1
             count += 1
     return dataset
 

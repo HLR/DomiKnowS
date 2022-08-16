@@ -30,7 +30,6 @@ class MultipleClassYN(BertPreTrainedModel):
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax()
 
-    # @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING)
     def forward(
             self,
             input_ids=None,
@@ -39,7 +38,6 @@ class MultipleClassYN(BertPreTrainedModel):
             position_ids=None,
             head_mask=None,
             inputs_embeds=None,
-            labels=None,
     ):
         outputs = self.bert(
             input_ids,
@@ -49,14 +47,8 @@ class MultipleClassYN(BertPreTrainedModel):
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
         )
-
         pooled_output = outputs[1]
-
         pooled_output = self.dropout(pooled_output)
-        #         print('$',pooled_output.shape)
-        #         for ind, logit in enumerate(pooled_output):
-        #             logit = self.classifiers[ind](pooled_output[ind])
-        #             logits.append(logit)
         output = self.classifier(pooled_output)
 
         return output
