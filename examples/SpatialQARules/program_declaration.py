@@ -10,7 +10,7 @@ import numpy as np
 
 
 def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, sampleSize=1, dropout=False, constrains=False):
-    from graph import graph, story, question, answer, story_contain, \
+    from graph import graph, story, question, answer_class, story_contain, \
         symmetric, s_quest1, s_quest2, reverse, r_quest1, r_quest2,\
         transitive, t_quest1, t_quest2, t_quest3, transitive_topo, tt_quest1, tt_quest2, tt_quest3, tt_quest4
 
@@ -40,17 +40,16 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
 
     def read_label(_, label):
         return label
-
-    question[answer] = FunctionalSensor(story_contain, "label", forward=read_label, label=True, device=cur_device)
+    question[answer_class] = FunctionalSensor(story_contain, "label", forward=read_label, label=True, device=cur_device)
 
     question["input_ids"] = JointSensor(story_contain, 'question', "story",
                                         forward=BERTTokenizer(), device=cur_device)
 
-    clf = BertForBooleanQuestion3ClassYN.from_pretrained('bert-base-uncased', device=cur_device, drp=dropout)
+    clf = MultipleClassYN.from_pretrained('bert-base-uncased', device=cur_device, drp=dropout)
 
-    question[answer] = ModuleLearner("input_ids", module=clf, device=cur_device)
+    question[answer_class] = ModuleLearner("input_ids", module=clf, device=cur_device)
 
-    poi_list = [question, answer]
+    poi_list = [question, answer_class]
     if constrains:
         symmetric[s_quest1.reversed, s_quest2.reversed] = \
             CompositionCandidateSensor(
@@ -79,15 +78,6 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     from regr.program import LearningBasedProgram, SolverPOIProgram
     from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
-
-    # Initial program using only ILP
-    # symmetric[s_event1.reversed, s_event2.reversed] = CompositionCandidateSensor(
-    #     relations=(s_event1.reversed, s_event2.reversed),
-    #     forward=check_symmetric, device=cur_device)
-    #
-    # transitive[t_event1.reversed, t_event2.reversed, t_event3.reversed] = CompositionCandidateSensor(
-    #     relations=(t_event1.reversed, t_event2.reversed, t_event3.reversed),
-    #     forward=check_transitive, device=cur_device)
 
     infer_list = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     if pmd:

@@ -113,7 +113,7 @@ def train_reader(file, question_type, size=None, upward_level=0):
                         relation_info[current_key] = ""
                         continue
                     relation_type = "symmetric" if size_relation == 1 \
-                        else "transitve" if size_relation == 2 \
+                        else "transitive" if size_relation == 2 \
                         else "transitive_topo"
                     for previous_id in previous_ids:
                         relation_type += "," + str(previous_id)
@@ -133,9 +133,9 @@ def train_reader(file, question_type, size=None, upward_level=0):
                 count += 1
             dataset.append(batch_question)
 
-    print("Original questions", count_original)
-    print("Total questions", count)
-    print(all_batch_dynamic_info)
+    # print("Original questions", count_original)
+    # print("Total questions", count)
+    # print(all_batch_dynamic_info)
     # Return Type need to be list of dict with name of variable as key
     return dataset
 
@@ -172,10 +172,3 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True,
                                    "labels": "@@".join(batch_data['labels'])})
 
     return return_dataset
-
-
-if __name__ == "__main__":
-    # Maximum deep for target = 7 + 1 (No answer) right now batch size is dynamic for training (It needs to cover all
-    # related fact) <- Right now can add the option later For training batch size if fix
-    dataset = DomiKnowS_reader("DataSet/train_with_rules.json", "YN", upward_level=8, batch_size=8)
-    print(len(dataset))

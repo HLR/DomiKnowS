@@ -14,7 +14,7 @@ class BERTTokenizer:
         return torch.LongTensor(input_ids)
 
 
-class BertForBooleanQuestion3ClassYN(BertPreTrainedModel):
+class MultipleClassYN(BertPreTrainedModel):
     def __init__(self, config, device="cpu", drp=False):
         super().__init__(config)
 
@@ -26,12 +26,11 @@ class BertForBooleanQuestion3ClassYN(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.num_classes = 2
-
         self.classifier = nn.Linear(config.hidden_size, self.num_classes)
-        self.classifiers = nn.Linear(config.hidden_size, self.num_classes)
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax()
 
+    # @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING)
     def forward(
             self,
             input_ids=None,
@@ -40,6 +39,7 @@ class BertForBooleanQuestion3ClassYN(BertPreTrainedModel):
             position_ids=None,
             head_mask=None,
             inputs_embeds=None,
+            labels=None,
     ):
         outputs = self.bert(
             input_ids,
@@ -53,8 +53,10 @@ class BertForBooleanQuestion3ClassYN(BertPreTrainedModel):
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
+        #         print('$',pooled_output.shape)
+        #         for ind, logit in enumerate(pooled_output):
+        #             logit = self.classifiers[ind](pooled_output[ind])
+        #             logits.append(logit)
+        output = self.classifier(pooled_output)
 
-        logit = self.classifiers(pooled_output)
-        logit = self.softmax(logit).unsqueeze(0)
-
-        return logit
+        return output
