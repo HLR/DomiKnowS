@@ -24,16 +24,9 @@ def main(args):
 
     print('Using: %s'%(cur_device))
 
-    training_file = "train.csv"
-    testing_file = "test.csv"
 
     augment_file = "data/snli_genadv_1000_test.jsonl"
     # Loading Test and Train data
-    test_dataset = DataReaderMultiRelation(file="data/" + testing_file, size=args.testing_sample,
-                                           batch_size=args.batch_size, augment_file=augment_file)
-
-    train_dataset = DataReaderMultiRelation(file="data/" + training_file, size=args.training_sample,
-                                            batch_size=args.batch_size)
     # Load Augmentation data
     augment_dataset = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
                                               augment_file=augment_file)
@@ -55,7 +48,7 @@ def main(args):
                 count_verify += verify_constrainsILP[lc]['satisfied']
             satisfy_ILP += count_verify / len(verify_constrainsILP)
 
-        verify_constrains = datanode.verifyResultsLC(key="/local/softmax")
+        verify_constrains = datanode.verifyResultsLC(key="")
         count_verify = 0
         if verify_constrains:
             for lc in verify_constrains:
