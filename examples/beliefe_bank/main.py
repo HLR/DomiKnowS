@@ -123,7 +123,7 @@ elif args.SAM:
     program = SampleLossProgram(graph, SolverModel,poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
 
-program.train(calibration_data,valid_set=calibration_data_dev,test_set=silver_data, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
+program.train(calibration_data[:2],valid_set=calibration_data_dev[:2],test_set=silver_data[:2], train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
 
 ac_, t_ = 0, 0
 for datanode in program.populate(silver_data, device="cpu"):
@@ -133,14 +133,10 @@ for datanode in program.populate(silver_data, device="cpu"):
     datanode.inferILPResults()
     verifyResult = datanode.verifyResultsLC()
     verifyResultILP = datanode.verifyResultsLC()
-    total_1_0=sum([sum([len(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP])
-    total_1=sum([sum([sum(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP])
-    total_0=total_1_0-total_1
+    ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
+    t_ +=len(verifyResultILP.keys())
 
-    ac_ += 128-total_0
-    t_ +=128
-
-print("constraint accuracy: ", ac_ / t_ * 100)
+print("constraint accuracy: ", ac_ / t_ )
 
 #, c_warmup_iters=0,test_set=silver_data
 f.close()
