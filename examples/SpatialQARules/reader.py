@@ -140,8 +140,42 @@ def train_reader(file, question_type, size=None, upward_level=0):
     return dataset
 
 
+def test_reader(file, question_type, size=None):
+    with open(file) as json_file:
+        data = json.load(json_file)
+    size = 300000 if not size else size
+
+    dataset = []
+    count = 0
+    for story in data["data"]:
+        story_txt = story['story'][0]
+        question_id = {}
+        run_id = 0
+
+        for question in story["questions"]:
+            if count >= size:
+                break
+            question_txt = question["question"]
+
+            q_type = question["q_type"]
+            if q_type != question_type:
+                continue
+            # Variable need
+            candidates = question['candidate_answers']
+            asked_relation = question['question_info']['asked_relation'][0].upper()
+            obj1, obj2 = question['query']
+            asked_question = (obj1, obj2, asked_relation)
+            current_key = create_key(*asked_question)
+            label = question["answer"][0]
+            if current_key not in question_id:
+                question_id[current_key] = run_id
+                run_id += 1
+            dataset.append([question_txt, story_txt, q_type, candidates, "", label, question_id[current_key]])
+    return dataset
+
+
 def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True, batch_size=8):
-    dataset = train_reader(file, question_type, size, upward_level) if train else None  # TODO: Fix this later
+    dataset = train_reader(file, question_type, size, upward_level) if train else test_reader(file, question_type, size)
 
     return_dataset = []
     current_batch_size = 0
