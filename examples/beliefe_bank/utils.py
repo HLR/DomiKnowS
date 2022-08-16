@@ -66,4 +66,14 @@ def make_facts(name, facts, labels):
 def label_reader(_, label):
     return torch.LongTensor([{"no":0,"yes":1}.get(i) for i in label])
 
+class SimpleTokenizer:
 
+    def __init__(self,device):
+
+        import spacy
+        self.nlp= spacy.load("en_core_web_sm")
+        self.device=device
+
+    def __call__(self,name, sentence):
+        preprocessed=[i+" "+j.replace("IsA" ,"is a").replace("CapableOf" ,"is capable of").replace("HasPart" ,"has the part").replace("HasA" ,"has").replace("," ," ").replace("MadeOf" ,"is made of ").replace("HasProperty" ,"Has the Property of") for i,j in zip(name, sentence)]
+        return torch.FloatTensor([self.nlp(i).vector.tolist() for i in preprocessed]).to(self.device)

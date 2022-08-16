@@ -188,7 +188,7 @@ class lcLossSampleBooleanMethods(ilpBooleanProcessor):
                 elif limitOp == '<=':
                     fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
                 elif limitOp == '==':
-                    fixedVar.append(torch.ones([self.sampleSize], device=self.current_device))
+                    fixedVar.append(torch.zeros([self.sampleSize], device=self.current_device))
         # --
          
         limitTensor = torch.full([self.sampleSize], limit, device = self.current_device)
