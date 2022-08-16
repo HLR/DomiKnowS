@@ -134,9 +134,9 @@ with Graph('global') as graph:
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(6):
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
-        # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 7)])
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 7)])
+        # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 7)])
 
         for j in range(1, 7):
             exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
@@ -283,7 +283,7 @@ program1 = SolverPOIProgram(
 #             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
 )
 
-program = SampleLossProgram(
+program= SampleLossProgram(
         graph, SolverModel,
         poi=(sudoku, empty_entry, same_row, same_col, same_table),
         inferTypes=['local/argmax'],
@@ -299,13 +299,13 @@ program = SampleLossProgram(
         
         sample = True,
         sampleSize=2000, 
-        sampleGlobalLoss = True,
+        # sampleGlobalLoss = True,
         beta=50
         )
 
 from regr.program.metric import PRF1Tracker, DatanodeCMMetric
 
-programRLoss = PrimalDualProgram(
+programPD = PrimalDualProgram(
        graph, SolverModel, 
        poi=(sudoku, empty_entry, same_row, same_col, same_table),
        inferTypes=['local/argmax'],
@@ -428,7 +428,7 @@ for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.Adam(param, lr=0.05), collectLoss=None, device='auto')
+                    Optim=lambda param: torch.optim.Adam(param, lr=0.1), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")

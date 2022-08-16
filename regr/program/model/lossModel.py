@@ -124,7 +124,7 @@ class SampleLosslModel(torch.nn.Module):
         self.lmbd_index = {}
 
         self.iter_step = 0
-        self.warmpup = 80
+        self.warmpup = 0
         
         for i, (key, lc) in enumerate(self.constr.items()):
             self.lmbd_index[key] = i
@@ -182,7 +182,7 @@ class SampleLosslModel(torch.nn.Module):
                     tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
                     true_val = lossTensor[tidx]
                     
-                    if true_val.sum().item() != 0: 
+                    if true_val.sum().item() != 0 and true_val.sum().item() != 0.0: 
                         if not replace_mul:
                             loss_value = true_val.sum() / lossTensor.sum()
                             loss_value = epsilon - ( -1 * torch.log(loss_value) )

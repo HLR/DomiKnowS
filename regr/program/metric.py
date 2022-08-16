@@ -217,7 +217,8 @@ class PRF1Tracker(MetricTracker):
             matrix=[[0 for i in range(n)] for j in range(n)]
             for batch in values:
                 for label,pred in zip(batch["labels"],batch["preds"]):
-                    matrix[label][pred]+=1
+                    if label != -100:
+                        matrix[label][pred]+=1
             if self.confusion_matrix:
                 output[str(names)]=matrix
             for name in names:
