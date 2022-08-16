@@ -133,7 +133,7 @@ for datanode in program.populate(silver_data, device="cpu"):
     datanode.inferILPResults()
     verifyResult = datanode.verifyResultsLC()
     verifyResultILP = datanode.verifyResultsLC()
-    if sum([sum([len(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP])==sum([sum([sum(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP]):
+    if sum([sum([len(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP])-1<=sum([sum([sum(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP]):
         ac_ += 1
     t_ +=1
 
