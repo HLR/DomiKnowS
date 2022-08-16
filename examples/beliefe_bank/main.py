@@ -133,11 +133,10 @@ for datanode in program.populate(silver_data, device="cpu"):
     datanode.inferILPResults()
     verifyResult = datanode.verifyResultsLC()
     verifyResultILP = datanode.verifyResultsLC()
-    if sum([sum([len(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP])==sum([sum([sum(j) for j in verifyResultILP[lc]['verifyList']]) for lc in verifyResultILP]):
-        ac_ += 1
-    t_ +=1
+    ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
+    t_ +=len(verifyResultILP.keys())
 
-print("constraint accuracy: ", ac_ / t_ * 100)
+print("constraint accuracy: ", ac_ / t_ )
 
 #, c_warmup_iters=0,test_set=silver_data
 f.close()
