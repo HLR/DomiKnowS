@@ -59,8 +59,17 @@ def train_reader(file, question_type, size=None, upward_level=0):
                 continue
 
             candidates = question['candidate_answers']
-            target_relation = question['question_info']['target_relation'][0].upper()
-            asked_relation = question['question_info']['asked_relation'][0].upper()
+
+            target_relation = question['question_info']['target_relation'][0] \
+                if isinstance(question['question_info']['target_relation'], list) \
+                else question['question_info']['target_relation']
+            target_relation = target_relation.upper()
+
+            asked_relation = question['question_info']['asked_relation'][0] \
+                if isinstance(question['question_info']['asked_relation'], list)\
+                else question['question_info']['asked_relation']
+            asked_relation = asked_relation.upper()
+
             count_original += 1
             obj1, obj2 = question['query']
             target_question = (obj1, obj2, target_relation)
@@ -162,7 +171,10 @@ def test_reader(file, question_type, size=None):
                 continue
             # Variable need
             candidates = question['candidate_answers']
-            asked_relation = question['question_info']['asked_relation'][0].upper()
+            asked_relation = question['question_info']['asked_relation'][0] \
+                if isinstance(question['question_info']['asked_relation'], list) \
+                else question['question_info']['asked_relation']
+            asked_relation = asked_relation.upper()
             obj1, obj2 = question['query']
             asked_question = (obj1, obj2, asked_relation)
             current_key = create_key(*asked_question)
@@ -170,7 +182,8 @@ def test_reader(file, question_type, size=None):
             if current_key not in question_id:
                 question_id[current_key] = run_id
                 run_id += 1
-            dataset.append([question_txt, story_txt, q_type, candidates, "", label, question_id[current_key]])
+            dataset.append([[question_txt, story_txt, q_type, candidates, "", label, question_id[current_key]]])
+            count += 1
     return dataset
 
 
@@ -180,29 +193,28 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True,
     return_dataset = []
     current_batch_size = 0
     batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
-    if train:
-        for batch in tqdm.tqdm(dataset):
-            if current_batch_size + len(batch) > batch_size and current_batch_size != 0:
-                current_batch_size = 0
-                return_dataset.append({"questions": "@@".join(batch_data['questions']),
-                                       "stories": "@@".join(batch_data['stories']),
-                                       "relation": "@@".join(batch_data['relation']),
-                                       "question_ids": "@@".join(batch_data['question_ids']),
-                                       "labels": "@@".join(batch_data['labels'])})
-                batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
-            for data in batch:
-                question_txt, story_txt, q_type, candidates_answer, relation, label, id = data
-                batch_data["questions"].append(question_txt)
-                batch_data["stories"].append(story_txt)
-                batch_data["relation"].append(relation)
-                batch_data["question_ids"].append(str(id))
-                batch_data["labels"].append(label)
-            current_batch_size += len(batch)
-        if current_batch_size != 0:
+    for batch in tqdm.tqdm(dataset):
+        if current_batch_size + len(batch) > batch_size and current_batch_size != 0:
+            current_batch_size = 0
             return_dataset.append({"questions": "@@".join(batch_data['questions']),
                                    "stories": "@@".join(batch_data['stories']),
                                    "relation": "@@".join(batch_data['relation']),
                                    "question_ids": "@@".join(batch_data['question_ids']),
                                    "labels": "@@".join(batch_data['labels'])})
+            batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
+        for data in batch:
+            question_txt, story_txt, q_type, candidates_answer, relation, label, id = data
+            batch_data["questions"].append(question_txt)
+            batch_data["stories"].append(story_txt)
+            batch_data["relation"].append(relation)
+            batch_data["question_ids"].append(str(id))
+            batch_data["labels"].append(label)
+        current_batch_size += len(batch)
+    if current_batch_size != 0:
+        return_dataset.append({"questions": "@@".join(batch_data['questions']),
+                               "stories": "@@".join(batch_data['stories']),
+                               "relation": "@@".join(batch_data['relation']),
+                               "question_ids": "@@".join(batch_data['question_ids']),
+                               "labels": "@@".join(batch_data['labels'])})
 
     return return_dataset

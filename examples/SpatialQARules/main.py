@@ -1,7 +1,5 @@
 import sys
 
-import tqdm
-
 sys.path.append(".")
 sys.path.append("../")
 sys.path.append("../../")
@@ -13,6 +11,7 @@ import numpy as np
 from regr.graph import Graph, Concept, Relation
 from program_declaration import program_declaration
 from reader import DomiKnowS_reader
+import tqdm
 
 
 def main(args):
@@ -47,6 +46,7 @@ def main(args):
     count = 0
     count_datanode = 0
     satisfy_constrain_rate = 0
+    result_csv = {"story":[], "question":[], "label":[], "argmax":[], "ILP":[]}
     for datanode in tqdm.tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
         count_datanode += 1
         for question in datanode.getChildDataNodes():
@@ -56,6 +56,11 @@ def main(args):
             pred_ILP = labels[int(torch.argmax(question.getAttribute(answer_class, "ILP")))]
             accuracy_ILP += 1 if pred_ILP == label else 0
             accuracy += 1 if pred_argmax == label else 0
+            result_csv["story"].append(question.getAttribute("story"))
+            result_csv["question"].append(question.getAttribute("question"))
+            result_csv["label"].append(label)
+            result_csv["argmax"].append(pred_argmax)
+            result_csv["ILP"].append(pred_ILP)
         verify_constrains = datanode.verifyResultsLC()
         count_verify = 0
         if verify_constrains:
@@ -66,7 +71,7 @@ def main(args):
     accuracy /= count
     accuracy_ILP /= count
 
-    result_file = open("result", 'a')
+    result_file = open("result.txt", 'a')
     print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS", file=result_file)
     if not args.loaded:
         print("Training info", file=result_file)
@@ -83,7 +88,8 @@ def main(args):
     print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
     result_file.close()
 
-
+    df = pd.DataFrame(result_csv)
+    df.to_csv("result.csv")
 
     if args.save:
         program.save(args.save_file)
