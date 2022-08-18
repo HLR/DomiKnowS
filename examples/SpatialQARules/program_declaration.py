@@ -50,6 +50,8 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     question[answer_class] = ModuleLearner("input_ids", module=clf, device=cur_device)
 
     poi_list = [question, answer_class]
+
+    # Including the constrains relation check
     if constrains:
         symmetric[s_quest1.reversed, s_quest2.reversed] = \
             CompositionCandidateSensor(
