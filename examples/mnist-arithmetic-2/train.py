@@ -102,7 +102,7 @@ program = CallbackProgram(graph, SolverModel,
                     inferTypes=['local/argmax'],
                     metric={},
                     sample=True,
-                    sampleSize=100,
+                    sampleSize=-1, # Semantic Sample when -1
                     sampleGlobalLoss=True,
                     beta=1)
 
