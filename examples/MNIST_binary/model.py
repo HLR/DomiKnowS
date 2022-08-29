@@ -28,14 +28,9 @@ class MNISTCNN(nn.Module):
 class MNISTLinear(nn.Module):
     def __init__(self,):
         super(MNISTLinear, self).__init__()
-
-
-        self.fc1 = nn.Linear(28*28, 28*28)
-        self.fc2 = nn.Linear(28*28, 2)
-        self.tanh= nn.Tanh()
+        self.fc1 = nn.Linear(28*28, 2)
 
     def forward(self, x):
 
         x = x.reshape(x.size(0), -1)
-        x = self.tanh(self.fc1(x))
-        return self.fc2(x)
+        return self.fc1(x)

@@ -61,6 +61,9 @@ def main():
     print('Test loss:', program.model.loss)
 
     for world_node in program.populate(data):
+        semanticLoss = world_node.calculateLcLoss(sample = True, sampleSize = -1)
+        print('semanticLoss: ', semanticLoss["LC4"]["loss"][0])
+        
         x_node = world_node.getChildDataNodes(x)[0]
         print('y0:', x_node.getAttribute('<y0>').softmax(dim=-1))
         print('y1:', x_node.getAttribute('<y1>').softmax(dim=-1))

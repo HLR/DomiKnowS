@@ -61,9 +61,3 @@ with Graph('CIFAR100') as graph:
                 relations += 1
 
     print("number of relations: ", relations)
-
-    for l1, l2 in combinations(category.attributes, 2):
-        nandL(l1, l2)
-
-    for l1, l2 in combinations(Label.attributes, 2):
-        nandL(l1, l2)
