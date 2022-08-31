@@ -25,12 +25,18 @@ from graph import graph, image_group_contains,image,category,Label,image_group
 class ImageNetwork(torch.nn.Module):
     def __init__(self):
         super(ImageNetwork, self).__init__()
-        self.conv = resnet18(pretrained=True)
+        self.conv = resnet18(pretrained=False)
 
     def forward(self, x):
         x = self.conv(x)
         return x
 
+# Disable Logging 
+from regr.utils import setProductionLogMode 
+productionMode = True  
+if productionMode:
+    setProductionLogMode()
+    
 def main():
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -99,6 +105,9 @@ def main():
                                      'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
     train_reader,test_reader=create_readers(train_num=args.samplenum)
+    if len(test_reader) > len(train_reader):
+        test_reader = test_reader[:len(train_reader)]
+        
     #for i in range(args.epochs):
     program.train(train_reader,valid_set=test_reader, train_epoch_num=args.epochs, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
     f.close()

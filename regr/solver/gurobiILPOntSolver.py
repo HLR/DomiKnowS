@@ -20,7 +20,6 @@ from regr.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
 
 from regr.graph import LogicalConstrain, V, fixedL
 from _functools import reduce
-from pickle import TRUE
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
 
@@ -110,7 +109,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                 else:
                     if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0) in x:
-                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0]
                 
                 if xkey not in dn.attributes:
                     dn.attributes[xkey] = [None] * currentConceptRelation[3]
@@ -171,9 +170,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
             if currentConceptRelation[2] is not None:
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
-                
-        # Create constraint for multiclass exclusivity 
-        self.addMulticlassExclusivity(conceptsRelations, rootDn, m)
 
         m.update()
 
@@ -1131,9 +1127,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 m.params.outputflag = 0
                 x = {}
                 
+            xLen = len(x)
             # Create ILP Variables for concepts and objective
             Q = self.createILPVariables(m, x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
-                
+            newXLen = len(x)
+            
+            if xLen != newXLen and self.model:
+                self.model = None
+            
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
             self.myLoggerTime.info('ILP Variables Init - time: %ims'%(elapsedVariablesInMs))
@@ -1142,7 +1143,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Add constraints based on ontology and graph definition
                 self.addOntologyConstrains(m, dn, *conceptsRelations)
                 self.addGraphConstrains(m, dn, *conceptsRelations)
-                
+                # Create constraint for multiclass exclusivity 
+                self.addMulticlassExclusivity(conceptsRelations, dn, m)
+            else:
+                self.myLoggerTime.info('Reusing ILP Model - LCs already present in the model')
+
             endGraphAndOntologyConstraints = process_time() # timer()
             elapsedGandOConstraintsInMs = (endGraphAndOntologyConstraints - endVariableInit) * 1000
             self.myLoggerTime.info('ILP Graph and Ontology Constraints - time: %ims'%(elapsedGandOConstraintsInMs))
