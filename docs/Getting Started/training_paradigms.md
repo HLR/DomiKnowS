@@ -43,7 +43,16 @@ Sampling Loss program relies on a sampling strategy and a statisfaction check to
 To use this, we should simply do the following:
 
 ```python3
-Code to run the Sampling Loss
+program = SampleLossProgram(
+        graph, SolverModel,
+        poi=...,
+        inferTypes=...,
+        loss=...,
+        sample = True,
+        sampleSize=2000, 
+        sampleGlobalLoss = False,
+        beta=1,
+        )
 ```
 
 ### Semantic-loss[[4]](#4)
@@ -63,3 +72,9 @@ Inference-Masked Loss for Deep Structured Output Learning, Proceedings of the Tw
 
 <a id="2">[2] https://papers.nips.cc/paper/2019/file/cf708fc1decf0337aded484f8f4519ae-Paper.pdf </a> 
 A Primal-Dual Formulation for Deep Learning with Constraints, 33rd Conference on Neural Information Processing Systems (NeurIPS 2019), Vancouver, Canada.
+
+<a id="3">[3] https://proceedings.mlr.press/v176/ahmed22a</a>
+Ahmed, Kareem, et al. "PYLON: A PyTorch framework for learning with constraints." NeurIPS 2021 Competitions and Demonstrations Track. PMLR, 2022.
+
+<a id="4">[4] https://proceedings.mlr.press/v80/xu18h.html</a>
+Xu, Jingyi, et al. "A semantic loss function for deep learning with symbolic knowledge." International conference on machine learning. PMLR, 2018.
