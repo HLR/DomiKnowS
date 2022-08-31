@@ -1,13 +1,13 @@
 from regr.graph import Graph, Concept, Relation
 from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL
+from regr.graph.logicalConstrain import nandL, exactL, ifL
 from itertools import combinations
 
 Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph('CIFAR100') as graph:
+with Graph('CIFAR100', reuse_model=True) as graph:
     image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
@@ -52,12 +52,27 @@ with Graph('CIFAR100') as graph:
                  'insects': {'bee', 'beetle', 'caterpillar', 'butterfly', 'cockroach'},
                  'non-insectinvertebrates': {'spider', 'worm', 'snail', 'lobster', 'crab'},
                  'aquaticmammals': {'seal', 'beaver', 'whale', 'otter', 'dolphin'}}
-    relations = 0
-    for i in category.attributes:
-        for j in Label.attributes:
-            if not j[1] in structure[i[1]]:
-                nandL(i, j)
-            else:
-                relations += 1
-
-    print("number of relations: ", relations)
+    
+    NEW_LC = True
+    
+    if NEW_LC:
+        for i in category.attributes:
+            li = []
+            for j in category.attributes:
+                if j == i:
+                    continue
+                
+                lj = [Label.get_concept(l) for l in structure[i[1]]]
+                li += lj
+            
+            ifL(i, exactL(*li, 0))
+    else:
+        relations = 0
+        for i in category.attributes:
+            for j in Label.attributes:
+                if not j[1] in structure[i[1]]:
+                    nandL(i, j)
+                else:
+                    relations += 1
+    
+        print("number of relations: ", relations)
