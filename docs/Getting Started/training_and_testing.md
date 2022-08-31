@@ -20,3 +20,7 @@ print(program.model.metric)
 ```
 
 Checkout for more details about [workflows in the program](developer/WORKFLOW.md)
+
+
+### Production Running 
+Describe necessary steps to increase the perfomance for running the production setting.
