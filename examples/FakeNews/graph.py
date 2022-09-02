@@ -14,12 +14,12 @@ Relation.clear()
 
 with Graph('FakeNews') as graph:
     TextSequence = Concept(name='TextSequence')
-
-    Category = TextSequence(name="Category", ConceptClass=EnumConcept, values=["HasAnno"])
+    
+    Category = TextSequence(name="Category", ConceptClass=EnumConcept, values=["NoAnno", "HasAnno"])
 
     ParentTag = Category(name='ParentTag', ConceptClass=EnumConcept,
-                             values=["Anno1", "Anno2", "Anno3", "Anno4", "Anno5", "Anno6", 
-                                     "Anno7", "Anno8", "Anno9", "Anno10", "Anno11", "Anno12"])
+                         values=["Anno1", "Anno2", "Anno3", "Anno4", "Anno5", "Anno6", 
+                                 "Anno7", "Anno8", "Anno9", "Anno10", "Anno11", "Anno12"])
 
     # ChildTag = TextSequence(name='ChildTag', ConceptClass=EnumConcept,
     #                        values=["Anno1a", "Anno1b", "Anno1c", "Anno3a", "Anno4a", "Anno4b", 
@@ -28,10 +28,12 @@ with Graph('FakeNews') as graph:
     #                                "Anno10b", "Anno10c", "Anno10d", "Anno11a", "Anno11b", "Anno11c", 
     #                                "Anno11d", "Anno11e", "Anno12a", "Anno12b", "Anno12c", "Anno12d"])
 
-    # for label in ParentTag.attributes:
-    #     nandL(label, category.NoAnno, active=True)
+    TextContains, = TextSequence.contains(ParentTag)
 
-    # disjoint(category.NoAnno, category.HasAnno)
+    # for label in ParentTag.values():
+    #     nandL(label, Category.NoAnno, active=True)
+
+    # disjoint(Category.NoAnno, Category.HasAnno)
 
     # nandL("NoAnno", "HasAnno")
 

@@ -1,3 +1,4 @@
+from cgitb import text
 from modulefinder import Module
 import sys
 sys.path.append("../")
@@ -7,11 +8,12 @@ from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSen
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.program import SolverPOIProgram, IMLProgram
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsLoss
 from regr.program.model.pytorch import SolverModel, IMLModel
 from regr.program.primaldualprogram import PrimalDualProgram
 from regr.sensor.pytorch.sensors import ReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
+from regr.sensor.pytorch.sensors import JointSensor
 import torch
 from torch import nn
 from torch.nn import Linear, Dropout, ReLU
@@ -19,27 +21,43 @@ import transformers
 from transformers import RobertaModel
 from transformers import RobertaTokenizer
 from dataset import load_annodata
-
+from graph import TextContains
 tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
 def tokenize_text(text):
     t=tokenizer(text, padding='max_length', max_length=192,
                      truncation=True, return_tensors="pt")
-    return t["input_ids"],t["attention_mask"]
+    return t["input_ids"], t["attention_mask"]
 
 def tokenize_parent_texts(parent_texts):
-    return [tokenizer(text, padding='max_length', max_length=192, 
+    t=[tokenizer(text, padding='max_length', max_length=192, 
                       truncation=True, return_tensors="pt") 
             for text in parent_texts]
+    inputs = []
+    masks = []
+    for i in t:
+        inputs.append(i["input_ids"])
+        masks.append(i["attention_mask"])
+    # print("-"*20)
+    # print(torch.stack(inputs, dim=0).squeeze(dim=0).shape[0])
+    # print(torch.ones(len([inputs[0]]), 1).shape)
+    # print(torch.stack(inputs, dim=0).squeeze(dim=0).shape)
+    # print(torch.stack(masks, dim=0).squeeze(dim=0).shape)
+    # print("-"*20)
+    return torch.ones(torch.stack(inputs, dim=0).squeeze(dim=0).shape[0], 1), \
+           torch.stack(inputs, dim=0).squeeze(dim=0), \
+           torch.stack(masks, dim=0).squeeze(dim=0)
 
 def binary_reader(label):
+    print(label)
     return label
 
 def parent_reader(labels):
-    print("-"*40)
     print(labels)
-    print("-"*40)
     return labels
+
+def parent_labels(labels):
+    return torch.ones(len(labels), 1), labels
 
 class RobertaClassifier(torch.nn.Module):
 
@@ -57,7 +75,11 @@ class RobertaClassifier(torch.nn.Module):
         _, pooled_output = self.roberta(input_ids=input_id, attention_mask=mask,return_dict=False)
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear1(dropout_output)
+        # print("----------------------")
+        # print(linear_output)
+        # print("----------------------")
         return linear_output
+
 
 def model_declaration(device):
     graph.detach()
@@ -72,14 +94,21 @@ def model_declaration(device):
     text_sequence["ParentLabels"] = ReaderSensor(keyword="Parent Labels", device=device)
     
     text_sequence["TokenText","mask"] = JointSensor("Text", forward=tokenize_text)
-    #category["TokenParentTexts"] = FunctionalSensor("Parent Text", forward=tokenize_parent_texts)
+    category[TextContains, "TokenParentTexts","ParentMasks"] = JointSensor(text_sequence["ParentTexts"], forward=tokenize_parent_texts)
+    category[TextContains, "TokenParentLabels"] = JointSensor(text_sequence["ParentLabels"], forward=parent_labels)
 
     text_sequence[category] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
-    #category["ParentLabels"] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
+    category[parent_tags] = FunctionalSensor("TokenParentLabels", forward=parent_reader, label=True)
 
     text_sequence[category] = ModuleLearner("TokenText","mask", module=RobertaClassifier(num_outputs=2))
+    category[parent_tags] = ModuleLearner("TokenParentTexts","ParentMasks", module=RobertaClassifier(num_outputs=13))
 
-    program = SolverPOIProgram(graph,poi=[text_sequence,text_sequence[category]], loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    # print("-"*40)
+    # print(category[parent_tags])
+    # print("-"*40)
+    program = SolverPOIProgram(graph,
+                               poi=[text_sequence, text_sequence[category], category[parent_tags]],
+                               loss=MacroAverageTracker(BCEWithLogitsLoss()),
                                metric=PRF1Tracker(DatanodeCMMetric('local/argmax')))
     return program
 

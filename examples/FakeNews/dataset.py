@@ -1,14 +1,14 @@
 import pandas as pd
 
 def load_annodata(anno_data):
-    anno_data = pd.read_csv(anno_data)
+    anno_data = pd.read_csv(anno_data, encoding="utf-8")
     final_reader = []
     anno_dict = {}
     for idx, row in anno_data.iterrows():
         text = row["Texts"]
-        binary_label = row["hasAnno"]
-        parent_texts = [text] * 12
-        parent_labels = row[4:16].tolist()
+        binary_label = [row["noAnno"], row["hasAnno"]]
+        parent_texts = [text]
+        parent_labels = [1]+row[4:16].astype(int).tolist()
 
         anno_dict["Text"] = [text]
         anno_dict["Label"] = [binary_label]
