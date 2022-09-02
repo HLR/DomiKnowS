@@ -356,4 +356,10 @@ class EnumConcept(Concept):
         except ValueError:
             return None
         
+    def get_concept(self, value):
+        valueIndex = self.get_index(value)
+        if valueIndex:
+            return (self, value, self.get_index(value), len(self.enum))
+        else:
+            return None
         

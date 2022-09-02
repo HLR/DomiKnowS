@@ -1131,12 +1131,14 @@ class DataNode:
     # T-norms: L - Lukasiewicz, G - Godel, P - Product
     #tnorms = ['L', 'G', 'P']
     tnormsDefault = 'P'
+    # sampleSize = -1 means Semantic Sample
     def calculateLcLoss(self, tnorm=tnormsDefault, sample = False, sampleSize = 0, sampleGlobalLoss = False):
         
-        myilpOntSolver, _ = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
+        myilpOntSolver, conceptsRelations = self.__getILPSolver(conceptsRelations = self.collectConceptsAndRelations())
 
         self.inferLocal()
-        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss)
+        lcResult = myilpOntSolver.calculateLcLoss(self, tnorm = tnorm, sample = sample, 
+                                                  sampleSize = sampleSize, sampleGlobalLoss = sampleGlobalLoss, conceptsRelations = conceptsRelations)
         
         return lcResult
 

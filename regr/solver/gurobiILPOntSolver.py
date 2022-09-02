@@ -109,7 +109,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2]]
                 else:
                     if (currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0) in x:
-                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0] = xNew
+                        xNew = x[currentConceptRelation[0], currentConceptRelation[1], dn.getInstanceID(), 0]
                 
                 if xkey not in dn.attributes:
                     dn.attributes[xkey] = [None] * currentConceptRelation[3]
@@ -170,9 +170,6 @@ class gurobiILPOntSolver(ilpOntSolver):
                 
             if currentConceptRelation[2] is not None:
                 self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
-                
-        # Create constraint for multiclass exclusivity 
-        self.addMulticlassExclusivity(conceptsRelations, rootDn, m)
 
         m.update()
 
@@ -628,6 +625,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.error('Failed to add Logical Constraint %s\n'%(lc.lcName))
                 self.myLoggerTime.error('Failed to add Logical Constraint %s'%(lc.lcName))
 
+    def isConceptFixed(self, conceptName):
+        for graph in self.myGraph: # Loop through graphs
+            for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
+                if not lc.headLC or not lc.active: # Process only active and head lcs
+                    continue
+                    
+                if type(lc) is not fixedL: # Skip not fixedL lc
+                    continue
+                
+                if not lc.e:
+                    continue
+                
+                if lc.e[0][1] == conceptName:
+                    return True
+            
+        return False
+                
     def isVariableFixed(self, dn, conceptName, e):
         fixedAttribute= None
         fixedValue = None
@@ -670,15 +684,17 @@ class gurobiILPOntSolver(ilpOntSolver):
        
         vDnLabel = self.__getLabel(dn, conceptName).item()
 
-        if vDnLabel == e[1]:
+        if vDnLabel == e[2]:
             return 1
         else:
             return 0
                     
-    def getMLResult(self, dn, conceptName, xPkey, e, p, loss = False, sample = False):
+    def getMLResult(self, dn, xPkey, e, p, loss = False, sample = False):
         if dn == None:
             raise Exception("No datanode provided")
             
+        conceptName = e[0]
+        
         sampleKey = '<' + conceptName + ">/sample" 
         if sample and sampleKey not in dn.getAttributes():
             dn.getAttributes()[sampleKey] = {}
@@ -741,27 +757,31 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
                 
-        if isFiexd != None:
+        usedSampleSize = sampleSize
+        if sampleSize == -1:
+            usedSampleSize = dn.getAttributes()[sampleKey][-1][e[1]].shape[0]
+        if isFiexd != None:  
             if isFiexd == 1:
-                xP = torch.ones(sampleSize, device = self.current_device)
+                xP = torch.ones(usedSampleSize, device = self.current_device, requires_grad=True)
             else:
-                xP = torch.zeros(sampleSize, device = self.current_device)
+                xP = torch.zeros(usedSampleSize, device = self.current_device, requires_grad=True)
         else:
             xV = dn.getAttribute(xPkey)
-            xEp = dn.getAttribute(xPkey).expand(sampleSize, len(xV))
+            xEp = dn.getAttribute(xPkey).expand(usedSampleSize, len(xV))
             xP = xEp[:,e[1]]
+          
+        if sampleSize > -1: 
+            if sampleSize not in dn.getAttributes()[sampleKey]: 
+                dn.getAttributes()[sampleKey][sampleSize] = {}
                 
-        if sampleSize not in dn.getAttributes()[sampleKey]: 
-            dn.getAttributes()[sampleKey][sampleSize] = {}
+            if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
+                # check if not already generated
+                if vDn == None or vDn != vDn:
+                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
+                else:
+                    # Create sample for this concept and sample size
+                    dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
             
-        if e[1] not in dn.getAttributes()[sampleKey][sampleSize]:
-            # check if not already generated
-            if vDn == None or vDn != vDn:
-                dn.getAttributes()[sampleKey][sampleSize][e[1]] = [None]
-            else:
-                # Create sample for this concept and sample size
-                dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.bernoulli(xP)
-        
         return (dn.getAttributes()[sampleKey][sampleSize][e[1]], (xP, dn.getAttributes()[sampleKey][sampleSize][e[1]], xVarName)) # Return sample data and probability info
                       
     def fixedLSupport(self, _dn, conceptName, vDn, i, m):
@@ -983,26 +1003,26 @@ class gurobiILPOntSolver(ilpOntSolver):
                             if isinstance(e[0], EnumConcept) and e[2] == None: # Multiclass concept
                                 eList = e[0].enum
                                 for i, _ in enumerate(eList):
-                                    eT = (e[0], i, i)
+                                    eT = (e[0].name, i, i)
                                     if sample:
-                                        vDn, vDnSampleInfo = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                        vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
                                         
                                         _sampleInfoForVariable.append(vDnSampleInfo)
                                     else:
-                                        vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                        vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
                                     
                                     if lc.__str__() == "fixedL":
                                         vDn = self.fixedLSupport(_dn, conceptName, vDn, i, m)
                                         
                                     _vDns.append(vDn)
                             elif isinstance(e[0], EnumConcept) and e[2] != None: # Multiclass concept label
-                                eT = (e[0], e[2], e[2])
+                                eT = (e[0].name, e[2], e[2])
                                 
                                 if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)                                    
+                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)                                    
                                     _sampleInfoForVariable.append(vDnSampleInfo)
                                 else:
-                                    vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
                                 
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, e[2], m)
@@ -1011,11 +1031,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                             else: # Binary concept
                                 eT = (conceptName, 1, 0)
                                 if sample:
-                                    vDn, vDnSampleInfo = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                    vDn, vDnSampleInfo = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
 
                                     _sampleInfoForVariable.append(vDnSampleInfo)
                                 else:
-                                    vDn = self.getMLResult(_dn, conceptName, xPkey, eT, p, loss = loss, sample=sample)
+                                    vDn = self.getMLResult(_dn, xPkey, eT, p, loss = loss, sample=sample)
                                 
                                 if lc.__str__() == "fixedL":
                                     self.fixedLSupport(_dn, conceptName, vDn, 1, m)
@@ -1107,9 +1127,14 @@ class gurobiILPOntSolver(ilpOntSolver):
                 m.params.outputflag = 0
                 x = {}
                 
+            xLen = len(x)
             # Create ILP Variables for concepts and objective
             Q = self.createILPVariables(m, x, dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
-                
+            newXLen = len(x)
+            
+            if xLen != newXLen and self.model:
+                self.model = None
+            
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
             self.myLoggerTime.info('ILP Variables Init - time: %ims'%(elapsedVariablesInMs))
@@ -1118,7 +1143,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 # Add constraints based on ontology and graph definition
                 self.addOntologyConstrains(m, dn, *conceptsRelations)
                 self.addGraphConstrains(m, dn, *conceptsRelations)
-                
+                # Create constraint for multiclass exclusivity 
+                self.addMulticlassExclusivity(conceptsRelations, dn, m)
+            else:
+                self.myLoggerTime.info('Reusing ILP Model - LCs already present in the model')
+
             endGraphAndOntologyConstraints = process_time() # timer()
             elapsedGandOConstraintsInMs = (endGraphAndOntologyConstraints - endVariableInit) * 1000
             self.myLoggerTime.info('ILP Graph and Ontology Constraints - time: %ims'%(elapsedGandOConstraintsInMs))
@@ -1487,8 +1516,93 @@ class gurobiILPOntSolver(ilpOntSolver):
         #     lossTensor = torch.exp(lossTensor)
         return lossTensor, lcSampleSize
             
+    def generateSemanticSample(self, rootDn, conceptsRelations):
+        sampleSize = -1
+        
+        # Collect master concepts with length of multiclass set
+        masterConcepts = OrderedDict()
+        productConcepts = []
+        productSize = 1
+        productArgs = []
+        for currentConceptRelation in conceptsRelations:
+            currentConceptName = currentConceptRelation[0].name
+            
+            if currentConceptName not in masterConcepts:
+                masterConcepts[currentConceptName] = OrderedDict()
+                
+                masterConcepts[currentConceptName]['e'] = []
+                masterConcepts[currentConceptName]['e'].append(currentConceptRelation)
+                
+                
+                rootConcept = rootDn.findRootConceptOrRelation(currentConceptName)
+                dns = rootDn.findDatanodes(select = rootConcept)
+                masterConcepts[currentConceptName]["dns"] = dns
+                
+                conceptRange = 2
+                if currentConceptRelation[2] is not None:
+                    conceptRange = currentConceptRelation[3]
+                masterConcepts[currentConceptName]["range"] = [x for x in range(conceptRange)]
+                
+                masterConcepts[currentConceptName]['xkey'] = '<' + currentConceptName + '>/sample'
+                 
+                if self.isConceptFixed(currentConceptName):
+                    continue
+                
+                for _ in dns:
+                    productArgs.append(masterConcepts[currentConceptName]["range"])
+                    productSize *= conceptRange
+                    
+                productConcepts.append(currentConceptName)
+            else:
+                masterConcepts[currentConceptName]['e'].append(currentConceptRelation)
+
+        # Init sample 
+        for mConcept in masterConcepts:
+            mConceptInfo = masterConcepts[mConcept]
+            
+            if len(mConceptInfo["e"]) == 1: # Binary concept
+                mConceptInfo["binary"] = True
+            else:
+                mConceptInfo["binary"] = False
+            
+            for dn in mConceptInfo['dns']:
+                if mConceptInfo['xkey'] not in dn.getAttributes():
+                    dn.getAttributes()[mConceptInfo['xkey']] = OrderedDict()
+                                                                    
+                dn.getAttributes()[mConceptInfo['xkey']][sampleSize] = OrderedDict()
+                
+                for i, e in enumerate(mConceptInfo["e"]):
+                    isFiexd = self.isVariableFixed(dn, mConcept, e)
+                    
+                    if mConceptInfo["binary"]:
+                        i = 1
+                        
+                    if isFiexd != None:
+                        if isFiexd == 1:
+                            dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.ones(productSize, device = self.current_device)
+                            continue
+                        
+                    dn.getAttributes()[mConceptInfo['xkey']][sampleSize][i] = torch.zeros(productSize, device = self.current_device)
+             
+        from itertools import product
+        for j, p in enumerate(product(*productArgs, repeat=1)):
+            index = 0
+            if mConceptInfo["binary"]:
+                index = 1
+            for pConcept in productConcepts:
+                pConceptInfo = masterConcepts[pConcept]
+
+                for dn in pConceptInfo['dns']:
+                    try:
+                        dn.getAttributes()[pConceptInfo['xkey']][sampleSize][p[index]][j] = 1
+                    except:
+                        pass
+                    index +=1
+        
+        return productSize
+        
     # -- Calculated loss values for logical constraints
-    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False):
+    def calculateLcLoss(self, dn, tnorm='L', sample = False, sampleSize = 0, sampleGlobalLoss = False, conceptsRelations = None):
         start = process_time() # timer()
 
         m = None 
@@ -1497,10 +1611,12 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.current_device = dn.current_device
 
         if sample: 
-            if sampleSize <= 0: 
-                raise Exception("Sample size is not incorrect - %i"%(sampleSize))
             p = sampleSize
-            
+            if sampleSize == -1: # Semantic Sample
+                sampleSize = self.generateSemanticSample(dn, conceptsRelations)
+            if sampleSize < -1: 
+                raise Exception("Sample size is not incorrect - %i"%(sampleSize))
+           
             myBooleanMethods = self.myLcLossSampleBooleanMethods
             myBooleanMethods.sampleSize = sampleSize
                     
@@ -1545,6 +1661,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
+                    current_lcLosses['lossRate'] = []
+                    for li in lossList:
+                        liList = []
+                        for l in li:
+                            liList.append(torch.sum(l)/l.shape[0])
+                        
+                        current_lcLosses['lossRate'].append(liList)
                 else:
                     # lossList will contain float result for lc loss calculation
                     lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)

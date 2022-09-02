@@ -250,4 +250,5 @@ class SampleLosslModel(torch.nn.Module):
             lmbd_loss = sum(lmbd_loss)
         
         # (*out, datanode, builder)
+        self.logger.info(f'-- lmbd_loss is {lmbd_loss}')
         return lmbd_loss, datanode, builder
