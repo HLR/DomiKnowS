@@ -28,10 +28,8 @@ with Graph('FakeNews') as graph:
     #                                "Anno10b", "Anno10c", "Anno10d", "Anno11a", "Anno11b", "Anno11c", 
     #                                "Anno11d", "Anno11e", "Anno12a", "Anno12b", "Anno12c", "Anno12d"])
 
-    TextContains, = TextSequence.contains(ParentTag)
-
-    # for label in ParentTag.values():
-    #     nandL(label, Category.NoAnno, active=True)
+    for label in ParentTag.values():
+        nandL(label, Category.NoAnno, active=True)
 
     # disjoint(Category.NoAnno, Category.HasAnno)
 
