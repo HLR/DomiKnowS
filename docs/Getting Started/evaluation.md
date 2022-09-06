@@ -4,8 +4,17 @@
 DomiKnows provides some tools to evaluate models on different aspects. First, we encode a set of predefined metrics such as F1, Precision, Recall, and Accuracy over concept classes which can be used as follows: 
 
 ```python3
-Python code indicating how they can specify the metrics
+Subclass_of_LearningBasedProgram(...,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),\
+    'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},...)
 ```
+In which the 'Subclass_of_LearningBasedProgram' can be 'SolverPOIProgram' , 'PrimalDualProgram' or any other subclass of LearningBasedProgram. The input value of metric can be a pythonn dict or a single metric class. In the provided example we give metric a dict with two values. As a result, this program will print the metrics for the program with and without 'ILP'.
+
+But suppose we don't want the ILP results. In that case case we can simply define our metric like:
+
+```python3
+Subclass_of_LearningBasedProgram(...,metric=PRF1Tracker(DatanodeCMMetric('local/argmax')),...)
+```
+
 
 The Metric is calculated in two main ways:
 ##### Binary Metric:
@@ -29,8 +38,18 @@ As Domiknow's primary goal is to facilitate research in combining constraints an
 
 This can be called using the following code:
 ```python3
-Python Code to run the constraint violation
+
+ac_,t_=0,0
+for datanode in program.populate(reader_data, device="cpu"):
+    datanode.inferILPResults()
+    verifyResult = datanode.verifyResultsLC()
+    verifyResultILP = datanode.verifyResultsLC()
+    ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
+    t_ +=len(verifyResultILP.keys())
+
+print("constraint accuracy: ", ac_ / t_ )
 ```
+
 - Descriptions of how the constraint violation in computed
 - Describe a particular case for If statements and how to get that number
 
