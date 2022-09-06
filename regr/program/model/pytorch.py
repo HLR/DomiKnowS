@@ -94,7 +94,7 @@ class TorchModel(torch.nn.Module):
             if (builder.needsBatchRootDN()):
                 builder.addBatchRootDN()
             *out, = self.populate(builder)
-            datanode = builder.getDataNode(device=self.device)
+            datanode = builder.getDataNode(context="build", device=self.device)
             return (*out, datanode, builder)
         else:
             *out, = self.populate(data_item)

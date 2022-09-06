@@ -138,8 +138,11 @@ class LogicalConstrain:
             elif isinstance(eItem, LogicalConstrain):
                 strsE.append(eItem.__repr__())
             elif isinstance(eItem, tuple) and (len(eItem) == 4):
-                strsE.append(eItem[0].name)
-             
+                if eItem[2]:
+                    strsE.append(eItem[0].name + '\\' + eItem[1])
+                else:
+                    strsE.append(eItem[0].name)
+
         newStrsE = "["
         for s in strsE:
             newStrsE+= s

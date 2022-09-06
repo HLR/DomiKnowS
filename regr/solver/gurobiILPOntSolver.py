@@ -81,6 +81,58 @@ class gurobiILPOntSolver(ilpOntSolver):
             
         return value # Return probability
     
+    def collectLCVariables(self, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
+        # Collect LC variables 
+        collectedLCVs = {}
+        for currentConceptRelation in conceptsRelations: 
+            currentName = currentConceptRelation[0]
+            
+            rootConcept = rootDn.findRootConceptOrRelation(currentName)
+            dns = rootDn.findDatanodes(select = rootConcept)
+       
+            for dn in dns:
+                currentProbability = dnFun(dn, currentConceptRelation, fun=fun, epsilon=epsilon)
+                
+                if currentProbability == None or (torch.is_tensor(currentProbability) and currentProbability.dim() == 0) or len(currentProbability) < 2:
+                    self.myLogger.warning("Probability not provided for variable concept %s in dataNode %s - skipping it"%(currentName,dn.getInstanceID()))
+
+                    continue
+                
+                # Check if probability is NaN or if and has to be skipped
+                if self.valueToBeSkipped(currentProbability[1]):
+                    self.myLogger.info("Probability is %f for concept %s and dataNode %s - skipping it"%(currentProbability[1],currentConceptRelation[1],dn.getInstanceID()))
+                    continue
+    
+                xNew = None
+                if currentConceptRelation[2] is not None:
+                    xNew = (currentName, currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2])
+                else:
+                    xNew = (currentName, currentConceptRelation[1], dn.getInstanceID(), 0)
+                
+                collectedLCVs[xNew] = currentProbability[1]
+   
+                # Create negative variable for binary concept
+                if currentConceptRelation[2] is None: # ilpOntSolver.__negVarTrashhold:
+                    # Check if probability is NaN or if and has to be created based on positive value
+                    if self.valueToBeSkipped(currentProbability[0]):
+                        currentProbability[0] = 1 - currentProbability[1]
+                        self.myLogger.info("No ILP negative variable for concept %s and dataNode %s - created based on positive value %f"
+                                           %(dn.getInstanceID(), currentName, currentProbability[1]))
+                        
+                    xNotNew  = None
+                    
+                    if currentConceptRelation[2] is not None:
+                        xNotNew = (currentName, 'Not_'+currentConceptRelation[1], dn.getInstanceID(), currentConceptRelation[2])
+                    else:
+                        xNotNew = (currentName, 'Not_'+currentConceptRelation[1], dn.getInstanceID(), 0)
+                    
+                    collectedLCVs[xNotNew] = currentProbability[0]
+                   
+            if currentConceptRelation[2] is not None:
+                self.myLogger.debug("No creating ILP negative variables for multiclass concept %s"%( currentConceptRelation[1]))
+           
+        return collectedLCVs
+    
     def createILPVariables(self, m, x, rootDn, *conceptsRelations, dnFun = None, fun=None, epsilon = 0.00001):
         Q = None
         
@@ -1114,9 +1166,9 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         start = process_time() # timer()
 
-        gurobiEnv = Env("logs/gurobi.log",empty=True)
+        gurobiEnv = Env("", empty=True)
         gurobiEnv.setParam('OutputFlag', 0)
-        gurobiEnv.start()
+        gurobiEnv.start()  
         try:
             if self.reuse_model and self.model:
                 m = self.model['m']
@@ -1138,6 +1190,11 @@ class gurobiILPOntSolver(ilpOntSolver):
             endVariableInit = process_time() # timer()
             elapsedVariablesInMs = (endVariableInit - start) *1000
             self.myLoggerTime.info('ILP Variables Init - time: %ims'%(elapsedVariablesInMs))
+
+            #LCs = self.collectLCVariables(dn, *conceptsRelations, dnFun = self.__getProbability, fun=fun, epsilon = epsilon)
+            #endLCVariablecollect = process_time() # timer()
+            #elapsedVariablesInMs = (endLCVariablecollect - endVariableInit) *1000
+            #self.myLoggerTime.info('LC Variables Collect - time: %ims'%(elapsedVariablesInMs))
 
             if self.model is None:
                 # Add constraints based on ontology and graph definition
