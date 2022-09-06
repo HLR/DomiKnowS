@@ -15,7 +15,7 @@ from reader import DomiKnowS_reader
 import tqdm
 
 
-def eval(program, testing_set, cur_device):
+def eval(program, testing_set, cur_device, args):
     from graph import answer_class
     labels = ["Yes", "No"]
     accuracy_ILP = 0
@@ -70,12 +70,16 @@ def eval(program, testing_set, cur_device):
     df.to_csv("result.csv")
 
 
-def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow"):
+def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
     from graph import answer_class
     labels = ["Yes", "No"]
     best_accuracy = 0
     best_epoch = 0
     old_file = None
+    training_file = open("training.txt", 'a')
+    print("-" * 10, file=training_file)
+    print("Training by ", program_name, file=training_file)
+    print("Learning Rate:", args.lr, file=training_file)
     for epoch in range(0, limit, check_epoch):
         program.train(train_set, train_epoch_num=limit,
                       Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
@@ -89,13 +93,16 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
                 pred_argmax = labels[int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))]
                 accuracy += 1 if pred_argmax == label else 0
         accuracy /= count
+        print("Epoch:", epoch + check_epoch, file=training_file)
+        print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
         if accuracy > best_accuracy:
             best_epoch = epoch + check_epoch
-            if old_file:
-                os.remove(old_file)
+            # if old_file:
+            #     os.remove(old_file)
             new_file = program_name + "_" + str(epoch + check_epoch)
             old_file = new_file
             program.save(new_file)
+
     return best_epoch
 
 
@@ -123,8 +130,8 @@ def main(args):
                                 train=False, batch_size=args.batch_size)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
-        eval(program, testing_set, cur_device)
+        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device}, args=args)
+        eval(program, testing_set, cur_device, args)
     else:
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name)
 
