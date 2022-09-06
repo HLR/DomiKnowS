@@ -7,10 +7,20 @@ DomiKnows provides some tools to evaluate models on different aspects. First, we
 Python code indicating how they can specify the metrics
 ```
 
-- Some Descriptions on the metric computation and notices.
+metric is calculated in two main ways:
+##### Binary Metric:
 
-- Refer to guideline over how they can define their own metric system
+if a concept defined in our graph is binary, meaing that it can be either true or false, it is evaluated as a binary metric. for every binary concept, Domiknows prints four values precision, recall, f1 and accuracy. this is done by the PRF1Tracker class that takes every datanode as input and looks for binary concepts, their labels and their predicted values.
 
+##### Multiclass Metric:
+
+multiclass concepts have more evaluation methods. that's why it is usefull to define a custom metrik for multiclass concepts. however, the default metric will output a comprehensive list of evaluations that includes: 
+-the confusion matrix
+- micro f1, precision, recall and accuracy for individual labels
+- macro f1, precision, recall and accuracy for the concept
+_________
+#### Defining Custom Metrics:
+TODO
 
 #### Constraint Violation
 
