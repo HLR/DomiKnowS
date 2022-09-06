@@ -75,8 +75,8 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
 
         poi_list.extend([symmetric, reverse, transitive, transitive_topo])
 
-    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
+    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
     from regr.program import LearningBasedProgram, SolverPOIProgram
     from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
@@ -85,7 +85,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
-                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    loss=ValueTracker(NBCrossEntropyLoss()),
                                     beta=beta,
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
@@ -93,7 +93,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     elif sampling:
         program = SampleLossProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
-                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    loss=ValueTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     sample=True,
@@ -104,7 +104,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
         program = SolverPOIProgram(graph,
                                    poi=poi_list,
                                    inferTypes=infer_list,
-                                   loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                   loss=ValueTracker(NBCrossEntropyLoss()),
                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                    device=cur_device)
