@@ -59,9 +59,18 @@ program = SampleLossProgram(
 The semantic loss method relis on a search to find the satisfactory cases and push the network to generate such examples with higher joint probability. More description of this method is in [4].
 
 ```python3
-Code to run Semantic-loss method
+program = SampleLossProgram(
+        graph, SolverModel,
+        poi=...,
+        inferTypes=...,
+        loss=...,
+        sample = True,
+        sampleSize=-1, 
+        sampleGlobalLoss = False,
+        beta=1,
+        )
 ```
-
+ Setting `SampleSize` to `-1` will execute the Semantic-loss instead of sampling loss.
 
 ## References
 
