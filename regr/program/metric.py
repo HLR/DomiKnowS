@@ -138,8 +138,23 @@ class MetricTracker(torch.nn.Module):
         return value
 
     def __str__(self):
-        return str(self.value())
-
+        value = self.value()
+        
+        if isinstance(value, dict):
+            newValue = {}
+            for v in value:
+                if isinstance(value[v], dict):
+                    newV = {}
+                    for w in value[v]:
+                        newV[w] = value[v][w].item()
+                        
+                    newValue[v] = newV   
+                else:
+                    newValue[v] = value[v].item()
+                   
+            value = newValue
+                                    
+        return str(value)
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):

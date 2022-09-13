@@ -2008,10 +2008,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                         ifVerifyListSatisfied += sum(ifVi)
                     
                     current_verifyResult['ifVerifyList'] = verifyList
-                    if ifVerifyList:
+                    if ifVerifyListLen:
                         current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
-                    elif verifyListLen:
-                        current_verifyResult['ifSatisfied'] = 0
                     else:
                         current_verifyResult['ifSatisfied'] = 100
 
