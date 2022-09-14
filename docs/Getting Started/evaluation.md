@@ -27,9 +27,9 @@ If a concept defined in our graph is binary, meaning it can be either true or fa
 ##### Multiclass Metric:
 
 Multiclass concepts have more evaluation methods. That is why it is useful to define a custom metric for multiclass concepts. However, the default metric will output a comprehensive list of evaluations that includes: 
-- the confusion matrix
-- micro f1, precision, recall, and accuracy for individual labels
-- macro f1, precision, recall, and accuracy for the concept
+- The confusion matrix
+- Micro f1, precision, recall, and accuracy for individual labels
+- Macro f1, precision, recall, and accuracy for the concept
 _________
 #### Defining Custom Metrics:
 
@@ -45,7 +45,7 @@ This can be called using the following code:
 program.verifyResultILP = datanode.verifyResultsLC(reader_data,names=None)
 ```
 
-`program` is a subclass of LearningBasedProgram that we defined earlier. reader_data is the dictionary of data that we need to evaluate, and it is usually the dev or test data. `names` is an optional argument and is a list of names of the constraints we want to evaluate. If names are not given, the function will print the results for every constraint possible. Each constraint will have default names given to it. However, for the important constraints, custom names can be defined in this way:
+`program` is a subclass of LearningBasedProgram that we defined earlier. `reader_data` is the dictionary of data that we need to evaluate, and it is usually the dev or test data. `names` is an optional argument and is a list of names of the constraints we want to evaluate. If names are not given, the function will print the results for every constraint possible. Each constraint will have default names given to it. However, for the important constraints, custom names can be defined in this way:
 
 ```python3
 
@@ -54,14 +54,14 @@ with Graph('graph_name') as graph:
     # ...
     # Logical_constraint(...,name="my_constraint")
     # ex:
-    #     ifL(andL(fact_check('x'), existsL(implication('s', path=('x', implication)))), fact_check(path=('s', i_arg2)),name="positive_implication")
+    # ifL(andL(fact_check('x'), existsL(implication('s', path=('x', implication)))), fact_check(path=('s', i_arg2)),name="positive_implication")
     #...
 
 ```
 
-Here, Logical_constraint can be any class that is a subclass of `LogicalConstrain` such as `IfL`, `NandL`, `OrL`, and... . The argument name is given to the constraint at the end, and it should be unique, meaning that it should be used in previous concepts or constraints.
+Here, `Logical_constraint` can be any class that is a subclass of `LogicalConstrain` such as `IfL`, `NandL`, `OrL`, and... . The argument name is given to the constraint at the end, and it should be unique, meaning that it should be used in previous concepts or constraints.
 
-The function `verifyResultsLC` would print two accuracy metrics. One is the accuracy of all instances of the constraint, and the other one is the accuracy for `Datanode`s. in this case, the `Datanode` is considered correct if all the instances of a constraint are True in that `Datanode`; otherwise, it is False.
+The function `verifyResultsLC` would print two accuracy metrics. One is the accuracy of all instances of the constraint, and the other one is the accuracy for `Datanode`s. In this case, the `Datanode` is considered correct if all the instances of a constraint are True in that `Datanode`; Otherwise, it is False.
 
 #### Execution Time
 Another essential factor in tracking the model's agility and usability is the time they take to be trained or used during inference. 
