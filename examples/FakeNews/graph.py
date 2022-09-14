@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 sys.path.append("../../")
 
@@ -13,35 +14,35 @@ Concept.clear()
 Relation.clear()
 
 with Graph('FakeNews') as graph:
+    def get_concept(attribute):
+        return attribute[0]
+
+
     TextSequence = Concept(name='TextSequence')
-    
+
     Category = TextSequence(name="Category", ConceptClass=EnumConcept, values=["NoAnno", "HasAnno"])
 
-    ParentTag = Category(name='ParentTag', ConceptClass=EnumConcept,
-                         values=["Anno1", "Anno2", "Anno3", "Anno4", "Anno5", "Anno6", 
-                                 "Anno7", "Anno8", "Anno9", "Anno10", "Anno11", "Anno12"])
+    categories = {"1": ["a", "b", "c"], "2": [], "3": ["a"], "4": ["a", "b", "c", "d"], "5": [], "6": [],
+                  "7": ["a", "b", "c"], "8": ["a"], "9": ["a", "b", "c", "d", "e"], "10": ["a", "b", "c", "d"],
+                  "11": ["a", "b", "c", "d", "e"], "12": ["a", "b", "c", "d"]}
+    ParentCategory = Category(name='ParentCategory', ConceptClass=EnumConcept,
+                              values=list(categories.keys()))
+    SubCategory = Category(name='SubCategory', ConceptClass=EnumConcept,
+                           values=['1a', '1b', '1c', '3a', '4a', '4b', '4c', '4d', '7a', '7b', '7c', '8a', '9a', '9b',
+                                   '9c', '9d', '9e', '10a', '10b', '10c', '10d', '11a', '11b', '11c', '11d', '11e',
+                                   '12a', '12b', '12c', '12d'])
 
-    # ChildTag = TextSequence(name='ChildTag', ConceptClass=EnumConcept,
-    #                        values=["Anno1a", "Anno1b", "Anno1c", "Anno3a", "Anno4a", "Anno4b", 
-    #                                "Anno4c", "Anno4d", "Anno7a", "Anno7b", "Anno7c", "Anno8a",
-    #                                "Anno9a", "Anno9b", "Anno9c", "Anno9d", "Anno9e", "Anno10a", 
-    #                                "Anno10b", "Anno10c", "Anno10d", "Anno11a", "Anno11b", "Anno11c", 
-    #                                "Anno11d", "Anno11e", "Anno12a", "Anno12b", "Anno12c", "Anno12d"])
 
-    for label in ParentTag.values():
-        nandL(label, Category.NoAnno, active=True)
+    for l1, l2 in combinations(Category.attributes, 2):
+        nandL(l1, l2)
 
-    # disjoint(Category.NoAnno, Category.HasAnno)
+    for l1, l2 in combinations(ParentCategory.attributes, 2):
+        nandL(l1, l2)
 
-    # nandL("NoAnno", "HasAnno")
+    for l1, l2 in combinations(SubCategory.attributes, 2):
+        nandL(l1, l2)
 
-    # ifL(orL(ChildTag.Anno1a, ChildTag.Anno1b, ChildTag.Anno1c), ParentTag.Anno1, active=True)
-    # ifL(ChildTag.Anno3a, ParentTag.Anno3, active=True)
-    # ifL(orL(ChildTag.Anno4a, ChildTag.Anno4b, ChildTag.Anno4c, ChildTag.Anno4d), ParentTag.Anno4, active=True)
-    # ifL(orL(ChildTag.Anno7a, ChildTag.Anno7b, ChildTag.Anno7c), ParentTag.Anno7, active=True)
-    # ifL(ChildTag.Anno8a, ParentTag.Anno8, active=True)
-    # ifL(orL(ChildTag.Anno9a, ChildTag.Anno9b, ChildTag.Anno9c, ChildTag.Anno9d, ChildTag.Anno9e), ParentTag.Anno9, active=True)
-    # ifL(orL(ChildTag.Anno10a, ChildTag.Anno10b, ChildTag.Anno10c, ChildTag.Anno10d), ParentTag.Anno10, active=True)
-    # ifL(orL(ChildTag.Anno11a, ChildTag.Anno11b, ChildTag.Anno11c, ChildTag.Anno11d, ChildTag.Anno11e), ParentTag.Anno11, active=True)
-    # ifL(orL(ChildTag.Anno12a, ChildTag.Anno12b, ChildTag.Anno12c, ChildTag.Anno12d), ParentTag.Anno12, active=True)
-
+    # for category, sub_categories_suffixes in categories.items():
+    #     for sub_categories_suffix in sub_categories_suffixes:
+    #         subCategory = category + sub_categories_suffix
+    #         ifL(getattr(SubCategory, subCategory), getattr(ParentCategory, category))

@@ -1,6 +1,7 @@
 from cgitb import text
 from modulefinder import Module
 import sys
+
 sys.path.append("../")
 sys.path.append("../../")
 from graph import graph
@@ -21,12 +22,15 @@ import transformers
 from transformers import RobertaModel
 from transformers import RobertaTokenizer
 from dataset import load_annodata
+
 tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
+
 def tokenize_text(text):
-    t=tokenizer(text, padding='max_length', max_length=192,
-                     truncation=True, return_tensors="pt")
+    t = tokenizer(text, padding='max_length', max_length=192,
+                  truncation=True, return_tensors="pt")
     return t["input_ids"], t["attention_mask"]
+
 
 # def tokenize_parent_texts(parent_texts):
 #     t=[tokenizer(text, padding='max_length', max_length=192,
@@ -52,27 +56,28 @@ def binary_reader(label):
     # print(label)
     return label
 
+
 def parent_reader(labels):
     # print(labels)
     return labels
 
+
 def parent_labels(labels):
     return torch.ones(len(labels), 1), labels
+
 
 class RobertaClassifier(torch.nn.Module):
 
     def __init__(self, num_outputs, dropout=0.5):
-
         super(RobertaClassifier, self).__init__()
 
         self.roberta = RobertaModel.from_pretrained("roberta-base")
         self.dropout = nn.Dropout(dropout)
         self.linear1 = nn.Linear(768, num_outputs)
         self.relu = nn.ReLU()
-      
 
     def forward(self, input_id, mask):
-        _, pooled_output = self.roberta(input_ids=input_id, attention_mask=mask,return_dict=False)
+        _, pooled_output = self.roberta(input_ids=input_id, attention_mask=mask, return_dict=False)
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear1(dropout_output)
         # print("----------------------")
@@ -83,7 +88,7 @@ class RobertaClassifier(torch.nn.Module):
 
 def model_declaration(device):
     graph.detach()
-    
+
     # text_sequence = graph["TextSequence"]
     # category = graph["Category"]
     # parent_tags = graph["ParentTag"]
@@ -105,7 +110,7 @@ def model_declaration(device):
 
     text_sequence = graph["TextSequence"]
     category = graph["Category"]
-    parent_tag = graph["ParentTag"]
+    parent_category = graph["ParentCategory"]
 
     text_sequence["Text"] = ReaderSensor(keyword="Text", device=device)
     text_sequence["BinaryLabel"] = ReaderSensor(keyword="Label", device=device)
@@ -113,15 +118,21 @@ def model_declaration(device):
     text_sequence[category] = FunctionalSensor("BinaryLabel", forward=binary_reader, label=True)
     text_sequence[category] = ModuleLearner("TokenText", "mask", module=RobertaClassifier(num_outputs=2))
 
-    text_sequence["ParentTexts"] = ReaderSensor(keyword="Text", device=device)
     text_sequence["ParentLabels"] = ReaderSensor(keyword="Parent Labels", device=device)
-    text_sequence["ParentTokenText", "ParentMask"] = JointSensor("ParentTexts", forward=tokenize_text)
-    text_sequence[parent_tag] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
-    text_sequence[parent_tag] = ModuleLearner("ParentTokenText", "ParentMask", module=RobertaClassifier(num_outputs=13))
+    text_sequence["ParentTokenText", "ParentMask"] = JointSensor("Text", forward=tokenize_text)
+    text_sequence[parent_category] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
+    text_sequence[parent_category] = ModuleLearner("ParentTokenText", "ParentMask",
+                                                   module=RobertaClassifier(num_outputs=13))
+
+
+    # text_sequence["SubLabels"] = ReaderSensor(keyword="Sub Labels", device=device)
+    # text_sequence["SubTokenText", "SubMask"] = JointSensor("Text", forward=tokenize_text)
+    # text_sequence[parent_category] = FunctionalSensor("SubLabels", forward=parent_reader, label=True)
+    # text_sequence[parent_category] = ModuleLearner("SubTokenText", "SubMask",
+    #                                                module=RobertaClassifier(num_outputs=13))
 
     program = SolverPOIProgram(graph,
-                               # poi=[text_sequence, text_sequence[category], text_sequence[parent_tag]],
-                               # poi=[text_sequence, text_sequence[category]],
+                               # poi=[text_sequence, text_sequence[category], text_sequence[parent_category]],
+                               poi=[text_sequence, text_sequence[category]],
                                loss=MacroAverageTracker(BCEWithLogitsLoss()))
     return program
-
