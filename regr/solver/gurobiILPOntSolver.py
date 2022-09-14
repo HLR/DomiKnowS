@@ -18,7 +18,7 @@ from regr.solver.lcLossBooleanMethods import lcLossBooleanMethods
 from regr.solver.lcLossSampleBooleanMethods import lcLossSampleBooleanMethods
 from regr.solver.ilpBooleanMethodsCalculator import booleanMethodsCalculator
 
-from regr.graph import LogicalConstrain, V, fixedL
+from regr.graph import LogicalConstrain, V, fixedL, ifL
 from _functools import reduce
 class gurobiILPOntSolver(ilpOntSolver):
     ilpSolver = 'Gurobi'
@@ -657,7 +657,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.debug('Skipping not active Logical Constraint %s(%s) - %s'%(lc.lcName, lc, [str(e) for e in lc.e]))
                 continue
 
-            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key,  lcVariablesDns = {}, headLC = True)
+            result = self.__constructLogicalConstrains(lc, self.myIlpBooleanProcessor, m, dn, p, key = key, headLC = True)
             
             m.update()
             endNumConstrs = m.NumConstrs
@@ -866,15 +866,15 @@ class gurobiILPOntSolver(ilpOntSolver):
             else:
                 return 0
         
-    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None):
+    def __constructLogicalConstrains(self, lc, booleanProcesor, m, dn, p, key = None, lcVariablesDns = None, headLC = False, loss = False, sample = False, vNo = None, verify=False):
         if key == None:
             key = ""
         if lcVariablesDns == None:
-            lcVariablesDns = {}
+            lcVariablesDns = OrderedDict()
             
-        lcVariables = {}
+        lcVariables = OrderedDict()
         if sample:
-            sampleInfo = {}
+            sampleInfo = OrderedDict()
         if vNo == None:
             vNo = [0]
         
@@ -1146,6 +1146,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 return None
         if sample:
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo
+        elif verify and headLC:
+            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate)
     
@@ -1715,7 +1717,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
                     current_lcLosses['lossRate'] = []
@@ -1727,7 +1729,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         current_lcLosses['lossRate'].append(liList)
                 else:
                     # lossList will contain float result for lc loss calculation
-                    lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = True, sample = sample)
+                    lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     
                     
@@ -1777,7 +1779,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
                 successesList = [] # Entry lcs successes
                 lcSuccesses = torch.ones(sampleSize, device = self.current_device) # Consolidated successes for all the entry lcs
-                lcVariables = {} # Unique variables used in all the entry lcs
+                lcVariables = OrderedDict() # Unique variables used in all the entry lcs
                 countSuccesses = torch.zeros(sampleSize, device = self.current_device)
                 oneT = torch.ones(sampleSize, device = self.current_device)
                 
@@ -1867,7 +1869,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_lcLosses['lcSuccesses'] = successesList
                     
                     for i, l in enumerate(lossList):
-                        currentLcVariables = {}
+                        currentLcVariables = OrderedDict()
                         for k in sampleInfo.keys():
                             for c in sampleInfo[k][i]:
                                 if len(c) > 2:                                        
@@ -1951,7 +1953,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLoggerTime.info('Calculating verify ')
         
         lcCounter = 0 # Count processed lcs
-        lcVerifyResult = {}
+        lcVerifyResult = OrderedDict()
         for graph in self.myGraph: # Loop through graphs
             for _, lc in graph.logicalConstrains.items(): # loop trough lcs in the graph
                 startLC = process_time_ns() # timer()
@@ -1971,8 +1973,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 lcVerifyResult[lcName] = {}
                 current_verifyResult = lcVerifyResult[lcName]
                 
-                # lossList will contain float result for lc loss calculation
-                verifyList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, lcVariablesDns = {}, headLC = True, loss = False, sample = False)
+                # verifyList will contain result for the lc verification
+                verifyList, lcVariables = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, verify=True)
                 current_verifyResult['verifyList'] = verifyList
                 
                 verifyListLen = 0
@@ -1985,6 +1987,31 @@ class gurobiILPOntSolver(ilpOntSolver):
                     current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) *100
                 else:
                     current_verifyResult['satisfied'] = 100
+                    
+                if type(lc) is ifL: # if LC
+                    firstKey = next(iter(lcVariables))
+                    firstLcV = lcVariables[firstKey] 
+                    
+                    ifVerifyList = []
+                    
+                    ifVerifyListLen = 0
+                    ifVerifyListSatisfied = 0
+                    for i, v in enumerate(verifyList):
+                        ifVi = []
+                        for j, w in enumerate(v):
+                            if firstLcV[i][j].item() == 1:
+                                ifVi.append(w)
+                                
+                        ifVerifyList.append(ifVi)
+                        
+                        ifVerifyListLen += len(ifVi)
+                        ifVerifyListSatisfied += sum(ifVi)
+                    
+                    current_verifyResult['ifVerifyList'] = verifyList
+                    if ifVerifyListLen:
+                        current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
+                    else:
+                        current_verifyResult['ifSatisfied'] = 100
 
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC
@@ -2005,7 +2032,6 @@ class gurobiILPOntSolver(ilpOntSolver):
             self.myLogger.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
             self.myLoggerTime.info('End of Verify Calculation - total time: %ims'%(elapsedInMs))
             
-        
         self.myLogger.info('')
         self.myLoggerTime.info('')
 
