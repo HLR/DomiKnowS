@@ -42,7 +42,7 @@ As Domiknow's primary goal is to facilitate research in combining constraints an
 This can be called using the following code:
 
 ```python3
-program.verifyResultILP = datanode.verifyResultsLC(reader_data,names=None)
+program.verifyResultsLC(reader_data,names=None)
 ```
 
 `program` is a subclass of LearningBasedProgram that we defined earlier. `reader_data` is the dictionary of data that we need to evaluate, and it is usually the dev or test data. `names` is an optional argument and is a list of names of the constraints we want to evaluate. If names are not given, the function will print the results for every constraint possible. Each constraint will have default names given to it. However, for the important constraints, custom names can be defined in this way:
