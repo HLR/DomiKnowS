@@ -70,7 +70,7 @@ class DatanodeCMMetric(torch.nn.Module):
     def forward(self, input, target, data_item, prop, weight=None):
         if (data_item.needsBatchRootDN()):
             data_item.addBatchRootDN()
-        datanode = data_item.getDataNode()
+        datanode = data_item.getDataNode(context=self.inferType)
         result = datanode.getInferMetrics(prop.name, inferType=self.inferType)
         if len(result.keys())==2:
             if str(prop.name) in result:
@@ -138,8 +138,23 @@ class MetricTracker(torch.nn.Module):
         return value
 
     def __str__(self):
-        return str(self.value())
-
+        value = self.value()
+        
+        if isinstance(value, dict):
+            newValue = {}
+            for v in value:
+                if isinstance(value[v], dict):
+                    newV = {}
+                    for w in value[v]:
+                        newV[w] = value[v][w].item()
+                        
+                    newValue[v] = newV   
+                else:
+                    newValue[v] = value[v].item()
+                   
+            value = newValue
+                                    
+        return str(value)
 
 class MacroAverageTracker(MetricTracker):
     def forward(self, values):

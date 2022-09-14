@@ -1,3 +1,4 @@
+import os
 import sys
 
 sys.path.append(".")
@@ -14,40 +15,15 @@ from reader import DomiKnowS_reader
 import tqdm
 
 
-def main(args):
+def eval(program, testing_set, cur_device, args):
     from graph import answer_class
-    cuda_number = args.cuda
-    if cuda_number == -1:
-        cur_device = 'cpu'
-    else:
-        cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
-
-    program = program_declaration(cur_device,
-                                  pmd=args.pmd, beta=args.beta,
-                                  sampling=args.sampling, sampleSize=args.sampling_size,
-                                  dropout=args.dropout, constrains=args.constrains)
-
-    training_set = DomiKnowS_reader("DataSet/train_with_rules.json", "YN",
-                                    size=args.train_size, upward_level=8, train=True, batch_size=args.batch_size)
-
-    test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" else "DataSet/test.json"
-    testing_set = DomiKnowS_reader(test_file, "YN", size=args.test_size,
-                                   train=False, batch_size=args.batch_size)
-
-    if args.loaded:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
-    else:
-        program.train(training_set, train_epoch_num=args.epoch,
-                      Optim=lambda param: torch.optim.Adam(param, lr=args.lr, amsgrad=True),
-                      device=cur_device)
-
     labels = ["Yes", "No"]
     accuracy_ILP = 0
     accuracy = 0
     count = 0
     count_datanode = 0
     satisfy_constrain_rate = 0
-    result_csv = {"story":[], "question":[], "label":[], "argmax":[], "ILP":[]}
+    result_csv = {"story": [], "question": [], "label": [], "argmax": [], "ILP": []}
     for datanode in tqdm.tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
         count_datanode += 1
         for question in datanode.getChildDataNodes():
@@ -73,7 +49,8 @@ def main(args):
     accuracy_ILP /= count
 
     result_file = open("result.txt", 'a')
-    print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS", file=result_file)
+    print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
+          file=result_file)
     if not args.loaded:
         print("Training info", file=result_file)
         print("Batch Size:", args.batch_size, file=result_file)
@@ -92,8 +69,71 @@ def main(args):
     df = pd.DataFrame(result_csv)
     df.to_csv("result.csv")
 
-    if args.save:
-        program.save(args.save_file)
+
+def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
+    from graph import answer_class
+    labels = ["Yes", "No"]
+    best_accuracy = 0
+    best_epoch = 0
+    old_file = None
+    training_file = open("training.txt", 'a')
+    print("-" * 10, file=training_file)
+    print("Training by ", program_name, file=training_file)
+    print("Learning Rate:", args.lr, file=training_file)
+    for epoch in range(0, limit, check_epoch):
+        program.train(train_set, train_epoch_num=limit,
+                      Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
+                      device=cur_device)
+        count = 0
+        accuracy = 0.0
+        for datanode in tqdm.tqdm(program.populate(eval_set, device=cur_device), "Manually Testing"):
+            for question in datanode.getChildDataNodes():
+                count += 1
+                label = labels[int(question.getAttribute(answer_class, "label"))]
+                pred_argmax = labels[int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))]
+                accuracy += 1 if pred_argmax == label else 0
+        accuracy /= count
+        print("Epoch:", epoch + check_epoch, file=training_file)
+        print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
+        if accuracy > best_accuracy:
+            best_epoch = epoch + check_epoch
+            # if old_file:
+            #     os.remove(old_file)
+            new_file = program_name + "_" + str(epoch + check_epoch)
+            old_file = new_file
+            program.save(new_file)
+
+    return best_epoch
+
+
+def main(args):
+    cuda_number = args.cuda
+    if cuda_number == -1:
+        cur_device = 'cpu'
+    else:
+        cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
+
+    program = program_declaration(cur_device,
+                                  pmd=args.pmd, beta=args.beta,
+                                  sampling=args.sampling, sampleSize=args.sampling_size,
+                                  dropout=args.dropout, constrains=args.constrains)
+
+    training_set = DomiKnowS_reader("DataSet/train_with_rules.json", "YN",
+                                    size=args.train_size, upward_level=8, train=True, batch_size=args.batch_size)
+
+    test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" else "DataSet/test.json"
+    testing_set = DomiKnowS_reader(test_file, "YN", size=args.test_size,
+                                   train=False, batch_size=args.batch_size)
+
+    eval_file = "DataSet/human_dev.json" if args.test_file.upper() == "HUMAN" else "DataSet/dev_Spartun.json"
+    eval_set = DomiKnowS_reader(eval_file, "YN", size=args.test_size,
+                                train=False, batch_size=args.batch_size)
+    program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
+    if args.loaded:
+        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device}, args=args)
+        eval(program, testing_set, cur_device, args)
+    else:
+        train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name)
 
 
 if __name__ == "__main__":

@@ -171,10 +171,17 @@ for node in program.populate(reader, device=device):
     verifyResult = node.verifyResultsLC()
     if verifyResult:
         for lc in verifyResult:
-            print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+            if "ifSatisfied" in verifyResult[lc]:
+                print("%s(if) is %i%% satisfied by learned results"%(lc, verifyResult[lc]['ifSatisfied']))
+            else:
+                print("%s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+
             
     print("\nVerify ILP Results:")
     verifyResultILP = node.verifyResultsLC(key = "/ILP")
     if verifyResultILP:
         for lc in verifyResultILP:
-            print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+            if "ifSatisfied" in verifyResultILP[lc]:
+                print("%s(if) is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['ifSatisfied']))
+            else:
+                print("%s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
