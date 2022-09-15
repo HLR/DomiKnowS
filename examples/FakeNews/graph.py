@@ -27,17 +27,19 @@ with Graph('FakeNews') as graph:
                   "11": ["a", "b", "c", "d", "e"], "12": ["a", "b", "c", "d"]}
     ParentCategory = Category(name='ParentCategory', ConceptClass=EnumConcept,
                               values=list(categories.keys()))
-    SubCategory = Category(name='SubCategory', ConceptClass=EnumConcept,
-                           values=['1a', '1b', '1c', '3a', '4a', '4b', '4c', '4d', '7a', '7b', '7c', '8a', '9a', '9b',
-                                   '9c', '9d', '9e', '10a', '10b', '10c', '10d', '11a', '11b', '11c', '11d', '11e',
-                                   '12a', '12b', '12c', '12d'])
-
 
     for l1, l2 in combinations(Category.attributes, 2):
         nandL(l1, l2)
 
     for l1, l2 in combinations(ParentCategory.attributes, 2):
         nandL(l1, l2)
+
+    ## This is the problem
+    SubCategory = Category(name='SubCategory', ConceptClass=EnumConcept,
+                           values=['1a', '1b', '1c', '3a', '4a', '4b', '4c', '4d', '7a', '7b', '7c', '8a', '9a', '9b',
+                                   '9c', '9d', '9e', '10a', '10b', '10c', '10d', '11a', '11b', '11c', '11d', '11e',
+                                   '12a', '12b', '12c', '12d'])
+
 
     for l1, l2 in combinations(SubCategory.attributes, 2):
         nandL(l1, l2)
