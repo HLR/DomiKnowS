@@ -5,14 +5,10 @@ def load_annodata(anno_data):
     final_reader = []
     anno_dict = {}
     for idx, row in anno_data.iterrows():
-        text = row["Texts"]
-        binary_label = [row["noAnno"], row["hasAnno"]]
-        parent_labels = [1]+row[4:16].astype(int).tolist()
-
-        anno_dict["Text"] = [text]
-        anno_dict["Label"] = [binary_label]
-        anno_dict["Parent Labels"] = [parent_labels]
-        
+        anno_dict["Text"] = [row["Texts"]]
+        anno_dict["Label"] = [[row["noAnno"], row["hasAnno"]]]
+        anno_dict["Parent Labels"] = [row[4:16].astype(int).tolist()]
+        anno_dict["Sub Labels"] = [row[16:].astype(int).tolist()]
         final_reader.append(anno_dict)
         anno_dict = {}
     return final_reader

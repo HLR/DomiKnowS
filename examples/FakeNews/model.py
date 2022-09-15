@@ -111,6 +111,7 @@ def model_declaration(device):
     text_sequence = graph["TextSequence"]
     category = graph["Category"]
     parent_category = graph["ParentCategory"]
+    sub_category = graph["SubCategory"]
 
     text_sequence["Text"] = ReaderSensor(keyword="Text", device=device)
     text_sequence["BinaryLabel"] = ReaderSensor(keyword="Label", device=device)
@@ -122,14 +123,14 @@ def model_declaration(device):
     text_sequence["ParentTokenText", "ParentMask"] = JointSensor("Text", forward=tokenize_text)
     text_sequence[parent_category] = FunctionalSensor("ParentLabels", forward=parent_reader, label=True)
     text_sequence[parent_category] = ModuleLearner("ParentTokenText", "ParentMask",
-                                                   module=RobertaClassifier(num_outputs=13))
+                                                   module=RobertaClassifier(num_outputs=12))
 
 
-    # text_sequence["SubLabels"] = ReaderSensor(keyword="Sub Labels", device=device)
-    # text_sequence["SubTokenText", "SubMask"] = JointSensor("Text", forward=tokenize_text)
-    # text_sequence[parent_category] = FunctionalSensor("SubLabels", forward=parent_reader, label=True)
-    # text_sequence[parent_category] = ModuleLearner("SubTokenText", "SubMask",
-    #                                                module=RobertaClassifier(num_outputs=13))
+    text_sequence["SubLabels"] = ReaderSensor(keyword="Sub Labels", device=device)
+    text_sequence["SubTokenText", "SubMask"] = JointSensor("Text", forward=tokenize_text)
+    text_sequence[sub_category] = FunctionalSensor("SubLabels", forward=parent_reader, label=True)
+    text_sequence[sub_category] = ModuleLearner("SubTokenText", "SubMask",
+                                                   module=RobertaClassifier(num_outputs=30))
 
     program = SolverPOIProgram(graph,
                                # poi=[text_sequence, text_sequence[category], text_sequence[parent_category]],
