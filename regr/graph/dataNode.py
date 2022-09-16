@@ -1398,6 +1398,7 @@ class DataNode:
     
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
+    context = "build"
     def __init__(self, *args, **kwargs ):
         dict.__init__(self, *args, **kwargs )
         _DataNodeBulder__Logger.info("")

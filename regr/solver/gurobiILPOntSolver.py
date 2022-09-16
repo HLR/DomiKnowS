@@ -247,7 +247,7 @@ class gurobiILPOntSolver(ilpOntSolver):
             multiclassDict[c[0]].append(c)
             
         for mc in multiclassDict:
-            
+            # Add constrain which restrict number of muliclass labels assigned to one for the given instance
             rootConcept = rootDn.findRootConceptOrRelation(mc)
             dns = rootDn.findDatanodes(select = rootConcept)
             xkey = '<' + mc.name + '>/ILP/x'  

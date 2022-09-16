@@ -7,8 +7,8 @@ import logging
 
 import torch
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph import ifL, notL, andL, orL, nandL, V
+from regr.graph import Graph, Concept, Relation, DataNodeBuilder
+from regr.graph import ifL, andL, nandL
 from regr.program import POIProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
@@ -141,6 +141,7 @@ linearsoftmax = torch.nn.Sequential(
 #
 # Access learned information from Datanode 
 #
+DataNodeBuilder.context = "interference"
 for node in program.populate(reader, device=device):
     node.infer()
     node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
