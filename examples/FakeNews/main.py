@@ -17,7 +17,7 @@ def main():
 
     data = load_annodata("data/LowContextAnnoData.csv")
 
-    train_data, val_data, test_data = np.split(data, [int(len(data) * 0.8), int(len(data) * 0.9)])
+    train_data, val_data, test_data = np.split(data, [int(len(data) * 0.1), int(len(data) * 0.9)])
 
     program = model_declaration(device)
 
