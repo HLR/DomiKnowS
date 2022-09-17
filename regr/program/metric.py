@@ -146,11 +146,17 @@ class MetricTracker(torch.nn.Module):
                 if isinstance(value[v], dict):
                     newV = {}
                     for w in value[v]:
-                        newV[w] = value[v][w].item()
+                        if torch.is_tensor(value[v][w]):
+                            newV[w] = value[v][w].item()
+                        else:
+                            newV[w] = value[v][w]
                         
                     newValue[v] = newV   
                 else:
-                    newValue[v] = value[v].item()
+                    if torch.is_tensor(value[v]):
+                        newValue[v] = value[v].item()
+                    else:
+                        newValue[v] = value[v]
                    
             value = newValue
                                     

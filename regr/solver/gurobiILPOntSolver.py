@@ -1999,9 +1999,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for i, v in enumerate(verifyList):
                         ifVi = []
                         for j, w in enumerate(v):
-                            if firstLcV[i][j].item() == 1:
-                                ifVi.append(w)
-                                
+                            if torch.is_tensor(firstLcV[i][j]):
+                                if firstLcV[i][j].item() == 1:
+                                    ifVi.append(w)
+                            else: 
+                                if firstLcV[i][j] == 1:
+                                    ifVi.append(w)
+                                    
                         ifVerifyList.append(ifVi)
                         
                         ifVerifyListLen += len(ifVi)
