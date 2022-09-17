@@ -1,1 +1,1 @@
-from .utils import setProductionLogMode
+from .utils import setProductionLogMode, getRegrTimer_logger, getProductionModeStatus

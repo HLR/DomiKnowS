@@ -8,6 +8,9 @@ from typing import Iterable
 from contextlib import contextmanager
 import warnings
 import logging
+from logging.handlers import RotatingFileHandler
+
+from regr.config import config
 
 def extract_args(*args, **kwargs):
     if '_stack_back_level_' in kwargs and kwargs['_stack_back_level_']:
@@ -38,13 +41,72 @@ def log(*args, **kwargs):
         else:
             print('{}: {}'.format(k, v))
 
+productionMode = False
 def setProductionLogMode():
+    global productionMode
+    productionMode = True
     ilpOntSolverLog = logging.getLogger("ilpOntSolver")
     ilpOntSolverLog.addFilter(lambda record: False)
     dataNodeLog = logging.getLogger("dataNode")
     dataNodeLog.addFilter(lambda record: False)
     dataNodeBuilderLog = logging.getLogger("dataNodeBuilder")
     dataNodeBuilderLog.addFilter(lambda record: False)
+    
+def getProductionModeStatus():
+    return productionMode
+    
+myLoggerTime = None
+def getRegrTimer_logger(_config = config):
+    global myLoggerTime
+    if myLoggerTime:
+        return myLoggerTime
+    
+    logName = __name__
+    logLevel = logging.CRITICAL
+    logFilename='regrTimer.log'
+    logFilesize=5*1024*1024*1024
+    logBackupCount=4
+    logFileMode='a'
+
+    if _config and (isinstance(_config, dict)):
+        if 'log_name' in _config:
+            logName = _config['log_name']
+        if 'log_level' in _config:
+            logLevel = _config['log_level']
+        if 'log_filename' in _config:
+            logFilename = _config['log_filename']
+        if 'log_filesize' in _config:
+            logFilesize = _config['log_filesize']
+        if 'log_backupCount' in _config:
+            logBackupCount = _config['log_backupCount']
+        if 'log_fileMode' in _config:
+            logFileMode = _config['log_fileMode']
+        
+    loggerTime = logging.getLogger(logName)
+
+    # Create file handler and set level to info
+    import pathlib
+    pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
+    chTime = RotatingFileHandler(logFilename + ".log", mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
+
+    loggerTime.setLevel(logLevel)
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
+
+    # Add formatter to ch
+    chTime.setFormatter(formatter)
+
+    # Add ch to logger
+    loggerTime.addHandler(chTime)
+    
+    # Don't propagate
+    loggerTime.propagate = False
+    
+    myLoggerTime = loggerTime
+    myLoggerTime.info('--- Starting new run ---')
+    
+    return myLoggerTime
 
 def printablesize(ni):
     if hasattr(ni, 'shape'):

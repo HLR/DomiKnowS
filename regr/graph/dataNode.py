@@ -1,11 +1,12 @@
 import torch
 from collections import OrderedDict, namedtuple
-import time
+from  time import process_time_ns
 import re
 from .dataNodeConfig import dnConfig 
 
 from ordered_set import OrderedSet 
 
+from regr import getRegrTimer_logger, getProductionModeStatus
 from regr.graph.logicalConstrain import eqL
 from regr.solver import ilpOntSolverFactory
 
@@ -1397,10 +1398,12 @@ class DataNode:
     
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
+    context = "build"
     def __init__(self, *args, **kwargs ):
         dict.__init__(self, *args, **kwargs )
         _DataNodeBulder__Logger.info("")
         _DataNodeBulder__Logger.info("Called")
+        self.myLoggerTime = getRegrTimer_logger()
 
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
@@ -2030,11 +2033,21 @@ class DataNodeBuilder(dict):
         elif isinstance(value, torch.Tensor):
             return ValueInfo(len = lenV, value = value, dim=dimV)
     
+    def collectTime(self, start):
+        # Collect time used for __setitem__
+        end = process_time_ns()
+        currenTime =  end - start
+        if not dict.__contains__(self, "DataNodeTime"):
+            dict.__setitem__(self, "DataNodeTime", [])
+
+        timeList = dict.__getitem__(self, "DataNodeTime")
+        timeList.append(currenTime)
+        
     # Overloaded __setitem Dictionary method - tracking sensor data and building corresponding data graph
     def __setitem__(self, _key, value):
         from ..sensor import Sensor
 
-        start = time.time()
+        start = process_time_ns()
         self.__addSetitemCounter()
         
         if isinstance(_key, (Sensor, Property, Concept)):
@@ -2047,6 +2060,7 @@ class DataNodeBuilder(dict):
                 else:
                     _DataNodeBulder__Logger.debug('No processing (because build is set to False) - key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
 
+                self.collectTime(start)
                 return dict.__setitem__(self, _key, value)
             
             if  isinstance(_key, Property):
@@ -2057,11 +2071,13 @@ class DataNodeBuilder(dict):
                 else:
                     _DataNodeBulder__Logger.debug('No processing Property as key - key - %s, key type - %s, value - %s'%(key,type(_key),type(value)))
 
+                self.collectTime(start)
                 return dict.__setitem__(self, _key, value)
         elif isinstance(_key, str):
             key = _key
         else:
             _DataNodeBulder__Logger.error('key - %s, type %s is not supported'%(_key,type(_key)))
+            self.collectTime(start)
             return
         
         skey = key.split('/')
@@ -2069,7 +2085,9 @@ class DataNodeBuilder(dict):
         # Check if the key with this value has been set recently
         # If not create a new sensor for it
         # If yes stop __setitem__ and return - the same value for the key was added last time that key was set
-        if self.__addSensorCounters(skey, value):
+        if not getProductionModeStatus() and self.__addSensorCounters(skey, value):
+            self.myLoggerTime.info(f"DataNode Builder skipping repeated value for sensor  - {skey}")
+            self.collectTime(start)
             return # Stop __setitem__ for repeated key value combination
         
         if isinstance(value, torch.Tensor):
@@ -2081,10 +2099,12 @@ class DataNodeBuilder(dict):
 
         if value is None:
             _DataNodeBulder__Logger.error('The value for the key %s is None - abandon the update'%(key))
+            self.collectTime(start)
             return dict.__setitem__(self, _key, value)
                 
         if len(skey) < 2:            
             _DataNodeBulder__Logger.error('The key %s has only two elements, needs at least three - abandon the update'%(key))
+            self.collectTime(start)
             return dict.__setitem__(self, _key, value)
         
         usedGraph = dict.__getitem__(self, "graph")
@@ -2098,8 +2118,9 @@ class DataNodeBuilder(dict):
         # Check if found concept in the key
         if not keyWithoutGraphName:
             _DataNodeBulder__Logger.warning('key - %s has not concept part - returning'%(key))
+            self.collectTime(start)
             return dict.__setitem__(self, _key, value)
- 
+            
         # Find description of the concept in the graph
         if isinstance(_key, Sensor):
             try:
@@ -2112,6 +2133,7 @@ class DataNodeBuilder(dict):
                 
         if not concept:
             _DataNodeBulder__Logger.warning('_conceptName - %s has not been found in the used graph %s - returning'%(_conceptName,usedGraph.fullname))
+            self.collectTime(start)
             return dict.__setitem__(self, _key, value)
         
         conceptInfo = self.__findConceptInfo(usedGraph, concept)
@@ -2148,19 +2170,10 @@ class DataNodeBuilder(dict):
         # Add value to the underling dictionary
         r = dict.__setitem__(self, _key, value)
         
-        # ------------------- Collect time used for __setitem__
-        end = time.time()
-        if dict.__contains__(self, "DataNodeTime"):
-            currenTime = dict.__getitem__(self, "DataNodeTime")
-            currenTime = currenTime + end - start
-        else:
-            currenTime =  end - start
-        dict.__setitem__(self, "DataNodeTime", currenTime)
-        # -------------------
-        
         if not r:
             pass # Error when adding entry to dictionary ?
         
+        self.collectTime(start)
         return r                
                                              
     def __delitem__(self, key):
@@ -2169,7 +2182,7 @@ class DataNodeBuilder(dict):
     def __contains__(self, key):
         return dict.__contains__(self, key)
     
-    # Add or increase generic counter counting number of thd setitem method calls
+    # Add or increase generic counter counting number of the getitem method calls
     def __addGetDataNodeCounter(self):
         counterName = 'Counter' + 'GetDataNode'
         if not dict.__contains__(self, counterName):
@@ -2252,8 +2265,13 @@ class DataNodeBuilder(dict):
             raise ValueError('DataNode Builder has no DataNode started yet')   
         
     # Method returning constructed DataNode - the fist in the list
-    def getDataNode(self, device='auto'):
+    def getDataNode(self, context="interference", device='auto'):
         self.__addGetDataNodeCounter()
+        
+        if context=="interference":
+            self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
+            elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+            self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
@@ -2289,6 +2307,10 @@ class DataNodeBuilder(dict):
     # Method returning all constructed DataNodes 
     def getBatchDataNodes(self):
         self.__addGetDataNodeCounter()
+        
+        self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
+        elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
+        self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
         
         if dict.__contains__(self, 'dataNode'):
             _dataNode = dict.__getitem__(self, 'dataNode')
