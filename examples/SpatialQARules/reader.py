@@ -187,8 +187,8 @@ def test_reader(file, question_type, size=None):
     return dataset
 
 
-def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True, batch_size=8):
-    dataset = train_reader(file, question_type, size, upward_level) if train else test_reader(file, question_type, size)
+def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, batch_size=8):
+    dataset = train_reader(file, question_type, size, upward_level) if augmented else test_reader(file, question_type, size)
 
     return_dataset = []
     current_batch_size = 0

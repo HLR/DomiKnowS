@@ -11,14 +11,14 @@ import numpy as np
 
 def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, sampleSize=1, dropout=False, constrains=False):
     from graph import graph, story, question, answer_class, story_contain, \
-        symmetric, s_quest1, s_quest2, reverse, r_quest1, r_quest2,\
+        symmetric, s_quest1, s_quest2, reverse, r_quest1, r_quest2, \
         transitive, t_quest1, t_quest2, t_quest3, transitive_topo, tt_quest1, tt_quest2, tt_quest3, tt_quest4
 
-    story["questions"] = ReaderSensor(keyword="questions", device=cur_device)
-    story["stories"] = ReaderSensor(keyword="stories", device=cur_device)
-    story["relations"] = ReaderSensor(keyword="relation", device=cur_device)
-    story["question_ids"] = ReaderSensor(keyword="question_ids", device=cur_device)
-    story["labels"] = ReaderSensor(keyword="labels", device=cur_device)
+    story["questions"] = ReaderSensor(keyword="questions")
+    story["stories"] = ReaderSensor(keyword="stories")
+    story["relations"] = ReaderSensor(keyword="relation")
+    story["question_ids"] = ReaderSensor(keyword="question_ids")
+    story["labels"] = ReaderSensor(keyword="labels")
 
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x])
@@ -32,7 +32,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
         num_labels = make_labels(labels)
         ids = str_to_int_list(q_ids.split("@@"))
         return torch.ones(len(questions.split("@@")), 1), questions.split("@@"), stories.split("@@"), \
-        relations.split("@@"), ids, num_labels
+               relations.split("@@"), ids, num_labels
 
     question[story_contain, "question", "story", "relation", "id", "label"] = \
         JointSensor(story["questions"], story["stories"], story["relations"],
@@ -55,23 +55,23 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     if constrains:
         symmetric[s_quest1.reversed, s_quest2.reversed] = \
             CompositionCandidateSensor(
-            relations=(s_quest1.reversed, s_quest2.reversed),
-            forward=check_symmetric, device=cur_device)
+                relations=(s_quest1.reversed, s_quest2.reversed),
+                forward=check_symmetric, device=cur_device)
 
         reverse[r_quest1.reversed, r_quest2.reversed] = \
             CompositionCandidateSensor(
-            relations=(r_quest1.reversed, r_quest2.reversed),
-            forward=check_reverse, device=cur_device)
+                relations=(r_quest1.reversed, r_quest2.reversed),
+                forward=check_reverse, device=cur_device)
 
         transitive[t_quest1.reversed, t_quest2.reversed, t_quest3.reversed] = \
             CompositionCandidateSensor(
-            relations=(t_quest1.reversed, t_quest2.reversed, t_quest3.reversed),
-            forward=check_transitive, device=cur_device)
+                relations=(t_quest1.reversed, t_quest2.reversed, t_quest3.reversed),
+                forward=check_transitive, device=cur_device)
 
-        transitive_topo[tt_quest1.reversed, tt_quest2.reversed, tt_quest3.reversed, tt_quest4.reversed] =\
+        transitive_topo[tt_quest1.reversed, tt_quest2.reversed, tt_quest3.reversed, tt_quest4.reversed] = \
             CompositionCandidateSensor(
-            relations=(tt_quest1.reversed, tt_quest2.reversed, tt_quest3.reversed, tt_quest4.reversed),
-            forward=check_transitive_topo, device=cur_device)
+                relations=(tt_quest1.reversed, tt_quest2.reversed, tt_quest3.reversed, tt_quest4.reversed),
+                forward=check_transitive_topo, device=cur_device)
 
         poi_list.extend([symmetric, reverse, transitive, transitive_topo])
 
