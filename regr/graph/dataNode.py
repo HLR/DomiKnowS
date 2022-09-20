@@ -1894,6 +1894,11 @@ class DataNodeBuilder(dict):
                         existingDnsForConcept[vIndex].attributes[keyDataName] = v
                     else:
                         _DataNodeBulder__Logger.error('Element %i in the list is not a dataNode - skipping it'%(vIndex))
+        
+                if keyDataName[0] == '<' and keyDataName[-1] == '>':
+                    if "contains" in existingDnsForConcept[0].impactLinks:
+                        dnParent = existingDnsForConcept[0].impactLinks["contains"][0]
+                        dnParent.attributes[keyDataName] = vInfo.value
         elif len(existingDnsForConcept) < vInfo.len: # Too many elements in the value
             _DataNodeBulder__Logger.warning('Provided value has length %i but found %i existing dataNode - abandon the update'%(vInfo.len,len(existingDnsForConcept)))
             

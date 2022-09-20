@@ -42,9 +42,12 @@ def log(*args, **kwargs):
             print('{}: {}'.format(k, v))
 
 productionMode = False
-def setProductionLogMode():
+reuseModel = False
+def setProductionLogMode(reuse_model=False):
     global productionMode
+    global reuseModel
     productionMode = True
+    reuseModel = reuse_model
     ilpOntSolverLog = logging.getLogger("ilpOntSolver")
     ilpOntSolverLog.addFilter(lambda record: False)
     dataNodeLog = logging.getLogger("dataNode")
@@ -54,6 +57,9 @@ def setProductionLogMode():
     
 def getProductionModeStatus():
     return productionMode
+
+def getReuseModel():
+    return reuseModel
     
 myLoggerTime = None
 def getRegrTimer_logger(_config = config):
