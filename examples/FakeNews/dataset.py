@@ -7,9 +7,6 @@ def load_annodata(anno_data):
     final_reader = []
     anno_dict = {}
     for idx, row in anno_data.iterrows():
-        if idx > 10:
-
-            break
         labels = [row["noAnno"], row["hasAnno"]]
         anno_dict["Label"] = np.array([np.array(labels).argmax(axis=0)])
         parent_labels = row[4:16].astype(int).tolist()
