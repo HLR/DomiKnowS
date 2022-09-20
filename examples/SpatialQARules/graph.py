@@ -14,7 +14,7 @@ with Graph('spatial_QA_rule') as graph:
     story_contain, = story.contains(question)
 
     answer_class = question(name="answer_class", ConceptClass=EnumConcept,
-                            values=["yes", "no"])
+                            values=["yes", "no", "dk"])
 
     # Symmetric Constrain
     symmetric = Concept(name="symmetric")

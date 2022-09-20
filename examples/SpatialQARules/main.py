@@ -144,7 +144,7 @@ def main(args):
                                   sampling=args.sampling, sampleSize=args.sampling_size,
                                   dropout=args.dropout, constrains=args.constrains)
 
-    train_file = "DataSet/train_with_rules.json" if args.test_file.upper() == "SPARTUN" else "DataSet/train_human.json"
+    train_file = "DataSet/train_with_rules.json" if args.test_file.upper() == "SPARTUN" else "DataSet/human_train.json"
     training_set = DomiKnowS_reader(train_file, "YN",
                                     size=args.train_size, upward_level=8,
                                     augmented=args.train_file.upper() == "SPARTUN", batch_size=args.batch_size)
@@ -158,13 +158,13 @@ def main(args):
                                 augmented=False, batch_size=args.batch_size)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device}, args=args)
+        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         eval(program, testing_set, cur_device, args)
     elif args.loaded_train:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device}, args=args)
-        train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name)
+        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
     else:
-        train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name)
+        train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
 
     def make_labels(label_list):
         labels = label_list.split("@@")
-        label_nums = [0 if label == "Yes" else 1 for label in labels]
+        label_nums = [0 if label == "Yes" else 1 if label == "No" else 2 for label in labels]
         return str_to_int_list(label_nums)
 
     def make_question(questions, stories, relations, q_ids, labels):

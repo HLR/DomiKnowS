@@ -179,8 +179,6 @@ def test_reader(file, question_type, size=None):
             # asked_question = (obj1, obj2, asked_relation)
             # current_key = create_key(*asked_question)
             label = question["answer"][0]
-            if label != "Yes" and label != "No":
-                continue
             dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
             run_id += 1
             count += 1
