@@ -1,0 +1,36 @@
+* Owlready2 * Warning: optimized Cython parser module 'owlready2_optimized' is not available, defaulting to slower Python implementation
+Log file for dataNode is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/datanode.log
+0 - [LC2(andL)]
+1 - [LC4(andL), LC5(andL)]
+2 - [LC8(andL), LC9(andL), LC10(andL)]
+3 - [LC13(andL), LC14(andL), LC15(andL), LC16(andL)]
+4 - [LC19(andL), LC20(andL), LC21(andL), LC22(andL), LC23(andL)]
+5 - [LC26(andL), LC27(andL), LC28(andL), LC29(andL), LC30(andL), LC31(andL)]
+6 - [LC34(andL), LC35(andL), LC36(andL), LC37(andL), LC38(andL), LC39(andL), LC40(andL)]
+7 - [LC43(andL), LC44(andL), LC45(andL), LC46(andL), LC47(andL), LC48(andL), LC49(andL), LC50(andL)]
+8 - [LC53(andL), LC54(andL), LC55(andL), LC56(andL), LC57(andL), LC58(andL), LC59(andL), LC60(andL), LC61(andL)]
+9 - [LC64(andL), LC65(andL), LC66(andL), LC67(andL), LC68(andL), LC69(andL), LC70(andL), LC71(andL), LC72(andL), LC73(andL)]
+10 - [LC76(andL), LC77(andL), LC78(andL), LC79(andL), LC80(andL), LC81(andL), LC82(andL), LC83(andL), LC84(andL)]
+11 - [LC87(andL), LC88(andL), LC89(andL), LC90(andL), LC91(andL), LC92(andL), LC93(andL), LC94(andL)]
+12 - [LC97(andL), LC98(andL), LC99(andL), LC100(andL), LC101(andL), LC102(andL), LC103(andL)]
+13 - [LC106(andL), LC107(andL), LC108(andL), LC109(andL), LC110(andL), LC111(andL)]
+14 - [LC114(andL), LC115(andL), LC116(andL), LC117(andL), LC118(andL)]
+15 - [LC121(andL), LC122(andL), LC123(andL), LC124(andL)]
+16 - [LC127(andL), LC128(andL), LC129(andL)]
+17 - [LC132(andL), LC133(andL)]
+18 - [LC136(andL)]
+loaded model from ../../../results_new/primaldual_500/epoch14/model.pth
+Log file for ilpOntSolver is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+Log file for ilpOntSolverTime is in: /Users/alexanderwan/Documents/alex_fork/DomiKnowS/examples/mnist-arithmetic-2/logs/ilpOntSolver.log
+GT: 4 + 0 = 4
+PRED: 9 + 0 = 4
+CONSTRAINTS SATISFACTION: 18/19
+Starting GBI:
+iter=0, c_loss=3555, satisfied=18
+iter=1, c_loss=3170, satisfied=18
+iter=2, c_loss=3013, satisfied=18
+iter=3, c_loss=3194, satisfied=18
+iter=4, c_loss=3447, satisfied=19
+SATISFIED
+GT: 4 + 0 = 4
+PRED: 4 + 0 = 4
