@@ -1704,7 +1704,7 @@ class DataNodeBuilder(dict):
  
             if len(existingDnsForRelation) != vInfo.len:
                 _DataNodeBulder__Logger.error('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
-                return
+                raise ValueError('Number of relations is %i and is different then the length of the provided tensor %i'%(len(existingDnsForRelation),vInfo.len))
  
             if len(existingDnsForRelationSorted) == 1:
                 if vInfo.dim == 0:
@@ -1894,6 +1894,7 @@ class DataNodeBuilder(dict):
                         existingDnsForConcept[vIndex].attributes[keyDataName] = v
                     else:
                         _DataNodeBulder__Logger.error('Element %i in the list is not a dataNode - skipping it'%(vIndex))
+                        raise ValueError('Element %i in the list is not a dataNode - skipping it'%(vIndex))
         
                 if keyDataName[0] == '<' and keyDataName[-1] == '>':
                     if "contains" in existingDnsForConcept[0].impactLinks:
@@ -1916,7 +1917,9 @@ class DataNodeBuilder(dict):
             if requiredLenOFReltedDns != len(relatedDns):
                 _DataNodeBulder__Logger.error('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
                                               %(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
-                return
+                raise ValueError('Provided value expected %i related dataNode of type %s but the number of existing dataNodes is %i - abandon the update'
+                                              %(requiredLenOFReltedDns,relatedDnsType,len(relatedDns)))
+
                 
             _DataNodeBulder__Logger.info('It is a contain update of type - %s'%(conceptInfo["relationMode"]))
             if conceptInfo["relationMode"] == "forward":

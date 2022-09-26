@@ -40,31 +40,16 @@ def log(*args, **kwargs):
             print('{}:\n{}'.format(k, v))
         else:
             print('{}: {}'.format(k, v))
-
-productionMode = False
-reuseModel = False
-def setProductionLogMode(reuse_model=False):
-    global productionMode
-    global reuseModel
-    productionMode = True
-    reuseModel = reuse_model
-    ilpOntSolverLog = logging.getLogger("ilpOntSolver")
-    ilpOntSolverLog.addFilter(lambda record: False)
-    dataNodeLog = logging.getLogger("dataNode")
-    dataNodeLog.addFilter(lambda record: False)
-    dataNodeBuilderLog = logging.getLogger("dataNodeBuilder")
-    dataNodeBuilderLog.addFilter(lambda record: False)
     
-def getProductionModeStatus():
-    return productionMode
-
-def getReuseModel():
-    return reuseModel
-    
+noUseTimeLog = False
 myLoggerTime = None
 def getRegrTimer_logger(_config = config):
+    global noUseTimeLog
     global myLoggerTime
     if myLoggerTime:
+        if noUseTimeLog:
+            myLoggerTime.addFilter(lambda record: False)
+            
         return myLoggerTime
     
     logName = __name__
@@ -112,8 +97,37 @@ def getRegrTimer_logger(_config = config):
     myLoggerTime = loggerTime
     myLoggerTime.info('--- Starting new run ---')
     
+    if noUseTimeLog:
+        myLoggerTime.addFilter(lambda record: False)
+    
     return myLoggerTime
 
+productionMode = False
+reuseModel = False
+def setProductionLogMode(no_UseTimeLog = False, reuse_model=False):
+    global productionMode
+    global reuseModel
+    global noUseTimeLog
+    global myLoggerTime
+    productionMode = True
+    reuseModel = reuse_model
+    ilpOntSolverLog = logging.getLogger("ilpOntSolver")
+    ilpOntSolverLog.addFilter(lambda record: False)
+    dataNodeLog = logging.getLogger("dataNode")
+    dataNodeLog.addFilter(lambda record: False)
+    dataNodeBuilderLog = logging.getLogger("dataNodeBuilder")
+    dataNodeBuilderLog.addFilter(lambda record: False)
+    
+    noUseTimeLog = no_UseTimeLog
+    if noUseTimeLog:
+        if myLoggerTime != None:
+            myLoggerTime.addFilter(lambda record: False)
+    
+def getProductionModeStatus():
+    return productionMode
+
+def getReuseModel():
+    return reuseModel
 def printablesize(ni):
     if hasattr(ni, 'shape'):
         return 'tensor' + str(tuple(ni.shape)) + ''

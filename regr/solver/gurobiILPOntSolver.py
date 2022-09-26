@@ -913,10 +913,11 @@ class gurobiILPOntSolver(ilpOntSolver):
         lcVariables = OrderedDict()
         if sample:
             sampleInfo = OrderedDict()
+            lcVariablesSet = OrderedDict()
         if vNo == None:
-            vNo = [0]
+            vNo = [1, 1]
         
-        firstV = True
+        firstV = None
         integrate = False
         
         for eIndex, e in enumerate(lc.e): 
@@ -929,14 +930,15 @@ class gurobiILPOntSolver(ilpOntSolver):
                     variable = lc.e[eIndex+1]
                 else:
                     if isinstance(e, LogicalConstrain):
-                        variable = V(name="_lc" + str(vNo[0]))
-                        vNo[0] += 1
+                        variable = V(name="_lc" + str(vNo[1]))
+                        vNo[1] += 1
                     else:
-                        if firstV:
-                            variable = V(name="_x" )
-                            firstV = False
+                        if firstV == None:
+                            variable = V(name="_x" + str(vNo[0]) )
+                            firstV = variable.name
+                            vNo[0] += 1
                         else:
-                            variable = V(name="_x" + str(vNo[0]), v = ("_x",))
+                            variable = V(name="_x" + str(vNo[0]), v = (firstV,))
                             vNo[0] += 1
                     
                 if variable.name:
@@ -1156,9 +1158,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 elif isinstance(e, LogicalConstrain): # -- nested LogicalConstrain - process recursively 
                     self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
-                        vDns, sampleInfoLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
+                        vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
                                                                                lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                         sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
+                        
+                        lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
                                                                  lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
@@ -1183,7 +1187,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                 self.myLogger.error('Logical Constraint %s has incorrect element %s'%(lc,e))
                 return None
         if sample:
-            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo
+            lcVariablesSet[lc] = lcVariables
+            return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), sampleInfo, lcVariablesSet
         elif verify and headLC:
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
@@ -1359,7 +1364,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     # Save model
                     if self.reuse_model:
                         self.model.append((ilpVarCount, mP, xP))
-                
+                        import sys
+                        memoryUsage = sys.getsizeof(mP)
+                        self.myLoggerTime.info('ILP Logical Constraints Preprocessing - memory use by saved Gurobi models: %f'%(memoryUsage))
+
                 self.myLogger.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
                 self.myLoggerTime.info('Optimizing model for LCs with probabilities %s with %i ILP variables and %i ILP constraints'%(p,mP.NumVars,mP.NumConstrs))
 
@@ -1783,9 +1791,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sample:
                     # lossList will contain boolean results for lc evaluation for the given sample element
                     # sampleInfo - will contain list of variable exiting in the given lc with their sample and probabilities
-                    lossList, sampleInfo = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
+                    lossList, sampleInfo, inputLc = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
                     current_lcLosses['sampleInfo'] = sampleInfo
+                    current_lcLosses['input'] = inputLc
                     current_lcLosses['lossRate'] = []
                     for li in lossList:
                         liList = []
