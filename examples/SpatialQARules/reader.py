@@ -66,7 +66,7 @@ def train_reader(file, question_type, size=None, upward_level=0):
             target_relation = target_relation.upper()
 
             asked_relation = question['question_info']['asked_relation'][0] \
-                if isinstance(question['question_info']['asked_relation'], list)\
+                if isinstance(question['question_info']['asked_relation'], list) \
                 else question['question_info']['asked_relation']
             asked_relation = asked_relation.upper()
 
@@ -184,6 +184,7 @@ def test_reader(file, question_type, size=None):
             count += 1
     return dataset
 
+
 def boolQ_reader(file, size=None):
     with open(file) as json_file:
         data = json.load(json_file)
@@ -197,7 +198,7 @@ def boolQ_reader(file, size=None):
         # Variable need
         candidates = ["Yes", "No"]
         label = story['answer']
-        dataset.append([[question_txt, story_txt, "YN",  candidates, label, run_id]])
+        dataset.append([[question_txt, story_txt, "YN", candidates, label, run_id]])
         run_id += 1
     return dataset
 

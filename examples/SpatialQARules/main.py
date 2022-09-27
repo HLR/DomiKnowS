@@ -1,7 +1,6 @@
 import os
 import sys
 import random
-import pytorch_lightning as pl
 
 sys.path.append(".")
 sys.path.append("../")
@@ -152,7 +151,7 @@ def main(args):
     SEED = 382
     np.random.seed(SEED)
     random.seed(SEED)
-    pl.seed_everything(SEED)
+    #pl.seed_everything(SEED)
     torch.manual_seed(SEED)
 
     cuda_number = args.cuda
@@ -165,12 +164,12 @@ def main(args):
                                   pmd=args.pmd, beta=args.beta,
                                   sampling=args.sampling, sampleSize=args.sampling_size,
                                   dropout=args.dropout, constrains=args.constrains)
-
+    boolQ = args.train_file.upper() == "BOOLQ"
     train_file = "DataSet/train_with_rules.json" if args.train_file.upper() == "SPARTUN" \
         else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/human_train.json"
     training_set = DomiKnowS_reader(train_file, "YN",
                                     size=args.train_size, upward_level=8,
-                                    augmented=args.train_file.upper() == "SPARTUN", batch_size=args.batch_size)
+                                    augmented=args.train_file.upper() == "SPARTUN", batch_size=args.batch_size, boolQL=boolQ)
 
     test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" \
          else "DataSet/test.json"
@@ -181,7 +180,7 @@ def main(args):
         else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
 
     eval_set = DomiKnowS_reader(eval_file, "YN", size=args.test_size,
-                                augmented=False, batch_size=args.batch_size)
+                                augmented=False, batch_size=args.batch_size, boolQL=boolQ)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
         program.load("Models" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
