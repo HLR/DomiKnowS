@@ -798,7 +798,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if sampleSize not in dn.getAttributes()[sampleKey]: 
                     dn.getAttributes()[sampleKey][sampleSize] = {}
                     
-                xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
+                xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
 
                 dn.getAttributes()[sampleKey][sampleSize][e[1]] = torch.ones(sampleSize, dtype=torch.bool, device = self.current_device)
                 xP = torch.ones(sampleSize, device = self.current_device)
@@ -845,7 +845,7 @@ class gurobiILPOntSolver(ilpOntSolver):
              
         sampleSize = p
 
-        xVarName = "%s_%s_is_%s"%(dn.getOntologyNode(), dn.getInstanceID(), e[1])
+        xVarName = "%s_%s_is_%s"%(e[0], dn.getInstanceID(), e[1])
                 
         usedSampleSize = sampleSize
         if sampleSize == -1:
@@ -1598,7 +1598,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         return newSampleSize, indices, Vs
 
-    def calulateSampleLossForVariable(self, lcVariables, lcSuccesses, sampleSize, eliminateDuplicateSamples, replace_mul=False):
+    def calulateSampleLossForVariable(self, currentLcName, lcVariables, lcSuccesses, sampleSize, eliminateDuplicateSamples, replace_mul=False):
         lcSampleSize = sampleSize
         if eliminateDuplicateSamples:
             lcSampleSize, indices, Vs = self.eliminateDuplicateSamples(lcVariables, sampleSize)
@@ -1967,7 +1967,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     usedLcSuccesses = lcSuccesses
                     if sampleGlobalLoss:
                         usedLcSuccesses = globalSuccesses
-                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
+                    lossTensor, lcSampleSize = self.calulateSampleLossForVariable(currentLcName, lcVariables, usedLcSuccesses, sampleSize, eliminateDuplicateSamples)
                     current_lcLosses['loss'].append(torch.nansum(lossTensor).item()) # Sum of losses across sample for x|=alfa
     
                     current_lcLosses['lossTensor'].append(lossTensor)
