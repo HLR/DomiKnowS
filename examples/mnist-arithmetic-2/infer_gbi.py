@@ -26,7 +26,7 @@ import torch.nn.functional as F
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-from gbi import get_lambda
+from gbi import get_lambda, reg_loss
 
 setProductionLogMode()
 
@@ -158,7 +158,21 @@ def get_constraints(node):
     return num_satisifed, num_constraints
 
 
+LIMIT = 1000
+NUM_GBI_ITERS = 100
+
+total = 0
+incorrect_initial = 0
+unsatisfied_initial = 0
+incorrect_after = 0
+unsatisfied_after = 0
+
 for data_iter, data_item in enumerate(validloader):
+    total += 1
+
+    if total > LIMIT:
+        break
+
     model = program.model
 
     with torch.no_grad():
@@ -175,9 +189,15 @@ for data_iter, data_item in enumerate(validloader):
     # get constraint satisfaction
     num_satisfied, num_constraints = get_constraints(node)
 
+    if digit0_pred != digit0_label or digit1_pred != digit1_label:
+        incorrect_initial += 1
+
     if num_satisfied == num_constraints:
         continue
 
+    unsatisfied_initial += 1
+
+    print('INDEX: %d' % data_iter)
     print('GT: %d + %d = %d' % (digit0_label, digit1_label, summation_label))
     print('PRED: %d + %d = %d' % (digit0_pred, digit1_pred, summation_pred))
     print('CONSTRAINTS SATISFACTION: %d/%d' % (num_satisfied, num_constraints))
@@ -189,28 +209,51 @@ for data_iter, data_item in enumerate(validloader):
     model_l.train()
     model_l.reset()
 
-    for c_iter in range(100):
+    satisfied = False
+
+    for c_iter in range(NUM_GBI_ITERS):
         c_opt.zero_grad()
 
         node_l = populate_forward(model_l, data_item)
 
         num_satisfied_l, num_constraints_l = get_constraints(node_l)
 
+        is_satisifed = 1 if num_satisfied_l == num_constraints_l else 0
+
         logits = node_l.getAttribute('logits')
         log_probs = torch.sum(F.log_softmax(logits, dim=-1))
 
-        c_loss = -1 * log_probs * num_satisfied_l
+        c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
 
-        print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
+        #print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
 
         if num_satisfied_l == num_constraints_l:
+            satisfied = True
             print('SATISFIED')
             digit0_pred_l, digit1_pred_l, summation_pred_l = get_pred_from_node(node_l, '/local/argmax')
             print('GT: %d + %d = %d' % (digit0_label, digit1_label, summation_label))
             print('PRED: %d + %d = %d' % (digit0_pred_l, digit1_pred_l, summation_pred_l))
+
+            if digit0_pred_l == digit0_label and digit1_pred_l == digit1_label:
+                print('CORRECT')
+            else:
+                incorrect_after += 1
+
             break
 
         c_loss.backward()
         c_opt.step()
 
-    break
+    if not satisfied:
+        print('NOT SATISFIED')
+
+        unsatisfied_after += 1
+        incorrect_after += 1
+
+    print('-------------------')
+
+print('num samples: %d' % total)
+print('initial incorrect: %.2f' % (incorrect_initial/total))
+print('initial unsatisfied: %.2f' % (unsatisfied_initial/total))
+print('after incorrect: %.2f' % (incorrect_after/total))
+print('after unsatisifed: %.2f' % (unsatisfied_after/total))
