@@ -104,7 +104,7 @@ def getRegrTimer_logger(_config = config):
 
 productionMode = False
 reuseModel = False
-def setProductionLogMode(no_UseTimeLog = False, reuse_model=False):
+def setProductionLogMode(no_UseTimeLog = False, reuse_model=True):
     global productionMode
     global reuseModel
     global noUseTimeLog
