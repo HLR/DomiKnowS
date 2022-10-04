@@ -35,7 +35,7 @@ class ImageNetwork(torch.nn.Module):
 from regr.utils import setProductionLogMode 
 productionMode = True  
 if productionMode:
-    setProductionLogMode()
+    setProductionLogMode(no_UseTimeLog=True)
     
 def main():
     import logging

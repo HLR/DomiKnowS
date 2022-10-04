@@ -213,13 +213,13 @@ def build_program(sum_setting=None, digit_labels=False):
     elif sum_setting == 'baseline':
         images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
     else:
-        images[s] = FunctionalSensor(forward=lambda: torch.zeros(1, config.summationRange))  # dummy values to populate
+        #images[s] = FunctionalSensor(forward=lambda: torch.ones(1, config.summationRange))  # dummy values to populate
 
-    '''def manual_fixedL(s):
-        res = torch.zeros((1, 19))
-        res[0, s] = 1
-        return res
-    images[s] = FunctionalSensor('summation_label', forward=manual_fixedL)'''
+        def manual_fixedL(s):
+            res = torch.zeros((1, 19))
+            res[0, s] = 1
+            return res
+        images[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
 
     images[s] = ReaderSensor(keyword='summation', label=True)
     images['summationEquality'] = FunctionalSensor('summation_label', forward=lambda x: torch.ones(1))
@@ -235,7 +235,7 @@ def build_program(sum_setting=None, digit_labels=False):
                                 inferTypes=['local/argmax'],
                                 loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
-    return graph, images
+    return graph, images, d0, d1
 
 
 

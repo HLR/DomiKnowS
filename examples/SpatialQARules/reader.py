@@ -66,7 +66,7 @@ def train_reader(file, question_type, size=None, upward_level=0):
             target_relation = target_relation.upper()
 
             asked_relation = question['question_info']['asked_relation'][0] \
-                if isinstance(question['question_info']['asked_relation'], list)\
+                if isinstance(question['question_info']['asked_relation'], list) \
                 else question['question_info']['asked_relation']
             asked_relation = asked_relation.upper()
 
@@ -185,8 +185,27 @@ def test_reader(file, question_type, size=None):
     return dataset
 
 
-def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, batch_size=8):
-    dataset = train_reader(file, question_type, size, upward_level) if augmented else test_reader(file, question_type, size)
+def boolQ_reader(file, size=None):
+    with open(file) as json_file:
+        data = json.load(json_file)
+    size = 300000 if not size else size
+
+    dataset = []
+    for story in data["data"][:size]:
+        story_txt = story['passage'][:1000]
+        run_id = 0
+        question_txt = story['question']
+        # Variable need
+        candidates = ["Yes", "No"]
+        label = story['answer']
+        dataset.append([[question_txt, story_txt, "YN", candidates, label, run_id]])
+        run_id += 1
+    return dataset
+
+
+def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8):
+    dataset = train_reader(file, question_type, size, upward_level) if augmented \
+        else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
 
     return_dataset = []
     current_batch_size = 0

@@ -184,7 +184,7 @@ class ValueTracker(MetricTracker):
 def frp_from_matrix(i,matrix):
     matrix=np.array(matrix)
     TP=matrix[i][i]
-    TN=matrix.sum()-matrix[i].sum()-matrix[i].sum()-matrix[:,i].sum()+matrix[i][i]
+    TN=matrix.sum()-matrix[i].sum()-matrix[:,i].sum()+matrix[i][i]
     FN=matrix[i].sum()-matrix[i][i]
     FP=matrix[:,i].sum()-matrix[i][i]
     return TP,TN,FP,FN

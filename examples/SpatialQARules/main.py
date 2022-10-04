@@ -1,5 +1,6 @@
 import os
 import sys
+import random
 
 sys.path.append(".")
 sys.path.append("../")
@@ -13,24 +14,31 @@ from regr.graph import Graph, Concept, Relation
 from program_declaration import program_declaration
 from reader import DomiKnowS_reader
 import tqdm
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 
 def eval(program, testing_set, cur_device, args):
     from graph import answer_class
-    labels = ["Yes", "No"]
+    labels = ["Yes", "No", "DK"]
     accuracy_ILP = 0
     accuracy = 0
     count = 0
     count_datanode = 0
     satisfy_constrain_rate = 0
+    pred = []
+    actual = []
     result_csv = {"story": [], "question": [], "label": [], "argmax": [], "ILP": []}
     for datanode in tqdm.tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
         count_datanode += 1
         for question in datanode.getChildDataNodes():
             count += 1
             label = labels[int(question.getAttribute(answer_class, "label"))]
-            pred_argmax = labels[int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))]
-            pred_ILP = labels[int(torch.argmax(question.getAttribute(answer_class, "ILP")))]
+            pred_label = int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))
+            actual_label = int(torch.argmax(question.getAttribute(answer_class, "ILP")))
+            pred_argmax = labels[pred_label]
+            pred_ILP = labels[actual_label]
+            pred.append(pred_label)
+            actual.append(actual_label)
             accuracy_ILP += 1 if pred_ILP == label else 0
             accuracy += 1 if pred_argmax == label else 0
             result_csv["story"].append(question.getAttribute("story"))
@@ -64,17 +72,20 @@ def eval(program, testing_set, cur_device, args):
     print("Accuracy:", accuracy, file=result_file)
     print("ILP Accuracy:", accuracy_ILP, file=result_file)
     print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
+    print("Precious:", precision_score(actual, pred), file=result_file)
+    print("Recall:", precision_score(actual, pred), file=result_file)
+    print("F1:", precision_score(actual, pred), file=result_file)
     result_file.close()
 
-    df = pd.DataFrame(result_csv)
-    df.to_csv("result.csv")
+    #df = pd.DataFrame(result_csv)
+    #df.to_csv("result.csv")
 
 
 def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
     from graph import answer_class
 
     def evaluate():
-        labels = ["Yes", "No"]
+        labels = ["Yes", "No", "DK"]
         count = 0
         accuracy = 0.0
         for datanode in tqdm.tqdm(program.populate(eval_set, device=cur_device), "Manually Evaluation"):
@@ -92,7 +103,9 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
     print("-" * 10, file=training_file)
     print("Training by ", program_name, file=training_file)
     print("Learning Rate:", args.lr, file=training_file)
+    training_file.close()
     for epoch in range(check_epoch, limit, check_epoch):
+        training_file = open("training.txt", 'a')
         program.train(train_set, train_epoch_num=check_epoch,
                       Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
                       device=cur_device)
@@ -112,7 +125,9 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
             new_file = program_name + "_" + str(epoch) + "epoch" + "_lr_" + str(args.lr) + program_addition
             old_file = new_file
             program.save("Models/" + new_file)
+        training_file.close()
 
+    training_file = open("training.txt", 'a')
     if epoch < limit:
         program.train(train_set, train_epoch_num=limit - epoch,
                       Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
@@ -133,6 +148,12 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
 
 
 def main(args):
+    SEED = 382
+    np.random.seed(SEED)
+    random.seed(SEED)
+    #pl.seed_everything(SEED)
+    torch.manual_seed(SEED)
+
     cuda_number = args.cuda
     if cuda_number == -1:
         cur_device = 'cpu'
@@ -143,25 +164,29 @@ def main(args):
                                   pmd=args.pmd, beta=args.beta,
                                   sampling=args.sampling, sampleSize=args.sampling_size,
                                   dropout=args.dropout, constrains=args.constrains)
-
-    train_file = "DataSet/train_with_rules.json" if args.test_file.upper() == "SPARTUN" else "DataSet/human_train.json"
+    boolQ = args.train_file.upper() == "BOOLQ"
+    train_file = "DataSet/train_with_rules.json" if args.train_file.upper() == "SPARTUN" \
+        else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/human_train.json"
     training_set = DomiKnowS_reader(train_file, "YN",
                                     size=args.train_size, upward_level=8,
-                                    augmented=args.train_file.upper() == "SPARTUN", batch_size=args.batch_size)
+                                    augmented=args.train_file.upper() == "SPARTUN", batch_size=args.batch_size, boolQL=boolQ)
 
-    test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" else "DataSet/test.json"
+    test_file = "DataSet/human_test.json" if args.test_file.upper() == "HUMAN" \
+         else "DataSet/test.json"
     testing_set = DomiKnowS_reader(test_file, "YN", size=args.test_size,
                                    augmented=False, batch_size=args.batch_size)
 
-    eval_file = "DataSet/human_dev.json" if args.test_file.upper() == "HUMAN" else "DataSet/dev_Spartun.json"
+    eval_file = "DataSet/human_dev.json" if args.test_file.upper() == "HUMAN" \
+        else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
+
     eval_set = DomiKnowS_reader(eval_file, "YN", size=args.test_size,
-                                augmented=False, batch_size=args.batch_size)
+                                augmented=False, batch_size=args.batch_size, boolQL=boolQ)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        program.load("Models" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         eval(program, testing_set, cur_device, args)
     elif args.loaded_train:
-        program.load(args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
     else:
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)

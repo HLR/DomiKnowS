@@ -72,6 +72,25 @@ program = SampleLossProgram(
 ```
  Setting `SampleSize` to `-1` will execute the Semantic-loss instead of sampling loss.
 
+
+
+## Loss Selection
+You can use any pytorch Loss function in the Program just by passing the function to compute the loss in the program property `loss`. 
+You can also use the following pre-defined losses.
+
+`NBCrossEntropyLoss` is the equivalant of CrossEntropy in Pytorch. See details in https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+
+`BCEWithLogitsLoss` is the equivalant of BCE loss in Pytorch. See details in https://pytorch.org/docs/stable/generated/torch.nn.BCELoss.html
+
+`NBCrossEntropyIMLoss` is the equivalant of CrossEntropy Loss for using with the IML model.
+
+You can also use multiple different Losses for each concept. To do so, you have to use the keyword `dictloss` instead of `loss` and use `SolverPOIDictLossProgram` instead of `SolverPOIPRogram`. 
+An example of this is:
+`dictloss={str(people.name): NBCrossEntropyDictLoss(), str(location.name): NBCrossEntropyDictLoss(), "default": NBCrossEntropyDictLoss()},`
+
+The loss function by default receives the following inputs: `input, target`
+In the case of DictLoss the inputs are: `builder, prop, input, target`
+
 ## References
 
 

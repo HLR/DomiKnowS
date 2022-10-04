@@ -36,4 +36,4 @@ class MultipleClassYN(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         output = self.classifier(pooled_output)
 
-        return self.softmax(output)
+        return output

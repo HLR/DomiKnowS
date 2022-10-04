@@ -81,7 +81,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('==========================================')
 
 
-graph, images = build_program()
+graph, images, _, _ = build_program()
 
 
 class CallbackProgram(SampleLossProgram):
@@ -102,7 +102,7 @@ program = CallbackProgram(graph, SolverModel,
                     inferTypes=['local/argmax'],
                     metric={},
                     sample=True,
-                    sampleSize=100,
+                    sampleSize=-1,
                     sampleGlobalLoss=True,
                     beta=1)
 
