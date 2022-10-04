@@ -176,53 +176,66 @@ class SampleLosslModel(torch.nn.Module):
             new_eps = 0.01
             for i, lossTensor in enumerate(loss['lossTensor']):
                 lcSuccesses = loss['lcSuccesses'][i]
-                if constr_loss["globalSuccessCountet"] > 0:
-                    lcSuccesses = constr_loss["globalSuccesses"]
-                if lossTensor.sum().item() != 0:
+                sample_info = [val[i][0][1] for key, val in loss['sampleInfo'].items()]
+                sample_info = torch.stack(sample_info).t()
+                unique_output, unique_inverse, counts = torch.unique(sample_info, return_inverse=True, dim=0, return_counts=True)
+                _, ind_sorted = torch.sort(unique_inverse, stable=True)
+                cum_sum = counts.cumsum(0)
+                cum_sum = torch.cat((torch.tensor([0]).to(counts.device), cum_sum[:-1]))
+                first_indicies = ind_sorted[cum_sum]
+                if self.sampleSize == -1:
+                    assert lcSuccesses.sum().item() != 0
                     tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
-                    true_val = lossTensor[tidx]
-                    
-                    if true_val.sum().item() != 0: 
-                        if not replace_mul:
-                            loss_value = true_val.sum() / lossTensor.sum()
-                            loss_value = epsilon - ( -1 * torch.log(loss_value) )
-                            # loss_value = -1 * torch.log(loss_value) 
-                            if self.iter_step < self.warmpup:
-                                with torch.no_grad():
-                                    min_val = loss_value
-                            else:
-                                min_val = -1
-                            # min_val = -1
-                            # with torch.no_grad():
-                            #     min_val = loss_value
-                            loss_ = min_val * loss_value
-                            key_loss += loss_
-                        else:
-                            loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
-                            key_loss += -1 * loss_value
-
-                    else:
-                        loss_ = 0
-                    
-                    
-
-                    # if loss['lossTensor'].nansum().item() <= 1:
-                    #     loss_value = loss['lossTensor']
-                    #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
-                    # else:
-                    #     _idx = []
-                    #     for i in torch.unique(loss['lossTensor']):
-                    #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
-                    #     loss_value = loss['lossTensor'][_idx]
-                    #     # loss_value = torch.unique(loss['lossTensor'])
-
-                    # loss_value = torch.log(loss_value.sum())
-                    # loss_ = -1 * (loss_value)
-                    # self.loss[key](loss_)
-                    # lmbd_loss.append(loss_) 
+                    unique_selected_indexes = torch.tensor(np.intersect1d(first_indicies.cpu().numpy(), tidx.cpu().numpy()))
                     
                 else:
-                    loss_ = 0
+                    if constr_loss["globalSuccessCountet"] > 0:
+                        lcSuccesses = constr_loss["globalSuccesses"]
+                    if lossTensor.sum().item() != 0:
+                        tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
+                        true_val = lossTensor[tidx]
+                        
+                        if true_val.sum().item() != 0: 
+                            if not replace_mul:
+                                loss_value = true_val.sum() / lossTensor.sum()
+                                loss_value = epsilon - ( -1 * torch.log(loss_value) )
+                                # loss_value = -1 * torch.log(loss_value) 
+                                if self.iter_step < self.warmpup:
+                                    with torch.no_grad():
+                                        min_val = loss_value
+                                else:
+                                    min_val = -1
+                                # min_val = -1
+                                # with torch.no_grad():
+                                #     min_val = loss_value
+                                loss_ = min_val * loss_value
+                                key_loss += loss_
+                            else:
+                                loss_value = true_val.logsumexp(dim=0) - lossTensor.logsumexp(dim=0)
+                                key_loss += -1 * loss_value
+
+                        else:
+                            loss_ = 0
+                        
+                        
+
+                        # if loss['lossTensor'].nansum().item() <= 1:
+                        #     loss_value = loss['lossTensor']
+                        #     # loss_value = loss_value[loss_value.nonzero()].squeeze(-1)
+                        # else:
+                        #     _idx = []
+                        #     for i in torch.unique(loss['lossTensor']):
+                        #         _idx.append((loss['lossTensor'] == i.item()).nonzero(as_tuple=True)[0][0].item())
+                        #     loss_value = loss['lossTensor'][_idx]
+                        #     # loss_value = torch.unique(loss['lossTensor'])
+
+                        # loss_value = torch.log(loss_value.sum())
+                        # loss_ = -1 * (loss_value)
+                        # self.loss[key](loss_)
+                        # lmbd_loss.append(loss_) 
+                        
+                    else:
+                        loss_ = 0
 
             epsilon = 1e-2
             key_loss = max(key_loss - epsilon, 0) 
