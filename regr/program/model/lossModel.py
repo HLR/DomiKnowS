@@ -187,6 +187,13 @@ class SampleLosslModel(torch.nn.Module):
                     assert lcSuccesses.sum().item() != 0
                     tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
                     unique_selected_indexes = torch.tensor(np.intersect1d(first_indicies.cpu().numpy(), tidx.cpu().numpy()))
+                    if unique_selected_indexes.shape:
+                        loss_value = lossTensor[unique_selected_indexes].sum()
+                        loss_ = -1 * torch.log(loss_value)
+                        key_loss += loss_
+
+                    else:
+                        loss_ = 0
                     
                 else:
                     if constr_loss["globalSuccessCountet"] > 0:
@@ -238,7 +245,8 @@ class SampleLosslModel(torch.nn.Module):
                         loss_ = 0
 
             epsilon = 1e-2
-            key_loss = max(key_loss - epsilon, 0) 
+            if self.sampleSize != -1:
+                key_loss = max(key_loss - epsilon, 0) 
             if key_loss != 0:  
                 key_losses[key] = key_loss
                 # self.loss[key](key_loss)
@@ -253,15 +261,19 @@ class SampleLosslModel(torch.nn.Module):
             #self.logger.info(f'-- number of satisfied constraints are {satisfied_num}')
             #self.logger.info(f'-- number of unstatisfied constraints are {unsatisfied_num}')
             for key in key_losses:
-                if replace_mul:
-                    loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
+                if self.sampleSize != -1:
+                    if replace_mul:
+                        loss_val = (key_losses[key] / all_losses.sum()) * key_losses[key]
+                    else:
+                        loss_val = key_losses[key]
                 else:
                     loss_val = key_losses[key]
+
                 self.loss[key](loss_val)
                 lmbd_loss.append(loss_val) 
                 
             lmbd_loss = sum(lmbd_loss)
         
         # (*out, datanode, builder)
-        self.logger.info(f'-- lmbd_loss is {lmbd_loss}')
+        # self.logger.info(f'-- lmbd_loss is {lmbd_loss}')
         return lmbd_loss, datanode, builder
