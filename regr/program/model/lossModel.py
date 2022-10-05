@@ -176,14 +176,15 @@ class SampleLosslModel(torch.nn.Module):
             new_eps = 0.01
             for i, lossTensor in enumerate(loss['lossTensor']):
                 lcSuccesses = loss['lcSuccesses'][i]
-                sample_info = [val[i][0][1] for key, val in loss['sampleInfo'].items()]
-                sample_info = torch.stack(sample_info).t()
-                unique_output, unique_inverse, counts = torch.unique(sample_info, return_inverse=True, dim=0, return_counts=True)
-                _, ind_sorted = torch.sort(unique_inverse, stable=True)
-                cum_sum = counts.cumsum(0)
-                cum_sum = torch.cat((torch.tensor([0]).to(counts.device), cum_sum[:-1]))
-                first_indicies = ind_sorted[cum_sum]
                 if self.sampleSize == -1:
+                    sample_info = [val_ for key, val in loss['sampleInfo'].items() for val_ in val if len(val_)]
+                    sample_info = [val[i][1] for val in sample_info]
+                    sample_info = torch.stack(sample_info).t()
+                    unique_output, unique_inverse, counts = torch.unique(sample_info, return_inverse=True, dim=0, return_counts=True)
+                    _, ind_sorted = torch.sort(unique_inverse, stable=True)
+                    cum_sum = counts.cumsum(0)
+                    cum_sum = torch.cat((torch.tensor([0]).to(counts.device), cum_sum[:-1]))
+                    first_indicies = ind_sorted[cum_sum]
                     assert lcSuccesses.sum().item() != 0
                     tidx = (lcSuccesses == 1).nonzero().squeeze(-1)
                     unique_selected_indexes = torch.tensor(np.intersect1d(first_indicies.cpu().numpy(), tidx.cpu().numpy()))
