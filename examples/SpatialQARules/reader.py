@@ -179,6 +179,8 @@ def test_reader(file, question_type, size=None):
             # asked_question = (obj1, obj2, asked_relation)
             # current_key = create_key(*asked_question)
             label = question["answer"][0]
+            if label == "DK":
+                label = "No"
             dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
             run_id += 1
             count += 1
@@ -203,10 +205,12 @@ def boolQ_reader(file, size=None):
     return dataset
 
 
-def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8):
+def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8, rule=False):
     dataset = train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
-
+    if rule:
+        with open("DataSet/rules.txt", 'r') as rules:
+            additional_text = rules.readline()
     return_dataset = []
     current_batch_size = 0
     batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
@@ -221,7 +225,7 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=T
             batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
         for data in batch:
             question_txt, story_txt, q_type, candidates_answer, relation, label, id = data
-            batch_data["questions"].append(question_txt)
+            batch_data["questions"].append(question_txt + additional_text)
             batch_data["stories"].append(story_txt)
             batch_data["relation"].append(relation)
             batch_data["question_ids"].append(str(id))
