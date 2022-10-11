@@ -206,11 +206,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:            
             return nandSuccess
             
-    def ifVar(self, _, var1, var2, onlyConstrains = False):
+    def ifVarS(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
 
         if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
-     
+                
         var1Item = self._isTensor(var1)
         var2Item = self._isTensor(var2)
 
@@ -224,12 +224,64 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
             else: 
                 ifSuccess = var2
+            
         elif self.tnorm =='P':
             if var1Item != 0:
                 tOne = torch.ones(1, device=self.current_device, requires_grad=True)
                 ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
             else:
                 ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
+
+        # if(var1, var2) = or(not(var1), var2)
+        #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
+
+        if onlyConstrains:
+            ifLoss = torch.sub(1, ifSuccess) # 1 - ifSuccess
+            
+            return ifLoss
+        else:            
+            return ifSuccess
+        
+    def ifVar(self, _, var1, var2, onlyConstrains = False):
+        logicMethodName = "IF"
+
+        if self.ifLog: self.myLogger.debug("%s called with: var1 - %s, var2 - %s"%(logicMethodName,var1,var2))
+                
+        if torch.is_tensor(var1) and (len(var1.shape) == 0 or len(var1.shape) == 1 and var1.shape[0] == 1):
+            return self.ifVarS(_, var1, var2, onlyConstrains = onlyConstrains)
+
+        tSize = var1.size(dim=0)
+        tOne = torch.ones(tSize, device=self.current_device, requires_grad=True)
+
+        #var1Item = self._isTensor(var1)
+        #var2Item = self._isTensor(var2)
+
+        var1, var2 = self._fixVar((var1,var2))
+
+        if self.tnorm =='L':
+            ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
+        elif self.tnorm =='G':
+            #if var2Item > var1Item: 
+            #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
+            #else: 
+            #   ifSuccess = var2
+            
+            var1Larger = torch.ge(var1, var2)
+            var2Larger = torch.ge(var2, var1)
+            
+            ifSuccess = torch.mul(var2Larger, torch.mul(var2, torch.div(1, var2))) + torch.mul(var1Larger, var2)
+        elif self.tnorm =='P':
+            #if var1Item != 0:
+            #   tOne = torch.ones(tSize, device=self.current_device, requires_grad=True)
+            #   ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
+            #else:
+            #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
+                
+            var1Zeros = torch.eq(torch.zeros(tSize, device=self.current_device, requires_grad=True), var1)
+            var1NoZeros = torch.logical_not(var1Zeros)
+            
+            ifSuccess = torch.mul(var1Zeros, torch.mul(var2, torch.div(1, var2))) + \
+                        torch.mul(var1NoZeros, torch.minimum(tOne, torch.div(var2, var1)))     
 
         # if(var1, var2) = or(not(var1), var2)
         #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)

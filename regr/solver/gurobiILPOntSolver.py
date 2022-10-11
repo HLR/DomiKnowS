@@ -1,8 +1,6 @@
 from time import process_time, process_time_ns
 from collections import OrderedDict
 import logging
-# ontology
-#from owlready2 import And, Or, Not, FunctionalProperty, InverseFunctionalProperty, ReflexiveProperty, SymmetricProperty, AsymmetricProperty, IrreflexiveProperty, TransitiveProperty
 
 # pytorch
 import torch
@@ -413,7 +411,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if dxkey not in dn.attributes:
                         continue
                         
-                    self.myIlpBooleanProcessor.countVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True,  limitOp = '<=', limit = 1, logicMethodName = "atMostL")
+                    self.myIlpBooleanProcessor.countVar(m, dn.getAttribute(cxkey)[0], dn.getAttribute(dxkey)[0], onlyConstrains = True, limitOp = '<=', limit = 1, logicMethodName = "atMostL")
                         
                 if not (conceptName in foundDisjoint):
                     foundDisjoint[conceptName] = {disjointConcept}
@@ -1150,7 +1148,18 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if None in lcVariablesDns:
                         pass
                     
-                    lcVariables[variableName] = vDns
+                    if loss and not sample:
+                        vDnsList = [v[0] for v in vDns]
+                        try:
+                            lcVariables[variableName] = [[torch.stack(vDnsList)]]
+                        except TypeError:
+                            try:
+                                vDnsList = [torch.tensor(v[0], dtype=torch.float, device=self.current_device, requires_grad=True) for v in vDns]
+                                lcVariables[variableName] = [[torch.stack(vDnsList)]]
+                            except TypeError: # has None  - will use tensor per value 
+                                lcVariables[variableName] = vDns
+                    else:
+                        lcVariables[variableName] = vDns
                     
                     if sample:
                         sampleInfo[variableName] = sampleInfoForVariable
@@ -1806,8 +1815,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     # lossList will contain float result for lc loss calculation
                     lossList = self.__constructLogicalConstrains(lc, myBooleanMethods, m, dn, p, key = key, headLC = True, loss = True, sample = sample)
                     current_lcLosses['lossList'] = lossList
-                    
-                    
+                             
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC
                 elapsedInMsLC = elapsedInNsLC/1000000
@@ -1820,16 +1828,30 @@ class gurobiILPOntSolver(ilpOntSolver):
                 current_lcLosses = lcLosses[currentLcName]
                 lossList = current_lcLosses['lossList']
                 
-                lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
-                for i, l in enumerate(lossList):
-                    lossTensor[i] = float("nan")
-                    for entry in l:
+                seperateTensorsUsed = False
+                if lossList and lossList[0]:
+                    if torch.is_tensor(lossList[0][0]) and (len(lossList[0][0].shape) == 0 or len(lossList[0][0].shape) == 1 and lossList[0][0].shape[0] == 1):
+                        seperateTensorsUsed = True
+                        
+                if seperateTensorsUsed:
+                    lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
+                    for i, l in enumerate(lossList):
+                        lossTensor[i] = float("nan")
+                        for entry in l:
+                            if entry is not None:
+                                if lossTensor[i] != lossTensor[i]:
+                                    lossTensor[i] = entry
+                                else:
+                                    lossTensor[i] += entry.item()
+                else:
+                    lossTensor = None
+                    for entry in lossList[0]:
                         if entry is not None:
-                            if lossTensor[i] != lossTensor[i]:
-                                lossTensor[i] = entry
+                            if lossTensor == None:
+                                lossTensor = entry
                             else:
-                                lossTensor[i] += entry.item()
-    
+                                lossTensor += entry
+                    
                 current_lcLosses['lossTensor'] = lossTensor
                 current_lcLosses['loss'] = torch.nansum(lossTensor).item()
                 
