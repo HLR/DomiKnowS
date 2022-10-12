@@ -30,12 +30,22 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
+        self.logical_constraints = graph.logicalConstrains
 
         self.reuse_model = reuse_model
         if getReuseModel():
             self.reuse_model = True
             
         self.model = collections.deque([], 20)
+        
+    def set_logical_constraints(self, new_logical_constraints):
+        self.logical_constraints = new_logical_constraints
+        
+    def get_logical_constraints(self, ):
+        return self.logical_constraints
+    
+    def reset_logical_constraints(self, ):
+        self.logical_constraints = self.myGraph[0].logicalConstrains ### Can myGraph really be multiple graphs?
         
     def valueToBeSkipped(self, x):
         return ( 
