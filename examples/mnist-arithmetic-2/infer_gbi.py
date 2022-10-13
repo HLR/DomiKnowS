@@ -1,7 +1,9 @@
 import sys
+
 sys.path.append('../../')
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
 from data import get_readers
@@ -41,7 +43,7 @@ def get_pred_from_node(node, suffix):
     return digit0_pred, digit1_pred, summation_pred
 
 
-#program.populate(reader, device='auto')
+# program.populate(reader, device='auto')
 
 def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax']):
     digits_results = {
@@ -85,7 +87,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                 satisfied[lc].append(verifyResult[lc]['satisfied'])
                 satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
-                #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % curr_label)
+                # print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % curr_label)
 
             num_constraints = len(verifyResult)
             satisfied_overall.append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
@@ -102,22 +104,21 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                           f'gt {summation_results["label"][j // 2]}\n')
 
         print(classification_report(digits_results['label'], digits_results[suffix], digits=5))
-        #print(classification_report(summation_results['label'], summation_results[suffix], digits=5))
+        # print(classification_report(summation_results['label'], summation_results[suffix], digits=5))
 
         print('==========================================')
 
-    #sat_values = list(chain(*satisfied.values()))
-    #print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))
-    print('Average constraint satisfactions: %f' % (sum(satisfied_overall)/len(satisfied_overall)))
+    # sat_values = list(chain(*satisfied.values()))
+    # print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))
+    print('Average constraint satisfactions: %f' % (sum(satisfied_overall) / len(satisfied_overall)))
 
 
 graph, images, digit0, digit1 = build_program()
 
-
 program = SolverPOIProgram(graph,
-                            poi=(images,),
-                            inferTypes=['local/argmax', 'local/softmax'],
-                            metric={})
+                           poi=(images,),
+                           inferTypes=['local/argmax', 'local/softmax'],
+                           metric={})
 
 # load model.pth
 model_path = '../../../results_new/primaldual_500/epoch14/model.pth'
@@ -134,6 +135,7 @@ del state_dict['global/images/<summations>/modulelearner-1.lin2.bias']
 program.model.load_state_dict(state_dict)
 
 print('loaded model from %s' % model_path)
+
 
 def populate_forward(model, data_item):
     _, _, *output = model(data_item)
@@ -158,26 +160,7 @@ def get_constraints(node):
     return num_satisifed, num_constraints
 
 
-LIMIT = 1000
-NUM_GBI_ITERS = 100
-
-total = 0
-incorrect_initial = 0
-unsatisfied_initial = 0
-incorrect_after = 0
-unsatisfied_after = 0
-
-for data_iter, data_item in enumerate(validloader):
-    total += 1
-
-    if total > LIMIT:
-        break
-
-    model = program.model
-
-    with torch.no_grad():
-        node = populate_forward(model, data_item)
-
+def is_correct_digits(node):
     # get label
     digit0_label = node.getAttribute('digit0_label').item()
     digit1_label = node.getAttribute('digit1_label').item()
@@ -186,74 +169,105 @@ for data_iter, data_item in enumerate(validloader):
     # get pred
     digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, '/local/argmax')
 
-    # get constraint satisfaction
-    num_satisfied, num_constraints = get_constraints(node)
+    return digit0_label == digit0_pred and digit1_label == digit1_pred
 
-    if digit0_pred != digit0_label or digit1_pred != digit1_label:
-        incorrect_initial += 1
 
-    if num_satisfied == num_constraints:
-        continue
+def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct):
+    """
+    Runs gradient-based inference on program. Prints pre- and post- accuracy/constraint violations.
+    data_iters: number of datapoints to test in validloader
+    gbi_iters: number of gradient based inference optimization steps
+    label_names: names of concepts used to get log probabilities from
+    is_correct: function with parameter datanode that returns whether or not the prediction is correct
+    """
 
-    unsatisfied_initial += 1
+    total = 0
+    incorrect_initial = 0
+    unsatisfied_initial = 0
+    incorrect_after = 0
+    unsatisfied_after = 0
 
-    print('INDEX: %d' % data_iter)
-    print('GT: %d + %d = %d' % (digit0_label, digit1_label, summation_label))
-    print('PRED: %d + %d = %d' % (digit0_pred, digit1_pred, summation_pred))
-    print('CONSTRAINTS SATISFACTION: %d/%d' % (num_satisfied, num_constraints))
+    for data_iter, data_item in enumerate(dataloader):
+        total += 1
 
-    print('Starting GBI:')
-
-    model_l, c_opt = get_lambda(model, lr=1e-1)
-    model_l.mode(Mode.TRAIN)
-    model_l.train()
-    model_l.reset()
-
-    satisfied = False
-
-    for c_iter in range(NUM_GBI_ITERS):
-        c_opt.zero_grad()
-
-        node_l = populate_forward(model_l, data_item)
-
-        num_satisfied_l, num_constraints_l = get_constraints(node_l)
-
-        is_satisifed = 1 if num_satisfied_l == num_constraints_l else 0
-
-        logits = node_l.getAttribute('logits')
-        log_probs = torch.sum(F.log_softmax(logits, dim=-1))
-
-        c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
-
-        #print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
-
-        if num_satisfied_l == num_constraints_l:
-            satisfied = True
-            print('SATISFIED')
-            digit0_pred_l, digit1_pred_l, summation_pred_l = get_pred_from_node(node_l, '/local/argmax')
-            print('GT: %d + %d = %d' % (digit0_label, digit1_label, summation_label))
-            print('PRED: %d + %d = %d' % (digit0_pred_l, digit1_pred_l, summation_pred_l))
-
-            if digit0_pred_l == digit0_label and digit1_pred_l == digit1_label:
-                print('CORRECT')
-            else:
-                incorrect_after += 1
-
+        if total > data_iters:
             break
 
-        c_loss.backward()
-        c_opt.step()
+        model = program.model
 
-    if not satisfied:
-        print('NOT SATISFIED')
+        with torch.no_grad():
+            node = populate_forward(model, data_item)
 
-        unsatisfied_after += 1
-        incorrect_after += 1
+        # get constraint satisfaction
+        num_satisfied, num_constraints = get_constraints(node)
 
-    print('-------------------')
+        if not is_correct(node):
+            incorrect_initial += 1
 
-print('num samples: %d' % total)
-print('initial incorrect: %.2f' % (incorrect_initial/total))
-print('initial unsatisfied: %.2f' % (unsatisfied_initial/total))
-print('after incorrect: %.2f' % (incorrect_after/total))
-print('after unsatisifed: %.2f' % (unsatisfied_after/total))
+        if num_satisfied == num_constraints:
+            continue
+
+        unsatisfied_initial += 1
+
+        print('INDEX: %d' % data_iter)
+        print('CONSTRAINTS SATISFACTION: %d/%d' % (num_satisfied, num_constraints))
+
+        print('Starting GBI:')
+
+        model_l, c_opt = get_lambda(model, lr=1e-1)
+        model_l.mode(Mode.TRAIN)
+        model_l.train()
+        model_l.reset()
+
+        satisfied = False
+
+        for c_iter in range(gbi_iters):
+            c_opt.zero_grad()
+
+            node_l = populate_forward(model_l, data_item)
+
+            num_satisfied_l, num_constraints_l = get_constraints(node_l)
+
+            is_satisifed = 1 if num_satisfied_l == num_constraints_l else 0
+
+            # logits = node_l.getAttribute('logits')
+            # log_probs = torch.sum(F.log_softmax(logits, dim=-1))
+
+            log_probs = 0.0
+            for ln in label_names:
+                log_probs += torch.sum(torch.log(node_l.getAttribute('<%s>/local/softmax' % ln)))
+
+            c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
+
+            # print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
+
+            if num_satisfied_l == num_constraints_l:
+                satisfied = True
+                print('SATISFIED')
+
+                if is_correct(node_l):
+                    print('CORRECT')
+                else:
+                    incorrect_after += 1
+
+                break
+
+            c_loss.backward()
+            c_opt.step()
+
+        if not satisfied:
+            print('NOT SATISFIED')
+
+            unsatisfied_after += 1
+            incorrect_after += 1
+
+        print('-------------------')
+
+    print('num samples: %d' % total)
+    print('initial incorrect: %.2f' % (incorrect_initial / total))
+    print('initial unsatisfied: %.2f' % (unsatisfied_initial / total))
+    print('after incorrect: %.2f' % (incorrect_after / total))
+    print('after unsatisifed: %.2f' % (unsatisfied_after / total))
+
+
+run_gbi(program, validloader, 1000, 100, ['digits0', 'digits1'], is_correct_digits)
