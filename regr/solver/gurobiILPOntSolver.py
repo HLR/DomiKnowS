@@ -30,7 +30,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
-        self.logical_constraints = graph.logicalConstrains
+        # self.logical_constraints = graph.logicalConstrains
 
         self.reuse_model = reuse_model
         if getReuseModel():
