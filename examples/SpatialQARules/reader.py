@@ -208,6 +208,7 @@ def boolQ_reader(file, size=None):
 def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8, rule=False):
     dataset = train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
+    additional_text = ""
     if rule:
         with open("DataSet/rules.txt", 'r') as rules:
             additional_text = rules.readline()

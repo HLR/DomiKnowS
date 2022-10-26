@@ -14,7 +14,7 @@ from regr.graph import Graph, Concept, Relation
 from program_declaration import program_declaration
 from reader import DomiKnowS_reader
 import tqdm
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 
 
 def eval(program, testing_set, cur_device, args):
@@ -34,18 +34,14 @@ def eval(program, testing_set, cur_device, args):
             count += 1
             label = labels[int(question.getAttribute(answer_class, "label"))]
             pred_label = int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))
-            actual_label = int(torch.argmax(question.getAttribute(answer_class, "ILP")))
             pred_argmax = labels[pred_label]
-            pred_ILP = labels[actual_label]
             pred.append(pred_label)
-            actual.append(actual_label)
-            accuracy_ILP += 1 if pred_ILP == label else 0
+            actual.append(int(question.getAttribute(answer_class, "label")))
             accuracy += 1 if pred_argmax == label else 0
             result_csv["story"].append(question.getAttribute("story"))
             result_csv["question"].append(question.getAttribute("question"))
             result_csv["label"].append(label)
             result_csv["argmax"].append(pred_argmax)
-            result_csv["ILP"].append(pred_ILP)
         verify_constrains = datanode.verifyResultsLC()
         count_verify = 0
         if verify_constrains:
@@ -54,7 +50,6 @@ def eval(program, testing_set, cur_device, args):
         satisfy_constrain_rate += count_verify / len(verify_constrains)
     satisfy_constrain_rate /= count_datanode
     accuracy /= count
-    accuracy_ILP /= count
 
     result_file = open("result.txt", 'a')
     print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
@@ -70,11 +65,12 @@ def eval(program, testing_set, cur_device, args):
         print("Loaded Model Name:", args.loaded_file, file=result_file)
     print("Evaluation File:", args.test_file, file=result_file)
     print("Accuracy:", accuracy, file=result_file)
-    print("ILP Accuracy:", accuracy_ILP, file=result_file)
     print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
-    print("Precious:", precision_score(actual, pred), file=result_file)
-    print("Recall:", precision_score(actual, pred), file=result_file)
-    print("F1:", precision_score(actual, pred), file=result_file)
+    print("Precious:", precision_score(actual, pred, average=None), file=result_file)
+    print("Recall:", recall_score(actual, pred, average=None), file=result_file)
+    print("F1:", f1_score(actual, pred, average=None), file=result_file)
+    print("F1 Macro:", f1_score(actual, pred, average='macro'), file=result_file)
+    print("Confusion Matrix:\n", confusion_matrix(actual, pred), file=result_file)
     result_file.close()
 
     #df = pd.DataFrame(result_csv)
@@ -113,7 +109,7 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
         print("Epoch:", epoch, file=training_file)
         print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
         if accuracy > best_accuracy:
-            best_epoch = epoch + check_epoch
+            best_epoch = epoch
             best_accuracy = accuracy
             # if old_file:
             #     os.remove(old_file)
@@ -170,6 +166,7 @@ def main(args):
         else "boolQ/train.json" if args.train_file.upper() == "BOOLQ" \
         else "human_train.json"
 
+    print(train_file)
     training_set = DomiKnowS_reader("DataSet/" + train_file, "YN",
                                     size=args.train_size, upward_level=8,
                                     augmented=args.train_file.upper() == "SPARTUN",
@@ -177,7 +174,7 @@ def main(args):
                                     boolQL=boolQ,
                                     rule=args.text_rules)
 
-    test_file = "human_test.json" if args.train_file.upper() == "HUMAN" \
+    test_file = "human_test.json" if args.test_file.upper() == "HUMAN" \
         else "test.json"
 
     testing_set = DomiKnowS_reader("DataSet/" + test_file, "YN",
@@ -197,7 +194,7 @@ def main(args):
                                 rule=args.text_rules)
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
     if args.loaded:
-        program.load("Models" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         eval(program, testing_set, cur_device, args)
     elif args.loaded_train:
         program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
@@ -214,8 +211,8 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", dest="test_size", type=int, default=100000)
     parser.add_argument("--train_size", dest="train_size", type=int, default=100000)
     parser.add_argument("--batch_size", dest="batch_size", type=int, default=100000)
-    parser.add_argument("--train_file", type=str, default="SpaRTUN", help="Option: SpaRTUN or Human")
-    parser.add_argument("--test_file", type=str, default="SpaRTUN", help="Option: SpaRTUN or Human")
+    parser.add_argument("--train_file", type=str, default="SPARTUN", help="Option: SpaRTUN or Human")
+    parser.add_argument("--test_file", type=str, default="SPARTUN", help="Option: SpaRTUN or Human")
     parser.add_argument("--text_rules", type=bool, default=False, help="Including rules as text or not")
     parser.add_argument("--dropout", dest="dropout", type=bool, default=False)
     parser.add_argument("--pmd", dest="pmd", type=bool, default=False)

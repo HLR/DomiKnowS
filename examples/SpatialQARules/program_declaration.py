@@ -81,7 +81,7 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
     from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
-    infer_list = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
+    infer_list = ['local/argmax']  # ['ILP', 'local/argmax']
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
@@ -98,7 +98,8 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     sample=True,
                                     sampleSize=sampleSize,
-                                    sampleGlobalLoss=True,
+                                    sampleGlobalLoss=False,
+                                    beta=1,
                                     device=cur_device)
     else:
         program = SolverPOIProgram(graph,
