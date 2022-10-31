@@ -53,7 +53,7 @@ with Graph('CIFAR100', reuse_model=False) as graph:
                  'non-insectinvertebrates': {'spider', 'worm', 'snail', 'lobster', 'crab'},
                  'aquaticmammals': {'seal', 'beaver', 'whale', 'otter', 'dolphin'}}
     
-    NEW_LC = True
+    NEW_LC = False
     
     if NEW_LC:
         for i in category.attributes:

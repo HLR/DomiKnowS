@@ -128,6 +128,16 @@ def getProductionModeStatus():
 
 def getReuseModel():
     return reuseModel
+
+dnSkeletonMode = False
+def setDnSkeletonMode(dnSkeleton):
+    global dnSkeletonMode
+    dnSkeletonMode = dnSkeleton
+    
+def getDnSkeletonMode():
+    global dnSkeletonMode
+    return dnSkeletonMode
+    
 def printablesize(ni):
     if hasattr(ni, 'shape'):
         return 'tensor' + str(tuple(ni.shape)) + ''
@@ -138,7 +148,6 @@ def printablesize(ni):
             return 'iterable(' + str(len(ni)) + ')[]'
     else:
         return str(type(ni))
-
 
 def entuple(args):
     if isinstance(args, tuple):

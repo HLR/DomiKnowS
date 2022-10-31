@@ -19,6 +19,10 @@ def model_declaration():
 
     graph2.detach()
 
+    lcConcepts = {}
+    for _, lc in graph2.logicalConstrains.items():
+        if lc.headLC:  
+            lcConcepts[lc.name] = lc.getLcConcepts()
     # --- City
     world['index'] = ReaderSensor(keyword='world')
     city['index'] = ReaderSensor(keyword='city')

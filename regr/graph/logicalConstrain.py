@@ -115,7 +115,24 @@ class LogicalConstrain:
         else:
             return e._context
        
-
+    def getLcConcepts(self):
+        lcConcepts = set()
+        
+        for _, eItem in enumerate(self.e):
+            if isinstance(eItem, V):
+                if eItem[1] and eItem[1][1]:
+                    if isinstance(eItem[1][1], eqL):
+                        if eItem[1][1].e[0]:
+                            lcConcepts.add(eItem[1][1].e[0][0].name)
+            elif isinstance(eItem, Concept):
+                lcConcepts.add(eItem.name)
+            elif isinstance(eItem, LogicalConstrain):
+                lcConcepts.update(eItem.getLcConcepts())
+            elif isinstance(eItem, tuple) and (len(eItem) == 4):
+                lcConcepts.add(eItem[0].name)
+                
+        return lcConcepts
+        
     # Get string representation of  Logical Constraintt
     def strEs(self):
         strsE = []

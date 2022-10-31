@@ -222,32 +222,34 @@ class DataNode:
         keyBis  = ""
         index = None
         
-        for i, k in enumerate(keys):
+        for _, kConcept in enumerate(keys):
             if key != "":
                 key = key + "/"
                 keyBis = keyBis + "/"
                 
-            if isinstance(k, str):
-                _k = self.findConcept(k)
+            # Handle different way of representing concept in the key list
+            if isinstance(kConcept, str): # Concept name
+                cocneptForK = self.findConcept(kConcept) # Find concept
                 
-                if _k is not None:  
-                    if isinstance(_k, tuple):
-                        key = key + '<' + _k[0].name +'>'
-                        index = _k[2]
-                        keyBis = keyBis + k
+                if cocneptForK is not None:  
+                    if isinstance(cocneptForK, tuple):
+                        key = key + '<' + cocneptForK[0].name +'>'
+                        index = cocneptForK[2]
+                        keyBis = keyBis + kConcept
                     else:
-                        key = key + '<' + k +'>'
-                        keyBis = keyBis + k
+                        key = key + '<' + kConcept +'>'
+                        keyBis = keyBis + kConcept
                 else:
-                    key = key + k
-                    keyBis = keyBis + k
-            elif isinstance(k, tuple):
-                key = key + '<' + k[0].name +'>'
-                keyBis = keyBis + k[0].name
-            elif isinstance(k, Concept):
-                key = key + '<' + k.name +'>'
-                keyBis = keyBis + k.name
-                    
+                    key = key + kConcept
+                    keyBis = keyBis + kConcept
+            elif isinstance(kConcept, tuple): # Concept represented as tuple
+                key = key + '<' + kConcept[0].name +'>'
+                keyBis = keyBis + kConcept[0].name
+            elif isinstance(kConcept, Concept): # Just concept
+                key = key + '<' + kConcept.name +'>'
+                keyBis = keyBis + kConcept.name
+            
+        # Use key and keyBis to get the dn attribute     
         if key in self.attributes:
             if index is None:
                 return self.attributes[key]
@@ -258,8 +260,16 @@ class DataNode:
                 return self.attributes[keyBis]
             else:
                 return self.attributes[keyBis][index]
-        else:
-            return None   
+        elif "rootDataNode" in self.attributes:
+            rootDataNode = self.attributes["rootDataNode"]
+            if "variableSet" in rootDataNode.attributes:
+                keyInVariableSet = self.ontologyNode.name + "/" + key
+                if keyInVariableSet in rootDataNode.attributes["variableSet"]:
+                    return rootDataNode.attributes["variableSet"][keyInVariableSet][self.instanceID]
+                elif keyInVariableSet in rootDataNode.attributes["propertySet"]:
+                    return rootDataNode.attributes["propertySet"][keyInVariableSet][self.instanceID]
+                
+        return None   
            
     # --- Relation Link methods
      
@@ -414,30 +424,39 @@ class DataNode:
     
     # Recursively search for concepts and relations in the data graph
     def findConceptsAndRelations(self, dn, conceptsAndRelations = None, visitedDns = None):
-        if conceptsAndRelations is None:
+        if 'variableSet' in self.attributes:
             conceptsAndRelations = set()
-        if visitedDns is None:
-            visitedDns = set()
+            for key in self.attributes['variableSet']:
+                if "label" in key:
+                    continue
+                conceptsAndRelations.add(key[key.index('<')+1:key.index('>')])
             
-        # Find concepts in dataNode - concept are in attributes from learning sensors
-        for att in dn.attributes:
-            if att[0] == '<' and att[-1] == '>':  
-                if att[1:-1] not in conceptsAndRelations:
-                    conceptsAndRelations.add(att[1:-1])
-                    _DataNode__Logger.info('Found concept %s in dataNode %s'%(att[1:-1],dn))
-                    
-        # Recursively find concepts and relations in linked dataNodes 
-        links = dn.getLinks()
-        if links:
-            for link in links:
-                for lDn in links[link]:
-                    if lDn in visitedDns:
-                        continue
-                    
-                    visitedDns.add(lDn)
-                    self.findConceptsAndRelations(lDn, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
-
-        return conceptsAndRelations
+            return conceptsAndRelations
+        else: 
+            if conceptsAndRelations is None:
+                conceptsAndRelations = set()
+            if visitedDns is None:
+                visitedDns = set()
+                
+            # Find concepts in dataNode - concept are in attributes from learning sensors
+            for att in dn.attributes:
+                if att[0] == '<' and att[-1] == '>':  
+                    if att[1:-1] not in conceptsAndRelations:
+                        conceptsAndRelations.add(att[1:-1])
+                        _DataNode__Logger.info('Found concept %s in dataNode %s'%(att[1:-1],dn))
+                        
+            # Recursively find concepts and relations in linked dataNodes 
+            links = dn.getLinks()
+            if links:
+                for link in links:
+                    for lDn in links[link]:
+                        if lDn in visitedDns:
+                            continue
+                        
+                        visitedDns.add(lDn)
+                        self.findConceptsAndRelations(lDn, conceptsAndRelations = conceptsAndRelations, visitedDns = visitedDns)
+    
+            return conceptsAndRelations
 
     # Find concept and relation names of DataNodes - used in concept.py
     def findConceptsNamesInDatanodes(self, dns = None, conceptNames = None, relationNames = None):
@@ -697,7 +716,10 @@ class DataNode:
     conceptsMap = {}
     
     # Find concept in the graph based on concept name
-    def findConcept(self, _conceptName, usedGraph = None):
+    def findConcept(self, conceptName, usedGraph = None):
+        if '<' in conceptName:
+            conceptName = conceptName[1:-1]
+            
         if not usedGraph:
             usedGraph = self.ontologyNode.getOntologyGraph()
             
@@ -706,35 +728,35 @@ class DataNode:
             
         usedGraphConceptsMap = self.conceptsMap[usedGraph]
         
-        if isinstance(_conceptName, Concept):
-            _conceptName = _conceptName.name()
+        if isinstance(conceptName, Concept):
+            conceptName = conceptName.name()
             
-        if _conceptName in usedGraphConceptsMap:
-            return usedGraphConceptsMap[_conceptName]
+        if conceptName in usedGraphConceptsMap:
+            return usedGraphConceptsMap[conceptName]
         
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
             subGraph = usedGraph._objs[subGraphKey]
             
             for conceptNameItem in subGraph.concepts:
-                if _conceptName == conceptNameItem:
+                if conceptName == conceptNameItem:
                     concept = subGraph.concepts[conceptNameItem]
                     
-                    usedGraphConceptsMap[_conceptName] =  (concept, concept.name, None, 1)
-                    return usedGraphConceptsMap[_conceptName]
+                    usedGraphConceptsMap[conceptName] =  (concept, concept.name, None, 1)
+                    return usedGraphConceptsMap[conceptName]
                 
                 elif isinstance(subGraph.concepts[conceptNameItem], EnumConcept):
                     vlen = len(subGraph.concepts[conceptNameItem].enum)
                     
-                    if _conceptName in subGraph.concepts[conceptNameItem].enum:
+                    if conceptName in subGraph.concepts[conceptNameItem].enum:
                         concept = subGraph.concepts[conceptNameItem]
                         
-                        usedGraphConceptsMap[_conceptName] = (concept, _conceptName, subGraph.concepts[conceptNameItem].get_index(_conceptName), vlen)
-                        return usedGraphConceptsMap[_conceptName]
+                        usedGraphConceptsMap[conceptName] = (concept, conceptName, subGraph.concepts[conceptNameItem].get_index(conceptName), vlen)
+                        return usedGraphConceptsMap[conceptName]
 
-        usedGraphConceptsMap[_conceptName] = None
+        usedGraphConceptsMap[conceptName] = None
         
-        return usedGraphConceptsMap[_conceptName]
+        return usedGraphConceptsMap[conceptName]
 
     # Check if concept is relation
     def isRelation(self, conceptRelation, usedGraph = None):
@@ -843,8 +865,9 @@ class DataNode:
                 else:
                     path0e1 = path[0].e[1].name
                     
-                if path0e1 in cDn.attributes and cDn.attributes[path0e1].item() in path[0].e[2]:
-                    _cDns.append(cDn)
+                if path0e1 in cDn.attributes or ("rootDataNode" in cDn.attributes and (path0.name + "/" + path0e1) in cDn.attributes["rootDataNode"].attributes["propertySet"]):
+                    if cDn.getAttribute(path0e1).item() in path[0].e[2]:
+                        _cDns.append(cDn)
                     
             relDns = _cDns
         
@@ -1398,15 +1421,20 @@ class DataNode:
     
 # Class constructing the data graph based on the sensors data during the model execution
 class DataNodeBuilder(dict):
+    
     context = "build"
     def __init__(self, *args, **kwargs ):
         dict.__init__(self, *args, **kwargs )
         _DataNodeBulder__Logger.info("")
         _DataNodeBulder__Logger.info("Called")
         self.myLoggerTime = getRegrTimer_logger()
+        
+        from regr.utils import getDnSkeletonMode
+        self.skeletonDataNode = getDnSkeletonMode()
 
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
+
 
     # Change elements of value to tuple if they are list - in order to use the value as dictionary key
     def __changToTuple(self, v):
@@ -1419,6 +1447,24 @@ class DataNodeBuilder(dict):
         else:
             return v
         
+    # Add variable name to set
+    def __addVariableNameToSet(self, vName):
+        variableSetName = 'variableSet'
+        if not dict.__contains__(self, variableSetName):
+            dict.__setitem__(self, variableSetName, set())
+        
+        variableSet = dict.__getitem__(self, variableSetName)
+        variableSet.add(vName)
+        
+    # Add property name to set
+    def __addPropertyNameToSet(self, pName):
+        propertySetName = 'propertySet'
+        if not dict.__contains__(self, propertySetName):
+            dict.__setitem__(self, propertySetName, set())
+        
+        variableSet = dict.__getitem__(self, propertySetName)
+        variableSet.add(pName)
+            
     # Add or increase generic counter counting number of setitem calls
     def __addSetitemCounter(self):
         globalCounterName = 'Counter' + '_setitem'
@@ -1994,7 +2040,7 @@ class DataNodeBuilder(dict):
                     _DataNodeBulder__Logger.info('DataNodes of %s is equal to %s'%(conceptDn,equalDn))
                     conceptDn.addEqualTo(equalDn)
 
-    # Method processing value of for the attribute - determining it it should be treated as a single element. 
+    # Method processing value of the attribute - determining it it should be treated as a single element. 
     #     It returns a tuple with elements specifying the length of the first dimension of the value, 
     #     the number of dimensions of the value and the original value itself
     def __processAttributeValue(self, value, keyDataName):
@@ -2149,32 +2195,46 @@ class DataNodeBuilder(dict):
         if isinstance(_key, Sensor):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
-        # Create key for DataNode construction
-        keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
-        keyDataName = keyDataName[1:] # __cut first '/' from the string
+        if not self.skeletonDataNode or "relationName" in conceptInfo or "dataNode" not in self:
+            # Create key for DataNode construction
+            keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
+            keyDataName = keyDataName[1:] # __cut first '/' from the string
+                            
+            if conceptInfo['label']:
+                keyDataName += '/label'
+                
+            vInfo = self.__processAttributeValue(value, keyDataName)
+            
+            # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
+            if keyDataName.find("_Equality_") > 0:
+                equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
+                self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
+            else:                       
+                _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
+                index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
+                
+                if index:
+                    indexKey = graphPath  + '/' +_conceptName + '/index'
+                    dict.__setitem__(self, indexKey, index)
+                    
+                    if self.skeletonDataNode:
+                        if "allDns" not in self:
+                            dict.__setitem__(self, "allDns", set())
+                        allDns = dict.__getitem__(self, "allDns")
+                        allDns.update(index)
+                
+                if conceptInfo['relation']:
+                    _DataNodeBulder__Logger.debug('%s is a relation'%(_conceptName))
+                    self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
+        else:
+            keyInRootDataNode = skey[-3] + "/" + skey[-2]
+            if conceptInfo['label']:
+                keyInRootDataNode += "/label"
+            if "<" in keyInRootDataNode:
+                self.__addVariableNameToSet((_key, keyInRootDataNode))
+            else:       
+                self.__addPropertyNameToSet((_key, keyInRootDataNode))
         
-        if conceptInfo['label']:
-            keyDataName += '/label'
-            
-        vInfo = self.__processAttributeValue(value, keyDataName)
-        
-        # Decide if this is equality between concept data, dataNode creation or update for concept or relation link
-        if keyDataName.find("_Equality_") > 0:
-            equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
-            self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
-        
-        else:                       
-            _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
-            index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
-            
-            if index:
-                indexKey = graphPath  + '/' +_conceptName + '/index'
-                dict.__setitem__(self, indexKey, index)
-            
-            if conceptInfo['relation']:
-                _DataNodeBulder__Logger.debug('%s is a relation'%(_conceptName))
-                self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
-            
         # Add value to the underling dictionary
         r = dict.__setitem__(self, _key, value)
         
@@ -2277,6 +2337,8 @@ class DataNodeBuilder(dict):
         self.__addGetDataNodeCounter()
         
         if context=="interference":
+            if self.skeletonDataNode:
+                self.myLoggerTime.info("DataNode Builder is using skeleton datanode mode")
             self.myLoggerTime.info("DataNode Builder the set method called - %i times"%(self['Counter_setitem']))
             elapsedInMsDataNodeBuilder = sum(self['DataNodeTime'])/1000000
             self.myLoggerTime.info(f"DataNode Builder used - {elapsedInMsDataNodeBuilder:.8f}ms")
@@ -2307,6 +2369,29 @@ class DataNodeBuilder(dict):
                     _DataNodeBulder__Logger.warning('Returning first dataNode with id %s of type %s - there are total %i dataNodes of types %s'
                                                     %(returnDn.instanceID,returnDn.getOntologyNode(),len(_dataNode),typesInDNs))
 
+                if self.skeletonDataNode:
+                    variableSetName = 'variableSet'
+                    if dict.__contains__(self, variableSetName):
+                        variableSet = dict.__getitem__(self, variableSetName)
+                        returnDn.attributes[variableSetName] = {}
+                        for _k, k in variableSet:
+                            returnDn.attributes[variableSetName][k] = self[_k]
+                            
+                    propertySetName = 'propertySet'
+                    if dict.__contains__(self, variableSetName):
+                        propertySet = dict.__getitem__(self, propertySetName)
+                        returnDn.attributes[propertySetName] = {}
+                        for _k, k in propertySet:
+                            returnDn.attributes[propertySetName][k] = self[_k]
+                            
+                    allDnsName = 'allDns' 
+                    if dict.__contains__(self, allDnsName):
+                        allDns = dict.__getitem__(self, allDnsName)
+                        for dn in allDns:
+                            if dn == returnDn:
+                                continue
+                            dn.attributes["rootDataNode"] = returnDn
+        
                 return returnDn
         
         _DataNodeBulder__Logger.error('Returning None - there are no dataNode')
