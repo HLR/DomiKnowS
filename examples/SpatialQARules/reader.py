@@ -19,6 +19,24 @@ VOCABULARY = {
     "NTPPI": ["contain[s]"]
 }
 
+LABELS_INT = {
+    "LEFT": 1,
+    "RIGHT": 2,
+    "ABOVE": 4,
+    "BELOW": 8,
+    "BEHIND": 16,
+    "FRONT": 32,
+    "NEAR": 64,
+    "FAR": 128,
+    "DC": 256,
+    "EC": 512,
+    "PO": 1024,
+    "TPP": 2048,
+    "NTPP": 4096,
+    "TPPI": 8192,
+    "NTPPI": 16384
+}
+
 
 def create_key(obj1, obj2, relation):
     key = str(obj1) + ":" + str(obj2) + ":" + str(relation)
@@ -29,6 +47,13 @@ def create_simple_question(obj1, obj2, relation, obj_info):
     return "Is " + obj_info[obj1]["full_name"] + " " + \
            (VOCABULARY[relation][0] if isinstance(VOCABULARY[relation], list) else VOCABULARY[relation]) \
            + " " + obj_info[obj2]["full_name"] + "?"
+
+
+def label_fr_to_int(labels: list):
+    result = 0
+    for label in labels:
+        result += LABELS_INT[label]
+    return result
 
 
 def train_reader(file, question_type, size=None, upward_level=0):
@@ -169,21 +194,37 @@ def test_reader(file, question_type, size=None):
             q_type = question["q_type"]
             if q_type != question_type:
                 continue
-            # Variable need
-            candidates = question['candidate_answers']
-            # asked_relation = question['question_info']['asked_relation'][0] \
-            #     if isinstance(question['question_info']['asked_relation'], list) \
-            #     else question['question_info']['asked_relation']
-            # asked_relation = asked_relation.upper()
-            # obj1, obj2 = question['query']
-            # asked_question = (obj1, obj2, asked_relation)
-            # current_key = create_key(*asked_question)
-            label = question["answer"][0]
-            if label == "DK":
-                label = "No"
-            dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
-            run_id += 1
-            count += 1
+            if q_type == "YN":
+                # Variable need
+                candidates = question['candidate_answers']
+                # asked_relation = question['question_info']['asked_relation'][0] \
+                #     if isinstance(question['question_info']['asked_relation'], list) \
+                #     else question['question_info']['asked_relation']
+                # asked_relation = asked_relation.upper()
+                # obj1, obj2 = question['query']
+                # asked_question = (obj1, obj2, asked_relation)
+                # current_key = create_key(*asked_question)
+                label = question["answer"][0]
+                if label == "DK":
+                    label = "No"
+                dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
+                run_id += 1
+                count += 1
+            elif q_type == "FR":
+                # Variable need
+                candidates = question['candidate_answers']
+                # asked_relation = question['question_info']['asked_relation'][0] \
+                #     if isinstance(question['question_info']['asked_relation'], list) \
+                #     else question['question_info']['asked_relation']
+                # asked_relation = asked_relation.upper()
+                # obj1, obj2 = question['query']
+                # asked_question = (obj1, obj2, asked_relation)
+                # current_key = create_key(*asked_question)
+                label = question["answer"]
+                dataset.append([[question_txt, story_txt, q_type, candidates, "", label_fr_to_int(label), run_id]])
+                run_id += 1
+                count += 1
+
     return dataset
 
 
@@ -205,7 +246,8 @@ def boolQ_reader(file, size=None):
     return dataset
 
 
-def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8, rule=False):
+def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8,
+                     rule=False):
     dataset = train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
     additional_text = ""
@@ -230,7 +272,7 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=T
             batch_data["stories"].append(story_txt)
             batch_data["relation"].append(relation)
             batch_data["question_ids"].append(str(id))
-            batch_data["labels"].append(label)
+            batch_data["labels"].append(str(label))
         current_batch_size += len(batch)
     if current_batch_size != 0:
         return_dataset.append({"questions": "@@".join(batch_data['questions']),
