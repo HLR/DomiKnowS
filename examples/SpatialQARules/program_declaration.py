@@ -173,51 +173,55 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
     question["input_ids"] = JointSensor(story_contain, 'question', "story",
                                         forward=BERTTokenizer(), device=device)
 
-    clf = MultipleClassYN.from_pretrained('bert-base-uncased', device=device, drp=dropout)
+    clf1 = MultipleClassYN_Hidden.from_pretrained('bert-base-uncased', device=device, drp=dropout)
 
-    question[left] = ModuleLearner("input_ids", module=clf, device=device)
+    question["hidden_layer"] = ModuleLearner("input_ids", module=clf1, device=device)
+
+    clf = ClassifyLayer(clf1.hidden_size, device=device, drp=dropout)
+
+    question[left] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[left] = FunctionalSensor(story_contain, "left_label", forward=read_label, label=True, device=device)
 
-    question[right] = ModuleLearner("input_ids", module=clf, device=device)
+    question[right] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[right] = FunctionalSensor(story_contain, "right_label", forward=read_label, label=True, device=device)
 
-    question[above] = ModuleLearner("input_ids", module=clf, device=device)
+    question[above] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[above] = FunctionalSensor(story_contain, "above_label", forward=read_label, label=True, device=device)
 
-    question[below] = ModuleLearner("input_ids", module=clf, device=device)
+    question[below] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[below] = FunctionalSensor(story_contain, "below_label", forward=read_label, label=True, device=device)
 
-    question[behind] = ModuleLearner("input_ids", module=clf, device=device)
+    question[behind] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[behind] = FunctionalSensor(story_contain, "behind_label", forward=read_label, label=True, device=device)
 
-    question[front] = ModuleLearner("input_ids", module=clf, device=device)
+    question[front] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[front] = FunctionalSensor(story_contain, "front_label", forward=read_label, label=True, device=device)
 
-    question[near] = ModuleLearner("input_ids", module=clf, device=device)
+    question[near] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[near] = FunctionalSensor(story_contain, "near_label", forward=read_label, label=True, device=device)
 
-    question[far] = ModuleLearner("input_ids", module=clf, device=device)
+    question[far] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[far] = FunctionalSensor(story_contain, "far_label", forward=read_label, label=True, device=device)
 
-    question[disconnected] = ModuleLearner("input_ids", module=clf, device=device)
+    question[disconnected] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[disconnected] = FunctionalSensor(story_contain, "dc_label", forward=read_label, label=True, device=device)
 
-    question[touch] = ModuleLearner("input_ids", module=clf, device=device)
+    question[touch] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[touch] = FunctionalSensor(story_contain, "ec_label", forward=read_label, label=True, device=device)
 
-    question[overlap] = ModuleLearner("input_ids", module=clf, device=device)
+    question[overlap] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[overlap] = FunctionalSensor(story_contain, "po_label", forward=read_label, label=True, device=device)
 
-    question[coveredby] = ModuleLearner("input_ids", module=clf, device=device)
+    question[coveredby] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[coveredby] = FunctionalSensor(story_contain, "tpp_label", forward=read_label, label=True, device=device)
 
-    question[inside] = ModuleLearner("input_ids", module=clf, device=device)
+    question[inside] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[inside] = FunctionalSensor(story_contain, "ntpp_label", forward=read_label, label=True, device=device)
 
-    question[cover] = ModuleLearner("input_ids", module=clf, device=device)
+    question[cover] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[cover] = FunctionalSensor(story_contain, "tppi_label", forward=read_label, label=True, device=device)
 
-    question[contain] = ModuleLearner("input_ids", module=clf, device=device)
+    question[contain] = ModuleLearner("hidden_layer", module=clf, device=device)
     question[contain] = FunctionalSensor(story_contain, "ntppi_label", forward=read_label, label=True, device=device)
 
     poi_list = [question, left, right, above, below, behind, front, near, far,
