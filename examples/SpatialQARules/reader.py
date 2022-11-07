@@ -246,8 +246,35 @@ def boolQ_reader(file, size=None):
     return dataset
 
 
+def StepGame_reader(prefix, train_dev_test="train", size=None):
+    if train_dev_test == "train":
+        files = ["train.json"]
+    elif train_dev_test == "dev":
+        files = ["qa" + str(i + 1) + "_valid.json" for i in range(5)]
+    else:
+        files = ["qa" + str(i + 1) + "_valid.json" for i in range(10)]
+
+    dataset = []
+    for file in files:
+        with open(prefix + file) as json_file:
+            data = json.load(json_file)
+        size = 300000 if not size else size
+        for story_ind in list(data)[:size]:
+            story = data[story_ind]
+            story_txt = " ".join(story["story"])
+            run_id = 0
+            question_txt = story["question"]
+            # Variable need
+            candidates = ["Yes", "No"]
+            label = story["label"]
+            dataset.append([[question_txt, story_txt, "FR", candidates, label, run_id]])
+            run_id += 1
+
+    return dataset
+
+
 def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8,
-                     rule=False):
+                     rule=False, StepGame_status="train"):
     dataset = train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
     additional_text = ""
