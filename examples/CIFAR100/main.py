@@ -21,6 +21,9 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetr
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from graph import graph, image_group_contains,image,category,Label,image_group
 
+# Enable skeleton DataNode
+from regr.utils import setDnSkeletonMode
+setDnSkeletonMode(True)
 
 class ImageNetwork(torch.nn.Module):
     def __init__(self):
@@ -35,7 +38,7 @@ class ImageNetwork(torch.nn.Module):
 from regr.utils import setProductionLogMode 
 productionMode = True  
 if productionMode:
-    setProductionLogMode(no_UseTimeLog=True)
+    setProductionLogMode(no_UseTimeLog=False)
     
 def main():
     import logging

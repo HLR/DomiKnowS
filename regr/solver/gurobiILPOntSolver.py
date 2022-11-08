@@ -30,7 +30,9 @@ class gurobiILPOntSolver(ilpOntSolver):
         self.myLcLossBooleanMethods = lcLossBooleanMethods()
         self.myLcLossSampleBooleanMethods = lcLossSampleBooleanMethods()
         self.booleanMethodsCalculator = booleanMethodsCalculator()
-        # self.logical_constraints = graph.logicalConstrains
+        self.logical_constraints = {}
+        for g in graph:
+            self.logical_constraints = {**self.logical_constraints, **g.logicalConstrains}
 
         self.reuse_model = reuse_model
         if getReuseModel():
@@ -1837,34 +1839,37 @@ class gurobiILPOntSolver(ilpOntSolver):
 
                 current_lcLosses = lcLosses[currentLcName]
                 lossList = current_lcLosses['lossList']
-                
+                lossTensor = None
+
                 seperateTensorsUsed = False
                 if lossList and lossList[0]:
                     if torch.is_tensor(lossList[0][0]) and (len(lossList[0][0].shape) == 0 or len(lossList[0][0].shape) == 1 and lossList[0][0].shape[0] == 1):
                         seperateTensorsUsed = True
                         
-                if seperateTensorsUsed:
-                    lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
-                    for i, l in enumerate(lossList):
-                        lossTensor[i] = float("nan")
-                        for entry in l:
+                    if seperateTensorsUsed:
+                        lossTensor = torch.zeros(len(lossList))#, requires_grad=True) # Entry lcs
+                        for i, l in enumerate(lossList):
+                            lossTensor[i] = float("nan")
+                            for entry in l:
+                                if entry is not None:
+                                    if lossTensor[i] != lossTensor[i]:
+                                        lossTensor[i] = entry
+                                    else:
+                                        lossTensor[i] += entry.item()
+                    else:
+                        for entry in lossList[0]:
                             if entry is not None:
-                                if lossTensor[i] != lossTensor[i]:
-                                    lossTensor[i] = entry
+                                if lossTensor == None:
+                                    lossTensor = entry
                                 else:
-                                    lossTensor[i] += entry.item()
-                else:
-                    lossTensor = None
-                    for entry in lossList[0]:
-                        if entry is not None:
-                            if lossTensor == None:
-                                lossTensor = entry
-                            else:
-                                lossTensor += entry
+                                    lossTensor += entry
                     
                 current_lcLosses['lossTensor'] = lossTensor
-                current_lcLosses['loss'] = torch.nansum(lossTensor).item()
-                
+                if lossTensor != None and torch.is_tensor(lossTensor):
+                    current_lcLosses['loss'] = torch.nansum(lossTensor).item()
+                else:
+                    current_lcLosses['loss'] = None
+
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC
                 elapsedInMsLC = elapsedInNsLC/1000000
@@ -2105,6 +2110,9 @@ class gurobiILPOntSolver(ilpOntSolver):
                     ifVerifyListSatisfied = 0
                     for i, v in enumerate(verifyList):
                         ifVi = []
+                        if len(v) != len(firstLcV[i]):
+                            f = firstLcV[i]
+                            continue    
                         for j, w in enumerate(v):
                             if torch.is_tensor(firstLcV[i][j]):
                                 if firstLcV[i][j].item() == 1:

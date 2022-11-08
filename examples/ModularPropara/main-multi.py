@@ -17,6 +17,7 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, D
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from regr.utils import setProductionLogMode
 
+
 def model_declaration():
     from graph_multi import (
         graph,

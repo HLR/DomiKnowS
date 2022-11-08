@@ -70,6 +70,10 @@ app_graph.detach()
 mention = app_graph['mention']
 mention_group = app_graph['mention_group']
 
+# Enable skeleton DataNode
+from regr.utils import setDnSkeletonMode
+setDnSkeletonMode(True)
+
 # text data sensors
 mention['MentionRepresentation'] = ReaderSensor(keyword='MentionRepresentation')
 mention['Context'] = ReaderSensor(keyword='Context')

@@ -1,16 +1,19 @@
 ## 6. Profiling the execution
-When the learning model has been positively tested and is ready for production execution there is a method which optimize the time performance during model execution. 
+
+
+#### Production Mode
+When the learning model has been positively tested and is ready for the production execution there is a method which optimize the model time performance:
 
 `setProductionLogMode(no_UseTimeLog=True)`
 
 The method should be called in the program before the learning model is started.
 
-The method will disable most of logging in the program and if its option *no_UseTimeLog* is set to true then all logging is disable.
-Additionally, the method enables reuse of the ILP constraints model in the ILP solver. This solution attempts to ruese previously constructed ILP model if the current example matches the examples from the previous model iteration. There is an option in the *setProductionLogMode* method to disable this mechanism by setting option *reuse_model* to False.
+The method will disable most of logging in the program (except single log file tracking time of basic steps in model). If the option *no_UseTimeLog* is set to true then all logging is disable.
+Additionally, the method enables reuse of the ILP constraints model in the ILP solver. This solution attempts  previously constructed ILP model if the current example matches the examples from the previous model iteration. There is an option in the *setProductionLogMode* method to disable this mechanism by setting option *reuse_model* to False.
 
 This example shows the usage of the method https://github.com/HLR/DomiKnowS/blob/9e228b31003dcf81dd663697aa988c504db9059b/examples/CIFAR100/main.py#L35
 
-The below log presents difference in execution time of ILP solver for the run using the method and one with production mode not enabled.
+The below log presents difference in execution time of ILP solver for the run using the method and the one with production mode not enabled.
 
 ```
 2022-10-01 10:59:29,444 - INFO - regrTimer:getDataNode - DataNode Builder the set method called - 28 times
@@ -62,3 +65,27 @@ The below log presents difference in execution time of ILP solver for the run us
 2022-10-01 11:02:52,432 - INFO - regrTimer:calculateILPSelection - ILP Preparing Return Results - time: 421ms
 2022-10-01 11:02:52,432 - INFO - regrTimer:calculateILPSelection - End ILP Inferencing - total time: 4.796875s
 ```
+
+
+#### DataNode Builder Optimalization
+
+The DataNode Builder constructs DataNode graph for the executed model. The model sensors provide information about the structure of the DataNode graph and their attributes.
+The attributes are provided as tensor with value in the specific index corresponding to the particular DataNode.
+In the normal mode of operation the builder with disassemble the tensor and put the appropriate value from it in the corresponding DataNode.
+This process takes time, which depends on the size of the tensor. 
+
+In order to limit the time used by the DataNode Builder it is possible to activate the DataNode skeleton mode using the method:
+
+`setDnSkeletonMode(True)`
+
+In the skeleton mode the builder will not distribute the attribute tensors across the DataNode but keep the in the cache.
+When the root DataNode is requested from the builder it will add to the root DataNode additional two attributes to the DataNode attribute dictionary:
+
+- `variableSet` - is associated with the dictionary of all the variables learned in the model and the corresponding value tensor
+- `prpertySet` - is associated with the dictionary of all the properties in the model and the corresponding value tensor
+
+All the child DataNodes linked with the root have their attributes extended with a single additional attribute:
+
+- `rootDataNode` - with value of the root DataNode
+
+This information allows the solver to transparently find the candidates for the ILP model in the same way as in the full DataNoode mode.
