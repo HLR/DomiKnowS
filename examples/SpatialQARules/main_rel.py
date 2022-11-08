@@ -11,7 +11,7 @@ import torch
 import argparse
 import numpy as np
 from regr.graph import Graph, Concept, Relation
-from program_declaration import program_declaration_spartun_fr
+from program_declaration import program_declaration_spartun_fr, program_declaration_StepGame
 from reader import DomiKnowS_reader
 import tqdm
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
@@ -41,25 +41,32 @@ def eval(program, testing_set, cur_device, args):
             pred_list.clear()
             for ind, label in enumerate(all_labels):
                 pred = question.getAttribute(label, 'local/softmax')
-                if pred.argmax() == 1:
+                if pred.argmax().item() == 1:
                     pred_set.add(ind)
                 pred_list.append(pred[1].item())
 
-            remove_opposite(0, 1, pred_set, pred_list)
-            remove_opposite(2, 3, pred_set, pred_list)
-            remove_opposite(4, 5, pred_set, pred_list)
-            remove_opposite(6, 7, pred_set, pred_list)
-            remove_opposite(8, 9, pred_set, pred_list)
+            if args.train_file.upper() == "STEPGAME":
+                pred = np.array(pred_list).argmax()
+                pred_set.clear()
+                pred_set.add(pred)
+            else:
+                remove_opposite(0, 1, pred_set, pred_list)
+                remove_opposite(2, 3, pred_set, pred_list)
+                remove_opposite(4, 5, pred_set, pred_list)
+                remove_opposite(6, 7, pred_set, pred_list)
+                remove_opposite(8, 9, pred_set, pred_list)
 
             for ind, label in enumerate(all_labels):
-                label = question.getAttribute(label, 'label')
+                label = question.getAttribute(label, 'label').item()
                 pred = 1 if ind in pred_set else 0
                 TPFN[ind] += label
                 TPFP[ind] += pred
                 TP[ind] += label if label == pred else 0
+
     precious = np.nan_to_num(TP / TPFP)
     recall = np.nan_to_num(TP / TPFN)
     f1 = np.nan_to_num(2 * precious * recall / (1 * precious + recall))
+
     return np.average(f1)
 
     # result_file = open("result.txt", 'a')
@@ -84,12 +91,8 @@ def eval(program, testing_set, cur_device, args):
     # print("Confusion Matrix:\n", confusion_matrix(actual, pred), file=result_file)
     # result_file.close()
 
-    return 0
-
 
 def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
-    # TODO: Change this version to FR question
-
     best_accuracy = 0
     best_epoch = 0
     old_file = None
@@ -156,15 +159,23 @@ def main(args):
     else:
         cur_device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
-    program = program_declaration_spartun_fr(cur_device,
-                                             pmd=args.pmd, beta=args.beta,
-                                             sampling=args.sampling, sampleSize=args.sampling_size,
-                                             dropout=args.dropout, constrains=args.constrains)
+    program = None
+    if args.train_file.upper() == "STEPGAME":
+        program = program_declaration_StepGame(cur_device,
+                                                 pmd=args.pmd, beta=args.beta,
+                                                 sampling=args.sampling, sampleSize=args.sampling_size,
+                                                 dropout=args.dropout, constrains=args.constrains)
+    else:
+        program = program_declaration_spartun_fr(cur_device,
+                                                 pmd=args.pmd, beta=args.beta,
+                                                 sampling=args.sampling, sampleSize=args.sampling_size,
+                                                 dropout=args.dropout, constrains=args.constrains)
 
     boolQ = args.train_file.upper() == "BOOLQ"
     train_file = "train.json" if args.train_file.upper() == "ORIGIN" \
         else "train_with_rules.json" if args.train_file.upper() == "SPARTUN" \
         else "boolQ/train.json" if args.train_file.upper() == "BOOLQ" \
+        else "StepGame" if args.train_file.upper() == "STEPGAME" \
         else "human_train.json"
 
     training_set = DomiKnowS_reader("DataSet/" + train_file, "FR",
@@ -172,26 +183,31 @@ def main(args):
                                     augmented=args.train_file.upper() == "SPARTUN",
                                     batch_size=args.batch_size,
                                     boolQL=boolQ,
-                                    rule=args.text_rules)
+                                    rule=args.text_rules,
+                                    StepGame_status="train" if args.train_file.upper() == "STEPGAME" else None)
 
     test_file = "human_test.json" if args.test_file.upper() == "HUMAN" \
+        else "StepGame" if args.train_file.upper() == "STEPGAME" \
         else "test.json"
 
     testing_set = DomiKnowS_reader("DataSet/" + test_file, "FR",
                                    size=args.test_size,
                                    augmented=False,
                                    batch_size=args.batch_size,
-                                   rule=args.text_rules)
+                                   rule=args.text_rules,
+                                   StepGame_status="test" if args.train_file.upper() == "STEPGAME" else None)
 
-    eval_file = "DataSet/human_dev.json" if args.test_file.upper() == "HUMAN" \
-        else "DataSet/boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
+    eval_file = "human_dev.json" if args.test_file.upper() == "HUMAN" \
+        else "StepGame" if args.train_file.upper() == "STEPGAME" \
+        else "boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
 
-    eval_set = DomiKnowS_reader(eval_file, "FR",
+    eval_set = DomiKnowS_reader("DataSet/" + eval_file, "FR",
                                 size=args.test_size,
                                 augmented=False,
                                 batch_size=args.batch_size,
                                 boolQL=boolQ,
-                                rule=args.text_rules)
+                                rule=args.text_rules,
+                                StepGame_status="dev" if args.train_file.upper() == "STEPGAME" else None)
 
     program_name = "PMD" if args.pmd else "Sampling" if args.sampling else "Base"
 

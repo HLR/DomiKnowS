@@ -265,7 +265,8 @@ def StepGame_reader(prefix, train_dev_test="train", size=None):
             run_id = 0
             question_txt = story["question"]
             # Variable need
-            candidates = ["Yes", "No"]
+            candidates = ["left", "right", "above", "below", "lower-left",
+                          "lower-right", "upper-left", "upper-right", "overlap"]
             label = story["label"]
             dataset.append([[question_txt, story_txt, "FR", candidates, label, run_id]])
             run_id += 1
@@ -274,8 +275,9 @@ def StepGame_reader(prefix, train_dev_test="train", size=None):
 
 
 def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8,
-                     rule=False, StepGame_status="train"):
-    dataset = train_reader(file, question_type, size, upward_level) if augmented \
+                     rule=False, StepGame_status=None):
+    dataset = StepGame_reader(file, StepGame_status, size) if StepGame_status \
+        else train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
     additional_text = ""
     if rule:

@@ -13,6 +13,15 @@ with Graph('spatial_QA_rule') as graph:
     question = Concept(name="question")
     story_contain, = story.contains(question)
 
+    left = question(name="left")
+    right = question(name="right")
+    above = question(name="above")
+    below = question(name="below")
+    lower_left = question(name="lower-left")
+    lower_right = question(name="lower_right")
+    upper_left = question(name="upper_left")
+    upper_right = question(name="upper_right")
+    overlap = question(name="overlap")
     # answer_class = question(name="answer_class", ConceptClass=EnumConcept,
     #                         values=["yes", "no"])
 
