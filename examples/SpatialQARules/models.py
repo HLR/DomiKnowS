@@ -36,4 +36,38 @@ class MultipleClassYN(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         output = self.classifier(pooled_output)
 
-        return self.softmax(output)
+        return output
+
+class MultipleClassYN_Hidden(BertPreTrainedModel):
+    def __init__(self, config, device="cpu", drp=False):
+        super().__init__(config)
+
+        if drp:
+            config.hidden_dropout_prob = 0.0
+            config.attention_probs_dropout_prob = 0.0
+
+        self.cur_device = device
+        self.bert = BertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.hidden_size = config.hidden_size
+
+    def forward(self, input_ids):
+        outputs = self.bert(input_ids)
+        pooled_output = outputs[1]
+        pooled_output = self.dropout(pooled_output)
+
+        return pooled_output
+
+class ClassifyLayer(nn.Module):
+    def __init__(self, hidden_size, device="cpu", drp=False):
+        super().__init__()
+
+        self.num_classes = 2
+        self.classifier = nn.Linear(hidden_size, self.num_classes)
+        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax()
+
+    def forward(self, pooled_output):
+        output = self.classifier(pooled_output)
+
+        return output

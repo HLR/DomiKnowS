@@ -336,3 +336,44 @@ class LearningBasedProgram():
 
     def load(self, path, **kwargs):
         self.model.load_state_dict(torch.load(path, **kwargs))
+
+    def verifyResultsLC(self,data,constraint_names=None):
+        datanode_ac,datanode_t=[],[]
+        all_ac, all_t = [], []
+        names=[]
+        FIRST=True
+        for datanode in self.populate(data, device=self.device):
+            datanode.inferILPResults()
+            verifyResult = datanode.verifyResultsLC()
+            if FIRST:
+                if constraint_names is None:
+                    for k in verifyResult.keys():
+                        datanode_ac.append(0)
+                        datanode_t.append(0)
+                        all_ac.append(0)
+                        all_t.append(0)
+                        names.append(k)
+                else:
+                    for k in constraint_names:
+                        if k not in verifyResult.keys():
+                            print("Contraint name {} not found.".format(k))
+                            continue
+                        datanode_ac.append(0)
+                        datanode_t.append(0)
+                        all_ac.append(0)
+                        all_t.append(0)
+                        names.append(k)
+                    if not names:
+                        print("All the provided constraint names were wrong.")
+                        return
+                FIRST=False
+            for num,name in enumerate(names):
+                datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
+                datanode_t[num] +=1
+                all_ac[num]+=sum([sum(i) for i in verifyResult['LC2']["verifyList"]])
+                all_t[num]+=sum([len(i) for i in verifyResult['LC2']["verifyList"]])
+
+        for num, name in enumerate(names):
+            print("Constraint name:",name,"datanode accuracy:",datanode_ac[num]/datanode_t[num],"total accuracy:",all_ac[num]/all_t[num])
+        return None
+

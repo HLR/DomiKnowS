@@ -22,16 +22,16 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code')
 
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=15, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 
-parser.add_argument('--samplenum', dest='samplenum', default=15, help='sample sizes for low data regime 10,20,40 max 37',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=2, help='sample sizes for low data regime 10,20,40 max 37',type=int)
 
 parser.add_argument('--simple_model', dest='simple_model', default=False, help='use the simplet model',type=bool)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
 
-parser.add_argument('--batch', dest='batch_size', default=128, help='batch size for neural network training',type=int)
+parser.add_argument('--batch', dest='batch_size', default=2, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
 

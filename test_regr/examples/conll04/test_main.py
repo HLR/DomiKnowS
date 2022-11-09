@@ -128,6 +128,16 @@ def model_declaration(config, case):
 
     graph.detach()
 
+    from regr.utils import setDnSkeletonMode
+    setDnSkeletonMode(True)
+    
+    lcConcepts = {}
+    for _, g in graph.subgraphs.items():
+        for _, lc in g.logicalConstrains.items():
+            if lc.headLC:  
+                lcConcepts[lc.name] = lc.getLcConcepts()
+    assert lcConcepts == {'LC0': {'organization', 'people'}, 'LC3': {'people', 'organization', 'work_for'}, 'LC5': {'word', 'other', 'O', 'location', 'organization', 'people'}}
+    
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
     # Edge: sentence to word
@@ -309,7 +319,7 @@ def test_main_conll04(case):
     
     for child_node in datanode.getChildDataNodes():
         if child_node.ontologyNode.name == 'word':
-            assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
+            #assert child_node.getAttribute('raw') == case.word.raw[child_node.instanceID]
             
             for child_node1 in child_node.getChildDataNodes():
                 assert child_node1.ontologyNode.name == 'char'
@@ -318,7 +328,7 @@ def test_main_conll04(case):
             num_pairs = case.pair.pa1_backward[:,child_node.instanceID].sum()
             assert len(child_node.getRelationLinks(relationName = "pair")) == num_pairs # has relation named "pair"with each word (including itself)
 
-            assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
+            #assert (child_node.getAttribute('emb') == case.word.emb[child_node.instanceID]).all()
             assert (child_node.getAttribute('<people>') == case.word.people[child_node.instanceID]).all()
             assert (child_node.getAttribute('<organization>') == case.word.organization[child_node.instanceID]).all()
             assert (child_node.getAttribute('<location>') == case.word.location[child_node.instanceID]).all()

@@ -19,6 +19,24 @@ VOCABULARY = {
     "NTPPI": ["contain[s]"]
 }
 
+LABELS_INT = {
+    "LEFT": 1,
+    "RIGHT": 2,
+    "ABOVE": 4,
+    "BELOW": 8,
+    "BEHIND": 16,
+    "FRONT": 32,
+    "NEAR": 64,
+    "FAR": 128,
+    "DC": 256,
+    "EC": 512,
+    "PO": 1024,
+    "TPP": 2048,
+    "NTPP": 4096,
+    "TPPI": 8192,
+    "NTPPI": 16384
+}
+
 
 def create_key(obj1, obj2, relation):
     key = str(obj1) + ":" + str(obj2) + ":" + str(relation)
@@ -29,6 +47,13 @@ def create_simple_question(obj1, obj2, relation, obj_info):
     return "Is " + obj_info[obj1]["full_name"] + " " + \
            (VOCABULARY[relation][0] if isinstance(VOCABULARY[relation], list) else VOCABULARY[relation]) \
            + " " + obj_info[obj2]["full_name"] + "?"
+
+
+def label_fr_to_int(labels: list):
+    result = 0
+    for label in labels:
+        result += LABELS_INT[label]
+    return result
 
 
 def train_reader(file, question_type, size=None, upward_level=0):
@@ -66,7 +91,7 @@ def train_reader(file, question_type, size=None, upward_level=0):
             target_relation = target_relation.upper()
 
             asked_relation = question['question_info']['asked_relation'][0] \
-                if isinstance(question['question_info']['asked_relation'], list)\
+                if isinstance(question['question_info']['asked_relation'], list) \
                 else question['question_info']['asked_relation']
             asked_relation = asked_relation.upper()
 
@@ -169,27 +194,95 @@ def test_reader(file, question_type, size=None):
             q_type = question["q_type"]
             if q_type != question_type:
                 continue
-            # Variable need
-            candidates = question['candidate_answers']
-            # asked_relation = question['question_info']['asked_relation'][0] \
-            #     if isinstance(question['question_info']['asked_relation'], list) \
-            #     else question['question_info']['asked_relation']
-            # asked_relation = asked_relation.upper()
-            # obj1, obj2 = question['query']
-            # asked_question = (obj1, obj2, asked_relation)
-            # current_key = create_key(*asked_question)
-            label = question["answer"][0]
-            if label != "Yes" and label != "No":
-                continue
-            dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
-            run_id += 1
-            count += 1
+            if q_type == "YN":
+                # Variable need
+                candidates = question['candidate_answers']
+                # asked_relation = question['question_info']['asked_relation'][0] \
+                #     if isinstance(question['question_info']['asked_relation'], list) \
+                #     else question['question_info']['asked_relation']
+                # asked_relation = asked_relation.upper()
+                # obj1, obj2 = question['query']
+                # asked_question = (obj1, obj2, asked_relation)
+                # current_key = create_key(*asked_question)
+                label = question["answer"][0]
+                if label == "DK":
+                    label = "No"
+                dataset.append([[question_txt, story_txt, q_type, candidates, "", label, run_id]])
+                run_id += 1
+                count += 1
+            elif q_type == "FR":
+                # Variable need
+                candidates = question['candidate_answers']
+                # asked_relation = question['question_info']['asked_relation'][0] \
+                #     if isinstance(question['question_info']['asked_relation'], list) \
+                #     else question['question_info']['asked_relation']
+                # asked_relation = asked_relation.upper()
+                # obj1, obj2 = question['query']
+                # asked_question = (obj1, obj2, asked_relation)
+                # current_key = create_key(*asked_question)
+                label = question["answer"]
+                dataset.append([[question_txt, story_txt, q_type, candidates, "", label_fr_to_int(label), run_id]])
+                run_id += 1
+                count += 1
+
     return dataset
 
 
-def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True, batch_size=8):
-    dataset = train_reader(file, question_type, size, upward_level) if train else test_reader(file, question_type, size)
+def boolQ_reader(file, size=None):
+    with open(file) as json_file:
+        data = json.load(json_file)
+    size = 300000 if not size else size
 
+    dataset = []
+    for story in data["data"][:size]:
+        story_txt = story['passage'][:1000]
+        run_id = 0
+        question_txt = story['question']
+        # Variable need
+        candidates = ["Yes", "No"]
+        label = story['answer']
+        dataset.append([[question_txt, story_txt, "YN", candidates, label, run_id]])
+        run_id += 1
+    return dataset
+
+
+def StepGame_reader(prefix, train_dev_test="train", size=None):
+    if train_dev_test == "train":
+        files = ["train.json"]
+    elif train_dev_test == "dev":
+        files = ["qa" + str(i + 1) + "_valid.json" for i in range(5)]
+    else:
+        files = ["qa" + str(i + 1) + "_valid.json" for i in range(10)]
+
+    dataset = []
+    for file in files:
+        with open(prefix + file) as json_file:
+            data = json.load(json_file)
+        size = 300000 if not size else size
+        for story_ind in list(data)[:size]:
+            story = data[story_ind]
+            story_txt = " ".join(story["story"])
+            run_id = 0
+            question_txt = story["question"]
+            # Variable need
+            candidates = ["left", "right", "above", "below", "lower-left",
+                          "lower-right", "upper-left", "upper-right", "overlap"]
+            label = story["label"]
+            dataset.append([[question_txt, story_txt, "FR", candidates, label, run_id]])
+            run_id += 1
+
+    return dataset
+
+
+def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8,
+                     rule=False, StepGame_status=None):
+    dataset = StepGame_reader(file, StepGame_status, size) if StepGame_status \
+        else train_reader(file, question_type, size, upward_level) if augmented \
+        else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
+    additional_text = ""
+    if rule:
+        with open("DataSet/rules.txt", 'r') as rules:
+            additional_text = rules.readline()
     return_dataset = []
     current_batch_size = 0
     batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
@@ -204,11 +297,11 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, train=True,
             batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
         for data in batch:
             question_txt, story_txt, q_type, candidates_answer, relation, label, id = data
-            batch_data["questions"].append(question_txt)
+            batch_data["questions"].append(question_txt + additional_text)
             batch_data["stories"].append(story_txt)
             batch_data["relation"].append(relation)
             batch_data["question_ids"].append(str(id))
-            batch_data["labels"].append(label)
+            batch_data["labels"].append(str(label))
         current_batch_size += len(batch)
     if current_batch_size != 0:
         return_dataset.append({"questions": "@@".join(batch_data['questions']),

@@ -14,6 +14,8 @@ graphMetaOntologyPathname = resource_filename('regr', 'ontology/ML')
 from pathlib import Path
 from regr.solver.ilpConfig import ilpConfig 
 
+from regr.utils import getRegrTimer_logger
+
 class ilpOntSolver(object):
     __metaclass__ = abc.ABCMeta
     
@@ -54,40 +56,32 @@ class ilpOntSolver(object):
                 logFileMode = _ilpConfig['log_fileMode']
             
         logger = logging.getLogger(logName)
-        loggerTime = logging.getLogger(logName + "Time")
 
         # Create file handler and set level to info
         import pathlib
         pathlib.Path("logs").mkdir(parents=True, exist_ok=True)
         chAll = RotatingFileHandler(logFilename + ".log", mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
-        chTime = RotatingFileHandler(logFilename + "Time.log", mode=logFileMode, maxBytes=logFilesize, backupCount=logBackupCount, encoding=None, delay=0)
 
         logger.setLevel(logLevel)
-        loggerTime.setLevel(logLevel)
         
         # Create formatter
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s:%(funcName)s - %(message)s')
     
         # Add formatter to ch
         chAll.setFormatter(formatter)
-        chTime.setFormatter(formatter)
 
         # Add ch to logger
         logger.addHandler(chAll)
-        loggerTime.addHandler(chTime)
         
         # Don't propagate
         logger.propagate = False
-        loggerTime.propagate = False
         print("Log file for %s is in: %s"%(logName,chAll.baseFilename))
         print("Log file for %s is in: %s"%(logName + "Time",chAll.baseFilename))
 
         self.myLogger = logger
         self.myLogger.info('--- Starting new run ---')
 
-        self.myLoggerTime = loggerTime
-        self.myLoggerTime.info('--- Starting new run ---')
-
+        self.myLoggerTime = getRegrTimer_logger()
 
     def loadOntology(self, ontologies):
         start = datetime.datetime.now()

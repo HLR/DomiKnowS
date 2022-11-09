@@ -7,8 +7,8 @@ import logging
 
 import torch
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph import ifL, notL, andL, orL, nandL, V
+from regr.graph import Graph, Concept, Relation, DataNodeBuilder
+from regr.graph import ifL, andL, nandL
 from regr.program import POIProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
@@ -27,7 +27,7 @@ Relation.clear()
 #
 # Graph Definition
 #
-with Graph('example') as graph:
+with Graph('example', reuse_model=True) as graph:
     sentence = Concept(name='sentence')
     word = Concept(name='word')
     sentence.contains(word)
@@ -141,9 +141,12 @@ linearsoftmax = torch.nn.Sequential(
 #
 # Access learned information from Datanode 
 #
+DataNodeBuilder.context = "interference"
 for node in program.populate(reader, device=device):
     node.infer()
     node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+    node.inferILPResults(fun=lambda val: torch.tensor(val).softmax(dim=-1).detach().cpu().numpy().tolist(), epsilon=None)
+
     for word_node in node.getChildDataNodes():
         print(word_node.getAttribute('text'))
         print(' - people:', word_node.getAttribute(people), 'ILP:', word_node.getAttribute(people, 'ILP'))
@@ -171,10 +174,17 @@ for node in program.populate(reader, device=device):
     verifyResult = node.verifyResultsLC()
     if verifyResult:
         for lc in verifyResult:
-            print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+            if "ifSatisfied" in verifyResult[lc]:
+                print("%s(if) is %i%% satisfied by learned results"%(lc, verifyResult[lc]['ifSatisfied']))
+            else:
+                print("%s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+
             
     print("\nVerify ILP Results:")
     verifyResultILP = node.verifyResultsLC(key = "/ILP")
     if verifyResultILP:
         for lc in verifyResultILP:
-            print("lc %s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
+            if "ifSatisfied" in verifyResultILP[lc]:
+                print("%s(if) is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['ifSatisfied']))
+            else:
+                print("%s is %i%% satisfied by ilp results"%(lc, verifyResultILP[lc]['satisfied']))
