@@ -30,10 +30,13 @@ import config
 
 from gbi import get_lambda, reg_loss
 
+# Enable skeleton DataNode
+from regr.utils import setDnSkeletonMode
+setDnSkeletonMode(True)
+
 setProductionLogMode()
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
-
 
 def get_pred_from_node(node, suffix):
     digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
@@ -246,7 +249,8 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             #for ln in label_names:
             #    log_probs += torch.sum(torch.log(node_l.getAttribute('<%s>/local/softmax' % ln)))
 
-            probs = {}
+            # collect probs from all datanodes (regular)
+            '''probs = {}
             # iter through datanodes
             for dn in builder_l['dataNode']:
                 dn.inferLocal()
@@ -254,7 +258,13 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
                 for c in dn.collectConceptsAndRelations():
                     c_prob = dn.getAttribute('<%s>/local/softmax' % c[0].name)
                     if c_prob.grad_fn is not None:
-                        probs[c[0].name] = c_prob
+                        probs[c[0].name] = c_prob'''
+
+            # collect probs from all datanodes (skeleton)
+            probs = {}
+            for var_name, var_val in node_l.getAttribute('variableSet').items():
+                if not var_name.endswith('/label') and var_val.grad_fn is not None:
+                    probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
 
             # get total log prob
             log_probs = 0.0
