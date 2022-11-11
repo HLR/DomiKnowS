@@ -306,7 +306,7 @@ def program_declaration_StepGame(device, *, pmd=False, beta=0.5, sampling=False,
 
     def make_labels(label_list):
         labels = label_list.split("@@")
-        all_labels_list = [[] for _ in range(15)]
+        all_labels_list = [[] for _ in range(9)]
         for cur_label in labels:
             for ind, label in enumerate(all_labels):
                 all_labels_list[ind].append(1 if label == cur_label else 0)
@@ -323,8 +323,7 @@ def program_declaration_StepGame(device, *, pmd=False, beta=0.5, sampling=False,
                lower_right_list, upper_left_list, upper_right_list, over_lap_list
 
     question[story_contain, "question", "story", "relation", "id", "left_label", "right_label",
-             "above_label", "below_label", "behind_label", "front_label", "near_label", "far_label", "dc_label", "ec_label", "po_label",
-             "tpp_label", "ntpp_label", "tppi_label", "ntppi_label"] = \
+             "above_label", "below_label", "lower_left_label", "lower_right_label", "upper_left_label", "upper_right_label", "overlap_label"] = \
         JointSensor(story["questions"], story["stories"], story["relations"],
                     story["question_ids"], story["labels"], forward=make_question, device=device)
 
