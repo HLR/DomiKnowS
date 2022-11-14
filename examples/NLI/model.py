@@ -26,7 +26,7 @@ class RobertClassification(nn.Module):
         self.hidden_size = hidden_layer_size
         self.start = nn.Linear(last_layer_size, 512)
         self.hidden = nn.Linear(512, 512)
-        self.final = nn.Linear(512, 2)
+        self.final = nn.Linear(512, 3)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
