@@ -216,10 +216,28 @@ def main(args):
 
     # eval(program, testing_set, cur_device, args)
     if args.loaded:
-        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        if args.model_change:
+            pretrain_model = torch.load("Models/" + args.loaded_file,
+                                        map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+            pretrain_dict = pretrain_model.state_dict()
+            current_dict = program.model.state_dict()
+            # Filter out unnecessary keys
+            pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in current_dict}
+            program.model.load_state_dict(pretrain_dict)
+        else:
+            program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         eval(program, testing_set, cur_device, args)
     elif args.loaded_train:
-        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        if args.model_change:
+            pretrain_model = torch.load("Models/" + args.loaded_file,
+                                        map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+            pretrain_dict = pretrain_model.state_dict()
+            current_dict = program.model.state_dict()
+            # Filter out unnecessary keys
+            pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in current_dict}
+            program.model.load_state_dict(pretrain_dict)
+        else:
+            program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
     else:
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
