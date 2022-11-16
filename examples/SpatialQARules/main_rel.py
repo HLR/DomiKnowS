@@ -18,8 +18,14 @@ from sklearn.metrics import precision_score, recall_score, f1_score, confusion_m
 
 
 def eval(program, testing_set, cur_device, args):
-    from graph_spartun_rel import left, right, above, below, behind, front, near, far, disconnected, touch, \
-        overlap, coveredby, inside, cover, contain
+    if args.test_file.upper() != "STEPGAME":
+        from graph_spartun_rel import left, right, above, below, behind, front, near, far, disconnected, touch, \
+            overlap, coveredby, inside, cover, contain
+        all_labels = [left, right, above, below, behind, front, near, far, disconnected,
+                      touch, overlap, coveredby, inside, cover, contain]
+    else:
+        from graph_stepgame import left, right, above, below, lower_left, lower_right, upper_left, upper_right, overlap
+        all_labels = [left, right, above, below, lower_left, lower_right, upper_left, upper_right, overlap]
 
     def remove_opposite(ind1, ind2, result_set, result_list):
         if ind1 in pred_set and ind2 in pred_set:
@@ -28,17 +34,18 @@ def eval(program, testing_set, cur_device, args):
             else:
                 result_set.remove(ind1)
 
-    all_labels = [left, right, above, below, behind, front, near, far, disconnected,
-                  touch, overlap, coveredby, inside, cover, contain]
-    TP = np.zeros(15)
-    TPFN = np.zero(15)
-    TPFP = np.zero(15)
+    TP = np.zeros(len(all_labels))
+    TPFN = np.zeros(len(all_labels))
+    TPFP = np.zeros(len(all_labels))
     pred_list = []
+    correct = 0
+    total = 0
     pred_set = set()
     for datanode in tqdm.tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
         for question in datanode.getChildDataNodes():
             pred_set.clear()
             pred_list.clear()
+            total += 1
             for ind, label in enumerate(all_labels):
                 pred = question.getAttribute(label, 'local/softmax')
                 if pred.argmax().item() == 1:
@@ -55,19 +62,15 @@ def eval(program, testing_set, cur_device, args):
                 remove_opposite(4, 5, pred_set, pred_list)
                 remove_opposite(6, 7, pred_set, pred_list)
                 remove_opposite(8, 9, pred_set, pred_list)
-
-            for ind, label in enumerate(all_labels):
-                label = question.getAttribute(label, 'label').item()
+            accuracy_check = True
+            for ind, label_ind in enumerate(all_labels):
+                label = question.getAttribute(label_ind, 'label').item()
                 pred = 1 if ind in pred_set else 0
-                TPFN[ind] += label
-                TPFP[ind] += pred
-                TP[ind] += label if label == pred else 0
+                accuracy_check = accuracy_check and label == pred
+            if accuracy_check: correct += 1
 
-    precious = np.nan_to_num(TP / TPFP)
-    recall = np.nan_to_num(TP / TPFN)
-    f1 = np.nan_to_num(2 * precious * recall / (1 * precious + recall))
 
-    return np.average(f1)
+    return correct / total
 
     # result_file = open("result.txt", 'a')
     # print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
@@ -98,7 +101,7 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
     old_file = None
     training_file = open("training.txt", 'a')
     print("-" * 10, file=training_file)
-    print("Training by ", program_name, file=training_file)
+    print("Training by {:s} of ({:s} {:s})".format(program_name, args.train_file, "FR"), file=training_file)
     print("Learning Rate:", args.lr, file=training_file)
     training_file.close()
     cur_epoch = 0
@@ -199,7 +202,7 @@ def main(args):
 
     eval_file = "human_dev.json" if args.test_file.upper() == "HUMAN" \
         else "StepGame" if args.train_file.upper() == "STEPGAME" \
-        else "boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "DataSet/dev_Spartun.json"
+        else "boolQ/train.json" if args.train_file.upper() == "BOOLQ" else "dev_Spartun.json"
 
     eval_set = DomiKnowS_reader("DataSet/" + eval_file, "FR",
                                 size=args.test_size,
@@ -213,10 +216,28 @@ def main(args):
 
     # eval(program, testing_set, cur_device, args)
     if args.loaded:
-        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        if args.model_change:
+            pretrain_model = torch.load("Models/" + args.loaded_file,
+                                        map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+            pretrain_dict = pretrain_model.state_dict()
+            current_dict = program.model.state_dict()
+            # Filter out unnecessary keys
+            pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in current_dict}
+            program.model.load_state_dict(pretrain_dict)
+        else:
+            program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         eval(program, testing_set, cur_device, args)
     elif args.loaded_train:
-        program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+        if args.model_change:
+            pretrain_model = torch.load("Models/" + args.loaded_file,
+                                        map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
+            pretrain_dict = pretrain_model.state_dict()
+            current_dict = program.model.state_dict()
+            # Filter out unnecessary keys
+            pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in current_dict}
+            program.model.load_state_dict(pretrain_dict)
+        else:
+            program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)
     else:
         train(program, training_set, eval_set, cur_device, args.epoch, args.lr, program_name=program_name, args=args)

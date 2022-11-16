@@ -241,7 +241,7 @@ def boolQ_reader(file, size=None):
         # Variable need
         candidates = ["Yes", "No"]
         label = story['answer']
-        dataset.append([[question_txt, story_txt, "YN", candidates, label, run_id]])
+        dataset.append([[question_txt, story_txt, "YN", candidates, "", label, run_id]])
         run_id += 1
     return dataset
 
@@ -252,23 +252,24 @@ def StepGame_reader(prefix, train_dev_test="train", size=None):
     elif train_dev_test == "dev":
         files = ["qa" + str(i + 1) + "_valid.json" for i in range(5)]
     else:
-        files = ["qa" + str(i + 1) + "_valid.json" for i in range(10)]
+        files = ["qa" + str(i + 1) + "_test.json" for i in range(10)]
 
     dataset = []
     for file in files:
-        with open(prefix + file) as json_file:
+        with open(prefix+ "/" + file) as json_file:
             data = json.load(json_file)
         size = 300000 if not size else size
+        run_id = 0
         for story_ind in list(data)[:size]:
             story = data[story_ind]
             story_txt = " ".join(story["story"])
-            run_id = 0
+
             question_txt = story["question"]
             # Variable need
             candidates = ["left", "right", "above", "below", "lower-left",
                           "lower-right", "upper-left", "upper-right", "overlap"]
             label = story["label"]
-            dataset.append([[question_txt, story_txt, "FR", candidates, label, run_id]])
+            dataset.append([[question_txt, story_txt, "FR", candidates, "", label, run_id]])
             run_id += 1
 
     return dataset
@@ -286,7 +287,7 @@ def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=T
     return_dataset = []
     current_batch_size = 0
     batch_data = {'questions': [], 'stories': [], 'relation': [], 'labels': [], "question_ids": []}
-    for batch in tqdm.tqdm(dataset):
+    for batch in tqdm.tqdm(dataset, desc="Reading " + file + " " + (str(StepGame_status) if StepGame_status is not None else "")):
         if current_batch_size + len(batch) > batch_size and current_batch_size != 0:
             current_batch_size = 0
             return_dataset.append({"questions": "@@".join(batch_data['questions']),

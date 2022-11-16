@@ -7,7 +7,7 @@ Relation.clear()
 with Graph('Useful_arg') as graph:
 
     # Group of sentence
-    sentence_group = Concept(name="sentence_group")
+    sentence_group = Concept(name="sentence_group") # TODO: Thi
     sentence = Concept(name="sentence")
     sentence_group_contains, = sentence_group.contains(sentence)
 

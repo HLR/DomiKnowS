@@ -30,10 +30,13 @@ import config
 
 from gbi import get_lambda, reg_loss
 
+# Enable skeleton DataNode
+from regr.utils import setDnSkeletonMode
+setDnSkeletonMode(True)
+
 setProductionLogMode()
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
-
 
 def get_pred_from_node(node, suffix):
     digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
@@ -138,9 +141,13 @@ print('loaded model from %s' % model_path)
 
 
 def populate_forward(model, data_item):
+    """
+    Forward pass through torch model.
+    Returns DataNode and DataNodeBuilder.
+    """
     _, _, *output = model(data_item)
     node = detuple(*output[:1])
-    return node
+    return node, output[1]
 
 
 def get_constraints(node):
@@ -190,13 +197,15 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
     for data_iter, data_item in enumerate(dataloader):
         total += 1
 
+        # end early based on number of test samples
         if total > data_iters:
             break
 
         model = program.model
 
+        # forward pass through model
         with torch.no_grad():
-            node = populate_forward(model, data_item)
+            node, _ = populate_forward(model, data_item)
 
         # get constraint satisfaction
         num_satisfied, num_constraints = get_constraints(node)
@@ -214,6 +223,8 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
 
         print('Starting GBI:')
 
+        # make copy of original model
+        # model_l is the model that gets optimized
         model_l, c_opt = get_lambda(model, lr=1e-1)
         model_l.mode(Mode.TRAIN)
         model_l.train()
@@ -224,7 +235,8 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
         for c_iter in range(gbi_iters):
             c_opt.zero_grad()
 
-            node_l = populate_forward(model_l, data_item)
+            # forward pass through model_l
+            node_l, builder_l = populate_forward(model_l, data_item)
 
             num_satisfied_l, num_constraints_l = get_constraints(node_l)
 
@@ -233,10 +245,34 @@ def run_gbi(program, dataloader, data_iters, gbi_iters, label_names, is_correct)
             # logits = node_l.getAttribute('logits')
             # log_probs = torch.sum(F.log_softmax(logits, dim=-1))
 
-            log_probs = 0.0
-            for ln in label_names:
-                log_probs += torch.sum(torch.log(node_l.getAttribute('<%s>/local/softmax' % ln)))
+            # calculate global log prob from all labels
+            #for ln in label_names:
+            #    log_probs += torch.sum(torch.log(node_l.getAttribute('<%s>/local/softmax' % ln)))
 
+            # collect probs from all datanodes (regular)
+            '''probs = {}
+            # iter through datanodes
+            for dn in builder_l['dataNode']:
+                dn.inferLocal()
+                # find concept names
+                for c in dn.collectConceptsAndRelations():
+                    c_prob = dn.getAttribute('<%s>/local/softmax' % c[0].name)
+                    if c_prob.grad_fn is not None:
+                        probs[c[0].name] = c_prob'''
+
+            # collect probs from all datanodes (skeleton)
+            probs = {}
+            for var_name, var_val in node_l.getAttribute('variableSet').items():
+                if not var_name.endswith('/label') and var_val.grad_fn is not None:
+                    probs[var_name] = torch.sum(F.log_softmax(var_val, dim=-1))
+
+            # get total log prob
+            log_probs = 0.0
+            for c_prob in probs.values():
+                log_probs += torch.sum(torch.log(c_prob))
+
+            # constraint loss: NLL * binary satisfaction + regularization loss
+            # reg loss is calculated based on L2 distance of weights between optimized model and original weights
             c_loss = -1 * log_probs * is_satisifed + reg_loss(model_l, model)
 
             # print("iter=%d, c_loss=%d, satisfied=%d" % (c_iter, c_loss.item(), num_satisfied_l))
