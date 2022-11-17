@@ -10,33 +10,27 @@ from program_declaration import program_declaration
 import torch
 import argparse
 import numpy as np
+from tqdm import tqdm
 from regr.graph import Graph, Concept, Relation
 
+
 def eval(program, testing_set, cur_device, args):
-    from graph import answer_class
+    from graph_senetences import answer_class
     labels = ["Yes", "No"]
     accuracy_ILP = 0
     accuracy = 0
     count = 0
     count_datanode = 0
     satisfy_constrain_rate = 0
-    pred = []
-    actual = []
-    result_csv = {"story": [], "question": [], "label": [], "argmax": [], "ILP": []}
-    for datanode in tqdm.tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
+    for datanode in tqdm(program.populate(testing_set, device=cur_device), "Manually Testing"):
         count_datanode += 1
         for question in datanode.getChildDataNodes():
             count += 1
-            label = labels[int(question.getAttribute(answer_class, "label"))]
-            pred_label = int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))
-            pred_argmax = labels[pred_label]
-            pred.append(pred_label)
-            actual.append(int(question.getAttribute(answer_class, "label")))
-            accuracy += 1 if pred_argmax == label else 0
-            result_csv["story"].append(question.getAttribute("story"))
-            result_csv["question"].append(question.getAttribute("question"))
-            result_csv["label"].append(label)
-            result_csv["argmax"].append(pred_argmax)
+            label = int(question.getAttribute(answer_class, "label"))
+            pred = int(torch.argmax(question.getAttribute(answer_class, "local/argmax")))
+            pred_ILP = int(torch.argmax(question.getAttribute(answer_class, "ILP")))
+            accuracy_ILP += 1 if pred_ILP == label else 0
+            accuracy += 1 if pred == label else 0
         verify_constrains = datanode.verifyResultsLC()
         count_verify = 0
         if verify_constrains:
@@ -60,81 +54,77 @@ def eval(program, testing_set, cur_device, args):
         print("Loaded Model Name:", args.loaded_file, file=result_file)
     print("Evaluation File:", args.test_file, file=result_file)
     print("Accuracy:", accuracy, file=result_file)
+    print("ILP Accuracy:", accuracy_ILP, file=result_file)
     print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
-    print("Precious:", precision_score(actual, pred, average=None), file=result_file)
-    print("Recall:", recall_score(actual, pred, average=None), file=result_file)
-    print("F1:", f1_score(actual, pred, average=None), file=result_file)
-    print("F1 Macro:", f1_score(actual, pred, average='macro'), file=result_file)
-    print("Confusion Matrix:\n", confusion_matrix(actual, pred), file=result_file)
     result_file.close()
 
-    #df = pd.DataFrame(result_csv)
-    #df.to_csv("result.csv")
+    # df = pd.DataFrame(result_csv)
+    # df.to_csv("result.csv")
 
 
-def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
-    from graph import answer_class
-
-    def evaluate():
-        labels = ["Yes", "No"]
-        count = 0
-        actual = []
-        pred = []
-        for datanode in tqdm.tqdm(program.populate(eval_set, device=cur_device), "Manually Evaluation"):
-            for question in datanode.getChildDataNodes():
-                count += 1
-                actual.append(int(question.getAttribute(answer_class, "label")))
-                pred.append(int(torch.argmax(question.getAttribute(answer_class, "local/argmax"))))
-        return f1_score(actual, pred, average="macro")
-
-    best_accuracy = 0
-    best_epoch = 0
-    old_file = None
-    training_file = open("training.txt", 'a')
-    print("-" * 10, file=training_file)
-    print("Training by ", program_name, file=training_file)
-    print("Learning Rate:", args.lr, file=training_file)
-    training_file.close()
-    for epoch in range(check_epoch, limit, check_epoch):
-        training_file = open("training.txt", 'a')
-        program.train(train_set, train_epoch_num=check_epoch,
-                      Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
-                      device=cur_device)
-        accuracy = evaluate()
-        print("Epoch:", epoch, file=training_file)
-        print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
-        if accuracy > best_accuracy:
-            best_epoch = epoch
-            best_accuracy = accuracy
-            # if old_file:
-            #     os.remove(old_file)
-            if program_name == "PMD":
-                program_addition = "_beta_" + str(args.beta)
-            else:
-                program_addition = "_size_" + str(args.sampling_size)
-            new_file = program_name + "_" + str(epoch) + "epoch" + "_lr_" + str(args.lr) + program_addition
-            old_file = new_file
-            program.save("Models/" + new_file)
-        training_file.close()
-
-    training_file = open("training.txt", 'a')
-    if epoch < limit:
-        program.train(train_set, train_epoch_num=limit - epoch,
-                      Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
-                      device=cur_device)
-        accuracy = evaluate()
-        print("Epoch:", limit, file=training_file)
-        print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
-        if accuracy > best_accuracy:
-            best_epoch = epoch + check_epoch
-            # if old_file:
-            #     os.remove(old_file)
-            new_file = program_name + "_" + str(limit) + "epoch" + "_lr_" + str(args.lr)
-            old_file = new_file
-            program.save("Models/" + new_file)
-    print("Best epoch ", best_epoch, file=training_file)
-    training_file.close()
-    return best_epoch
+# def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
+#     from graph import answer_class
+#
+#     def evaluate():
+#         labels = ["Yes", "No"]
+#         count = 0
+#         actual = []
+#         pred = []
+#         for datanode in tqdm.tqdm(program.populate(eval_set, device=cur_device), "Manually Evaluation"):
+#             for question in datanode.getChildDataNodes():
+#                 count += 1
+#                 actual.append(int(question.getAttribute(answer_class, "label")))
+#                 pred.append(int(torch.argmax(question.getAttribute(answer_class, "local/argmax"))))
+#         return f1_score(actual, pred, average="macro")
+#
+#     best_accuracy = 0
+#     best_epoch = 0
+#     old_file = None
+#     training_file = open("training.txt", 'a')
+#     print("-" * 10, file=training_file)
+#     print("Training by ", program_name, file=training_file)
+#     print("Learning Rate:", args.lr, file=training_file)
+#     training_file.close()
+#     for epoch in range(check_epoch, limit, check_epoch):
+#         training_file = open("training.txt", 'a')
+#         program.train(train_set, train_epoch_num=check_epoch,
+#                       Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
+#                       device=cur_device)
+#         accuracy = evaluate()
+#         print("Epoch:", epoch, file=training_file)
+#         print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
+#         if accuracy > best_accuracy:
+#             best_epoch = epoch
+#             best_accuracy = accuracy
+#             # if old_file:
+#             #     os.remove(old_file)
+#             if program_name == "PMD":
+#                 program_addition = "_beta_" + str(args.beta)
+#             else:
+#                 program_addition = "_size_" + str(args.sampling_size)
+#             new_file = program_name + "_" + str(epoch) + "epoch" + "_lr_" + str(args.lr) + program_addition
+#             old_file = new_file
+#             program.save("Models/" + new_file)
+#         training_file.close()
+#
+#     training_file = open("training.txt", 'a')
+#     if epoch < limit:
+#         program.train(train_set, train_epoch_num=limit - epoch,
+#                       Optim=lambda param: torch.optim.Adam(param, lr=lr, amsgrad=True),
+#                       device=cur_device)
+#         accuracy = evaluate()
+#         print("Epoch:", limit, file=training_file)
+#         print("Dev Accuracy:", accuracy * 100, "%", file=training_file)
+#         if accuracy > best_accuracy:
+#             best_epoch = epoch + check_epoch
+#             # if old_file:
+#             #     os.remove(old_file)
+#             new_file = program_name + "_" + str(limit) + "epoch" + "_lr_" + str(args.lr)
+#             old_file = new_file
+#             program.save("Models/" + new_file)
+#     print("Best epoch ", best_epoch, file=training_file)
+#     training_file.close()
+#     return best_epoch
 
 def main(args):
     from graph_senetences import answer_class
@@ -161,10 +151,10 @@ def main(args):
                                             batch_size=args.batch_size)
     # Load Augmentation data
     augment_dataset_dev = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
-                                              augment_file=augment_file_dev)
+                                                  augment_file=augment_file_dev)
 
     augment_dataset_test = DataReaderMultiRelation(file=None, size=None, batch_size=args.batch_size,
-                                              augment_file=augment_file_test)
+                                                   augment_file=augment_file_test)
     # Declare Program
     train_program, eval_program = program_declaration(cur_device,
                                                       sym_relation=args.sym_relation,
@@ -172,7 +162,6 @@ def main(args):
                                                       primaldual=args.primaldual,
                                                       sample=args.sampleloss,
                                                       beta=args.beta)
-
 
     train_program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -187,6 +176,7 @@ def main(args):
               "actual": [],
               "predict_softmax": [],
               "predict_ILP": []}
+
     # for datanode in program.populate(test_dataset, device=cur_device):
     #     for sentence in datanode.getChildDataNodes():
     #         result["premise"].append(sentence.getAttribute("premise"))
