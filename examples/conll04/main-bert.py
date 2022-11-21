@@ -16,7 +16,7 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, Com
 from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
-from regr.utils import setProductionLogMode
+from regr.utils import setProductionLogMode, setDnSkeletonMode
 
 
 import spacy
@@ -225,7 +225,7 @@ def model(device=None):
         pass
 
     lbp1 = Program(
-        graph, poi=(phrase, pair), inferTypes=['ILP'],
+        graph, poi=(sentence, phrase, word, pair), inferTypes=['ILP'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric()),
@@ -233,7 +233,7 @@ def model(device=None):
         })
     
     lbp = Program(
-        graph, poi=(phrase, pair), inferTypes=['local/argmax'],
+        graph, poi=(sentence, phrase, word, pair), inferTypes=['local/argmax'],
         loss=MacroAverageTracker(NBCrossEntropyLoss()),
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -439,5 +439,6 @@ def parse_arguments():
 
 if __name__ == '__main__':
     args = parse_arguments()
-    setProductionLogMode()
+    setProductionLogMode(no_UseTimeLog=True)
+    setDnSkeletonMode(True)
     main(args)
