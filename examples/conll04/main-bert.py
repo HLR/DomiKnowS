@@ -411,7 +411,7 @@ def parse_arguments():
         help="GPU option",
         type=str,
         required=False,
-        default="cuda:1",
+        default="cuda:0",
         choices=[
             "auto",
             "cpu",
