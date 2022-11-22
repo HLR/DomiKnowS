@@ -214,7 +214,7 @@ def model(device='auto'):
 #             "default": NBCrossEntropyDictLoss()},
         loss = MacroAverageTracker(NBCrossEntropyLoss()),
         sample = True,
-        sampleSize=300, 
+        sampleSize=500, 
         sampleGlobalLoss = False,
         beta=1,
         metric={
@@ -400,5 +400,5 @@ def parse_arguments():
 
 if __name__ == '__main__':
     args = parse_arguments()
-    setProductionLogMode()
+    setProductionLogMode(no_UseTimeLog=True)
     main(args)

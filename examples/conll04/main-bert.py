@@ -440,5 +440,5 @@ def parse_arguments():
 if __name__ == '__main__':
     args = parse_arguments()
     setProductionLogMode(no_UseTimeLog=True)
-    setDnSkeletonMode(True)
+#     setDnSkeletonMode(True)
     main(args)
