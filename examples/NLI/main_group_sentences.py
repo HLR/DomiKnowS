@@ -162,7 +162,7 @@ def main(args):
                                                       sample=args.sampleloss,
                                                       beta=args.beta)
 
-    train_program.train(train_dataset, train_epoch_num=args.cur_epoch,
+    train_program.train(train_dataset, c_warmup_iters=0, train_epoch_num=args.cur_epoch,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     # Loading train parameter to evaluation program
@@ -244,19 +244,19 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_sample', default=600000,
+    parser.add_argument('--training_sample', dest='training_sample', default=50000,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_sample', default=600000, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=50000, help="number of data to test model",
                         type=int)
 
-    parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=16, help="batch size of sample", type=int)
 
-    parser.add_argument('--sym_relation', dest='sym_relation', default=False, help="Using symmetric relation",
+    parser.add_argument('--sym_relation', dest='sym_relation', default=True, help="Using symmetric relation",
                         type=bool)
-    parser.add_argument('--tran_relation', dest='tran_relation', default=False, help="Using transitive relation",
+    parser.add_argument('--tran_relation', dest='tran_relation', default=True, help="Using transitive relation",
                         type=bool)
-    parser.add_argument('--pmd', dest='primaldual', default=False, help="Using primaldual model or not",
+    parser.add_argument('--pmd', dest='primaldual', default=True, help="Using primaldual model or not",
                         type=bool)
     parser.add_argument('--sampleloss', dest='sampleloss', default=False, help="Using IML model or not",
                         type=bool)

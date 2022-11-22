@@ -51,7 +51,7 @@ def program_declaration(cur_device, *,
                                                                     hidden_layer_size=hidden_layer_size),
                                         device=cur_device)
 
-    poi_list = [pairs, answer_class]
+    poi_list = [group_pairs, pairs, answer_class]
     # Using symmetric relation
     if sym_relation:
         symmetric[s_sent1.reversed, s_sent2.reversed] = CompositionCandidateSensor(

@@ -125,4 +125,4 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
                             "hypothesises": "@@".join(data['hypothesis']),
                             "label_list": "@@".join(data['label'])})
     print("Size", total_size)
-    return return_data
+    return return_data[1940:1941]
