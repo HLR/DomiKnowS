@@ -22,14 +22,17 @@ import os
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-setProductionLogMode()
+setProductionLogMode(no_UseTimeLog=True)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
 
 
 def get_pred_from_node(node, suffix):
-    digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
-    digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
+    digit0_node = node.getChildDataNodes()[1]
+    digit1_node = node.getChildDataNodes()[2]
+
+    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -58,11 +61,15 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
             digits_results[suffix].append(digit0_pred.cpu().item())
             digits_results[suffix].append(digit1_pred.cpu().item())
 
-            summation_results[suffix].append(summation_pred.cpu().item())
+            summation_results[suffix].append(summation_pred)
 
-        digits_results['label'].append(node.getAttribute('digit0_label').item())
-        digits_results['label'].append(node.getAttribute('digit1_label').item())
-        summation_results['label'].append(node.getAttribute('summation_label').item())
+        pair_node = node.getChildDataNodes()[0]
+        digit0_node = node.getChildDataNodes()[1]
+        digit1_node = node.getChildDataNodes()[2]
+
+        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+        summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -81,10 +88,10 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('==========================================')
 
 
-graph, images = build_program()
+graph, image, image_pair = build_program(sum_setting=None, digit_labels=False)
 
 
-class CallbackProgram(SampleLossProgram):
+class PrimalDualCallbackProgram(PrimalDualProgram):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
@@ -97,14 +104,10 @@ class CallbackProgram(SampleLossProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = CallbackProgram(graph, SolverModel,
-                    poi=(images,),
+program = PrimalDualCallbackProgram(graph, SolverModel,
+                    poi=(image_pair, image),
                     inferTypes=['local/argmax'],
-                    metric={},
-                    sample=True,
-                    sampleSize=-1, # Semantic Sample when -1
-                    sampleGlobalLoss=True,
-                    beta=1)
+                    metric={})
 
 
 '''class Program(CallbackProgram, IMLProgram):
@@ -112,7 +115,7 @@ program = CallbackProgram(graph, SolverModel,
 
 
 program = Program(graph,
-                   poi=(images,),
+                   poi=(image,),
                    inferTypes=['local/argmax'],
                    loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
 
@@ -120,7 +123,7 @@ program = Program(graph,
 epoch_num = 1
 
 
-def post_epoch_metrics(kwargs, interval=1, train=False, valid=True):
+def post_epoch_metrics(kwargs, interval=1, train=True, valid=True):
     global epoch_num
 
     if epoch_num % interval == 0:
@@ -146,15 +149,15 @@ def save_model(kwargs, interval=1, directory='checkpoints'):
             os.mkdir(save_dir)
 
         torch.save(program.model.state_dict(), os.path.join(save_dir, 'model.pth'))
-        torch.save(program.cmodel.state_dict(), os.path.join(save_dir, 'cmodel.pth'))
+        #torch.save(program.cmodel.state_dict(), os.path.join(save_dir, 'cmodel.pth'))
         torch.save(program.opt.state_dict(), os.path.join(save_dir, 'opt.pth'))
-        torch.save(program.copt.state_dict(), os.path.join(save_dir, 'copt.pth'))
+        #torch.save(program.copt.state_dict(), os.path.join(save_dir, 'copt.pth'))
 
-        other_params = {}
-        other_params['c_session'] = kwargs['c_session']
-        other_params['beta'] = program.beta
+        #other_params = {}
+        #other_params['c_session'] = kwargs['c_session']
+        #other_params['beta'] = program.beta
 
-        torch.save('other_params', os.path.join(save_dir, 'other.pth'))
+        #torch.save('other_params', os.path.join(save_dir, 'other.pth'))
 
 
 def load_program_inference(program, save_dir):
@@ -166,7 +169,7 @@ program.after_train_epoch = [save_model, post_epoch_metrics]
 
 def test_adam(params):
     print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.0005)
+    return torch.optim.Adam(params, lr=0.0001)
 
 
 program.train(trainloader,
