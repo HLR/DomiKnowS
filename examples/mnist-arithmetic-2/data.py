@@ -61,7 +61,7 @@ class SumBalanceDataset:
 
         return {
             'pixels': torch.stack((d0_image[0], d1_image[0]), dim=0),
-            'summation': [d0 + d1],
+            'summation': torch.tensor([[d0 + d1]]),
             'digit': [d0, d1],
             'eval': self.eval
         }
@@ -70,7 +70,7 @@ class SumBalanceDataset:
 def make_sum(samples, eval=False):
     return {
         'pixels': torch.stack(tuple(map(lambda s: s[0], samples)), dim=0),
-        'summation': [sum(map(lambda s: s[1], samples))],
+        'summation': torch.tensor([[sum(map(lambda s: s[1], samples))]]),
         'digit': [samples[0][1], samples[1][1]],
         'eval': eval
     }
