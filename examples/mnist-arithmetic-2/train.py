@@ -22,14 +22,14 @@ import os
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-# setProductionLogMode(no_UseTimeLog=True)
+setProductionLogMode(no_UseTimeLog=True)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
 
 
 def get_pred_from_node(node, suffix):
-    digit0_node = node.getChildDataNodes()[1]
-    digit1_node = node.getChildDataNodes()[2]
+    digit0_node = node.findDatanodes(select='image')[0]
+    digit1_node = node.findDatanodes(select='image')[1]
 
     digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
     digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
@@ -63,9 +63,9 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
             summation_results[suffix].append(summation_pred)
 
-        pair_node = node.getChildDataNodes()[0]
-        digit0_node = node.getChildDataNodes()[1]
-        digit1_node = node.getChildDataNodes()[2]
+        pair_node = node.findDatanodes(select='pair')[0]
+        digit0_node = node.findDatanodes(select='image')[0]
+        digit1_node = node.findDatanodes(select='image')[1]
 
         digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
         digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
