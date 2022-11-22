@@ -24,14 +24,14 @@ parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 
-parser.add_argument('--samplenum', dest='samplenum', default=2, help='sample sizes for low data regime 10,20,40 max 37',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=40, help='sample sizes for low data regime 10,20,40 max 37',type=int)
 
 parser.add_argument('--simple_model', dest='simple_model', default=False, help='use the simplet model',type=bool)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
 
-parser.add_argument('--batch', dest='batch_size', default=2, help='batch size for neural network training',type=int)
+parser.add_argument('--batch', dest='batch_size', default=4, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier',type=float)
 parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
 
@@ -86,7 +86,9 @@ with Graph('belief_bank') as graph:
     ni_arg1, ni_arg2 = nimplication.has_a(narg1=facts, narg2=facts)
 
     ifL(andL(fact_check('x'), existsL(implication('s', path=('x', implication)))), fact_check(path=('s', i_arg2)))
-    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', nimplication)))), notL(fact_check(path=('s', i_arg2))))
+    #ifL(implication('s'), ifL(fact_check(path=('s',i_arg1.reversed)),fact_check(path=('s',i_arg2.reversed )) ) )
+    #ifL(andL(implication('s'),fact_check(path=('s',i_arg1.reversed)) ,fact_check(path=('s',i_arg2.reversed )) ) )
+    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', nimplication)))), notL(fact_check(path=('s', ni_arg2))))
 
 subject['name'] = ReaderSensor(keyword='name')
 subject['facts'] = ReaderSensor(keyword='facts')
