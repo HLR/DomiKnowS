@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.utils import resample
-
+from tqdm import tqdm
 
 def DataReader(file, size):
     df = pd.read_csv(file).dropna()
@@ -20,6 +20,25 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     if file is None and augment_file is None:
         return None
 
+    def append_data_from_id(cur_id, cur_data, data_from_id, check):
+        if cur_id in check:
+            return
+        check[cur_id] = True
+        current_data, is_augmented = data_from_id[cur_id]
+        premise_key = "premise" if not is_augmented else "sentence1"
+        hypothesis_key = "hypothesis" if not is_augmented else "sentence2"
+        cur_data['premise'].append(item[premise_key])
+        cur_data['hypothesis'].append(item[hypothesis_key])
+
+        if not augment_data:
+            current_label = item['label'] if item['label'] != -1 else 1
+        else:
+            current_label = 0 if item['gold_label'] == "entailment" else \
+                2 if item['gold_label'] == "contradiction" else 1
+
+        cur_data['label'].append(str(current_label))
+        return
+
     df = pd.read_csv(file).dropna() if file else None
     df_augment = pd.read_json(augment_file, lines=True).dropna() if augment_file else None
     # Default will make the size equal to the maximum size of data
@@ -27,10 +46,12 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     return_data = []
     # Doing the basic batch size without relationship, first
     current_size = 0
-    data = {'premise': [], 'hypothesis': [], 'entailment': [], 'contradiction': [], 'neutral': []}
+    data = {'premise': [], 'hypothesis': [], 'label': []}
     index = 0
     data_id_sample = {}
     sample = df.iloc[:size, :] if file else None
+
+    # Making combined of files, False -> Original dataset, True -> Augmented proposed by reference paper
     if file:
         for _, item in sample.iterrows():
             data_id_sample[index] = (item, False)
@@ -41,53 +62,67 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             data_id_sample[index] = (item, True)
             index += 1
 
-    symmetric = {}
+    symmetric_check = {}
+    transitive_check = {}
     check_id = {}
+    total_size = 0;
+    # Creating key from symmetric pair
     for id, pair in data_id_sample.items():
         item, augment_data = pair
         premise = "premise" if not augment_data else "sentence1"
         hypothesis = "hypothesis" if not augment_data else "sentence2"
         pre = item[premise]
         hypo = item[hypothesis]
+        # If any pair have the same
         key = pre + ',' + hypo if pre <= hypo else hypo + ',' + pre
-        if key not in symmetric:
-            symmetric[key] = []
-        symmetric[key].append(id)
+        if key not in symmetric_check:
+            symmetric_check[key] = []
+        if pre not in transitive_check:
+            transitive_check[pre] = {}
+        if hypo not in transitive_check[pre]:
+            transitive_check[pre][hypo] = []
+        transitive_check[pre][hypo].append(id)
+        symmetric_check[key].append(id)
 
-    for group_sym in symmetric.values():
+    for group_sym in tqdm(symmetric_check.values()):
         for ind, id in enumerate(group_sym):
             if id in check_id:
                 continue
-            check_id[id] = True
             item, augment_data = data_id_sample[id]
             premise = "premise" if not augment_data else "sentence1"
             hypothesis = "hypothesis" if not augment_data else "sentence2"
-            data['premise'].append(item[premise])
-            data['hypothesis'].append(item[hypothesis])
-            if not augment_data:
-                data['entailment'].append('1' if item['label'] == 0 else '0')
-                data['contradiction'].append('1' if item['label'] == 2 else '0')
-                data['neutral'].append('1' if data['entailment'][-1] == '0' and data['contradiction'][-1] == '0' else '0')
-            else:
-                data['entailment'].append('1' if item['gold_label'] == "entailment" else '0')
-                data['contradiction'].append('1' if item['gold_label'] == "contradiction" else '0')
-                data['neutral'].append('1' if data['entailment'][-1] == '0' and data['contradiction'][-1] == '0' else '0')
+            current_premise = item[premise]
+            current_hypo = item[hypothesis]
+            append_data_from_id(id, data, data_id_sample, check_id)
             current_size += 1
-            # To prevent separation between symmetric sentence
-            if ind + 3 == len(group_sym) or current_size == batch_size:
-                current_size = 0
-                return_data.append({"premises": "@@".join(data['premise']),
-                                    "hypothesises": "@@".join(data['hypothesis']),
-                                    "entailment_list": "@@".join(data['entailment']),
-                                    "contradiction_list": "@@".join(data['contradiction']),
-                                    "neutral_list": "@@".join(data['neutral'])})
-                # Reset data
-                for key in data.keys():
-                    data[key] = []
+            # If there is any pair start with current hypothesis (Potential transitive)
+            if current_hypo in transitive_check:
+                for last_hypothesis in transitive_check[current_hypo]:
+                    if last_hypothesis in transitive_check[current_premise]:
+                        for cur_id in transitive_check[current_hypo][last_hypothesis]:
+                            if cur_id in check_id:
+                                continue
+                            append_data_from_id(cur_id, data, data_id_sample, check_id)
+                            current_size += 1
+                        for cur_id in transitive_check[current_premise][last_hypothesis]:
+                            if cur_id in check_id:
+                                continue
+                            append_data_from_id(cur_id, data, data_id_sample, check_id)
+                            current_size += 1
+
+        if current_size >= batch_size:
+            total_size += current_size;
+            current_size = 0
+            return_data.append({"premises": "@@".join(data['premise']),
+                                "hypothesises": "@@".join(data['hypothesis']),
+                                "label_list": "@@".join(data['label'])})
+            # Reset data
+            for key in data.keys():
+                data[key] = []
     if current_size != 0:
+        total_size += current_size;
         return_data.append({"premises": "@@".join(data['premise']),
                             "hypothesises": "@@".join(data['hypothesis']),
-                            "entailment_list": "@@".join(data['entailment']),
-                            "contradiction_list": "@@".join(data['contradiction']),
-                            "neutral_list": "@@".join(data['neutral'])})
-    return return_data
+                            "label_list": "@@".join(data['label'])})
+    print("Size", total_size)
+    return return_data[1940:1941]

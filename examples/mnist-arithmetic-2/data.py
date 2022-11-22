@@ -13,7 +13,7 @@ import config
 DATA_PATH = 'data'
 
 
-class SumBalanceDataset(Dataset):
+class SumBalanceDataset:
     def __init__(self, dataset, digit_ids, eval=False):
         digit_to_id = {}
 
@@ -60,20 +60,18 @@ class SumBalanceDataset(Dataset):
         d1_image = self.dataset[d1_id]
 
         return {
-            'pixels': torch.unsqueeze(torch.stack((d0_image[0], d1_image[0]), dim=0), dim=0),
-            'summation': [d0 + d1],
-            'digit0': [d0],
-            'digit1': [d1],
+            'pixels': torch.stack((d0_image[0], d1_image[0]), dim=0),
+            'summation': torch.tensor([[d0 + d1]]),
+            'digit': [d0, d1],
             'eval': self.eval
         }
 
 
 def make_sum(samples, eval=False):
     return {
-        'pixels': torch.unsqueeze(torch.stack(tuple(map(lambda s: s[0], samples)), dim=0), dim=0),
-        'summation': [sum(map(lambda s: s[1], samples))],
-        'digit0': [samples[0][1]],
-        'digit1': [samples[1][1]],
+        'pixels': torch.stack(tuple(map(lambda s: s[0], samples)), dim=0),
+        'summation': torch.tensor([[sum(map(lambda s: s[1], samples))]]),
+        'digit': [samples[0][1], samples[1][1]],
         'eval': eval
     }
 
@@ -94,10 +92,7 @@ def get_readers():
 
     train_balanced = SumBalanceDataset(trainset, train_ids)
 
-    trainloader = DataLoader(
-        train_balanced,
-        shuffle=False
-    )
+    trainloader = train_balanced
 
     trainloader_mini = DataLoader(
         trainset,

@@ -113,7 +113,6 @@ def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, pr
             best_accuracy = accuracy
             # if old_file:
             #     os.remove(old_file)
-            program_addition = ""
             if program_name == "PMD":
                 program_addition = "_beta_" + str(args.beta)
             else:

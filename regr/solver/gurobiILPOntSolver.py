@@ -1061,7 +1061,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                             else:
                                 # --- Assume Intersection - TODO: in future use lo if defined to determine if different operation                                
                                 for i in range(len(dnsListForPaths[0])):
-                                    se = [set(dnsListForPaths[item][i]) for item in range(pathsCount)]
+                                    try:
+                                        se = [set(dnsListForPaths[item][i]) for item in range(pathsCount)]
+                                    except IndexError as ei:
+                                        continue
                                     dnsListR = reduce(set.intersection, se)
                                     dnsList.append(list(dnsListR))
                         else:
@@ -1187,7 +1190,20 @@ class gurobiILPOntSolver(ilpOntSolver):
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
                                                                  lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
-                    
+                        
+                        if loss:
+                            vDnsList = [v[0] for v in  vDns]
+                            vDns = []
+                            try:
+                                tStack = torch.stack(vDnsList, dim=1)
+                            except IndexError as ie:
+                                tStack = torch.stack(vDnsList, dim=0)
+                                pass
+
+                            tsqueezed = torch.squeeze(tStack)
+                            tList = [tsqueezed]
+                            vDns.append(tList)
+                                                
                     if vDns == None:
                         self.myLogger.warning('Not found data for %s(%s) nested Logical Constraint required to build %s(%s) - skipping it'%(e.lcName,e,lc.lcName,lc))
                         return None
@@ -1213,6 +1229,24 @@ class gurobiILPOntSolver(ilpOntSolver):
         elif verify and headLC:
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate), lcVariables
         else:
+            if loss:
+                slpitT = False
+                for v in lcVariables:
+                    if lcVariables[v] and lcVariables[v][0] and not torch.is_tensor(lcVariables[v][0][0]):
+                        slpitT = True
+                        break
+                    
+                if slpitT:
+                    for v in lcVariables:
+                        if lcVariables[v] and lcVariables[v][0] and not torch.is_tensor(lcVariables[v][0][0]):
+                            continue
+                        
+                        lcVSplitted = torch.split(lcVariables[v][0][0], 1)
+                        lcVariables[v] = []
+                        
+                        for s in lcVSplitted:
+                            lcVariables[v].append([s]) 
+                    
             return lc(m, booleanProcesor, lcVariables, headConstrain = headLC, integrate = integrate)
     
     # ---------------
@@ -1820,7 +1854,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                     for li in lossList:
                         liList = []
                         for l in li:
-                            liList.append(torch.sum(l)/l.shape[0])
+                            if l != None:
+                                liList.append(torch.sum(l)/l.shape[0])
+                            else:
+                                liList.append(None)
                         
                         current_lcLosses['lossRate'].append(liList)
                 else:
