@@ -250,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('--testing_sample', dest='testing_sample', default=50000, help="number of data to test model",
                         type=int)
 
-    parser.add_argument('--batch_size', dest='batch_size', default=16, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=3, help="batch size of sample", type=int)
 
     parser.add_argument('--sym_relation', dest='sym_relation', default=True, help="Using symmetric relation",
                         type=bool)

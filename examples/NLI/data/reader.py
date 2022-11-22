@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.utils import resample
 from tqdm import tqdm
 
+
 def DataReader(file, size):
     df = pd.read_csv(file).dropna()
     return_data = []
@@ -39,6 +40,7 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         cur_data['label'].append(str(current_label))
         return
 
+    target_batch = None
     df = pd.read_csv(file).dropna() if file else None
     df_augment = pd.read_json(augment_file, lines=True).dropna() if augment_file else None
     # Default will make the size equal to the maximum size of data
@@ -50,6 +52,9 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     index = 0
     data_id_sample = {}
     sample = df.iloc[:size, :] if file else None
+    if file == "data/train.csv":
+        sample = sample[31042:31049]
+
 
     # Making combined of files, False -> Original dataset, True -> Augmented proposed by reference paper
     if file:
@@ -65,7 +70,7 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     symmetric_check = {}
     transitive_check = {}
     check_id = {}
-    total_size = 0;
+    total_size = 0
     # Creating key from symmetric pair
     for id, pair in data_id_sample.items():
         item, augment_data = pair
@@ -83,7 +88,6 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             transitive_check[pre][hypo] = []
         transitive_check[pre][hypo].append(id)
         symmetric_check[key].append(id)
-
     for group_sym in tqdm(symmetric_check.values()):
         for ind, id in enumerate(group_sym):
             if id in check_id:
@@ -111,7 +115,7 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
                             current_size += 1
 
         if current_size >= batch_size:
-            total_size += current_size;
+            total_size += current_size
             current_size = 0
             return_data.append({"premises": "@@".join(data['premise']),
                                 "hypothesises": "@@".join(data['hypothesis']),
@@ -120,9 +124,10 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             for key in data.keys():
                 data[key] = []
     if current_size != 0:
-        total_size += current_size;
+        total_size += current_size
         return_data.append({"premises": "@@".join(data['premise']),
                             "hypothesises": "@@".join(data['hypothesis']),
                             "label_list": "@@".join(data['label'])})
-    print("Size", total_size)
-    return return_data[1940:1941]
+    if file == "data/train.csv":
+        print(return_data)
+    return return_data
