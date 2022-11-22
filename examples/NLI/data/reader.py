@@ -65,6 +65,7 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     symmetric_check = {}
     transitive_check = {}
     check_id = {}
+    total_size = 0;
     # Creating key from symmetric pair
     for id, pair in data_id_sample.items():
         item, augment_data = pair
@@ -78,7 +79,9 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             symmetric_check[key] = []
         if pre not in transitive_check:
             transitive_check[pre] = {}
-        transitive_check[pre][hypo] = id
+        if hypo not in transitive_check[pre]:
+            transitive_check[pre][hypo] = []
+        transitive_check[pre][hypo].append(id)
         symmetric_check[key].append(id)
 
     for group_sym in tqdm(symmetric_check.values()):
@@ -96,17 +99,19 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             if current_hypo in transitive_check:
                 for last_hypothesis in transitive_check[current_hypo]:
                     if last_hypothesis in transitive_check[current_premise]:
-                        if transitive_check[current_hypo][last_hypothesis] not in check_id:
-                            append_data_from_id(transitive_check[current_hypo][last_hypothesis], data, data_id_sample, check_id)
+                        for cur_id in transitive_check[current_hypo][last_hypothesis]:
+                            if cur_id in check_id:
+                                continue
+                            append_data_from_id(cur_id, data, data_id_sample, check_id)
+                            current_size += 1
+                        for cur_id in transitive_check[current_premise][last_hypothesis]:
+                            if cur_id in check_id:
+                                continue
+                            append_data_from_id(cur_id, data, data_id_sample, check_id)
                             current_size += 1
 
-                        id = transitive_check[current_premise][last_hypothesis]
-                        if id in check_id:
-                            continue
-                        append_data_from_id(id, data, data_id_sample, check_id)
-                        current_size += 1
-
         if current_size >= batch_size:
+            total_size += current_size;
             current_size = 0
             return_data.append({"premises": "@@".join(data['premise']),
                                 "hypothesises": "@@".join(data['hypothesis']),
@@ -114,4 +119,10 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
             # Reset data
             for key in data.keys():
                 data[key] = []
+    if current_size != 0:
+        total_size += current_size;
+        return_data.append({"premises": "@@".join(data['premise']),
+                            "hypothesises": "@@".join(data['hypothesis']),
+                            "label_list": "@@".join(data['label'])})
+    print("Size", total_size)
     return return_data

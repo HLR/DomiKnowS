@@ -14,7 +14,7 @@ from tqdm import tqdm
 from regr.graph import Graph, Concept, Relation
 
 
-def eval(program, testing_set, cur_device, args):
+def eval(program, testing_set, cur_device, args, filename=""):
     from graph_senetences import answer_class
     labels = ["Yes", "No"]
     accuracy_ILP = 0
@@ -39,20 +39,19 @@ def eval(program, testing_set, cur_device, args):
         satisfy_constrain_rate += count_verify / len(verify_constrains)
     satisfy_constrain_rate /= count_datanode
     accuracy /= count
+    accuracy_ILP /= count
 
     result_file = open("result.txt", 'a')
-    print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
+    print("Program:", "Primal Dual" if args.primaldual else "Sampling Loss" if args.sampleloss else "DomiKnowS",
           file=result_file)
-    if not args.loaded:
-        print("Training info", file=result_file)
-        print("Batch Size:", args.batch_size, file=result_file)
-        print("Epoch:", args.epoch, file=result_file)
-        print("Learning Rate:", args.lr, file=result_file)
-        print("Beta:", args.beta, file=result_file)
-        print("Sampling Size:", args.sampling_size, file=result_file)
-    else:
-        print("Loaded Model Name:", args.loaded_file, file=result_file)
-    print("Evaluation File:", args.test_file, file=result_file)
+
+    print("Training info", file=result_file)
+    print("Batch Size:", args.batch_size, file=result_file)
+    print("Epoch:", args.cur_epoch, file=result_file)
+    print("Learning Rate:", args.learning_rate, file=result_file)
+    print("Beta:", args.beta, file=result_file)
+    # print("Sampling Size:", args.sampling_size, file=result_file)
+    print("Evaluation File: ", filename, file=result_file)
     print("Accuracy:", accuracy, file=result_file)
     print("ILP Accuracy:", accuracy_ILP, file=result_file)
     print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
@@ -163,11 +162,14 @@ def main(args):
                                                       sample=args.sampleloss,
                                                       beta=args.beta)
 
-    train_program.train(train_dataset, test_set=test_dataset, train_epoch_num=args.cur_epoch,
+    train_program.train(train_dataset, train_epoch_num=args.cur_epoch,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     # Loading train parameter to evaluation program
-    eval_program.load(train_program.model.state_dict())
+    train_program.save("Models.pth")
+    eval_program.load("Models.pth")
+    eval(eval_program, test_dataset, cur_device, args, "ALL")
+    eval(eval_program, augment_dataset_test, cur_device, args, "Augmented")
 
     correct_ILP = 0
     correct_softmax = 0
@@ -242,10 +244,10 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_sample', default=10,
+    parser.add_argument('--training_sample', dest='training_sample', default=600000,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_sample', default=10, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=600000, help="number of data to test model",
                         type=int)
 
     parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)

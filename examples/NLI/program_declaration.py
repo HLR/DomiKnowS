@@ -8,15 +8,15 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 def program_declaration(cur_device, *,
                         sym_relation: bool = False, tran_relation: bool = False,
-                        primaldual: bool = False, sample: bool = False, iml: bool = False, beta=0.5, sampling_size=1):
+                        primaldual: bool = False, sample: bool = False, iml: bool = False, beta=0.5, sampling_size=100):
     from graph_senetences import graph, group_pairs, pairs, symmetric, s_sent1, s_sent2, \
         transitive, t_sent1, t_sent2, t_sent3, answer_class, group_pair_contains
 
     graph.detach()
     # Reading directly from data table
-    group_pairs["premises_raw"] = ReaderSensor(keyword="premises", device=cur_device)
-    group_pairs["hypothesises_raw"] = ReaderSensor(keyword="hypothesises", device=cur_device)
-    group_pairs["labels_raw"] = ReaderSensor(keyword="label_list", device=cur_device)
+    group_pairs["premises_raw"] = ReaderSensor(keyword="premises")
+    group_pairs["hypothesises_raw"] = ReaderSensor(keyword="hypothesises")
+    group_pairs["labels_raw"] = ReaderSensor(keyword="label_list")
 
     def str_to_int_list(x):
         return torch.LongTensor([int(i) for i in x])
