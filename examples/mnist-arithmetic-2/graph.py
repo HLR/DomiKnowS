@@ -21,8 +21,11 @@ for sum_val in range(config.summationRange):
 numbers = digits + summations
 
 with Graph(name='global') as graph:
+    image_batch = Concept(name='image_batch')
     image = Concept(name='image')
 
+    image_contains, = image_batch.contains(image)
+    
     digit = image(name='digits',
                   ConceptClass=EnumConcept,
                   values=digits)

@@ -186,7 +186,16 @@ class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
 def build_program(sum_setting=None, digit_labels=False):
     image['pixels'] = ReaderSensor(keyword='pixels')
 
+    def make_batch(pixel):
+        return pixel.flatten().unsqueeze(0), torch.ones((1, len(pixel)))
+    image_batch['pixels', image_contains.reversed] = JointSensor(image['pixels'], forward=make_batch)
+
     image['logits'] = ModuleLearner('pixels', module=Net())
+
+    def make_pairs(*inputs):
+        return torch.tensor([[True, False]]), torch.tensor([[False, True]])
+
+    image_pair[pair_d0.reversed, pair_d1.reversed] = JointSensor(image['pixels'], forward=make_pairs)
 
     image_pair['summation_label'] = ReaderSensor(keyword='summation')
 
@@ -194,8 +203,8 @@ def build_program(sum_setting=None, digit_labels=False):
 
     image[digit] = FunctionalSensor('logits', forward=lambda x: x)
 
-    image_pair[pair_d0.reversed] = ConstantEdgeSensor(image['logits'], data=[[1, 0]], relation=pair_d0.reversed)
-    image_pair[pair_d1.reversed] = ConstantEdgeSensor(image['logits'], data=[[0, 1]], relation=pair_d1.reversed)
+    # image_pair[pair_d0.reversed] = ConstantEdgeSensor(image['logits'], data=[[1, 0]], relation=pair_d0.reversed)
+    # image_pair[pair_d1.reversed] = ConstantEdgeSensor(image['logits'], data=[[0, 1]], relation=pair_d1.reversed)
 
     if digit_labels:
         image[digit] = FunctionalSensor('digit_label', forward=lambda x: x, label=True)
@@ -215,9 +224,9 @@ def build_program(sum_setting=None, digit_labels=False):
         #image_pair[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
 
     image_pair[s] = ReaderSensor(keyword='summation', label=True)
-    image_pair['summationEquality'] = FunctionalSensor('summation_label', forward=lambda x: torch.ones(1))
+    image_pair['summationEquality'] = FunctionalSensor(forward=lambda: torch.ones(1,1))
 
-    return graph, image, image_pair
+    return graph, image, image_pair, image_batch
 
 
 

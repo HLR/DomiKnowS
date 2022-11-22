@@ -22,7 +22,7 @@ import os
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-setProductionLogMode(no_UseTimeLog=True)
+# setProductionLogMode(no_UseTimeLog=True)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers()
 
@@ -88,7 +88,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('==========================================')
 
 
-graph, image, image_pair = build_program(sum_setting=None, digit_labels=False)
+graph, image, image_pair, image_batch = build_program(sum_setting=None, digit_labels=False)
 
 
 class PrimalDualCallbackProgram(PrimalDualProgram):
@@ -105,7 +105,7 @@ class PrimalDualCallbackProgram(PrimalDualProgram):
 
 
 program = PrimalDualCallbackProgram(graph, SolverModel,
-                    poi=(image_pair, image),
+                    poi=(image_batch, image, image_pair),
                     inferTypes=['local/argmax'],
                     metric={})
 
