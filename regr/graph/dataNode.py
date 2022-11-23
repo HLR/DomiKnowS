@@ -1508,13 +1508,13 @@ class DataNodeBuilder(dict):
                 return False
             
     # Find concept in the graph based on concept name
-    def __findConcept(self, _conceptName, usedGraph):
+    def __findConcept(self, conceptName, usedGraph):
         subGraph_keys = [key for key in usedGraph._objs]
         for subGraphKey in subGraph_keys:
             subGraph = usedGraph._objs[subGraphKey]
             
             for conceptNameItem in subGraph.concepts:
-                if _conceptName == conceptNameItem:
+                if conceptName == conceptNameItem:
                     concept = subGraph.concepts[conceptNameItem]
                     
                     return concept
@@ -2103,6 +2103,7 @@ class DataNodeBuilder(dict):
 
         start = process_time_ns()
         self.__addSetitemCounter()
+        dict.__setitem__(self, "DataNodesConcepts", set())
         
         if isinstance(_key, (Sensor, Property, Concept)):
             key = _key.fullname
@@ -2178,15 +2179,15 @@ class DataNodeBuilder(dict):
         # Find description of the concept in the graph
         if isinstance(_key, Sensor):
             try:
-                _conceptName = _key.concept.name 
+                conceptName = _key.concept.name 
             except TypeError as _:
-                _conceptName = keyWithoutGraphName[0]
+                conceptName = keyWithoutGraphName[0]
         else:
-            _conceptName = keyWithoutGraphName[0]
-        concept = self.__findConcept(_conceptName, usedGraph)
+            conceptName = keyWithoutGraphName[0]
+        concept = self.__findConcept(conceptName, usedGraph)
                 
         if not concept:
-            _DataNodeBulder__Logger.warning('_conceptName - %s has not been found in the used graph %s - returning'%(_conceptName,usedGraph.fullname))
+            _DataNodeBulder__Logger.warning('conceptName - %s has not been found in the used graph %s - returning'%(conceptName,usedGraph.fullname))
             self.collectTime(start)
             return dict.__setitem__(self, _key, value)
         
@@ -2195,7 +2196,11 @@ class DataNodeBuilder(dict):
         if isinstance(_key, Sensor):
             self.__updateConceptInfo(usedGraph, conceptInfo, _key)
 
-        if not self.skeletonDataNode or "relationName" in conceptInfo or "dataNode" not in self:
+        DataNodesConcepts = dict.__getitem__(self, "DataNodesConcepts")
+        if not self.skeletonDataNode or "relationName" in conceptInfo or "dataNode" not in self or conceptName not in DataNodesConcepts:
+            DataNodesConcepts.add(conceptName)
+            dict.__setitem__(self, "DataNodesConcepts", DataNodesConcepts)
+
             # Create key for DataNode construction
             keyDataName = "".join(map(lambda x: '/' + x, keyWithoutGraphName[1:-1]))
             keyDataName = keyDataName[1:] # __cut first '/' from the string
@@ -2210,21 +2215,24 @@ class DataNodeBuilder(dict):
                 equalityConceptName = keyDataName[keyDataName.find("_Equality_") + len("_Equality_"):]
                 self.__addEquality(vInfo, conceptInfo, equalityConceptName, keyDataName)
             else:                       
-                _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(_conceptName))
+                _DataNodeBulder__Logger.debug('%s found in the graph; it is a concept'%(conceptName))
                 index = self.__buildDataNode(vInfo, conceptInfo, keyDataName)   # Build or update Data node
                 
                 if index:
-                    indexKey = graphPath  + '/' +_conceptName + '/index'
+                    indexKey = graphPath  + '/' +conceptName + '/index'
                     dict.__setitem__(self, indexKey, index)
                     
                     if self.skeletonDataNode:
                         if "allDns" not in self:
                             dict.__setitem__(self, "allDns", set())
                         allDns = dict.__getitem__(self, "allDns")
-                        allDns.update(index)
+                        try:
+                            allDns.update(index)
+                        except TypeError as ty:
+                            pass
                 
                 if conceptInfo['relation']:
-                    _DataNodeBulder__Logger.debug('%s is a relation'%(_conceptName))
+                    _DataNodeBulder__Logger.debug('%s is a relation'%(conceptName))
                     self.__buildRelationLink(vInfo, conceptInfo, keyDataName) # Build or update relation link
         else:
             keyInRootDataNode = skey[-3] + "/" + skey[-2]

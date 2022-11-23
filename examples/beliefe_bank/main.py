@@ -88,7 +88,7 @@ with Graph('belief_bank') as graph:
     ifL(andL(fact_check('x'), existsL(implication('s', path=('x', implication)))), fact_check(path=('s', i_arg2)))
     #ifL(implication('s'), ifL(fact_check(path=('s',i_arg1.reversed)),fact_check(path=('s',i_arg2.reversed )) ) )
     #ifL(andL(implication('s'),fact_check(path=('s',i_arg1.reversed)) ,fact_check(path=('s',i_arg2.reversed )) ) )
-    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', nimplication)))), notL(fact_check(path=('s', i_arg2))))
+    ifL(andL(fact_check('x'), existsL(nimplication('s', path=('x', nimplication)))), notL(fact_check(path=('s', ni_arg2))))
 
 subject['name'] = ReaderSensor(keyword='name')
 subject['facts'] = ReaderSensor(keyword='facts')

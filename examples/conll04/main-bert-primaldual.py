@@ -331,7 +331,7 @@ def parse_arguments():
         help="The split",
         required=False,
         type=int,
-        default=1,
+        default=2,
         choices=[1, 2, 3, 4, 5],
     )
     parser.add_argument(

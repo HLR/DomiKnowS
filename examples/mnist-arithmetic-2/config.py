@@ -7,4 +7,4 @@ num_test = 5000
 
 epochs = 1
 
-device = 'cuda'
+device = 'cpu'
