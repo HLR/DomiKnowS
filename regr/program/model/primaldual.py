@@ -58,10 +58,11 @@ class PrimalDualModel(torch.nn.Module):
         constr_loss = datanode.calculateLcLoss(tnorm=self.tnorm)
         lmbd_loss = []
         for key, loss in constr_loss.items():
-            loss_value = loss['lossTensor'].clamp(min=0)
-            loss_nansum = loss_value[loss_value==loss_value].sum()
-            loss_ = self.get_lmbd(key) * loss_nansum
-            self.loss[key](loss_)
-            lmbd_loss.append(loss_)
+            if loss['lossTensor'] != None:
+                loss_value = loss['lossTensor'].clamp(min=0)
+                loss_nansum = loss_value[loss_value==loss_value].sum()
+                loss_ = self.get_lmbd(key) * loss_nansum
+                self.loss[key](loss_)
+                lmbd_loss.append(loss_)
         lmbd_loss = sum(lmbd_loss)
         return lmbd_loss, datanode, builder
