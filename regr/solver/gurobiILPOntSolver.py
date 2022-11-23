@@ -1191,7 +1191,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
                                                                  lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                         
-                        if loss:
+                        if loss and vDns:
                             vDnsList = [v[0] for v in  vDns]
                             vDns = []
                             try:
@@ -1232,15 +1232,15 @@ class gurobiILPOntSolver(ilpOntSolver):
             if loss:
                 slpitT = False
                 for v in lcVariables:
-                    if lcVariables[v] and lcVariables[v][0] and not torch.is_tensor(lcVariables[v][0][0]):
+                    if lcVariables[v] and len(lcVariables[v]) > 1:
                         slpitT = True
                         break
                     
                 if slpitT:
                     for v in lcVariables:
-                        if lcVariables[v] and lcVariables[v][0] and not torch.is_tensor(lcVariables[v][0][0]):
+                        if lcVariables[v] and len(lcVariables[v]) > 1:
                             continue
-                        
+                         
                         lcVSplitted = torch.split(lcVariables[v][0][0], 1)
                         lcVariables[v] = []
                         
