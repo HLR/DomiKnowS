@@ -8,11 +8,9 @@ sys.path.append("../../../")
 
 import torch
 from torch import nn
-import time
-import torchtext
 import numpy as np
 
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
+from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor, JointReaderSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 import graph
 
@@ -23,13 +21,14 @@ from regr.program.loss import NBCrossEntropyLoss
 from model_domi import RNNTagger
 from data_reader_no_torchtext import load_examples, word_mapping, char_mapping, tag_mapping, lower_case
 
-# self.device = "cuda:0"
+# device = "cuda:0"
 device = "cpu"
 
 ######################################################################
 # Data Reader
 ######################################################################
-train_sentences = load_examples('../bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
+# train_sentences = load_examples('../bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
+train_sentences = load_examples('../bio_data/testb.txt', True)
 dev_sentences = load_examples('../bio_data/testa.txt', True)
 test_sentences = load_examples('../bio_data/testb.txt', True)
 
@@ -37,7 +36,6 @@ test_sentences = load_examples('../bio_data/testb.txt', True)
 from torchtext.vocab import GloVe
 glove = GloVe()
 glove_vocab = glove.stoi
-# print('unk',glove_vocab['unk'])
 
 ### tagging labels vocab and id
 dico_tags, tag_vocab, id_to_tag = tag_mapping(train_sentences) ### tag_vocab: tag_to_id
@@ -55,8 +53,10 @@ def generate_data(sentences, word_to_id, tag_to_id, lower=False):
         labels = [tag_to_id[w[-1]] for w in s]
         data.append({
             'fullsentencestr': str_words, ## string 
-            'words': [words], ## word index
-            'labels': [labels], ## label
+            # 'text': [words],
+            # 'labels': labels, ## label
+            'text': torch.LongTensor([words]),
+            'labels': torch.LongTensor(labels), ## label
         })
     return data
 
@@ -66,8 +66,8 @@ test_examples = generate_data(test_sentences, glove_vocab, tag_vocab, lower=True
 
 print("{} / {} / {} sentences in train / dev / test.".format(len(train_examples), len(valid_examples), len(test_examples))) ## 14041 / 3250 / 3453 sentences in train / dev / test.14041 / 3250 / 3453 sentences in train / dev / test.
 
-print(test_examples[0])
 
+print(test_examples[0])
 
 
 ######################################################################
@@ -78,11 +78,25 @@ from graph import graph, sentence, word, labels, sen_word_rel
 graph.detach()
 
 def forward_tensor(x):
-    return torch.ones(len(x)),x
+    words = []
+    rels = []
+    total = 0
+    for sentence in x:
+        words.extend(sentence)
+        rels.append((total, total + len(sentence)))
+        total += len(sentence)
+
+    connection = torch.zeros(len(x), total)
+    for sid, rel in enumerate(rels):
+        connection[sid][rel[0]: rel[1]] = 1
+
+    words = torch.LongTensor(words)
+    # print('----------------->:', connection.shape, len(words), words)
+    return connection, words
 
 print('start the ReaderSensor!')
 
-sentence['words'] = ReaderSensor(keyword='words')
+sentence['text'] = ReaderSensor(keyword='text')
 
 # word[b_loc] = ReaderSensor(keyword='b_loc',label=True, device=device)
 # word[i_loc] = ReaderSensor(keyword='i_loc',label=True, device=device)
@@ -97,8 +111,10 @@ sentence['words'] = ReaderSensor(keyword='words')
 # word[bos] = ReaderSensor(keyword='bos',label=True, device=device)
 word[labels] = ReaderSensor(keyword='labels',label=True, device=device)
 
-word[sen_word_rel[0], 'words'] = JointSensor(sentence['words'], forward=forward_tensor) ## what is the meaning
+word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor) ## what is the meaning
 # word[sen_word_rel[0], 'words', 'labels'] = JointSensor(sentence['words'], word[labels], forward=forward_tensor) ## what is the meaning
+
+# tmp = torch.nn.Parameter(glove.vectors, requires_grad=False) ### torch.Size([2196017, 300])
 
 print('start the ModuleLearner!')
 # word[emb] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
@@ -113,14 +129,9 @@ print('start the ModuleLearner!')
 # word[o] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 # word[pad] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 # word[bos] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-word[labels] = ModuleLearner('words', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
+word[labels] = ModuleLearner('text', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 
 ### why the above ModuleLearners are so slow
-
-
-# word["token", 'label'] = JointSensor(sentence['tokenized_text'],sentence['tokenized_label'])
-
-# word[label] = ModuleLearner("predict_model", module=RNNTagger(TEXT, LABEL, emb_dim=300, rnn_size=128, update_pretrained=False))
 
 # Creating the program to create model
 program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
@@ -133,7 +144,7 @@ print('finish Graph Declaration')
 ######################################################################
 # Train the model
 ######################################################################
-n_epochs = 25
+n_epochs = 1
 batch_size = 1024
 n_batches = np.ceil(len(train_examples) / batch_size)
 
