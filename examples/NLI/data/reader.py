@@ -128,6 +128,4 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         return_data.append({"premises": "@@".join(data['premise']),
                             "hypothesises": "@@".join(data['hypothesis']),
                             "label_list": "@@".join(data['label'])})
-    if file == "data/train.csv":
-        print(return_data)
     return return_data
