@@ -1163,7 +1163,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if None in lcVariablesDns:
                         pass
                     
-                    if loss and not sample:
+                    if vDns and loss and not sample:
                         vDnsList = [v[0] for v in vDns]
                         try:
                             lcVariables[variableName] = [[torch.stack(vDnsList)]]
@@ -1173,6 +1173,8 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 lcVariables[variableName] = [[torch.stack(vDnsList)]]
                             except TypeError: # has None  - will use tensor per value 
                                 lcVariables[variableName] = vDns
+                        except RuntimeError:
+                            pass
                     else:
                         lcVariables[variableName] = vDns
                     

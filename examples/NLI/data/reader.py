@@ -30,7 +30,8 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         hypothesis_key = "hypothesis" if not is_augmented else "sentence2"
         cur_data['premise'].append(item[premise_key])
         cur_data['hypothesis'].append(item[hypothesis_key])
-
+        if item[premise_key] == "People are fishing and walking next to the water.":
+            print(len(return_data))
         if not augment_data:
             current_label = item['label'] if item['label'] != -1 else 1
         else:
@@ -126,4 +127,4 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         return_data.append({"premises": "@@".join(data['premise']),
                             "hypothesises": "@@".join(data['hypothesis']),
                             "label_list": "@@".join(data['label'])})
-    return return_data
+    return return_data[264:265]
