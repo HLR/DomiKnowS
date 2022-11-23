@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation, EnumConcept
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, V, nandL
+from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, V, nandL, fixedL, exactL
 
 Graph.clear()
 Concept.clear()
@@ -8,11 +8,13 @@ with Graph('Useful_arg') as graph:
     # Group of sentence
     group_pairs = Concept(name="group_pairs")
     pairs = Concept(name="pairs")
-    group_pair_contains,  = group_pairs.contains(pairs)
+    group_pair_contains, = group_pairs.contains(pairs)
 
     # 3 classes
     answer_class = pairs(name="answer_class", ConceptClass=EnumConcept,
                          values=["entailment", "neutral", "contradiction"])
+
+    ifL(pairs('x'), exactL(answer_class.entailment('x'), answer_class.neutral('x'), answer_class.contradiction('x')))
 
     # Logical Constrains
     symmetric = Concept(name="symmetric")
