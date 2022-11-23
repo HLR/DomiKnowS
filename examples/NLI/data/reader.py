@@ -52,8 +52,6 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
     index = 0
     data_id_sample = {}
     sample = df.iloc[:size, :] if file else None
-    if file == "data/train.csv":
-        sample = sample[31042:31049]
 
 
     # Making combined of files, False -> Original dataset, True -> Augmented proposed by reference paper

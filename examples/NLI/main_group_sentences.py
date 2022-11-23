@@ -160,7 +160,8 @@ def main(args):
                                                       tran_relation=args.tran_relation,
                                                       primaldual=args.primaldual,
                                                       sample=args.sampleloss,
-                                                      beta=args.beta)
+                                                      beta=args.beta,
+                                                      sampling_size=args.sampling_size)
 
     train_program.train(train_dataset, train_epoch_num=args.cur_epoch,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
@@ -262,5 +263,7 @@ if __name__ == "__main__":
                         type=bool)
     parser.add_argument('--beta', dest='beta', default=0.5, help="Using IML model or not",
                         type=float)
+    parser.add_argument('--sampling_size', dest='sampling_size', default=100, help="Using IML model or not",
+                        type=int)
     args = parser.parse_args()
     main(args)
