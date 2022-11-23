@@ -27,8 +27,7 @@ device = "cpu"
 ######################################################################
 # Data Reader
 ######################################################################
-# train_sentences = load_examples('../bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
-train_sentences = load_examples('../bio_data/testb.txt', True)
+train_sentences = load_examples('../bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
 dev_sentences = load_examples('../bio_data/testa.txt', True)
 test_sentences = load_examples('../bio_data/testb.txt', True)
 
@@ -65,7 +64,6 @@ valid_examples = generate_data(dev_sentences, glove_vocab, tag_vocab, lower=True
 test_examples = generate_data(test_sentences, glove_vocab, tag_vocab, lower=True)
 
 print("{} / {} / {} sentences in train / dev / test.".format(len(train_examples), len(valid_examples), len(test_examples))) ## 14041 / 3250 / 3453 sentences in train / dev / test.14041 / 3250 / 3453 sentences in train / dev / test.
-
 
 print(test_examples[0])
 
@@ -112,7 +110,6 @@ sentence['text'] = ReaderSensor(keyword='text')
 word[labels] = ReaderSensor(keyword='labels',label=True, device=device)
 
 word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor) ## what is the meaning
-# word[sen_word_rel[0], 'words', 'labels'] = JointSensor(sentence['words'], word[labels], forward=forward_tensor) ## what is the meaning
 
 # tmp = torch.nn.Parameter(glove.vectors, requires_grad=False) ### torch.Size([2196017, 300])
 
@@ -148,5 +145,4 @@ n_epochs = 1
 batch_size = 1024
 n_batches = np.ceil(len(train_examples) / batch_size)
 
-print(train_examples[0])
 program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
