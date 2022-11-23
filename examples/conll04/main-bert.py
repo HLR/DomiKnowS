@@ -417,7 +417,7 @@ def parse_arguments():
         help="GPU option",
         type=str,
         required=False,
-        default="cuda:1",
+        default="cuda:0",
         choices=[
             "auto",
             "cpu",
@@ -440,5 +440,9 @@ def parse_arguments():
 if __name__ == '__main__':
     args = parse_arguments()
     setProductionLogMode(no_UseTimeLog=True)
+<<<<<<< HEAD
 #     setDnSkeletonMode(True)
+=======
+    setDnSkeletonMode(True)
+>>>>>>> origin/develop
     main(args)

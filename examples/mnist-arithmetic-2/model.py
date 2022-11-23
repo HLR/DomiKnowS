@@ -60,7 +60,7 @@ class Net(torch.nn.Module):
 
         y_digit = self.lin2(x)
 
-        return torch.unsqueeze(y_digit, dim=0)
+        return y_digit
 
 
 time_sum = 0.0
@@ -79,9 +79,12 @@ class SumLayer(torch.nn.Module):
 
         self.relu = nn.ReLU()
 
-    def forward(self, digit0, digit1, do_time=True):
+    def forward(self, digits, do_time=True):
         if do_time:
             t0 = time.time()
+
+        digit0 = torch.unsqueeze(digits[0, :], dim=0)
+        digit1 = torch.unsqueeze(digits[1, :], dim=0)
 
         x = torch.cat((digit0, digit1), dim=1)
 
@@ -104,9 +107,12 @@ class SumLayerExplicit(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, digit0, digit1, do_time=True):
+    def forward(self, digits, do_time=True):
         if do_time:
             t0 = time.time()
+
+        digit0 = torch.unsqueeze(digits[0, :], dim=0)
+        digit1 = torch.unsqueeze(digits[1, :], dim=0)
 
         #x = F.softmax(x, dim=2)
 
@@ -174,68 +180,53 @@ def print_and_output(x, f=lambda x: x.shape, do_print=False):
     return x
 
 
+class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
+
+
 def build_program(sum_setting=None, digit_labels=False):
-    # (1, 2, 784)
-    images['pixels'] = ReaderSensor(keyword='pixels')
+    image['pixels'] = ReaderSensor(keyword='pixels')
 
-    # (1, 2, 784) -> (2, 784) -> (2, 10) -> (1, 2, 10)
-    images['logits'] = ModuleLearner('pixels', module=Net())
+    def make_batch(pixel):
+        return pixel.flatten().unsqueeze(0), torch.ones((1, len(pixel)))
+    image_batch['pixels', image_contains.reversed] = JointSensor(image['pixels'], forward=make_batch)
 
-    images['digit0_label'] = ReaderSensor(keyword='digit0')
-    images['digit1_label'] = ReaderSensor(keyword='digit1')
-    images['summation_label'] = ReaderSensor(keyword='summation')
+    image['logits'] = ModuleLearner('pixels', module=Net())
 
-    s['eval'] = ReaderSensor(keyword='eval')
+    def make_pairs(*inputs):
+        return torch.tensor([[True, False]]), torch.tensor([[False, True]])
 
-    # (1, 2, 10) -> (1, 10) to digit enums
-    #images[d0] = ModuleLearner('logits', module=Net())
-    images[d0] = FunctionalSensor('logits', forward=lambda x: x[:, 0])
+    image_pair[pair_d0.reversed, pair_d1.reversed] = JointSensor(image['pixels'], forward=make_pairs)
 
-    if digit_labels:
-        images[d0] = ReaderSensor(keyword='digit0', label=True)
+    image_pair['summation_label'] = ReaderSensor(keyword='summation')
 
-    #images[d0] = FunctionalSensor('summation_label',
-    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
+    image['digit_label'] = ReaderSensor(keyword='digit')
 
-    # (1, 2, 10) -> (1, 10) to digit enums
-    #images[d1] = ModuleLearner('logits', 1, module=Net())
-    images[d1] = FunctionalSensor('logits', forward=lambda x: x[:, 1])
+    image[digit] = FunctionalSensor('logits', forward=lambda x: x)
+
+    # image_pair[pair_d0.reversed] = ConstantEdgeSensor(image['logits'], data=[[1, 0]], relation=pair_d0.reversed)
+    # image_pair[pair_d1.reversed] = ConstantEdgeSensor(image['logits'], data=[[0, 1]], relation=pair_d1.reversed)
 
     if digit_labels:
-        images[d1] = ReaderSensor(keyword='digit1', label=True)
+        image[digit] = FunctionalSensor('digit_label', forward=lambda x: x, label=True)
 
-    #images[d1] = FunctionalSensor('summation_label',
-    #                              forward=lambda x: torch.unsqueeze(digit_labels[x[0]], dim=0), label=True)
-
-    # (1, 2, 10) -> (2, 10) -> (19,) -> (1, 19) to summation enums
     if sum_setting == 'explicit':
-        images[s] = ModuleLearner(images[d0], images[d1], module=SumLayerExplicit())
+        image_pair[s] = ModuleLearner(image['logits'], module=SumLayerExplicit())
     elif sum_setting == 'baseline':
-        images[s] = ModuleLearner(images[d0], images[d1], module=SumLayer())
+        image_pair[s] = ModuleLearner(image['logits'], module=SumLayer())
     else:
-        #images[s] = FunctionalSensor(forward=lambda: torch.ones(1, config.summationRange))  # dummy values to populate
+        image_pair[s] = FunctionalSensor(forward=lambda: torch.ones(1, config.summationRange))  # dummy values to populate
 
-        def manual_fixedL(s):
-            res = torch.zeros((1, 19))
-            res[0, s] = 1
-            return res
-        images[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
+        #def manual_fixedL(s):
+        #    res = torch.zeros((1, 19))
+        #    res[0, s] = 1
+        #    return res
 
-    images[s] = ReaderSensor(keyword='summation', label=True)
-    images['summationEquality'] = FunctionalSensor('summation_label', forward=lambda x: torch.ones(1))
+        #image_pair[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
 
-    '''program = SolverPOIProgram(graph,
-                         poi=(images,),
-                         inferTypes=['local/argmax'],
-                         loss=MacroAverageTracker(NBSoftCrossEntropyLoss(prior_weight=1.0)))'''
+    image_pair[s] = ReaderSensor(keyword='summation', label=True)
+    image_pair['summationEquality'] = FunctionalSensor(forward=lambda: torch.ones(1,1))
 
-    '''program = PrimalDualProgram(graph,
-                                IMLModel,
-                                poi=(images,),
-                                inferTypes=['local/argmax'],
-                                loss=MacroAverageTracker(NBSoftCrossEntropyIMLoss(prior_weight=0.1, lmbd=0.5)))'''
-
-    return graph, images, d0, d1
+    return graph, image, image_pair, image_batch
 
 
 

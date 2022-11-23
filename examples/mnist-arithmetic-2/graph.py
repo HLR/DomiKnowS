@@ -9,43 +9,40 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-digits_0 = []
-digits_1 = []
+digits = []
 summations = []
 
 for digit_val in range(config.digitRange):
-    digits_0.append(f'd0_{digit_val}')
-
-for digit_val in range(config.digitRange):
-    digits_1.append(f'd1_{digit_val}')
+    digits.append(f'd0_{digit_val}')
 
 for sum_val in range(config.summationRange):
     summations.append(f's_{sum_val}')
 
-numbers = digits_0 + digits_1 + summations
+numbers = digits + summations
 
 with Graph(name='global') as graph:
-    images = Concept(name='images')
+    image_batch = Concept(name='image_batch')
+    image = Concept(name='image')
 
-    d0 = images(name='digits0',
-                ConceptClass=EnumConcept,
-                values=digits_0)
+    image_contains, = image_batch.contains(image)
+    
+    digit = image(name='digits',
+                  ConceptClass=EnumConcept,
+                  values=digits)
 
-    d1 = images(name='digits1',
-               ConceptClass=EnumConcept,
-               values=digits_1)
+    image_pair = Concept(name='pair')
+    pair_d0, pair_d1 = image_pair.has_a(digit0=image, digit1=image)
 
-    s = images(name='summations',
-                ConceptClass=EnumConcept,
-                values=summations)
+    s = image_pair(name='summations',
+                   ConceptClass=EnumConcept,
+                   values=summations)
 
-    #exactL(*d0.attributes)
-    #exactL(*d1.attributes)
+    #exactL(*digit.attributes)
     #exactL(*s.attributes)
 
     #fixedL(s)
     FIXED = True
-    fixedL(s("x", eqL(images, "summationEquality", {True})), active = FIXED)
+    fixedL(s("x", eqL(image_pair, "summationEquality", {True})), active = FIXED)
 
     for sum_val in range(config.summationRange):
         sum_combinations = []
@@ -55,23 +52,25 @@ with Graph(name='global') as graph:
         for d0_val in range(sum_val + 1):
             d1_val = sum_val - d0_val
 
-            if d0_val >= len(digits_0) or d1_val >= len(digits_1):
+            if d0_val >= len(digits) or d1_val >= len(digits):
                 continue
 
-            d0_nm = digits_0[d0_val]
-            d1_nm = digits_1[d1_val]
+            d0_nm = digits[d0_val]
+            d1_nm = digits[d1_val]
 
-            sum_combinations.append(andL(getattr(d0, d0_nm)(), getattr(d1, d1_nm)()))
+            sum_combinations.append(andL(getattr(digit, d0_nm)(path=('x', pair_d0)),
+                                         getattr(digit, d1_nm)(path=('x', pair_d1))
+                                         ))
 
         print(sum_val, '-', sum_combinations)
 
         if len(sum_combinations) == 1:
             ifL(
-                getattr(s, sum_nm)(),
+                getattr(s, sum_nm)('x'),
                 sum_combinations[0]
             )
         else:
             ifL(
-                getattr(s, sum_nm)(),
+                getattr(s, sum_nm)('x'),
                 orL(*sum_combinations)
             )
