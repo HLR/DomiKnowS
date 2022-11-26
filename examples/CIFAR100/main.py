@@ -22,8 +22,7 @@ from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from graph import graph, image_group_contains,image,category,Label,image_group
 
 # Enable skeleton DataNode
-from regr.utils import setDnSkeletonMode
-setDnSkeletonMode(True)
+
 
 class ImageNetwork(torch.nn.Module):
     def __init__(self):
@@ -35,17 +34,20 @@ class ImageNetwork(torch.nn.Module):
         return x
 
 # Disable Logging 
-from regr.utils import setProductionLogMode 
-productionMode = True  
-if productionMode:
-    setProductionLogMode(no_UseTimeLog=False)
+
     
 def main():
+    from regr.utils import setProductionLogMode
+    productionMode = True
+    if productionMode:
+        setProductionLogMode(no_UseTimeLog=False)
+    from regr.utils import setDnSkeletonMode
+    setDnSkeletonMode(True)
     import logging
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
-    parser.add_argument('--solver', help='the model solver', default='poi')
+    parser.add_argument('--solver', help='the model solver', default='sam')
     parser.add_argument('--samplenum', dest='samplenum', default=5000,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=10, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
