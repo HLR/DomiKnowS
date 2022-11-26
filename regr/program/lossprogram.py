@@ -167,6 +167,8 @@ class LossProgram(LearningBasedProgram):
         c_session={},
         **kwargs):
         assert c_session
+        from torch import autograd
+        torch.autograd.set_detect_anomaly(False)
         self.model.mode(Mode.TRAIN)
 #         self.cmodel.mode(Mode.TRAIN)
         iter = c_session['iter']
@@ -333,6 +335,10 @@ class SampleLossProgram(LossProgram):
                     loss = mloss + self.beta * closs
                 else:
                     loss = mloss
+                    
+                if loss != loss:
+                    raise Exception("Calculated loss is nan")
+                
             if self.opt is not None and loss:
                 loss.backward()
                 # for name, param in self.model.named_parameters():

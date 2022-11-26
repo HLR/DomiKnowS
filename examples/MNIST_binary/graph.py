@@ -7,7 +7,7 @@ sys.path.append(".")
 
 from itertools import combinations
 from regr.graph import Graph, Concept, Relation, EnumConcept
-from regr.graph.logicalConstrain import nandL, orL, notL, ifL
+from regr.graph.logicalConstrain import nandL, orL, notL, ifL, exactL
 
 Graph.clear()
 Concept.clear()
@@ -33,6 +33,7 @@ with Graph('MNISTGraph') as graph:
 
 
     Numbers=[Zero,One,Two,Three,Four,Five,Six,Seven,Eight,Nine]
-    for l1, l2 in combinations(Numbers, 2):
-        nandL(l1, l2)
-    #isjoint(*Numbers)
+    #for l1, l2 in combinations(Numbers, 2):
+    #    nandL(l1, l2)
+    disjoint(*Numbers)
+    orL(*Numbers)

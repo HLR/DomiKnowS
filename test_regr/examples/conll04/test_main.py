@@ -136,7 +136,7 @@ def model_declaration(config, case):
         for _, lc in g.logicalConstrains.items():
             if lc.headLC:  
                 lcConcepts[lc.name] = lc.getLcConcepts()
-    assert lcConcepts == {'LC0': {'organization', 'people'}, 'LC3': {'people', 'organization', 'work_for'}, 'LC5': {'word', 'other', 'O', 'location', 'organization', 'people'}}
+    assert lcConcepts == {'LC0': {'organization', 'people'}, 'LC2': {'people', 'organization', 'work_for'}, 'LC4': {'word', 'other', 'O', 'location', 'organization', 'people'}}
     
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 
@@ -458,12 +458,12 @@ def test_main_conll04(case):
         for tnorm in ['L', 'G', "P"]:
             lcResult = datanode.calculateLcLoss(tnorm=tnorm)
                     
-            break
         
             if 'LC0' in lcResult:                     
                 for i in range(3):
                     assert round(lcResult['LC0']['lossTensor'][i].item(), 4) == round(case.lc0LossTensor[tnorm][i].item(), 4)
-    
+            break 
+        
             ifLLCid = 'LC22'
             if ifLLCid not in lcResult:
                 ifLLCid = 'LC2'

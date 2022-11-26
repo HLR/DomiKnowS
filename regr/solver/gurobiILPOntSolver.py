@@ -801,7 +801,12 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         if dn.ontologyNode.name == conceptName:
             if not sample:
+                if loss:
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+                    return tOne
+                
                 return 1
+            
             else:
                 sampleSize = p
                 
@@ -1201,7 +1206,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                             except IndexError as ie:
                                 tStack = torch.stack(vDnsList, dim=0)
                                 pass
-
+                        
                             tsqueezed = torch.squeeze(tStack)
                             tList = [tsqueezed]
                             vDns.append(tList)
