@@ -198,6 +198,17 @@ def model(device='auto'):
 #     class DictCallBackProgram(CallbackProgram, PrimalDualProgram):
 #         pass
     
+    lbp1 = CallbackSamplingProgram(
+        graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax', "ILP"],
+        loss = MacroAverageTracker(NBCrossEntropyLoss()),
+        sample = True,
+        sampleSize=500, 
+        sampleGlobalLoss = False,
+        beta=1,
+        metric={
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax')),
+            'ILP': PRF1Tracker(DatanodeCMMetric('ILP'))})
+    
     lbp = CallbackSamplingProgram(
         graph, Model=SolverModel, poi=(sentence, phrase, pair), inferTypes=['local/argmax'],
 #         dictloss={
@@ -220,12 +231,12 @@ def model(device='auto'):
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-    return lbp
+    return lbp, lbp1
 
 
 def main(args):
     from graph import graph, sentence, word, phrase, pair
-    program = model(device=args.gpu)
+    program, program1 = model(device=args.gpu)
 
     split_id = args.split
     if args.number == 1:
@@ -314,7 +325,7 @@ def main(args):
         else:
             program.load(f'saves/conll04-bert-sample-{split_id}-size-{args.number}-best_macro-f1.pt')
         
-    program.test(test_reader, device=args.gpu)
+    program1.test(test_reader, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
