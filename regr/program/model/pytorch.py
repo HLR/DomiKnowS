@@ -163,13 +163,17 @@ class PoiModel(TorchModel):
                 if isinstance(metric, MetricTracker):
                     metric.reset()
 
-    def poi_loss(self, data_item, prop, sensors):
+    def poi_loss(self, data_item, _, sensors):
         if not self.loss:
             return 0
         outs = [sensor(data_item) for sensor in sensors]
         if len(outs[0]) == 0:
             return None
         local_loss = self.loss[(*sensors,)](*outs)
+        
+        if local_loss != local_loss:
+            raise Exception("Calculated local_loss is nan") 
+        
         return local_loss
 
     def poi_metric(self, data_item, prop, sensors):
@@ -207,7 +211,7 @@ class PoiModel(TorchModel):
                         local_metric = self.poi_metric(builder, prop, sensors)
                         if local_metric is not None:
                             metric[(*sensors,)] = local_metric
-                            
+        
         return loss, metric
 
 class SolverModel(PoiModel):

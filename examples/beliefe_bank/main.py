@@ -11,7 +11,8 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker,
 import logging
 from reader import read_data
 from regr.graph import Graph, Concept, Relation, ifL, andL, notL, existsL
-from regr.program.primaldualprogram import PrimalDualProgram
+#from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram
 from regr.sensor.pytorch import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
