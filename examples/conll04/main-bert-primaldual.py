@@ -212,8 +212,9 @@ def model(device='auto'):
             str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6309, 2.4094]).to(device)), 
             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 4.3231]).to(device)), 
             "default": NBCrossEntropyDictLoss()},
-#         loss = MacroAverageTracker(NBCrossEntropyLoss()),
-        tnorm = 'G', 
+        # loss = MacroAverageTracker(NBCrossEntropyLoss()),
+        tnorm = 'G',
+        beta=0.01,
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 

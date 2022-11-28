@@ -321,9 +321,9 @@ def main(args):
         
     if not args.load:
         if args.number == 1:
-            program.load(f'saves/conll04-bert-sample-{split_id}-best-macro-f1.pt')
+            program1.load(f'saves/conll04-bert-sample-{split_id}-best-macro-f1.pt')
         else:
-            program.load(f'saves/conll04-bert-sample-{split_id}-size-{args.number}-best_macro-f1.pt')
+            program1.load(f'saves/conll04-bert-sample-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
     
