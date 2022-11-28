@@ -35,5 +35,5 @@ with Graph('MNISTGraph') as graph:
     Numbers=[Zero,One,Two,Three,Four,Five,Six,Seven,Eight,Nine]
     #for l1, l2 in combinations(Numbers, 2):
     #    nandL(l1, l2)
-    disjoint(*Numbers)
-    orL(*Numbers)
+    #disjoint(*Numbers)
+    ifL(image("x"),exactL(Zero("x"),One("x"),Two("x"),Three("x"),Four("x"),Five("x"),Six("x"),Seven("x"),Eight("x"),Nine("x")))
