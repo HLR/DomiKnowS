@@ -30,22 +30,22 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
     def _isTensor(self, v):
         if v is None:
-            return  0
+            return -100
         elif torch.is_tensor(v):
             if len(v.shape) == 0 or len(v.shape) == 1 and v.shape[0] == 1:
                 return v.item()
             else:
-                0
+                return -100
         elif isinstance(v, (int, float, complex)):
-            return 0
+            return -100
         else:
-            return 0
+            return -100
         
     # -- Consider None
     def _fixVar(self, var):
         varFixed = []  
         for v in var:
-            if v == None or self._isTensor(v) == 0:
+            if v == None or self._isTensor(v) == -100:
                 varFixed.append(torch.tensor([0], device=self.current_device, requires_grad=True, dtype=torch.float64)) # Uses 0 for None
             else:
                 varFixed.append(v)
@@ -154,9 +154,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         logicMethodName = "OR"
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
-        
+
+        print(var)
         var = self._fixVar(var)
-        
+
         varSum = torch.clone(var[0])
         for v in var[1:]:
             varSum.add_(v)
