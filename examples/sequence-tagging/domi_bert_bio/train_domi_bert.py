@@ -34,7 +34,7 @@ device = "cpu"
 ######################################################################
 # Data Reader
 ######################################################################
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_epochs = 5
 batch_size=32
 data_dir='data'
@@ -79,11 +79,13 @@ def generate_data(data_iteration):
         # print('-------------->>>>>', b_token_type_ids, b_token_type_ids.size()) ### torch.Size([32, 128])
         # print('-------------->>>>>', b_labels, b_labels.size()) ### torch.Size([32, 128])
         # print('-------------->>>>>', b_label_masks, b_label_masks.size()) ### torch.Size([32, 128])
+        one_hot = F.one_hot(b_labels, num_classes=len(label_map))
         data.append({
             'text': b_input_ids,
             'input_mask': b_input_mask,
             'token_type_ids': b_token_type_ids,
-            'labels': b_labels,
+            # 'labels': b_labels,
+            'labels': one_hot,
             'label_masks': b_label_masks,
         })
     return data
@@ -108,12 +110,24 @@ graph.detach()
 
 ### x1 is 'input_id', x2 is 'input_mask', x3 is 'token_type_ids', x4 is 'label_masks' 
 ### the size of x1, x2, x3, x4 are all torch.Size([32, 128])
-def forward_tensor(x1, x2, x3, x4):
+
+
+def forward_tensor(input_id, input_mask, token_type_ids, label_masks):
     ### how to write connection code?
 
     ### return connection, input_id, input_mask, token_type_ids, label_masks
 
-    return
+    # connection = torch.zeros(len(x), total)
+    # for sid, rel in enumerate(rels):
+    #     connection[sid][rel[0]: rel[1]] = 1
+    idx = input_mask.nonzero()[:, 0].unsqueeze(-1)
+    connection = torch.zeros(idx.shape[0], idx.max()+1)
+    connection.scatter_(1, idx, 1)
+    connection = connection.view(connection.size(1), connection.size(0))
+    # print(connection)
+    # print(connection.size()) ## (batch_size, 807)
+
+    return connection, input_id, input_mask, token_type_ids, label_masks
 
 
 
@@ -137,8 +151,6 @@ print('start the ModuleLearner!')
 model = BIO_Model.from_pretrained('bert-base-cased', num_labels=len(label_map)).to(device)
 word[labels] = ModuleLearner('text', module=model)
 
-### why the above ModuleLearners are so slow
-
 # Creating the program to create model
 program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
                         loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -152,3 +164,17 @@ print('finish Graph Declaration')
 ######################################################################
 
 program.train(train_examples, train_epoch_num=num_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+
+program.save("domi_0")
+print('model saved!!!')
+
+
+######################################################################
+# Evaluate the model
+######################################################################
+
+program.load("domi_0") # in case we want to load the model instead of training
+
+
+
+
