@@ -25,6 +25,7 @@ class BIO_Model(BertForTokenClassification):
         logits = self.classifier(sequence_output)  # (b, local_max_len, num_labels)
 
         # outputs = (logits,)
+        print(logits.size())
         outputs = logits
         # if labels is not None:
         #     labels = [label[mask] for mask, label in zip(label_masks, labels)]
