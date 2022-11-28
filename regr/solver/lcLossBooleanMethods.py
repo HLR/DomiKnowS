@@ -35,7 +35,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             if len(v.shape) == 0 or len(v.shape) == 1 and v.shape[0] == 1:
                 return v.item()
             else:
-                return -100
+                return None
         elif isinstance(v, (int, float, complex)):
             return -100
         else:
