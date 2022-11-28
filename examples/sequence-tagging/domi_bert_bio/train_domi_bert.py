@@ -36,7 +36,7 @@ device = "cpu"
 ######################################################################
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_epochs = 5
-batch_size=32
+batch_size=20
 data_dir='data'
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
@@ -120,12 +120,20 @@ def forward_tensor(input_id, input_mask, token_type_ids, label_masks):
     # connection = torch.zeros(len(x), total)
     # for sid, rel in enumerate(rels):
     #     connection[sid][rel[0]: rel[1]] = 1
-    idx = input_mask.nonzero()[:, 0].unsqueeze(-1)
-    connection = torch.zeros(idx.shape[0], idx.max()+1)
-    connection.scatter_(1, idx, 1)
-    connection = connection.view(connection.size(1), connection.size(0))
+
+    # idx = input_mask.nonzero()[:, 0].unsqueeze(-1)
+    # connection = torch.zeros(idx.shape[0], idx.max()+1)
+    # connection.scatter_(1, idx, 1)
+    # connection = connection.view(connection.size(1), connection.size(0))
+
+
     # print(connection)
     # print(connection.size()) ## (batch_size, 807)
+
+    connection = torch.ones(input_id.size(0), 1, input_id.size(1))
+    # print(connection.size())
+    # import sys
+    # sys.exit()
 
     return connection, input_id, input_mask, token_type_ids, label_masks
 
