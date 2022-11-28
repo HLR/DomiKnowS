@@ -155,7 +155,6 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.ifLog: self.myLogger.debug("%s called with: %s"%(logicMethodName, var))
 
-        print(var)
         var = self._fixVar(var)
 
         varSum = torch.clone(var[0])
