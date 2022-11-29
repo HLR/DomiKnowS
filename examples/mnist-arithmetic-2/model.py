@@ -104,8 +104,10 @@ class SumLayer(torch.nn.Module):
 
 
 class SumLayerExplicit(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, device='cpu'):
         super().__init__()
+
+        self.device = device
 
     def forward(self, digits, do_time=True):
         if do_time:
@@ -126,7 +128,7 @@ class SumLayerExplicit(torch.nn.Module):
         d = torch.matmul(digit0, digit1)
         d = d.repeat(1, 1, 1, 1)
         f = torch.flip(torch.eye(10), dims=(0,)).repeat(1, 1, 1, 1)
-        conv_diag_sums = F.conv2d(d, f.to(config.device), padding=(9, 0), groups=1)[..., 0]
+        conv_diag_sums = F.conv2d(d, f.to(self.device), padding=(9, 0), groups=1)[..., 0]
 
         out = torch.squeeze(conv_diag_sums, dim=0)
 
@@ -183,7 +185,7 @@ def print_and_output(x, f=lambda x: x.shape, do_print=False):
 class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
 
 
-def build_program(sum_setting=None, digit_labels=False):
+def build_program(sum_setting=None, digit_labels=False, device='cpu'):
     image['pixels'] = ReaderSensor(keyword='pixels')
 
     def make_batch(pixel):
@@ -210,7 +212,7 @@ def build_program(sum_setting=None, digit_labels=False):
         image[digit] = FunctionalSensor('digit_label', forward=lambda x: x, label=True)
 
     if sum_setting == 'explicit':
-        image_pair[s] = ModuleLearner(image['logits'], module=SumLayerExplicit())
+        image_pair[s] = ModuleLearner(image['logits'], module=SumLayerExplicit(device=device))
     elif sum_setting == 'baseline':
         image_pair[s] = ModuleLearner(image['logits'], module=SumLayer())
     else:

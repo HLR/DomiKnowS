@@ -19,18 +19,40 @@ from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithL
 from regr import setProductionLogMode
 import os
 from itertools import chain
+import argparse
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-setProductionLogMode()
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
+parser.add_argument('--checkpoint_path', type=str, required=True)
+parser.add_argument('--log', default=False, action='store_true')
+parser.add_argument('--cuda', default=False, action='store_true')
 
-trainloader, trainloader_mini, validloader, testloader = get_readers()
+args = parser.parse_args()
+
+print(args)
+
+model_name = args.model_name
+checkpoint_path = args.checkpoint_path
+no_log = not args.log
+device = 'cuda' if args.cuda else 'cpu'
+
+if no_log:
+    setProductionLogMode(no_UseTimeLog=True)
+
+trainloader, trainloader_mini, validloader, testloader = get_readers(0)
 
 
 def get_pred_from_node(node, suffix):
-    digit0_pred = torch.argmax(node.getAttribute(f'<digits0>{suffix}'))
-    digit1_pred = torch.argmax(node.getAttribute(f'<digits1>{suffix}'))
+    digit0_node = node.findDatanodes(select='image')[0]
+    digit1_node = node.findDatanodes(select='image')[1]
+
+    #print(digit0_node.getAttributes())
+
+    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -65,11 +87,13 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
             summation_results[suffix].append(summation_pred)
 
-        digits_results['label'].append(node.getAttribute('digit0_label').item())
-        digits_results['label'].append(node.getAttribute('digit1_label').item())
-        summation_results['label'].append(node.getAttribute('<summations>/label').item())
+        pair_node = node.findDatanodes(select='pair')[0]
+        digit0_node = node.findDatanodes(select='image')[0]
+        digit1_node = node.findDatanodes(select='image')[1]
 
-        curr_label = node.getAttribute('<summations>/label').item()
+        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+        summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
         verifyResult = node.verifyResultsLC()
         if verifyResult:
@@ -80,7 +104,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                 satisfied[lc].append(verifyResult[lc]['satisfied'])
                 satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
-                #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % curr_label)
+                #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
 
             num_constraints = len(verifyResult)
             satisfied_overall.append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
@@ -106,34 +130,42 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
     print('Average constraint satisfactions: %f' % (sum(satisfied_overall)/len(satisfied_overall)))
 
 
-graph, images = build_program()
+use_digit_labels = (model_name == 'DigitLabel')
+
+sum_setting = None
+if model_name == 'Explicit':
+    sum_setting = 'explicit'
+elif model_name == 'Baseline':
+    sum_setting = 'baseline'
+
+graph, image, image_pair, image_batch = build_program(device=device, sum_setting=sum_setting, digit_labels=use_digit_labels)
 
 
 program = SolverPOIProgram(graph,
-                            poi=(images,),
-                            inferTypes=['local/argmax'],
+                            poi=(image_batch, image, image_pair),
+                            inferTypes=['local/argmax', 'ILP'],
                             metric={})
 
 # load model.pth
-model_path = '../../../results_new/primaldual_500/epoch14/model.pth'
+model_path = checkpoint_path
 
 state_dict = torch.load(model_path)
 
-'''
-# baseline - remove summation layer
-del state_dict['global/images/<summations>/modulelearner-1.lin1.weight']
-del state_dict['global/images/<summations>/modulelearner-1.lin1.bias']
-del state_dict['global/images/<summations>/modulelearner-1.lin2.weight']
-del state_dict['global/images/<summations>/modulelearner-1.lin2.bias']
-'''
+'''if model_name == 'baseline':
+    # remove summation layer
+    del state_dict['global/images/<summations>/modulelearner-1.lin1.weight']
+    del state_dict['global/images/<summations>/modulelearner-1.lin1.bias']
+    del state_dict['global/images/<summations>/modulelearner-1.lin2.weight']
+    del state_dict['global/images/<summations>/modulelearner-1.lin2.bias']'''
+
 program.model.load_state_dict(state_dict)
 
 print('loaded model from %s' % model_path)
 
 # verify validation accuracy
 print("validation evaluation")
-get_classification_report(program, validloader, total=config.num_valid, verbose=False)
+get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=['/local/argmax', '/ILP'])
 
 # get test accuracy
 print("test evaluation")
-get_classification_report(program, testloader, total=config.num_test, verbose=False)
+get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=['/local/argmax', '/ILP'])
