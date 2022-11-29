@@ -102,9 +102,12 @@ class BIOProcessor(DataProcessor):
             self._read_tsv(os.path.join(data_dir, "test.txt")),
             "test")
 
+    # def get_labels(self):
+    #     return ["O", "B-MISC", "I-MISC", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC",
+    #             "[CLS]", "[SEP]", "X"]
     def get_labels(self):
-        return ["O", "B-MISC", "I-MISC", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC",
-                "[CLS]", "[SEP]", "X"]
+        return ["O", "B_MISC", "I_MISC", "B_PER", "I_PER", "B_ORG", "I_ORG", "B_LOC", "I_LOC",
+            "[CLS]", "[SEP]", "X"]
 
     @staticmethod
     def _create_examples(lines, set_type):
@@ -145,6 +148,10 @@ class BIODataSet(data.Dataset):
             for token in tokenized_word:
                 word_tokens.append(token)
                 input_ids.append(self.tokenizer.convert_tokens_to_ids(token))
+            
+            ## chen add code
+            if '-' in label:
+                label = '_'.join(label.split('-'))
 
             label_list.append(label)
             label_ids.append(self.label_map[label])

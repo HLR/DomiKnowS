@@ -83,13 +83,19 @@ def forward_tensor(x):
         words.extend(sentence)
         rels.append((total, total + len(sentence)))
         total += len(sentence)
+        # print(words.extend(sentence))
+        # print(rels)
+        # print(total)
+        # print('<><><>'*50)
 
     connection = torch.zeros(len(x), total)
     for sid, rel in enumerate(rels):
         connection[sid][rel[0]: rel[1]] = 1
 
     words = torch.LongTensor(words)
-    # print('----------------->:', connection.shape, len(words), words)
+    # print('----------------->:', connection.shape, connection)
+    # print('=================>:', len(words), words)
+    # print('<><><>'*50)
     return connection, words
 
 print('start the ReaderSensor!')
@@ -141,8 +147,30 @@ print('finish Graph Declaration')
 ######################################################################
 # Train the model
 ######################################################################
-n_epochs = 1
-batch_size = 1024
-n_batches = np.ceil(len(train_examples) / batch_size)
+n_epochs = 10
+# batch_size = 1024
+# n_batches = np.ceil(len(train_examples) / batch_size)
 
-program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+# program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+
+# program.save("domi_ilp_epoch_10")
+# print('model saved!!!')
+
+######################################################################
+# Evaluate the model
+######################################################################
+
+program.load("domi_ilp_epoch_10") # in case we want to load the model instead of training
+
+
+from regr.utils import setProductionLogMode
+
+productionMode = False
+# if productionMode:
+#     setProductionLogMode(no_UseTimeLog=False)
+    
+
+import logging
+logging.basicConfig(level=logging.INFO)
+# program.test(test_examples, device=device)
+program.test(valid_examples, device=device)

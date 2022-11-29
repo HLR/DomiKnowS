@@ -803,7 +803,8 @@ class gurobiILPOntSolver(ilpOntSolver):
             if not sample:
                 if loss:
                     tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    return tOne
+                    tOneSqueezed = torch.squeeze(tOne)
+                    return tOneSqueezed
                 
                 return 1
             
@@ -1171,7 +1172,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if vDns and loss and not sample:
                         vDnsList = [v[0] for v in vDns]
                         try:
-                            lcVariables[variableName] = [[torch.stack(vDnsList)]]
+                            tStack = torch.stack(vDnsList, dim=0)
+                            tsqueezed = torch.squeeze(tStack, dim=0)
+                            if not len(tsqueezed.shape):
+                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
+                            lcVariables[variableName] = [[tStack]]
                         except TypeError:
                             try:
                                 vDnsList = [torch.tensor(v[0], dtype=torch.float, device=self.current_device, requires_grad=True) for v in vDns]
@@ -1199,15 +1204,23 @@ class gurobiILPOntSolver(ilpOntSolver):
                                                                  lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
                         
                         if loss and vDns:
+                            vDnsOriginal = vDns
                             vDnsList = [v[0] for v in  vDns]
                             vDns = []
                             try:
-                                tStack = torch.stack(vDnsList, dim=1)
+                                if len(vDnsList) > 1:
+                                    tStack = torch.stack(vDnsList, dim=1)
+                                else:
+                                    tStack = vDnsList[0]
+                                tsqueezed = torch.squeeze(tStack, dim=0)
+
                             except IndexError as ie:
-                                tStack = torch.stack(vDnsList, dim=0)
+                                tsqueezed = torch.stack(vDnsList, dim=0)
                                 pass
                         
-                            tsqueezed = torch.squeeze(tStack)
+                            if not len(tsqueezed.shape):
+                                tsqueezed = torch.unsqueeze(tsqueezed, 0)
+                                
                             tList = [tsqueezed]
                             vDns.append(tList)
                                                 

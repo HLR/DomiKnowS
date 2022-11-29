@@ -32,7 +32,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         if v is None:
             return -100
         elif torch.is_tensor(v):
-            if len(v.shape) == 0 or len(v.shape) == 1 and v.shape[0] == 1:
+            if len(v.shape) == 0 or (len(v.shape) == 1 and v.shape[0] == 1):
                 return v.item()
             else:
                 return None
@@ -213,6 +213,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         else:            
             return nandSuccess
             
+    # Singleton tensors 
     def ifVarS(self, _, var1, var2, onlyConstrains = False):
         logicMethodName = "IF"
 
@@ -222,6 +223,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         var2Item = self._isTensor(var2)
 
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
+        #tOneSqueezed = torch.squeeze(tOne)
         if self.tnorm =='L':
             ifSuccess = torch.minimum(tOne, torch.add(torch.sub(1, var1), var2)) # min(1, 1 - var1 + var2) #torch.sub
         elif self.tnorm =='G':
@@ -239,6 +241,7 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         # if(var1, var2) = or(not(var1), var2)
         #ifSuccess = self.or2Var(_, self.notVar(_, var1), var2)
 
+        #ifSuccessUnsqueezed = torch.unsqueeze(ifSuccess, 0)
         if onlyConstrains:
             ifLoss = torch.sub(tOne, ifSuccess) # 1 - ifSuccess
             
@@ -265,8 +268,10 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if self.tnorm =='L':
             # min(1, 1 - var1 + var2) #torch.sub
-            ifSuccess = torch.minimum(tOneSize, torch.add(torch.sub(1, var1), var2)
-            ) 
+            oneMinusVar1 = torch.sub(tOneSize, var1)
+            sumOneMinusVar1AndVar2 = torch.add(oneMinusVar1, var2)
+            
+            ifSuccess = torch.minimum(tOneSize, sumOneMinusVar1AndVar2) 
         elif self.tnorm =='G':
             #if var2Item > var1Item: 
             #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
@@ -274,13 +279,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
             #   ifSuccess = var2
             
             if not zeroInVar2:
-                var2Larger = torch.ge(var2, var1)
+                var2Larger = torch.gt(var2, var1)
                 var1Larger = torch.ge(var1, var2)
                 
-                #var2Mask = (var2 != 0) # var2 is divisor - use only not zeros
+                var2Inverse = torch.div(tOneSize, var2)
+                var2LargerSuccess = torch.mul(torch.mul(var2Larger, var2), var2Inverse)
+                var1LargerSuccess = torch.mul(var1Larger, var2)
                 
-                # Filter var2 zeros - if var 2 is zero then 
-                ifSuccess = torch.mul(torch.mul(var2Larger, var2), torch.div(1, var2)) + torch.mul(var1Larger, var2)
+                ifSuccess = var2LargerSuccess + var1LargerSuccess
             else:
                 ifSuccessList = []
                 for v1, v2 in zip(var1,var2):
@@ -290,23 +296,14 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         elif self.tnorm =='P':
             #if var1Item != 0:
             #   tOne = torch.ones(tSize, device=self.current_device, requires_grad=True, dtype=torch.float64)
-            
             #   ifSuccess = torch.minimum(tOne, torch.div(var2, var1)) # min(1, var2/var1) # 
             #else:
             #   ifSuccess = torch.mul(var2, torch.div(1, var2)) # 1
             
             if not zeroInVar1:
+                div1DivisionDiv2 = torch.div(var2, var1)
                 
-                #var1Zeros = torch.eq(torch.zeros(tSize, device=self.current_device, requires_grad=True, dtype=torch.float64), var1)
-                #var1NoZeros = torch.logical_not(var1Zeros)
-                
-                #var2Zeros = torch.eq(torch.zeros(tSize, device=self.current_device, requires_grad=True, dtype=torch.float64), var2)
-                #var2NoZeros = torch.logical_not(var2Zeros)
-                
-                #ifSuccess = torch.mul(var1Zeros, torch.mul(var2, torch.div(1, var2))) + \
-                #           torch.mul(var1NoZeros, torch.minimum(tOneSize, torch.div(var2, var1)))  
-                            
-                ifSuccess = torch.minimum(tOneSize, torch.div(var2, var1))
+                ifSuccess = torch.minimum(tOneSize, div1DivisionDiv2)
             else:
                 ifSuccessList = []
                 for v1, v2 in zip(var1,var2):

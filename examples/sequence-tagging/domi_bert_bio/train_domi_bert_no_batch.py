@@ -21,15 +21,15 @@ from regr.program.loss import NBCrossEntropyLoss
 from model_domi import BIO_Model
 
 import torch.nn.functional as F
-from seqeval.metrics import accuracy_score, f1_score, classification_report
+# from seqeval.metrics import accuracy_score, f1_score, classification_report
 from torch.utils import data
 from tqdm import trange, tqdm
 from transformers import BertTokenizer, AdamW, get_linear_schedule_with_warmup
 
 from data_set import BIOProcessor, BIODataSet
 
-# device = "cuda:0"
-device = "cpu"
+device = "cuda:1"
+# device = "cpu"
 
 ######################################################################
 # Data Reader
@@ -38,6 +38,7 @@ device = "cpu"
 num_epochs = 5
 batch_size=1
 data_dir='data'
+max_len=32
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
 
@@ -58,13 +59,15 @@ for (i, label) in enumerate(tags_vals):
 
 print(label_map) ### {'O': 0, 'B_MISC': 1, 'I_MISC': 2, 'B_PER': 3, 'I_PER': 4, 'B_ORG': 5, 'I_ORG': 6, 'B_LOC': 7, 'I_LOC': 8, '[CLS]': 9, '[SEP]': 10, 'X': 11}
 
-train_dataset = BIODataSet(data_list=train_examples, tokenizer=tokenizer, label_map=label_map, max_len=128)
-eval_dataset = BIODataSet(data_list=val_examples, tokenizer=tokenizer, label_map=label_map, max_len=128)
-test_dataset = BIODataSet(data_list=test_examples, tokenizer=tokenizer, label_map=label_map, max_len=128)
+train_dataset = BIODataSet(data_list=train_examples, tokenizer=tokenizer, label_map=label_map, max_len=max_len)
+eval_dataset = BIODataSet(data_list=val_examples, tokenizer=tokenizer, label_map=label_map, max_len=max_len)
+test_dataset = BIODataSet(data_list=test_examples, tokenizer=tokenizer, label_map=label_map, max_len=max_len)
 
-train_iter = data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-eval_iter = data.DataLoader(dataset=eval_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-test_iter = data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+# print(len(train_dataset[:10000]))
+
+train_iter = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+eval_iter = torch.utils.data.DataLoader(dataset=eval_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+test_iter = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 ######################################################################
 # Data Processing
@@ -80,14 +83,14 @@ def generate_data(data_iteration):
         # print('-------------->>>>>', b_token_type_ids, b_token_type_ids.size()) ### torch.Size([32, 128])
         # print('-------------->>>>>', b_labels, b_labels.size()) ### torch.Size([32, 128])
         # print('-------------->>>>>', b_label_masks, b_label_masks.size()) ### torch.Size([32, 128])
-        one_hot = F.one_hot(b_labels, num_classes=len(label_map))
+        # one_hot = F.one_hot(b_labels, num_classes=len(label_map))
         data.append({
-            'text': b_input_ids,
-            'input_mask': b_input_mask,
-            'token_type_ids': b_token_type_ids,
-            # 'labels': b_labels,
-            'labels': one_hot,
-            'label_masks': b_label_masks,
+            'text': b_input_ids.view(1, max_len),
+            'input_mask': b_input_mask.view(max_len),
+            'token_type_ids': b_token_type_ids.view(max_len),
+            'labels': b_labels.view(max_len),
+            # 'labels': one_hot.view(max_len),
+            'label_masks': b_label_masks.view(max_len),
         })
     return data
 
@@ -113,32 +116,52 @@ graph.detach()
 ### the size of x1, x2, x3, x4 are all torch.Size([32, 128])
 
 
-def forward_tensor(input_id, input_mask, token_type_ids, label_masks):
-    ### how to write connection code?
+# def forward_tensor(input_id, input_mask, token_type_ids, label_masks):
+#     ### how to write connection code?
 
-    ### return connection, input_id, input_mask, token_type_ids, label_masks
+#     ### return connection, input_id, input_mask, token_type_ids, label_masks
 
-    # connection = torch.zeros(len(x), total)
-    # for sid, rel in enumerate(rels):
-    #     connection[sid][rel[0]: rel[1]] = 1
+#     # connection = torch.zeros(len(x), total)
+#     # for sid, rel in enumerate(rels):
+#     #     connection[sid][rel[0]: rel[1]] = 1
 
-    # idx = input_mask.nonzero()[:, 0].unsqueeze(-1)
-    # connection = torch.zeros(idx.shape[0], idx.max()+1)
-    # connection.scatter_(1, idx, 1)
-    # connection = connection.view(connection.size(1), connection.size(0))
+#     # idx = input_mask.nonzero()[:, 0].unsqueeze(-1)
+#     # connection = torch.zeros(idx.shape[0], idx.max()+1)
+#     # connection.scatter_(1, idx, 1)
+#     # connection = connection.view(connection.size(1), connection.size(0))
 
 
-    # print(connection)
-    # print(connection.size()) ## (batch_size, 807)
+#     # print(connection)
+#     # print(connection.size()) ## (batch_size, 807)
 
-    # connection = torch.ones(input_id.size(0), 1, input_id.size(1))
-    connection = torch.ones(input_id.size(1), input_id.size(0))
-    # print(connection.size())
-    # import sys
-    # sys.exit()
+#     # connection = torch.ones(input_id.size(0), 1, input_id.size(1))
+#     connection = torch.ones(input_id.size(1), input_id.size(0))
+#     # print(connection.size())
+#     # import sys
+#     # sys.exit()
 
-    return connection, input_id, input_mask, token_type_ids, label_masks
+#     return connection, input_id, input_mask, token_type_ids, label_masks
 
+
+# def forward_tensor(x, input_mask, token_type_ids, label_masks):
+def forward_tensor(x):
+    words = []
+    rels = []
+    total = 0
+    for sentence in x:
+        words.extend(sentence)
+        rels.append((total, total + len(sentence)))
+        total += len(sentence)
+
+    connection = torch.zeros(len(x), total)
+    for sid, rel in enumerate(rels):
+        connection[sid][rel[0]: rel[1]] = 1
+
+    words = torch.LongTensor(words)
+    # print('connection: ', connection.size()) ## torch.Size([1, 32])
+    # print('words: ', words.size()) ## torch.Size([32])
+    # return connection, words, input_mask, token_type_ids, label_masks
+    return connection, words
 
 
 
@@ -147,19 +170,19 @@ def forward_tensor(input_id, input_mask, token_type_ids, label_masks):
 
 print('start the ReaderSensor!')
 
-sentence['text'] = ReaderSensor(keyword='text')
-sentence['input_mask'] = ReaderSensor(keyword='input_mask')
-sentence['token_type_ids'] = ReaderSensor(keyword='token_type_ids')
-sentence['label_masks'] = ReaderSensor(keyword='label_masks')
+sentence['text'] = ReaderSensor(keyword='text', device=device)
+# sentence['input_mask'] = ReaderSensor(keyword='input_mask')
+# sentence['token_type_ids'] = ReaderSensor(keyword='token_type_ids')
+# sentence['label_masks'] = ReaderSensor(keyword='label_masks')
 
 word[labels] = ReaderSensor(keyword='labels',label=True, device=device)
 
-word[sen_word_rel[0], 'text', 'input_mask', 'token_type_ids', 'label_masks'] = JointSensor(sentence['text'], sentence['input_mask'], sentence['token_type_ids'], sentence['label_masks'], forward=forward_tensor)
-
+# word[sen_word_rel[0], 'text', 'input_mask', 'token_type_ids', 'label_masks'] = JointSensor(sentence['text'], sentence['input_mask'], sentence['token_type_ids'], sentence['label_masks'], forward=forward_tensor)
+word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor, device=device)
 print('start the ModuleLearner!')
 
 model = BIO_Model.from_pretrained('bert-base-cased', num_labels=len(label_map)).to(device)
-word[labels] = ModuleLearner('text', module=model)
+word[labels] = ModuleLearner('text', module=model, device=device)
 
 # Creating the program to create model
 program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
@@ -173,17 +196,26 @@ print('finish Graph Declaration')
 # Train the model
 ######################################################################
 
-program.train(train_examples, train_epoch_num=num_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+# program.train(train_examples, train_epoch_num=num_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
 
-program.save("domi_0")
-print('model saved!!!')
-
+# program.save("domi_0")
+# print('model saved!!!')
 
 ######################################################################
 # Evaluate the model
 ######################################################################
 
 program.load("domi_0") # in case we want to load the model instead of training
+
+
+from regr.utils import setProductionLogMode
+
+productionMode = False
+    
+
+import logging
+logging.basicConfig(level=logging.INFO)
+program.test(valid_examples, device=device)
 
 
 

@@ -1,6 +1,6 @@
 from regr.graph import Graph, Concept, Relation
 from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL, exactL, ifL
+from regr.graph.logicalConstrain import nandL, exactL, ifL, orL
 from itertools import combinations
 
 Graph.clear()
@@ -53,19 +53,15 @@ with Graph('CIFAR100', reuse_model=False) as graph:
                  'non-insectinvertebrates': {'spider', 'worm', 'snail', 'lobster', 'crab'},
                  'aquaticmammals': {'seal', 'beaver', 'whale', 'otter', 'dolphin'}}
     
-    NEW_LC = False
-    
+    NEW_LC = True
+
     if NEW_LC:
+        ifL(image("x"),exactL(*[Label.__getattr__(i[1])("x") for i in Label.attributes]))
+        ifL(image("x"), exactL(*[category.__getattr__(i[1])("x") for i in category.attributes]))
         for i in category.attributes:
-            li = []
-            for j in category.attributes:
-                if j == i:
-                    continue
-                
-                lj = [Label.get_concept(l) for l in structure[i[1]]]
-                li += lj
-            
-            ifL(i, exactL(*li, 0))
+            lj = [Label.get_concept(l) for l in structure[i[1]]]
+            ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
+            #print("if ",category.__getattr__(i[1])("x"), "then orL all these: ",*[Label.__getattr__(ii[1])("x") for ii in lj])
     else:
         relations = 0
         for i in category.attributes:
