@@ -37,7 +37,7 @@ with Graph(name='global') as graph:
                    ConceptClass=EnumConcept,
                    values=summations)
 
-    exactL(*d.attributes)
+    exactL(*digit.attributes)
     exactL(*s.attributes)
 
     #fixedL(s)

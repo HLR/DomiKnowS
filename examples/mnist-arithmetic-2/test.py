@@ -29,6 +29,7 @@ parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', '
 parser.add_argument('--checkpoint_path', type=str, required=True)
 parser.add_argument('--log', default=False, action='store_true')
 parser.add_argument('--cuda', default=False, action='store_true')
+parser.add_argument('--ILP', default=False, action='store_true')
 
 args = parser.parse_args()
 
@@ -46,6 +47,7 @@ trainloader, trainloader_mini, validloader, testloader = get_readers(0)
 
 
 def get_pred_from_node(node, suffix):
+    pair_node = node.findDatanodes(select='pair')[0]
     digit0_node = node.findDatanodes(select='image')[0]
     digit1_node = node.findDatanodes(select='image')[1]
 
@@ -53,9 +55,9 @@ def get_pred_from_node(node, suffix):
 
     digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
     digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
-    #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
+    summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
 
-    return digit0_pred, digit1_pred, 0
+    return digit0_pred, digit1_pred, summation_pred
 
 
 #program.populate(reader, device='auto')
@@ -71,7 +73,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
     satisfied = {}
 
-    satisfied_overall = []
+    satisfied_overall = {}
 
     for suffix in infer_suffixes:
         digits_results[suffix] = []
@@ -95,19 +97,24 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
         summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
-        verifyResult = node.verifyResultsLC()
-        if verifyResult:
-            satisfied_constraints = []
-            for lc_idx, lc in enumerate(verifyResult):
-                if lc not in satisfied:
-                    satisfied[lc] = []
-                satisfied[lc].append(verifyResult[lc]['satisfied'])
-                satisfied_constraints.append(verifyResult[lc]['satisfied'])
+        for suffix in infer_suffixes:
+            verifyResult = node.verifyResultsLC(key=suffix)
+            if verifyResult:
+                satisfied_constraints = []
+                for lc_idx, lc in enumerate(verifyResult):
+                    if lc not in satisfied:
+                        satisfied[lc] = []
+                    satisfied[lc].append(verifyResult[lc]['satisfied'])
+                    satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
-                #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
+                    #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
 
-            num_constraints = len(verifyResult)
-            satisfied_overall.append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
+                num_constraints = len(verifyResult)
+
+                if suffix not in satisfied_overall:
+                    satisfied_overall[suffix] = []
+
+                satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -127,7 +134,8 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
     #sat_values = list(chain(*satisfied.values()))
     #print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))
-    print('Average constraint satisfactions: %f' % (sum(satisfied_overall)/len(satisfied_overall)))
+    for suffix in infer_suffixes:
+        print('Average constraint satisfactions: %s - %f' % (suffix, sum(satisfied_overall[suffix])/len(satisfied_overall[suffix])))
 
 
 use_digit_labels = (model_name == 'DigitLabel')
@@ -141,9 +149,13 @@ elif model_name == 'Baseline':
 graph, image, image_pair, image_batch = build_program(device=device, sum_setting=sum_setting, digit_labels=use_digit_labels)
 
 
+inferTypes = ['local/argmax']
+if args.ILP:
+    inferTypes.append('ILP')
+
 program = SolverPOIProgram(graph,
                             poi=(image_batch, image, image_pair),
-                            inferTypes=['local/argmax', 'ILP'],
+                            inferTypes=inferTypes,
                             metric={})
 
 # load model.pth
@@ -162,10 +174,14 @@ program.model.load_state_dict(state_dict)
 
 print('loaded model from %s' % model_path)
 
+classification_suffixes = ['/local/argmax']
+if args.ILP:
+    classification_suffixes.append('/ILP')
+
 # verify validation accuracy
 print("validation evaluation")
-get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=['/local/argmax', '/ILP'])
+get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=classification_suffixes)
 
 # get test accuracy
 print("test evaluation")
-get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=['/local/argmax', '/ILP'])
+get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=classification_suffixes)
