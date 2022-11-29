@@ -1202,12 +1202,16 @@ class gurobiILPOntSolver(ilpOntSolver):
                             vDnsList = [v[0] for v in  vDns]
                             vDns = []
                             try:
-                                tStack = torch.stack(vDnsList, dim=1)
+                                if len(vDnsList) > 1:
+                                    tStack = torch.stack(vDnsList, dim=1)
+                                else:
+                                    tStack = vDnsList[0]
+                                tsqueezed = torch.squeeze(tStack, dim=0)
+
                             except IndexError as ie:
-                                tStack = torch.stack(vDnsList, dim=0)
+                                tsqueezed = torch.stack(vDnsList, dim=0)
                                 pass
                         
-                            tsqueezed = torch.squeeze(tStack)
                             tList = [tsqueezed]
                             vDns.append(tList)
                                                 
