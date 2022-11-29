@@ -330,9 +330,9 @@ class LogicalConstrain:
 
         zVars = [] # Output ILP variables
         
-        varsSetup = []
         for i, _ in enumerate(lcVariableSet0):
-            
+            varsSetup = []
+
             var = []
             for currentV in iter(v):
                 var.extend(v[currentV][i])
@@ -348,13 +348,13 @@ class LogicalConstrain:
             else:
                 varsSetup.append(var)
              
-        # -- Use ILP variable setup to create constrains   
-        if headConstrain or integrate:
-            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
-                                                         logicMethodName = logicMethodName)])
-        else:
-            for current_var in varsSetup:
-                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+            # -- Use ILP variable setup to create constrains   
+            if headConstrain or integrate:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                             logicMethodName = logicMethodName)])
+            else:
+                for current_var in varsSetup:
+                    zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
                                                              logicMethodName = logicMethodName)])
            
         if model is not None:

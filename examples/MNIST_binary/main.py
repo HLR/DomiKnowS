@@ -145,12 +145,19 @@ for i in range(args.cur_epoch):
     for datanode in program.populate(mnist_testset_reader, device="cpu"):
         datanode.inferILPResults()
         for i in datanode.getChildDataNodes():
-            ilp_list=([i.getAttribute(j) for j in ['<threehandwriting>/ILP','<onehandwriting>/ILP','<sevenhandwriting>/ILP','<sixhandwriting>/ILP'\
-                                                    '<fivehandwriting>/ILP','<ninehandwriting>/ILP','<fourhandwriting>/ILP','<eighthandwriting>/ILP',\
-                                                '<twohandwriting>/ILP','<zerohandwriting>/ILP']])
+            ilp_list=([i.getAttribute(*j) for j in [('<threehandwriting>', 'ILP'),\
+                                                   ('<onehandwriting>', 'ILP'),\
+                                                   ('<sevenhandwriting>' ,'ILP'),\
+                                                   ('<sixhandwriting>', 'ILP'),\
+                                                   ('<fivehandwriting>', 'ILP'),\
+                                                   ('<ninehandwriting>', 'ILP'),\
+                                                   ('<fourhandwriting>', 'ILP'),\
+                                                   ('<eighthandwriting>', 'ILP'),\
+                                                   ('<twohandwriting>', 'ILP'),\
+                                                   ('<zerohandwriting>', 'ILP')]])
             if None in ilp_list:
                 print("error None in Ilp results")
-            elif not sum([j.tolist() for j in ilp_list])==1:
+            elif not sum([j.item() for j in ilp_list])==1:
                 print("exactL is not working")
 
         verifyResult = datanode.verifyResultsLC()
