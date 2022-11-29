@@ -163,12 +163,12 @@ def main(args):
                                                       beta=args.beta,
                                                       sampling_size=args.sampling_size)
 
-    train_program.train(train_dataset, train_epoch_num=args.cur_epoch,
+    eval_program.train(train_dataset, train_epoch_num=0,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     # Loading train parameter to evaluation program
-    train_program.save("Models.pth")
-    eval_program.load("Models.pth")
+    #train_program.save("Models.pth")
+    #eval_program.load("Models.pth")
     eval(eval_program, test_dataset, cur_device, args, "ALL")
     eval(eval_program, augment_dataset_dev, cur_device, args, "Augmented_dev")
     eval(eval_program, augment_dataset_test, cur_device, args, "Augmented")
@@ -246,13 +246,13 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_sample', default=600000,
+    parser.add_argument('--training_sample', dest='training_sample', default=600,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_sample', default=600000, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=600, help="number of data to test model",
                         type=int)
 
-    parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=2, help="batch size of sample", type=int)
 
     parser.add_argument('--sym_relation', dest='sym_relation', default=False, help="Using symmetric relation",
                         type=bool)
