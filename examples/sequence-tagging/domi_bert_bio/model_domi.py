@@ -10,7 +10,7 @@ class BIO_Model(BertForTokenClassification):
         # print('attention_mask:', attention_mask.size())
         # print('token_type_ids:', token_type_ids.size())
         # print('label_masks:', label_masks.size())
-        outputs = self.bert(input_ids,
+        outputs = self.bert(input_ids.view(1, input_ids.size(0)),
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
@@ -25,8 +25,8 @@ class BIO_Model(BertForTokenClassification):
         logits = self.classifier(sequence_output)  # (b, local_max_len, num_labels)
 
         # outputs = (logits,)
-        print(logits.size())
-        outputs = logits
+        outputs = logits.view(logits.size(1),logits.size(2))
+
         # if labels is not None:
         #     labels = [label[mask] for mask, label in zip(label_masks, labels)]
         #     labels = pad_sequence(labels, batch_first=True, padding_value=-1)  # (b, local_max_len)
@@ -35,5 +35,5 @@ class BIO_Model(BertForTokenClassification):
         #     loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
         #     loss /= mask.float().sum()
         #     outputs = (loss,) + outputs + (labels,)
-        print('chen: model go to the last step!!')
+        # print('chen: model go to the last step!!')
         return outputs  # (loss), scores, (hidden_states), (attentions)
