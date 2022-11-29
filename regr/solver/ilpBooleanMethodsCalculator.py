@@ -36,7 +36,9 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(1) # when None
+                tOnes = torch.ones(1, device=self.current_device, requires_grad=False)
+                tOnesSqueezed = torch.squeeze(tOnes)
+                varFixed.append(tOnesSqueezed) # when None
             else:
                 varFixed.append(v)
         var = varFixed
@@ -60,7 +62,9 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(0) # when None
+                tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
+                tZerosSqueezed = torch.squeeze(tZeros)
+                varFixed.append(tZerosSqueezed)  # when None
             else:
                 varFixed.append(v)
         var = varFixed
@@ -88,7 +92,9 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(0) # when None
+                tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
+                tZerosSqueezed = torch.squeeze(tZeros)
+                varFixed.append(tZerosSqueezed)  # when None
             else:
                 varFixed.append(v)
         
@@ -120,7 +126,18 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
     
     def norVar(self, _, *var, onlyConstrains = False):
         #results = self.notVar(_, self.orVar(_, var))
-            
+        # -- Consider None
+        varFixed = []  
+        for v in var:
+            if v is None:
+                tOnes = torch.ones(1, device=self.current_device, requires_grad=False)
+                tOnesSqueezed = torch.squeeze(tOnes)
+                varFixed.append(tOnesSqueezed) # when None
+            else:
+                varFixed.append(v)
+        var = varFixed
+        # --
+         
         norSuccess = 1
         if sum(var) > 0:
             norSuccess = 0
@@ -154,7 +171,9 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(torch.zeros(1))  # when None
+                tZeros = torch.zeros(1, device=self.current_device, requires_grad=False)
+                tZerosSqueezed = torch.squeeze(tZeros)
+                varFixed.append(tZerosSqueezed)  # when None
             else:
                 varFixed.append(v)
         
