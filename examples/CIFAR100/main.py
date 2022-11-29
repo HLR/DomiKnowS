@@ -46,6 +46,7 @@ def main():
     import logging
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
+    parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--solver', help='the model solver', default='sam')
     parser.add_argument('--samplenum', dest='samplenum', default=5000,help='number of samples to choose from the dataset',type=int)
@@ -112,9 +113,10 @@ def main():
     train_reader,test_reader=create_readers(train_num=args.samplenum)
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
-        
-    #for i in range(args.epochs):
-    program.train(train_reader,valid_set=test_reader, train_epoch_num=args.epochs, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+
+    for i in range(args.epochs):
+        program.train(train_reader,valid_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+        program.save(args.namesave + "_" + str(i))
     f.close()
     guessed_tag = {
         "local/softmax": [],

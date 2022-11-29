@@ -1,5 +1,6 @@
 import logging
 
+import torch
 from regr.solver.ilpBooleanMethods import ilpBooleanProcessor 
 from regr.solver.ilpConfig import ilpConfig 
 
@@ -153,7 +154,7 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         varFixed = []  
         for v in var:
             if v is None:
-                varFixed.append(0) # when None
+                varFixed.append(torch.zeros(1))  # when None
             else:
                 varFixed.append(v)
         
@@ -162,7 +163,7 @@ class booleanMethodsCalculator(ilpBooleanProcessor):
         
         countSuccess = 0
 
-        varSum = sum(list(var))
+        varSum = sum(list(var)).item()
 
         if limitOp == '>=':
             if varSum >= limit:

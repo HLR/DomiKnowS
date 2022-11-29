@@ -246,13 +246,13 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_sample', default=600000,
+    parser.add_argument('--training_sample', dest='training_sample', default=600,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_sample', default=600000, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=600, help="number of data to test model",
                         type=int)
 
-    parser.add_argument('--batch_size', dest='batch_size', default=4, help="batch size of sample", type=int)
+    parser.add_argument('--batch_size', dest='batch_size', default=2, help="batch size of sample", type=int)
 
     parser.add_argument('--sym_relation', dest='sym_relation', default=False, help="Using symmetric relation",
                         type=bool)
