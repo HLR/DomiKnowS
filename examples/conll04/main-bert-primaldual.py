@@ -213,7 +213,7 @@ def model(device='auto'):
             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 4.3231]).to(device)), 
             "default": NBCrossEntropyDictLoss()},
         # loss = MacroAverageTracker(NBCrossEntropyLoss()),
-        tnorm = 'G',
+        tnorm = 'L',
         beta=0.01,
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -398,5 +398,5 @@ def parse_arguments():
 
 if __name__ == '__main__':
     args = parse_arguments()
-    setProductionLogMode()
+    setProductionLogMode(no_UseTimeLog=True)
     main(args)
