@@ -25,7 +25,7 @@ parser.add_argument('--namesave', dest='namesave', default="modelname", help='mo
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
 parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning rate of the adam optimiser',type=float)
-parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp',type=bool)
+parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to use ilp',type=bool)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
@@ -50,8 +50,8 @@ mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transf
 mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transform=transform_mnist)
 
 
-mnist_trainset_reader=create_readers(mnist_trainset,5,args.batch_size)
-mnist_testset_reader=create_readers(mnist_testset,5,args.batch_size)
+mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,args.batch_size)
+mnist_testset_reader=create_readers(mnist_testset,99999999,args.batch_size)
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
