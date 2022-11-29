@@ -30,6 +30,12 @@ with Graph('spatial_QA_rule') as graph:
     contain = question(name="contain")
     # answer_class = question(name="answer_class", ConceptClass=EnumConcept,
     #                         values=["yes", "no"])
+    # Only one label of opposite concepts
+    exactL(left, right)
+    exactL(above, below)
+    exactL(behind, front)
+    exactL(near, far)
+    exactL(disconnected, touch)
 
     # Symmetric Constrain
     # symmetric = Concept(name="symmetric")

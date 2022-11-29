@@ -14,7 +14,8 @@ with Graph('Useful_arg') as graph:
     answer_class = pairs(name="answer_class", ConceptClass=EnumConcept,
                          values=["entailment", "neutral", "contradiction"])
 
-    ifL(pairs('x'), exactL(answer_class.entailment('x'), answer_class.neutral('x'), answer_class.contradiction('x')))
+    # ifL(pairs('x'), exactL(answer_class.entailment('x'), answer_class.neutral('x'), answer_class.contradiction('x')))
+    exactL(answer_class.entailment, answer_class.neutral, answer_class.contradiction)
 
     # Logical Constrains
     symmetric = Concept(name="symmetric")

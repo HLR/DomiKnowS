@@ -163,12 +163,12 @@ def main(args):
                                                       beta=args.beta,
                                                       sampling_size=args.sampling_size)
 
-    eval_program.train(train_dataset, train_epoch_num=0,
+    train_program.train(train_dataset, train_epoch_num=args.cur_epoch,
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     # Loading train parameter to evaluation program
-    #train_program.save("Models.pth")
-    #eval_program.load("Models.pth")
+    train_program.save("Models.pth")
+    eval_program.load("Models.pth")
     eval(eval_program, test_dataset, cur_device, args, "ALL")
     eval(eval_program, augment_dataset_dev, cur_device, args, "Augmented_dev")
     eval(eval_program, augment_dataset_test, cur_device, args, "Augmented")
