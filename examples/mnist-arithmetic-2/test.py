@@ -55,9 +55,14 @@ def get_pred_from_node(node, suffix):
 
     #print(digit0_node.getAttributes())
 
-    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
-    summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
+    if args.cuda:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+        summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}')).cpu()
+    else:
+        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+        summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     return digit0_pred, digit1_pred, summation_pred
 
@@ -95,9 +100,14 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
 
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        if args.cuda:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+        else:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
         if print_incorrect and (digits_results['/local/argmax'][-1] != digits_results['label'][-1] or digits_results['/local/argmax'][-2] != digits_results['label'][-2]):
             for suffix in infer_suffixes:
