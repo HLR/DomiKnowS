@@ -25,8 +25,8 @@ from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 
-# device = "cuda:0"
-device = "cpu"
+device = "cuda:5"
+# device = "cpu"
 
 ######################################################################
 # Data Reader
@@ -130,23 +130,23 @@ print('start the ModuleLearner!')
 word[labels] = ModuleLearner('text', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 
 
-### Creating the program to create model
-# program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], poi=(sentence, word),
-#                         loss=MacroAverageTracker(NBCrossEntropyLoss()),
-#                         metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-#                                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+## Creating the program to create model
+program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], poi=(sentence, word),
+                        loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                        metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
 # program = PrimalDualProgram(graph, SolverModel, poi=(sentence, word),inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=1.0)
 
 
-program = SampleLossProgram(
-    graph, SolverModel,
-    poi=(sentence, word),
-    inferTypes=['local/argmax'],
-    sample = True,
-    sampleSize=2,
-    sampleGlobalLoss = True
-    )
+# program = SampleLossProgram(
+#     graph, SolverModel,
+#     poi=(sentence, word),
+#     inferTypes=['local/argmax'],
+#     sample = True,
+#     sampleSize=2,
+#     sampleGlobalLoss = True
+#     )
 
 print('finish Graph Declaration')
 
@@ -206,23 +206,23 @@ print('finish Graph Declaration')
 ######################################################################
 # Train the model
 ######################################################################
-n_epochs = 1
+n_epochs = 15
 # batch_size = 1024
 # n_batches = np.ceil(len(train_examples) / batch_size)
 
 program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
 
-# program.save("domi_ilp_epoch_1")
+program.save("domi_ilp_epoch_20")
 # program.save("domi_pd_epoch_1")
-program.save("domi_sampleloss_epoch_1")
+# program.save("domi_sampleloss_epoch_1")
 
 ######################################################################
 # Evaluate the model
 ######################################################################
 
-# program.load("domi_ilp_epoch_1")
+program.load("domi_ilp_epoch_20")
 # program.load("domi_pd_epoch_1")
-program.load("domi_sampleloss_epoch_1")
+# program.load("domi_sampleloss_epoch_1")
 
 
 from regr.utils import setProductionLogMode

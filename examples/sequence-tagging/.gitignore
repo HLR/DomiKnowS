@@ -5,4 +5,4 @@ logs
 
 eng.*
 *.yaml
-bert_base_cased
+bert_base_cased/
