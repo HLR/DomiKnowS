@@ -1,8 +1,8 @@
 import sys
 
-sys.path.append(".")
-sys.path.append("../")
+sys.path.append("..")
 sys.path.append("../../")
+sys.path.append("../../../")
 
 import pandas as pd
 import torch
@@ -136,9 +136,9 @@ def eval(model, dataloader, loss_fn, *, device="cpu"):
 
 
 def main(args):
-    train_set = load_data("data/train.csv", size=args.training_sample, batch_size=args.batch_size)
-    test_set = load_data("data/test.csv", size=args.testing_sample, batch_size=args.batch_size)
-    aug_set = load_data(None, size=0, batch_size=args.batch_size, augment="data/snli_genadv_1000_test.jsonl")
+    train_set = load_data("../data/train.csv", size=args.training_sample, batch_size=args.batch_size)
+    test_set = load_data("../data/test.csv", size=args.testing_sample, batch_size=args.batch_size)
+    aug_set = load_data(None, size=0, batch_size=args.batch_size, augment="../data/snli_genadv_1000_test.jsonl")
     cuda_number = args.cuda_number
     device = "cuda:" + str(cuda_number) if torch.cuda.is_available() else 'cpu'
     loss_fn = nn.CrossEntropyLoss()

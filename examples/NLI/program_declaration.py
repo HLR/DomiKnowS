@@ -8,8 +8,8 @@ from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 def program_declaration(cur_device, *,
                         sym_relation: bool = False, tran_relation: bool = False,
-                        primaldual: bool = False, sample: bool = False, iml: bool = False, beta=0.5, sampling_size=100):
-    from graph_senetences import graph, group_pairs, pairs, symmetric, s_sent1, s_sent2, \
+                        primaldual: bool = False, sample: bool = False, beta=0.5, sampling_size=100):
+    from graph import graph, group_pairs, pairs, symmetric, s_sent1, s_sent2, \
         transitive, t_sent1, t_sent2, t_sent3, answer_class, group_pair_contains
 
     graph.detach()
@@ -34,6 +34,7 @@ def program_declaration(cur_device, *,
         group_pairs["hypothesises_raw"],
         group_pairs["labels_raw"], forward=make_pair, device=cur_device)
 
+    # Create token_ids and mask
     pairs["token_ids", "Mask"] = JointSensor(group_pair_contains, 'premise',
                                              "hypothesis",
                                              forward=RobertaTokenizerMulti(), device=cur_device)
@@ -42,7 +43,7 @@ def program_declaration(cur_device, *,
 
     # number of hidden layer excluding the first layer and the last layer
     hidden_layer_size = 2
-
+    # Predict the result from classify layer
     pairs[answer_class] = FunctionalSensor(group_pair_contains, "label",
                                            forward=read_label, label=True, device=cur_device)
 
@@ -58,7 +59,7 @@ def program_declaration(cur_device, *,
             relations=(s_sent1.reversed, s_sent2.reversed),
             forward=check_symmetric, device=cur_device)
         poi_list.append(symmetric)
-
+    # Using transitive relation
     if tran_relation:
         transitive[t_sent1.reversed, t_sent2.reversed, t_sent3.reversed] = CompositionCandidateSensor(
             relations=(t_sent1.reversed, t_sent2.reversed, t_sent3.reversed),
