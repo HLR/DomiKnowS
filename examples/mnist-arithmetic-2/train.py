@@ -26,7 +26,7 @@ import config
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
 parser.add_argument('--num_train', type=int, default=10000)
-parser.add_argument('--log', default=False, action='store_true')
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
 parser.add_argument('--cuda', default=False, action='store_true')
 
 args = parser.parse_args()
@@ -35,11 +35,12 @@ print(args)
 
 model_name = args.model_name
 num_train = args.num_train
-no_log = not args.log
 device = 'cuda' if args.cuda else 'cpu'
 
-if no_log:
+if args.log == 'None':
     setProductionLogMode(no_UseTimeLog=True)
+elif args.log == 'TimeOnly':
+    setProductionLogMode(no_UseTimeLog=False)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers(num_train)
 
@@ -327,7 +328,7 @@ elif model_name == 'Baseline' and num_train == 10000:
 
 
     program.train(trainloader,
-                  train_epoch_num=config.epochs,
+                  train_epoch_num=1000,
                   Optim=test_adam,
                   device='auto',
                   test_every_epoch=True)
@@ -339,7 +340,7 @@ elif model_name == 'Baseline' and num_train == 500:
 
 
     program.train(trainloader,
-                  train_epoch_num=config.epochs,
+                  train_epoch_num=1000,
                   Optim=test_adam,
                   device='auto',
                   test_every_epoch=True)

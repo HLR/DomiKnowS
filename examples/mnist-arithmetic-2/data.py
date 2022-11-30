@@ -129,7 +129,7 @@ def get_readers(num_train):
     valid_ids = random.sample(range(50000, 60000), config.num_valid * 2)
     test_ids = random.sample(range(10000), config.num_test * 2)
 
-    train_balanced = SumBalanceDataset(trainset, train_ids, num_train)
+    train_balanced = SumBalanceDataset(trainset, train_ids, num_train, verbose=False)
 
     trainloader = train_balanced
 
