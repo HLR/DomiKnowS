@@ -267,7 +267,7 @@ if model_name == 'Semantic':
     program.train(trainloader,
                   train_epoch_num=50,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -280,7 +280,7 @@ elif model_name == 'Sampling':
     program.train(trainloader,
                   train_epoch_num=50,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -293,7 +293,7 @@ elif model_name == 'PrimalDual':
     program.train(trainloader,
                   train_epoch_num=50,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -306,7 +306,7 @@ elif model_name == 'DigitLabel':
     program.train(trainloader,
                   train_epoch_num=50,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Explicit':
@@ -318,7 +318,7 @@ elif model_name == 'Explicit':
     program.train(trainloader,
                   train_epoch_num=1000,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Baseline' and num_train == 10000:
@@ -330,7 +330,7 @@ elif model_name == 'Baseline' and num_train == 10000:
     program.train(trainloader,
                   train_epoch_num=1000,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Baseline' and num_train == 500:
@@ -342,7 +342,7 @@ elif model_name == 'Baseline' and num_train == 500:
     program.train(trainloader,
                   train_epoch_num=1000,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 

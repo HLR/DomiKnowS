@@ -81,7 +81,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in enumerate(program.populate(reader)):
+    for i, node in enumerate(program.populate(reader, device=device)):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)

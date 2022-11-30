@@ -4,82 +4,64 @@ function move_time_logs() {
 	mv "logs" "all_logs/$1"
 }
 
-echo "python test.py --model_name Sampling --checkpoint_path 'checkpoints/samplingloss_500.pth'"
-python test.py --model_name Sampling --checkpoint_path 'checkpoints/samplingloss_500.pth'
-echo ""
-move_time_logs "samplingloss_500"
+function run_test() {
+	echo "python test.py --model_name $1 --checkpoint_path \"checkpoints/$2.pth\" ${@:3}"
+	python test.py --model_name $1 --checkpoint_path "checkpoints/$2.pth" ${@:3}
+	echo ""
+}
 
-echo "python test.py --model_name Sampling --checkpoint_path 'checkpoints/samplingloss_10k.pth'"
-python test.py --model_name Sampling --checkpoint_path 'checkpoints/samplingloss_10k.pth'
-echo ""
+function run_test_ILP() {
+	echo "python test.py --model_name $1 --checkpoint_path \"checkpoints/$2.pth\" --ILP --no_fixedL ${@:3}"
+	python test.py --model_name $1 --checkpoint_path "checkpoints/$2.pth" --ILP --no_fixedL ${@:3}
+	echo ""
+}
+
+# regular tests
+run_test "Sampling" "samplingloss_10k" ${@:1}
 move_time_logs "samplingloss_10k"
 
-echo "python test.py --model_name Semantic --checkpoint_path 'checkpoints/semanticloss_500.pth'"
-python test.py --model_name Semantic --checkpoint_path 'checkpoints/semanticloss_500.pth'
-echo ""
+run_test "Sampling" "samplingloss_500" ${@:1}
+move_time_logs "samplingloss_500"
+
+run_test "Semantic" "semanticloss_500" ${@:1}
 move_time_logs "semanticloss_500"
 
-echo "python test.py --model_name Semantic --checkpoint_path 'checkpoints/semanticloss_10k.pth'"
-python test.py --model_name Semantic --checkpoint_path 'checkpoints/semanticloss_10k.pth'
-echo ""
+run_test "Semantic" "semanticloss_10k" ${@:1}
 move_time_logs "semanticloss_10k"
 
-echo "python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_500.pth'"
-python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_500.pth'
-echo ""
+run_test "Baseline" "baseline_500" ${@:1}
 move_time_logs "baseline_500"
 
-echo "python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_10k.pth'"
-python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_10k.pth'
-echo ""
+run_test "Baseline" "baseline_10k" ${@:1}
 move_time_logs "baseline_10k"
 
-echo "python test.py --model_name DigitLabel --checkpoint_path 'checkpoints/digitlbl_500.pth'"
-python test.py --model_name DigitLabel --checkpoint_path 'checkpoints/digitlbl_500.pth'
-echo ""
+run_test "DigitLabel" "digitlbl_500" ${@:1}
 move_time_logs "digitlbl_500"
 
-echo "python test.py --model_name DigitLabel --checkpoint_path 'checkpoints/digitlbl_10k.pth'"
-python test.py --model_name DigitLabel --checkpoint_path 'checkpoints/digitlbl_10k.pth'
-echo ""
+run_test "DigitLabel" "digitlbl_10k" ${@:1}
 move_time_logs "digitlbl_10k"
 
-echo "python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_500.pth'"
-python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_500.pth'
-echo ""
+run_test "Explicit" "explicit_500" ${@:1}
 move_time_logs "explicit_500"
 
-echo "python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_10k.pth'"
-python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_10k.pth'
-echo ""
+run_test "Explicit" "explicit_10k" ${@:1}
 move_time_logs "explicit_10k"
 
-echo "python test.py --model_name PrimalDual --checkpoint_path 'checkpoints/primaldual_500.pth'"
-python test.py --model_name PrimalDual --checkpoint_path 'checkpoints/primaldual_500.pth'
-echo ""
+run_test "PrimalDual" "primaldual_500" ${@:1}
 move_time_logs "primaldual_500"
 
-echo "python test.py --model_name PrimalDual --checkpoint_path 'checkpoints/primaldual_10k.pth'"
-python test.py --model_name PrimalDual --checkpoint_path 'checkpoints/primaldual_10k.pth'
-echo ""
+run_test "PrimalDual" "primaldual_10k" ${@:1}
 move_time_logs "primaldual_10k"
 
-echo "python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_500.pth' --ILP --no_fixedL"
-python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_500.pth' --ILP --no_fixedL
-echo ""
+# ILP
+run_test_ILP "Baseline" "baseline_500" ${@:1}
 move_time_logs "baseline_500_ILP"
 
-echo "python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_10k.pth' --ILP --no_fixedL"
-python test.py --model_name Baseline --checkpoint_path 'checkpoints/baseline_10k.pth' --ILP --no_fixedL
-echo ""
+run_test_ILP "Baseline" "baseline_10k" ${@:1}
 move_time_logs "baseline_10k_ILP"
 
-echo "python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_500.pth' --ILP --no_fixedL"
-python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_500.pth' --ILP --no_fixedL
-echo ""
+run_test_ILP "Explicit" "explicit_500" ${@:1}
 move_time_logs "explicit_500_ILP"
 
-echo "python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_10k.pth' --ILP --no_fixedL"
-python test.py --model_name Explicit --checkpoint_path 'checkpoints/explicit_10k.pth' --ILP --no_fixedL
-echo ""
+run_test_ILP "Explicit" "explicit_10k" ${@:1}
 move_time_logs "explicit_10k_ILP"
