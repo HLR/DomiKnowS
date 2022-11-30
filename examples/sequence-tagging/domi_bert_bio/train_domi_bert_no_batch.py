@@ -39,7 +39,7 @@ device = "cuda:6"
 # Data Reader
 ######################################################################
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-num_epochs = 10
+num_epochs = 5
 batch_size=1
 # data_dir='domi_bert_bio/data'
 data_dir='data'
@@ -85,18 +85,13 @@ def generate_data(data_iteration):
     for batch in data_iteration:
     # for batch in test_iter:
         b_input_ids, b_labels, b_input_mask, b_token_type_ids, b_label_masks = batch
-        # print('-------------->>>>>', b_input_ids, b_input_ids.size()) ### torch.Size([32, 128])
-        # print('-------------->>>>>', b_input_mask, b_input_mask.size()) ### torch.Size([32, 128])
-        # print('-------------->>>>>', b_token_type_ids, b_token_type_ids.size()) ### torch.Size([32, 128])
-        # print('-------------->>>>>', b_labels, b_labels.size()) ### torch.Size([32, 128])
-        # print('-------------->>>>>', b_label_masks, b_label_masks.size()) ### torch.Size([32, 128])
         # one_hot = F.one_hot(b_labels, num_classes=len(label_map))
         data.append({
             'text': b_input_ids.view(1, max_len),
-            'input_mask': b_input_mask.view(max_len),
-            'token_type_ids': b_token_type_ids.view(max_len),
+            'input_mask': b_input_mask.view(1, max_len),
+            'token_type_ids': b_token_type_ids.view(1, max_len),
             'labels': b_labels.view(max_len),
-            'label_masks': b_label_masks.view(max_len),
+            'label_masks': b_label_masks.view(1, max_len),
         })
     return data
 
@@ -113,39 +108,65 @@ from graph import graph, sentence, word, labels, sen_word_rel
 graph.detach()
 
 
-def forward_tensor(x):
+# def forward_tensor(x):
+#     words = []
+#     rels = []
+#     total = 0
+#     for sentence in x:
+#         words.extend(sentence)
+#         rels.append((total, total + len(sentence)))
+#         total += len(sentence)
+
+#     connection = torch.zeros(total, len(x))
+#     for sid, rel in enumerate(rels):
+#         connection[rel[0]: rel[1]][:] = 1
+
+#     words = torch.LongTensor(words)
+#     return connection, words
+
+def forward_tensor(x,x2,x3,x4):
     words = []
+    input_mask = []
+    token_type_ids = []
+    label_masks = []
+
     rels = []
     total = 0
-    for sentence in x:
-        words.extend(sentence)
-        rels.append((total, total + len(sentence)))
-        total += len(sentence)
+    for i in range(len(x)):
+        words.extend(x[i])
+        input_mask.extend(x2[i])
+        token_type_ids.extend(x3[i])
+        label_masks.extend(x4[i])
+        rels.append((total, total + len(x[i])))
+        total += len(x[i])
 
     connection = torch.zeros(total, len(x))
     for sid, rel in enumerate(rels):
         connection[rel[0]: rel[1]][:] = 1
 
     words = torch.LongTensor(words)
-    return connection, words
+    input_mask = torch.LongTensor(input_mask)
+    token_type_ids = torch.LongTensor(token_type_ids)
+    label_masks = torch.LongTensor(label_masks)
+    return connection, words, input_mask, token_type_ids, label_masks
 
 
 print('start the ReaderSensor!')
 
 sentence['text'] = ReaderSensor(keyword='text', device=device)
-# sentence['input_mask'] = ReaderSensor(keyword='input_mask')
-# sentence['token_type_ids'] = ReaderSensor(keyword='token_type_ids')
-# sentence['label_masks'] = ReaderSensor(keyword='label_masks')
+sentence['input_mask'] = ReaderSensor(keyword='input_mask')
+sentence['token_type_ids'] = ReaderSensor(keyword='token_type_ids')
+sentence['label_masks'] = ReaderSensor(keyword='label_masks')
 
 # word[sen_word_rel[0], 'text', 'input_mask', 'token_type_ids', 'label_masks'] = JointSensor(sentence['text'], sentence['input_mask'], sentence['token_type_ids'], sentence['label_masks'], forward=forward_tensor)
-word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor, device=device)
+word[sen_word_rel[0], 'text', 'input_mask', 'token_type_ids', 'label_masks'] = JointSensor(sentence['text'], sentence['input_mask'], sentence['token_type_ids'], sentence['label_masks'], forward=forward_tensor, device=device)
 
 word[labels] = ReaderSensor(keyword='labels',label=True, device=device)
 print('start the ModuleLearner!')
 
 model = BIO_Model.from_pretrained('./local_model_directory', num_labels=len(label_map)).to(device)
 # model = BIO_Model.from_pretrained('bert-base-cased', num_labels=len(label_map)).to(device)
-word[labels] = ModuleLearner('text', module=model, device=device)
+word[labels] = ModuleLearner('text', 'input_mask', 'token_type_ids', 'label_masks', module=model, device=device)
 
 ######################################################################
 # ILP OR PD OR SAMPLELOSS
@@ -180,16 +201,15 @@ print('finish Graph Declaration')
 
 program.train(train_examples, train_epoch_num=num_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
 
-program.save("domi_ilp_10")
+program.save("domi_ilp_5_bert")
 # program.save("domi_pd_10")
 # program.save("domi_sample_loss_10")
-print('model saved!!!')
 
 ######################################################################
 # Evaluate the model
 ######################################################################
 
-program.load("domi_ilp_10")
+program.load("domi_ilp_5_bert")
 # program.load("domi_pd_10")
 # program.load("domi_sample_loss_10")
 
