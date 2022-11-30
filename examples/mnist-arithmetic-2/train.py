@@ -76,7 +76,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
+    for i, node in tqdm(enumerate(program.populate(reader, device=device)), total=total, position=0, leave=True):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
