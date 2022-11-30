@@ -10,6 +10,7 @@ from program_declaration import program_declaration
 import torch
 import argparse
 import numpy as np
+import random
 from tqdm import tqdm
 from regr.graph import Graph, Concept, Relation
 
@@ -128,6 +129,12 @@ def eval(program, testing_set, cur_device, args, filename=""):
 def main(args):
     from graph_senetences import answer_class
 
+    SEED = 2022
+    np.random.seed(SEED)
+    random.seed(SEED)
+    # pl.seed_everything(SEED)
+    torch.manual_seed(SEED)
+
     # Set the cuda number we want to use
     cuda_number = args.cuda_number
     if cuda_number == -1:
@@ -167,8 +174,8 @@ def main(args):
                         Optim=lambda params: torch.optim.AdamW(params, lr=args.learning_rate), device=cur_device)
 
     # Loading train parameter to evaluation program
-    train_program.save("Models.pth")
-    eval_program.load("Models.pth")
+    train_program.save(args.model_name + ".pth")
+    eval_program.load(args.model_name + ".pth")
     eval(eval_program, test_dataset, cur_device, args, "ALL")
     eval(eval_program, augment_dataset_dev, cur_device, args, "Augmented_dev")
     eval(eval_program, augment_dataset_test, cur_device, args, "Augmented")
@@ -246,10 +253,10 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='learning_rate', default=1e-5, help='learning rate of the adamW optimiser',
                         type=float)
 
-    parser.add_argument('--training_sample', dest='training_sample', default=600,
+    parser.add_argument('--training_sample', dest='training_sample', default=600000,
                         help="number of data to train model", type=int)
 
-    parser.add_argument('--testing_sample', dest='testing_sample', default=600, help="number of data to test model",
+    parser.add_argument('--testing_sample', dest='testing_sample', default=600000, help="number of data to test model",
                         type=int)
 
     parser.add_argument('--batch_size', dest='batch_size', default=2, help="batch size of sample", type=int)
@@ -266,5 +273,7 @@ if __name__ == "__main__":
                         type=float)
     parser.add_argument('--sampling_size', dest='sampling_size', default=100, help="Using IML model or not",
                         type=int)
+    parser.add_argument('--model_name', dest='model_name', default="Models", help="Using IML model or not",
+                        type=str)
     args = parser.parse_args()
     main(args)

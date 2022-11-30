@@ -79,6 +79,8 @@ def test_graph_coloring_main():
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 1
             else:
                 assert child_node.getAttribute(firestationCity, 'ILP').item() == 0
+                
+    verifyResult = datanode.verifyResultsLC()
 
 
 if __name__ == '__main__':
