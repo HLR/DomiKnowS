@@ -18,22 +18,7 @@ with Graph('sequence_tagging') as graph:
     labels = word(name="labels", ConceptClass=EnumConcept,
                      values=['O', 'I_PER', 'I_ORG', 'I_LOC', 'I_MISC', 'B_MISC', 'B_ORG', 'B_LOC', 'B_PER'])
 
-    ifL(
-      word('x'), 
-      exactL(labels.O, labels.I_PER, labels.I_ORG, labels.I_MISC, labels.B_MISC, labels.B_ORG, labels.B_LOC, labels.B_PER)
-    )
-   #  b_loc = word(name='b_loc')
-   #  i_loc = word(name='i_loc')
-   #  b_per = word(name='b_per')
-   #  i_per = word(name='i_per')
-   #  b_org = word(name='b_org')
-   #  i_org = word(name='i_org')
-   #  b_misc = word(name='b_misc')
-   #  i_misc = word(name='i_misc')
-   #  o = word(name='o')
-   #  pad = word(name='pad')
-   #  bos = word(name='bos')
-    ## ['<pad>', '<bos>', '<eos>', 'O', 'I-PER', 'I-ORG', 'I-LOC', 'I-MISC', 'B-MISC', 'B-ORG', 'B-LOC']
+    exactL(labels.O, labels.I_PER, labels.I_ORG, labels.I_MISC, labels.B_MISC, labels.B_ORG, labels.B_LOC, labels.B_PER)
 
     ### BIO constraints
 
@@ -82,19 +67,5 @@ with Graph('sequence_tagging') as graph:
         ),
         active = True
     )
-
-
-
-
-
-    ### bio constraints end
-    # ifL(
-    #     before('x'), 
-    #     ifL(
-    #        b_loc(path=('x', b_prefix)),
-    #        notL(i_loc(path=('x', b_prefix))),
-    #         ),
-    #     active = True
-    # )
 
 graph.detach()
