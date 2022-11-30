@@ -49,8 +49,13 @@ def get_pred_from_node(node, suffix):
     digit0_node = node.findDatanodes(select='image')[0]
     digit1_node = node.findDatanodes(select='image')[1]
 
-    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+    if args.cuda:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+    else:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -85,9 +90,14 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
 
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        if args.cuda:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+        else:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
