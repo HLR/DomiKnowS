@@ -17,8 +17,8 @@ function run_test_ILP() {
 }
 
 function run_mini_train() {
-	echo "python train.py --model_name $1 --num_train 500 ${@:2}"
-	python train.py --model_name $1 --num_train 500 ${@:2}
+	echo "python train.py --model_name $1 --num_train 500 --epochs 1 ${@:2}"
+	python train.py --model_name $1 --num_train 500 --epochs 1 ${@:2}
 	echo ""
 }
 
