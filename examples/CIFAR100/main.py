@@ -48,7 +48,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
-    parser.add_argument('--solver', help='the model solver', default='sam')
+    parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to use ilp', type=bool)
+    parser.add_argument('--pd', dest='primaldual', default=False,help='whether or not to use primaldual constriant learning', type=bool)
+    parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
+    parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning', type=bool)
+    parser.add_argument('--test', dest='test', default=False, help='dont train just test', type=bool)
+
     parser.add_argument('--samplenum', dest='samplenum', default=5000,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=10, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
@@ -86,29 +91,37 @@ def main():
     image[category] = ModuleLearner('emb', module=nn.Linear(1000, 20))
     image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
     f = open(str(args.solver)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
-    if args.solver=="poi":
-        print("POI")
-        program = SolverPOIProgram(graph,inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss())\
-                               ,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},f=f)
-    elif args.solver=="primal_dual":
+    print("POI")
+    program = SolverPOIProgram(graph,inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss())\
+                           ,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},f=f)
+    if args.ilp:
+        print("ILP")
+        program = SolverPOIProgram(graph, inferTypes=[ 'local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
 
+    elif args.primaldual:
         print("PrimalDualProgram")
+        program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['local/argmax'],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
+    elif args.primaldual and args.ilp:
+
+        print("PrimalDualProgram ILP")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                            'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
-    elif args.solver=="sam":
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
+    elif args.sam:
 
         print("sam")
-        program = SampleLossProgram(graph, SolverModel,inferTypes=['ILP','local/argmax'],
-        metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
+        program = SampleLossProgram(graph, SolverModel,inferTypes=['local/argmax'],metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=False,sampleSize=250,sampleGlobalLoss=True,beta=args.beta,device=device)
+    elif args.sam and args.ilp:
 
-    elif args.solver=="iml":
-
-        print("iml")
-        program = IMLProgram(graph, inferTypes=['ILP', 'local/argmax'], \
-                             loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),metric={'ILP': PRF1Tracker(DatanodeCMMetric()), \
-                                     'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+        print("sam ILP")
+        program = SampleLossProgram(graph, SolverModel, inferTypes=['ILP', 'local/argmax'],
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=250,
+                                    sampleGlobalLoss=False, beta=args.beta, device=device)
 
     train_reader,test_reader=create_readers(train_num=args.samplenum)
     if len(test_reader) > len(train_reader):
