@@ -29,10 +29,10 @@ parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to 
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
-parser.add_argument('--test', dest='test', default=False, help='dont train just test',type=bool)
+parser.add_argument('--test', dest='test', default=True, help='dont train just test',type=bool)
 parser.add_argument('--simple_model', dest='simple_model', default=False, help='use a simple baseline',type=bool)
 
-parser.add_argument('--samplenum', dest='samplenum', default=800, help='number of samples to train the model on',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=99999, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=30, help='batch size for neural network training',type=int)
 parser.add_argument('--beta', dest='beta', default=0.005, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
@@ -133,6 +133,7 @@ if args.SAM and args.ilp:
 
 for i in range(args.cur_epoch):
     if args.test:
+        i=2
         program.load(args.namesave + "_" + str(i))
         program.test(mnist_testset_reader,device=device)
 
@@ -163,8 +164,10 @@ for i in range(args.cur_epoch):
         verifyResult = datanode.verifyResultsLC()
         verifyResultILP = datanode.verifyResultsLC()
         verify_vector = np.sum([verifyResultILP[lc]['verifyList'] for lc in verifyResultILP], axis=0)
-        ac_ += np.sum(verify_vector == 45)
+        ac_ += np.sum(verify_vector)
         t_ += verify_vector.shape[0]
 
     print("constraint accuracy: ",ac_ / t_ * 100)
+    if args.test:
+        break
 
