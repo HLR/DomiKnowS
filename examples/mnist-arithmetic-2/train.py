@@ -26,8 +26,9 @@ import config
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
 parser.add_argument('--num_train', type=int, default=10000)
-parser.add_argument('--log', default=False, action='store_true')
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
 parser.add_argument('--cuda', default=False, action='store_true')
+parser.add_argument('--epochs', type=int, default=100)
 
 args = parser.parse_args()
 
@@ -35,11 +36,12 @@ print(args)
 
 model_name = args.model_name
 num_train = args.num_train
-no_log = not args.log
 device = 'cuda' if args.cuda else 'cpu'
 
-if no_log:
+if args.log == 'None':
     setProductionLogMode(no_UseTimeLog=True)
+elif args.log == 'TimeOnly':
+    setProductionLogMode(no_UseTimeLog=False)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers(num_train)
 
@@ -48,8 +50,13 @@ def get_pred_from_node(node, suffix):
     digit0_node = node.findDatanodes(select='image')[0]
     digit1_node = node.findDatanodes(select='image')[1]
 
-    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+    if args.cuda:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+    else:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -70,7 +77,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
+    for i, node in tqdm(enumerate(program.populate(reader, device=device)), total=total, position=0, leave=True):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
@@ -84,9 +91,14 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
 
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        if args.cuda:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+        else:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -264,9 +276,9 @@ if model_name == 'Semantic':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -277,9 +289,9 @@ elif model_name == 'Sampling':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -290,9 +302,9 @@ elif model_name == 'PrimalDual':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True,
                   c_warmup_iters=0)
 
@@ -303,9 +315,9 @@ elif model_name == 'DigitLabel':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Explicit':
@@ -315,9 +327,9 @@ elif model_name == 'Explicit':
 
 
     program.train(trainloader,
-                  train_epoch_num=1000,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Baseline' and num_train == 10000:
@@ -327,9 +339,9 @@ elif model_name == 'Baseline' and num_train == 10000:
 
 
     program.train(trainloader,
-                  train_epoch_num=config.epochs,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 elif model_name == 'Baseline' and num_train == 500:
@@ -339,9 +351,9 @@ elif model_name == 'Baseline' and num_train == 500:
 
 
     program.train(trainloader,
-                  train_epoch_num=config.epochs,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
-                  device='auto',
+                  device=device,
                   test_every_epoch=True)
 
 

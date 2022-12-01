@@ -21,12 +21,19 @@ from regr.program.loss import NBCrossEntropyLoss
 from model_domi import RNNTagger
 from data_reader_no_torchtext import load_examples, word_mapping, char_mapping, tag_mapping, lower_case
 
-# device = "cuda:0"
-device = "cpu"
+from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.lossprogram import SampleLossProgram
+from regr.program.model.pytorch import SolverModel
+
+device = "cuda:5"
+# device = "cpu"
 
 ######################################################################
 # Data Reader
 ######################################################################
+# train_sentences = load_examples('bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
+# dev_sentences = load_examples('bio_data/testa.txt', True)
+# test_sentences = load_examples('bio_data/testb.txt', True)
 train_sentences = load_examples('../bio_data/train.txt', True) ### True: Replace every digit in a string by a zero.
 dev_sentences = load_examples('../bio_data/testa.txt', True)
 test_sentences = load_examples('../bio_data/testb.txt', True)
@@ -75,6 +82,26 @@ print(test_examples[0])
 from graph import graph, sentence, word, labels, sen_word_rel
 graph.detach()
 
+# def forward_tensor(x):
+#     words = []
+#     rels = []
+#     total = 0
+#     for sentence in x:
+#         words.extend(sentence)
+#         rels.append((total, total + len(sentence)))
+#         total += len(sentence)
+#         # print(words.extend(sentence))
+#         # print(rels)
+#         # print(total)
+#         # print('<><><>'*50)
+
+#     connection = torch.zeros(len(x), total)
+#     for sid, rel in enumerate(rels):
+#         connection[sid][rel[0]: rel[1]] = 1
+
+#     words = torch.LongTensor(words)
+#     return connection, words
+
 def forward_tensor(x):
     words = []
     rels = []
@@ -83,84 +110,119 @@ def forward_tensor(x):
         words.extend(sentence)
         rels.append((total, total + len(sentence)))
         total += len(sentence)
-        # print(words.extend(sentence))
-        # print(rels)
-        # print(total)
-        # print('<><><>'*50)
 
-    connection = torch.zeros(len(x), total)
+    connection = torch.zeros(total, len(x))
     for sid, rel in enumerate(rels):
-        connection[sid][rel[0]: rel[1]] = 1
+        connection[rel[0]: rel[1]][:] = 1
 
     words = torch.LongTensor(words)
-    # print('----------------->:', connection.shape, connection)
-    # print('=================>:', len(words), words)
-    # print('<><><>'*50)
     return connection, words
 
 print('start the ReaderSensor!')
 
-sentence['text'] = ReaderSensor(keyword='text')
+sentence['text'] = ReaderSensor(keyword='text', device=device)
 
-# word[b_loc] = ReaderSensor(keyword='b_loc',label=True, device=device)
-# word[i_loc] = ReaderSensor(keyword='i_loc',label=True, device=device)
-# word[b_per] = ReaderSensor(keyword='b_per',label=True, device=device)
-# word[i_per] = ReaderSensor(keyword='i_per',label=True, device=device)
-# word[b_org] = ReaderSensor(keyword='b_org',label=True, device=device)
-# word[i_org] = ReaderSensor(keyword='i_org',label=True, device=device)
-# word[b_misc] = ReaderSensor(keyword='b_misc',label=True, device=device)
-# word[i_misc] = ReaderSensor(keyword='i_misc',label=True, device=device)
-# word[o] = ReaderSensor(keyword='o',label=True, device=device)
-# word[pad] = ReaderSensor(keyword='pad',label=True, device=device)
-# word[bos] = ReaderSensor(keyword='bos',label=True, device=device)
+word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor, device=device) ## what is the meaning
+
 word[labels] = ReaderSensor(keyword='labels',label=True, device=device)
 
-word[sen_word_rel[0], 'text'] = JointSensor(sentence['text'], forward=forward_tensor) ## what is the meaning
-
-# tmp = torch.nn.Parameter(glove.vectors, requires_grad=False) ### torch.Size([2196017, 300])
-
 print('start the ModuleLearner!')
-# word[emb] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[b_loc] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[i_loc] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[b_per] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[i_per] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[b_org] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[i_org] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[b_misc] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[i_misc] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[o] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[pad] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
-# word[bos] = ModuleLearner('emb', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 word[labels] = ModuleLearner('text', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 
-### why the above ModuleLearners are so slow
 
-# Creating the program to create model
-program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
+## Creating the program to create model
+program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], poi=(sentence, word),
                         loss=MacroAverageTracker(NBCrossEntropyLoss()),
                         metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                 'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
+# program = PrimalDualProgram(graph, SolverModel, poi=(sentence, word),inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=1.0)
+
+
+# program = SampleLossProgram(
+#     graph, SolverModel,
+#     poi=(sentence, word),
+#     inferTypes=['local/argmax'],
+#     sample = True,
+#     sampleSize=2,
+#     sampleGlobalLoss = True
+#     )
+
 print('finish Graph Declaration')
+
+######################################################################
+# save model
+######################################################################
+
+# def compute_scores(item, criteria="P"):
+#         entities = ["location", "people", "organization", "other"]
+#         instances = {"location": 937, "people": 774, "organization": 512, "other": 610, "work_for": 71, "located_in": 75, "live_in": 103, 
+#                      "orgbase_on": 97, "kill": 55} ### ???
+#         sum_entity = 0
+#         sum_relations = 0
+#         precision_entity = 0
+#         precision_relations = 0
+#         normal_precision_entity = 0
+#         normal_precision_relations = 0
+#         sum_all = 0
+#         precision_all = 0
+#         normal_precision_all = 0
+#         for key in entities:
+#             sum_entity += float(instances[key])
+#             precision_entity += float(instances[key]) * float(item[key][criteria])
+#             normal_precision_entity += float(item[key][criteria])
+
+#         sum_all = sum_relations + sum_entity
+#         precision_all = precision_entity + precision_relations
+#         normal_precision_all = normal_precision_relations + normal_precision_entity
+
+#         outputs = {}
+        
+#         if criteria == "P":
+#             outputs["micro_" + str(criteria) + "_entities"] = precision_entity / sum_entity
+#             outputs["micro_" + str(criteria) + "_relations"] = precision_relations / sum_relations
+#             outputs["micro_" + str(criteria) + "_all"] = precision_all / sum_all
+
+#         outputs["macro_" + str(criteria) + "_entities"] = normal_precision_entity / len(entities)
+        
+#         return outputs
+
+# def save_best(program, epoch=1, best_epoch=-1, best_macro_f1=0):
+#         import logging
+#         logger = logging.getLogger(__name__)
+#         metrics = program.model.metric['argmax'].value()
+#         results = compute_scores(metrics, criteria="F1")
+#         score = results["macro_F1_all"]
+#         if score > best_macro_f1:
+#             logger.info(f'New Best Score {score} achieved at Epoch {epoch}.')
+#             best_epoch = epoch
+#             best_macro_f1 = score
+#             if args.number == 1:
+#                 program.save(f'saves/conll04-bert-{split_id}-best-macro-f1.pt')
+#             else:
+#                 program.save(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
+#         return epoch + 1, best_epoch, best_macro_f1
 
 ######################################################################
 # Train the model
 ######################################################################
-n_epochs = 10
+n_epochs = 15
 # batch_size = 1024
 # n_batches = np.ceil(len(train_examples) / batch_size)
 
-# program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
 
-# program.save("domi_ilp_epoch_10")
-# print('model saved!!!')
+program.save("domi_ilp_epoch_20")
+# program.save("domi_pd_epoch_1")
+# program.save("domi_sampleloss_epoch_1")
 
 ######################################################################
 # Evaluate the model
 ######################################################################
 
-program.load("domi_ilp_epoch_10") # in case we want to load the model instead of training
+program.load("domi_ilp_epoch_20")
+# program.load("domi_pd_epoch_1")
+# program.load("domi_sampleloss_epoch_1")
 
 
 from regr.utils import setProductionLogMode
@@ -172,5 +234,4 @@ productionMode = False
 
 import logging
 logging.basicConfig(level=logging.INFO)
-# program.test(test_examples, device=device)
 program.test(valid_examples, device=device)

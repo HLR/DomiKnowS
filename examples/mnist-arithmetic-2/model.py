@@ -185,7 +185,7 @@ def print_and_output(x, f=lambda x: x.shape, do_print=False):
 class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
 
 
-def build_program(sum_setting=None, digit_labels=False, device='cpu'):
+def build_program(sum_setting=None, digit_labels=False, device='cpu', use_fixedL=True, test=False):
     image['pixels'] = ReaderSensor(keyword='pixels')
 
     def make_batch(pixel):
@@ -211,22 +211,24 @@ def build_program(sum_setting=None, digit_labels=False, device='cpu'):
     if digit_labels:
         image[digit] = FunctionalSensor('digit_label', forward=lambda x: x, label=True)
 
-    if sum_setting == 'explicit':
-        image_pair[s] = ModuleLearner(image['logits'], module=SumLayerExplicit(device=device))
-    elif sum_setting == 'baseline':
-        image_pair[s] = ModuleLearner(image['logits'], module=SumLayer())
+    if use_fixedL and test:
+        def manual_fixedL(s):
+            res = torch.zeros((1, 19))
+            res[0, s] = 1
+            return res
+
+        image_pair[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
     else:
-        image_pair[s] = FunctionalSensor(forward=lambda: torch.ones(1, config.summationRange))  # dummy values to populate
+        if sum_setting == 'explicit':
+            image_pair[s] = ModuleLearner(image['logits'], module=SumLayerExplicit(device=device))
+        elif sum_setting == 'baseline':
+            image_pair[s] = ModuleLearner(image['logits'], module=SumLayer())
+        else:
+             image_pair[s] = FunctionalSensor(forward=lambda: torch.ones(1, config.summationRange))  # dummy values to populate
 
-        #def manual_fixedL(s):
-        #    res = torch.zeros((1, 19))
-        #    res[0, s] = 1
-        #    return res
-
-        #image_pair[s] = FunctionalSensor('summation_label', forward=manual_fixedL)
-
-    image_pair[s] = ReaderSensor(keyword='summation', label=True)
-    image_pair['summationEquality'] = FunctionalSensor(forward=lambda: torch.ones(1,1))
+    if use_fixedL:
+        image_pair[s] = ReaderSensor(keyword='summation', label=True)
+        image_pair['summationEquality'] = FunctionalSensor(forward=lambda: torch.ones(1,1))
 
     return graph, image, image_pair, image_batch
 

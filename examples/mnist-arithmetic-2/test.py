@@ -27,9 +27,10 @@ import config
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
 parser.add_argument('--checkpoint_path', type=str, required=True)
-parser.add_argument('--log', default=False, action='store_true')
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
 parser.add_argument('--cuda', default=False, action='store_true')
 parser.add_argument('--ILP', default=False, action='store_true')
+parser.add_argument('--no_fixedL', default=False, action='store_true')
 
 args = parser.parse_args()
 
@@ -37,11 +38,12 @@ print(args)
 
 model_name = args.model_name
 checkpoint_path = args.checkpoint_path
-no_log = not args.log
 device = 'cuda' if args.cuda else 'cpu'
 
-if no_log:
+if args.log == 'None':
     setProductionLogMode(no_UseTimeLog=True)
+elif args.log == 'TimeOnly':
+    setProductionLogMode(no_UseTimeLog=False)
 
 trainloader, trainloader_mini, validloader, testloader = get_readers(0)
 
@@ -53,16 +55,21 @@ def get_pred_from_node(node, suffix):
 
     #print(digit0_node.getAttributes())
 
-    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
-    summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
+    if args.cuda:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+        summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}')).cpu()
+    else:
+        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+        summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     return digit0_pred, digit1_pred, summation_pred
 
 
 #program.populate(reader, device='auto')
 
-def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax']):
+def get_classification_report(program, reader, total=None, verbose=False, infer_suffixes=['/local/argmax'], print_incorrect=False):
     digits_results = {
         'label': []
     }
@@ -79,7 +86,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader)), total=total, position=0, leave=True):
+    for i, node in enumerate(program.populate(reader, device=device)):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
@@ -93,9 +100,23 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
 
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        if args.cuda:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+        else:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label'))
+
+        if print_incorrect and (digits_results['/local/argmax'][-1] != digits_results['label'][-1] or digits_results['/local/argmax'][-2] != digits_results['label'][-2]):
+            for suffix in infer_suffixes:
+                print("%s: %d + %d = %d" % (suffix,
+                                        digits_results[suffix][-1],
+                                        digits_results[suffix][-2],
+                                        summation_results[suffix][-1]))
+
+            print()
 
         for suffix in infer_suffixes:
             verifyResult = node.verifyResultsLC(key=suffix)
@@ -115,6 +136,9 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                     satisfied_overall[suffix] = []
 
                 satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
+                #pred_digit_sum = digits_results[suffix][-1] + digits_results[suffix][-2]
+                #label_sum = summation_results['label'][-1]
+                #satisfied_overall[suffix].append(1 if pred_digit_sum == label_sum else 0)
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -146,7 +170,7 @@ if model_name == 'Explicit':
 elif model_name == 'Baseline':
     sum_setting = 'baseline'
 
-graph, image, image_pair, image_batch = build_program(device=device, sum_setting=sum_setting, digit_labels=use_digit_labels)
+graph, image, image_pair, image_batch = build_program(device=device, sum_setting=sum_setting, digit_labels=use_digit_labels, use_fixedL=not args.no_fixedL, test=True)
 
 
 inferTypes = ['local/argmax']
@@ -163,12 +187,11 @@ model_path = checkpoint_path
 
 state_dict = torch.load(model_path)
 
-'''if model_name == 'baseline':
-    # remove summation layer
-    del state_dict['global/images/<summations>/modulelearner-1.lin1.weight']
-    del state_dict['global/images/<summations>/modulelearner-1.lin1.bias']
-    del state_dict['global/images/<summations>/modulelearner-1.lin2.weight']
-    del state_dict['global/images/<summations>/modulelearner-1.lin2.bias']'''
+if model_name == 'Baseline' and not args.no_fixedL:
+    remove_keys = ["global/pair/<summations>/modulelearner-1.lin1.weight", "global/pair/<summations>/modulelearner-1.lin1.bias", "global/pair/<summations>/modulelearner-1.lin2.weight", "global/pair/<summations>/modulelearner-1.lin2.bias"]
+
+    for k in remove_keys:
+        del state_dict[k]
 
 program.model.load_state_dict(state_dict)
 
@@ -180,8 +203,8 @@ if args.ILP:
 
 # verify validation accuracy
 print("validation evaluation")
-get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=classification_suffixes)
+get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=classification_suffixes, print_incorrect=False)
 
 # get test accuracy
 print("test evaluation")
-get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=classification_suffixes)
+get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=classification_suffixes, print_incorrect=False)

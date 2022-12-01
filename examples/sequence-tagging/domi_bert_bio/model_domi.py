@@ -6,22 +6,21 @@ from transformers import BertForTokenClassification
 class BIO_Model(BertForTokenClassification):
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, label_masks=None,
                 position_ids=None, head_mask=None, labels=None):
-        # print('input_ids:', input_ids.size())
-        # print('attention_mask:', attention_mask.size())
-        # print('token_type_ids:', token_type_ids.size())
-        # print('label_masks:', label_masks.size())
         outputs = self.bert(input_ids.view(1, input_ids.size(0)),
-                            attention_mask=attention_mask,
-                            token_type_ids=token_type_ids,
+                            attention_mask=attention_mask.view(1, attention_mask.size(0)),
+                            token_type_ids=token_type_ids.view(1, token_type_ids.size(0)),
                             position_ids=position_ids,
                             head_mask=head_mask)
 
         sequence_output = outputs[0]  # (b, MAX_LEN, 768)
 
-        # token_reprs = [embedding[mask] for mask, embedding in zip(label_masks, sequence_output)]
-        # token_reprs = pad_sequence(sequences=token_reprs, batch_first=True,
-        #                            padding_value=-1)  # (b, local_max_len, 768)
-        # sequence_output = self.dropout(token_reprs)
+        label_masks = label_masks.view(1, label_masks.size(0))
+
+        token_reprs = [embedding[mask] for mask, embedding in zip(label_masks, sequence_output)]
+        token_reprs = pad_sequence(sequences=token_reprs, batch_first=True,
+                                   padding_value=-1)  # (b, local_max_len, 768)
+        sequence_output = self.dropout(token_reprs)
+
         logits = self.classifier(sequence_output)  # (b, local_max_len, num_labels)
 
         # outputs = (logits,)
