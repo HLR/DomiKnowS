@@ -117,7 +117,7 @@ def main():
     if args.sam:
 
         print("sam")
-        program = SampleLossProgram(graph, SolverModel,inferTypes=['local/argmax'],metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=False,sampleSize=250,sampleGlobalLoss=True,beta=args.beta,device=device)
+        program = SampleLossProgram(graph, SolverModel,inferTypes=['local/argmax'],metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=250,sampleGlobalLoss=False,beta=args.beta,device=device)
     if args.sam and args.ilp:
 
         print("sam ILP")
