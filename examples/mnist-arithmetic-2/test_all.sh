@@ -16,6 +16,31 @@ function run_test_ILP() {
 	echo ""
 }
 
+function run_mini_train() {
+	echo "python train.py --model_name $1 --num_train 100 ${@:2}"
+	python python train.py --model_name $1 --num_train 100 ${@:2}
+	echo ""
+}
+
+# mini training
+run_mini_train "Sampling" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
+run_mini_train "Semantic" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
+run_mini_train "Baseline" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
+run_mini_train "DigitLabel" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
+run_mini_train "Explicit" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
+run_mini_train "PrimalDual" ${@:1}
+move_time_logs "train_samplingloss_10k"
+
 # regular tests
 run_test "Sampling" "samplingloss_10k" ${@:1}
 move_time_logs "samplingloss_10k"
