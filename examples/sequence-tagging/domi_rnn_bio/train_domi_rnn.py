@@ -6,6 +6,13 @@ sys.path.append("../")
 sys.path.append("../../")
 sys.path.append("../../../")
 
+######################################################################
+# run the code:
+# python train_domi_rnn.py -ilp True -cuda 1
+# python train_domi_rnn.py -sample True -cuda 2
+# python train_domi_rnn.py -sampleilp True -cuda 3
+######################################################################
+
 import torch
 from torch import nn
 import numpy as np
@@ -25,7 +32,21 @@ from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.lossprogram import SampleLossProgram
 from regr.program.model.pytorch import SolverModel
 
-device = "cuda:5"
+import time
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('-ilp', dest='ilp', default=False, help='use ILP or not', type=bool)
+parser.add_argument('-pd', dest='pd', default=False,help='use primaldual or not', type=bool)
+parser.add_argument('-sample', dest='sample', default=False, help='use sampling loss or not', type=bool)
+parser.add_argument('-pdilp', dest='pdilp', default=False, help='use sampling loss or not', type=bool)
+parser.add_argument('-sampleilp', dest='sampleilp', default=False, help='use sampling loss or not', type=bool)
+parser.add_argument('-cuda', dest='cuda', default=0, help='cuda number', type=int)
+args = parser.parse_args()
+
+
+
+device = "cuda:"+str(args.cuda)
 # device = "cpu"
 
 ######################################################################
@@ -130,25 +151,152 @@ print('start the ModuleLearner!')
 word[labels] = ModuleLearner('text', module=RNNTagger(glove, tag_vocab, emb_dim=300, rnn_size=128, update_pretrained=False), device=device)
 
 
-## Creating the program to create model
-program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], poi=(sentence, word),
-                        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                        metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
-                                'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+######################################################################
+# ILP or PD or SAMPLELOSS or PD+ILP or SAMPLELOSS+ILP
+######################################################################
 
-# program = PrimalDualProgram(graph, SolverModel, poi=(sentence, word),inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=1.0)
+if args.ilp:
+    print('run ilp program')
+    program = SolverPOIProgram(graph, poi=(sentence, word), inferTypes=['ILP', 'local/argmax'],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    device=device)
 
+if args.pd:
+    print('run PrimalDual program')
+    program = PrimalDualProgram(graph, SolverModel, poi=(sentence, word), inferTypes=['local/argmax'],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    beta=1.0,device=device)
 
-# program = SampleLossProgram(
-#     graph, SolverModel,
-#     poi=(sentence, word),
-#     inferTypes=['local/argmax'],
-#     sample = True,
-#     sampleSize=2,
-#     sampleGlobalLoss = True
-#     )
+if args.sample:
+    print('run sampling loss program')
+    program = SampleLossProgram(graph, SolverModel, poi=(sentence, word), inferTypes=['local/argmax'],
+                                    sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    device=device)
+
+if args.pdilp:
+    print('run PrimalDual + ILP program')
+    program = PrimalDualProgram(graph, SolverModel, poi=(sentence, word), inferTypes=['ILP', 'local/argmax'],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    beta=1.0, device=device)
+
+if args.sampleilp:
+    print('run sampling loss + ILP program')
+    program = SampleLossProgram(graph, SolverModel, poi=(sentence, word), inferTypes=['ILP', 'local/argmax'],
+                                    sample=True, sampleSize=100, sampleGlobalLoss=False,
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()), 
+                                    metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    beta=1.0, device=device)
+
 
 print('finish Graph Declaration')
+
+######################################################################
+# Train the model
+######################################################################
+n_epochs = 20
+
+# for i in range(num_epochs):
+#     program.train(train_examples, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+#     program.save("domi_"+str(i))
+
+train_time_start = time.time()
+program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+train_time_end = time.time()  
+print('training time execution time: ', (train_time_end - train_time_start)*1000, ' milliseconds')
+
+if args.ilp:
+    program.save("saved_models/domi_ilp_epoch_"+str(n_epochs)+'.pt')
+if args.pd:
+    program.save("saved_models/domi_pd_epoch_"+str(n_epochs)+'.pt')
+if args.sample:
+    program.save("saved_models/domi_sampleloss_epoch_"+str(n_epochs)+'.pt')
+if args.pdilp:
+    program.save("saved_models/domi_pd+ilp_epoch_"+str(n_epochs)+'.pt')
+if args.sampleilp:
+    program.save("saved_models/domi_sampleloss+ilp_epoch_"+str(n_epochs)+'.pt')
+
+######################################################################
+# Evaluate the model
+######################################################################
+
+if args.ilp:
+    program.load("saved_models/domi_ilp_epoch_"+str(n_epochs)+'.pt')
+if args.pd:
+    program.load("saved_models/domi_pd_epoch_"+str(n_epochs)+'.pt')
+if args.sample:
+    program.load("saved_models/domi_sampleloss_epoch_"+str(n_epochs)+'.pt')
+if args.pdilp:
+    program.load("saved_models/domi_pd+ilp_epoch_"+str(n_epochs)+'.pt')
+if args.sampleilp:
+    program.load("saved_models/domi_sampleloss+ilp_epoch_"+str(n_epochs)+'.pt')
+
+
+from regr.utils import setProductionLogMode
+productionMode = False
+# if productionMode:
+#     setProductionLogMode(no_UseTimeLog=False)
+import logging
+logging.basicConfig(level=logging.INFO)
+
+test_time_start = time.time()
+program.test(valid_examples, device=device)
+test_time_end= time.time()  
+print('test time execution time: ', (test_time_end - test_time_start)*1000, ' milliseconds')
+
+
+# def compute_scores(item, criteria="P"):
+#         entities = ["location", "people", "organization", "other"]
+#         instances = {"location": 937, "people": 774, "organization": 512, "other": 610, "work_for": 71, "located_in": 75, "live_in": 103, 
+#                      "orgbase_on": 97, "kill": 55} ### ???
+#         sum_entity = 0
+#         sum_relations = 0
+#         precision_entity = 0
+#         precision_relations = 0
+#         normal_precision_entity = 0
+#         normal_precision_relations = 0
+#         sum_all = 0
+#         precision_all = 0
+#         normal_precision_all = 0
+#         for key in entities:
+#             sum_entity += float(instances[key])
+#             precision_entity += float(instances[key]) * float(item[key][criteria])
+#             normal_precision_entity += float(item[key][criteria])
+
+#         sum_all = sum_relations + sum_entity
+#         precision_all = precision_entity + precision_relations
+#         normal_precision_all = normal_precision_relations + normal_precision_entity
+
+#         outputs = {}
+        
+#         if criteria == "P":
+#             outputs["micro_" + str(criteria) + "_entities"] = precision_entity / sum_entity
+#             outputs["micro_" + str(criteria) + "_relations"] = precision_relations / sum_relations
+#             outputs["micro_" + str(criteria) + "_all"] = precision_all / sum_all
+
+#         outputs["macro_" + str(criteria) + "_entities"] = normal_precision_entity / len(entities)
+        
+#         return outputs
+
+
+
+
+# metrics = program.model.metric['argmax'].value()
+# results = compute_scores(metrics, criteria="F1")
+# score = results["macro_F1_all"]
+
+
+
+
+
+
 
 ######################################################################
 # save model
@@ -202,36 +350,3 @@ print('finish Graph Declaration')
 #             else:
 #                 program.save(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
 #         return epoch + 1, best_epoch, best_macro_f1
-
-######################################################################
-# Train the model
-######################################################################
-n_epochs = 15
-# batch_size = 1024
-# n_batches = np.ceil(len(train_examples) / batch_size)
-
-program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
-
-program.save("domi_ilp_epoch_20")
-# program.save("domi_pd_epoch_1")
-# program.save("domi_sampleloss_epoch_1")
-
-######################################################################
-# Evaluate the model
-######################################################################
-
-program.load("domi_ilp_epoch_20")
-# program.load("domi_pd_epoch_1")
-# program.load("domi_sampleloss_epoch_1")
-
-
-from regr.utils import setProductionLogMode
-
-productionMode = False
-# if productionMode:
-#     setProductionLogMode(no_UseTimeLog=False)
-    
-
-import logging
-logging.basicConfig(level=logging.INFO)
-program.test(valid_examples, device=device)
