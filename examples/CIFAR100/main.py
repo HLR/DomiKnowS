@@ -98,23 +98,23 @@ def main():
         print("ILP")
         program = SolverPOIProgram(graph, inferTypes=[ 'local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
 
-    elif args.primaldual:
+    if args.primaldual:
         print("PrimalDualProgram")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
-    elif args.primaldual and args.ilp:
+    if args.primaldual and args.ilp:
 
         print("PrimalDualProgram ILP")
         program = PrimalDualProgram(graph, SolverModel, poi=(image,), inferTypes=['ILP', 'local/argmax'],
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},beta=args.lambdaValue,f=f)
-    elif args.sam:
+    if args.sam:
 
         print("sam")
         program = SampleLossProgram(graph, SolverModel,inferTypes=['local/argmax'],metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=False,sampleSize=250,sampleGlobalLoss=True,beta=args.beta,device=device)
-    elif args.sam and args.ilp:
+    if args.sam and args.ilp:
 
         print("sam ILP")
         program = SampleLossProgram(graph, SolverModel, inferTypes=['ILP', 'local/argmax'],
