@@ -52,8 +52,8 @@ mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transf
 batch_size=args.batch_size
 if args.test:
     batch_size*=10
-mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,)
-mnist_testset_reader=create_readers(mnist_testset,99999999,args.batch_size)
+mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,batch_size)
+mnist_testset_reader=create_readers(mnist_testset,99999999,batch_size)
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
