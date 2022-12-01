@@ -92,11 +92,15 @@ def main():
     image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
     f = open(str(args.ilp)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
     print("POI")
-    program = SolverPOIProgram(graph,inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss())\
-                           ,metric={'ILP': PRF1Tracker(DatanodeCMMetric()),'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},f=f)
+    program = SolverPOIProgram(graph, inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                               metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+
     if args.ilp:
         print("ILP")
-        program = SolverPOIProgram(graph, inferTypes=[ 'local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
+        program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'],
+                                   loss=MacroAverageTracker(NBCrossEntropyLoss()) \
+                                   , metric={'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}, f=f)
 
     if args.primaldual:
         print("PrimalDualProgram")
