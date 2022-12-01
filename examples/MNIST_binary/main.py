@@ -49,8 +49,10 @@ transform_mnist=transform=torchvision.transforms.Compose([torchvision.transforms
 mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform_mnist)
 mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transform=transform_mnist)
 
-
-mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,args.batch_size)
+batch_size=args.batch_size
+if args.test:
+    batch_size*=10
+mnist_trainset_reader=create_readers(mnist_trainset,args.samplenum,)
 mnist_testset_reader=create_readers(mnist_testset,99999999,args.batch_size)
 
 cuda_number= args.cuda_number
