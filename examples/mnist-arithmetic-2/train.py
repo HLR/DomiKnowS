@@ -28,6 +28,7 @@ parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', '
 parser.add_argument('--num_train', type=int, default=10000)
 parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
 parser.add_argument('--cuda', default=False, action='store_true')
+parser.add_argument('--epochs', type=int, default=100)
 
 args = parser.parse_args()
 
@@ -275,7 +276,7 @@ if model_name == 'Semantic':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True,
@@ -288,7 +289,7 @@ elif model_name == 'Sampling':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True,
@@ -301,7 +302,7 @@ elif model_name == 'PrimalDual':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True,
@@ -314,7 +315,7 @@ elif model_name == 'DigitLabel':
 
 
     program.train(trainloader,
-                  train_epoch_num=50,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True)
@@ -326,7 +327,7 @@ elif model_name == 'Explicit':
 
 
     program.train(trainloader,
-                  train_epoch_num=1000,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True)
@@ -338,7 +339,7 @@ elif model_name == 'Baseline' and num_train == 10000:
 
 
     program.train(trainloader,
-                  train_epoch_num=1000,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True)
@@ -350,7 +351,7 @@ elif model_name == 'Baseline' and num_train == 500:
 
 
     program.train(trainloader,
-                  train_epoch_num=1000,
+                  train_epoch_num=args.epochs,
                   Optim=test_adam,
                   device=device,
                   test_every_epoch=True)
