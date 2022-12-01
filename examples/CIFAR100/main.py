@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
-    parser.add_argument('--test', dest='test', default=False, help='test the final resultss', type=bool)
+
 
     args = parser.parse_args()
 
