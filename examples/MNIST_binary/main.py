@@ -29,7 +29,7 @@ parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to 
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
 parser.add_argument('--sam', dest='SAM', default=False, help='whether or not to use sampling learning',type=bool)
-parser.add_argument('--test', dest='test', default=True, help='dont train just test',type=bool)
+parser.add_argument('--test', dest='test', default=False, help='dont train just test',type=bool)
 parser.add_argument('--simple_model', dest='simple_model', default=False, help='use a simple baseline',type=bool)
 
 parser.add_argument('--samplenum', dest='samplenum', default=99999, help='number of samples to train the model on',type=int)
