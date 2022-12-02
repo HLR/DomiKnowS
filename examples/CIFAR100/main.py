@@ -60,7 +60,6 @@ def main():
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
-
     args = parser.parse_args()
 
     device = "cuda:"+str(args.cuda_number)
@@ -130,10 +129,10 @@ def main():
     train_reader,test_reader=create_readers(train_num=args.samplenum)
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
-
-    for i in range(args.epochs):
-        program.train(train_reader,valid_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
-        program.save(args.namesave + "_" + str(i))
+    if not args.test:
+        for i in range(args.epochs):
+            program.train(train_reader,valid_set=test_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+            program.save(args.namesave + "_" + str(i))
     f.close()
     guessed_tag = {
         "local/softmax": [],
@@ -145,6 +144,8 @@ def main():
         "ILP": []
     }
 
+    if args.test:
+        program.save(args.namesave + "_" + str(args.epochs))
     real_category = []
     for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
         for image_ in picture_group.getChildDataNodes():
