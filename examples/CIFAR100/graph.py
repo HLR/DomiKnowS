@@ -59,6 +59,14 @@ with Graph('CIFAR100', reuse_model=False) as graph:
         #ifL(image("x"),exactL(*[Label.__getattr__(i[1])("x") for i in Label.attributes]))
         #ifL(image("s"), exactL(*[category.__getattr__(i[1])("s") for i in category.attributes]))
         for i in category.attributes:
+            for j in category.attributes:
+                if not j==i:
+                    nandL(i,j)
+        for i in Label.attributes:
+            for j in Label.attributes:
+                if not j==i:
+                    nandL(i,j)
+        for i in category.attributes:
             lj = [Label.get_concept(l) for l in structure[i[1]]]
             ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
             #print("if ",category.__getattr__(i[1])("x"), "then orL all these: ",*[Label.__getattr__(ii[1])("x") for ii in lj])
