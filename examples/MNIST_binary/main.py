@@ -23,7 +23,7 @@ parser.add_argument('--namesave', dest='namesave', default="modelname", help='mo
 
 
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=3, help='number of epochs you want your model to train on',type=int)
 parser.add_argument('--lr', dest='learning_rate', default=2e-3, help='learning rate of the adam optimiser',type=float)
 parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to use ilp',type=bool)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
@@ -34,7 +34,7 @@ parser.add_argument('--simple_model', dest='simple_model', default=False, help='
 
 parser.add_argument('--samplenum', dest='samplenum', default=99999, help='number of samples to train the model on',type=int)
 parser.add_argument('--batch', dest='batch_size', default=30, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=0.005, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--beta', dest='beta', default=0.01, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
 
 from regr.utils import setProductionLogMode
@@ -135,7 +135,7 @@ if args.SAM and args.ilp:
 
 for i in range(args.cur_epoch):
     if args.test:
-        i=0
+        i=2
         program.load(args.namesave + "_" + str(i))
         program.test(mnist_testset_reader,device=device)
 
