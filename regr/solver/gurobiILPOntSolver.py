@@ -1181,13 +1181,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 tsqueezed = torch.unsqueeze(tsqueezed, 0)
                             lcVariables[variableName] = [[tStack]]
                         except TypeError:
-                            try:
-                                vDnsList = [torch.tensor(v[0], dtype=torch.float, device=self.current_device, requires_grad=True) for v in vDns]
-                                lcVariables[variableName] = [[torch.stack(vDnsList)]]
-                            except TypeError: # has None  - will use tensor per value 
-                                lcVariables[variableName] = vDns
-                        except RuntimeError:
-                            pass
+                            for v in vDns:
+                                if v[0] != None and torch.is_tensor(v[0]):
+                                    v[0] = torch.unsqueeze(v[0], 0)
+                                                                    
+                            lcVariables[variableName] = vDns
                     else:
                         lcVariables[variableName] = vDns
                     

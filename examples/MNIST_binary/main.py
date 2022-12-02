@@ -135,7 +135,7 @@ if args.SAM and args.ilp:
 
 for i in range(args.cur_epoch):
     if args.test:
-        i=2
+        i=0
         program.load(args.namesave + "_" + str(i))
         program.test(mnist_testset_reader,device=device)
 
