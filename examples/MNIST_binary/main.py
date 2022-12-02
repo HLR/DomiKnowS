@@ -136,6 +136,7 @@ if args.SAM and args.ilp:
 for i in range(args.cur_epoch):
     if args.test:
         i=2
+        print("loading model",args.namesave + "_" + str(i))
         program.load(args.namesave + "_" + str(i))
         program.test(mnist_testset_reader,device=device)
 
