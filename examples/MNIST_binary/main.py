@@ -140,7 +140,7 @@ for i in range(args.cur_epoch):
         program.test(mnist_testset_reader,device=device)
 
     else:
-        program.train(mnist_trainset_reader,valid_set=mnist_testset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
+        program.train(mnist_trainset_reader, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=args.learning_rate),device=device)
         program.save(args.namesave+"_"+str(i))
     import numpy as np
 
