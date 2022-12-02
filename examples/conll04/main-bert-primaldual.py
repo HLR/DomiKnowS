@@ -213,17 +213,38 @@ def model(device='auto'):
             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 4.3231]).to(device)), 
             "default": NBCrossEntropyDictLoss()},
         # loss = MacroAverageTracker(NBCrossEntropyLoss()),
-        tnorm = 'L',
-        beta=0.01,
+        tnorm = 'G',
+        beta=0.2,
         metric={
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
+    
+    lbp1 = CallbackPrimalProgram(
+        graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
+        dictloss={
+            str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5341,  0.5620]).to(device)),
+            str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5194, 13.3925]).to(device)),
+            str(people.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5156, 22.5134]).to(device)), 
+            str(other.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5120, 21.4100]).to(device)),             
+            str(organization.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5098, 25.8953]).to(device)), 
+            str(work_for.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6277, 2.4578]).to(device)), 
+            str(located_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6270, 2.4677]).to(device)), 
+            str(live_in.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6748, 2.1306]).to(device)), 
+            str(orgbase_on.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.6309, 2.4094]).to(device)), 
+            str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 4.3231]).to(device)), 
+            "default": NBCrossEntropyDictLoss()},
+        # loss = MacroAverageTracker(NBCrossEntropyLoss()),
+        tnorm = 'G',
+        beta=0.2,
+        metric={
+            'ILP': PRF1Tracker(DatanodeCMMetric('ILP')),
+            'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 
-    return lbp
+    return lbp, lbp1
 
 
 def main(args):
     from graph import graph, sentence, word, phrase, pair
-    program = model(device=args.gpu)
+    program, program1 = model(device=args.gpu)
 
     split_id = args.split
     if args.number == 1:
@@ -308,11 +329,11 @@ def main(args):
         
     if not args.load:
         if args.number == 1:
-            program.load(f'saves/conll04-bert-pd-{split_id}-best-macro-f1.pt')
+            program1.load(f'saves/conll04-bert-pd-{split_id}-best-macro-f1.pt')
         else:
-            program.load(f'saves/conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
+            program1.load(f'saves/conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
         
-    program.test(test_reader, device=args.gpu)
+    program1.test(test_reader, device=args.gpu)
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')

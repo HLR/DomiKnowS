@@ -58,16 +58,11 @@ with Graph('global') as graph:
         kill.has_a(people, people, auto_constraint=None)
         
         # Have exactly one label
-        ifL(phrase, 
-            exactL(people, organization, location, other, o,
-               active = LC_SET_BASED
-            )
-        )
-        
-        ifL(pair, 
-            exactL(work_for, live_in, located_in, orgbase_on, kill,
-               active = LC_SET_BASED
-            )
+        exactL(people, organization, location, other, o,
+           active = LC_SET_BASED
+        )         
+        exactL(work_for, live_in, located_in, orgbase_on, kill,
+           active = LC_SET_BASED
         )
 
         # work_for  -> people, organization
