@@ -23,7 +23,7 @@ from regr.program.model.pytorch import SolverModel, IMLModel
 parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code')
 
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)
-parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epochs you want your model to train on',type=int)
+parser.add_argument('--epoch', dest='cur_epoch', default=15, help='number of epochs you want your model to train on',type=int)
 
 parser.add_argument('--samplenum', dest='samplenum', default=40, help='sample sizes for low data regime 10,20,40 max 37',type=int)
 
@@ -126,13 +126,15 @@ elif args.SAM:
     program = SampleLossProgram(graph, SolverModel,poi=[facts[fact_check],implication,nimplication],inferTypes=['ILP','local/argmax'],
         metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},loss=MacroAverageTracker(NBCrossEntropyLoss()),sample=True,sampleSize=50,sampleGlobalLoss=True,beta=args.beta,device=device)
 
-program.train(calibration_data,valid_set=calibration_data_dev,test_set=silver_data, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
+program.train(calibration_data,valid_set=calibration_data_dev, train_epoch_num=args.cur_epoch, Optim=lambda param: AdamW(param, lr = args.learning_rate ,eps = 1e-9 ),device=device)
 
 ac_, t_ = 0, 0
 for datanode in program.populate(silver_data, device="cpu"):
     #     tdatanode = datanode.findDatanodes(select = context)[0]
     #     print(len(datanode.findDatanodes(select = context)))
     #     print(tdatanode.getChildDataNodes(conceptName=step))
+
+
     datanode.inferILPResults()
     verifyResult = datanode.verifyResultsLC()
     verifyResultILP = datanode.verifyResultsLC()
