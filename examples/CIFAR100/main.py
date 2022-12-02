@@ -54,8 +54,8 @@ def main():
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
     parser.add_argument('--test', dest='test', default=False, help='dont train just test', type=bool)
 
-    parser.add_argument('--samplenum', dest='samplenum', default=50000,help='number of samples to choose from the dataset',type=int)
-    parser.add_argument('--epochs', dest='epochs', default=10, help='number of training epoch', type=int)
+    parser.add_argument('--samplenum', dest='samplenum', default=3,help='number of samples to choose from the dataset',type=int)
+    parser.add_argument('--epochs', dest='epochs', default=2, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
@@ -147,7 +147,13 @@ def main():
     if args.test:
         program.load(args.namesave + "_" + str(args.epochs))
     real_category = []
+    ac_,t_=0,0
     for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
+        picture_group.inferILPResults()
+        verifyResult = picture_group.verifyResultsLC()
+        verifyResultILP = picture_group.verifyResultsLC()
+        ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
+        t_ += len(verifyResultILP.keys())
         for image_ in picture_group.getChildDataNodes():
             for key in ["local/softmax", "ILP"]:
                 if key == "ILP":
@@ -178,7 +184,7 @@ def main():
         correct = sum(1 if x == y else 0 for x, y in zip(real_labels, guessed_labels))
         total = len(real_labels)+1
         print("category accuracy", correct / total)
-
+    print("constraint accuracy: ", ac_ / t_ )
 
 if __name__ == '__main__':
     main()
