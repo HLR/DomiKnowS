@@ -38,7 +38,7 @@ class ImageNetwork(torch.nn.Module):
     
 def main():
     from regr.utils import setProductionLogMode
-    productionMode = True
+    productionMode = False
     if productionMode:
         setProductionLogMode(no_UseTimeLog=False)
     from regr.utils import setDnSkeletonMode
