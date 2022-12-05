@@ -42,8 +42,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 train_data=read_data(sample_size=args.samplenum)
-dev_data=read_data(sample_size=args.samplenum)
-test_data=read_data(sample_size=args.samplenum)
+dev_data=read_data(sample_size=args.samplenum,file_name="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/dev.jsonl",\
+              meta_file="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/meta-dev.jsonl")
+test_data=read_data(sample_size=args.samplenum,file_name="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/test.jsonl",\
+              meta_file="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/meta-test.jsonl")
 
 cuda_number= args.cuda_number
 device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'

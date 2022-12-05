@@ -1,7 +1,7 @@
 import json
 
-def read_data(sample_size=100,file_name="data\\rule-reasoning-dataset-V2020.2.5.0\\original\\depth-5\\train.jsonl",\
-              meta_file="data\\rule-reasoning-dataset-V2020.2.5.0\\original\\depth-5\\meta-train.jsonl"):
+def read_data(sample_size=100,file_name="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/train.jsonl",\
+              meta_file="data/rule-reasoning-dataset-V2020.2.5.0/original/depth-5/meta-train.jsonl"):
 
     reader=[]
     counter = 0
