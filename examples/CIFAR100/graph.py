@@ -56,15 +56,20 @@ with Graph('CIFAR100') as graph:
     NEW_LC = True
 
     if NEW_LC:
+        counter=0
         exactL(*[Label.__getattr__(i[1]) for i in Label.attributes])
         exactL(*[category.__getattr__(i[1]) for i in category.attributes])
         for i in category.attributes:
             lj = [Label.get_concept(l) for l in structure[i[1]]]
             #ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
             #ifL(orL(*[Label.__getattr__(ii[1])("x") for ii in lj]),category.__getattr__(i[1])("x"))
-            for j in lj:
-                ifL(j,i)
-                print(j[1],i[1])
+            for j in Label.attributes:
+                if not j in lj:
+                    nandL(j,i)
+                    if counter<20:
+                        print(j,i)
+                    counter+=1
+
             #print("if ",category.__getattr__(i[1])("x")[0][1], "then orL all these: ",*[Label.__getattr__(ii[1])("x")[0][1] for ii in lj])
     else:
         relations = 0
