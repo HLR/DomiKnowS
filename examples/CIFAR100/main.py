@@ -144,7 +144,7 @@ def main():
 
     if args.test:
         program.load(args.namesave + "_" + str(args.epochs))
-        program.test(test_reader)
+        #program.test(test_reader)
     real_category = []
     ac_,t_=0,0
     for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
