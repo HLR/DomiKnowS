@@ -61,7 +61,10 @@ with Graph('CIFAR100', reuse_model=False) as graph:
         for i in category.attributes:
             lj = [Label.get_concept(l) for l in structure[i[1]]]
             #ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
-            ifL(orL(*[Label.__getattr__(ii[1])("x") for ii in lj]),category.__getattr__(i[1])("x"))
+            #ifL(orL(*[Label.__getattr__(ii[1])("x") for ii in lj]),category.__getattr__(i[1])("x"))
+            for j in lj:
+                ifL(j,i)
+                print(j[1],i[1])
             #print("if ",category.__getattr__(i[1])("x")[0][1], "then orL all these: ",*[Label.__getattr__(ii[1])("x")[0][1] for ii in lj])
     else:
         relations = 0
