@@ -7,7 +7,7 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph('CIFAR100', reuse_model=False) as graph:
+with Graph('CIFAR100') as graph:
     image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
