@@ -1,8 +1,6 @@
 import argparse
 import sys
 
-
-
 sys.path.append('.')
 sys.path.append('../..')
 from regr.program.lossprogram import SampleLossProgram
@@ -48,13 +46,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
-    parser.add_argument('--ilp', dest='ilp', default=False, help='whether or not to use ilp', type=bool)
+    parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp', type=bool)
     parser.add_argument('--pd', dest='primaldual', default=False,help='whether or not to use primaldual constriant learning', type=bool)
     parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
-    parser.add_argument('--test', dest='test', default=False, help='dont train just test', type=bool)
+    parser.add_argument('--test', dest='test', default=True, help='dont train just test', type=bool)
 
-    parser.add_argument('--samplenum', dest='samplenum', default=3,help='number of samples to choose from the dataset',type=int)
+    parser.add_argument('--samplenum', dest='samplenum', default=5,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=2, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
@@ -146,6 +144,7 @@ def main():
 
     if args.test:
         program.load(args.namesave + "_" + str(args.epochs))
+        program.test(test_reader)
     real_category = []
     ac_,t_=0,0
     for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
