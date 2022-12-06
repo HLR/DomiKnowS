@@ -17,7 +17,7 @@ from reader import create_readers
 import torch.nn as nn
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from graph import graph, image_group_contains,image,category,Label,image_group
+
 
 # Enable skeleton DataNode
 
@@ -58,7 +58,23 @@ def main():
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
+    parser.add_argument('--graph_type', dest='graph_type', default="nothing", help='type of constraints to be defined', type=str)
     args = parser.parse_args()
+
+    if args.graph_type=="nothing":
+        from graph import graph, image_group_contains, image, category, Label, image_group
+    elif args.graph_type=="only_exactL":
+        from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group
+    elif args.graph_type == "exactL_ifLorLtopdown":
+        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group
+    elif args.graph_type == "exactL_ifLorLbottomup":
+        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group
+    elif args.graph_type == "exactL_ifLorLbothways":
+        from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group
+    elif args.graph_type == "exactL_nandL":
+        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group
+
+
 
     device = "cuda:"+str(args.cuda_number)
 

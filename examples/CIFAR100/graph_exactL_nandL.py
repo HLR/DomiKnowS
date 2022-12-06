@@ -52,3 +52,23 @@ with Graph('CIFAR100') as graph:
                  'insects': {'bee', 'beetle', 'caterpillar', 'butterfly', 'cockroach'},
                  'non-insectinvertebrates': {'spider', 'worm', 'snail', 'lobster', 'crab'},
                  'aquaticmammals': {'seal', 'beaver', 'whale', 'otter', 'dolphin'}}
+
+    NEW_LC = True
+    if NEW_LC:
+        exactL(*[Label.__getattr__(i[1]) for i in Label.attributes])
+        exactL(*[category.__getattr__(i[1]) for i in category.attributes])
+        for i in category.attributes:
+            lj = [Label.get_concept(l) for l in structure[i[1]]]
+            for j in Label.attributes:
+                if not j in lj:
+                    nandL(j, i)
+    else:
+        relations = 0
+        for i in category.attributes:
+            for j in Label.attributes:
+                if not j[1] in structure[i[1]]:
+                    nandL(i, j)
+                else:
+                    relations += 1
+
+        print("number of relations: ", relations)
