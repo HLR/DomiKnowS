@@ -380,21 +380,30 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                         
         tZero = torch.zeros(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
         tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-        if limitOp == '>=': # > limit
-            countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
-            
-        elif limitOp == '<=': # < limit
-            countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
+        
+        if  limitOp == '==': # == limit
+            countLoss = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
+            countSuccess = torch.sub(tOne, countLoss)
 
-        elif limitOp == '==': # == limit
-            countSuccess = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
-                
-        if onlyConstrains:
-            countLoss = torch.sub(tOne, countSuccess)
-    
-            return countLoss
+            if onlyConstrains:
+        
+                return countLoss
+            else:
+                return countSuccess
         else:
-            return countSuccess
+            if limitOp == '>=': # > limit
+                countSuccess = torch.minimum(torch.maximum(torch.sub(varSum, limit), tZero), tOne) # min(max(varSum - limit, 0), 1)
+                
+            elif limitOp == '<=': # < limit
+                countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
+    
+                    
+            if onlyConstrains:
+                countLoss = torch.sub(tOne, countSuccess)
+        
+                return countLoss
+            else:
+                return countSuccess
         
     def fixedVar(self, _, _var, onlyConstrains = False):
         logicMethodName = "FIXED"

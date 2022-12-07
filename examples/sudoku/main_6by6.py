@@ -305,7 +305,7 @@ program = SampleLossProgram(
 
 from regr.program.metric import PRF1Tracker, DatanodeCMMetric
 
-programRLoss = PrimalDualProgram(
+program = PrimalDualProgram(
        graph, SolverModel, 
        poi=(sudoku, empty_entry, same_row, same_col, same_table),
        inferTypes=['local/argmax'],
