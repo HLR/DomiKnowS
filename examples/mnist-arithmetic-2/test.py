@@ -60,9 +60,9 @@ def get_pred_from_node(node, suffix):
         digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
         summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}')).cpu()
     else:
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+        summation_pred = torch.argmax(pair_node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, summation_pred
 
@@ -122,23 +122,31 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
             verifyResult = node.verifyResultsLC(key=suffix)
             if verifyResult:
                 satisfied_constraints = []
+                ifSatisfied_avg = 0.0
+                ifSatisfied_total = 0
                 for lc_idx, lc in enumerate(verifyResult):
                     if lc not in satisfied:
                         satisfied[lc] = []
                     satisfied[lc].append(verifyResult[lc]['satisfied'])
                     satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
+                    if 'ifSatisfied' in verifyResult[lc]:
+                        ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
+                        ifSatisfied_total += 1
+
                     #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
 
-                num_constraints = len(verifyResult)
+                #num_constraints = len(verifyResult)
 
                 if suffix not in satisfied_overall:
                     satisfied_overall[suffix] = []
 
-                satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
+                #satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
                 #pred_digit_sum = digits_results[suffix][-1] + digits_results[suffix][-2]
                 #label_sum = summation_results['label'][-1]
                 #satisfied_overall[suffix].append(1 if pred_digit_sum == label_sum else 0)
+
+                satisfied_overall[suffix].append(ifSatisfied_avg/ifSatisfied_total)
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
