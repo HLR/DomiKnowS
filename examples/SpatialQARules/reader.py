@@ -246,13 +246,20 @@ def boolQ_reader(file, size=None):
     return dataset
 
 
-def StepGame_reader(prefix, train_dev_test="train", size=None):
+def StepGame_reader(prefix, train_dev_test="train", size=None, file_number=None):
     if train_dev_test == "train":
         files = ["train.json"]
     elif train_dev_test == "dev":
-        files = ["qa" + str(i + 1) + "_valid.json" for i in range(5)]
+        if file_number is None:
+            files = ["qa" + str(i + 1) + "_valid.json" for i in range(5)]
+        else:
+            files = ["qa" + str(file_number + 1) + "_valid.json"]
     else:
-        files = ["qa" + str(i + 1) + "_test.json" for i in range(10)]
+        if file_number is None:
+            files = ["qa" + str(i + 1) + "_test.json" for i in range(10)]
+        else:
+            files = ["qa" + str(file_number + 1) + "_test.json"]
+
 
     dataset = []
     for file in files:
@@ -276,8 +283,8 @@ def StepGame_reader(prefix, train_dev_test="train", size=None):
 
 
 def DomiKnowS_reader(file, question_type, size=None, upward_level=0, augmented=True, boolQL=False, batch_size=8,
-                     rule=False, StepGame_status=None):
-    dataset = StepGame_reader(file, StepGame_status, size) if StepGame_status \
+                     rule=False, StepGame_status=None, StepGame_number=None):
+    dataset = StepGame_reader(file, StepGame_status, size, file_number=StepGame_number) if StepGame_status \
         else train_reader(file, question_type, size, upward_level) if augmented \
         else boolQ_reader(file, size) if boolQL else test_reader(file, question_type, size)
     additional_text = ""
