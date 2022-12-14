@@ -82,7 +82,7 @@ class SudokuReader(RegrReader):
 trainreader = SudokuReader("randn", type="raw")
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL, exactL
+from regr.graph.logicalConstrain import andL, fixedL, eqL, exactAL
 from regr.graph import EnumConcept
 
 Graph.clear()
@@ -139,9 +139,9 @@ with Graph('global') as graph:
         # andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
 
         for j in range(1, 7):
-            exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
-            exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
-            exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
+            exactAL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
+            exactAL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
+            exactAL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
    
 import torch.nn as nn
 
@@ -305,7 +305,7 @@ program = SampleLossProgram(
 
 from regr.program.metric import PRF1Tracker, DatanodeCMMetric
 
-programRLoss = PrimalDualProgram(
+program = PrimalDualProgram(
        graph, SolverModel, 
        poi=(sudoku, empty_entry, same_row, same_col, same_table),
        inferTypes=['local/argmax'],

@@ -7,7 +7,9 @@ import torch
 
 
 class NLI_Robert(nn.Module):
-
+    """
+    Roberta model, language model, to create the input for classify layer
+    """
     def __init__(self):
         super(NLI_Robert, self).__init__()
         self.bert = RobertaModel.from_pretrained('roberta-base')
@@ -20,7 +22,9 @@ class NLI_Robert(nn.Module):
 
 
 class RobertClassification(nn.Module):
-
+    """
+    Classifying layer to predict whether the hypothesis is entailment, contradiction, or neutral
+    """
     def __init__(self, last_layer_size, *, hidden_layer_size=1):
         super(RobertClassification, self).__init__()
         self.hidden_size = hidden_layer_size
@@ -43,19 +47,10 @@ class RobertClassification(nn.Module):
         return x
 
 
-class RobertaTokenizer:
-    def __init__(self, max_length=256):
-        self.max_length = max_length
-        self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
-
-    def __call__(self, hypothesis, premise):
-        encoded_input = self.tokenizer(hypothesis, premise, padding="max_length", max_length=self.max_length)
-        input_ids = encoded_input["input_ids"]
-        attention_mask = encoded_input["attention_mask"]
-        return torch.LongTensor(input_ids), torch.LongTensor(attention_mask)
-
-
 class RobertaTokenizerMulti:
+    """
+    Tokenizer model from RoBERTa
+    """
     def __init__(self, max_length=256):
         self.max_length = max_length
         self.tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")

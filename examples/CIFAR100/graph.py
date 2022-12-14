@@ -7,7 +7,7 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-with Graph('CIFAR100', reuse_model=False) as graph:
+with Graph('CIFAR100') as graph:
     image_group = Concept(name='image_group')
     image = Concept(name='image')
     image_group_contains, = image_group.contains(image)
@@ -52,23 +52,3 @@ with Graph('CIFAR100', reuse_model=False) as graph:
                  'insects': {'bee', 'beetle', 'caterpillar', 'butterfly', 'cockroach'},
                  'non-insectinvertebrates': {'spider', 'worm', 'snail', 'lobster', 'crab'},
                  'aquaticmammals': {'seal', 'beaver', 'whale', 'otter', 'dolphin'}}
-    
-    NEW_LC = True
-
-    if NEW_LC:
-        ifL(image("x"),exactL(*[Label.__getattr__(i[1])("x") for i in Label.attributes]))
-        ifL(image("x"), exactL(*[category.__getattr__(i[1])("x") for i in category.attributes]))
-        for i in category.attributes:
-            lj = [Label.get_concept(l) for l in structure[i[1]]]
-            ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
-            #print("if ",category.__getattr__(i[1])("x"), "then orL all these: ",*[Label.__getattr__(ii[1])("x") for ii in lj])
-    else:
-        relations = 0
-        for i in category.attributes:
-            for j in Label.attributes:
-                if not j[1] in structure[i[1]]:
-                    nandL(i, j)
-                else:
-                    relations += 1
-    
-        print("number of relations: ", relations)

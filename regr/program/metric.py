@@ -190,7 +190,7 @@ def frp_from_matrix(i,matrix):
     return TP,TN,FP,FN
 
 class PRF1Tracker(MetricTracker):
-    def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=True):
+    def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=False):
         super().__init__(metric)
         self.confusion_matrix=confusion_matrix
 

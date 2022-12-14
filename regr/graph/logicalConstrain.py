@@ -361,6 +361,52 @@ class LogicalConstrain:
             model.update()
             
         return zVars
+    
+    def createILPAccumulatedCount(self, model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = "COUNT"):         
+        try:
+            lcVariableNames = [e for e in iter(v)]
+        except StopIteration:
+            pass
+        
+        if cLimit== None:
+            cLimit
+        lcVariableName0 = lcVariableNames[0] # First variable
+        lcVariableSet0 =  v[lcVariableName0]
+
+        zVars = [] # Output ILP variables
+        
+        # Accumulate all variables
+        varsSetup = []
+        for i, _ in enumerate(lcVariableSet0):
+            
+            var = []
+            for currentV in iter(v):
+                var.extend(v[currentV][i])
+                
+            if len(var) == 0:
+                if not (headConstrain or integrate):
+                    varsSetup.append([None])
+                    
+                continue
+            
+            if headConstrain or integrate:
+                varsSetup.extend(var)
+            else:
+                varsSetup.append(var)
+             
+        # -- Use ILP variable setup to create constrains   
+        if headConstrain or integrate:
+            zVars.append([myIlpBooleanProcessor.countVar(model, *varsSetup, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                         logicMethodName = logicMethodName)])
+        else:
+            for current_var in varsSetup:
+                zVars.append([myIlpBooleanProcessor.countVar(model, *current_var, onlyConstrains = headConstrain, limitOp = cOperation, limit=cLimit, 
+                                                         logicMethodName = logicMethodName)])
+       
+        if model is not None:
+            model.update()
+            
+        return zVars
         
 
 def use_grad(grad):
@@ -508,3 +554,63 @@ class atMostL(LogicalConstrain):
         
         with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
             return self.createILPCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+        
+        
+# ----------------- Accumulated Counting
+
+class exactAL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
+
+        cOperation = '=='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+
+class existsAL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        cLimit = 1
+
+        cOperation = '>='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+
+class atLeastAL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
+            
+        cOperation = '>='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))
+    
+class atMostAL(LogicalConstrain):
+    def __init__(self, *e, p=100, active = True, sampleEntries = False, name = None):
+        LogicalConstrain.__init__(self, *e, p=p, active=active, sampleEntries  = sampleEntries, name=name)
+        
+    def __call__(self, model, myIlpBooleanProcessor, v, headConstrain = False, integrate = False): 
+        if isinstance(self.e[-1], int):
+            cLimit = self.e[-1]
+        else:
+            cLimit = 1
+            
+        cOperation = '<='
+        
+        with torch.set_grad_enabled(myIlpBooleanProcessor.grad):
+            return self.createILPAccumulatedCount(model, myIlpBooleanProcessor, v, headConstrain, cOperation, cLimit, integrate, logicMethodName = str(self))

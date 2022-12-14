@@ -18,21 +18,45 @@ from regr.program.model.pytorch import SolverModel
 from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 from regr import setProductionLogMode
 import os
+import argparse
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
-setProductionLogMode(no_UseTimeLog=True)
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
+parser.add_argument('--num_train', type=int, default=10000)
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
+parser.add_argument('--cuda', default=False, action='store_true')
+parser.add_argument('--epochs', type=int, default=100)
 
-trainloader, trainloader_mini, validloader, testloader = get_readers()
+args = parser.parse_args()
+
+print(args)
+
+model_name = args.model_name
+num_train = args.num_train
+device = 'cuda' if args.cuda else 'cpu'
+
+if args.log == 'None':
+    setProductionLogMode(no_UseTimeLog=True)
+elif args.log == 'TimeOnly':
+    setProductionLogMode(no_UseTimeLog=False)
+
+trainloader, trainloader_mini, validloader, testloader = get_readers(num_train)
 
 
 def get_pred_from_node(node, suffix):
     digit0_node = node.findDatanodes(select='image')[0]
     digit1_node = node.findDatanodes(select='image')[1]
 
-    digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
-    digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+    if args.cuda:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}')).cpu()
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}')).cpu()
+    else:
+        digit0_pred = torch.argmax(digit0_node.getAttribute(f'<digits>{suffix}'))
+        digit1_pred = torch.argmax(digit1_node.getAttribute(f'<digits>{suffix}'))
+
     #summation_pred = torch.argmax(node.getAttribute(f'<summations>{suffix}'))
 
     return digit0_pred, digit1_pred, 0
@@ -53,7 +77,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
-    for i, node in tqdm(enumerate(program.populate(reader, device='auto')), total=total, position=0, leave=True):
+    for i, node in tqdm(enumerate(program.populate(reader, device=device)), total=total, position=0, leave=True):
 
         for suffix in infer_suffixes:
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
@@ -67,9 +91,14 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
 
-        digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
-        digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
-        summation_results['label'].append(pair_node.getAttribute('summation_label'))
+        if args.cuda:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').cpu().item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').cpu().item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label').cpu().item())
+        else:
+            digits_results['label'].append(digit0_node.getAttribute('digit_label').item())
+            digits_results['label'].append(digit1_node.getAttribute('digit_label').item())
+            summation_results['label'].append(pair_node.getAttribute('summation_label'))
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -88,27 +117,100 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('==========================================')
 
 
-graph, image, image_pair, image_batch = build_program(sum_setting=None, digit_labels=False)
+use_digit_labels = (model_name == 'DigitLabel')
+
+sum_setting = None
+if model_name == 'Explicit':
+    sum_setting = 'explicit'
+elif model_name == 'Baseline':
+    sum_setting = 'baseline'
+
+graph, image, image_pair, image_batch = build_program(device=device, sum_setting=sum_setting, digit_labels=use_digit_labels)
+
+if model_name == 'PrimalDual':
+    class PrimalDualCallbackProgram(PrimalDualProgram):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.after_train_epoch = []
+
+        def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+            if name == 'Testing':
+                for fn in self.after_train_epoch:
+                    fn(kwargs)
+            else:
+                super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-class PrimalDualCallbackProgram(PrimalDualProgram):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.after_train_epoch = []
+    program = PrimalDualCallbackProgram(graph, SolverModel,
+                        poi=(image_batch, image, image_pair),
+                        inferTypes=['local/argmax'],
+                        metric={})
 
-    def call_epoch(self, name, dataset, epoch_fn, **kwargs):
-        if name == 'Testing':
-            for fn in self.after_train_epoch:
-                fn(kwargs)
-        else:
-            super().call_epoch(name, dataset, epoch_fn, **kwargs)
+elif model_name == 'Sampling':
+    class CallbackProgram(SampleLossProgram):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.after_train_epoch = []
+
+        def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+            if name == 'Testing':
+                for fn in self.after_train_epoch:
+                    fn(kwargs)
+            else:
+                super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = PrimalDualCallbackProgram(graph, SolverModel,
-                    poi=(image_batch, image, image_pair),
-                    inferTypes=['local/argmax'],
-                    metric={})
+    program = CallbackProgram(graph, SolverModel,
+                              poi=(image_batch, image, image_pair),
+                              inferTypes=['local/argmax'],
+                              metric={},
+                              sample=True,
+                              sampleSize=100,
+                              sampleGlobalLoss=True,
+                              beta=1)
 
+elif model_name == 'Semantic':
+    class CallbackProgram(SampleLossProgram):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.after_train_epoch = []
+
+        def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+            if name == 'Testing':
+                for fn in self.after_train_epoch:
+                    fn(kwargs)
+            else:
+                super().call_epoch(name, dataset, epoch_fn, **kwargs)
+
+
+    program = CallbackProgram(graph, SolverModel,
+                              poi=(image_batch, image, image_pair),
+                              inferTypes=['local/argmax'],
+                              metric={},
+                              sample=True,
+                              sampleSize=-1,  # Semantic Sample when -1
+                              sampleGlobalLoss=True,
+                              beta=1)
+
+elif model_name in ['DigitLabel', 'Explicit', 'Baseline']:
+    class CallbackProgram(SolverPOIProgram):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.after_train_epoch = []
+
+        def call_epoch(self, name, dataset, epoch_fn, **kwargs):
+            if name == 'Testing':
+                for fn in self.after_train_epoch:
+                    fn(kwargs)
+            else:
+                super().call_epoch(name, dataset, epoch_fn, **kwargs)
+
+
+    program = CallbackProgram(graph,
+                              poi=(image_batch, image, image_pair),
+                              inferTypes=['local/argmax'],
+                              loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                              metric={})
 
 '''class Program(CallbackProgram, IMLProgram):
     pass
@@ -167,17 +269,93 @@ def load_program_inference(program, save_dir):
 program.after_train_epoch = [save_model, post_epoch_metrics]
 
 
-def test_adam(params):
-    print('initializing optimizer')
-    return torch.optim.Adam(params, lr=0.0001)
+if model_name == 'Semantic':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0005)
 
 
-program.train(trainloader,
-              train_epoch_num=50,
-              Optim=test_adam,
-              device='auto',
-              test_every_epoch=True,
-              c_warmup_iters=0)
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True,
+                  c_warmup_iters=0)
+
+elif model_name == 'Sampling':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0005)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True,
+                  c_warmup_iters=0)
+
+elif model_name == 'PrimalDual':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0001)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True,
+                  c_warmup_iters=0)
+
+elif model_name == 'DigitLabel':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0001)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True)
+
+elif model_name == 'Explicit':
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.0005)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True)
+
+elif model_name == 'Baseline' and num_train == 10000:
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.001)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True)
+
+elif model_name == 'Baseline' and num_train == 500:
+    def test_adam(params):
+        print('initializing optimizer')
+        return torch.optim.Adam(params, lr=0.01)
+
+
+    program.train(trainloader,
+                  train_epoch_num=args.epochs,
+                  Optim=test_adam,
+                  device=device,
+                  test_every_epoch=True)
+
 
 #optim = program.model.params()
 

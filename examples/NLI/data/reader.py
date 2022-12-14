@@ -127,4 +127,4 @@ def DataReaderMultiRelation(file, size, *, batch_size=8, augment_file=None):
         return_data.append({"premises": "@@".join(data['premise']),
                             "hypothesises": "@@".join(data['hypothesis']),
                             "label_list": "@@".join(data['label'])})
-    return return_data[264:265]
+    return return_data

@@ -1,5 +1,5 @@
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, ifL, notL, existsL, eqL, atMostL, atLeastL, exactL
+from regr.graph.logicalConstrain import orL, ifL, notL, existsL, eqL, atMostL, atMostAL, atLeastAL, exactAL
 
 
 Graph.clear()
@@ -20,13 +20,13 @@ with Graph('global') as graph2:
         orL(firestationCity('x'), existsL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}),  city2))))
         
         # No less then 1 firestationCity in the world
-        atLeastL(firestationCity, p=90)
+        atLeastAL(firestationCity, p=90)
         
         # At most 3 firestationCity in the world
-        atMostL(firestationCity, 3, p=80)
+        atMostAL(firestationCity, 3, p=80)
         
         # Each city has no more then 4 neighbors which are not firestationCity
         ifL(city('x'), atMostL(notL(firestationCity(path=('x', eqL(cityLink, 'neighbor', {True}), city2))), 3), p=90)
 
         # Exactly 2 firestationCity in the world 
-        exactL(firestationCity, 2, p=55)
+        exactAL(firestationCity, 2, p=55)

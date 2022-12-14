@@ -801,13 +801,16 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         if dn.ontologyNode.name == conceptName:
             if not sample:
-                if loss:
+                if "xP" in xPkey:
+                    return 1
+                elif loss:
                     tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    tOneSqueezed = torch.squeeze(tOne)
-                    return tOneSqueezed
-                
-                return 1
-            
+                    
+                else:
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=False)
+                    
+                tOneSqueezed = torch.squeeze(tOne)
+                return tOneSqueezed
             else:
                 sampleSize = p
                 
@@ -1178,13 +1181,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 tsqueezed = torch.unsqueeze(tsqueezed, 0)
                             lcVariables[variableName] = [[tStack]]
                         except TypeError:
-                            try:
-                                vDnsList = [torch.tensor(v[0], dtype=torch.float, device=self.current_device, requires_grad=True) for v in vDns]
-                                lcVariables[variableName] = [[torch.stack(vDnsList)]]
-                            except TypeError: # has None  - will use tensor per value 
-                                lcVariables[variableName] = vDns
-                        except RuntimeError:
-                            pass
+                            for v in vDns:
+                                if v[0] != None and torch.is_tensor(v[0]):
+                                    v[0] = torch.unsqueeze(v[0], 0)
+                                                                    
+                            lcVariables[variableName] = vDns
                     else:
                         lcVariables[variableName] = vDns
                     
@@ -1195,13 +1196,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
+                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                         sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                         
                         lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
+                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                         
                         if loss and vDns:
                             vDnsOriginal = vDns
