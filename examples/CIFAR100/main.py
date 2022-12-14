@@ -44,6 +44,7 @@ def main():
     import logging
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
+
     parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp', type=bool)
@@ -182,6 +183,12 @@ def main():
                     guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
             real_tag.append(int(image_.getAttribute(Label, "label")[0]))
             real_category.append(int(image_.getAttribute(category, "label")))
+
+            if guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1]:
+                print("cathrgory messed up:",real_tag[-1],guessed_tag["ILP"][-1],image_.getAttribute(Label, "local/softmax"),image_.getAttribute(category, "local/softmax"))
+
+            if not guessed_category["local/softmax"][-1]==real_category[-1] and guessed_category["ILP"][-1]==real_category[-1]:
+                print("tag messed up:",real_category[-1],guessed_category["ILP"][-1],image_.getAttribute(Label, "local/softmax"),image_.getAttribute(category, "local/softmax"))
 
     for key in ["local/softmax", "ILP"]:
         print(f"##############################{key}#########################")
