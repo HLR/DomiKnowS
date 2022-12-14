@@ -134,6 +134,22 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                         ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
                         ifSatisfied_total += 1
 
+                        '''if verifyResult[lc]['ifSatisfied'] != 100:
+                            print('NOT SATISIFED')
+                            print("%s: %d + %d = %d" % (suffix,
+                                                        digits_results[suffix][-1],
+                                                        digits_results[suffix][-2],
+                                                        summation_results[suffix][-1]))
+                            print()
+
+                        if verifyResult[lc]['ifSatisfied'] == 100 and (digits_results['label'][-1] != digits_results[suffix][-1] or digits_results[suffix][-2] != digits_results['label'][-2]):
+                            print('SATISFIED', digits_results['label'][-1], digits_results['label'][-2], summation_results['label'][-1])
+                            print("%s: %d + %d = %d" % (suffix,
+                                                        digits_results[suffix][-1],
+                                                        digits_results[suffix][-2],
+                                                        summation_results[suffix][-1]))
+                            print()'''
+
                     #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
 
                 #num_constraints = len(verifyResult)
