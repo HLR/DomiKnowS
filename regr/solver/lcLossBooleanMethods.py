@@ -383,12 +383,11 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
         
         if  limitOp == '==': # == limit
             countLoss = torch.minimum(torch.maximum(torch.abs(torch.sub(limit, varSum)), tZero), tOne) # min(max(abs(varSum - limit), 0), 1)
-            countSuccess = torch.sub(tOne, countLoss)
 
             if onlyConstrains:
-        
                 return countLoss
             else:
+                countSuccess = torch.sub(tOne, countLoss)
                 return countSuccess
         else:
             if limitOp == '>=': # > limit
@@ -396,11 +395,9 @@ class lcLossBooleanMethods(ilpBooleanProcessor):
                 
             elif limitOp == '<=': # < limit
                 countSuccess = torch.minimum(torch.maximum(torch.sub(limit, varSum), tZero), tOne) # min(max(limit - varSum, 0), 1)
-    
                     
             if onlyConstrains:
                 countLoss = torch.sub(tOne, countSuccess)
-        
                 return countLoss
             else:
                 return countSuccess
