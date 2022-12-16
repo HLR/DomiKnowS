@@ -24,9 +24,10 @@ import argparse
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
 import config
 
+# build configs from command line args
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
-parser.add_argument('--checkpoint_path', type=str, required=True)
+parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], default='PrimalDual')
+parser.add_argument('--checkpoint_path', type=str, default='checkpoints/primaldual_10k.pth')
 parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
 parser.add_argument('--cuda', default=False, action='store_true')
 parser.add_argument('--ILP', default=False, action='store_true')
@@ -45,6 +46,7 @@ if args.log == 'None':
 elif args.log == 'TimeOnly':
     setProductionLogMode(no_UseTimeLog=False)
 
+# import data
 trainloader, trainloader_mini, validloader, testloader = get_readers(0)
 
 
@@ -86,9 +88,12 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         digits_results[suffix] = []
         summation_results[suffix] = []
 
+    # iter through test data
     for i, node in enumerate(program.populate(reader, device=device)):
 
+        # e.g. /local/argmax or /ILP
         for suffix in infer_suffixes:
+            # get predictions and add to list
             digit0_pred, digit1_pred, summation_pred = get_pred_from_node(node, suffix)
 
             digits_results[suffix].append(digit0_pred)
@@ -96,6 +101,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
             summation_results[suffix].append(summation_pred)
 
+        # get labels and add to list
         pair_node = node.findDatanodes(select='pair')[0]
         digit0_node = node.findDatanodes(select='image')[0]
         digit1_node = node.findDatanodes(select='image')[1]
@@ -118,6 +124,7 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
             print()
 
+        # get constraint verification stats
         for suffix in infer_suffixes:
             verifyResult = node.verifyResultsLC(key=suffix)
             if verifyResult:
@@ -125,44 +132,27 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
                 ifSatisfied_avg = 0.0
                 ifSatisfied_total = 0
                 for lc_idx, lc in enumerate(verifyResult):
+                    # add constraint satisfaction to total list (across all samples)
                     if lc not in satisfied:
                         satisfied[lc] = []
                     satisfied[lc].append(verifyResult[lc]['satisfied'])
                     satisfied_constraints.append(verifyResult[lc]['satisfied'])
 
+                    # build average ifSatisfied value for this single sample
                     if 'ifSatisfied' in verifyResult[lc]:
                         ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
                         ifSatisfied_total += 1
 
-                        '''if verifyResult[lc]['ifSatisfied'] != 100:
-                            print('NOT SATISIFED')
-                            print("%s: %d + %d = %d" % (suffix,
-                                                        digits_results[suffix][-1],
-                                                        digits_results[suffix][-2],
-                                                        summation_results[suffix][-1]))
-                            print()
-
-                        if verifyResult[lc]['ifSatisfied'] == 100 and (digits_results['label'][-1] != digits_results[suffix][-1] or digits_results[suffix][-2] != digits_results['label'][-2]):
-                            print('SATISFIED', digits_results['label'][-1], digits_results['label'][-2], summation_results['label'][-1])
-                            print("%s: %d + %d = %d" % (suffix,
-                                                        digits_results[suffix][-1],
-                                                        digits_results[suffix][-2],
-                                                        summation_results[suffix][-1]))
-                            print()'''
-
-                    #print("constraint #%d" % (lc_idx), lc + ':', verifyResult[lc]['satisfied'], 'label = %d' % summation_results['label'][-1])
-
-                #num_constraints = len(verifyResult)
-
+                # add average ifSatisifed value to overall stats
                 if suffix not in satisfied_overall:
                     satisfied_overall[suffix] = []
+
+                satisfied_overall[suffix].append(ifSatisfied_avg / ifSatisfied_total)
 
                 #satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
                 #pred_digit_sum = digits_results[suffix][-1] + digits_results[suffix][-2]
                 #label_sum = summation_results['label'][-1]
                 #satisfied_overall[suffix].append(1 if pred_digit_sum == label_sum else 0)
-
-                satisfied_overall[suffix].append(ifSatisfied_avg/ifSatisfied_total)
 
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
@@ -211,6 +201,7 @@ model_path = checkpoint_path
 
 state_dict = torch.load(model_path)
 
+# remove learned linear layers for baseline model if summation isn't predicted
 if model_name == 'Baseline' and not args.no_fixedL:
     remove_keys = ["global/pair/<summations>/modulelearner-1.lin1.weight", "global/pair/<summations>/modulelearner-1.lin1.bias", "global/pair/<summations>/modulelearner-1.lin2.weight", "global/pair/<summations>/modulelearner-1.lin2.bias"]
 
