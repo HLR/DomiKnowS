@@ -2156,7 +2156,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                 if verifyListLen:
                     current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
                 else:
-                    current_verifyResult['satisfied'] = 100
+                    current_verifyResult['satisfied'] = float("nan")
                     
                 # If  this if logical constraints
                 if type(lc) is ifL: # if LC
@@ -2194,7 +2194,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if ifVerifyListLen:
                         current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
                     else:
-                        current_verifyResult['ifSatisfied'] = 0
+                        current_verifyResult['ifSatisfied'] = float("nan")
 
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC

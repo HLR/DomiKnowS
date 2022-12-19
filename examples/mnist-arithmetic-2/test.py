@@ -140,8 +140,9 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
                     # build average ifSatisfied value for this single sample
                     if 'ifSatisfied' in verifyResult[lc]:
-                        ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
-                        ifSatisfied_total += 1
+                        if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
+                            ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
+                            ifSatisfied_total += 1
 
                 # add average ifSatisifed value to overall stats
                 if suffix not in satisfied_overall:
@@ -171,9 +172,11 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         print('==========================================')
 
     #sat_values = list(chain(*satisfied.values()))
-    #print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))
+    #print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))]
+    import numpy
     for suffix in infer_suffixes:
-        print('Average constraint satisfactions: %s - %f' % (suffix, sum(satisfied_overall[suffix])/len(satisfied_overall[suffix])))
+        suffixSatisfiedNumpy = numpy.array(satisfied_overall[suffix])
+        print('Average constraint satisfactions: %s - %f' % (suffix, numpy.nanmean(suffixSatisfiedNumpy)))
 
 
 use_digit_labels = (model_name == 'DigitLabel')
