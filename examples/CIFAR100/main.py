@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
-    parser.add_argument('--graph_type', dest='graph_type', default="nothing", help='type of constraints to be defined', type=str)
+    parser.add_argument('--graph_type', dest='graph_type', default="exactL_nandL", help='type of constraints to be defined', type=str)
     args = parser.parse_args()
 
     if args.graph_type=="nothing":
@@ -185,10 +185,25 @@ def main():
             real_category.append(int(image_.getAttribute(category, "label")))
 
             if guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1]:
-                print("cathrgory messed up:",real_tag[-1],guessed_tag["ILP"][-1],image_.getAttribute(Label, "local/softmax"),image_.getAttribute(category, "local/softmax"))
+                print("tag messed up: original tag {} new wrong ILP tag {}  ,correct cathegory {} previous cathegory {} new cathegory {}"+\
+                      ", probablites of correct tag and cathegory are {} and {} and their softmax are {} and {} and their ILP probablites are {} and {}",\
+                      real_tag[-1],guessed_tag["ILP"][-1],real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1]\
+                      ,image_.getAttribute(Label, "local/softmax")[guessed_tag[-1]],image_.getAttribute(category, "local/softmax")[real_category[-1]],\
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]],\
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]])
 
-            if not guessed_category["local/softmax"][-1]==real_category[-1] and guessed_category["ILP"][-1]==real_category[-1]:
-                print("tag messed up:",real_category[-1],guessed_category["ILP"][-1],image_.getAttribute(Label, "local/softmax"),image_.getAttribute(category, "local/softmax"))
+            if guessed_category["local/softmax"][-1]==real_category[-1] and not guessed_category["ILP"][-1]==real_category[-1]:
+                print(
+                    "cathegory messed up: original cathegory {} new wrong ILP cathegory {}  ,correct tag {} previous tag {} new tag {}" + \
+                    ", probablites of correct tag and cathegory are {} and {} and their softmax are {} and {} and their ILP probablites are {} and {}", \
+                    real_category[-1], guessed_category["ILP"][-1], real_tag[-1], guessed_tag["local/softmax"][-1],
+                    guessed_tag["ILP"][-1] \
+                    , image_.getAttribute(Label, "local/softmax")[guessed_tag[-1]],
+                    image_.getAttribute(category, "local/softmax")[real_category[-1]], \
+                    image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],
+                    image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]], \
+                    image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],
+                    image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]])
 
     for key in ["local/softmax", "ILP"]:
         print(f"##############################{key}#########################")
