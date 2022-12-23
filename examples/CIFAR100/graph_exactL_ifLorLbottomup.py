@@ -31,7 +31,7 @@ with Graph('CIFAR100') as graph:
                           'spider', 'squirrel', 'streetcar', 'sunflower', 'sweetpepper', 'table', 'tank', 'telephone',
                           'television', 'tiger', 'tractor', 'train', 'trout', 'tulip', 'turtle', 'wardrobe', 'whale',
                           'willowtree', 'wolf', 'woman', 'worm'])
-    parent_names = {i: j for j, i in
+    parent_names = {j:i for j, i in
                     enumerate(['aquaticmammals', 'fish', 'flowers', 'foodcontainers', 'fruitandvegetables',
                                'householdelectricaldevices', 'householdfurniture', 'insects', 'largecarnivores',
                                'largeman-madeoutdoorthings', 'largenaturaloutdoorscenes', 'largeomnivoresandherbivores',
@@ -39,7 +39,7 @@ with Graph('CIFAR100') as graph:
                                'trees',
                                'vehicles1', 'vehicles2'])}
 
-    children_names = {i: j for j, i in
+    children_names = {j:i for j, i in
                       enumerate(['apple', 'aquariumfish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 'bicycle',
                                  'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 'can', 'castle',
                                  'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock', 'cloud', 'cockroach', 'couch',
