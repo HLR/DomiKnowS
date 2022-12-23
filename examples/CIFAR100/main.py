@@ -80,7 +80,7 @@ def main():
 
     child_to_parent_dict=dict()
     for parent in structure.keys():
-       for child in child_to_parent_dict[parent]:
+       for child in list(structure[parent]):
            child_to_parent_dict[children_names_reverse[child]]=parent_names_reverse[parent]
 
 
