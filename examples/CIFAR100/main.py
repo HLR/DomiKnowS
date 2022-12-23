@@ -207,24 +207,24 @@ def main():
             if flag:
                 print("cathegory(parent) label, softmax, ILP :",real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1])
                 print("cathegory(parent) label, softmax, ILP :", parent_names[real_category[-1]],parent_names[guessed_category["local/softmax"][-1]], parent_names[guessed_category["ILP"][-1]])
-                print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]],\
-                      image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]])
+                print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]].item(),\
+                      image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]].item(),image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]].item())
 
                 print("tag(child) label, softmax, ILP :", real_tag[-1],guessed_tag["local/softmax"][-1], guessed_tag["ILP"][-1])
                 print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
-                print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]], \
-                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]], image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]])
+                print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]].item(), \
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]].item(), image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]].item())
 
                 softmax_children=[]
                 names_softmax_children=[]
                 for i in structure[parent_names[guessed_category["local/softmax"][-1]]]:
-                    softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]])
+                    softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
                     names_softmax_children.append(i)
 
                 ILP_children = []
                 names_ILP_children=[]
                 for i in structure[parent_names[guessed_category["ILP"][-1]]]:
-                    ILP_children.append(image_.getAttribute(Label, "ILP")[children_names_reverse[i]])
+                    ILP_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
                     names_ILP_children.append(i)
 
                 print("names of the children of softmax parent:", names_softmax_children)
