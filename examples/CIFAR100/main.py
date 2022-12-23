@@ -76,6 +76,13 @@ def main():
         from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
 
     children_names_reverse={i:j for j,i in children_names.items()}
+    parent_names_reverse = {i: j for j, i in parent_names.items()}
+
+    child_to_parent_dict=dict()
+    for parent in structure.keys():
+       for child in child_to_parent_dict[parent]:
+           child_to_parent_dict[children_names_reverse[child]]=parent_names_reverse[parent]
+
 
     device = "cuda:"+str(args.cuda_number)
 
@@ -214,6 +221,11 @@ def main():
                 print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
                 print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]].item(), \
                       image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]].item(), image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]].item())
+
+                print("probability of parents of tag(child) label, softmax, ILP :",
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[real_tag[-1]]].item(), \
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["local/softmax"][-1]]].item(),
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["ILP"][-1]]].item())
 
                 softmax_children=[]
                 names_softmax_children=[]
