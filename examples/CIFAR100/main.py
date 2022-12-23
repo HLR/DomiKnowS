@@ -63,19 +63,19 @@ def main():
     args = parser.parse_args()
 
     if args.graph_type=="nothing":
-        from graph import graph, image_group_contains, image, category, Label, image_group
+        from graph import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type=="only_exactL":
-        from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group
+        from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLtopdown":
-        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLbottomup":
-        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLbothways":
-        from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_nandL":
-        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
 
-
+    children_names_reverse={i:j for j,i in children_names.items()}
 
     device = "cuda:"+str(args.cuda_number)
 
@@ -183,53 +183,55 @@ def main():
                     guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
             real_tag.append(int(image_.getAttribute(Label, "label")[0]))
             real_category.append(int(image_.getAttribute(category, "label")))
-
+            flag=False
             if counter_list[0]<5 and guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1]:
                 counter_list[0]+=1
-
-                print(("tag messed up: original tag {} new wrong ILP tag {}  ,correct cathegory {} previous cathegory {} new ILP cathegory {}"+\
-                      ", probablites of correct tag and cathegory are {:.2f} and {:.2f} and their softmax are {:.2f} and {:.2f} and their ILP probablites are {:.2f} and {:.2f}").format(\
-                      real_tag[-1],guessed_tag["ILP"][-1],real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1]\
-                      ,image_.getAttribute(Label, "local/softmax")[real_tag[-1]],image_.getAttribute(category, "local/softmax")[real_category[-1]],\
-                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]],\
-                      image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]]))
+                print("tag messed up:")
+                flag=True
 
             if counter_list[1]<5 and guessed_category["local/softmax"][-1]==real_category[-1] and not guessed_category["ILP"][-1]==real_category[-1]:
                 counter_list[1] += 1
-                print((
-                    "cathegory messed up: original cathegory {} new wrong ILP cathegory {}  ,correct tag {} previous tag {} new ILP tag {}" + \
-                    ", probablites of correct tag and cathegory are {:.2f} and {:.2f} and their softmax are {:.2f} and {:.2f} and their ILP probablites are {:.2f} and {:.2f}").format( \
-                    real_category[-1], guessed_category["ILP"][-1], real_tag[-1], guessed_tag["local/softmax"][-1],
-                    guessed_tag["ILP"][-1] \
-                    , image_.getAttribute(Label, "local/softmax")[real_tag[-1]],
-                    image_.getAttribute(category, "local/softmax")[real_category[-1]], \
-                    image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],
-                    image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]], \
-                    image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],
-                    image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]]))
+                print("cathegory messed up:")
+                flag = True
 
             if counter_list[2]<5 and guessed_tag["ILP"][-1]==real_tag[-1] and not guessed_tag["local/softmax"][-1]==real_tag[-1]:
                 counter_list[2] += 1
-                print(("tag improved: original tag {} new wrong ILP tag {}  ,correct cathegory {} previous cathegory {} new ILP cathegory {}"+\
-                      ", probablites of correct tag and cathegory are {:.2f} and {:.2f} and their softmax are {:.2f} and {:.2f} and their ILP probablites are {:.2f} and {:.2f}").format(\
-                      real_tag[-1],guessed_tag["local/softmax"][-1],real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1]\
-                      ,image_.getAttribute(Label, "local/softmax")[real_tag[-1]],image_.getAttribute(category, "local/softmax")[real_category[-1]],\
-                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]],\
-                      image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]]))
+                print("tag improved:")
+                flag = True
 
             if counter_list[3]<5 and guessed_category["ILP"][-1]==real_category[-1] and not guessed_category["local/softmax"][-1]==real_category[-1]:
                 counter_list[3] += 1
-                print((
-                    "cathegory improved: original cathegory {} new wrong ILP cathegory {}  ,correct tag {} previous tag {} new ILP tag {}" + \
-                    ", probablites of correct tag and cathegory are {:.2f} and {:.2f} and their softmax are {:.2f} and {:.2f} and their ILP probablites are {:.2f} and {:.2f}").format( \
-                    real_category[-1], guessed_category["local/softmax"][-1], real_tag[-1], guessed_tag["local/softmax"][-1],
-                    guessed_tag["ILP"][-1] \
-                    , image_.getAttribute(Label, "local/softmax")[real_tag[-1]],
-                    image_.getAttribute(category, "local/softmax")[real_category[-1]], \
-                    image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]],
-                    image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]], \
-                    image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]],
-                    image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]]))
+                print("cathegory improved")
+                flag = True
+
+            if flag:
+                print("cathegory(parent) label, softmax, ILP :",real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1])
+                print("cathegory(parent) label, softmax, ILP :", parent_names[real_category[-1]],parent_names[guessed_category["local/softmax"][-1]], parent_names[guessed_category["ILP"][-1]])
+                print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]],\
+                      image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]],image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]])
+
+                print("tag(child) label, softmax, ILP :", real_tag[-1],guessed_tag["local/softmax"][-1], guessed_tag["ILP"][-1])
+                print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
+                print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]], \
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]], image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]])
+
+                softmax_children=[]
+                names_softmax_children=[]
+                for i in structure[parent_names[guessed_category["local/softmax"][-1]]]:
+                    softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]])
+                    names_softmax_children.append(i)
+
+                ILP_children = []
+                names_ILP_children=[]
+                for i in structure[parent_names[guessed_category["ILP"][-1]]]:
+                    ILP_children.append(image_.getAttribute(Label, "ILP")[children_names_reverse[i]])
+                    names_ILP_children.append(i)
+
+                print("names of the children of softmax parent:", names_softmax_children)
+                print("Probabilities of the children of softmax parent:",softmax_children)
+                print("names of the children of ILP parent:", names_ILP_children)
+                print("Probabilities of the children of ILP parent:", ILP_children)
+
 
     for key in ["local/softmax", "ILP"]:
         print(f"##############################{key}#########################")
