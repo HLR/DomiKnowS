@@ -86,8 +86,8 @@ with Graph('CIFAR100') as graph:
         exactL(*[category.__getattr__(i[1]) for i in category.attributes])
         for i in category.attributes:
             lj = [Label.get_concept(l) for l in structure[i[1]]]
-            ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
-            ifL(orL(*[Label.__getattr__(ii[1])("x") for ii in lj]),category.__getattr__(i[1])("x"))
+            ifL(category.__getattr__(i[1]), orL(*[Label.__getattr__(ii[1]) for ii in lj]))
+            ifL(orL(*[Label.__getattr__(ii[1]) for ii in lj]), category.__getattr__(i[1]))
     else:
         relations = 0
         for i in category.attributes:
