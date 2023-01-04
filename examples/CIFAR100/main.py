@@ -194,7 +194,7 @@ def main():
     }
     counter_list=[0,0,0,0]
     if args.test:
-        model.load_state_dict(torch.load(args.namesave + "_" + str(args.epochs)))
+        model.load_state_dict(torch.load(args.namesave + str(args.epochs)))
         #program.load(args.namesave + "_" + str(args.epochs))
         #program.test(test_reader)
     real_category = []
