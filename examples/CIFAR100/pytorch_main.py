@@ -119,7 +119,7 @@ model.to(device)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4,)
 epoch_number=args.epochs
-train_reader,test_reader=create_readers(train_num=250,test_num=250)#train_num=2500,test_num=2500
+train_reader,test_reader=create_readers()#train_num=2500,test_num=2500
 
 for epoch_i in range(epoch_number):
     model.train()
