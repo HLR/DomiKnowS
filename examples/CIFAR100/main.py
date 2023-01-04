@@ -175,7 +175,7 @@ def main():
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=250,
                                     sampleGlobalLoss=False, beta=args.beta, device=device)
 
-    train_reader,test_reader=create_readers(train_num=args.samplenum)
+    train_reader,test_reader=create_readers(train_num=min(args.samplenum,50000),test_num= min(args.samplenum,10000//4))
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
     if not args.test:
