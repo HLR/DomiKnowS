@@ -8,7 +8,7 @@ from regr.program.model.pytorch import SolverModel
 from regr.program.primaldualprogram import PrimalDualProgram
 
 import torch
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet50, resnet101, resnet152
 
 from regr.program import SolverPOIProgram, IMLProgram
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
@@ -30,9 +30,6 @@ class ImageNetwork(torch.nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
-
-# Disable Logging 
-
     
 def main():
     from regr.utils import setProductionLogMode
@@ -52,6 +49,8 @@ def main():
     parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
     parser.add_argument('--test', dest='test', default=True, help='dont train just test', type=bool)
+
+    parser.add_argument('--resnet', dest='resnet', default=18, help='value of learning rate', type=int)
 
     parser.add_argument('--samplenum', dest='samplenum', default=5,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=2, help='number of training epoch', type=int)
@@ -83,7 +82,6 @@ def main():
        for child in list(structure[parent]):
            child_to_parent_dict[children_names_reverse[child]]=parent_names_reverse[parent]
 
-
     device = "cuda:"+str(args.cuda_number)
 
     image_group['pixels_group'] = ReaderSensor(keyword='pixels', device=device)
@@ -94,10 +92,10 @@ def main():
         return torch.LongTensor([[int(i)] for i in x])
 
     def make_images(pixels_group, category_group, tag_group):
-        return torch.ones((len(category_group.split("@@")), 1)), torch.squeeze(pixels_group, 0), str_to_int_list(
-            category_group.split("@@")), str_to_int_list(tag_group.split("@@"))
+        return torch.ones((len(category_group.split("@@")), 1)), torch.squeeze(pixels_group, 0),["parent" for i in range(len(category_group.split("@@")))],\
+               ["child" for i in range(len(category_group.split("@@")))], str_to_int_list(category_group.split("@@")), str_to_int_list(tag_group.split("@@"))
 
-    image[image_group_contains, "pixels", 'category_', "tag_"] = JointSensor(image_group['pixels_group'],
+    image[image_group_contains, "pixels","parent","child", 'category_', "tag_"] = JointSensor(image_group['pixels_group'],
                                                                              image_group["category_group"],
                                                                              image_group["tag_group"],
                                                                              forward=make_images)
@@ -107,10 +105,39 @@ def main():
     image[category] = FunctionalSensor(image_group_contains, "category_", forward=label_reader, label=True)
     image[Label] = FunctionalSensor(image_group_contains, "tag_", forward=label_reader, label=True)
 
+    class CIFAR100Model(torch.nn.Module):
 
-    image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
-    image[category] = ModuleLearner('emb', module=nn.Linear(1000, 20))
-    image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
+        def __init__(self):
+            super(CIFAR100Model, self).__init__()
+            # resnet18, resnet50, resnet101, resnet152
+            if args.resnet == 18:
+                self.res_p = resnet18(pretrained=True)
+                self.res_c = resnet18(pretrained=True)
+            elif args.resnet == 50:
+                self.res_p = resnet50(pretrained=True)
+                self.res_c = resnet50(pretrained=True)
+            elif args.resnet == 101:
+                self.res_p = resnet101(pretrained=True)
+                self.res_c = resnet101(pretrained=True)
+            elif args.resnet == 152:
+                self.res_p = resnet152(pretrained=True)
+                self.res_c = resnet152(pretrained=True)
+
+            self.l1 = torch.nn.Linear(1000, 20)
+            self.l2 = torch.nn.Linear(1000, 100)
+
+
+        def forward(self, input, mode="parent"):
+            if mode[0] == "parent":
+                return self.l1(self.res_p(input))
+            return self.l2(self.res_c(input))
+
+    model=CIFAR100Model()
+    #image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
+
+    image[category] = ModuleLearner('pixels',"parent", module=model)
+    image[Label] = ModuleLearner('pixels',"child", module=model)
+
     f = open(str(args.ilp)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
     print("POI")
     program = SolverPOIProgram(graph, inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -167,7 +194,8 @@ def main():
     }
     counter_list=[0,0,0,0]
     if args.test:
-        program.load(args.namesave + "_" + str(args.epochs))
+        model.load_state_dict(torch.load(args.namesave + "_" + str(args.epochs)))
+        #program.load(args.namesave + "_" + str(args.epochs))
         #program.test(test_reader)
     real_category = []
     ac_,t_=0,0

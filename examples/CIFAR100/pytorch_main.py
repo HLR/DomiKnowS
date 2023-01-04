@@ -107,6 +107,7 @@ class CIFAR100Model(torch.nn.Module):
 
         self.l1=torch.nn.Linear(1000, 20)
         self.l2=torch.nn.Linear(1000, 100)
+
     def forward(self,input,mode="parent"):
         if mode=="parent":
             return self.l1(self.res_p(input))
