@@ -1,8 +1,8 @@
 import pickle,torch
 from torchvision import transforms
 import torch.optim as optim
-import itertools
-from torchvision.models import resnet18
+import itertools, argparse
+from torchvision.models import resnet18,resnet50,resnet101,resnet152
 preprocess = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize(256),
@@ -10,6 +10,18 @@ preprocess = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
+parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
+
+parser.add_argument('--epochs', dest='epochs', default=100, help='number of training epoch', type=int)
+parser.add_argument('--resnet', dest='resnet', default=18, help='value of learning rate', type=int)
+
+parser.add_argument('--graph_type', dest='graph_type', default="exactL_nandL", help='type of constraints to be defined', type=str)
+args = parser.parse_args()
+
 
 def create_readers(train_num=50000,test_num=10000//4,batch_size=64):
     structure={}
@@ -79,22 +91,35 @@ class CIFAR100Model(torch.nn.Module):
 
     def __init__(self):
         super(CIFAR100Model, self).__init__()
-        self.res=resnet18(pretrained=True)
+        #resnet18, resnet50, resnet101, resnet152
+        if args.resnet==18:
+            self.res_p = resnet18(pretrained=True)
+            self.res_c = resnet18(pretrained=True)
+        elif args.resnet==50:
+            self.res_p = resnet50(pretrained=True)
+            self.res_c = resnet50(pretrained=True)
+        elif args.resnet==101:
+            self.res_p = resnet101(pretrained=True)
+            self.res_c = resnet101(pretrained=True)
+        elif args.resnet==152:
+            self.res_p = resnet152(pretrained=True)
+            self.res_c = resnet152(pretrained=True)
+
         self.l1=torch.nn.Linear(1000, 20)
         self.l2=torch.nn.Linear(1000, 100)
     def forward(self,input,mode="parent"):
         if mode=="parent":
-            return self.l1(self.res(input))
-        return self.l2(self.res(input))
+            return self.l1(self.res_p(input))
+        return self.l2(self.res_c(input))
 
 model = CIFAR100Model()
-device = "cuda:"+str(0) if torch.cuda.is_available() else 'cpu'
+device = "cuda:"+str(args.cuda_number) if torch.cuda.is_available() else 'cpu'
 print("device is : ",device)
 model.to(device)
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=2e-4,)
-epoch_number=10
-train_reader,test_reader=create_readers(train_num=2500,test_num=2500)
+optimizer = optim.Adam(model.parameters(), lr=1e-4,)
+epoch_number=args.epochs
+train_reader,test_reader=create_readers(train_num=250,test_num=250)#train_num=2500,test_num=2500
 
 for epoch_i in range(epoch_number):
     model.train()
@@ -138,5 +163,6 @@ for epoch_i in range(epoch_number):
         ac_c += torch.sum(outputs.argmax(dim=1) == fine_label).item()
 
         t_ += outputs.shape[0]
-
+    if epoch_i%10==9:
+        torch.save(model.state_dict(), args.namesave+str(epoch_i))
     print(epoch_i, "test ac:", ac_p / t_ * 100, ac_c / t_ * 100)
