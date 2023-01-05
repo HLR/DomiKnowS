@@ -19,6 +19,8 @@ parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number t
 parser.add_argument('--epochs', dest='epochs', default=100, help='number of training epoch', type=int)
 parser.add_argument('--resnet', dest='resnet', default=18, help='value of learning rate', type=int)
 
+parser.add_argument('--lowdata', dest='lowdata', default=False, help='value of learning rate', type=bool)
+
 parser.add_argument('--graph_type', dest='graph_type', default="exactL_nandL", help='type of constraints to be defined', type=str)
 args = parser.parse_args()
 
@@ -120,7 +122,10 @@ model.to(device)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4,)
 epoch_number=args.epochs
-train_reader,test_reader=create_readers()#train_num=2500,test_num=2500
+if not args.lowdata:
+    train_reader,test_reader=create_readers()#train_num=2500,test_num=2500
+else:
+    train_reader, test_reader = create_readers(train_num=5000,test_num=2500)
 
 for epoch_i in range(epoch_number):
     model.train()
