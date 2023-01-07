@@ -13,9 +13,11 @@ from torchtext.vocab import GloVe, vocab
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import pickle
 
+limit_spans = 50
+
 glove_vectors = GloVe()
 
-with open('srl_data_train.pkl', 'rb') as file_in:
+with open('data/srl_data_train.pkl', 'rb') as file_in:
     train_data = pickle.load(file_in)
 
 
@@ -34,11 +36,6 @@ def unpack_data(data, subset=1.0):
         if i >= limit_idx:
             break
 
-        sentence_raw.append(dp['sentence'])
-        sentences.append(glove_vectors.get_vecs_by_tokens(dp['sentence']))
-        predicates.append(dp['predicate'])
-        args.append(dp['args'])
-
         sentence_spans = []
 
         for sp in dp['spans'].keys():
@@ -46,6 +43,13 @@ def unpack_data(data, subset=1.0):
             span_mask[sp[0]: sp[1] + 1] = 1
             sentence_spans.append(span_mask)
 
+        if len(sentence_spans) > limit_spans:
+            continue
+
+        sentence_raw.append(dp['sentence'])
+        sentences.append(glove_vectors.get_vecs_by_tokens(dp['sentence']))
+        predicates.append(dp['predicate'])
+        args.append(dp['args'])
         spans.append(sentence_spans)
 
     lens = [len(s) for s in sentences]
@@ -81,7 +85,13 @@ class SRLDataset:
 
         # spans
         for sp_idx in range(self.num_spans):
-            result['span_%d' % sp_idx] = self.data_blob['spans'][idx][sp_idx]
+            if sp_idx < len(self.data_blob['spans'][idx]):
+                result['span_%d' % sp_idx] = self.data_blob['spans'][idx][sp_idx]
+            else:
+                result['span_%d' % sp_idx] = torch.zeros(self.data_blob['spans'][idx][0].shape)
+
+        result['span_0'] = torch.ones(self.data_blob['spans'][idx][0].shape)
+        result['span_1'] = torch.zeros(self.data_blob['spans'][idx][0].shape)
 
         # arg labels
         result['arg_label'] = torch.tensor([[x] for x in self.data_blob['args'][idx]])
@@ -106,12 +116,12 @@ data_blob = unpack_data(train_data, subset=0.10)
 del train_data
 del glove_vectors
 
-data_blob_train = select_batch(data_blob, 0, 5000)
+data_blob_train = select_batch(data_blob, 0, 100)
 data_blob_train_mini = select_batch(data_blob, 0, 500)
 data_blob_valid = select_batch(data_blob, 5000, 500)
 
-train_dataset = SRLDataset(data_blob_train, 2)
-train_mini_dataset = SRLDataset(data_blob_train_mini, 2)
-valid_dataset = SRLDataset(data_blob_valid, 2)
+train_dataset = SRLDataset(data_blob_train, limit_spans)
+train_mini_dataset = SRLDataset(data_blob_train_mini, limit_spans)
+valid_dataset = SRLDataset(data_blob_valid, limit_spans)
 
 # print(data_blob_train)

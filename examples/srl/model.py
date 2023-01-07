@@ -19,10 +19,10 @@ import torch.nn.functional as F
 from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program import SolverPOIProgram
-from regr.program.lossprogram import PrimalDualProgram
-from regr.program.model.pytorch import SolverModel
-from regr.program.loss import NBCrossEntropyLoss
+from regr.program import SolverPOIProgram, SolverPOIDictLossProgram
+from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from regr.program.model.pytorch import SolverModel, SolverModelDictLoss
+from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyDictLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from functools import partial
 from tqdm import tqdm
@@ -52,16 +52,35 @@ sentence['word', sentence_contains.reversed] = JointSensor(word['word'], forward
 
 for i, sp in enumerate(spans):
     # dummy values
-    word[sp] = FunctionalSensor(word['word'], forward=lambda x: torch.ones(len(x), 2) * 0.5)
+    #word[sp] = FunctionalSensor(word['word'], forward=lambda x: torch.ones(len(x), 2) * 0.5)
+
+    word['sp_label_%d' % i] = ReaderSensor(keyword='span_%d' % i)
+
+    def manual_fixedL(x, lbl):
+        result = torch.ones(len(x), 2) * -100
+        for j, l in enumerate(lbl):
+            result[j, int(l[0])] = 100
+        return result
+
+    word[sp] = FunctionalSensor(word['word'], word['sp_label_%d' % i], forward=manual_fixedL)
 
     word[sp] = ReaderSensor(keyword='span_%d' % i, label=True)
 
 word['spanFixed'] = FunctionalSensor(word['word'], forward=lambda x: torch.ones(len(x), 1))
 
-sentence[span_num] = FunctionalSensor(forward=lambda: torch.ones(1, num_spans))
+first = torch.ones(1, num_spans) * -100
+first[:, 0] = 100
+
+second = torch.ones(1, num_spans) * -100
+second[:, 1] = 100
+
+uniform = torch.ones(1, num_spans)
+
+sentence[span_num_1] = FunctionalSensor(forward=lambda: first)
+sentence[span_num_2] = FunctionalSensor(forward=lambda: second)
 
 
-class CallbackProgram(SolverPOIProgram):
+class CallbackProgram(PrimalDualProgram):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
@@ -74,11 +93,19 @@ class CallbackProgram(SolverPOIProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = CallbackProgram(graph,
+'''program = CallbackProgram(graph,
                           poi=(sentence, word),
                           inferTypes=['local/argmax'],
-                          metric={})
+                          dictloss={'tag': MacroAverageTracker(NBCrossEntropyDictLoss(weight=torch.tensor([1.20999499, 22.3466872, 7.76391863]))),
+                                    'default': MacroAverageTracker(NBCrossEntropyDictLoss())},
+                          metric={})'''
 
+program = CallbackProgram(graph, SolverModelDictLoss,
+                            poi=(sentence, word),
+                            inferTypes=['local/argmax'],
+                            #dictloss={'tag': MacroAverageTracker(NBCrossEntropyDictLoss(weight=torch.tensor([1.20999499, 22.3466872, 7.76391863]))),
+                            #          'default': MacroAverageTracker(NBCrossEntropyDictLoss())},
+                            metric={})
 
 def print_scores(dataset):
     all_lbl = []
@@ -94,21 +121,27 @@ def print_scores(dataset):
             all_lbl.append(lbl)
             all_pred.append(pred)
 
-    print(classification_report(all_lbl, all_pred))
+        #print(all_pred[-len(word_nodes):])
+
+    #print(classification_report(all_lbl, all_pred))
+    print(all_pred[:100])
 
 
 def post_epoch_metrics(kwargs):
     print_scores(train_mini_dataset)
-    print_scores(valid_dataset)
+    #print_scores(valid_dataset)
 
 
 program.after_train_epoch = [post_epoch_metrics]
 
 program.train(train_dataset,
-              train_epoch_num=10,
-              Optim=partial(torch.optim.Adam, lr=1e-5),
+              train_epoch_num=40,
+              Optim=partial(torch.optim.Adam, lr=1e-3),
               test_every_epoch=True,
-              device='auto')
+              device='auto',
+              c_lr=0.05,
+              c_momentum=0.9,
+              c_warmup_iters=0)
 
 '''program = PrimalDualProgram(graph, SolverModel,
                             poi=(sentence, word),
