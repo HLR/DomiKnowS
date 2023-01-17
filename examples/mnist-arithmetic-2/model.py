@@ -182,9 +182,6 @@ def print_and_output(x, f=lambda x: x.shape, do_print=False):
     return x
 
 
-class ConstantEdgeSensor(ConstantSensor, EdgeSensor): pass
-
-
 def build_program(sum_setting=None, digit_labels=False, device='cpu', use_fixedL=True, test=False):
     image['pixels'] = ReaderSensor(keyword='pixels')
 
@@ -205,13 +202,11 @@ def build_program(sum_setting=None, digit_labels=False, device='cpu', use_fixedL
 
     image[digit] = FunctionalSensor('logits', forward=lambda x: x)
 
-    # image_pair[pair_d0.reversed] = ConstantEdgeSensor(image['logits'], data=[[1, 0]], relation=pair_d0.reversed)
-    # image_pair[pair_d1.reversed] = ConstantEdgeSensor(image['logits'], data=[[0, 1]], relation=pair_d1.reversed)
-
     if digit_labels:
         image[digit] = FunctionalSensor('digit_label', forward=lambda x: x, label=True)
 
     if use_fixedL and test:
+        # during test time, set model output to be the summation label
         def manual_fixedL(s):
             res = torch.zeros((1, 19))
             res[0, s] = 1

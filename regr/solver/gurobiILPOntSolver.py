@@ -2154,30 +2154,36 @@ class gurobiILPOntSolver(ilpOntSolver):
                     verifyListSatisfied += sum(vl)
                 
                 if verifyListLen:
-                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) *100
+                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
                 else:
-                    current_verifyResult['satisfied'] = 100
+                    current_verifyResult['satisfied'] = float("nan")
                     
+                # If  this if logical constraints
                 if type(lc) is ifL: # if LC
-                    firstKey = next(iter(lcVariables))
-                    firstLcV = lcVariables[firstKey] 
+                    firstKey = next(iter(lcVariables)) # antecedent variable name in the given if LC
+                    firstLcV = lcVariables[firstKey]   # values of antecedent 
                     
                     ifVerifyList = []
                     
                     ifVerifyListLen = 0
                     ifVerifyListSatisfied = 0
+                    
+                    # Loop through the collected verification 
                     for i, v in enumerate(verifyList):
                         ifVi = []
+                        # Check if the number of elements in verify list is the same as number of elements in antecedent variables
                         if len(v) != len(firstLcV[i]):
-                            f = firstLcV[i]
-                            continue    
+                            continue # should be exception
+                        
+                        # Select these calculated verification which have antecedent true
                         for j, w in enumerate(v):
                             if torch.is_tensor(firstLcV[i][j]):
-                                if firstLcV[i][j].item() == 1:
-                                    ifVi.append(w)
+                                currentAntecedent = firstLcV[i][j].item()
                             else: 
-                                if firstLcV[i][j] == 1:
-                                    ifVi.append(w)
+                                currentAntecedent = firstLcV[i][j] 
+                                
+                            if currentAntecedent == 1: # antecedent true
+                                ifVi.append(w)
                                     
                         ifVerifyList.append(ifVi)
                         
@@ -2188,7 +2194,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     if ifVerifyListLen:
                         current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
                     else:
-                        current_verifyResult['ifSatisfied'] = 100
+                        current_verifyResult['ifSatisfied'] = float("nan")
 
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC

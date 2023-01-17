@@ -8,7 +8,7 @@ from regr.program.model.pytorch import SolverModel
 from regr.program.primaldualprogram import PrimalDualProgram
 
 import torch
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet50, resnet101, resnet152
 
 from regr.program import SolverPOIProgram, IMLProgram
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
@@ -30,9 +30,6 @@ class ImageNetwork(torch.nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
-
-# Disable Logging 
-
     
 def main():
     from regr.utils import setProductionLogMode
@@ -44,6 +41,7 @@ def main():
     import logging
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
+
     parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp', type=bool)
@@ -52,29 +50,37 @@ def main():
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
     parser.add_argument('--test', dest='test', default=True, help='dont train just test', type=bool)
 
+    parser.add_argument('--resnet', dest='resnet', default=18, help='value of learning rate', type=int)
+
     parser.add_argument('--samplenum', dest='samplenum', default=5,help='number of samples to choose from the dataset',type=int)
     parser.add_argument('--epochs', dest='epochs', default=2, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
-    parser.add_argument('--graph_type', dest='graph_type', default="nothing", help='type of constraints to be defined', type=str)
+    parser.add_argument('--graph_type', dest='graph_type', default="exactL_nandL", help='type of constraints to be defined', type=str)
     args = parser.parse_args()
 
     if args.graph_type=="nothing":
-        from graph import graph, image_group_contains, image, category, Label, image_group
+        from graph import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type=="only_exactL":
-        from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group
+        from graph_only_exactL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLtopdown":
-        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLtopdown import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLbottomup":
-        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLbottomup import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_ifLorLbothways":
-        from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_ifLorLbothways import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
     elif args.graph_type == "exactL_nandL":
-        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group
+        from graph_exactL_nandL import graph, image_group_contains, image, category, Label, image_group,parent_names,children_names,structure
 
+    children_names_reverse={i:j for j,i in children_names.items()}
+    parent_names_reverse = {i: j for j, i in parent_names.items()}
 
+    child_to_parent_dict=dict()
+    for parent in structure.keys():
+       for child in list(structure[parent]):
+           child_to_parent_dict[children_names_reverse[child]]=parent_names_reverse[parent]
 
     device = "cuda:"+str(args.cuda_number)
 
@@ -86,10 +92,10 @@ def main():
         return torch.LongTensor([[int(i)] for i in x])
 
     def make_images(pixels_group, category_group, tag_group):
-        return torch.ones((len(category_group.split("@@")), 1)), torch.squeeze(pixels_group, 0), str_to_int_list(
-            category_group.split("@@")), str_to_int_list(tag_group.split("@@"))
+        return torch.ones((len(category_group.split("@@")), 1)), torch.squeeze(pixels_group, 0),["parent" for i in range(len(category_group.split("@@")))],\
+               ["child" for i in range(len(category_group.split("@@")))], str_to_int_list(category_group.split("@@")), str_to_int_list(tag_group.split("@@"))
 
-    image[image_group_contains, "pixels", 'category_', "tag_"] = JointSensor(image_group['pixels_group'],
+    image[image_group_contains, "pixels","parent","child", 'category_', "tag_"] = JointSensor(image_group['pixels_group'],
                                                                              image_group["category_group"],
                                                                              image_group["tag_group"],
                                                                              forward=make_images)
@@ -99,10 +105,39 @@ def main():
     image[category] = FunctionalSensor(image_group_contains, "category_", forward=label_reader, label=True)
     image[Label] = FunctionalSensor(image_group_contains, "tag_", forward=label_reader, label=True)
 
+    class CIFAR100Model(torch.nn.Module):
 
-    image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
-    image[category] = ModuleLearner('emb', module=nn.Linear(1000, 20))
-    image[Label] = ModuleLearner('emb', module=nn.Linear(1000, 100))
+        def __init__(self):
+            super(CIFAR100Model, self).__init__()
+            # resnet18, resnet50, resnet101, resnet152
+            if args.resnet == 18:
+                self.res_p = resnet18(pretrained=True)
+                self.res_c = resnet18(pretrained=True)
+            elif args.resnet == 50:
+                self.res_p = resnet50(pretrained=True)
+                self.res_c = resnet50(pretrained=True)
+            elif args.resnet == 101:
+                self.res_p = resnet101(pretrained=True)
+                self.res_c = resnet101(pretrained=True)
+            elif args.resnet == 152:
+                self.res_p = resnet152(pretrained=True)
+                self.res_c = resnet152(pretrained=True)
+
+            self.l1 = torch.nn.Linear(1000, 20)
+            self.l2 = torch.nn.Linear(1000, 100)
+
+
+        def forward(self, input, mode="parent"):
+            if mode[0] == "parent":
+                return self.l1(self.res_p(input))
+            return self.l2(self.res_c(input))
+
+    model=CIFAR100Model()
+    #image['emb'] = ModuleLearner('pixels', module=resnet18(pretrained=True))
+
+    image[category] = ModuleLearner('pixels',"parent", module=model)
+    image[Label] = ModuleLearner('pixels',"child", module=model)
+
     f = open(str(args.ilp)+"_"+str(args.samplenum)+"_"+"_"+str(args.beta)+".txt", "w")
     print("POI")
     program = SolverPOIProgram(graph, inferTypes=['local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -140,7 +175,7 @@ def main():
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()), sample=True, sampleSize=250,
                                     sampleGlobalLoss=False, beta=args.beta, device=device)
 
-    train_reader,test_reader=create_readers(train_num=args.samplenum)
+    train_reader,test_reader=create_readers(train_num=min(args.samplenum,50000),test_num= min(args.samplenum,10000//4))
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
     if not args.test:
@@ -157,9 +192,10 @@ def main():
         "local/softmax": [],
         "ILP": []
     }
-
+    counter_list=[0,0,0,0]
     if args.test:
-        program.load(args.namesave + "_" + str(args.epochs))
+        model.load_state_dict(torch.load(args.namesave + str(args.epochs)))
+        #program.load(args.namesave + "_" + str(args.epochs))
         #program.test(test_reader)
     real_category = []
     ac_,t_=0,0
@@ -182,6 +218,60 @@ def main():
                     guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
             real_tag.append(int(image_.getAttribute(Label, "label")[0]))
             real_category.append(int(image_.getAttribute(category, "label")))
+            flag=False
+            if counter_list[0]<5 and guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1]:
+                counter_list[0]+=1
+                print("tag messed up:")
+                flag=True
+
+            if counter_list[1]<5 and guessed_category["local/softmax"][-1]==real_category[-1] and not guessed_category["ILP"][-1]==real_category[-1]:
+                counter_list[1] += 1
+                print("cathegory messed up:")
+                flag = True
+
+            if counter_list[2]<5 and guessed_tag["ILP"][-1]==real_tag[-1] and not guessed_tag["local/softmax"][-1]==real_tag[-1]:
+                counter_list[2] += 1
+                print("tag improved:")
+                flag = True
+
+            if counter_list[3]<5 and guessed_category["ILP"][-1]==real_category[-1] and not guessed_category["local/softmax"][-1]==real_category[-1]:
+                counter_list[3] += 1
+                print("cathegory improved")
+                flag = True
+
+            if flag:
+                print("cathegory(parent) label, softmax, ILP :",real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1])
+                print("cathegory(parent) label, softmax, ILP :", parent_names[real_category[-1]],parent_names[guessed_category["local/softmax"][-1]], parent_names[guessed_category["ILP"][-1]])
+                print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]].item(),\
+                      image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]].item(),image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]].item())
+
+                print("tag(child) label, softmax, ILP :", real_tag[-1],guessed_tag["local/softmax"][-1], guessed_tag["ILP"][-1])
+                print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
+                print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]].item(), \
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]].item(), image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]].item())
+
+                print("probability of parents of tag(child) label, softmax, ILP :",
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[real_tag[-1]]].item(), \
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["local/softmax"][-1]]].item(),
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["ILP"][-1]]].item())
+
+                softmax_children=[]
+                names_softmax_children=[]
+                for i in structure[parent_names[guessed_category["local/softmax"][-1]]]:
+                    softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
+                    names_softmax_children.append(i)
+
+                ILP_children = []
+                names_ILP_children=[]
+                for i in structure[parent_names[guessed_category["ILP"][-1]]]:
+                    ILP_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
+                    names_ILP_children.append(i)
+
+                print("names of the children of softmax parent:", names_softmax_children)
+                print("Probabilities of the children of softmax parent:",softmax_children)
+                print("names of the children of ILP parent:", names_ILP_children)
+                print("Probabilities of the children of ILP parent:", ILP_children)
+
 
     for key in ["local/softmax", "ILP"]:
         print(f"##############################{key}#########################")
