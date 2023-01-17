@@ -82,7 +82,7 @@ class SudokuReader(RegrReader):
 trainreader = SudokuReader("randn", type="raw")
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, fixedL, eqL, exactAL
+from regr.graph.logicalConstrain import andL, fixedL, eqL, exactAL, exactL
 from regr.graph import EnumConcept
 
 Graph.clear()
@@ -130,7 +130,7 @@ with Graph('global') as graph:
     FIXED = True
     
     # ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True, sampleEntries = True)
-    
+    exactL(*empty_entry_label.attributes)
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(6):
@@ -310,7 +310,7 @@ program = PrimalDualProgram(
        poi=(sudoku, empty_entry, same_row, same_col, same_table),
        inferTypes=['local/argmax'],
        loss=MacroAverageTracker(NBCrossEntropyLoss()),
-       metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+    #    metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
        )
 
 # program1 = SolverPOIProgram(
