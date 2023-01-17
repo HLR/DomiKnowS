@@ -48,17 +48,17 @@ def main():
     parser.add_argument('--pd', dest='primaldual', default=False,help='whether or not to use primaldual constriant learning', type=bool)
     parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
     parser.add_argument('--sam', dest='sam', default=False, help='whether or not to use sampling learning', type=bool)
-    parser.add_argument('--test', dest='test', default=True, help='dont train just test', type=bool)
+    parser.add_argument('--test', dest='test', default=False, help='dont train just test', type=bool)
 
     parser.add_argument('--resnet', dest='resnet', default=18, help='value of learning rate', type=int)
 
-    parser.add_argument('--samplenum', dest='samplenum', default=5,help='number of samples to choose from the dataset',type=int)
-    parser.add_argument('--epochs', dest='epochs', default=2, help='number of training epoch', type=int)
+    parser.add_argument('--samplenum', dest='samplenum', default=999999999,help='number of samples to choose from the dataset',type=int)
+    parser.add_argument('--epochs', dest='epochs', default=19, help='number of training epoch', type=int)
     parser.add_argument('--lambdaValue', dest='lambdaValue', default=0.5, help='value of learning rate', type=float)
     parser.add_argument('--lr', dest='learning_rate', default=2e-4, help='learning rate of the adam optimiser',type=float)
     parser.add_argument('--beta', dest='beta', default=0.1, help='primal dual or IML multiplier', type=float)
 
-    parser.add_argument('--graph_type', dest='graph_type', default="exactL_nandL", help='type of constraints to be defined', type=str)
+    parser.add_argument('--graph_type', dest='graph_type', default="exactL_ifLorLtopdown", help='type of constraints to be defined', type=str)
     args = parser.parse_args()
 
     if args.graph_type=="nothing":
@@ -176,6 +176,10 @@ def main():
                                     sampleGlobalLoss=False, beta=args.beta, device=device)
 
     train_reader,test_reader=create_readers(train_num=min(args.samplenum,50000),test_num= min(args.samplenum,10000//4))
+
+    if not args.namesave=="none":
+        model.load_state_dict(torch.load(args.namesave + str(args.epochs)))
+
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
     if not args.test:
@@ -193,10 +197,8 @@ def main():
         "ILP": []
     }
     counter_list=[0,0,0,0]
-    if args.test:
-        model.load_state_dict(torch.load(args.namesave + str(args.epochs)))
-        #program.load(args.namesave + "_" + str(args.epochs))
-        #program.test(test_reader)
+    #program.load(args.namesave + "_" + str(args.epochs))
+    #program.test(test_reader)
     real_category = []
     ac_,t_=0,0
     for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
