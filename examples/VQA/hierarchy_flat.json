@@ -1,0 +1,626 @@
+{
+    "level1": {
+        "river": [
+            "mat"
+        ],
+        "lake": [
+            "pond"
+        ],
+        "person": [
+            "fan",
+            "driver",
+            "face",
+            "child",
+            "player",
+            "man",
+            "woman"
+        ],
+        "animal": [
+            "bear",
+            "giraffe",
+            "horse",
+            "elephant",
+            "dog",
+            "cow",
+            "bat"
+        ],
+        "building": [
+            "house"
+        ],
+        "food": [
+            "bread",
+            "bun",
+            "fruit",
+            "orange",
+            "meat",
+            "egg",
+            "pepperoni",
+            "animals",
+            "vegetables",
+            "fries",
+            "hot dog",
+            "sprinkles",
+            "cake",
+            "cheese",
+            "wine",
+            "donut",
+            "carrots",
+            "sandwich",
+            "vegetable",
+            "water"
+        ],
+        "book": [
+            "plant",
+            "city"
+        ],
+        "road": [
+            "street"
+        ],
+        "computer": [
+            "laptop"
+        ],
+        "liquid": [
+            "sauce",
+            "ocean",
+            "drink"
+        ],
+        "display": [
+            "window",
+            "screen",
+            "monitor"
+        ],
+        "people": [
+            "pocket"
+        ],
+        "entrance": [
+            "gate",
+            "doorway"
+        ],
+        "cloud": [
+            "smoke"
+        ],
+        "blanket": [],
+        "stone": [
+            "rock"
+        ],
+        "path": [
+            "steps"
+        ],
+        "lamp": [
+            "candle"
+        ],
+        "vehicle": [
+            "car",
+            "taxi",
+            "bus",
+            "airplane",
+            "cart",
+            "truck",
+            "glass",
+            "motorcycle",
+            "bicycle",
+            "boat",
+            "train"
+        ],
+        "clock": [
+            "watch"
+        ],
+        "star": [
+            "sun"
+        ],
+        "plants": [
+            "weeds",
+            "onions",
+            "bushes"
+        ],
+        "symbol": [
+            "words",
+            "nose",
+            "numbers",
+            "letters",
+            "letter"
+        ],
+        "word": [
+            "game",
+            "dirt"
+        ],
+        "room": [
+            "floor",
+            "kitchen",
+            "balcony",
+            "bathroom",
+            "toilet",
+            "shower"
+        ],
+        "stove": [
+            "grill"
+        ],
+        "container": [
+            "mug",
+            "bag",
+            "heart",
+            "jar",
+            "vase",
+            "pipe",
+            "drawer",
+            "pot",
+            "basket",
+            "bucket",
+            "can",
+            "cup",
+            "pan",
+            "bottle"
+        ],
+        "paper": [
+            "sheet"
+        ],
+        "sign": [
+            "poster"
+        ],
+        "bed": [
+            "couch"
+        ],
+        "hair": [
+            "beard",
+            "mane",
+            "coat"
+        ],
+        "platform": [
+            "table",
+            "runway",
+            "dock",
+            "ring"
+        ],
+        "canopy": [
+            "umbrella"
+        ],
+        "seat": [
+            "box",
+            "chair",
+            "sofa",
+            "cockpit",
+            "bench"
+        ],
+        "wheel": [
+            "tire"
+        ],
+        "toy": [
+            "frisbee",
+            "kite",
+            "teddy bear",
+            "ball",
+            "skateboard"
+        ],
+        "dress": [
+            "skirt"
+        ],
+        "hand": [
+            "banana"
+        ],
+        "barrier": [
+            "curtain",
+            "door",
+            "fence"
+        ],
+        "hat": [
+            "cap",
+            "headband",
+            "helmet"
+        ],
+        "shore": [
+            "beach"
+        ],
+        "mouth": [],
+        "picture": [
+            "painting",
+            "frame"
+        ],
+        "outfit": [
+            "uniform"
+        ],
+        "clothes": [
+            "shirt",
+            "gloves"
+        ],
+        "walkway": [
+            "sidewalk"
+        ],
+        "tail": [
+            "brush",
+            "flag"
+        ],
+        "rope": [
+            "cord"
+        ],
+        "shelf": [
+            "bookshelf"
+        ],
+        "pants": [
+            "jeans",
+            "shorts"
+        ],
+        "ground": [
+            "hill",
+            "sand"
+        ],
+        "television": [
+            "cable"
+        ],
+        "utensil": [
+            "spoon"
+        ],
+        "necklace": [
+            "chain"
+        ],
+        "crust": [
+            "plate"
+        ],
+        "shoes": [
+            "shoe",
+            "sandal",
+            "boot"
+        ],
+        "stairs": [
+            "ladder"
+        ],
+        "foot": [
+            "paw"
+        ],
+        "finger": [
+            "thumb"
+        ],
+        "topping": [
+            "frosting"
+        ],
+        "glasses": [
+            "eye glasses",
+            "goggles"
+        ],
+        "label_artifact": [
+            "tag"
+        ]
+    },
+    "level2": {
+        "mat": [
+            "rug"
+        ],
+        "fan": [],
+        "bread": [],
+        "bun": [],
+        "pond": [],
+        "fruit": [
+            "ear"
+        ],
+        "orange": [],
+        "banana": [],
+        "meat": [
+            "bird"
+        ],
+        "game": [
+            "bridge"
+        ],
+        "egg": [],
+        "pepperoni": [],
+        "beard": [],
+        "driver": [],
+        "face": [],
+        "bear": [],
+        "child": [
+            "boy",
+            "girl",
+            "baby"
+        ],
+        "player": [
+            "pitcher"
+        ],
+        "man": [
+            "guy"
+        ],
+        "woman": [
+            "cat",
+            "lady"
+        ],
+        "plant": [
+            "tree",
+            "grass",
+            "flower"
+        ],
+        "box": [
+            "crate",
+            "suitcase",
+            "oven",
+            "cabinet",
+            "fireplace"
+        ],
+        "giraffe": [],
+        "horse": [
+            "zebra"
+        ],
+        "elephant": [],
+        "dog": [],
+        "cow": [],
+        "bat": [
+            "paddle"
+        ],
+        "tag": [],
+        "frisbee": [],
+        "house": [],
+        "window": [],
+        "floor": [],
+        "animals": [
+            "sheep"
+        ],
+        "vegetables": [
+            "tomatoes"
+        ],
+        "fries": [],
+        "hot dog": [],
+        "sprinkles": [],
+        "cake": [],
+        "cheese": [],
+        "wine": [],
+        "donut": [],
+        "carrots": [],
+        "sandwich": [],
+        "vegetable": [
+            "lettuce",
+            "pepper",
+            "olive",
+            "tomato",
+            "potato",
+            "mushroom",
+            "onion",
+            "carrot",
+            "broccoli"
+        ],
+        "water": [
+            "snow"
+        ],
+        "table": [
+            "counter",
+            "desk"
+        ],
+        "words": [],
+        "curtain": [],
+        "city": [],
+        "kite": [],
+        "street": [],
+        "laptop": [],
+        "car": [
+            "suv"
+        ],
+        "taxi": [],
+        "bus": [],
+        "sauce": [],
+        "ocean": [],
+        "drink": [],
+        "rock": [
+            "gravel"
+        ],
+        "screen": [
+            "windshield"
+        ],
+        "monitor": [],
+        "pocket": [],
+        "door": [],
+        "gate": [],
+        "doorway": [],
+        "mug": [],
+        "plate": [
+            "dish"
+        ],
+        "airplane": [
+            "jet"
+        ],
+        "smoke": [],
+        "cord": [
+            "tie"
+        ],
+        "cable": [],
+        "bag": [
+            "skin",
+            "backpack",
+            "purse"
+        ],
+        "steps": [],
+        "candle": [],
+        "cart": [],
+        "truck": [
+            "van"
+        ],
+        "glass": [
+            "mirror"
+        ],
+        "motorcycle": [],
+        "bicycle": [
+            "bike"
+        ],
+        "boat": [],
+        "train": [],
+        "watch": [],
+        "sun": [],
+        "weeds": [],
+        "onions": [],
+        "bushes": [],
+        "nose": [
+            "beak",
+            "trunk"
+        ],
+        "heart": [],
+        "numbers": [],
+        "letters": [],
+        "letter": [],
+        "jar": [],
+        "vase": [],
+        "dirt": [],
+        "pipe": [
+            "drain"
+        ],
+        "kitchen": [],
+        "balcony": [],
+        "bathroom": [],
+        "toilet": [
+            "head"
+        ],
+        "shower": [],
+        "shoe": [],
+        "sandal": [],
+        "boot": [],
+        "grill": [],
+        "drawer": [],
+        "pot": [
+            "planter"
+        ],
+        "basket": [],
+        "bucket": [],
+        "can": [],
+        "cup": [],
+        "pan": [],
+        "bottle": [
+            "water bottle"
+        ],
+        "spoon": [],
+        "chair": [
+            "comforter"
+        ],
+        "sofa": [],
+        "sheet": [
+            "leaf"
+        ],
+        "poster": [],
+        "couch": [],
+        "mane": [],
+        "coat": [
+            "fur",
+            "jacket"
+        ],
+        "runway": [],
+        "dock": [],
+        "ring": [],
+        "umbrella": [],
+        "cockpit": [],
+        "bench": [],
+        "shirt": [
+            "jersey"
+        ],
+        "fence": [
+            "wall"
+        ],
+        "tire": [],
+        "teddy bear": [],
+        "ball": [
+            "baseball",
+            "bowl"
+        ],
+        "skateboard": [],
+        "skirt": [],
+        "cap": [],
+        "headband": [],
+        "helmet": [],
+        "brush": [
+            "toothbrush"
+        ],
+        "beach": [],
+        "painting": [],
+        "frame": [],
+        "uniform": [],
+        "gloves": [],
+        "sidewalk": [],
+        "flag": [],
+        "bookshelf": [],
+        "jeans": [],
+        "shorts": [],
+        "hill": [],
+        "sand": [],
+        "chain": [],
+        "ladder": [],
+        "paw": [],
+        "thumb": [],
+        "frosting": [],
+        "eye glasses": [],
+        "goggles": []
+    },
+    "level4": {
+        "salad": [],
+        "apple": [],
+        "chicken": [],
+        "duck": [],
+        "palm tree": [],
+        "pine tree": [],
+        "pizza": []
+    },
+    "level3": {
+        "lettuce": [],
+        "pepper": [],
+        "ear": [],
+        "olive": [],
+        "tomato": [],
+        "bird": [
+            "chicken",
+            "duck"
+        ],
+        "counter": [],
+        "tree": [
+            "apple",
+            "palm tree",
+            "pine tree"
+        ],
+        "grass": [],
+        "potato": [],
+        "flower": [],
+        "sheep": [],
+        "cat": [],
+        "zebra": [],
+        "bridge": [],
+        "baseball": [],
+        "wall": [],
+        "tomatoes": [],
+        "paddle": [],
+        "desk": [],
+        "suv": [],
+        "van": [],
+        "gravel": [],
+        "dish": [
+            "salad",
+            "pizza"
+        ],
+        "bowl": [],
+        "boy": [],
+        "guy": [],
+        "jet": [],
+        "mushroom": [],
+        "comforter": [],
+        "tie": [],
+        "skin": [],
+        "backpack": [],
+        "purse": [],
+        "crate": [],
+        "suitcase": [],
+        "oven": [],
+        "cabinet": [],
+        "fireplace": [],
+        "planter": [],
+        "windshield": [],
+        "lady": [],
+        "girl": [],
+        "snow": [],
+        "leaf": [],
+        "pitcher": [],
+        "head": [],
+        "drain": [],
+        "baby": [],
+        "mirror": [],
+        "onion": [],
+        "carrot": [],
+        "broccoli": [],
+        "jersey": [],
+        "toothbrush": [],
+        "beak": [],
+        "trunk": [],
+        "water bottle": [],
+        "bike": [],
+        "fur": [],
+        "jacket": [],
+        "rug": []
+    }
+}
