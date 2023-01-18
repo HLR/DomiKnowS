@@ -340,6 +340,7 @@ class LearningBasedProgram():
     def verifyResultsLC(self,data,constraint_names=None):
         datanode_ac,datanode_t=[],[]
         all_ac, all_t = [], []
+        ifl_ac, ifl_t = [], []
         names=[]
         FIRST=True
         for datanode in self.populate(data, device=self.device):
@@ -352,6 +353,10 @@ class LearningBasedProgram():
                         datanode_t.append(0)
                         all_ac.append(0)
                         all_t.append(0)
+
+                        ifl_ac.append(0)
+                        ifl_t.append(0)
+
                         names.append(k)
                 else:
                     for k in constraint_names:
@@ -362,6 +367,10 @@ class LearningBasedProgram():
                         datanode_t.append(0)
                         all_ac.append(0)
                         all_t.append(0)
+
+                        ifl_ac.append(0)
+                        ifl_t.append(0)
+
                         names.append(k)
                     if not names:
                         print("All the provided constraint names were wrong.")
@@ -370,10 +379,17 @@ class LearningBasedProgram():
             for num,name in enumerate(names):
                 datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
                 datanode_t[num] +=1
-                all_ac[num]+=sum([sum(i) for i in verifyResult['LC2']["verifyList"]])
-                all_t[num]+=sum([len(i) for i in verifyResult['LC2']["verifyList"]])
+
+                all_ac[num]+=sum([sum(i) for i in verifyResult[name]["verifyList"]])
+                all_t[num]+=sum([len(i) for i in verifyResult[name]["verifyList"]])
+
+                ifl_ac[num] += sum([sum(i) for i in verifyResult[name]["ifVerifyList"]])
+                ifl_t[num] += sum([len(i) for i in verifyResult[name]["ifVerifyList"]])
 
         for num, name in enumerate(names):
             print("Constraint name:",name,"datanode accuracy:",datanode_ac[num]/datanode_t[num],"total accuracy:",all_ac[num]/all_t[num])
+        print("Results for all constraints:\ndatanode accuracy:",sum([i for i in datanode_ac])/sum([i for i in datanode_t]),
+                "\ntotal accuracy:",sum([i for i in all_ac])/sum([i for i in all_t]),
+                "\ntotal accuracy ifL:",sum([i for i in ifl_ac])/sum([i for i in ifl_t]))
         return None
 
