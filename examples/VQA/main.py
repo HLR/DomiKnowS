@@ -65,10 +65,14 @@ if __name__ == '__main__':
     data = np.load(file, allow_pickle=True).item()
 
     dataset = VQADataset(data,)
-    dataloader = DataLoader(dataset, batch_size=500)
+    # dataloader = DataLoader(dataset, batch_size=800)
+    dataloader = DataLoader(dataset, batch_size=20)
 
     # test_reader = VQAReader('val.npy', 'npy')
     device = 'cpu'
     program = main(device)
-    program.test(dataloader, device=device)
-    # program.test(list(iter(dataloader))[:2], device=device)
+    # program.test(dataloader, device=device)
+    program.test(list(iter(dataloader))[:2], device=device)
+
+    # for datanode in program.populate(list(iter(dataloader))[:2], device=device):
+    #     print(datanode)

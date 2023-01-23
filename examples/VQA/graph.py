@@ -7,7 +7,7 @@ sys.path.append(root)
 
 from regr.graph import Graph, Concept, Relation
 from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL, exactL, ifL, orL
+from regr.graph.logicalConstrain import nandL, exactL, ifL, orL, andL, notL
 
 
 with open("concepts.json") as f:
@@ -70,14 +70,49 @@ with Graph('VQA') as graph:
         for key in structure:
             if len(structure[key]):
                 if key in hierarchy['level1']:
-                    ifL(orL(*[level2.__getattr__(key1) for key1 in structure[key]]), level1.__getattr__(key))
+                    # ifL(orL(*[level2.__getattr__(key1) for key1 in structure[key]]), level1.__getattr__(key))
+                    ifL(level1.__getattr__(key), orL(*[level2.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level2']:
-                    ifL(orL(*[level3.__getattr__(key1) for key1 in structure[key]]), level2.__getattr__(key))
+                    # ifL(orL(*[level3.__getattr__(key1) for key1 in structure[key]]), level2.__getattr__(key))
+                    ifL(level2.__getattr__(key), orL(*[level3.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level3']:
-                    ifL(orL(*[level4.__getattr__(key1) for key1 in structure[key]]), level3.__getattr__(key))
+                    # ifL(orL(*[level4.__getattr__(key1) for key1 in structure[key]]), level3.__getattr__(key))
+                    ifL(level3.__getattr__(key), orL(*[level4.__getattr__(key1) for key1 in structure[key]]))
 
-        exactL(*[level1.__getattr__(key) for key in hierarchy['level1']])
-        exactL(*[level2.__getattr__(key) for key in hierarchy['level2']])
-        exactL(*[level3.__getattr__(key) for key in hierarchy['level3']])
-        exactL(*[level4.__getattr__(key) for key in hierarchy['level4']])
+        # ifL(level1.__getattr__('None'), andL(*[level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')]))
+        # ifL(
+        #     notL(level1.__getattr__('None')), 
+        #     ifL(
+        #         level2.__getattr__('None'), 
+        #         andL(*[level3.__getattr__('None'), level4.__getattr__('None')])
+        #     )
+        # )
+        # ifL(
+        #     notL(level1.__getattr__('None')), 
+        #     ifL(
+        #         notL(level2.__getattr__('None')), 
+        #         ifL(
+        #             level3.__getattr__('None'), 
+        #             level4.__getattr__('None')
+        #             )
+        #     )
+        # )
+
+        ifL(
+            level1.__getattr__('None'), 
+            level2.__getattr__('None')
+        )
+        ifL(
+            level2.__getattr__('None'), 
+            level3.__getattr__('None')
+        )
+        ifL(
+            level3.__getattr__('None'), 
+            level4.__getattr__('None')
+        )
+
+        exactL(*[level1.__getattr__(key) for key in hierarchy['level1'] + ["None"]])
+        exactL(*[level2.__getattr__(key) for key in hierarchy['level2'] + ["None"]])
+        exactL(*[level3.__getattr__(key) for key in hierarchy['level3'] + ["None"]])
+        exactL(*[level4.__getattr__(key) for key in hierarchy['level4'] + ["None"]])
         # print("number of relations: ", relations)
