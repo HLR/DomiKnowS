@@ -99,7 +99,7 @@ uniform = torch.ones(1, num_spans)'''
 #sentence[span_num_1] = FunctionalSensor(forward=lambda: uniform)
 #sentence[span_num_2] = FunctionalSensor(forward=lambda: uniform)
 
-class CallbackProgram(SolverPOIDictLossProgram):
+class CallbackProgram(PrimalDualProgram):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.after_train_epoch = []
@@ -112,19 +112,19 @@ class CallbackProgram(SolverPOIDictLossProgram):
             super().call_epoch(name, dataset, epoch_fn, **kwargs)
 
 
-program = CallbackProgram(graph,
+'''program = CallbackProgram(graph,
                           poi=(sentence, word),
                           inferTypes=['local/argmax'],
                           dictloss={'tag': MacroAverageTracker(NBCrossEntropyDictLoss(weight=torch.tensor([1.20999499, 22.3466872, 7.76391863]))),
                                     'default': MacroAverageTracker(NBCrossEntropyDictLoss())},
-                          metric={})
+                          metric={})'''
 
-'''program = CallbackProgram(graph, SolverModelDictLoss,
+program = CallbackProgram(graph, SolverModelDictLoss,
                             poi=(sentence, word),
                             inferTypes=['local/argmax'],
                             dictloss={'tag': MacroAverageTracker(NBCrossEntropyDictLoss(weight=torch.tensor([1.20999499, 22.3466872, 7.76391863]))),
                                       'default': MacroAverageTracker(NBCrossEntropyDictLoss())},
-                            metric={})'''
+                            metric={})
                             #sample=True,
                             #sampleSize=100,
                             #sampleGlobalLoss=False,
