@@ -63,6 +63,12 @@ Here, `Logical_constraint` can be any class that is a subclass of `LogicalConstr
 
 The function `verifyResultsLC` would print two accuracy metrics. One is the accuracy of all instances of the constraint, and the other one is the accuracy for `Datanode`s. In this case, the `Datanode` is considered correct if all the instances of a constraint are True in that `Datanode`; Otherwise, it is False.
 
+The `program` method `verifyResultsLC` internally uses `datanode` `verifyResultsLC` methods, which returns dictionary with keys for specific satisfaction  type: `satisfied` general satisfaction for any constraint and  `ifSatisfied` only for `ifL` constraint. The value for the key is the percentage of the cases for the constraint which were satisfied. In case if there is no cases for the given constraints then float `nan` is returned. In case of `ifL` it means that there was not constraints with antecedent true. To test for the float `nan` value use:
+
+```python3
+	if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
+```
+
 #### Execution Time
 Another essential factor in tracking the model's agility and usability is the time they take to be trained or used during inference. 
 DomiKnows provide this information in log files accessible to programmers, which can be reviewed. 
