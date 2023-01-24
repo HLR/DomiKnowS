@@ -13,7 +13,7 @@ from torchtext.vocab import GloVe, vocab
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import pickle
 
-limit_spans = 50
+limit_spans = 35
 
 glove_vectors = GloVe()
 
@@ -83,15 +83,24 @@ class SRLDataset:
         # words
         result['word'] = self.data_blob['sentences'][idx]
 
+        spans_all = []
+
+        # sort spans by length (shortest to longest)
+        sorted_spans = sorted(self.data_blob['spans'][idx], key=lambda l: torch.sum(l))
+
         # spans
         for sp_idx in range(self.num_spans):
-            if sp_idx < len(self.data_blob['spans'][idx]):
-                result['span_%d' % sp_idx] = self.data_blob['spans'][idx][sp_idx]
+            if sp_idx < len(sorted_spans):
+                result['span_%d' % sp_idx] = sorted_spans[sp_idx]
+                spans_all.append(sorted_spans[sp_idx])
             else:
-                result['span_%d' % sp_idx] = torch.zeros(self.data_blob['spans'][idx][0].shape)
+                result['span_%d' % sp_idx] = torch.zeros(sorted_spans[0].shape)
+                spans_all.append(torch.zeros(sorted_spans[0].shape))
 
-        result['span_0'] = torch.ones(self.data_blob['spans'][idx][0].shape)
-        result['span_1'] = torch.zeros(self.data_blob['spans'][idx][0].shape)
+        result['spans_all'] = [spans_all]
+
+        #result['span_0'] = torch.ones(self.data_blob['spans'][idx][0].shape)
+        #result['span_1'] = torch.zeros(self.data_blob['spans'][idx][0].shape)
 
         # arg labels
         result['arg_label'] = torch.tensor([[x] for x in self.data_blob['args'][idx]])
@@ -116,7 +125,9 @@ data_blob = unpack_data(train_data, subset=0.10)
 del train_data
 del glove_vectors
 
-data_blob_train = select_batch(data_blob, 0, 100)
+print(len(data_blob['sentences']))
+
+data_blob_train = select_batch(data_blob, 0, 5000)
 data_blob_train_mini = select_batch(data_blob, 0, 500)
 data_blob_valid = select_batch(data_blob, 5000, 500)
 

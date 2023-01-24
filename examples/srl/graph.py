@@ -6,7 +6,7 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
-num_spans = 20
+num_spans = 35
 
 with Graph(name='global') as graph:
 	sentence = Concept(name='sentence')
@@ -14,21 +14,26 @@ with Graph(name='global') as graph:
 
 	sentence_contains, = sentence.contains(word)
 
+	# predicted tag for each word
 	tag_names = ['t_%d' % i for i in range(3)]
 	tag = word(name='tag', ConceptClass=EnumConcept, values=tag_names)
 
 	span_names = ['s_%d' % i for i in range(num_spans)]
-	span_num_1 = sentence(name='span_num_1', ConceptClass=EnumConcept, values=span_names)
-	span_num_2 = sentence(name='span_num_2', ConceptClass=EnumConcept, values=span_names)
+
+	# enforce that only one span is correct for each argument
+	span_num_1 = word(name='span_num_1', ConceptClass=EnumConcept, values=span_names)
+	span_num_2 = word(name='span_num_2', ConceptClass=EnumConcept, values=span_names)
 
 	spans = []
 	span_constraints = []
 	for i in range(num_spans):
+		# binary mask for span i and some arbitrary word
 		sp = word(name='span_%d' % i)
 
 		#FIXED = True
 		#fixedL(sp("x", eqL(word, "spanFixed", {True})), active = FIXED)
 
+		# if the ith span is correct, enforce that it gets predicted
 		ifL(
 			getattr(span_num_1, span_names[i])('x'),
 			ifL(
@@ -45,4 +50,4 @@ with Graph(name='global') as graph:
 			)
 		)
 
-		spans.append(sp)
+		spans.append((sp, span_num_1, span_num_2))
