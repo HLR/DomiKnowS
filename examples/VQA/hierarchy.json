@@ -770,7 +770,7 @@
                 }
             },
             {
-                "label_artifact": {
+                "label": {
                     "children": [
                         {
                             "tag": {
