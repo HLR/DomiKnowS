@@ -103,7 +103,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         conceptToDNSCash = {}
         
         for currentConceptRelation in conceptsRelations: 
-            currentName = currentConceptRelation[0]
+            currentName = currentConceptRelation[0].name
             
             if currentName in conceptToDNSCash:
                 dns = conceptToDNSCash[currentName]
@@ -112,10 +112,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 dns = rootDn.findDatanodes(select = rootConcept)
                 conceptToDNSCash[currentName] = dns
                 
-            ilpVarCount[currentConceptRelation[1]] = len(dns)
+            currentConceptName = currentName + "_" + currentConceptRelation[1]
+            ilpVarCount[currentConceptName] = len(dns)
             
             if currentConceptRelation[2] is None:
-                ilpVarCount[currentConceptRelation[1]] += len(dns)
+                ilpVarCount[currentConceptName] += len(dns)
        
         return ilpVarCount
     
