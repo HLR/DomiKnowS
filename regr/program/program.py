@@ -375,14 +375,17 @@ class LearningBasedProgram():
                         print("All the provided constraint names were wrong.")
                         return
                 FIRST=False
+            IF_exsits=False
             for num,name in enumerate(names):
                 datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
                 datanode_t[num] +=1
                 all_ac[num] += verifyResult[name]["satisfied"]
                 all_t[num] +=1
-                if not np.isnan(verifyResult[name]["ifSatisfied"]):
-                    ifl_ac[num] += verifyResult[name]["ifSatisfied"]
-                    ifl_t[num]+=1
+                if "ifSatisfied" in verifyResult[name]:
+                    IF_exsits=True
+                    if not np.isnan(verifyResult[name]["ifSatisfied"]):
+                        ifl_ac[num] += verifyResult[name]["ifSatisfied"]
+                        ifl_t[num]+=1
 
         def zero_check(numerator,denominator):
             if denominator==0:
@@ -392,7 +395,8 @@ class LearningBasedProgram():
         for num, name in enumerate(names):
             print("Constraint name:",name,"datanode accuracy:",zero_check(datanode_ac[num],datanode_t[num])*100,"total accuracy:",zero_check(all_ac[num],all_t[num]))
         print("Results for all constraints:\ndatanode accuracy:",zero_check(sum([i for i in datanode_ac])*100,(sum([i for i in datanode_t]))),
-                "\ntotal accuracy:",zero_check(sum([i for i in all_ac]),(sum([i for i in all_t]))),
-                "\ntotal accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
+                "\ntotal accuracy:",zero_check(sum([i for i in all_ac]),(sum([i for i in all_t]))))
+        if IF_exsits:
+            print("total accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
         return None
 
