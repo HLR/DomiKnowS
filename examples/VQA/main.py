@@ -60,19 +60,85 @@ if __name__ == '__main__':
 
     from torch.utils.data import Dataset, DataLoader
     from reader import VQADataset
+    from graph import *
 
     file = "val.npy"
     data = np.load(file, allow_pickle=True).item()
 
     dataset = VQADataset(data,)
-    # dataloader = DataLoader(dataset, batch_size=800)
-    dataloader = DataLoader(dataset, batch_size=20)
+    dataloader = DataLoader(dataset, batch_size=1000)
+    # dataloader = DataLoader(dataset, batch_size=20)
 
     # test_reader = VQAReader('val.npy', 'npy')
     device = 'cpu'
     program = main(device)
     # program.test(dataloader, device=device)
-    program.test(list(iter(dataloader))[:2], device=device)
+    # program.test(list(iter(dataloader))[:5], device=device)
 
-    # for datanode in program.populate(list(iter(dataloader))[:2], device=device):
-    #     print(datanode)
+    corrects = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+        'level4': 0
+    }
+
+    consistent_corrects = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+        'level4': 0
+    }
+
+    ilp_corrects = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+        'level4': 0
+    }
+
+    totals = {
+        'level1': 0,
+        'level2': 0,
+        'level3': 0,
+        'level4': 0
+    }
+
+    backsteps = {'level3': 'level2', 'level4': 'level3'}
+
+    from tqdm import tqdm
+    # for datanode in tqdm(program.populate(list(iter(dataloader))[:20], device=device)):
+    for datanode in tqdm(program.populate(dataloader, device=device)):
+        for child in datanode.getChildDataNodes('image'):
+            pred = child.getAttribute('level1', 'local/argmax').argmax().item()
+            pred_ilp = child.getAttribute('level1', 'ILP').argmax().item()
+            label = child.getAttribute('level1', 'label').item()
+            if pred == label:
+                corrects['level1'] += 1
+            if pred_ilp == label:
+                ilp_corrects['level1'] += 1
+            totals['level1'] += 1
+            for _concept in ['level2', 'level3', 'level4']:
+                label = child.getAttribute(_concept, 'label').item()
+                if len(hierarchy[_concept]) != label:
+                    totals[_concept] += 1
+                    pred = child.getAttribute(_concept, 'local/argmax').argmax().item()
+                    pred_ilp = child.getAttribute(_concept, 'ILP').argmax().item()
+                    if _concept in backsteps:
+                        if prior != len(hierarchy[backsteps[_concept]]):
+                            if label == pred:
+                                consistent_corrects[_concept] += 1
+                    if label == pred:
+                        corrects[_concept] += 1
+                    if label == pred_ilp:
+                        ilp_corrects[_concept] += 1
+                prior = pred
+
+    f = open("logger_manual.txt", "w")
+    for _c in corrects:
+        if totals[_c] != 0:
+            print(f"{_c} accuracy: {corrects[_c]/totals[_c]}", file=f)
+            print(f"{_c} ILP accuracy: {ilp_corrects[_c]/totals[_c]}", file=f)  
+            if _c in backsteps:
+                print(f"{_c} consistent accuracy: {consistent_corrects[_c]/totals[_c]}", file=f)
+        else:
+            print(f"no instances for {_c}", file=f)                 

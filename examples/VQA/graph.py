@@ -80,38 +80,33 @@ with Graph('VQA') as graph:
                     ifL(level3.__getattr__(key), orL(*[level4.__getattr__(key1) for key1 in structure[key]]))
 
         # ifL(level1.__getattr__('None'), andL(*[level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')]))
-        # ifL(
-        #     notL(level1.__getattr__('None')), 
-        #     ifL(
-        #         level2.__getattr__('None'), 
-        #         andL(*[level3.__getattr__('None'), level4.__getattr__('None')])
-        #     )
-        # )
-        # ifL(
-        #     notL(level1.__getattr__('None')), 
-        #     ifL(
-        #         notL(level2.__getattr__('None')), 
-        #         ifL(
-        #             level3.__getattr__('None'), 
-        #             level4.__getattr__('None')
-        #             )
-        #     )
-        # )
-
-        ifL(
-            level1.__getattr__('None'), 
-            level2.__getattr__('None')
-        )
         ifL(
             level2.__getattr__('None'), 
-            level3.__getattr__('None')
+            andL(*[level3.__getattr__('None'), level4.__getattr__('None')])
         )
+        
         ifL(
-            level3.__getattr__('None'), 
-            level4.__getattr__('None')
+            notL(level2.__getattr__('None')), 
+            ifL(
+                level3.__getattr__('None'), 
+                level4.__getattr__('None')
+                )
         )
 
-        exactL(*[level1.__getattr__(key) for key in hierarchy['level1'] + ["None"]])
+        # ifL(
+        #     level1.__getattr__('None'), 
+        #     level2.__getattr__('None')
+        # )
+        # ifL(
+        #     level2.__getattr__('None'), 
+        #     level3.__getattr__('None')
+        # )
+        # ifL(
+        #     level3.__getattr__('None'), 
+        #     level4.__getattr__('None')
+        # )
+
+        exactL(*[level1.__getattr__(key) for key in hierarchy['level1']])
         exactL(*[level2.__getattr__(key) for key in hierarchy['level2'] + ["None"]])
         exactL(*[level3.__getattr__(key) for key in hierarchy['level3'] + ["None"]])
         exactL(*[level4.__getattr__(key) for key in hierarchy['level4'] + ["None"]])
