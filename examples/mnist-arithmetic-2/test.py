@@ -219,6 +219,8 @@ classification_suffixes = ['/local/argmax']
 if args.ILP:
     classification_suffixes.append('/ILP')
 
+program.verifyResultsLC(testloader)
+
 # verify validation accuracy
 print("validation evaluation")
 get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=classification_suffixes, print_incorrect=False)
