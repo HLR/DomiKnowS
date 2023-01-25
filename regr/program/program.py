@@ -381,12 +381,16 @@ class LearningBasedProgram():
                 datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
                 datanode_t[num] +=1
 
-                all_ac[num]+=sum([sum(i) for i in verifyResult[name]["verifyList"]])
-                all_t[num]+=sum([len(i) for i in verifyResult[name]["verifyList"]])
+                #all_ac[num]+=sum([sum(i) for i in verifyResult[name]["verifyList"]])
+                all_ac[num] += verifyResult[name]["satisfied"]
+                #all_t[num]+=sum([len(i) for i in verifyResult[name]["verifyList"]])
+                all_t[num] +=1
 
                 if not np.isnan(verifyResult[name]["ifSatisfied"]):
-                    ifl_ac[num] += sum([sum(i) for i in verifyResult[name]["ifVerifyList"]])
-                    ifl_t[num] += sum([len(i) for i in verifyResult[name]["ifVerifyList"]])
+                    #ifl_ac[num] += sum([sum(i) for i in verifyResult[name]["ifVerifyList"]])
+                    ifl_ac[num] += verifyResult[name]["ifSatisfied"]
+                    #ifl_t[num] += sum([len(i) for i in verifyResult[name]["ifVerifyList"]])
+                    ifl_t[num]+=1
 
         for num, name in enumerate(names):
             print("Constraint name:",name,"datanode accuracy:",datanode_ac[num]/(datanode_t[num]+0.001),"total accuracy:",all_ac[num]/(all_t[num]+0.001))
