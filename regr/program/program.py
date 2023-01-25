@@ -354,10 +354,8 @@ class LearningBasedProgram():
                         datanode_t.append(0)
                         all_ac.append(0)
                         all_t.append(0)
-
                         ifl_ac.append(0)
                         ifl_t.append(0)
-
                         names.append(k)
                 else:
                     for k in constraint_names:
@@ -380,16 +378,10 @@ class LearningBasedProgram():
             for num,name in enumerate(names):
                 datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
                 datanode_t[num] +=1
-
-                #all_ac[num]+=sum([sum(i) for i in verifyResult[name]["verifyList"]])
                 all_ac[num] += verifyResult[name]["satisfied"]
-                #all_t[num]+=sum([len(i) for i in verifyResult[name]["verifyList"]])
                 all_t[num] +=1
-
                 if not np.isnan(verifyResult[name]["ifSatisfied"]):
-                    #ifl_ac[num] += sum([sum(i) for i in verifyResult[name]["ifVerifyList"]])
                     ifl_ac[num] += verifyResult[name]["ifSatisfied"]
-                    #ifl_t[num] += sum([len(i) for i in verifyResult[name]["ifVerifyList"]])
                     ifl_t[num]+=1
 
         def zero_check(numerator,denominator):
