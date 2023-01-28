@@ -20,7 +20,13 @@ The WIQA dataset V1 has 39705 questions containing a perturbation and a possible
 
 ## How To Run
 ```
-!python WIQA_aug.py --cuda 3 --epoch 100 --lr 2e-7 --samplenum 1000000000 --batch 15 --beta 1.0 --pd True
+python WIQA_aug.py --cuda 3 --epoch 100 --lr 2e-7 --samplenum 1000000000 --batch 15 --beta 1.0
+
+python WIQA_PD.py --cuda 3 --epoch 100 --lr 2e-7 --samplenum 1000000000 --batch 15 --beta 1.0 --pd True
+
+python WIQA_aug.py --cuda 3 --epoch 100 --lr 2e-7 --samplenum 1000000000 --batch 15 --beta 1.0 --sample True
+
+
 ```
 #### inputs
 
