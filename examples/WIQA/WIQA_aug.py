@@ -287,7 +287,7 @@ if args.sampleilp:
 
 if not args.primaldual and not args.IML:
     program.load("saved_models/domi_ilp_epoch_"+str(args.cur_epoch)+'.pt')
-if args.pd:
+if args.primaldual:
     program.load("saved_models/domi_pd_epoch_"+str(args.cur_epoch)+'.pt')
 if args.sample:
     program.load("saved_models/domi_sampleloss_epoch_"+str(args.cur_epoch)+'.pt')
@@ -304,7 +304,7 @@ print('-' * 40,"\n")
 print("***** dev aug *****")
 test_time_start_1 = time.time()
 test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
-test_time_end_1= time.time()  
+test_time_end_1= time.time()
 print('dev time execution time: ', (test_time_end_1 - test_time_start_1)*1000, ' milliseconds')
 print("***** test aug *****")
 test_time_start_2 = time.time()
