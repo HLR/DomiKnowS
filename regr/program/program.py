@@ -354,10 +354,8 @@ class LearningBasedProgram():
                         datanode_t.append(0)
                         all_ac.append(0)
                         all_t.append(0)
-
                         ifl_ac.append(0)
                         ifl_t.append(0)
-
                         names.append(k)
                 else:
                     for k in constraint_names:
@@ -377,21 +375,28 @@ class LearningBasedProgram():
                         print("All the provided constraint names were wrong.")
                         return
                 FIRST=False
+            IF_exsits=False
             for num,name in enumerate(names):
                 datanode_ac[num]+=(verifyResult[name]['satisfied']==100.0)
                 datanode_t[num] +=1
+                all_ac[num] += verifyResult[name]["satisfied"]
+                all_t[num] +=1
+                if "ifSatisfied" in verifyResult[name]:
+                    IF_exsits=True
+                    if not np.isnan(verifyResult[name]["ifSatisfied"]):
+                        ifl_ac[num] += verifyResult[name]["ifSatisfied"]
+                        ifl_t[num]+=1
 
-                all_ac[num]+=sum([sum(i) for i in verifyResult[name]["verifyList"]])
-                all_t[num]+=sum([len(i) for i in verifyResult[name]["verifyList"]])
-
-                if not np.isnan(verifyResult[name]["ifSatisfied"]):
-                    ifl_ac[num] += sum([sum(i) for i in verifyResult[name]["ifVerifyList"]])
-                    ifl_t[num] += sum([len(i) for i in verifyResult[name]["ifVerifyList"]])
+        def zero_check(numerator,denominator):
+            if denominator==0:
+                return 0
+            return numerator/denominator
 
         for num, name in enumerate(names):
-            print("Constraint name:",name,"datanode accuracy:",datanode_ac[num]/(datanode_t[num]+0.001),"total accuracy:",all_ac[num]/(all_t[num]+0.001))
-        print("Results for all constraints:\ndatanode accuracy:",sum([i for i in datanode_ac])/(sum([i for i in datanode_t])+0.001),
-                "\ntotal accuracy:",sum([i for i in all_ac])/(sum([i for i in all_t])+0.001),
-                "\ntotal accuracy ifL:",sum([i for i in ifl_ac])/(sum([i for i in ifl_t])+0.001))
+            print("Constraint name:",name,"datanode accuracy:",zero_check(datanode_ac[num],datanode_t[num])*100,"total accuracy:",zero_check(all_ac[num],all_t[num]))
+        print("Results for all constraints:\ndatanode accuracy:",zero_check(sum([i for i in datanode_ac])*100,(sum([i for i in datanode_t]))),
+                "\ntotal accuracy:",zero_check(sum([i for i in all_ac]),(sum([i for i in all_t]))))
+        if IF_exsits:
+            print("total accuracy ifL:",zero_check(sum([i for i in ifl_ac]),(sum([i for i in ifl_t]))))
         return None
 

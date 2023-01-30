@@ -51,7 +51,7 @@ args = parser.parse_args()
 device = "cuda:"+str(args.cuda)
 # device = "cpu"
 
-n_epochs = 20
+n_epochs = 1
 
 ######################################################################
 # Data Reader
@@ -187,21 +187,21 @@ print('finish Graph Declaration')
 #     program.train(train_examples, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
 #     program.save("domi_"+str(i))
 
-train_time_start = time.time()
-program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
-train_time_end = time.time()  
-print('training time execution time: ', (train_time_end - train_time_start)*1000, ' milliseconds')
+# train_time_start = time.time()
+# program.train(train_examples, train_epoch_num=n_epochs, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
+# train_time_end = time.time()  
+# print('training time execution time: ', (train_time_end - train_time_start)*1000, ' milliseconds')
 
-if args.ilp:
-    program.save("saved_models/final_domi_ilp_epoch_"+str(n_epochs)+'.pt')
-if args.pd:
-    program.save("saved_models/final_domi_pd_epoch_"+str(n_epochs)+'.pt')
-if args.sample:
-    program.save("saved_models/final_domi_sampleloss_epoch_"+str(n_epochs)+'.pt')
-if args.pdilp:
-    program.save("saved_models/final_domi_pd+ilp_epoch_"+str(n_epochs)+'.pt')
-if args.sampleilp:
-    program.save("saved_models/final_domi_sampleloss+ilp_epoch_"+str(n_epochs)+'.pt')
+# if args.ilp:
+#     program.save("saved_models/final_domi_ilp_epoch_"+str(n_epochs)+'.pt')
+# if args.pd:
+#     program.save("saved_models/final_domi_pd_epoch_"+str(n_epochs)+'.pt')
+# if args.sample:
+#     program.save("saved_models/final_domi_sampleloss_epoch_"+str(n_epochs)+'.pt')
+# if args.pdilp:
+#     program.save("saved_models/final_domi_pd+ilp_epoch_"+str(n_epochs)+'.pt')
+# if args.sampleilp:
+#     program.save("saved_models/final_domi_sampleloss+ilp_epoch_"+str(n_epochs)+'.pt')
 
 ######################################################################
 # Evaluate the model

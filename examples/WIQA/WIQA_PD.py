@@ -14,11 +14,12 @@ from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker,
 import logging
 from transformers import get_linear_schedule_with_warmup
 # from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.lossprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
 from regr.graph import Graph, Concept, Relation
+from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.program import LearningBasedProgram, IMLProgram
@@ -40,6 +41,13 @@ parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=20000, help='total number of training steps for the transformer',type=int)
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+
+parser.add_argument('--sample', dest='sample', default=False, help='whether or not to use semantic loss',type=bool)
+parser.add_argument('--pdilp', dest='pdilp', default=False, help='whether or not to use primaldual+ILP constriant learning',type=bool)
+parser.add_argument('--sampleilp', dest='sampleilp', default=False, help='whether or not to use sample loss + ILP constriant learning',type=bool)
+
+parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',type=bool)
+
 args = parser.parse_args()
 
 
@@ -219,18 +227,65 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
 
+# if not args.primaldual and not args.IML:
+#     print("simple program")
+#     program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+# if args.primaldual:
+#     print("primal dual program")
+#     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=args.beta)
+# if args.IML:
+#     print("IML program")
+#     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+
 if not args.primaldual and not args.IML:
-    print("simple program")
-    program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+    print("run program")
+    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
+                                metric=PRF1Tracker())
 if args.primaldual:
-    print("primal dual program")
-    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=args.beta)
+    print('run PrimalDual program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker(),
+                                beta=args.beta)
+
+
 if args.IML:
-    print("IML program")
-    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+    print("run IML program")
+    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric=PRF1Tracker())
+
+if args.sample:
+    print('run sampling loss program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric={'argmax': PRF1Tracker()})
+
+if args.sampleilp:
+    print('run sampling loss + ILP program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['ILP', 'local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker())
+
+if args.pdilp:
+    print('run PrimalDual + ILP program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['ILP', 'local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                beta=args.beta)
+
 
 logging.basicConfig(level=logging.INFO)
 

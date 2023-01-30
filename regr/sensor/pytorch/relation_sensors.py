@@ -45,7 +45,7 @@ class BaseCandidateSensor(QuerySensor):
         super(QuerySensor, self).define_inputs()  # skip QuerySensor.define_inputs
         args = {}
         for name, concept in self.args.items():
-            datanodes = self.builder.getDataNode().findDatanodes(select=concept)
+            datanodes = self.builder.getDataNode(device=self.device).findDatanodes(select=concept)
             args[name] = datanodes
         self.kwinputs['datanodes'] = args
 
