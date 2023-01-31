@@ -14,6 +14,12 @@ bash download_checkpoints.sh
 python test.py --model_name {Sampling, Semantic, PrimalDual, Explicit, DigitLabel, Baseline} --checkpoint_path checkpoints/<checkpoint>.pth
 ```
 
+Single model test with ILP:
+```
+bash download_checkpoints.sh
+python test.py --model_name {Baseline, Explicit} --checkpoint_path checkpoints/<checkpoint>.pth --ILP --no_fixedL
+```
+
 ## Training
 ```
 python train.py --model_name {Sampling, Semantic, PrimalDual, Explicit, DigitLabel, Baseline} --epochs 10
