@@ -230,7 +230,10 @@ class gurobiILPOntSolver(ilpOntSolver):
                 else:
                     dn.attributes[xkey][0] = xNew
                     
-                Q += currentProbability[1] * xNew       
+                if Q is None:
+                    Q = currentProbability[1] * xNew
+                else:
+                    Q += currentProbability[1] * xNew
     
                 # Check if probability is NaN or if and has to be created based on positive value
                 if self.valueToBeSkipped(currentProbability[0]):
@@ -1288,9 +1291,9 @@ class gurobiILPOntSolver(ilpOntSolver):
 
         start = process_time() # timer()
 
-        gurobiEnv = Env("", empty=True)
-        gurobiEnv.setParam('OutputFlag', 0)
-        gurobiEnv.start()  
+        #gurobiEnv = Env("", empty=True)
+        #gurobiEnv.setParam('OutputFlag', 0)
+        #gurobiEnv.start()  
         
         try:
             # Find count of instance in each concept 
@@ -1308,7 +1311,7 @@ class gurobiILPOntSolver(ilpOntSolver):
                     
             if not reusingModel:
                 # If not reusing the model or if the right model was yet saved - create new Gurabi model
-                m = Model("decideOnClassificationResult" + str(start), gurobiEnv)
+                m = Model("decideOnClassificationResult" + str(start))
                 m.params.outputflag = 0
                 x = OrderedDict()
                 
