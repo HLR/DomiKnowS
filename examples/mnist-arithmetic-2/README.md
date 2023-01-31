@@ -38,6 +38,6 @@ More command line arguments for `train.py` and `test.py` can be found with the `
 | SamplingLoss | +89.55% | +85.60% | 2.86% |
 | SemanticLoss | +89.61% | +84.80% | 2.76% |
 | ILP | -2.11% | 0.00% | -% |
-| ExplicitSum + ILP | +89.+54% | +84.61% | -% |
+| ExplicitSum + ILP | +89.54% | +84.61% | -% |
 | ExplicitSum | +89.54% | +84.61% | 2.88% |
 | Supervised | +89.53% | +84.30% | 2.86% |
