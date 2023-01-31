@@ -34,9 +34,9 @@ More command line arguments for `train.py` and `test.py` can be found with the `
 | Method | Performance (Method - Baseline) | Low Data (Method - Baseline) | Constraint Violation |
 | --- | --- | --- | --- |
 | Baseline | 9.01% | 10.32% | 96.92% |
-| PD | +89.39% | +85.01% | 3.18% |
-| SampL | +89.55% | +85.60% | 2.86% |
-| SemanticL | +89.61% | +84.80% | 2.76% |
+| PrimalDual | +89.39% | +85.01% | 3.18% |
+| SamplingLoss | +89.55% | +85.60% | 2.86% |
+| SemanticLoss | +89.61% | +84.80% | 2.76% |
 | ILP | -2.11% | 0.00% | -% |
 | ExplicitSum + ILP | +89.+54% | +84.61% | -% |
 | ExplicitSum | +89.54% | +84.61% | 2.88% |
