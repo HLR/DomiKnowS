@@ -182,6 +182,7 @@ def main():
 
     if not args.namesave=="none":
         model.load_state_dict(torch.load(args.nameload))
+        model.to(device)
 
     if len(test_reader) > len(train_reader):
         test_reader = test_reader[:len(train_reader)]
