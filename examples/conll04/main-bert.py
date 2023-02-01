@@ -349,12 +349,12 @@ def main(args):
         else:
             program1.load(f'saves/conll04-bert-{split_id}-size-{args.number}-best_macro-f1.pt')
         
-#     program1.test(test_reader, device=args.gpu)
-    for node in program1.populate(test_reader, device=args.gpu):
-        verifyResult = node.verifyResultsLC()
-        if verifyResult:
-            for lc in verifyResult:
-                print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+    program1.test(test_reader, device=args.gpu)
+    # for node in program1.populate(test_reader, device=args.gpu):
+    #     verifyResult = node.verifyResultsLC()
+    #     if verifyResult:
+    #         for lc in verifyResult:
+    #             print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')

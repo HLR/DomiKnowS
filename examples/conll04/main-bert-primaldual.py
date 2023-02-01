@@ -219,7 +219,11 @@ def model(device='auto'):
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
     
     lbp1 = CallbackPrimalProgram(
-        graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), inferTypes=['ILP', 'local/argmax'],
+        graph, Model=SolverModelDictLoss, poi=(sentence, phrase, pair), 
+        inferTypes=[
+            'ILP', 
+            'local/argmax'
+        ],
         dictloss={
             str(o.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 4.5341,  0.5620]).to(device)),
             str(location.name): NBCrossEntropyDictLoss(weight=torch.tensor([ 0.5194, 13.3925]).to(device)),
@@ -233,8 +237,8 @@ def model(device='auto'):
             str(kill.name): NBCrossEntropyDictLoss(weight=torch.tensor([0.5730, 4.3231]).to(device)), 
             "default": NBCrossEntropyDictLoss()},
         # loss = MacroAverageTracker(NBCrossEntropyLoss()),
-        tnorm = 'G',
-        beta=0.2,
+        # tnorm = 'G',
+        beta=0.5,
         metric={
             'ILP': PRF1Tracker(DatanodeCMMetric('ILP')),
             'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))})
@@ -334,6 +338,24 @@ def main(args):
             program1.load(f'saves/conll04-bert-pd-{split_id}-size-{args.number}-best_macro-f1.pt')
         
     program1.test(test_reader, device=args.gpu)
+    
+#     avg_verify = 0
+#     count_examples = 0
+#     for node in program.populate(test_reader, device=args.gpu):
+#         verifyResult = node.verifyResultsLC()
+#         avg_ex = 0
+#         if verifyResult:
+#             for lc in verifyResult:
+#                 if "ifSatisfied" in verifyResult[lc]:
+#                     avg_ex += verifyResult[lc]['ifSatisfied']
+#                 else:
+#                     avg_ex += verifyResult[lc]['satisfied']  
+# #                 print("lc %s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
+#             avg_ex = avg_ex / len(verifyResult)
+#         count_examples += 1
+#         avg_verify += avg_ex
+        
+#     print(f"the statisfaction is {avg_verify/count_examples}")
     
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
