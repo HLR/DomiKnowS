@@ -228,3 +228,5 @@ examples/IMDB/logs/*
 examples/IMDB/.vector_cache/*
 # typeset example resources
 /examples/Typenet/resources/*
+/.vscode/
+/.settings/
