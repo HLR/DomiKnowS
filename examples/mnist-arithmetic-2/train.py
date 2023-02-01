@@ -24,11 +24,11 @@ from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLos
 import config
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'])
-parser.add_argument('--num_train', type=int, default=10000)
-parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
-parser.add_argument('--cuda', default=False, action='store_true')
-parser.add_argument('--epochs', type=int, default=100)
+parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], help='Method of integrating constraints')
+parser.add_argument('--num_train', type=int, default=10000, help='Number of training iterations per epoch')
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'], help='None: no logs, TimeOnly: only output timing logs, All: output all logs. Logs will be found in the logs directory.')
+parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA for training')
+parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train for')
 
 args = parser.parse_args()
 

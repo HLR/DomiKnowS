@@ -106,7 +106,7 @@
                         "Transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the blue and black triangles?",
+                    "question": "What is the relation between the blue thing in C and the black triangle?",
                     "answer": [
                         0,
                         4
@@ -155,7 +155,7 @@
                         "Converse"
                     ],
                     "indifinite": false,
-                    "question": "What object is to the below the small black thing? the yellow square  or  the large black circle?",
+                    "question": "What object is to the below the small black thing? the yellow square  or  a large black circle?",
                     "answer": [
                         0
                     ],
@@ -967,7 +967,7 @@
                         " Lists/sets"
                     ],
                     "indifinite": false,
-                    "question": "Is the yellow thing to the right of a blue square?",
+                    "question": "Is the small yellow thing in C to the right of a blue square?",
                     "answer": [
                         "Yes"
                     ],
@@ -1084,7 +1084,7 @@
                         "Lists/Sets"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the small blue thing and the large yellow thing?",
+                    "question": "What is the relation between the small blue thing in A and the large yellow thing?",
                     "answer": [
                         1,
                         5
@@ -1344,7 +1344,7 @@
                         "Symmetry"
                     ],
                     "indifinite": false,
-                    "question": "Is the medium black thing touching the medium yellow thing?",
+                    "question": "Is the medium black thing in A touching the medium yellow thing?",
                     "answer": [
                         "Yes"
                     ],
@@ -1447,7 +1447,7 @@
                         "Transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the medium black thing and the medium blue thing?",
+                    "question": "What is the relation between the medium black thing in A and the medium blue thing in A?",
                     "answer": [
                         3,
                         4
@@ -1930,7 +1930,7 @@
                         "Lists/Sets"
                     ],
                     "indifinite": false,
-                    "question": "Is there any yellow squares at top of a black square?",
+                    "question": "Are there any yellow squares on top of a black square?",
                     "answer": [
                         "Yes"
                     ],
@@ -2274,7 +2274,7 @@
                         "Negation"
                     ],
                     "indifinite": false,
-                    "question": "What object is not touching the bottom of a block? the medium black triangle  or  the small black circle?",
+                    "question": "What object is not touching the bottom of a block? the medium black square  or  the small black circle?",
                     "answer": [
                         1
                     ],
@@ -2458,7 +2458,7 @@
                     "q_type": "CO",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "What object is to the left of the small black thing? the large yellow circe  or  the large black square?",
+                    "question": "What object is to the left of the small black thing? the large yellow circle  or  the large black square?",
                     "answer": [
                         1
                     ],

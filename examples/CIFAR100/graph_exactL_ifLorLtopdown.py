@@ -31,7 +31,32 @@ with Graph('CIFAR100') as graph:
                           'spider', 'squirrel', 'streetcar', 'sunflower', 'sweetpepper', 'table', 'tank', 'telephone',
                           'television', 'tiger', 'tractor', 'train', 'trout', 'tulip', 'turtle', 'wardrobe', 'whale',
                           'willowtree', 'wolf', 'woman', 'worm'])
+    parent_names = {j:i for j, i in
+                    enumerate(['aquaticmammals', 'fish', 'flowers', 'foodcontainers', 'fruitandvegetables',
+                               'householdelectricaldevices', 'householdfurniture', 'insects', 'largecarnivores',
+                               'largeman-madeoutdoorthings', 'largenaturaloutdoorscenes', 'largeomnivoresandherbivores',
+                               'mediummammals', 'non-insectinvertebrates', 'people', 'reptiles', 'smallmammals',
+                               'trees',
+                               'vehicles1', 'vehicles2'])}
 
+    children_names = {j:i for j, i in
+                      enumerate(['apple', 'aquariumfish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 'bicycle',
+                                 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 'can', 'castle',
+                                 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock', 'cloud', 'cockroach', 'couch',
+                                 'crab', 'crocodile', 'cup', 'dinosaur', 'dolphin', 'elephant', 'flatfish', 'forest',
+                                 'fox',
+                                 'girl', 'hamster', 'house', 'kangaroo', 'keyboard', 'lamp', 'lawnmower', 'leopard',
+                                 'lion',
+                                 'lizard', 'lobster', 'man', 'mapletree', 'motorcycle', 'mountain', 'mouse', 'mushroom',
+                                 'oaktree', 'orange', 'orchid', 'otter', 'palmtree', 'pear', 'pickuptruck', 'pinetree',
+                                 'plain', 'plate', 'poppy', 'porcupine', 'possum', 'rabbit', 'raccoon', 'ray', 'road',
+                                 'rocket', 'rose', 'sea', 'seal', 'shark', 'shrew', 'skunk', 'skyscraper', 'snail',
+                                 'snake',
+                                 'spider', 'squirrel', 'streetcar', 'sunflower', 'sweetpepper', 'table', 'tank',
+                                 'telephone',
+                                 'television', 'tiger', 'tractor', 'train', 'trout', 'tulip', 'turtle', 'wardrobe',
+                                 'whale',
+                                 'willowtree', 'wolf', 'woman', 'worm'])}
     structure = {'largeomnivoresandherbivores': {'cattle', 'kangaroo', 'chimpanzee', 'elephant', 'camel'},
                  'reptiles': {'dinosaur', 'lizard', 'crocodile', 'turtle', 'snake'},
                  'fruitandvegetables': {'pear', 'orange', 'apple', 'mushroom', 'sweetpepper'},
@@ -61,7 +86,8 @@ with Graph('CIFAR100') as graph:
         exactL(*[category.__getattr__(i[1]) for i in category.attributes])
         for i in category.attributes:
             lj = [Label.get_concept(l) for l in structure[i[1]]]
-            ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
+            ifL(category.__getattr__(i[1]), orL(*[Label.__getattr__(ii[1]) for ii in lj]))
+            #ifL(category.__getattr__(i[1])("x"), orL(*[Label.__getattr__(ii[1])("x") for ii in lj]))
     else:
         relations = 0
         for i in category.attributes:

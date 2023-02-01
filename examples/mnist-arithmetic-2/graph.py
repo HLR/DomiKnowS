@@ -25,7 +25,8 @@ with Graph(name='global') as graph:
     image = Concept(name='image')
 
     image_contains, = image_batch.contains(image)
-    
+
+    # digit classes 0-9
     digit = image(name='digits',
                   ConceptClass=EnumConcept,
                   values=digits)
@@ -33,6 +34,7 @@ with Graph(name='global') as graph:
     image_pair = Concept(name='pair')
     pair_d0, pair_d1 = image_pair.has_a(digit0=image, digit1=image)
 
+    # sum value classes 0-18
     s = image_pair(name='summations',
                    ConceptClass=EnumConcept,
                    values=summations)
@@ -58,12 +60,17 @@ with Graph(name='global') as graph:
             d0_nm = digits[d0_val]
             d1_nm = digits[d1_val]
 
+            # for each combination of digits that sum to sum_val add constraint to list
             sum_combinations.append(andL(getattr(digit, d0_nm)(path=('x', pair_d0)),
                                          getattr(digit, d1_nm)(path=('x', pair_d1))
                                          ))
 
         print(sum_val, '-', sum_combinations)
 
+        # if the given summation value is some value, then the digits must be one of a set of
+        # digit pairs that add to that value
+        # i.e. if sum val = s, d0 = 0 and d1 = s or d0 = 1 and d1 = s-1 ...
+        # e.g. if sum val = 1, d0 = 0 and d1 = 1 or d0 = 1 and d0 = 0
         if len(sum_combinations) == 1:
             ifL(
                 getattr(s, sum_nm)('x'),

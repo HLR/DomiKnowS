@@ -29,7 +29,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Is the medium black thing near and above a blue thing?",
+                    "question": "Is the medium black thing in A near and above a blue thing?",
                     "answer": [
                         "No"
                     ],
@@ -171,10 +171,9 @@
                         " Transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the medium black thing and the medium blue thing in C?",
+                    "question": "What is the relation between the medium black thing in A and the large blue thing in C?",
                     "answer": [
-                        1,
-                        5
+                        0
                     ],
                     "candidate_answers": [
                         "left",
@@ -641,7 +640,7 @@
         },
         {
             "story": [
-                "There are three blocks called A, B, and C. A is to the right of B and B is to the right of C. In A, there is a medium black circe that is far to the right of a medium blue square. The medium blue square is near and to the right of a small yellow circle. Far above the blue square is a medium yellow triangle. Near above the medium triangle is a small blue circle. In B, there is a large blue square that is touching the right edge of B. There is a medium black triangle that is touching the left side of the blue square. Near and above the medium black triangle is a large blue circle. Near and above the large blue circle is a large yellow triangle. In C, there is a small yellow triangle near and to the left  of a medium black circle. The yellow triangle is touching the right edge of C. Far to the left of the medium black circle is a small blue square."
+                "There are three blocks called A, B, and C. A is to the right of B and B is to the right of C. In A, there is a medium black circe that is far to the right of a medium blue square. The medium blue square is near and to the right of a small yellow circle. Far above the blue square is a medium yellow triangle. Near above the medium triangle is a small blue circle. In B, there is a large blue square that is touching the right edge of B. There is a medium black triangle that is touching the left side of the blue square. Near and above the medium black triangle is a large blue circle. Near and above the large blue circle is a large yellow triangle. In C, there is a small yellow triangle near and to the right of a medium black circle. The yellow triangle is touching the right edge of C. Far to the left of the medium black circle is a small blue square."
             ],
             "questions": [
                 {
@@ -699,7 +698,7 @@
                     "indifinite": false,
                     "question": "Is the small yellow thing in A to the right of a medium black thing?",
                     "answer": [
-                        "No"
+                        "Yes"
                     ],
                     "candidate_answers": "",
                     "image": ""
@@ -835,7 +834,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the large blue thing and the medium black thing in B?",
+                    "question": "What is the relation between the large blue square and the medium black thing in B?",
                     "answer": [
                         1,
                         6
@@ -946,7 +945,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What object is to the left of the small blue thing, the large yellow triangle or the medium black circle? the large yellow triangle  or  the medium black circle ?",
+                    "question": "What object is to the left of the small blue thing in C, the large yellow triangle or the medium black circle? the large yellow triangle  or  the medium black circle ?",
                     "answer": [
                         3
                     ],
@@ -1960,7 +1959,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Are the small blue thing in C below a medium yellow thing?",
+                    "question": "Is the small blue thing in C below a medium yellow thing?",
                     "answer": [
                         "No"
                     ],
@@ -2090,7 +2089,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the small blue thing and the medium yellow thing?",
+                    "question": "What is the relation between the small blue thing in C and the medium yellow thing?",
                     "answer": [
                         2,
                         5
@@ -2570,7 +2569,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Is the small black thing in C below a large black thing?",
+                    "question": "Is the small black thing in C below a large black thing in C?",
                     "answer": [
                         "Yes"
                     ],
@@ -2667,7 +2666,7 @@
                         " Quantifier"
                     ],
                     "indifinite": false,
-                    "question": "What block does not have an triangle inside of it?",
+                    "question": "What block does not have any triangles inside of it?",
                     "answer": [],
                     "candidate_answers": [
                         "A",
@@ -2701,7 +2700,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the large yellow in A and the large black circle in A?",
+                    "question": "What is the relation between the large yellow thing in A and the large black circle in A?",
                     "answer": [
                         1,
                         4
@@ -2841,7 +2840,7 @@
                         " Symmetry"
                     ],
                     "indifinite": false,
-                    "question": "What object is to the far from the small black thing in C, the large yellow square in C or the small blue triangle in C? the large yellow square in c  or  the small blue triangle in c ?",
+                    "question": "What object is far from the small black thing in C, the large yellow square in C or the small blue triangle in C? the large yellow square in c  or  the small blue triangle in c ?",
                     "answer": [
                         0
                     ],
@@ -3942,7 +3941,7 @@
                         "Quantifier"
                     ],
                     "indifinite": false,
-                    "question": "What block does all of the medium sized objects inside of it?",
+                    "question": "What block has all of the medium sized objects inside of it?",
                     "answer": [],
                     "candidate_answers": [
                         "A",
@@ -4662,7 +4661,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the medium yellow thing and the medium black thing in B?",
+                    "question": "What is the relation between the medium yellow thing and the large black thing in B?",
                     "answer": [
                         3,
                         5
@@ -4712,7 +4711,7 @@
                         " Symmetry"
                     ],
                     "indifinite": false,
-                    "question": "What object is not near the large blue thing, the large yellow square or the small yellow square? the large yellow square  or  the small yellow square ?",
+                    "question": "What object is not near the large blue thing, the large yellow square or the small yellow square in C? the large yellow square  or  the small yellow square in c ?",
                     "answer": [
                         0
                     ],
@@ -5136,7 +5135,7 @@
                         " Symmetry"
                     ],
                     "indifinite": false,
-                    "question": "Is the small black thing far to the left of a medium black triangle?",
+                    "question": "Is the small black thing in C far to the left of a medium black triangle?",
                     "answer": [
                         "Yes"
                     ],
@@ -5199,7 +5198,7 @@
                         "Quantifier"
                     ],
                     "indifinite": true,
-                    "question": "What block does has all of the yelow objects inside of it?",
+                    "question": "What block has all of the yelow objects inside of it?",
                     "answer": [
                         "A"
                     ],
@@ -5279,7 +5278,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between large medium blue thing and the large black thing?",
+                    "question": "What is the relation between medium blue thing and the large black thing?",
                     "answer": [
                         0,
                         4
@@ -5395,7 +5394,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What object is near and to the left of the large black thing, the small blue circle or the small yellow triangle? the small blue circle  or  the small yellow triangle ?",
+                    "question": "What object is near and to the left of the large black thing, the medium blue circle or the small yellow triangle? the medium blue circle  or  the small yellow triangle ?",
                     "answer": [
                         0
                     ],
@@ -5776,7 +5775,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Is the medium yellow thing near and to the right of a medium blue thing?",
+                    "question": "Is the medium yellow thing near and to the right of a medium blue thing in A?",
                     "answer": [
                         "No"
                     ],
@@ -5791,7 +5790,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Are the large blue things to the right of a large black thing?",
+                    "question": "Are the large blue things in C to the right of a large black thing?",
                     "answer": [
                         "Yes"
                     ],
@@ -5820,7 +5819,7 @@
                         " Quantifier"
                     ],
                     "indifinite": true,
-                    "question": "What block does not ahve any yellow objects inside of it?",
+                    "question": "What block does not have any yellow objects inside of it?",
                     "answer": [
                         "C"
                     ],
@@ -5856,7 +5855,7 @@
                         " Quantifier"
                     ],
                     "indifinite": true,
-                    "question": "What block does not has all of the black objects?",
+                    "question": "What block does not have any black objects inside of it?",
                     "answer": [
                         "B"
                     ],
@@ -6011,7 +6010,7 @@
                         " Transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What object is to the left of the large blue things in C, the large blue triangle or the medium yellow square? the large blue triangle  or  the medium yellow square ?",
+                    "question": "What object is to the left of the large blue things in C, the large blue triangle in A or the medium yellow square? the large blue triangle in a  or  the medium yellow square ?",
                     "answer": [
                         2
                     ],
@@ -6051,7 +6050,7 @@
                         " Symmetry"
                     ],
                     "indifinite": false,
-                    "question": "What object is not near the medium blue thing in B, the large blue triangle or the large blue square? the large blue triangle  or  the large blue square ?",
+                    "question": "What object is not near the medium blue thing in B, the large blue triangle in C or the large blue square in B? the large blue triangle in c  or  the large blue square in b ?",
                     "answer": [
                         1
                     ],
@@ -6395,7 +6394,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "Is the small blue thing in B to the right of the small blue thing?",
+                    "question": "Is the small blue thing in B to the right of the small blue thing in A?",
                     "answer": [
                         "Yes"
                     ],
@@ -7856,7 +7855,7 @@
                         " Converse"
                     ],
                     "indifinite": false,
-                    "question": "What is the relation between the small blue thing and the medium black thing?",
+                    "question": "What is the relation between the small blue thing and the medium black thing in B?",
                     "answer": [
                         2,
                         4
@@ -7922,26 +7921,6 @@
                     "q_id": 14,
                     "q_type": "CO",
                     "reasoning_type": [
-                        "Lists/Sets",
-                        " Converse"
-                    ],
-                    "indifinite": false,
-                    "question": "What object is to the right of the left of the large yellow thing, the large black circle or the small blue square? the large black circle  or  the small blue square ?",
-                    "answer": [
-                        3
-                    ],
-                    "candidate_answers": [
-                        " the large black circle ",
-                        " the small blue square ",
-                        "both of them",
-                        "none of them"
-                    ],
-                    "image": ""
-                },
-                {
-                    "q_id": 15,
-                    "q_type": "CO",
-                    "reasoning_type": [
                         "Transitivity",
                         " Symmetry",
                         " Converse"
@@ -7960,14 +7939,14 @@
                     "image": ""
                 },
                 {
-                    "q_id": 16,
+                    "q_id": 15,
                     "q_type": "CO",
                     "reasoning_type": [
                         "Lists/Sets",
                         " Transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What object is to the right of the meidum black thing in A, the medium yellow square or the small blue square in A? the medium yellow square  or  the small blue square in a ?",
+                    "question": "What object is to the right of the medium black thing in A, the medium yellow square or the small blue square in A? the medium yellow square  or  the small blue square in a ?",
                     "answer": [
                         0
                     ],
@@ -8862,7 +8841,7 @@
                     "q_type": "YN",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "Are all small squares to the right of the medium yelli square?",
+                    "question": "Are all small squares to the right of the medium yellow square?",
                     "answer": [
                         "No"
                     ],
@@ -8886,7 +8865,7 @@
                     "q_type": "YN",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "Is there any yellow object under the big triangle?",
+                    "question": "Are there any yellow objects under the big triangle?",
                     "answer": [
                         "Yes"
                     ],
@@ -8910,7 +8889,7 @@
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
-                    "question": "Which block has a small blue bject above another small blue object?",
+                    "question": "Which block has a small blue object above another small blue object?",
                     "answer": [
                         "B"
                     ],
@@ -8926,7 +8905,7 @@
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
-                    "question": "Which block has a small blue bject to the left of another small blue object?",
+                    "question": "Which block has a small blue object to the left of another small blue object?",
                     "answer": [
                         "B"
                     ],
@@ -9435,14 +9414,19 @@
                 },
                 {
                     "q_id": 4,
-                    "q_type": "YN",
+                    "q_type": "CO",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "Is small black circle between the small black triangle and the medium blue square?",
+                    "question": "Which object is to the left of a big triangle? a small triangle  or  a big circle?",
                     "answer": [
-                        "Yes"
+                        3
                     ],
-                    "candidate_answers": "",
+                    "candidate_answers": [
+                        " a small triangle ",
+                        " a big circle",
+                        "both of them",
+                        "none of them"
+                    ],
                     "image": ""
                 },
                 {
@@ -9521,7 +9505,7 @@
                     "q_type": "FR",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "What is the relation between  the big blue circle and the small square?",
+                    "question": "What is the relation between the big blue circle and the small square?",
                     "answer": [
                         3
                     ],
@@ -9640,30 +9624,13 @@
                     "q_type": "CO",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "Which object is below any small objects? a big yellow triangle  or  the big circle?",
+                    "question": "Which object is below any small objects? a big yellow triangle  or  the big blue circle?",
                     "answer": [
                         1
                     ],
                     "candidate_answers": [
                         " a big yellow triangle ",
                         " the big circle",
-                        "both of them",
-                        "none of them"
-                    ],
-                    "image": ""
-                },
-                {
-                    "q_id": 17,
-                    "q_type": "CO",
-                    "reasoning_type": "",
-                    "indifinite": false,
-                    "question": "Which object is to the left of a big triangle? a small triangle  or  a big circle?",
-                    "answer": [
-                        3
-                    ],
-                    "candidate_answers": [
-                        " a small triangle ",
-                        " a big circle",
                         "both of them",
                         "none of them"
                     ],
@@ -9990,7 +9957,7 @@
                     "q_type": "YN",
                     "reasoning_type": "",
                     "indifinite": true,
-                    "question": "Is the medium triangle in block A to the left od the big triangle in block A?",
+                    "question": "Is the medium triangle in block A to the left of the big triangle in block A?",
                     "answer": [
                         "DK"
                     ],
@@ -10035,7 +10002,7 @@
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
-                    "question": "Which block has all small objects?",
+                    "question": "Which block has all of the small objects?",
                     "answer": [
                         "C"
                     ],
@@ -10521,7 +10488,7 @@
                     "q_type": "YN",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "Are Are all green sqauares to the left of any red square?",
+                    "question": "Are all green sqauares to the left of any red square?",
                     "answer": [
                         "Yes"
                     ],
@@ -10626,7 +10593,7 @@
                     "q_type": "FR",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "What is the relation between the red square above a green pbject and a red triangle to the left of a green object?",
+                    "question": "What is the relation between the red square above a green object and a red triangle to the left of a green object?",
                     "answer": [
                         2
                     ],
@@ -10647,7 +10614,7 @@
                     "q_type": "FR",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "What is the relation between the red square above a green pbject and a red triangle below a green object?",
+                    "question": "What is the relation between the red square above a green object and a red triangle below a green object?",
                     "answer": [
                         0
                     ],
@@ -11300,7 +11267,7 @@
                         " transitivity"
                     ],
                     "indifinite": false,
-                    "question": "What relations exist between the black object above the yellow thing and the black object above the black thing?",
+                    "question": "What relations exist between the blue object above the yellow thing and the black object above the black thing?",
                     "answer": [
                         1
                     ],
@@ -11414,7 +11381,7 @@
                     "q_type": "CO",
                     "reasoning_type": "",
                     "indifinite": false,
-                    "question": "What is to the left of the black square? a yellow circle  or  a blue circle?",
+                    "question": "What is to the left of the blue square? a yellow circle  or  a blue circle?",
                     "answer": [
                         2
                     ],
@@ -11447,23 +11414,6 @@
                 },
                 {
                     "q_id": 23,
-                    "q_type": "CO",
-                    "reasoning_type": "",
-                    "indifinite": false,
-                    "question": "What is between two blue objects? a blue square  or  a yellow circle?",
-                    "answer": [
-                        1
-                    ],
-                    "candidate_answers": [
-                        " a blue square ",
-                        " a yellow circle",
-                        "both of them",
-                        "none of them"
-                    ],
-                    "image": "R"
-                },
-                {
-                    "q_id": 24,
                     "q_type": "FB",
                     "reasoning_type": [
                         "Negation",
@@ -11481,7 +11431,7 @@
                     "image": ""
                 },
                 {
-                    "q_id": 25,
+                    "q_id": 24,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": false,
@@ -11494,7 +11444,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 26,
+                    "q_id": 25,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
@@ -11509,7 +11459,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 27,
+                    "q_id": 26,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
@@ -11524,7 +11474,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 28,
+                    "q_id": 27,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": false,
@@ -11537,7 +11487,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 29,
+                    "q_id": 28,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
@@ -11552,7 +11502,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 30,
+                    "q_id": 29,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,
@@ -11568,7 +11518,7 @@
                     "image": "R"
                 },
                 {
-                    "q_id": 31,
+                    "q_id": 30,
                     "q_type": "FB",
                     "reasoning_type": "",
                     "indifinite": true,

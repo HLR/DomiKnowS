@@ -87,8 +87,8 @@ for (i, label) in enumerate(tags_vals):
 # {'O': 0, 'B_MISC': 1, 'I_MISC': 2, 'B_PER': 3, 'I_PER': 4, 'B_ORG': 5, 'I_ORG': 6, 'B_LOC': 7, 'I_LOC': 8, 'X': 9}
 # print(label_map.keys())
 
-train_dataset = BIODataSet(data_list=train_examples[:9000], tokenizer=tokenizer, label_map=label_map, max_len=max_len)
-eval_dataset = BIODataSet(data_list=val_examples[:9000], tokenizer=tokenizer, label_map=label_map, max_len=max_len)
+train_dataset = BIODataSet(data_list=train_examples[:100], tokenizer=tokenizer, label_map=label_map, max_len=max_len)
+eval_dataset = BIODataSet(data_list=val_examples[:100], tokenizer=tokenizer, label_map=label_map, max_len=max_len)
 # test_dataset = BIODataSet(data_list=test_examples[:100], tokenizer=tokenizer, label_map=label_map, max_len=max_len)
 
 train_iter = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)

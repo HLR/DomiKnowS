@@ -120,7 +120,7 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
     program = None
     from graph_spartun_rel import graph, story, story_contain, question, \
         left, right, above, below, behind, front, near, far, disconnected, touch, \
-        overlap, coveredby, inside, cover, contain
+        overlap, coveredby, inside, cover, contain, inverse, inv_question1, inv_question2
 
     story["questions"] = ReaderSensor(keyword="questions")
     story["stories"] = ReaderSensor(keyword="stories")
@@ -250,8 +250,13 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
                                       device=device)
     question[contain] = FunctionalSensor(story_contain, "ntppi_label", forward=read_label, label=True, device=device)
 
+    inverse[inv_question1.reversed, inv_question2.reversed] = \
+        CompositionCandidateSensor(
+            relations=(inv_question1.reversed, inv_question2.reversed),
+            forward=check_symmetric, device=device)
+
     poi_list = [question, left, right, above, below, behind, front, near, far,
-                disconnected, touch, overlap, coveredby, inside, cover, contain]
+                disconnected, touch, overlap, coveredby, inside, cover, contain, inverse]
 
     from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
     from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
@@ -259,19 +264,23 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
     from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
     from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 
-    infer_list = ['local/argmax']  # ['ILP', 'local/argmax']
+    infer_list = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     if pmd:
         program = PrimalDualProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
                                     beta=beta,
-                                    metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    metric={
+                                        'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     device=device)
     elif sampling:
         program = SampleLossProgram(graph, SolverModel, poi=poi_list,
                                     inferTypes=infer_list,
                                     loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                                    metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                    metric={
+                                        'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                        'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                     sample=True,
                                     sampleSize=sampleSize,
                                     sampleGlobalLoss=False,
@@ -282,7 +291,9 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
                                    poi=poi_list,
                                    inferTypes=infer_list,
                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
-                                   metric={'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
+                                   metric={
+                                       'ILP': PRF1Tracker(DatanodeCMMetric()),
+                                       'argmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))},
                                    device=device)
 
     return program
