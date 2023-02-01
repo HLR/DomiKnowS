@@ -175,7 +175,11 @@ for node in program.populate(reader, device=device):
     if verifyResult:
         for lc in verifyResult:
             if "ifSatisfied" in verifyResult[lc]:
-                print("%s(if) is %i%% satisfied by learned results"%(lc, verifyResult[lc]['ifSatisfied']))
+                if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
+                    print("%s(if) is %i%% satisfied by learned results"%(lc, verifyResult[lc]['ifSatisfied']))
+                else:
+                    print("%s(if) is Nan satisfied by learned results"%(lc, verifyResult[lc]['ifSatisfied']))
+
             else:
                 print("%s is %i%% satisfied by learned results"%(lc, verifyResult[lc]['satisfied']))
 
