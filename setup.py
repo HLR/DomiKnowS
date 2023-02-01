@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='DomiKnowS',
-    version='0.216',
+    version='0.217',
     description='A library provides integration between Domain Knowledge and Deep Learning.',
 
     long_description ='The library allows to specify a problem domain with a conceptual [graph](https://github.com/HLR/DomiKnowS/blob/main/docs/developer/KNOWLEDGE.md#graph) including declarations of edges and nodes, as well as [logical constraints](https://github.com/HLR/DomiKnowS/blob/main/docs/developer/KNOWLEDGE.md#constraints) on the graph concepts and relations. [Neural network](https://github.com/HLR/DomiKnowS/blob/main/docs/developer/MODEL.md#model-declaration) outputs bounded to the graph edges and nodes. The logical constraints are conveted to ILP and Gurobi Solver is used for inferencing. This adds a relational overlay over elements in a network that relates physical concepts in applications. <br> <br> The example runing in Google colab environment, presenting the usage of the libarary is [here](https://colab.research.google.com/drive/1FvdePHv3h3NDSTkBw1VKwAmaZFWuGgTi).',
@@ -17,7 +17,7 @@ setup(
     install_requires=[
        'acls>=1.0.2',
        'Owlready2>=0.30',
-       'gurobipy',
+       'gurobipy<=9.1.2',
        'pandas>=1.1.5',
        'torch>=1.8.1',
        'ordered-set',
