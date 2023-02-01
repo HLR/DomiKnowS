@@ -71,13 +71,23 @@ with Graph('VQA') as graph:
             if len(structure[key]):
                 if key in hierarchy['level1']:
                     # ifL(orL(*[level2.__getattr__(key1) for key1 in structure[key]]), level1.__getattr__(key))
-                    ifL(level1.__getattr__(key), orL(*[level2.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level1.__getattr__(key), exactL(*[level2.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level2']:
                     # ifL(orL(*[level3.__getattr__(key1) for key1 in structure[key]]), level2.__getattr__(key))
-                    ifL(level2.__getattr__(key), orL(*[level3.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level2.__getattr__(key), exactL(*[level3.__getattr__(key1) for key1 in structure[key]]))
                 elif key in hierarchy['level3']:
                     # ifL(orL(*[level4.__getattr__(key1) for key1 in structure[key]]), level3.__getattr__(key))
-                    ifL(level3.__getattr__(key), orL(*[level4.__getattr__(key1) for key1 in structure[key]]))
+                    ifL(level3.__getattr__(key), exactL(*[level4.__getattr__(key1) for key1 in structure[key]]))
+            else:
+                if key in hierarchy['level1']:
+                    ifL(level1.__getattr__(key), andL(level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')))
+                elif key in hierarchy['level2']:
+                    ifL(level2.__getattr__(key), andL(level3.__getattr__('None'), level4.__getattr__('None')))
+                elif key in hierarchy['level3']:
+                    ifL(level3.__getattr__(key), level4.__getattr__('None'))
+
+
+                
 
         # ifL(level1.__getattr__('None'), andL(*[level2.__getattr__('None'), level3.__getattr__('None'), level4.__getattr__('None')]))
         ifL(
