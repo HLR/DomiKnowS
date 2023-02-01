@@ -3,9 +3,9 @@ import sys
 
 sys.path.append('.')
 sys.path.append('../..')
-from regr.program.lossprogram import SampleLossProgram
+from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
-from regr.program.primaldualprogram import PrimalDualProgram
+
 
 import torch
 from torchvision.models import resnet18, resnet50, resnet101, resnet152
