@@ -13,7 +13,7 @@ from regr.graph import Graph, Concept, Relation
 
 
 def main(args):
-    from graph_senetences import entailment, neutral, contradiction
+    from graph import answer_class
 
     # Set the cuda number we want to use
     cuda_number = args.cuda_number

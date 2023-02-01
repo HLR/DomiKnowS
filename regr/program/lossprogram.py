@@ -55,6 +55,8 @@ class LossProgram(LearningBasedProgram):
         super().to(device=device)
         if self.device is not None:
             self.model.to(self.device)
+            self.cmodel.device = self.device
+            self.cmodel.to(self.device)
 
     def train(
         self,

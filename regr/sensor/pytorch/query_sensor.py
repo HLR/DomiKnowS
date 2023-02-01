@@ -29,7 +29,7 @@ class QuerySensor(FunctionalSensor):
 
     def define_inputs(self):
         super().define_inputs()
-        datanodes = self.builder.getDataNode().findDatanodes(select=self.concept)
+        datanodes = self.builder.getDataNode(device=self.device).findDatanodes(select=self.concept)
         self.kwinputs['datanodes'] = datanodes
 
     def forward_wrap(self):

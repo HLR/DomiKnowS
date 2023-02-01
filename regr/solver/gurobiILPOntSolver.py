@@ -103,7 +103,7 @@ class gurobiILPOntSolver(ilpOntSolver):
         conceptToDNSCash = {}
         
         for currentConceptRelation in conceptsRelations: 
-            currentName = currentConceptRelation[0]
+            currentName = currentConceptRelation[0].name
             
             if currentName in conceptToDNSCash:
                 dns = conceptToDNSCash[currentName]
@@ -112,10 +112,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                 dns = rootDn.findDatanodes(select = rootConcept)
                 conceptToDNSCash[currentName] = dns
                 
-            ilpVarCount[currentConceptRelation[1]] = len(dns)
+            currentConceptName = currentName + "_" + currentConceptRelation[1]
+            ilpVarCount[currentConceptName] = len(dns)
             
             if currentConceptRelation[2] is None:
-                ilpVarCount[currentConceptRelation[1]] += len(dns)
+                ilpVarCount[currentConceptName] += len(dns)
        
         return ilpVarCount
     
@@ -801,13 +802,16 @@ class gurobiILPOntSolver(ilpOntSolver):
         
         if dn.ontologyNode.name == conceptName:
             if not sample:
-                if loss:
+                if "xP" in xPkey:
+                    return 1
+                elif loss:
                     tOne = torch.ones(1, device=self.current_device, requires_grad=True, dtype=torch.float64)
-                    tOneSqueezed = torch.squeeze(tOne)
-                    return tOneSqueezed
-                
-                return 1
-            
+                    
+                else:
+                    tOne = torch.ones(1, device=self.current_device, requires_grad=False)
+                    
+                tOneSqueezed = torch.squeeze(tOne)
+                return tOneSqueezed
             else:
                 sampleSize = p
                 
@@ -1178,13 +1182,11 @@ class gurobiILPOntSolver(ilpOntSolver):
                                 tsqueezed = torch.unsqueeze(tsqueezed, 0)
                             lcVariables[variableName] = [[tStack]]
                         except TypeError:
-                            try:
-                                vDnsList = [torch.tensor(v[0], dtype=torch.float, device=self.current_device, requires_grad=True) for v in vDns]
-                                lcVariables[variableName] = [[torch.stack(vDnsList)]]
-                            except TypeError: # has None  - will use tensor per value 
-                                lcVariables[variableName] = vDns
-                        except RuntimeError:
-                            pass
+                            for v in vDns:
+                                if v[0] != None and torch.is_tensor(v[0]):
+                                    v[0] = torch.unsqueeze(v[0], 0)
+                                                                    
+                            lcVariables[variableName] = vDns
                     else:
                         lcVariables[variableName] = vDns
                     
@@ -1195,13 +1197,13 @@ class gurobiILPOntSolver(ilpOntSolver):
                     self.myLogger.info('Processing Nested %s(%s) - %s'%(e.lcName, e, e.strEs()))
                     if sample:
                         vDns, sampleInfoLC, lcVariablesLC = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
+                                                                               lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                         sampleInfo = {**sampleInfo, **sampleInfoLC} # sampleInfo|sampleInfoLC in python 9
                         
                         lcVariablesSet = {**lcVariablesSet, **lcVariablesLC}
                     else:
                         vDns = self.__constructLogicalConstrains(e, booleanProcesor, m, dn, p, key = key, 
-                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo)
+                                                                 lcVariablesDns = lcVariablesDns, headLC = False, loss = loss, sample = sample, vNo=vNo, verify=verify)
                         
                         if loss and vDns:
                             vDnsOriginal = vDns
@@ -2153,41 +2155,47 @@ class gurobiILPOntSolver(ilpOntSolver):
                     verifyListSatisfied += sum(vl)
                 
                 if verifyListLen:
-                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) *100
+                    current_verifyResult['satisfied'] = (verifyListSatisfied / verifyListLen) * 100
                 else:
-                    current_verifyResult['satisfied'] = 100
+                    current_verifyResult['satisfied'] = float("nan")
                     
+                # If  this if logical constraints
                 if type(lc) is ifL: # if LC
-                    firstKey = next(iter(lcVariables))
-                    firstLcV = lcVariables[firstKey] 
+                    firstKey = next(iter(lcVariables)) # antecedent variable name in the given if LC
+                    firstLcV = lcVariables[firstKey]   # values of antecedent 
                     
                     ifVerifyList = []
                     
                     ifVerifyListLen = 0
                     ifVerifyListSatisfied = 0
+                    
+                    # Loop through the collected verification 
                     for i, v in enumerate(verifyList):
                         ifVi = []
+                        # Check if the number of elements in verify list is the same as number of elements in antecedent variables
                         if len(v) != len(firstLcV[i]):
-                            f = firstLcV[i]
-                            continue    
+                            continue # should be exception
+                        
+                        # Select these calculated verification which have antecedent true
                         for j, w in enumerate(v):
                             if torch.is_tensor(firstLcV[i][j]):
-                                if firstLcV[i][j].item() == 1:
-                                    ifVi.append(w)
+                                currentAntecedent = firstLcV[i][j].item()
                             else: 
-                                if firstLcV[i][j] == 1:
-                                    ifVi.append(w)
+                                currentAntecedent = firstLcV[i][j] 
+                                
+                            if currentAntecedent == 1: # antecedent true
+                                ifVi.append(w)
                                     
                         ifVerifyList.append(ifVi)
                         
                         ifVerifyListLen += len(ifVi)
                         ifVerifyListSatisfied += sum(ifVi)
                     
-                    current_verifyResult['ifVerifyList'] = verifyList
+                    current_verifyResult['ifVerifyList'] = ifVerifyList
                     if ifVerifyListLen:
                         current_verifyResult['ifSatisfied'] = (ifVerifyListSatisfied / ifVerifyListLen) *100
                     else:
-                        current_verifyResult['ifSatisfied'] = 100
+                        current_verifyResult['ifSatisfied'] = float("nan")
 
                 endLC = process_time_ns() # timer()
                 elapsedInNsLC = endLC - startLC

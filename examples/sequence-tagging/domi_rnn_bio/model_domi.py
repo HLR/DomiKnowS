@@ -43,8 +43,6 @@ class RNNTagger(nn.Module):
         # The input to this loss needs to be one 2-dimensional and one 1-dimensional tensor.
         scores = scores.view(-1, self.n_labels) ## torch.Size([12, 9])
         # print(scores.size())
-        # import sys
-        # sys.exit()
         return scores
 
     # def predict(self, sentences):

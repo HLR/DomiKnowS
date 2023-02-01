@@ -48,6 +48,12 @@ class LossModel(torch.nn.Module):
     def reset_parameters(self):
         torch.nn.init.constant_(self.lmbd, 1.)
 
+    def to(self, device):
+        super().to(device=device)
+        if self.device is not None:
+            if hasattr(self, 'lmbd_p'):
+                self.lmbd_p = self.lmbd_p.to(device)
+
     def reset(self):
         if isinstance(self.loss, MetricTracker):
             self.loss.reset()

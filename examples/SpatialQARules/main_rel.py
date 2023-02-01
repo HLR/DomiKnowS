@@ -17,7 +17,7 @@ import tqdm
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 
 
-def eval(program, testing_set, cur_device, args):
+def eval(program, testing_set, cur_device, args, print_result=False, StepGame_number=None):
     if args.test_file.upper() != "STEPGAME":
         from graph_spartun_rel import left, right, above, below, behind, front, near, far, disconnected, touch, \
             overlap, coveredby, inside, cover, contain
@@ -34,9 +34,6 @@ def eval(program, testing_set, cur_device, args):
             else:
                 result_set.remove(ind1)
 
-    TP = np.zeros(len(all_labels))
-    TPFN = np.zeros(len(all_labels))
-    TPFP = np.zeros(len(all_labels))
     pred_list = []
     correct = 0
     total = 0
@@ -68,31 +65,34 @@ def eval(program, testing_set, cur_device, args):
                 pred = 1 if ind in pred_set else 0
                 accuracy_check = accuracy_check and label == pred
             if accuracy_check: correct += 1
+    accuracy = correct / total
 
+    if print_result:
+        result_file = open("result.txt", 'a')
+        print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
+              file=result_file)
+        if not args.loaded:
+            print("Training info", file=result_file)
+            print("Batch Size:", args.batch_size, file=result_file)
+            print("Epoch:", args.epoch, file=result_file)
+            print("Learning Rate:", args.lr, file=result_file)
+            print("Beta:", args.beta, file=result_file)
+            print("Sampling Size:", args.sampling_size, file=result_file)
+        else:
+            print("Loaded Model Name:", args.loaded_file, file=result_file)
+        print("Evaluation File:", args.test_file, file=result_file)
+        if StepGame_number:
+            print("Testing on StepGame {:} steps".format(StepGame_number), file=result_file)
+        print("Accuracy:", accuracy, file=result_file)
 
-    return correct / total
-
-    # result_file = open("result.txt", 'a')
-    # print("Program:", "Primal Dual" if args.pmd else "Sampling Loss" if args.sampling else "DomiKnowS",
-    #       file=result_file)
-    # if not args.loaded:
-    #     print("Training info", file=result_file)
-    #     print("Batch Size:", args.batch_size, file=result_file)
-    #     print("Epoch:", args.epoch, file=result_file)
-    #     print("Learning Rate:", args.lr, file=result_file)
-    #     print("Beta:", args.beta, file=result_file)
-    #     print("Sampling Size:", args.sampling_size, file=result_file)
-    # else:
-    #     print("Loaded Model Name:", args.loaded_file, file=result_file)
-    # print("Evaluation File:", args.test_file, file=result_file)
-    # print("Accuracy:", accuracy, file=result_file)
-    # print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
-    # print("Precious:", precision_score(actual, pred, average=None), file=result_file)
-    # print("Recall:", recall_score(actual, pred, average=None), file=result_file)
-    # print("F1:", f1_score(actual, pred, average=None), file=result_file)
-    # print("F1 Macro:", f1_score(actual, pred, average='macro'), file=result_file)
-    # print("Confusion Matrix:\n", confusion_matrix(actual, pred), file=result_file)
-    # result_file.close()
+        # print("Constrains Satisfied rate:", satisfy_constrain_rate, "%", file=result_file)
+        # print("Precious:", precision_score(actual, pred, average=None), file=result_file)
+        # print("Recall:", recall_score(actual, pred, average=None), file=result_file)
+        # print("F1:", f1_score(actual, pred, average=None), file=result_file)
+        # print("F1 Macro:", f1_score(actual, pred, average='macro'), file=result_file)
+        # print("Confusion Matrix:\n", confusion_matrix(actual, pred), file=result_file)
+        # result_file.close()
+    return accuracy
 
 
 def train(program, train_set, eval_set, cur_device, limit, lr, check_epoch=4, program_name="DomiKnow", args=None):
@@ -165,9 +165,9 @@ def main(args):
     program = None
     if args.train_file.upper() == "STEPGAME":
         program = program_declaration_StepGame(cur_device,
-                                                 pmd=args.pmd, beta=args.beta,
-                                                 sampling=args.sampling, sampleSize=args.sampling_size,
-                                                 dropout=args.dropout, constrains=args.constrains)
+                                               pmd=args.pmd, beta=args.beta,
+                                               sampling=args.sampling, sampleSize=args.sampling_size,
+                                               dropout=args.dropout, constrains=args.constrains)
     else:
         program = program_declaration_spartun_fr(cur_device,
                                                  pmd=args.pmd, beta=args.beta,
@@ -198,7 +198,8 @@ def main(args):
                                    augmented=False,
                                    batch_size=args.batch_size,
                                    rule=args.text_rules,
-                                   StepGame_status="test" if args.train_file.upper() == "STEPGAME" else None)
+                                   StepGame_status="test" if args.train_file.upper() == "STEPGAME" else None,
+                                   )
 
     eval_file = "human_dev.json" if args.test_file.upper() == "HUMAN" \
         else "StepGame" if args.train_file.upper() == "STEPGAME" \
@@ -226,7 +227,18 @@ def main(args):
             program.model.load_state_dict(pretrain_dict)
         else:
             program.load("Models/" + args.loaded_file, map_location={'cuda:0': cur_device, 'cuda:1': cur_device})
-        eval(program, testing_set, cur_device, args)
+        if args.test_each:
+            for i in range(10):
+                testing_set = DomiKnowS_reader("DataSet/" + test_file, "FR",
+                                               size=args.test_size,
+                                               augmented=False,
+                                               batch_size=args.batch_size,
+                                               rule=args.text_rules,
+                                               StepGame_status="test" if args.train_file.upper() == "STEPGAME" else None,
+                                               StepGame_number=i+1)
+                eval(program, testing_set, cur_device, args, print_result=True)
+        else:
+            eval(program, testing_set, cur_device, args, print_result=True)
     elif args.loaded_train:
         if args.model_change:
             pretrain_model = torch.load("Models/" + args.loaded_file,
@@ -248,8 +260,8 @@ if __name__ == "__main__":
     parser.add_argument("--epoch", dest="epoch", type=int, default=1)
     parser.add_argument("--lr", dest="lr", type=float, default=1e-5)
     parser.add_argument("--cuda", dest="cuda", type=int, default=0)
-    parser.add_argument("--test_size", dest="test_size", type=int, default=100000)
-    parser.add_argument("--train_size", dest="train_size", type=int, default=100000)
+    parser.add_argument("--test_size", dest="test_size", type=int, default=2)
+    parser.add_argument("--train_size", dest="train_size", type=int, default=2)
     parser.add_argument("--batch_size", dest="batch_size", type=int, default=1)
     parser.add_argument("--train_file", type=str, default="origin", help="Option: SpaRTUN or Human")
     parser.add_argument("--test_file", type=str, default="SPARTUN", help="Option: SpaRTUN or Human")
@@ -265,6 +277,7 @@ if __name__ == "__main__":
     parser.add_argument("--loaded_train", type=bool, default=False, help="Option to load and then further train")
     parser.add_argument("--save", dest="save", type=bool, default=False)
     parser.add_argument("--save_file", dest="save_file", type=str, default="train_model")
+    parser.add_argument("--step_game_test_each", dest="test_each", type=bool, default=False)
 
     args = parser.parse_args()
     main(args)

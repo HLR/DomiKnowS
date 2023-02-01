@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from regr.data.reader import RegrReader
-from regr.program.lossprogram import SampleLossProgram
+from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
 from regr.program.model.pytorch import SolverModel
 from regr.utils import setProductionLogMode
 
@@ -88,7 +88,7 @@ class SudokuReader(RegrReader):
 trainreader = SudokuReader("randn", type="raw")
 
 from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL, exactL
+from regr.graph.logicalConstrain import andL, existsL, notL, atMostL, ifL, fixedL, eqL, exactL, exactAL
 from regr.graph import EnumConcept
 
 Graph.clear()
@@ -137,17 +137,18 @@ with Graph('global') as graph:
     
     # ifL(empty_entry,  atMostL(*empty_entry_label.attributes), active = True, sampleEntries = True)
     
+    exactL(*empty_entry_label.attributes)
     fixedL(empty_entry_label("x", eqL(empty_entry, "fixed", {True})), active = FIXED)
     
     for row_num in range(9):
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
-        andL(*[exactL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactAL(v[i](path = (eqL(empty_entry, "rows", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactAL(v[i](path = (eqL(empty_entry, "cols", {row_num})))) for i in range(1, 10)])
+        # andL(*[exactAL(v[i](path = (eqL(empty_entry, "tables", {row_num})))) for i in range(1, 10)])
 
-        # for j in range(1, 10):
-        #     exactL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
-        #     exactL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
-        #     exactL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
+        for j in range(1, 10):
+            exactAL(v[j](path = (eqL(empty_entry, "rows", {row_num}))))
+            exactAL(v[j](path = (eqL(empty_entry, "cols", {row_num}))))
+            exactAL(v[j](path = (eqL(empty_entry, "tables", {row_num}))))
    
 import torch.nn as nn
 
@@ -169,7 +170,7 @@ class Conv2dSame(torch.nn.Module):
 class SudokuSolver(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W = torch.nn.Parameter(torch.rand((81,9)))
+        self.W = torch.nn.Parameter(torch.ones((81,9)))
         
     def __call__(self, X):
         
@@ -308,6 +309,14 @@ program = SampleLossProgram(
         beta=1,
         )
 
+program = PrimalDualProgram(
+       graph, SolverModel, 
+       poi=(sudoku, empty_entry, same_row, same_col, same_table),
+       inferTypes=['local/argmax'],
+       loss=MacroAverageTracker(NBCrossEntropyLoss()),
+    #    metric={'softmax': PRF1Tracker(DatanodeCMMetric('local/argmax'))}
+       )
+
 # program1 = SolverPOIProgram(
 #         graph, poi=(sudoku, empty_entry), inferTypes=['local/argmax', 'ILP'],
 #         loss=MacroAverageTracker(NBCrossEntropyLoss()),
@@ -424,7 +433,7 @@ for i in range(trainingNo):
     print("Training - %i"%(i))
     
     program.train(trainreader, train_epoch_num=1,  c_warmup_iters=0,
-                    Optim=lambda param: torch.optim.Adam(param, lr=0.01), collectLoss=None, device='auto')
+                    Optim=lambda param: torch.optim.Adam(param, lr=0.2), collectLoss=None, device='auto')
     check = False
     if program.model.loss.value()['empty_entry_label'].item() == 0:
         print("loss is zero")

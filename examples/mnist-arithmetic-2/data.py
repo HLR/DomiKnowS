@@ -113,7 +113,7 @@ def make_sum(samples, eval=False):
     }
 
 
-def get_readers():
+def get_readers(num_train):
     transform = transforms.Compose([transforms.ToTensor(),
                               transforms.Normalize((0.5,), (0.5,)),
                               Flatten(0)
@@ -121,15 +121,15 @@ def get_readers():
     trainset = datasets.MNIST(DATA_PATH, download=True, train=True, transform=transform)
     testset = datasets.MNIST(DATA_PATH, download=True, train=False, transform=transform)
 
-    assert config.num_train * 4 <= 50000 and config.num_valid * 2 <= 10000 and config.num_test * 2 <= 10000
+    assert num_train * 4 <= 50000 and config.num_valid * 2 <= 10000 and config.num_test * 2 <= 10000
 
     # need to sample twice as many train ids because we're sampling s.t. the sum distribution is uniform
     # so some digits may appear disproportionately often
-    train_ids = random.sample(range(0, 50000), config.num_train * 4)
+    train_ids = random.sample(range(0, 50000), num_train * 4)
     valid_ids = random.sample(range(50000, 60000), config.num_valid * 2)
     test_ids = random.sample(range(10000), config.num_test * 2)
 
-    train_balanced = SumBalanceDataset(trainset, train_ids, config.num_train)
+    train_balanced = SumBalanceDataset(trainset, train_ids, num_train, verbose=False)
 
     trainloader = train_balanced
 

@@ -222,6 +222,7 @@ class DataNode:
         keyBis  = ""
         index = None
         
+        conceptFound = False
         for _, kConcept in enumerate(keys):
             if key != "":
                 key = key + "/"
@@ -229,9 +230,12 @@ class DataNode:
                 
             # Handle different way of representing concept in the key list
             if isinstance(kConcept, str): # Concept name
-                cocneptForK = self.findConcept(kConcept) # Find concept
+                cocneptForK = None
+                if not conceptFound:
+                    cocneptForK = self.findConcept(kConcept) # Find concept
                 
-                if cocneptForK is not None:  
+                if not conceptFound and cocneptForK is not None:  
+                    conceptFound = True
                     if isinstance(cocneptForK, tuple):
                         key = key + '<' + cocneptForK[0].name +'>'
                         index = cocneptForK[2]
@@ -243,9 +247,11 @@ class DataNode:
                     key = key + kConcept
                     keyBis = keyBis + kConcept
             elif isinstance(kConcept, tuple): # Concept represented as tuple
+                conceptFound = True
                 key = key + '<' + kConcept[0].name +'>'
                 keyBis = keyBis + kConcept[0].name
             elif isinstance(kConcept, Concept): # Just concept
+                conceptFound = True
                 key = key + '<' + kConcept.name +'>'
                 keyBis = keyBis + kConcept.name
             

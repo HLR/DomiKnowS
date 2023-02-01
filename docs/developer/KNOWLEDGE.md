@@ -1,7 +1,7 @@
 # Knowledge Declaration
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge a the task.
-We provide a graph language based on python for knowledge declaration with notation of "graph", "concept", "property", "relation", and "constraints".
+We provide a graph language based on Python for knowledge declaration with notation of "graph", "concept", "property", "relation", and "constraints".
 
 - [Knowledge Declaration](#knowledge-declaration)
   - [Class Overview](#class-overview)
@@ -16,7 +16,7 @@ We provide a graph language based on python for knowledge declaration with notat
         - [Inherit declaration](#inherit-declaration)
     - [Access the nodes](#access-the-nodes)
   - [Constraints](#constraints)
-    - [Logical Constraints](#logical-constraints)
+    - [Logical Constraints](#logical-constraints-lc)
     - [Graph Constraints](#graph-constraints)
     - [Ontology Cconstrains](#ontology-constraint)
 
@@ -41,7 +41,7 @@ We provide a graph language based on python for knowledge declaration with notat
 A `Graph` object is constructed either by manually coding or compiled from `OWL` (deprecated).
 Each `Graph` object can contain other `Graph` objects as sub-graphs. No cyclic reference in graph hierarchy is allowed.
 
-You can either write an owl file initializing your concepts and relations or to write your graph with our specific python classes.
+You can either write an owl file initializing your concepts and relations or to write your graph with our specific Python classes.
 
 Each `Graph` object can contain `Concept`s.
 
@@ -54,7 +54,7 @@ We have three defined relationship between nodes that each program can use. `con
 `contains` means that concept `A` is the parent node of concept `B` and several `B` instances can be the children of one single node `A`.
 Whgen ever a `contains` relationship is used, it indicates a way of generating or connecting parent to children if the children are from the same type.
 
-```python
+```Python
 sentence = Concept('sentence')
 word = Concept('word')
 phrase = Concept('phrase')
@@ -65,7 +65,7 @@ phrase.contains(word)
 
 we use the relationship `has_a` only to define relations between concepts and to produce candidates of a relationship. For instance, a relationship between `word` and `word` can be defined using an intermediate concept `pair` and two `has_a` relation links.
 
-```python
+```Python
 pair = Concept("pair")
 pair.has_a(arg1=word, arg2=word)
 ```
@@ -73,14 +73,14 @@ pair.has_a(arg1=word, arg2=word)
 This means that the candidates of a `pair` concept are generated based on a `word_{i}` and a `word_{j}`.
 Considering the properties of `contains` and `has_a`, in case of defining a `semantic frame` we have to define the following code.
 
-```python
+```Python
 semanic_frame = Concept('semantic-frame')
 semantic_frame.has_a(verb=word, subject=word, object=word)
 ```
 
 As we only support relationships between three concepts, in case of a relation with more arguments, you have to break it to relationships between a main concept and one other concept each time.
 
-```python
+```Python
 semanic_frame = Concept('semantic-frame')
 verb_semantic = Concept('verb-semantic')
 subject_semantic = Concept('subject-semantic')
@@ -92,7 +92,7 @@ object_semantic.has_a(semantic=semanic_frame, object=word)
 
 the `equal` relation establishes an equality between two different concept. for instance, if you have two different tokenizers and you want to use features from one of them into another, you have to establish an `equal` edge between the concepts holding those tokenizer instances.
 
-```python
+```Python
 word = Concept("word")
 word1 = Concept("word1")
 word.equal(word1)
@@ -106,7 +106,7 @@ Using each of these relation edges requires us to assign a sensor to them in the
 
 The following snippest shows an example of a `Graph`.
 
-```python
+```Python
 with Graph() as graph:
     word = Concept('word')
     pair = Concept(word, word)
@@ -118,7 +118,7 @@ with Graph() as graph:
 
 #### Graph declaration and `with` statement
 
-The first `with` statement creates a graph, assigns it to python variable `graph`, and declares that anything below are attached to the graph.
+The first `with` statement creates a graph, assigns it to Python variable `graph`, and declares that anything below are attached to the graph.
 
 The second `with` statement declare another graph with an explicit name `'sub'`. It will also be attached to the enclosing graph, and become a subgraph. However, everything below this point will be attached to the subgraph, instead of the first graph.
 
@@ -126,7 +126,7 @@ The second `with` statement declare another graph with an explicit name `'sub'`.
 
 ##### Direct declaration
 
-`word = Concept('word')` creates a concept with name `'word'` (implicitly attached to the enclosing graph) and assign it to python variable `word`.
+`word = Concept('word')` creates a concept with name `'word'` (implicitly attached to the enclosing graph) and assign it to Python variable `word`.
 
 `pair = Concept(word, word)` is syntactic sugar to creates a concept with two `word`s being its arguments (with two `HasA` relations).
 It does not has an explicit name. If a explicit name is designable, use keyword argument `name=`. For example, `pair = Concept(word, word, name='pair')`.
@@ -134,7 +134,7 @@ It will also be attached to the enclosing graph.
 A `HasA` relation will be added between the new concept and each argument concept. That implies, two `HasA` concepts will be created from `pair` to `word`.
 It is equivalent to the following statements:
 
-```python
+```Python
 pair = Concept(name='pair')
 pair.has_a(word)
 pair.has_a(word)
@@ -142,11 +142,11 @@ pair.has_a(word)
 
 ##### Inherit declaration
 
-`people = word('people')` and `organization = word('organization')` create another two concepts extending `word`, setting name `'people'` and `'organization'`, and assign them to python variable `people` and `organization`. They are attached to enclosing subgraph `sub_graph`.
+`people = word('people')` and `organization = word('organization')` create another two concepts extending `word`, setting name `'people'` and `'organization'`, and assign them to Python variable `people` and `organization`. They are attached to enclosing subgraph `sub_graph`.
 Inherit declaration is syntactic sugar for creating concepts and `IsA` relations.
 An `IsA` relation will be create for each of these statements. It is equivalent to the following statements:
 
-```python
+```Python
 people = Concept('people')
 people.is_a(word)
 organization = Concept('organization')
@@ -170,10 +170,15 @@ The constraints are collected from three sources:
 
 They express constraints between instances of concepts defined in the graph using logical and counting methods (e.g. `ifL`, see below for the full list of LC methods).
 
-The basic building block of the logical constraint is the instance candidate selection expression consisting of the instance concept name called with two optional attributes:
-- variable name assigned to the selected candidate set
-- `path` argument which provide information how reach candidates from the given instance for the provided concept name during the computing of logical constraints. 
-  The path can use an previously, defined in the given LC, variable and the list of relation concepts through the graph edges to candidates selected for the LC variable.
+The basic building block of the logical constraint is the instance candidate selection expression consisting of the instance **concept** name called with two optional attributes:
+- `variable name` is assigned to the current lc element candidate set. 
+	- If not variable namer is specified than a new unique variable name is created. 
+	
+	- If the variable has been already used in the current constraint then its associated candidate set will be reused and the `path` element, if present, is ignored.  
+	
+- `path` provides information how to reach candidates for the LC element from the candidates of the LC other element. 
+  The path uses candidates set identified by `variable name` and the chain of relation concepts through the graph edges to candidates of the current LC element concept.
+  If the `path` is not define for the current LC element than the default candidate set is used consists of of all possible candidates for the current concept.
 
 	 ifL(
 		 work_for('x'), 
@@ -185,7 +190,7 @@ The basic building block of the logical constraint is the instance candidate sel
 
 This example above show shows the constraint defines variables:
  - `x` representing candidates for `'work_for'` concept. 
- - this variable is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
+ - this variable `x` is then used to define candidates for `'people'` and `'organization'` by specifying `path` to them using names of graph edges respectively:
  	- `'rel_pair_phrase1'` and 
  	- `'rel_pair_phrase2'`.
 
@@ -271,7 +276,7 @@ The graph can also specify constraints:
 
 ### Ontology Constraint
 
-The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
+The OWL ontology, on which the learning system graph was build is loaded into the `ilpOntSolver` and parsed using Python OWL library [owlready2](https://pythonhosted.org/Owlready2/).
 
 The OWL ontology language allows to specify constraints on [classes](https://www.w3.org/TR/owl2-syntax/#Classes "OWL Class") and [properties](https://www.w3.org/TR/owl2-syntax/#Object_Properties "OWL Property"). These classes and properties relate to concepts and relations which the learning system builds classification model for. The solver extracts these constraints.
 

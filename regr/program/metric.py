@@ -190,12 +190,12 @@ def frp_from_matrix(i,matrix):
     return TP,TN,FP,FN
 
 class PRF1Tracker(MetricTracker):
-    def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=True):
+    def __init__(self, metric=CMWithLogitsMetric(),confusion_matrix=False):
         super().__init__(metric)
         self.confusion_matrix=confusion_matrix
 
     def forward(self, values):
-        if not "class_names" in values[0]:
+        if values[0] and not "class_names" in values[0]:
 
             CM = wrap_batch(values)
 
@@ -230,7 +230,7 @@ class PRF1Tracker(MetricTracker):
             if (tp + fp + fn + tn):
                 accuracy=(tp + tn) / (tp + fp + fn + tn)
             return {'P': p, 'R': r, 'F1': f1,"accuracy":accuracy}
-        else:
+        elif values[0]:
             output={}
             names=values[0]["class_names"][:]
             n=len(names)

@@ -105,9 +105,11 @@ class BIOProcessor(DataProcessor):
     # def get_labels(self):
     #     return ["O", "B-MISC", "I-MISC", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC",
     #             "[CLS]", "[SEP]", "X"]
+    # def get_labels(self):
+    #     return ["O", "B_MISC", "I_MISC", "B_PER", "I_PER", "B_ORG", "I_ORG", "B_LOC", "I_LOC",
+    #         "[CLS]", "[SEP]", "X"]
     def get_labels(self):
-        return ["O", "B_MISC", "I_MISC", "B_PER", "I_PER", "B_ORG", "I_ORG", "B_LOC", "I_LOC",
-            "[CLS]", "[SEP]", "X"]
+        return ["O", "B_MISC", "I_MISC", "B_PER", "I_PER", "B_ORG", "I_ORG", "B_LOC", "I_LOC", "X"]
 
     @staticmethod
     def _create_examples(lines, set_type):
@@ -135,11 +137,13 @@ class BIODataSet(data.Dataset):
         text = input_example.text
         label = input_example.label
         word_tokens = ['[CLS]']
-        label_list = ['[CLS]']
+        # label_list = ['[CLS]']
+        label_list = ['X']
         label_mask = [0]  # value in (0, 1) - 0 signifies invalid token
 
         input_ids = [self.tokenizer.convert_tokens_to_ids('[CLS]')]
-        label_ids = [self.label_map['[CLS]']]
+        label_ids = [self.label_map['X']]
+        # label_ids = [self.label_map['X']]
 
         # iterate over individual tokens and their labels
         for word, label in zip(text.split(), label):
@@ -177,9 +181,11 @@ class BIODataSet(data.Dataset):
         assert len(word_tokens) < self.max_len, len(word_tokens)
 
         word_tokens.append('[SEP]')
-        label_list.append('[SEP]')
+        # label_list.append('[SEP]')
+        label_list.append('X')
         input_ids.append(self.tokenizer.convert_tokens_to_ids('[SEP]'))
-        label_ids.append(self.label_map['[SEP]'])
+        # label_ids.append(self.label_map['[SEP]'])
+        label_ids.append(self.label_map['X'])
         label_mask.append(0)
 
         assert len(word_tokens) == len(label_list) == len(input_ids) == len(label_ids) == len(

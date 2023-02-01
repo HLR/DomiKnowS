@@ -1,3 +1,11 @@
+import sys
+sys.path.append('../../../')
+sys.path.append('../../')
+sys.path.append('./')
+sys.path.append('../')
+
+import os
+os.environ['TRANSFORMERS_CACHE'] = '/localscratch2/zhengchen/domi_new_for_wiqa/DomiKnowS/examples/WIQA/roberta_model_store'
 
 import torch
 from transformers import AdamW
@@ -5,11 +13,13 @@ from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
-from regr.program.primaldualprogram import PrimalDualProgram
+# from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL
+from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
 from regr.graph import Graph, Concept, Relation
+from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
 from WIQA_reader import make_reader
 from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from regr.program import LearningBasedProgram, IMLProgram
@@ -31,6 +41,13 @@ parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML
 parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
 parser.add_argument('--num_training_steps', dest='num_training_steps', default=20000, help='total number of training steps for the transformer',type=int)
 parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+
+parser.add_argument('--sample', dest='sample', default=False, help='whether or not to use semantic loss',type=bool)
+parser.add_argument('--pdilp', dest='pdilp', default=False, help='whether or not to use primaldual+ILP constriant learning',type=bool)
+parser.add_argument('--sampleilp', dest='sampleilp', default=False, help='whether or not to use sample loss + ILP constriant learning',type=bool)
+
+parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',type=bool)
+
 args = parser.parse_args()
 
 
@@ -49,6 +66,48 @@ Graph.clear()
 Concept.clear()
 Relation.clear()
 
+# with Graph('WIQA_graph') as graph:
+#     #first we define paragrapg, then we define questions and add a constains relation from paragraph to question
+#     paragraph = Concept(name='paragraph')
+#     question = Concept(name='question')
+#     para_quest_contains, = paragraph.contains(question)
+
+#     # each question could be one the following three concepts:
+#     is_more = question(name='is_more')
+#     is_less = question(name='is_less')
+#     no_effect = question(name='no_effect')
+
+#     # we want only one of the labels to be true
+#     nandL( is_less, no_effect)
+#     nandL(is_more,  no_effect)
+#     nandL(is_more, is_less)
+#     orL(is_more, is_less, no_effect)
+#     # the symmetric relation is between questions that are opposite of each other and have opposing values
+#     symmetric = Concept(name='symmetric')
+#     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
+
+#     # here we define that if a question is is_more or is_less and it has a symmetric relation with another
+#     # question, then the second question should be is_less and is_more respectively
+#     ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+#     ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+
+#     # the transitive relation is between questions that have a transitive relation between them
+#     # meaning that the effect of the first question if the cause of the second question and the
+#     # third question si made of the cause of the first and the effect of the second question
+#     transitive = Concept(name='transitive')
+#     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
+
+
+#     # the transitive relation implies that if the first and the second question are is_more, so should be the
+#     # third question. but if the first question is is_more and the second question is is_less, then the third
+#     # question should also be is_less
+
+#     ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
+#         is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
+#     ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
+#         is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
+
 with Graph('WIQA_graph') as graph:
     #first we define paragrapg, then we define questions and add a constains relation from paragraph to question
     paragraph = Concept(name='paragraph')
@@ -60,36 +119,44 @@ with Graph('WIQA_graph') as graph:
     is_less = question(name='is_less')
     no_effect = question(name='no_effect')
 
-    # we want only one of the labels to be true
-    nandL( is_less, no_effect)
-    nandL(is_more,  no_effect)
-    nandL(is_more, is_less)
-    orL(is_more, is_less, no_effect)
+    USE_LC_exactL = True
+    USE_LC_atMostL = True
+
+    USE_LC_symmetric  = True
+    USE_LC_transitiveIsMore  = True
+    USE_LC_transitiveIsLess = True
+    
+    # Only one of the labels to be true
+    exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
+    # atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL") # breakpoint in WIQA line 126
+
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
-    # here we define that if a question is is_more or is_less and it has a symmetric relation with another
-    # question, then the second question should be is_less and is_more respectively
-    ifL(is_more, V(name='x'), is_less, V(name='y', v=('x', symmetric.name, s_arg2.name)))
-    ifL(is_less, V(name='x'), is_more, V(name='y', v=('x', symmetric.name, s_arg2.name)))
+    # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
+    # ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
+    ifL(symmetric('x'), ifL(is_more(path=('x', s_arg1.reversed)), is_less(path=('x', s_arg2.reversed))), active=USE_LC_symmetric, name="symetric_is_more")
+    
+    # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
+    # ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
+    ifL(symmetric('x'), ifL(is_less(path=('x', s_arg1.reversed)), is_less(path=('x', s_arg2.reversed))), active=USE_LC_symmetric, name="symetric_is_less")
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
-    # third question si made of the cause of the first and the effect of the second question
+    # third question is made of the cause of the first and the effect of the second question
     transitive = Concept(name='transitive')
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
+    # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
+    # ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
+    ifL(transitive('x'), ifL(andL(is_more(path=('x', t_arg1.reversed)), is_more(path=('x', t_arg2.reversed))), is_more(path=('x', t_arg3))), active=USE_LC_transitiveIsMore, name="transitive_is_more")
 
-    # the transitive relation implies that if the first and the second question are is_more, so should be the
-    # third question. but if the first question is is_more and the second question is is_less, then the third
-    # question should also be is_less
+    # If the first question is is_more and the second question is is_less, then the third question should also be is_less
+    # ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+    ifL(transitive('x'), ifL(andL(is_less(path=('x', t_arg1.reversed)), is_less(path=('x', t_arg2.reversed))), is_less(path=('x', t_arg3))), active=USE_LC_transitiveIsLess, name="transitive_is_less")
 
-    ifL(andL(is_more, V(name='x'), is_more, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_more, V(name='y', v=('x', transitive.name, t_arg3.name)))
 
-    ifL(andL(is_more, V(name='x'), is_less, V(name='z', v=('x', transitive.name, t_arg2.name))),
-        is_less, V(name='y', v=('x', transitive.name, t_arg3.name)))
 
 from IPython.display import Image
 #graph.visualize("./image")
@@ -160,18 +227,65 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 # in our program we define POI ( points of interest) that are the final Concepts we want to be calculated
 # other inputs are graph, loss function and the metric
 
+# if not args.primaldual and not args.IML:
+#     print("simple program")
+#     program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+# if args.primaldual:
+#     print("primal dual program")
+#     program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=args.beta)
+# if args.IML:
+#     print("IML program")
+#     program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
+#                                     symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+
 if not args.primaldual and not args.IML:
-    print("simple program")
-    program = LearningBasedProgram(graph, model_helper(PoiModel,poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
+    print("run program")
+    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
+                                metric=PRF1Tracker())
 if args.primaldual:
-    print("primal dual program")
-    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(NBCrossEntropyLoss()),beta=args.beta)
+    print('run PrimalDual program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker(),
+                                beta=args.beta)
+
+
 if args.IML:
-    print("IML program")
-    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+    print("run IML program")
+    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric=PRF1Tracker())
+
+if args.sample:
+    print('run sampling loss program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric={'argmax': PRF1Tracker()})
+
+if args.sampleilp:
+    print('run sampling loss + ILP program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['ILP', 'local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker())
+
+if args.pdilp:
+    print('run PrimalDual + ILP program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['ILP', 'local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                beta=args.beta)
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -202,10 +316,32 @@ for i in range(args.cur_epoch):
     if args.primaldual:
         print(program.cmodel.loss)
 
-    print("***** dev aug *****")
-    test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
-    print("***** test aug *****")
-    test_inference_results(program, reader_test_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+    # print("***** dev aug *****")
+    # test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+    # print("***** test aug *****")
+    # test_inference_results(program, reader_test_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+
+program.save("pd_"+str(args.cur_epoch)) ### in case of saving the parameters of the model
+print('-' * 40,"\n")
+
+    # print('-' * 40,"\n",'Training result:')
+    # print(program.model.loss)
+    # if args.primaldual:
+    #     print(program.cmodel.loss)
+
+import time
+
+print("***** dev aug *****")
+test_time_start_1 = time.time()
+test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+test_time_end_1= time.time()  
+print('dev time execution time: ', (test_time_end_1 - test_time_start_1)*1000, ' milliseconds')
+print("***** test aug *****")
+test_time_start_2 = time.time()
+test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
+# test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+test_time_end_2= time.time()
+print('test time execution time: ', (test_time_end_2 - test_time_start_2)*1000, ' milliseconds')
 
 
 

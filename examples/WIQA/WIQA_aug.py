@@ -1,15 +1,23 @@
+
 import sys
-sys.path.append(".")
-sys.path.append("../")
-sys.path.append("../../")
+sys.path.append('../../../')
+sys.path.append('../../')
+sys.path.append('./')
+sys.path.append('../')
+
 import torch
+
+import os
+os.environ['TRANSFORMERS_CACHE'] = '/localscratch2/zhengchen/domi_new_for_wiqa/DomiKnowS/examples/WIQA/roberta_model_store'
 
 from transformers import AdamW
 from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
-from regr.program.primaldualprogram import PrimalDualProgram
+# from regr.program.primaldualprogram import PrimalDualProgram
+from regr.program.lossprogram import PrimalDualProgram
+from regr.program.lossprogram import SampleLossProgram
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
@@ -21,6 +29,8 @@ from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead
 import argparse
+import time
+
 from WIQA_utils import guess_pair, guess_triple
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
@@ -29,23 +39,34 @@ parser.add_argument('--epoch', dest='cur_epoch', default=1, help='number of epoc
 parser.add_argument('--lr', dest='learning_rate', default=2e-6, help='learning rate of the adamW optimiser',type=float)
 parser.add_argument('--pd', dest='primaldual', default=False, help='whether or not to use primaldual constriant learning',type=bool)
 parser.add_argument('--iml', dest='IML', default=False, help='whether or not to use IML constriant learning',type=bool)
-parser.add_argument('--samplenum', dest='samplenum', default=100000000, help='number of samples to train the model on',type=int)
-parser.add_argument('--batch', dest='batch_size', default=10, help='batch size for neural network training',type=int)
-parser.add_argument('--beta', dest='beta', default=0.5, help='primal dual or IML multiplier',type=float)
-parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=5000, help='warmup steps for the transformer',type=int)
-parser.add_argument('--num_training_steps', dest='num_training_steps', default=20000, help='total number of training steps for the transformer',type=int)
-parser.add_argument('--verbose', dest='verbose', default=1, help='print the errors',type=int)
+parser.add_argument('--samplenum', dest='samplenum', default=100000000000, help='number of samples to train the model on',type=int)
+parser.add_argument('--batch', dest='batch_size', default=14, help='batch size for neural network training',type=int)
+parser.add_argument('--beta', dest='beta', default=1.0, help='primal dual or IML multiplier',type=float)
+parser.add_argument('--num_warmup_steps', dest='num_warmup_steps', default=2500, help='warmup steps for the transformer',type=int)
+parser.add_argument('--num_training_steps', dest='num_training_steps', default=10000, help='total number of training steps for the transformer',type=int)
+parser.add_argument('--verbose', dest='verbose', default=0, help='print the errors',type=int)
+
+parser.add_argument('--sample', dest='sample', default=False, help='whether or not to use semantic loss',type=bool)
+parser.add_argument('--pdilp', dest='pdilp', default=False, help='whether or not to use primaldual+ILP constriant learning',type=bool)
+parser.add_argument('--sampleilp', dest='sampleilp', default=False, help='whether or not to use sample loss + ILP constriant learning',type=bool)
+
+parser.add_argument('--cpu', dest='cpu', default=False, help='use cpu or not',type=bool)
+
 args = parser.parse_args()
 
 
 # here we set the cuda we want to use and the number of maximum epochs we want to train our model
-cuda_number= args.cuda_number
-cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
+if args.cpu:
+    cur_device = 'cpu'
+else:
+    cuda_number= args.cuda_number
+    cur_device = "cuda:"+str(cuda_number) if torch.cuda.is_available() else 'cpu'
 
 # our reader is a list of dictionaries and each dictionary has the attributes for the root node to read
 reader_train_aug = make_reader(file_address="data/WIQA_AUG/train.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+# reader_train_aug = make_reader(file_address="data/WIQA_AUG/train_30_percent.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 reader_dev_aug = make_reader(file_address="data/WIQA_AUG/dev.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
-#reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
+reader_test_aug = make_reader(file_address="data/WIQA_AUG/test.jsonl", sample_num=args.samplenum,batch_size=args.batch_size)
 
 print("Graph Declaration:")
 # reseting the graph
@@ -65,29 +86,27 @@ with Graph('WIQA_graph') as graph:
     no_effect = question(name='no_effect')
 
     USE_LC_exactL = True
-    USE_LC_atMostL = False
+    USE_LC_atMostL = True
 
     USE_LC_symmetric  = True
     USE_LC_transitiveIsMore  = True
     USE_LC_transitiveIsLess = True
     
     # Only one of the labels to be true
-    ifL(question, exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL"))
-
-    #exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
-    ifL(question,  atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL"))
+    exactL(is_more, is_less, no_effect, active=USE_LC_exactL, name="exactL")
+    # atMostL(is_more, is_less, no_effect, active=USE_LC_atMostL, name="atMostL") # breakpoint in WIQA line 126
 
     # the symmetric relation is between questions that are opposite of each other and have opposing values
     symmetric = Concept(name='symmetric')
     s_arg1, s_arg2 = symmetric.has_a(arg1=question, arg2=question)
 
     # If a question is is_more and it has a symmetric relation with another question, then the second question should be is_less
-    ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
-    #ifL(is_more('x'), is_less(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
-
+    # ifL(andL(is_more('x'), symmetric('s', path=('x', symmetric))), is_less(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_more")
+    ifL(symmetric('x'), ifL(is_more(path=('x', s_arg1.reversed)), is_less(path=('x', s_arg2.reversed))), active=USE_LC_symmetric, name="symetric_is_more")
+    
     # If a question is is_less and it has a symmetric relation with another question, then the second question should be is_more
-    ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
-    #ifL(is_less('x'), is_more(path=('x', symmetric, s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
+    # ifL(andL(is_less('x'), symmetric("s", path=('x', symmetric))), is_more(path=('s', s_arg2)), active=USE_LC_symmetric, name="symetric_is_less")
+    ifL(symmetric('x'), ifL(is_less(path=('x', s_arg1.reversed)), is_less(path=('x', s_arg2.reversed))), active=USE_LC_symmetric, name="symetric_is_less")
 
     # the transitive relation is between questions that have a transitive relation between them
     # meaning that the effect of the first question if the cause of the second question and the
@@ -96,12 +115,13 @@ with Graph('WIQA_graph') as graph:
     t_arg1, t_arg2, t_arg3 = transitive.has_a(arg11=question, arg22=question, arg33=question)
 
     # The transitive relation implies that if the first and the second question are is_more, so should be the third question. 
-    ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
-    #ifL(andL(is_more('x'), is_more(path=('x', transitive, t_arg2))), is_more(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
+    # ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_more(path=('t', t_arg2))), is_more(path=('t', t_arg3)), active=USE_LC_transitiveIsMore, name="transitive_is_more")
+    ifL(transitive('x'), ifL(andL(is_more(path=('x', t_arg1.reversed)), is_more(path=('x', t_arg2.reversed))), is_more(path=('x', t_arg3))), active=USE_LC_transitiveIsMore, name="transitive_is_more")
 
     # If the first question is is_more and the second question is is_less, then the third question should also be is_less
-    ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
-    #ifL(andL(is_more('x'), is_less(path=('x', transitive, t_arg2))), is_less(path=('x', transitive, t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+    # ifL(andL(is_more('x'), transitive("t", path=('x', transitive)), is_less(path=('t', t_arg2))), is_less(path=('t', t_arg3)), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+    ifL(transitive('x'), ifL(andL(is_less(path=('x', t_arg1.reversed)), is_less(path=('x', t_arg2.reversed))), is_less(path=('x', t_arg3))), active=USE_LC_transitiveIsLess, name="transitive_is_less")
+
 
 
 print("Sensor Part:")
@@ -121,6 +141,7 @@ def str_to_int_list(x):
     return torch.LongTensor([[int(i)] for i in x])
 
 def make_questions(paragraph, question_list, less_list, more_list, no_effect_list, quest_ids):
+    tmp = torch.ones((len(question_list.split("@@")), 1))
     return torch.ones((len(question_list.split("@@")), 1)), [paragraph for i in range(len(question_list.split("@@")))], \
            question_list.split("@@"), str_to_int_list(less_list.split("@@")), str_to_int_list(more_list.split("@@")), \
            str_to_int_list(no_effect_list.split("@@")), quest_ids.split("@@")
@@ -170,23 +191,60 @@ question[no_effect] = ModuleLearner("robert_emb", module=RobertaClassificationHe
 # other inputs are graph, loss function and the metric
 
 if not args.primaldual and not args.IML:
-    print("simple program")
-    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker())
+    print("run program")
+    program = SolverPOIProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()), 
+                                metric=PRF1Tracker())
 if args.primaldual:
-    print("primal dual program")
-    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],inferTypes=['local/argmax'],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)),beta=args.beta)
+    print('run PrimalDual program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker(),
+                                beta=args.beta)
+
+
 if args.IML:
-    print("IML program")
-    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],\
-                                    symmetric, transitive],loss=MacroAverageTracker(BCEWithLogitsIMLoss(lmbd=args.beta)), metric=PRF1Tracker())
+    print("run IML program")
+    program = IMLProgram(graph, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                    loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                    metric=PRF1Tracker())
+
+if args.sample:
+    print('run sampling loss program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric={'argmax': PRF1Tracker()})
+
+if args.sampleilp:
+    print('run sampling loss + ILP program')
+    program = SampleLossProgram(graph, SolverModel, 
+                                poi=[question[is_less], question[is_more], question[no_effect], symmetric, transitive], 
+                                inferTypes=['ILP', 'local/argmax'],
+                                sample=True, sampleSize=100, sampleGlobalLoss = False,
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                metric=PRF1Tracker())
+
+if args.pdilp:
+    print('run PrimalDual + ILP program')
+    program = PrimalDualProgram(graph, SolverModel, poi=[question[is_less], question[is_more], question[no_effect],symmetric, transitive],
+                                inferTypes=['ILP', 'local/argmax'],
+                                loss=MacroAverageTracker(NBCrossEntropyLoss()),
+                                beta=args.beta)
 
 logging.basicConfig(level=logging.INFO)
 
 from os import path
 if not path.exists("new_domi_1"):
     join_model("domi_1_20","new_domi_1")
+
+######################################################################
+### Train the model
+######################################################################
 
 # at the end we run our program for each epoch and test the results each time
 logging.info("training and testing begins")
@@ -205,17 +263,52 @@ for i in range(args.cur_epoch):
         def __call__(self):
             self.sch.step()
 
-    program.load("new_domi_1", map_location={'cuda:5':'cpu'})# in case we want to load the model instead of training
-    #program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)#, train_step_callbacks=[SchCB(program)])
-    #program.save("domi_"+str(i)) in case of saving the parameters of the model
+    # program.load("domi_7") # in case we want to load the model instead of training
+    # program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device, train_step_callbacks=[SchCB(program)])
+    program.train(reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
+    # program.train(question, paragraph, reader_train_aug, train_epoch_num=1, Optim=lambda param: AdamW(param, lr = args.learning_rate,eps = 1e-8 ), device=cur_device)
 
-    print('-' * 40,"\n",'Training result:')
-    print(program.model.loss)
-    if args.primaldual:
-        print(program.cmodel.loss)
 
-    print("***** dev aug *****")
-    test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
-    test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
-    print("***** test aug *****")
-    #test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+
+if not args.primaldual and not args.IML:
+    program.save("saved_models/domi_ilp_epoch_"+str(args.cur_epoch)+'.pt')
+if args.primaldual:
+    program.save("saved_models/domi_pd_epoch_"+str(args.cur_epoch)+'.pt')
+if args.sample:
+    program.save("saved_models/domi_sampleloss_epoch_"+str(args.cur_epoch)+'.pt')
+if args.pdilp:
+    program.save("saved_models/domi_pd+ilp_epoch_"+str(args.cur_epoch)+'.pt')
+if args.sampleilp:
+    program.save("saved_models/domi_sampleloss+ilp_epoch_"+str(args.cur_epoch)+'.pt')
+
+#####################################################################
+### Evaluate the model
+#####################################################################
+
+if not args.primaldual and not args.IML:
+    program.load("saved_models/domi_ilp_epoch_"+str(args.cur_epoch)+'.pt')
+if args.primaldual:
+    program.load("saved_models/domi_pd_epoch_"+str(args.cur_epoch)+'.pt')
+if args.sample:
+    program.load("saved_models/domi_sampleloss_epoch_"+str(args.cur_epoch)+'.pt')
+if args.pdilp:
+    program.load("saved_models/domi_pd+ilp_epoch_"+str(args.cur_epoch)+'.pt')
+if args.sampleilp:
+    program.load("saved_models/domi_sampleloss+ilp_epoch_"+str(args.cur_epoch)+'.pt')
+
+
+# program.save("sl_"+str(args.cur_epoch)) ### in case of saving the parameters of the model
+print('-' * 40,"\n")
+
+
+print("***** dev aug *****")
+test_time_start_1 = time.time()
+test_inference_results(program, reader_dev_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric, args.verbose)
+test_time_end_1= time.time()
+print('dev time execution time: ', (test_time_end_1 - test_time_start_1)*1000, ' milliseconds')
+print("***** test aug *****")
+test_time_start_2 = time.time()
+# test_inference_results(program, reader_train_aug, cur_device, is_more, is_less, no_effect, transitive, symmetric,args.verbose)
+test_inference_results(program,reader_test_aug,cur_device,is_more,is_less,no_effect,args.verbose)
+test_time_end_2= time.time()
+print('test time execution time: ', (test_time_end_2 - test_time_start_2)*1000, ' milliseconds')
