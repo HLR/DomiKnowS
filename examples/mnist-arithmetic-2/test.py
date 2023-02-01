@@ -26,12 +26,12 @@ import config
 
 # build configs from command line args
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], default='PrimalDual')
-parser.add_argument('--checkpoint_path', type=str, default='checkpoints/primaldual_10k.pth')
-parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'])
-parser.add_argument('--cuda', default=False, action='store_true')
-parser.add_argument('--ILP', default=False, action='store_true')
-parser.add_argument('--no_fixedL', default=False, action='store_true')
+parser.add_argument('--model_name', type=str, choices=['Sampling', 'Semantic', 'PrimalDual', 'Explicit', 'DigitLabel', 'Baseline'], default='PrimalDual', help='Method of integrating constraints')
+parser.add_argument('--checkpoint_path', type=str, default='checkpoints/primaldual_10k.pth', help='Checkpoint to test')
+parser.add_argument('--log', type=str, default='None', choices=['None', 'TimeOnly', 'All'], help='None: no logs, TimeOnly: only output timing logs, All: output all logs. Logs will be found in the logs directory.')
+parser.add_argument('--cuda', default=False, action='store_true', help='Enable CUDA for testing')
+parser.add_argument('--ILP', default=False, action='store_true', help='Use ILP during inference')
+parser.add_argument('--no_fixedL', default=False, action='store_true', help='Don\'t fix summation labels in model. Use this flag when testing ILP.')
 
 args = parser.parse_args()
 
