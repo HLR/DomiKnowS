@@ -4,3 +4,4 @@ saved_models
 new_saved_models
 /logs/
 saves
+__pycache__

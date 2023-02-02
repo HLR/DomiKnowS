@@ -2,6 +2,10 @@
 # CoNLL04 Entity Relation Extraction Example
 
 ## Requirements
+install requirements:
+```
+pip install -r requirements.txt
+```
 
 spacy `en_core_web_sm` model:
 
@@ -59,9 +63,9 @@ Running the Normal + ILP inference program
 python main-bert.py
 ```
 
-Running the IML program
+Running the Sampling program
 ```bash
-python main-bert-iml.py
+python main-bert-sampling.py
 ```
 
 Running the PrimalDual program
@@ -69,6 +73,16 @@ Running the PrimalDual program
 python main-bert-primaldual.py
 ```
 
+The No bert version of the Program:
+```bash
+python main-nobert.py
+```
+This program also recieves an extra hint of which model should be used by:
+```text
+"-t",	"--type",	default="argmax"	
+choices=["argmax", "sampling", "pd"]
+help="Type of training",	type=str,	required=False,
+```
 ### Results
 
 To see the results please look at the `statistics.ipynb` file.
