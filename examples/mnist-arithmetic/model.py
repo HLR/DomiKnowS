@@ -5,7 +5,6 @@ from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, Constant
 from regr.sensor.pytorch.learners import ModuleLearner
 from regr.sensor.pytorch.relation_sensors import EdgeSensor
 from regr.program import POIProgram, IMLProgram, SolverPOIProgram, LearningBasedProgram
-from regr.program.primaldualprogram import PrimalDualProgram
 from regr.program.model.ilpu import ILPUModel
 from regr.program.model.iml import IMLModel
 from regr.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
@@ -15,7 +14,6 @@ from graph import *
 
 import time
 
-from digit_label import digit_labels
 import config
 
 class Net(torch.nn.Module):
