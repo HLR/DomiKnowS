@@ -1,7 +1,0 @@
-/data/
-/logs/
-checkpoints/*
-/checkpoints/
-.DS_Store
-.ipynb_checkpoints/
-__pycache__/
