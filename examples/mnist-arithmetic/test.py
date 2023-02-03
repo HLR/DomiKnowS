@@ -121,37 +121,6 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
 
             print()
 
-        # get constraint verification stats
-        for suffix in infer_suffixes:
-            verifyResult = node.verifyResultsLC(key=suffix)
-            if verifyResult:
-                satisfied_constraints = []
-                ifSatisfied_avg = 0.0
-                ifSatisfied_total = 0
-                for lc_idx, lc in enumerate(verifyResult):
-                    # add constraint satisfaction to total list (across all samples)
-                    if lc not in satisfied:
-                        satisfied[lc] = []
-                    satisfied[lc].append(verifyResult[lc]['satisfied'])
-                    satisfied_constraints.append(verifyResult[lc]['satisfied'])
-
-                    # build average ifSatisfied value for this single sample
-                    if 'ifSatisfied' in verifyResult[lc]:
-                        if verifyResult[lc]['ifSatisfied'] == verifyResult[lc]['ifSatisfied']:
-                            ifSatisfied_avg += verifyResult[lc]['ifSatisfied']
-                            ifSatisfied_total += 1
-
-                # add average ifSatisifed value to overall stats
-                if suffix not in satisfied_overall:
-                    satisfied_overall[suffix] = []
-
-                satisfied_overall[suffix].append(ifSatisfied_avg / ifSatisfied_total)
-
-                #satisfied_overall[suffix].append(1 if num_constraints * 100 == sum(satisfied_constraints) else 0)
-                #pred_digit_sum = digits_results[suffix][-1] + digits_results[suffix][-2]
-                #label_sum = summation_results['label'][-1]
-                #satisfied_overall[suffix].append(1 if pred_digit_sum == label_sum else 0)
-
     for suffix in infer_suffixes:
         print('============== RESULTS FOR:', suffix, '==============')
 
@@ -167,14 +136,6 @@ def get_classification_report(program, reader, total=None, verbose=False, infer_
         #print(classification_report(summation_results['label'], summation_results[suffix], digits=5))
 
         print('==========================================')
-
-    #sat_values = list(chain(*satisfied.values()))
-    #print('Average constraint satisfactions: %f' % (sum(sat_values)/len(sat_values)))]
-    import numpy
-    for suffix in infer_suffixes:
-        suffixSatisfiedNumpy = numpy.array(satisfied_overall[suffix])
-        print('Average constraint satisfactions: %s - %f' % (suffix, numpy.nanmean(suffixSatisfiedNumpy)))
-
 
 use_digit_labels = (model_name == 'DigitLabel')
 
@@ -216,12 +177,12 @@ classification_suffixes = ['/local/argmax']
 if args.ILP:
     classification_suffixes.append('/ILP')
 
-program.verifyResultsLC(testloader)
+#program.verifyResultsLC(testloader)
 
 # verify validation accuracy
 print("validation evaluation")
 get_classification_report(program, validloader, total=config.num_valid, verbose=False, infer_suffixes=classification_suffixes, print_incorrect=False)
 
 # get test accuracy
-print("test evaluation")
+print("\ntest evaluation")
 get_classification_report(program, testloader, total=config.num_test, verbose=False, infer_suffixes=classification_suffixes, print_incorrect=False)
