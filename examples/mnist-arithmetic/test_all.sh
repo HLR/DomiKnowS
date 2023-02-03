@@ -1,4 +1,5 @@
 mkdir "all_logs"
+mkdir "checkpoints"
 
 function move_time_logs() {
 	mv "logs" "all_logs/$1"
