@@ -3,7 +3,7 @@
 name: Build Dist and upload to PyPi
 
 # Controls when the action will run.
-# When tagged push with the tag started with v 
+# When tagged push with tag started with v 
 on:
   push:
     tags:
@@ -23,7 +23,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Exit if not on master branch
+      - name: Exit if not on main branch
         if: endsWith(github.ref, 'master_beta') == false
         run: exit -1
         
