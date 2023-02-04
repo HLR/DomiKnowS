@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import os
 
-DomiKnowS_version = '0.220'
+DomiKnowS_version = '0.224'
 DomiKnowS_version_env = os.getenv('DomiKnowS_VERSION')
 
 # Override version if set in environment
