@@ -8,11 +8,11 @@ sys.path.append("../../../")
 
 ######################################################################
 # run the code:
-# python train.py -ilp True -cuda 0
-# python train.py -pd True -cuda 0
-# python train.py -sample True -cuda 0
-# python train.py -pdilp True -cuda 0
-# python train.py -sampleilp True -cuda 0
+# python test.py -ilp True -cuda 0
+# python test.py -pd True -cuda 0
+# python test.py -sample True -cuda 0
+# python test.py -pdilp True -cuda 0
+# python test.py -sampleilp True -cuda 0
 ######################################################################
 
 import torch
@@ -188,15 +188,15 @@ print('finish Graph Declaration')
 ######################################################################
 
 if args.ilp:
-    program.load("2022_saved_model/ilp/ilp.pt')
+    program.load("2022_saved_model/ilp/ilp.pt")
 if args.pd:
-    program.load("2022_saved_model/pd/pd.pt')
+    program.load("2022_saved_model/pd/pd.pt")
 if args.sample:
-    program.load("2022_saved_model/sample/sample.pt')
+    program.load("2022_saved_model/sample/sample.pt")
 if args.pdilp:
-    program.load("2022_saved_model/pdilp/pdilp.pt')
+    program.load("2022_saved_model/pdilp/pdilp.pt")
 if args.sampleilp:
-    program.load("2022_saved_model/sampleilp/sampleilp.pt')
+    program.load("2022_saved_model/sampleilp/sampleilp.pt")
 
 from regr.utils import setProductionLogMode
 productionMode = False

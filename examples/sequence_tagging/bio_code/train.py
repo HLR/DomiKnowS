@@ -195,15 +195,15 @@ for i in range(num_epochs):
     print('training time execution time: ', (train_time_end - train_time_start)*1000, ' milliseconds')
 
 if args.ilp:
-    program.save("2022_saved_model/ilp/ilp.pt')
+    program.save("2022_saved_model/ilp/ilp.pt")
 if args.pd:
-    program.save("2022_saved_model/pd/pd.pt')
+    program.save("2022_saved_model/pd/pd.pt")
 if args.sample:
-    program.save("2022_saved_model/sample/sample.pt')
+    program.save("2022_saved_model/sample/sample.pt")
 if args.pdilp:
-    program.save("2022_saved_model/pdilp/pdilp.pt')
+    program.save("2022_saved_model/pdilp/pdilp.pt")
 if args.sampleilp:
-    program.save("2022_saved_model/sampleilp/sampleilp.pt')
+    program.save("2022_saved_model/sampleilp/sampleilp.pt")
 
 
 ######################################################################
