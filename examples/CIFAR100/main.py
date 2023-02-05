@@ -43,6 +43,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--nameload', dest='nameload', default="none", help='model name to load', type=str)
+    parser.add_argument('--nameloadprogram', dest='nameloadprogram', default="none", help='model name to load', type=str)
     parser.add_argument('--namesave', dest='namesave', default="none", help='model name to save', type=str)
     parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)
     parser.add_argument('--ilp', dest='ilp', default=True, help='whether or not to use ilp', type=bool)
@@ -180,7 +181,7 @@ def main():
 
     train_reader,test_reader=create_readers(train_num=min(args.samplenum,50000),test_num= min(args.samplenum,10000//4))
 
-    if not args.namesave=="none":
+    if not args.nameload=="none":
         model.load_state_dict(torch.load(args.nameload))
         model.to(device)
 
@@ -202,8 +203,9 @@ def main():
         "ILP": []
     }
     counter_list=[0,0,0,0]
-    #program.load(args.namesave + "_" + str(args.epochs))
-    #program.test(test_reader)
+    program.load(args.nameloadprogram)
+    program.test(test_reader)
+    program.verifyResultsLC(test_reader, constraint_names=None, device=device)
     real_category = []
     ac_,t_=0,0
     if args.verbose:
