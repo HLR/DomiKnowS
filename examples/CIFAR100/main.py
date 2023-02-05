@@ -204,7 +204,7 @@ def main():
     }
     counter_list=[0,0,0,0]
     program.load(args.nameloadprogram)
-    program.test(test_reader)
+    #program.test(test_reader)
     program.verifyResultsLC(test_reader, constraint_names=None, device=device)
     real_category = []
     ac_,t_=0,0
