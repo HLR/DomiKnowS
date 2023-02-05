@@ -208,79 +208,79 @@ def main():
     program.verifyResultsLC(test_reader, constraint_names=None, device=device)
     real_category = []
     ac_,t_=0,0
-    if args.verbose:
-        for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
-            picture_group.inferILPResults()
-            verifyResult = picture_group.verifyResultsLC()
-            verifyResultILP = picture_group.verifyResultsLC()
-            ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
-            t_ += len(verifyResultILP.keys())
-            for image_ in picture_group.getChildDataNodes():
-                for key in ["local/softmax", "ILP"]:
-                    if key == "ILP":
-                        guessed_tag[key].append(int(torch.argmax(image_.getAttribute(Label, key))))
-                    else:
-                        guessed_tag[key].append(int(torch.argmax(image_.getAttribute(Label, key))))
 
-                    if key == "ILP":
-                        guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
-                    else:
-                        guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
-                real_tag.append(int(image_.getAttribute(Label, "label")[0]))
-                real_category.append(int(image_.getAttribute(category, "label")))
-                flag=False
-                if counter_list[0]<5 and guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1]:
-                    counter_list[0]+=1
-                    print("tag messed up:")
-                    flag=True
+    for pic_num, picture_group in enumerate(program.populate(test_reader, device=device)):
+        picture_group.inferILPResults()
+        verifyResult = picture_group.verifyResultsLC()
+        verifyResultILP = picture_group.verifyResultsLC()
+        ac_ += sum([verifyResultILP[lc]['satisfied'] for lc in verifyResultILP])
+        t_ += len(verifyResultILP.keys())
+        for image_ in picture_group.getChildDataNodes():
+            for key in ["local/softmax", "ILP"]:
+                if key == "ILP":
+                    guessed_tag[key].append(int(torch.argmax(image_.getAttribute(Label, key))))
+                else:
+                    guessed_tag[key].append(int(torch.argmax(image_.getAttribute(Label, key))))
 
-                if counter_list[1]<5 and guessed_category["local/softmax"][-1]==real_category[-1] and not guessed_category["ILP"][-1]==real_category[-1]:
-                    counter_list[1] += 1
-                    print("cathegory messed up:")
-                    flag = True
+                if key == "ILP":
+                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
+                else:
+                    guessed_category[key].append(int(torch.argmax(image_.getAttribute(category, key))))
+            real_tag.append(int(image_.getAttribute(Label, "label")[0]))
+            real_category.append(int(image_.getAttribute(category, "label")))
+            flag=False
+            if counter_list[0]<5 and guessed_tag["local/softmax"][-1]==real_tag[-1] and not guessed_tag["ILP"][-1]==real_tag[-1] and args.verbose:
+                counter_list[0]+=1
+                print("tag messed up:")
+                flag=True
 
-                if counter_list[2]<5 and guessed_tag["ILP"][-1]==real_tag[-1] and not guessed_tag["local/softmax"][-1]==real_tag[-1]:
-                    counter_list[2] += 1
-                    print("tag improved:")
-                    flag = True
+            if counter_list[1]<5 and guessed_category["local/softmax"][-1]==real_category[-1] and not guessed_category["ILP"][-1]==real_category[-1]  and args.verbose:
+                counter_list[1] += 1
+                print("cathegory messed up:")
+                flag = True
 
-                if counter_list[3]<5 and guessed_category["ILP"][-1]==real_category[-1] and not guessed_category["local/softmax"][-1]==real_category[-1]:
-                    counter_list[3] += 1
-                    print("cathegory improved")
-                    flag = True
+            if counter_list[2]<5 and guessed_tag["ILP"][-1]==real_tag[-1] and not guessed_tag["local/softmax"][-1]==real_tag[-1]  and args.verbose:
+                counter_list[2] += 1
+                print("tag improved:")
+                flag = True
 
-                if flag:
-                    print("cathegory(parent) label, softmax, ILP :",real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1])
-                    print("cathegory(parent) label, softmax, ILP :", parent_names[real_category[-1]],parent_names[guessed_category["local/softmax"][-1]], parent_names[guessed_category["ILP"][-1]])
-                    print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]].item(),\
-                          image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]].item(),image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]].item())
+            if counter_list[3]<5 and guessed_category["ILP"][-1]==real_category[-1] and not guessed_category["local/softmax"][-1]==real_category[-1]  and args.verbose:
+                counter_list[3] += 1
+                print("cathegory improved")
+                flag = True
 
-                    print("tag(child) label, softmax, ILP :", real_tag[-1],guessed_tag["local/softmax"][-1], guessed_tag["ILP"][-1])
-                    print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
-                    print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]].item(), \
-                          image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]].item(), image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]].item())
+            if flag  and args.verbose:
+                print("cathegory(parent) label, softmax, ILP :",real_category[-1],guessed_category["local/softmax"][-1],guessed_category["ILP"][-1])
+                print("cathegory(parent) label, softmax, ILP :", parent_names[real_category[-1]],parent_names[guessed_category["local/softmax"][-1]], parent_names[guessed_category["ILP"][-1]])
+                print("cathegory(parent) label, softmax, ILP :",image_.getAttribute(category, "local/softmax")[real_category[-1]].item(),\
+                      image_.getAttribute(category, "local/softmax")[guessed_category["local/softmax"][-1]].item(),image_.getAttribute(category, "local/softmax")[guessed_category["ILP"][-1]].item())
 
-                    print("probability of parents of tag(child) label, softmax, ILP :",
-                          image_.getAttribute(category, "local/softmax")[child_to_parent_dict[real_tag[-1]]].item(), \
-                          image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["local/softmax"][-1]]].item(),
-                          image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["ILP"][-1]]].item())
+                print("tag(child) label, softmax, ILP :", real_tag[-1],guessed_tag["local/softmax"][-1], guessed_tag["ILP"][-1])
+                print("tag(child) label, softmax, ILP :", children_names[real_tag[-1]],children_names[guessed_tag["local/softmax"][-1]], children_names[guessed_tag["ILP"][-1]])
+                print("tag(child) label, softmax, ILP :",image_.getAttribute(Label, "local/softmax")[real_tag[-1]].item(), \
+                      image_.getAttribute(Label, "local/softmax")[guessed_tag["local/softmax"][-1]].item(), image_.getAttribute(Label, "local/softmax")[guessed_tag["ILP"][-1]].item())
 
-                    softmax_children=[]
-                    names_softmax_children=[]
-                    for i in structure[parent_names[guessed_category["local/softmax"][-1]]]:
-                        softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
-                        names_softmax_children.append(i)
+                print("probability of parents of tag(child) label, softmax, ILP :",
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[real_tag[-1]]].item(), \
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["local/softmax"][-1]]].item(),
+                      image_.getAttribute(category, "local/softmax")[child_to_parent_dict[guessed_tag["ILP"][-1]]].item())
 
-                    ILP_children = []
-                    names_ILP_children=[]
-                    for i in structure[parent_names[guessed_category["ILP"][-1]]]:
-                        ILP_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
-                        names_ILP_children.append(i)
+                softmax_children=[]
+                names_softmax_children=[]
+                for i in structure[parent_names[guessed_category["local/softmax"][-1]]]:
+                    softmax_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
+                    names_softmax_children.append(i)
 
-                    print("names of the children of softmax parent:", names_softmax_children)
-                    print("Probabilities of the children of softmax parent:",softmax_children)
-                    print("names of the children of ILP parent:", names_ILP_children)
-                    print("Probabilities of the children of ILP parent:", ILP_children)
+                ILP_children = []
+                names_ILP_children=[]
+                for i in structure[parent_names[guessed_category["ILP"][-1]]]:
+                    ILP_children.append(image_.getAttribute(Label, "local/softmax")[children_names_reverse[i]].item())
+                    names_ILP_children.append(i)
+
+                print("names of the children of softmax parent:", names_softmax_children)
+                print("Probabilities of the children of softmax parent:",softmax_children)
+                print("names of the children of ILP parent:", names_ILP_children)
+                print("Probabilities of the children of ILP parent:", ILP_children)
 
 
     for key in ["local/softmax", "ILP"]:
