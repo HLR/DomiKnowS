@@ -337,14 +337,14 @@ class LearningBasedProgram():
     def load(self, path, **kwargs):
         self.model.load_state_dict(torch.load(path, **kwargs))
 
-    def verifyResultsLC(self,data,constraint_names=None):
+    def verifyResultsLC(self,data,constraint_names=None,device=None):
         import numpy as np
         datanode_ac,datanode_t=[],[]
         all_ac, all_t = [], []
         ifl_ac, ifl_t = [], []
         names=[]
         FIRST=True
-        for datanode in self.populate(data, device=self.device):
+        for datanode in self.populate(data, device=device):
             datanode.inferILPResults()
             verifyResult = datanode.verifyResultsLC()
             if FIRST:
