@@ -219,7 +219,8 @@ classification_suffixes = ['/local/argmax']
 if args.ILP:
     classification_suffixes.append('/ILP')
 
-program.verifyResultsLC(testloader)
+print("test constraint satisfaction")
+program.verifyResultsLC(testloader, device=None)
 
 # verify validation accuracy
 print("validation evaluation")
