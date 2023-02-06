@@ -175,6 +175,7 @@ class LearningBasedProgram():
         self.opt = None
         self.epoch = None
         self.stop = None
+        self.device = "auto"
         if "f" in kwargs:
             self.f=kwargs["f"]
 
