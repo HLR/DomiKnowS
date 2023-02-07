@@ -1,7 +1,7 @@
-data
+/data/
 cache
 saved_models
 new_saved_models
 /logs/
-saves
+/saves/
 __pycache__
