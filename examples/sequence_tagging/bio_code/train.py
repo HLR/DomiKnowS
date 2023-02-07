@@ -188,22 +188,22 @@ print('finish Graph Declaration')
 
 for i in range(num_epochs):
 
-    print('epoch ', str(i))
+    print('this is the epoch: '+str(i))
     train_time_start = time.time()
     program.train(train_examples, train_epoch_num=1, Optim=lambda param: torch.optim.Adam(param, lr=0.01, weight_decay=1e-5), device=device)
     train_time_end = time.time()  
     print('training time execution time: ', (train_time_end - train_time_start)*1000, ' milliseconds')
 
-if args.ilp:
-    program.save("2022_saved_model/ilp/ilp.pt")
-if args.pd:
-    program.save("2022_saved_model/pd/pd.pt")
-if args.sample:
-    program.save("2022_saved_model/sample/sample.pt")
-if args.pdilp:
-    program.save("2022_saved_model/pdilp/pdilp.pt")
-if args.sampleilp:
-    program.save("2022_saved_model/sampleilp/sampleilp.pt")
+    if args.ilp:
+        program.save("2022_saved_model/ilp/ilp_"+str(i)+'.pt')
+    if args.pd:
+        program.save("2022_saved_model/pd1/pd_"+str(i)+'.pt')
+    if args.sample:
+        program.save("2022_saved_model/sample/sample_"+str(i)+'.pt')
+    if args.pdilp:
+        program.save("2022_saved_model/pdilp/pdilp_"+str(i)+'.pt')
+    if args.sampleilp:
+        program.save("2022_saved_model/sampleilp/sampleilp_"+str(i)+'.pt')
 
 
 ######################################################################
@@ -211,15 +211,15 @@ if args.sampleilp:
 ######################################################################
 
 if args.ilp:
-    program.load("2022_saved_model/ilp/ilp.pt')
+    program.load("2022_saved_model/ilp/ilp.pt")
 if args.pd:
-    program.load("2022_saved_model/pd/pd.pt')
+    program.load("2022_saved_model/pd/pd.pt")
 if args.sample:
-    program.load("2022_saved_model/sample/sample.pt')
+    program.load("2022_saved_model/sample/sample.pt")
 if args.pdilp:
-    program.load("2022_saved_model/pdilp/pdilp.pt')
+    program.load("2022_saved_model/pdilp/pdilp.pt")
 if args.sampleilp:
-    program.load("2022_saved_model/sampleilp/sampleilp.pt')
+    program.load("2022_saved_model/sampleilp/sampleilp.pt")
 
 from regr.utils import setProductionLogMode
 productionMode = False
@@ -236,19 +236,21 @@ print('test time execution time: ', (test_time_end - test_time_start)*1000, ' mi
 ### Compute Violation Rate
 #####################################################################
 
-violation_rate = 0
-count_constraints = 0
-for node in program.populate(valid_examples, device=device):
-        verifyResult = node.verifyResultsLC()
-        node_average = 0
-        if verifyResult:
-            for lc in verifyResult:
-                if "ifSatisfied" in verifyResult[lc]:
-                    node_average += verifyResult[lc]["ifSatisfied"]
-                else:
-                    node_average += verifyResult[lc]["satisfied"]
-            node_average = node_average / len(verifyResult)
-            violation_rate += node_average
-            count_constraints += 1
-print(f"Average satisfaction is : {violation_rate/count_constraints}")
+# violation_rate = 0
+# count_constraints = 0
+# for node in program.populate(valid_examples, device=device):
+#         verifyResult = node.verifyResultsLC()
+#         node_average = 0
+#         if verifyResult:
+#             for lc in verifyResult:
+#                 if "ifSatisfied" in verifyResult[lc]:
+#                     node_average += verifyResult[lc]["ifSatisfied"]
+#                 else:
+#                     node_average += verifyResult[lc]["satisfied"]
+#             node_average = node_average / len(verifyResult)
+#             violation_rate += node_average
+#             count_constraints += 1
+# print(f"Average satisfaction is : {violation_rate/count_constraints}")
+
+program.verifyResultsLC(valid_examples,constraint_names=None)
 

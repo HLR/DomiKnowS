@@ -188,15 +188,16 @@ print('finish Graph Declaration')
 ######################################################################
 
 if args.ilp:
-    program.load("2022_saved_model/ilp/ilp.pt")
+    program.load("2022_saved_model/ilp/ilp_0.pt")
 if args.pd:
-    program.load("2022_saved_model/pd/pd.pt")
+    program.load("2022_saved_model/pd1/pd_1.pt")
 if args.sample:
     program.load("2022_saved_model/sample/sample.pt")
 if args.pdilp:
-    program.load("2022_saved_model/pdilp/pdilp.pt")
+    # program.load("2022_saved_model/pdilp/pdilp.pt")
+    program.load("2022_saved_model/pd1/pd_1.pt")
 if args.sampleilp:
-    program.load("2022_saved_model/sampleilp/sampleilp.pt")
+    program.load("2022_saved_model/sampleilp/sampleilp_1.pt")
 
 from regr.utils import setProductionLogMode
 productionMode = False
@@ -213,19 +214,21 @@ print('test time execution time: ', (test_time_end - test_time_start)*1000, ' mi
 ### Compute Violation Rate
 #####################################################################
 
-violation_rate = 0
-count_constraints = 0
-for node in program.populate(valid_examples, device=device):
-        verifyResult = node.verifyResultsLC()
-        node_average = 0
-        if verifyResult:
-            for lc in verifyResult:
-                if "ifSatisfied" in verifyResult[lc]:
-                    node_average += verifyResult[lc]["ifSatisfied"]
-                else:
-                    node_average += verifyResult[lc]["satisfied"]
-            node_average = node_average / len(verifyResult)
-            violation_rate += node_average
-            count_constraints += 1
-print(f"Average satisfaction is : {violation_rate/count_constraints}")
+# violation_rate = 0
+# count_constraints = 0
+# for node in program.populate(valid_examples, device=device):
+#         verifyResult = node.verifyResultsLC()
+#         node_average = 0
+#         if verifyResult:
+#             for lc in verifyResult:
+#                 if "ifSatisfied" in verifyResult[lc]:
+#                     node_average += verifyResult[lc]["ifSatisfied"]
+#                 else:
+#                     node_average += verifyResult[lc]["satisfied"]
+#             node_average = node_average / len(verifyResult)
+#             violation_rate += node_average
+#             count_constraints += 1
+# print(f"Average satisfaction is : {violation_rate/count_constraints}")
+
+program.verifyResultsLC(valid_examples,constraint_names=None)
 
