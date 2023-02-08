@@ -1,8 +1,0 @@
-./data/
-.vector_cache
-__pycache__
-logs
-
-eng.*
-*.yaml
-bert_base_cased/
