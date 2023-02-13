@@ -1,0 +1,1910 @@
+37	0	plant; animal	-	-	?
+37	0	soft tissues	-	-	plant
+37	0	bones	-	-	plant
+37	0	mineral	-	-	plant
+37	0	fossils	-	-	?
+37	1	plant; animal	D	?	watery environment
+37	1	soft tissues	O_C	?	watery environment
+37	1	bones	O_C	?	watery environment
+37	1	mineral	O_C	?	watery environment
+37	1	fossils	O_C	?	watery environment
+37	2	plant; animal	O_C	?	watery environment
+37	2	soft tissues	O_C	?	mud and silt
+37	2	bones	O_C	?	mud and silt
+37	2	mineral	O_C	?	mud and silt
+37	2	fossils	O_C	?	?
+37	3	plant; animal	O_C	?	watery environment
+37	3	soft tissues	M	?	mud and silt
+37	3	bones	C	?	watery environment
+37	3	mineral	O_C	?	bone
+37	3	fossils	O_C	?	?
+37	4	plant; animal	O_C	?	watery environment
+37	4	soft tissues	D	?	top
+37	4	bones	O_C	?	top
+37	4	mineral	O_C	?	top
+37	4	fossils	O_C	?	top
+37	5	plant; animal	O_C	?	watery environment
+37	5	soft tissues	O_C	?	?
+37	5	bones	O_C	?	watery environment
+37	5	mineral	C	?	top
+37	5	fossils	O_C	?	?
+37	6	plant; animal	O_C	?	watery environment
+37	6	soft tissues	O_C	?	?
+37	6	bones	O_C	?	?
+37	6	mineral	O_C	?	top
+37	6	fossils	C	?	top
+38	0	animal; body	-	-	?
+38	0	soil	-	-	animal
+38	0	rock	-	-	?
+38	0	fossil	-	-	?
+38	1	animal; body	D	?	?
+38	1	soil	O_C	?	animal
+38	1	rock	O_C	?	?
+38	1	fossil	O_C	?	?
+38	2	animal; body	O_C	?	?
+38	2	soil	O_C	?	?
+38	2	rock	O_C	?	?
+38	2	fossil	O_C	?	?
+38	3	animal; body	M	?	wet place
+38	3	soil	O_C	?	wet place
+38	3	rock	O_C	?	wet place
+38	3	fossil	O_C	?	?
+38	4	animal; body	O_C	?	wet place
+38	4	soil	C	?	wet place
+38	4	rock	O_C	?	wet place
+38	4	fossil	O_C	?	?
+38	5	animal; body	O_C	?	wet place
+38	5	soil	O_C	?	wet place
+38	5	rock	C	?	wet place
+38	5	fossil	O_C	?	wet place
+38	6	animal; body	O_C	?	wet place
+38	6	soil	O_C	?	wet place
+38	6	rock	O_C	?	wet place
+38	6	fossil	C	?	wet place
+38	7	animal; body	O_C	?	wet place
+38	7	soil	O_C	?	wet place
+38	7	rock	O_C	?	wet place
+38	7	fossil	O_C	?	wet place
+67	0	plants; dead plants	-	-	?
+67	0	peat	-	-	swamp
+67	0	coal	-	-	?
+67	1	plants; dead plants	O_C	?	?
+67	1	peat	O_C	?	swamp
+67	1	coal	O_C	?	?
+67	2	plants; dead plants	O_C	?	swamp
+67	2	peat	O_C	?	swamp
+67	2	coal	O_C	?	swamp
+67	3	plants; dead plants	M	?	bottom of the swamp
+67	3	peat	O_C	?	swamp
+67	3	coal	O_C	?	swamp
+67	4	plants; dead plants	O_C	?	same area
+67	4	peat	O_C	?	same area
+67	4	coal	O_C	?	?
+67	5	plants; dead plants	D	?	same area
+67	5	peat	C	?	same area
+67	5	coal	O_C	?	peat
+67	6	plants; dead plants	O_C	?	same area
+67	6	peat	O_C	?	same area
+67	6	coal	O_C	?	peat
+67	7	plants; dead plants	O_C	?	same area
+67	7	peat	O_C	?	same area
+67	7	coal	O_C	?	peat
+67	8	plants; dead plants	O_C	?	same area
+67	8	peat	O_C	?	same area
+67	8	coal	O_C	?	peat
+67	9	plants; dead plants	O_C	?	?
+67	9	peat	D	?	same area
+67	9	coal	C	?	?
+68	0	plants; trees	-	-	?
+68	0	plant and tree remains	-	-	?
+68	0	peat; burial peat	-	-	?
+68	0	water	-	-	?
+68	0	heat	-	-	?
+68	0	coal	-	-	?
+68	1	plants; trees	D	?	?
+68	1	plant and tree remains	O_C	?	?
+68	1	peat; burial peat	O_C	?	?
+68	1	water	O_C	?	?
+68	1	heat	O_C	?	?
+68	1	coal	O_C	?	?
+68	2	plants; trees	O_C	?	?
+68	2	plant and tree remains	D	?	bottom
+68	2	peat; burial peat	O_C	?	?
+68	2	water	O_C	?	bottom
+68	2	heat	O_C	?	?
+68	2	coal	O_C	?	?
+68	3	plants; trees	O_C	?	?
+68	3	plant and tree remains	O_C	?	bottom
+68	3	peat; burial peat	O_C	?	?
+68	3	water	O_C	?	?
+68	3	heat	O_C	?	?
+68	3	coal	O_C	?	?
+68	4	plants; trees	O_C	?	?
+68	4	plant and tree remains	O_C	?	bottom
+68	4	peat; burial peat	C	?	?
+68	4	water	O_C	?	peat
+68	4	heat	O_C	?	peat
+68	4	coal	O_C	?	?
+68	5	plants; trees	O_C	?	?
+68	5	plant and tree remains	O_C	?	bottom
+68	5	peat; burial peat	O_C	?	other mineral material
+68	5	water	O_C	?	peat
+68	5	heat	O_C	?	peat
+68	5	coal	O_C	?	?
+68	6	plants; trees	O_C	?	?
+68	6	plant and tree remains	O_C	?	?
+68	6	peat; burial peat	O_C	?	?
+68	6	water	M	?	peat
+68	6	heat	O_C	?	peat
+68	6	coal	O_C	?	?
+68	7	plants; trees	O_C	?	?
+68	7	plant and tree remains	O_C	?	?
+68	7	peat; burial peat	D	?	?
+68	7	water	O_C	?	coal
+68	7	heat	D	?	coal
+68	7	coal	C	?	?
+69	0	plants;trees	-	-	?
+69	0	peat	-	-	swamp
+69	0	sand	-	-	swamp
+69	0	clay	-	-	?
+69	0	sedimentary rocks	-	-	?
+69	0	pressure	-	-	swamp
+69	0	water	-	-	swamp
+69	0	coal	-	-	?
+69	1	plants;trees	D	?	bottom
+69	1	peat	O_C	?	swamp
+69	1	sand	O_C	?	swamp
+69	1	clay	O_C	?	?
+69	1	sedimentary rocks	O_C	?	?
+69	1	pressure	O_C	?	swamp
+69	1	water	O_C	?	swamp
+69	1	coal	O_C	?	?
+69	2	plants;trees	C	?	bottom
+69	2	peat	O_C	?	bottom of swamp
+69	2	sand	O_C	?	swamp
+69	2	clay	O_C	?	?
+69	2	sedimentary rocks	O_C	?	swamp
+69	2	pressure	O_C	?	swamp
+69	2	water	O_C	?	swamp
+69	2	coal	O_C	?	?
+69	3	plants;trees	D	?	bottom
+69	3	peat	C	?	bottom
+69	3	sand	C	?	peat
+69	3	clay	C	?	?
+69	3	sedimentary rocks	O_C	?	peat
+69	3	pressure	O_C	?	peat
+69	3	water	O_C	?	peat
+69	3	coal	O_C	?	?
+69	4	plants;trees	O_C	?	bottom
+69	4	peat	O_C	?	bottom
+69	4	sand	O_C	?	peat
+69	4	clay	O_C	?	peat
+69	4	sedimentary rocks	O_C	?	peat
+69	4	pressure	O_C	?	peat
+69	4	water	O_C	?	peat
+69	4	coal	O_C	?	?
+69	5	plants;trees	O_C	?	bottom
+69	5	peat	O_C	?	bottom
+69	5	sand	D	?	peat
+69	5	clay	D	?	peat
+69	5	sedimentary rocks	C	?	peat
+69	5	pressure	O_C	?	peat
+69	5	water	O_C	?	peat
+69	5	coal	O_C	?	?
+69	6	plants;trees	O_C	?	bottom
+69	6	peat	O_C	?	bottom
+69	6	sand	O_C	?	peat
+69	6	clay	O_C	?	?
+69	6	sedimentary rocks	O_C	?	peat
+69	6	pressure	C	?	peat
+69	6	water	M	?	sedimentary rock
+69	6	coal	O_C	?	?
+69	7	plants;trees	O_C	?	?
+69	7	peat	O_C	?	bottom
+69	7	sand	O_C	?	?
+69	7	clay	O_C	?	?
+69	7	sedimentary rocks	O_C	?	?
+69	7	pressure	O_C	?	sedimentary rock
+69	7	water	O_C	?	?
+69	7	coal	C	?	?
+70	0	rain	-	-	?
+70	0	water	-	-	?
+70	0	streams	-	-	?
+70	0	water levels	-	-	?
+70	1	rain	O_C	?	?
+70	1	water	M	?	?
+70	1	streams	O_C	?	?
+70	1	water levels	O_C	?	ground
+70	2	rain	O_C	?	?
+70	2	water	M	?	?
+70	2	streams	O_C	?	?
+70	2	water levels	O_C	?	ground
+70	3	rain	O_C	?	?
+70	3	water	M	?	ground
+70	3	streams	O_C	?	?
+70	3	water levels	O_C	?	ground
+70	4	rain	O_C	?	?
+70	4	water	M	?	street
+70	4	streams	O_C	?	?
+70	4	water levels	O_C	?	ground
+70	5	rain	O_C	?	?
+70	5	water	M	?	house
+70	5	streams	O_C	?	?
+70	5	water levels	O_C	?	ground
+70	6	rain	O_C	?	?
+70	6	water	O_C	?	?
+70	6	streams	O_C	?	?
+70	6	water levels	O_C	?	ground
+70	7	rain	O_C	?	?
+70	7	water	M	?	stream
+70	7	streams	C	?	ground
+70	7	water levels	O_C	?	?
+70	8	rain	O_C	?	?
+70	8	water	M	?	?
+70	8	streams	O_C	?	?
+70	8	water levels	O_C	?	?
+99	0	rain clouds	-	-	sky
+99	0	rain	-	-	?
+99	0	clouds	-	-	sky
+99	0	a very different ecosystem	-	-	sky
+99	0	desert	-	-	?
+99	1	rain clouds	O_C	?	sky
+99	1	rain	O_C	?	?
+99	1	clouds	O_C	?	sky
+99	1	a very different ecosystem	O_C	?	sky
+99	1	desert	O_C	?	sky
+99	2	rain clouds	O_C	?	sky
+99	2	rain	C	?	?
+99	2	clouds	O_C	?	sky
+99	2	a very different ecosystem	O_C	?	area
+99	2	desert	O_C	?	sky
+99	3	rain clouds	O_C	?	sky
+99	3	rain	O_C	?	sky
+99	3	clouds	O_C	?	sky
+99	3	a very different ecosystem	O_C	?	area
+99	3	desert	O_C	?	sky
+99	4	rain clouds	D	?	sky
+99	4	rain	O_C	?	obstacle
+99	4	clouds	O_C	?	sky
+99	4	a very different ecosystem	O_C	?	area
+99	4	desert	O_C	?	sky
+99	5	rain clouds	O_C	?	?
+99	5	rain	O_C	?	area
+99	5	clouds	D	?	sky
+99	5	a very different ecosystem	O_C	?	area
+99	5	desert	O_C	?	sky
+99	6	rain clouds	O_C	?	?
+99	6	rain	O_C	?	area
+99	6	clouds	O_C	?	sky
+99	6	a very different ecosystem	C	?	area
+99	6	desert	O_C	?	sky
+99	7	rain clouds	O_C	?	?
+99	7	rain	D	?	area
+99	7	clouds	O_C	?	?
+99	7	a very different ecosystem	O_C	?	area
+99	7	desert	C	?	sky
+152	0	water vapor ; lifted vapor ; vapor	-	-	atmosphere
+152	0	solid ; cloud droplets	-	-	sky
+152	1	water vapor ; lifted vapor ; vapor	O_C	?	atmosphere
+152	1	solid ; cloud droplets	O_C	?	sky
+152	2	water vapor ; lifted vapor ; vapor	M	?	atmosphere
+152	2	solid ; cloud droplets	O_C	?	sky
+152	3	water vapor ; lifted vapor ; vapor	O_C	?	atmosphere
+152	3	solid ; cloud droplets	O_C	?	sky
+152	4	water vapor ; lifted vapor ; vapor	D	?	?
+152	4	solid ; cloud droplets	C	?	sky
+152	5	water vapor ; lifted vapor ; vapor	O_C	?	?
+152	5	solid ; cloud droplets	O_C	?	sky
+152	6	water vapor ; lifted vapor ; vapor	O_C	?	?
+152	6	solid ; cloud droplets	M	?	sky
+249	0	rocks ; smaller pieces	-	-	?
+249	0	oxygen	-	-	rock
+249	0	new types of rocks ; new substance ; certain types of rocks	-	-	?
+249	1	rocks ; smaller pieces	O_C	?	?
+249	1	oxygen	O_C	?	rock
+249	1	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	2	rocks ; smaller pieces	O_C	?	?
+249	2	oxygen	O_C	?	rock
+249	2	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	3	rocks ; smaller pieces	O_C	?	?
+249	3	oxygen	O_C	?	?
+249	3	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	4	rocks ; smaller pieces	O_C	?	?
+249	4	oxygen	O_C	?	?
+249	4	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	5	rocks ; smaller pieces	D	?	?
+249	5	oxygen	O_C	?	?
+249	5	new types of rocks ; new substance ; certain types of rocks	C	?	?
+249	6	rocks ; smaller pieces	O_C	?	?
+249	6	oxygen	O_C	?	?
+249	6	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	7	rocks ; smaller pieces	O_C	?	?
+249	7	oxygen	O_C	?	?
+249	7	new types of rocks ; new substance ; certain types of rocks	O_C	?	?
+249	8	rocks ; smaller pieces	O_C	?	?
+249	8	oxygen	O_C	?	?
+249	8	new types of rocks ; new substance ; certain types of rocks	D	?	?
+310	0	blood	-	-	heart
+310	0	carbon dioxide	-	-	blood
+310	0	oxygen	-	-	?
+310	1	blood	M	?	heart
+310	1	carbon dioxide	O_C	?	blood
+310	1	oxygen	O_C	?	?
+310	2	blood	M	?	lung
+310	2	carbon dioxide	O_C	?	lung
+310	2	oxygen	O_C	?	?
+310	3	blood	O_C	?	lung
+310	3	carbon dioxide	M	?	lung
+310	3	oxygen	O_C	?	?
+310	4	blood	O_C	?	lung
+310	4	carbon dioxide	O_C	?	lung
+310	4	oxygen	M	?	blood
+310	5	blood	M	?	?
+310	5	carbon dioxide	O_C	?	?
+310	5	oxygen	O_C	?	?
+310	6	blood	M	?	body
+310	6	carbon dioxide	O_C	?	?
+310	6	oxygen	O_C	?	body
+400	0	energy	-	-	?
+400	0	electricity	-	-	?
+400	1	energy	O_C	?	?
+400	1	electricity	O_C	?	?
+400	2	energy	O_C	?	?
+400	2	electricity	O_C	?	?
+400	3	energy	O_C	?	?
+400	3	electricity	O_C	?	?
+400	4	energy	C	?	?
+400	4	electricity	O_C	?	?
+400	5	energy	D	?	?
+400	5	electricity	C	?	?
+401	0	sunlight	-	-	?
+401	0	direct current	-	-	?
+401	0	alternating current	-	-	?
+401	1	sunlight	O_C	?	?
+401	1	direct current	O_C	?	?
+401	1	alternating current	O_C	?	?
+401	2	sunlight	O_C	?	?
+401	2	direct current	O_C	?	?
+401	2	alternating current	O_C	?	?
+401	3	sunlight	M	?	top half
+401	3	direct current	O_C	?	?
+401	3	alternating current	O_C	?	?
+401	4	sunlight	M	?	bottom half
+401	4	direct current	O_C	?	?
+401	4	alternating current	O_C	?	?
+401	5	sunlight	O_C	?	?
+401	5	direct current	C	?	?
+401	5	alternating current	O_C	?	?
+401	6	sunlight	O_C	?	?
+401	6	direct current	D	?	inverter
+401	6	alternating current	C	?	inverter
+401	7	sunlight	O_C	?	?
+401	7	direct current	O_C	?	?
+401	7	alternating current	O_C	?	?
+409	0	image	-	-	?
+409	0	electrical impulses	-	-	?
+409	1	image	O_C	?	?
+409	1	electrical impulses	O_C	?	?
+409	2	image	O_C	?	?
+409	2	electrical impulses	O_C	?	?
+409	3	image	O_C	?	?
+409	3	electrical impulses	O_C	?	?
+409	4	image	C	?	retina
+409	4	electrical impulses	O_C	?	?
+409	5	image	D	?	retina
+409	5	electrical impulses	C	?	retina
+409	6	image	O_C	?	?
+409	6	electrical impulses	M	?	brain
+409	7	image	O_C	?	?
+409	7	electrical impulses	O_C	?	brain
+410	0	electric signal	-	-	?
+410	0	light	-	-	cornea
+410	1	electric signal	O_C	?	?
+410	1	light	M	?	cornea
+410	2	electric signal	O_C	?	?
+410	2	light	M	?	iris
+410	3	electric signal	O_C	?	?
+410	3	light	M	?	pupil
+410	4	electric signal	C	?	retina
+410	4	light	M	?	retina
+410	5	electric signal	M	?	brain
+410	5	light	O_C	?	?
+410	6	electric signal	O_C	?	brain
+410	6	light	O_C	?	?
+411	0	electrochemical signals	-	-	?
+411	0	light	-	-	?
+411	1	electrochemical signals	O_C	?	?
+411	1	light	M	?	retina
+411	2	electrochemical signals	C	?	rod
+411	2	light	D	?	?
+411	3	electrochemical signals	O_C	?	?
+411	3	light	O_C	?	?
+411	4	electrochemical signals	O_C	?	?
+411	4	light	O_C	?	?
+411	5	electrochemical signals	O_C	?	?
+411	5	light	O_C	?	?
+411	6	electrochemical signals	O_C	?	?
+411	6	light	O_C	?	?
+411	7	electrochemical signals	O_C	?	?
+411	7	light	O_C	?	?
+411	8	electrochemical signals	O_C	?	?
+411	8	light	O_C	?	?
+429	0	nitrogen	-	-	atmosphere
+429	0	fixed nitrogen; usable nitrogen	-	-	?
+429	0	plants	-	-	?
+429	0	waste	-	-	?
+429	0	gas-based form	-	-	?
+429	1	nitrogen	O_C	?	atmosphere
+429	1	fixed nitrogen; usable nitrogen	O_C	?	?
+429	1	plants	O_C	?	?
+429	1	waste	O_C	?	?
+429	1	gas-based form	O_C	?	?
+429	2	nitrogen	O_C	?	soil
+429	2	fixed nitrogen; usable nitrogen	O_C	?	?
+429	2	plants	O_C	?	?
+429	2	waste	O_C	?	?
+429	2	gas-based form	O_C	?	?
+429	3	nitrogen	O_C	?	soil
+429	3	fixed nitrogen; usable nitrogen	O_C	?	?
+429	3	plants	O_C	?	?
+429	3	waste	O_C	?	?
+429	3	gas-based form	O_C	?	?
+429	4	nitrogen	O_C	?	soil
+429	4	fixed nitrogen; usable nitrogen	O_C	?	plant
+429	4	plants	O_C	?	?
+429	4	waste	O_C	?	?
+429	4	gas-based form	O_C	?	?
+429	5	nitrogen	O_C	?	soil
+429	5	fixed nitrogen; usable nitrogen	O_C	?	?
+429	5	plants	O_C	?	soil
+429	5	waste	O_C	?	?
+429	5	gas-based form	O_C	?	?
+429	6	nitrogen	O_C	?	soil
+429	6	fixed nitrogen; usable nitrogen	O_C	?	?
+429	6	plants	O_C	?	soil
+429	6	waste	M	?	?
+429	6	gas-based form	O_C	?	?
+429	7	nitrogen	O_C	?	soil
+429	7	fixed nitrogen; usable nitrogen	O_C	?	?
+429	7	plants	D	?	soil
+429	7	waste	O_C	?	?
+429	7	gas-based form	O_C	?	soil
+429	8	nitrogen	M	?	soil
+429	8	fixed nitrogen; usable nitrogen	O_C	?	soil
+429	8	plants	O_C	?	?
+429	8	waste	O_C	?	soil
+429	8	gas-based form	O_C	?	soil
+429	9	nitrogen	D	?	soil
+429	9	fixed nitrogen; usable nitrogen	O_C	?	soil
+429	9	plants	O_C	?	?
+429	9	waste	O_C	?	?
+429	9	gas-based form	O_C	?	soil
+429	10	nitrogen	M	?	atmosphere
+429	10	fixed nitrogen; usable nitrogen	O_C	?	atmosphere
+429	10	plants	O_C	?	?
+429	10	waste	O_C	?	?
+429	10	gas-based form	O_C	?	atmosphere
+460	0	living things ; remains of living things	-	-	?
+460	0	carbon	-	-	live
+460	0	carbon-based mixture	-	-	?
+460	0	fossil fuel	-	-	?
+460	0	energy	-	-	?
+460	0	power	-	-	?
+460	1	living things ; remains of living things	O_C	?	?
+460	1	carbon	O_C	?	live
+460	1	carbon-based mixture	O_C	?	?
+460	1	fossil fuel	O_C	?	?
+460	1	energy	O_C	?	?
+460	1	power	O_C	?	?
+460	2	living things ; remains of living things	D	?	?
+460	2	carbon	O_C	?	live
+460	2	carbon-based mixture	O_C	?	?
+460	2	fossil fuel	O_C	?	?
+460	2	energy	O_C	?	?
+460	2	power	O_C	?	?
+460	3	living things ; remains of living things	O_C	?	?
+460	3	carbon	O_C	?	?
+460	3	carbon-based mixture	O_C	?	?
+460	3	fossil fuel	O_C	?	?
+460	3	energy	O_C	?	?
+460	3	power	O_C	?	?
+460	4	living things ; remains of living things	M	?	?
+460	4	carbon	O_C	?	?
+460	4	carbon-based mixture	O_C	?	?
+460	4	fossil fuel	O_C	?	?
+460	4	energy	O_C	?	?
+460	4	power	O_C	?	?
+460	5	living things ; remains of living things	O_C	?	?
+460	5	carbon	O_C	?	?
+460	5	carbon-based mixture	O_C	?	?
+460	5	fossil fuel	O_C	?	?
+460	5	energy	O_C	?	fossil fuel
+460	5	power	O_C	?	?
+460	6	living things ; remains of living things	O_C	?	?
+460	6	carbon	M	?	?
+460	6	carbon-based mixture	O_C	?	?
+460	6	fossil fuel	O_C	?	?
+460	6	energy	O_C	?	fossil fuel
+460	6	power	O_C	?	?
+460	7	living things ; remains of living things	O_C	?	?
+460	7	carbon	O_C	?	surface
+460	7	carbon-based mixture	O_C	?	surface
+460	7	fossil fuel	O_C	?	surface
+460	7	energy	O_C	?	fossil fuel
+460	7	power	O_C	?	surface
+460	8	living things ; remains of living things	O_C	?	?
+460	8	carbon	O_C	?	surface
+460	8	carbon-based mixture	O_C	?	surface
+460	8	fossil fuel	D	?	surface
+460	8	energy	O_C	?	surface
+460	8	power	O_C	?	surface
+460	9	living things ; remains of living things	O_C	?	?
+460	9	carbon	O_C	?	surface
+460	9	carbon-based mixture	O_C	?	surface
+460	9	fossil fuel	O_C	?	surface
+460	9	energy	M	?	surface
+460	9	power	O_C	?	surface
+460	10	living things ; remains of living things	O_C	?	?
+460	10	carbon	O_C	?	?
+460	10	carbon-based mixture	O_C	?	surface
+460	10	fossil fuel	O_C	?	surface
+460	10	energy	D	?	surface
+460	10	power	C	?	surface
+463	0	raindrops	-	-	thunderstorm
+463	0	ice particle	-	-	?
+463	0	hailstone	-	-	?
+463	1	raindrops	M	?	thunderstorm
+463	1	ice particle	O_C	?	?
+463	1	hailstone	O_C	?	?
+463	2	raindrops	M	?	dust
+463	2	ice particle	O_C	?	surface
+463	2	hailstone	O_C	?	?
+463	3	raindrops	D	?	dust
+463	3	ice particle	O_C	?	surface
+463	3	hailstone	O_C	?	?
+463	4	raindrops	O_C	?	dust
+463	4	ice particle	O_C	?	surface
+463	4	hailstone	O_C	?	?
+463	5	raindrops	O_C	?	dust
+463	5	ice particle	O_C	?	surface
+463	5	hailstone	M	?	earth
+465	0	water	-	-	?
+465	0	hail	-	-	?
+465	1	water	M	?	wind
+465	1	hail	O_C	?	?
+465	2	water	O_C	?	wind
+465	2	hail	O_C	?	?
+465	3	water	O_C	?	wind
+465	3	hail	O_C	?	?
+465	4	water	D	?	earth
+465	4	hail	O_C	?	?
+465	5	water	O_C	?	earth
+465	5	hail	O_C	?	earth
+465	6	water	O_C	?	earth
+465	6	hail	O_C	?	earth
+465	7	water	O_C	?	earth
+465	7	hail	M	?	ground
+502	0	diesel	-	-	chamber
+502	0	petrol	-	-	chamber
+502	0	energy	-	-	chamber
+502	0	pistons	-	-	?
+502	0	piston motion	-	-	?
+502	0	rotary motion	-	-	?
+502	0	car	-	-	?
+502	1	diesel	M	?	combustion
+502	1	petrol	M	?	combustion
+502	1	energy	C	?	combustion
+502	1	pistons	O_C	?	?
+502	1	piston motion	O_C	?	?
+502	1	rotary motion	O_C	?	?
+502	1	car	O_C	?	?
+502	2	diesel	O_C	?	combustion
+502	2	petrol	O_C	?	combustion
+502	2	energy	M	?	piston
+502	2	pistons	O_C	?	combustion
+502	2	piston motion	O_C	?	crankshaft
+502	2	rotary motion	O_C	?	crankshaft
+502	2	car	O_C	?	?
+502	3	diesel	O_C	?	combustion
+502	3	petrol	O_C	?	combustion
+502	3	energy	O_C	?	?
+502	3	pistons	O_C	?	?
+502	3	piston motion	D	?	crankshaft and axle
+502	3	rotary motion	C	?	crankshaft and axle
+502	3	car	O_C	?	?
+502	4	diesel	O_C	?	combustion
+502	4	petrol	O_C	?	combustion
+502	4	energy	O_C	?	?
+502	4	pistons	O_C	?	?
+502	4	piston motion	O_C	?	crankshaft and axle
+502	4	rotary motion	O_C	?	crankshaft and axle
+502	4	car	O_C	?	?
+502	5	diesel	O_C	?	combustion
+502	5	petrol	O_C	?	combustion
+502	5	energy	O_C	?	?
+502	5	pistons	O_C	?	car
+502	5	piston motion	O_C	?	crankshaft and axle
+502	5	rotary motion	O_C	?	crankshaft and axle
+502	5	car	M	?	?
+503	0	car	-	-	?
+503	0	gasoline;gas	-	-	car
+503	0	battery	-	-	car
+503	0	spark	-	-	car
+503	0	piston	-	-	?
+503	0	crankshaft	-	-	car
+503	0	wheel	-	-	car
+503	1	car	O_C	?	?
+503	1	gasoline;gas	O_C	?	car
+503	1	battery	O_C	?	car
+503	1	spark	O_C	?	car
+503	1	piston	O_C	?	car
+503	1	crankshaft	O_C	?	car
+503	1	wheel	O_C	?	car
+503	2	car	O_C	?	?
+503	2	gasoline;gas	O_C	?	car
+503	2	battery	O_C	?	car
+503	2	spark	O_C	?	car
+503	2	piston	O_C	?	car
+503	2	crankshaft	O_C	?	car
+503	2	wheel	O_C	?	car
+503	3	car	O_C	?	?
+503	3	gasoline;gas	O_C	?	car
+503	3	battery	O_C	?	car
+503	3	spark	C	?	car
+503	3	piston	O_C	?	car
+503	3	crankshaft	O_C	?	car
+503	3	wheel	O_C	?	car
+503	4	car	O_C	?	?
+503	4	gasoline;gas	O_C	?	car
+503	4	battery	O_C	?	?
+503	4	spark	O_C	?	car
+503	4	piston	O_C	?	?
+503	4	crankshaft	O_C	?	car
+503	4	wheel	O_C	?	car
+503	5	car	O_C	?	?
+503	5	gasoline;gas	O_C	?	car
+503	5	battery	O_C	?	?
+503	5	spark	O_C	?	car
+503	5	piston	O_C	?	car
+503	5	crankshaft	O_C	?	car
+503	5	wheel	O_C	?	car
+503	6	car	O_C	?	?
+503	6	gasoline;gas	O_C	?	car
+503	6	battery	O_C	?	?
+503	6	spark	O_C	?	car
+503	6	piston	O_C	?	car
+503	6	crankshaft	O_C	?	car
+503	6	wheel	O_C	?	car
+503	7	car	O_C	?	?
+503	7	gasoline;gas	O_C	?	car
+503	7	battery	O_C	?	?
+503	7	spark	O_C	?	car
+503	7	piston	O_C	?	car
+503	7	crankshaft	O_C	?	car
+503	7	wheel	O_C	?	car
+503	8	car	O_C	?	?
+503	8	gasoline;gas	O_C	?	?
+503	8	battery	O_C	?	?
+503	8	spark	O_C	?	car
+503	8	piston	O_C	?	car
+503	8	crankshaft	O_C	?	car
+503	8	wheel	O_C	?	car
+503	9	car	O_C	?	?
+503	9	gasoline;gas	O_C	?	?
+503	9	battery	O_C	?	?
+503	9	spark	O_C	?	car
+503	9	piston	O_C	?	car
+503	9	crankshaft	O_C	?	car
+503	9	wheel	O_C	?	car
+533	0	seed	-	-	adult
+533	0	sprouts	-	-	soil
+533	0	seedling	-	-	tree
+533	0	sapling	-	-	tree
+533	0	tree	-	-	?
+533	1	seed	M	?	adult tree
+533	1	sprouts	O_C	?	soil
+533	1	seedling	O_C	?	tree
+533	1	sapling	O_C	?	tree
+533	1	tree	O_C	?	?
+533	2	seed	M	?	tree
+533	2	sprouts	M	?	tree
+533	2	seedling	O_C	?	tree
+533	2	sapling	O_C	?	tree
+533	2	tree	O_C	?	?
+533	3	seed	O_C	?	tree
+533	3	sprouts	O_C	?	tree
+533	3	seedling	C	?	tree
+533	3	sapling	O_C	?	tree
+533	3	tree	O_C	?	?
+533	4	seed	O_C	?	tree
+533	4	sprouts	O_C	?	tree
+533	4	seedling	O_C	?	tree
+533	4	sapling	C	?	tree
+533	4	tree	C	?	?
+533	5	seed	O_C	?	?
+533	5	sprouts	O_C	?	tree
+533	5	seedling	O_C	?	tree
+533	5	sapling	O_C	?	tree
+533	5	tree	O_C	?	?
+533	6	seed	O_C	?	?
+533	6	sprouts	O_C	?	tree
+533	6	seedling	O_C	?	tree
+533	6	sapling	O_C	?	tree
+533	6	tree	O_C	?	?
+533	7	seed	O_C	?	?
+533	7	sprouts	O_C	?	?
+533	7	seedling	O_C	?	?
+533	7	sapling	O_C	?	tree
+533	7	tree	D	?	?
+534	0	seed	-	-	?
+534	0	small tree ; tree	-	-	?
+534	0	fruit	-	-	tree
+534	0	flowers	-	-	seed
+534	1	seed	O_C	?	?
+534	1	small tree ; tree	O_C	?	?
+534	1	fruit	O_C	?	seed
+534	1	flowers	O_C	?	seed
+534	2	seed	D	?	tree
+534	2	small tree ; tree	C	?	?
+534	2	fruit	O_C	?	tree
+534	2	flowers	O_C	?	tree
+534	3	seed	O_C	?	tree
+534	3	small tree ; tree	O_C	?	?
+534	3	fruit	O_C	?	tree
+534	3	flowers	O_C	?	tree
+534	4	seed	O_C	?	?
+534	4	small tree ; tree	O_C	?	?
+534	4	fruit	C	?	tree
+534	4	flowers	O_C	?	tree
+534	5	seed	O_C	?	?
+534	5	small tree ; tree	O_C	?	?
+534	5	fruit	O_C	?	tree
+534	5	flowers	C	?	tree
+534	6	seed	O_C	?	?
+534	6	small tree ; tree	O_C	?	?
+534	6	fruit	O_C	?	small tree
+534	6	flowers	O_C	?	small tree
+534	7	seed	O_C	?	?
+534	7	small tree ; tree	O_C	?	?
+534	7	fruit	O_C	?	tree
+534	7	flowers	O_C	?	small tree
+582	0	warm, moist air	-	-	?
+582	0	cool, dry air	-	-	?
+582	0	air masses ; masses	-	-	?
+582	0	wind	-	-	?
+582	0	updraft	-	-	?
+582	0	circular patterns	-	-	?
+582	0	tornado	-	-	?
+582	1	warm, moist air	O_C	?	?
+582	1	cool, dry air	O_C	?	?
+582	1	air masses ; masses	O_C	?	air
+582	1	wind	O_C	?	?
+582	1	updraft	O_C	?	?
+582	1	circular patterns	O_C	?	?
+582	1	tornado	O_C	?	?
+582	2	warm, moist air	O_C	?	?
+582	2	cool, dry air	O_C	?	?
+582	2	air masses ; masses	O_C	?	?
+582	2	wind	O_C	?	?
+582	2	updraft	O_C	?	?
+582	2	circular patterns	O_C	?	?
+582	2	tornado	O_C	?	?
+582	3	warm, moist air	O_C	?	?
+582	3	cool, dry air	O_C	?	?
+582	3	air masses ; masses	O_C	?	?
+582	3	wind	O_C	?	?
+582	3	updraft	O_C	?	?
+582	3	circular patterns	O_C	?	?
+582	3	tornado	O_C	?	?
+582	4	warm, moist air	O_C	?	?
+582	4	cool, dry air	O_C	?	?
+582	4	air masses ; masses	O_C	?	?
+582	4	wind	O_C	?	?
+582	4	updraft	O_C	?	?
+582	4	circular patterns	O_C	?	?
+582	4	tornado	O_C	?	?
+582	5	warm, moist air	O_C	?	?
+582	5	cool, dry air	O_C	?	?
+582	5	air masses ; masses	O_C	?	?
+582	5	wind	O_C	?	?
+582	5	updraft	O_C	?	?
+582	5	circular patterns	O_C	?	?
+582	5	tornado	O_C	?	?
+582	6	warm, moist air	O_C	?	?
+582	6	cool, dry air	O_C	?	?
+582	6	air masses ; masses	O_C	?	?
+582	6	wind	O_C	?	?
+582	6	updraft	C	?	?
+582	6	circular patterns	O_C	?	?
+582	6	tornado	O_C	?	?
+582	7	warm, moist air	O_C	?	?
+582	7	cool, dry air	O_C	?	?
+582	7	air masses ; masses	O_C	?	?
+582	7	wind	C	?	updraft
+582	7	updraft	O_C	?	?
+582	7	circular patterns	C	?	updraft
+582	7	tornado	O_C	?	?
+582	8	warm, moist air	O_C	?	?
+582	8	cool, dry air	O_C	?	?
+582	8	air masses ; masses	O_C	?	?
+582	8	wind	O_C	?	updraft
+582	8	updraft	O_C	?	?
+582	8	circular patterns	O_C	?	updraft
+582	8	tornado	C	?	updraft
+583	0	warm, humd low-presure air	-	-	?
+583	0	updraft	-	-	?
+583	0	dry, cold high-pressure air	-	-	?
+583	0	rotation	-	-	?
+583	0	funnel; tornado	-	-	?
+583	1	warm, humd low-presure air	O_C	?	?
+583	1	updraft	O_C	?	?
+583	1	dry, cold high-pressure air	O_C	?	?
+583	1	rotation	O_C	?	?
+583	1	funnel; tornado	O_C	?	?
+583	2	warm, humd low-presure air	O_C	?	?
+583	2	updraft	C	?	?
+583	2	dry, cold high-pressure air	O_C	?	?
+583	2	rotation	O_C	?	?
+583	2	funnel; tornado	O_C	?	?
+583	3	warm, humd low-presure air	O_C	?	?
+583	3	updraft	O_C	?	?
+583	3	dry, cold high-pressure air	O_C	?	?
+583	3	rotation	O_C	?	?
+583	3	funnel; tornado	O_C	?	?
+583	4	warm, humd low-presure air	O_C	?	?
+583	4	updraft	O_C	?	?
+583	4	dry, cold high-pressure air	O_C	?	?
+583	4	rotation	C	?	?
+583	4	funnel; tornado	O_C	?	?
+583	5	warm, humd low-presure air	O_C	?	?
+583	5	updraft	O_C	?	?
+583	5	dry, cold high-pressure air	O_C	?	?
+583	5	rotation	O_C	?	?
+583	5	funnel; tornado	C	?	?
+583	6	warm, humd low-presure air	O_C	?	ground
+583	6	updraft	O_C	?	?
+583	6	dry, cold high-pressure air	O_C	?	ground
+583	6	rotation	O_C	?	ground
+583	6	funnel; tornado	O_C	?	ground
+600	0	air	-	-	car
+600	0	petrol; fuel	-	-	car
+600	0	energy	-	-	car
+600	0	hot gas	-	-	piston
+600	1	air	O_C	?	car
+600	1	petrol; fuel	D	?	car
+600	1	energy	C	?	car
+600	1	hot gas	O_C	?	piston
+600	2	air	D	?	engine
+600	2	petrol; fuel	O_C	?	engine
+600	2	energy	O_C	?	car
+600	2	hot gas	O_C	?	piston
+600	3	air	O_C	?	engine
+600	3	petrol; fuel	O_C	?	engine
+600	3	energy	O_C	?	?
+600	3	hot gas	M	?	piston
+600	4	air	O_C	?	engine
+600	4	petrol; fuel	O_C	?	?
+600	4	energy	M	?	crankshaft
+600	4	hot gas	O_C	?	piston
+600	5	air	O_C	?	?
+600	5	petrol; fuel	O_C	?	?
+600	5	energy	O_C	?	crankshaft
+600	5	hot gas	O_C	?	?
+600	6	air	O_C	?	?
+600	6	petrol; fuel	O_C	?	?
+600	6	energy	O_C	?	crankshaft
+600	6	hot gas	O_C	?	?
+653	0	seed	-	-	?
+653	0	seedling	-	-	?
+653	0	tree	-	-	?
+653	0	flower	-	-	tree
+653	0	fruit	-	-	tree
+653	1	seed	O_C	?	?
+653	1	seedling	O_C	?	?
+653	1	tree	O_C	?	?
+653	1	flower	O_C	?	tree
+653	1	fruit	O_C	?	tree
+653	2	seed	D	?	?
+653	2	seedling	C	?	?
+653	2	tree	O_C	?	?
+653	2	flower	O_C	?	tree
+653	2	fruit	O_C	?	tree
+653	3	seed	O_C	?	tree
+653	3	seedling	O_C	?	tree
+653	3	tree	C	?	?
+653	3	flower	O_C	?	tree
+653	3	fruit	O_C	?	tree
+653	4	seed	O_C	?	?
+653	4	seedling	O_C	?	?
+653	4	tree	O_C	?	?
+653	4	flower	C	?	tree
+653	4	fruit	O_C	?	tree
+653	5	seed	O_C	?	?
+653	5	seedling	O_C	?	?
+653	5	tree	O_C	?	?
+653	5	flower	O_C	?	tree
+653	5	fruit	C	?	tree
+653	6	seed	C	?	tree
+653	6	seedling	O_C	?	?
+653	6	tree	O_C	?	?
+653	6	flower	O_C	?	tree
+653	6	fruit	O_C	?	tree
+654	0	seedling	-	-	tree
+654	0	root system	-	-	tree
+654	0	tree	-	-	?
+654	0	material for new growth	-	-	tree
+654	1	seedling	C	?	ground
+654	1	root system	O_C	?	tree
+654	1	tree	O_C	?	ground
+654	1	material for new growth	O_C	?	tree
+654	2	seedling	O_C	?	ground
+654	2	root system	C	?	tree
+654	2	tree	O_C	?	ground
+654	2	material for new growth	O_C	?	tree
+654	3	seedling	O_C	?	ground
+654	3	root system	O_C	?	ground
+654	3	tree	O_C	?	ground
+654	3	material for new growth	O_C	?	tree
+654	4	seedling	O_C	?	ground
+654	4	root system	O_C	?	ground
+654	4	tree	O_C	?	ground
+654	4	material for new growth	O_C	?	tree
+654	5	seedling	O_C	?	ground
+654	5	root system	O_C	?	ground
+654	5	tree	O_C	?	ground
+654	5	material for new growth	O_C	?	tree
+654	6	seedling	O_C	?	ground
+654	6	root system	O_C	?	ground
+654	6	tree	O_C	?	ground
+654	6	material for new growth	C	?	tree
+659	0	nitrogen; nitrates	-	-	soil
+659	0	ammonium	-	-	?
+659	0	plant	-	-	?
+659	0	extra nitrogen	-	-	soil
+659	1	nitrogen; nitrates	D	?	soil
+659	1	ammonium	O_C	?	?
+659	1	plant	O_C	?	?
+659	1	extra nitrogen	O_C	?	soil
+659	2	nitrogen; nitrates	C	?	soil
+659	2	ammonium	D	?	plant
+659	2	plant	O_C	?	?
+659	2	extra nitrogen	O_C	?	soil
+659	3	nitrogen; nitrates	M	?	plant
+659	3	ammonium	O_C	?	plant
+659	3	plant	O_C	?	?
+659	3	extra nitrogen	O_C	?	soil
+659	4	nitrogen; nitrates	D	?	plant
+659	4	ammonium	O_C	?	?
+659	4	plant	D	?	?
+659	4	extra nitrogen	O_C	?	soil
+659	5	nitrogen; nitrates	O_C	?	?
+659	5	ammonium	O_C	?	?
+659	5	plant	O_C	?	?
+659	5	extra nitrogen	M	?	air
+659	6	nitrogen; nitrates	O_C	?	?
+659	6	ammonium	O_C	?	?
+659	6	plant	O_C	?	?
+659	6	extra nitrogen	O_C	?	air
+660	0	atmospheric nitrogen	-	-	?
+660	0	organic nitrogen	-	-	soil
+660	0	animals	-	-	?
+660	0	plants	-	-	soil
+660	0	wastes	-	-	soil
+660	0	ammonium	-	-	soil
+660	0	nitrate	-	-	soil
+660	0	nitrogen gas	-	-	soil
+660	1	atmospheric nitrogen	D	?	?
+660	1	organic nitrogen	C	?	soil
+660	1	animals	O_C	?	?
+660	1	plants	O_C	?	soil
+660	1	wastes	O_C	?	plant
+660	1	ammonium	O_C	?	soil
+660	1	nitrate	O_C	?	soil
+660	1	nitrogen gas	O_C	?	soil
+660	2	atmospheric nitrogen	O_C	?	?
+660	2	organic nitrogen	M	?	plant
+660	2	animals	O_C	?	?
+660	2	plants	O_C	?	?
+660	2	wastes	O_C	?	plant
+660	2	ammonium	O_C	?	plant
+660	2	nitrate	O_C	?	soil
+660	2	nitrogen gas	O_C	?	soil
+660	3	atmospheric nitrogen	O_C	?	?
+660	3	organic nitrogen	O_C	?	animal
+660	3	animals	O_C	?	?
+660	3	plants	O_C	?	?
+660	3	wastes	O_C	?	?
+660	3	ammonium	O_C	?	?
+660	3	nitrate	O_C	?	?
+660	3	nitrogen gas	O_C	?	soil
+660	4	atmospheric nitrogen	O_C	?	?
+660	4	organic nitrogen	O_C	?	?
+660	4	animals	O_C	?	?
+660	4	plants	D	?	?
+660	4	wastes	O_C	?	?
+660	4	ammonium	O_C	?	?
+660	4	nitrate	O_C	?	?
+660	4	nitrogen gas	O_C	?	soil
+660	5	atmospheric nitrogen	O_C	?	?
+660	5	organic nitrogen	O_C	?	?
+660	5	animals	D	?	?
+660	5	plants	O_C	?	?
+660	5	wastes	M	?	?
+660	5	ammonium	O_C	?	?
+660	5	nitrate	O_C	?	?
+660	5	nitrogen gas	O_C	?	soil
+660	6	atmospheric nitrogen	O_C	?	?
+660	6	organic nitrogen	D	?	?
+660	6	animals	O_C	?	?
+660	6	plants	O_C	?	?
+660	6	wastes	D	?	?
+660	6	ammonium	O_C	?	?
+660	6	nitrate	O_C	?	?
+660	6	nitrogen gas	O_C	?	soil
+660	7	atmospheric nitrogen	O_C	?	?
+660	7	organic nitrogen	O_C	?	?
+660	7	animals	O_C	?	?
+660	7	plants	O_C	?	?
+660	7	wastes	O_C	?	?
+660	7	ammonium	D	?	?
+660	7	nitrate	O_C	?	?
+660	7	nitrogen gas	O_C	?	soil
+660	8	atmospheric nitrogen	O_C	?	?
+660	8	organic nitrogen	O_C	?	?
+660	8	animals	O_C	?	?
+660	8	plants	O_C	?	?
+660	8	wastes	O_C	?	?
+660	8	ammonium	O_C	?	?
+660	8	nitrate	D	?	?
+660	8	nitrogen gas	C	?	soil
+660	9	atmospheric nitrogen	O_C	?	?
+660	9	organic nitrogen	O_C	?	?
+660	9	animals	O_C	?	?
+660	9	plants	O_C	?	?
+660	9	wastes	O_C	?	?
+660	9	ammonium	O_C	?	?
+660	9	nitrate	O_C	?	?
+660	9	nitrogen gas	M	?	atmosphere
+661	0	nitrogen	-	-	soil
+661	0	ammonium	-	-	soil
+661	0	nitrates	-	-	soil
+661	0	plant	-	-	soil
+661	0	animal	-	-	soil
+661	1	nitrogen	O_C	?	soil
+661	1	ammonium	O_C	?	plant
+661	1	nitrates	O_C	?	soil
+661	1	plant	O_C	?	soil
+661	1	animal	O_C	?	soil
+661	2	nitrogen	O_C	?	soil
+661	2	ammonium	D	?	plant
+661	2	nitrates	C	?	soil
+661	2	plant	O_C	?	?
+661	2	animal	O_C	?	soil
+661	3	nitrogen	O_C	?	soil
+661	3	ammonium	O_C	?	soil
+661	3	nitrates	O_C	?	soil
+661	3	plant	O_C	?	?
+661	3	animal	O_C	?	soil
+661	4	nitrogen	M	?	soil
+661	4	ammonium	O_C	?	?
+661	4	nitrates	O_C	?	soil
+661	4	plant	O_C	?	?
+661	4	animal	O_C	?	soil
+661	5	nitrogen	O_C	?	soil
+661	5	ammonium	O_C	?	?
+661	5	nitrates	M	?	root
+661	5	plant	O_C	?	?
+661	5	animal	O_C	?	?
+661	6	nitrogen	O_C	?	soil
+661	6	ammonium	O_C	?	?
+661	6	nitrates	O_C	?	?
+661	6	plant	O_C	?	?
+661	6	animal	O_C	?	?
+661	7	nitrogen	O_C	?	soil
+661	7	ammonium	O_C	?	?
+661	7	nitrates	O_C	?	?
+661	7	plant	D	?	?
+661	7	animal	D	?	soil
+661	8	nitrogen	M	?	air
+661	8	ammonium	O_C	?	?
+661	8	nitrates	O_C	?	?
+661	8	plant	O_C	?	?
+661	8	animal	O_C	?	?
+661	9	nitrogen	O_C	?	?
+661	9	ammonium	O_C	?	?
+661	9	nitrates	O_C	?	?
+661	9	plant	O_C	?	?
+661	9	animal	O_C	?	?
+695	0	water	-	-	ocean
+695	0	vapor; steam; water vapor	-	-	ocean
+695	0	clouds	-	-	?
+695	0	rain	-	-	earth
+695	0	hail	-	-	earth
+695	0	sleet	-	-	earth
+695	0	snow	-	-	?
+695	1	water	D	?	ocean
+695	1	vapor; steam; water vapor	C	?	ocean
+695	1	clouds	O_C	?	air
+695	1	rain	O_C	?	earth
+695	1	hail	O_C	?	earth
+695	1	sleet	O_C	?	earth
+695	1	snow	O_C	?	earth
+695	2	water	O_C	?	air
+695	2	vapor; steam; water vapor	M	?	air
+695	2	clouds	O_C	?	air
+695	2	rain	O_C	?	earth
+695	2	hail	O_C	?	earth
+695	2	sleet	O_C	?	earth
+695	2	snow	O_C	?	earth
+695	3	water	O_C	?	air
+695	3	vapor; steam; water vapor	D	?	air
+695	3	clouds	C	?	air
+695	3	rain	O_C	?	earth
+695	3	hail	O_C	?	earth
+695	3	sleet	O_C	?	earth
+695	3	snow	O_C	?	earth
+695	4	water	O_C	?	air
+695	4	vapor; steam; water vapor	O_C	?	?
+695	4	clouds	O_C	?	air
+695	4	rain	O_C	?	earth
+695	4	hail	O_C	?	earth
+695	4	sleet	O_C	?	earth
+695	4	snow	O_C	?	earth
+695	5	water	M	?	earth
+695	5	vapor; steam; water vapor	O_C	?	?
+695	5	clouds	O_C	?	air
+695	5	rain	C	?	earth
+695	5	hail	C	?	earth
+695	5	sleet	C	?	earth
+695	5	snow	C	?	earth
+695	6	water	M	?	earth
+695	6	vapor; steam; water vapor	O_C	?	?
+695	6	clouds	O_C	?	air
+695	6	rain	O_C	?	earth
+695	6	hail	O_C	?	earth
+695	6	sleet	O_C	?	earth
+695	6	snow	O_C	?	earth
+695	7	water	M	?	ocean
+695	7	vapor; steam; water vapor	O_C	?	?
+695	7	clouds	O_C	?	air
+695	7	rain	O_C	?	earth
+695	7	hail	O_C	?	earth
+695	7	sleet	O_C	?	earth
+695	7	snow	O_C	?	earth
+696	0	water vapor	-	-	air
+696	0	water droplets	-	-	air
+696	0	cloud	-	-	?
+696	0	rain	-	-	?
+696	1	water vapor	O_C	?	air
+696	1	water droplets	O_C	?	air
+696	1	cloud	O_C	?	?
+696	1	rain	O_C	?	?
+696	2	water vapor	D	?	air
+696	2	water droplets	C	?	air
+696	2	cloud	O_C	?	?
+696	2	rain	O_C	?	?
+696	3	water vapor	O_C	?	?
+696	3	water droplets	M	?	cloud
+696	3	cloud	O_C	?	air
+696	3	rain	O_C	?	?
+696	4	water vapor	O_C	?	?
+696	4	water droplets	M	?	cloud
+696	4	cloud	O_C	?	air
+696	4	rain	O_C	?	?
+696	5	water vapor	O_C	?	?
+696	5	water droplets	O_C	?	?
+696	5	cloud	O_C	?	air
+696	5	rain	O_C	?	?
+696	6	water vapor	O_C	?	?
+696	6	water droplets	O_C	?	?
+696	6	cloud	O_C	?	air
+696	6	rain	C	?	cloud
+697	0	water	-	-	body of water
+697	0	clouds	-	-	?
+697	0	rain	-	-	?
+697	1	water	M	?	body
+697	1	clouds	O_C	?	?
+697	1	rain	O_C	?	?
+697	2	water	D	?	cloud
+697	2	clouds	C	?	?
+697	2	rain	O_C	?	cloud
+697	3	water	O_C	?	cloud
+697	3	clouds	O_C	?	?
+697	3	rain	O_C	?	cloud
+697	4	water	O_C	?	cloud
+697	4	clouds	O_C	?	?
+697	4	rain	O_C	?	cloud
+697	5	water	O_C	?	cloud
+697	5	clouds	O_C	?	?
+697	5	rain	C	?	area
+1031	0	plant or animal	-	-	?
+1031	0	bones	-	-	mud or soil
+1031	0	sediment	-	-	?
+1031	0	rock	-	-	?
+1031	0	fossil	-	-	?
+1031	1	plant or animal	D	?	mud or soil
+1031	1	bones	C	?	mud or soil
+1031	1	sediment	O_C	?	?
+1031	1	rock	O_C	?	?
+1031	1	fossil	O_C	?	?
+1031	2	plant or animal	O_C	?	mud or soil
+1031	2	bones	O_C	?	mud or soil
+1031	2	sediment	O_C	?	?
+1031	2	rock	O_C	?	?
+1031	2	fossil	O_C	?	?
+1031	3	plant or animal	O_C	?	mud or soil
+1031	3	bones	O_C	?	mud or soil
+1031	3	sediment	C	?	mud or soil
+1031	3	rock	O_C	?	?
+1031	3	fossil	O_C	?	?
+1031	4	plant or animal	O_C	?	mud or soil
+1031	4	bones	O_C	?	mud or soil
+1031	4	sediment	D	?	mud or soil
+1031	4	rock	C	?	mud or soil
+1031	4	fossil	O_C	?	?
+1031	5	plant or animal	O_C	?	mud or soil
+1031	5	bones	O_C	?	?
+1031	5	sediment	O_C	?	mud or soil
+1031	5	rock	D	?	mud or soil
+1031	5	fossil	C	?	?
+1032	0	animals	-	-	?
+1032	0	plants	-	-	?
+1032	0	bones and hard tissues ; remains	-	-	?
+1032	0	sediment	-	-	?
+1032	0	rock	-	-	?
+1032	1	animals	O_C	?	wet environment
+1032	1	plants	O_C	?	wet environment
+1032	1	bones and hard tissues ; remains	O_C	?	most fossil
+1032	1	sediment	O_C	?	?
+1032	1	rock	O_C	?	?
+1032	2	animals	D	?	mud
+1032	2	plants	D	?	mud
+1032	2	bones and hard tissues ; remains	O_C	?	mud
+1032	2	sediment	O_C	?	?
+1032	2	rock	O_C	?	mud
+1032	3	animals	O_C	?	mud
+1032	3	plants	O_C	?	mud
+1032	3	bones and hard tissues ; remains	C	?	soft tissue
+1032	3	sediment	O_C	?	?
+1032	3	rock	O_C	?	mud
+1032	4	animals	O_C	?	mud
+1032	4	plants	O_C	?	mud
+1032	4	bones and hard tissues ; remains	O_C	?	mud
+1032	4	sediment	O_C	?	mud
+1032	4	rock	O_C	?	mud
+1032	5	animals	O_C	?	mud
+1032	5	plants	O_C	?	mud
+1032	5	bones and hard tissues ; remains	O_C	?	mud
+1032	5	sediment	C	?	remain
+1032	5	rock	O_C	?	mud
+1032	6	animals	O_C	?	mud
+1032	6	plants	O_C	?	mud
+1032	6	bones and hard tissues ; remains	O_C	?	mud
+1032	6	sediment	D	?	remain
+1032	6	rock	C	?	mud
+1033	0	animal	-	-	?
+1033	0	skeleton	-	-	animal
+1033	0	rock	-	-	animal
+1033	0	mold	-	-	animal
+1033	1	animal	D	?	?
+1033	1	skeleton	O_C	?	animal
+1033	1	rock	O_C	?	animal
+1033	1	mold	O_C	?	animal
+1033	2	animal	O_C	?	mud
+1033	2	skeleton	O_C	?	animal
+1033	2	rock	O_C	?	mud
+1033	2	mold	O_C	?	mud
+1033	3	animal	O_C	?	mud
+1033	3	skeleton	O_C	?	?
+1033	3	rock	O_C	?	mud
+1033	3	mold	O_C	?	mud
+1033	4	animal	O_C	?	?
+1033	4	skeleton	O_C	?	?
+1033	4	rock	C	?	?
+1033	4	mold	O_C	?	mud
+1033	5	animal	O_C	?	?
+1033	5	skeleton	D	?	?
+1033	5	rock	O_C	?	?
+1033	5	mold	O_C	?	mud
+1033	6	animal	O_C	?	?
+1033	6	skeleton	O_C	?	?
+1033	6	rock	O_C	?	mud
+1033	6	mold	C	?	mud
+1145	0	hydrogen fuel	-	-	?
+1145	0	hydrogen atoms	-	-	?
+1145	0	helium atoms	-	-	?
+1145	0	red giant star	-	-	?
+1145	1	hydrogen fuel	O_C	?	?
+1145	1	hydrogen atoms	O_C	?	?
+1145	1	helium atoms	O_C	?	?
+1145	1	red giant star	C	?	?
+1145	2	hydrogen fuel	D	?	?
+1145	2	hydrogen atoms	O_C	?	?
+1145	2	helium atoms	O_C	?	?
+1145	2	red giant star	O_C	?	?
+1145	3	hydrogen fuel	O_C	?	?
+1145	3	hydrogen atoms	D	?	?
+1145	3	helium atoms	C	?	?
+1145	3	red giant star	O_C	?	?
+1145	4	hydrogen fuel	O_C	?	?
+1145	4	hydrogen atoms	O_C	?	?
+1145	4	helium atoms	O_C	?	?
+1145	4	red giant star	O_C	?	?
+1145	5	hydrogen fuel	O_C	?	?
+1145	5	hydrogen atoms	O_C	?	?
+1145	5	helium atoms	O_C	?	?
+1145	5	red giant star	O_C	?	?
+1146	0	star	-	-	?
+1146	0	hydrogen fuel	-	-	star
+1146	0	hydrogen	-	-	star
+1146	0	helium	-	-	?
+1146	0	energy	-	-	star
+1146	0	carbon atoms	-	-	?
+1146	0	red giant star	-	-	helium atoms
+1146	1	star	O_C	?	?
+1146	1	hydrogen fuel	O_C	?	star
+1146	1	hydrogen	O_C	?	star
+1146	1	helium	O_C	?	?
+1146	1	energy	O_C	?	star
+1146	1	carbon atoms	O_C	?	?
+1146	1	red giant star	O_C	?	star
+1146	2	star	O_C	?	?
+1146	2	hydrogen fuel	D	?	star
+1146	2	hydrogen	O_C	?	space
+1146	2	helium	O_C	?	?
+1146	2	energy	O_C	?	star
+1146	2	carbon atoms	O_C	?	?
+1146	2	red giant star	O_C	?	space
+1146	3	star	O_C	?	?
+1146	3	hydrogen fuel	O_C	?	star
+1146	3	hydrogen	D	?	space
+1146	3	helium	C	?	star
+1146	3	energy	O_C	?	star
+1146	3	carbon atoms	O_C	?	?
+1146	3	red giant star	O_C	?	space
+1146	4	star	O_C	?	?
+1146	4	hydrogen fuel	O_C	?	space
+1146	4	hydrogen	O_C	?	space
+1146	4	helium	O_C	?	space
+1146	4	energy	O_C	?	star
+1146	4	carbon atoms	O_C	?	space
+1146	4	red giant star	O_C	?	space
+1146	5	star	O_C	?	?
+1146	5	hydrogen fuel	O_C	?	space
+1146	5	hydrogen	O_C	?	space
+1146	5	helium	O_C	?	space
+1146	5	energy	O_C	?	space
+1146	5	carbon atoms	O_C	?	space
+1146	5	red giant star	O_C	?	space
+1146	6	star	O_C	?	space
+1146	6	hydrogen fuel	O_C	?	space
+1146	6	hydrogen	O_C	?	?
+1146	6	helium	O_C	?	space
+1146	6	energy	O_C	?	star
+1146	6	carbon atoms	O_C	?	space
+1146	6	red giant star	O_C	?	space
+1146	7	star	O_C	?	space
+1146	7	hydrogen fuel	O_C	?	space
+1146	7	hydrogen	O_C	?	?
+1146	7	helium	D	?	space
+1146	7	energy	O_C	?	star
+1146	7	carbon atoms	C	?	star
+1146	7	red giant star	O_C	?	space
+1146	8	star	O_C	?	space
+1146	8	hydrogen fuel	O_C	?	?
+1146	8	hydrogen	O_C	?	?
+1146	8	helium	O_C	?	space
+1146	8	energy	O_C	?	star
+1146	8	carbon atoms	O_C	?	star
+1146	8	red giant star	O_C	?	space
+1146	9	star	O_C	?	space
+1146	9	hydrogen fuel	O_C	?	?
+1146	9	hydrogen	O_C	?	?
+1146	9	helium	O_C	?	space
+1146	9	energy	O_C	?	?
+1146	9	carbon atoms	O_C	?	?
+1146	9	red giant star	O_C	?	space
+1146	10	star	O_C	?	space
+1146	10	hydrogen fuel	O_C	?	?
+1146	10	hydrogen	O_C	?	?
+1146	10	helium	O_C	?	space
+1146	10	energy	O_C	?	?
+1146	10	carbon atoms	O_C	?	?
+1146	10	red giant star	O_C	?	space
+1147	0	hydrogen atoms	-	-	star
+1147	0	helium atoms	-	-	star
+1147	0	hydrogen	-	-	star
+1147	0	helium	-	-	?
+1147	0	star	-	-	?
+1147	0	carbon atoms	-	-	?
+1147	0	red giant star	-	-	helium atoms
+1147	1	hydrogen atoms	D	?	star
+1147	1	helium atoms	C	?	star
+1147	1	hydrogen	O_C	?	star
+1147	1	helium	O_C	?	?
+1147	1	star	O_C	?	?
+1147	1	carbon atoms	O_C	?	?
+1147	1	red giant star	O_C	?	helium atoms
+1147	2	hydrogen atoms	O_C	?	star
+1147	2	helium atoms	O_C	?	star
+1147	2	hydrogen	D	?	star
+1147	2	helium	C	?	star
+1147	2	star	O_C	?	?
+1147	2	carbon atoms	O_C	?	?
+1147	2	red giant star	O_C	?	helium atoms
+1147	3	hydrogen atoms	O_C	?	star
+1147	3	helium atoms	O_C	?	star
+1147	3	hydrogen	O_C	?	?
+1147	3	helium	O_C	?	?
+1147	3	star	O_C	?	?
+1147	3	carbon atoms	O_C	?	?
+1147	3	red giant star	O_C	?	helium atoms
+1147	4	hydrogen atoms	O_C	?	?
+1147	4	helium atoms	D	?	?
+1147	4	hydrogen	O_C	?	?
+1147	4	helium	O_C	?	?
+1147	4	star	O_C	?	?
+1147	4	carbon atoms	C	?	star
+1147	4	red giant star	O_C	?	helium atoms
+1147	5	hydrogen atoms	O_C	?	?
+1147	5	helium atoms	O_C	?	?
+1147	5	hydrogen	O_C	?	?
+1147	5	helium	O_C	?	?
+1147	5	star	O_C	?	?
+1147	5	carbon atoms	O_C	?	?
+1147	5	red giant star	O_C	?	helium atoms
+1147	6	hydrogen atoms	O_C	?	?
+1147	6	helium atoms	O_C	?	?
+1147	6	hydrogen	O_C	?	?
+1147	6	helium	O_C	?	?
+1147	6	star	O_C	?	?
+1147	6	carbon atoms	O_C	?	?
+1147	6	red giant star	O_C	?	helium atoms
+1188	0	comet	-	-	?
+1188	0	hole; crater	-	-	planet
+1188	1	comet	O_C	?	?
+1188	1	hole; crater	O_C	?	planet
+1188	2	comet	M	?	planet
+1188	2	hole; crater	O_C	?	planet
+1188	3	comet	M	?	atmosphere
+1188	3	hole; crater	O_C	?	planet
+1188	4	comet	M	?	planet
+1188	4	hole; crater	O_C	?	planet
+1188	5	comet	O_C	?	planet
+1188	5	hole; crater	C	?	planet
+1189	0	chunks of rock	-	-	meteorite
+1189	0	crater	-	-	?
+1189	1	chunks of rock	O_C	?	meteorite
+1189	1	crater	O_C	?	?
+1189	2	chunks of rock	M	?	atmosphere
+1189	2	crater	O_C	?	atmosphere
+1189	3	chunks of rock	O_C	?	atmosphere
+1189	3	crater	O_C	?	?
+1189	4	chunks of rock	M	?	earth
+1189	4	crater	C	?	earth
+1189	5	chunks of rock	O_C	?	earth
+1189	5	crater	O_C	?	earth
+1189	6	chunks of rock	O_C	?	earth
+1189	6	crater	O_C	?	earth
+1190	0	oxygenated blood	-	-	?
+1190	0	deoxygenated blood	-	-	?
+1190	0	oxygen	-	-	?
+1190	1	oxygenated blood	O_C	?	?
+1190	1	deoxygenated blood	O_C	?	heart
+1190	1	oxygen	O_C	?	?
+1190	2	oxygenated blood	O_C	?	?
+1190	2	deoxygenated blood	O_C	?	right atrium
+1190	2	oxygen	O_C	?	right atrium
+1190	3	oxygenated blood	O_C	?	?
+1190	3	deoxygenated blood	O_C	?	?
+1190	3	oxygen	O_C	?	?
+1190	4	oxygenated blood	O_C	?	?
+1190	4	deoxygenated blood	O_C	?	right ventricle
+1190	4	oxygen	O_C	?	?
+1190	5	oxygenated blood	O_C	?	?
+1190	5	deoxygenated blood	O_C	?	lung
+1190	5	oxygen	O_C	?	lung
+1190	6	oxygenated blood	O_C	?	?
+1190	6	deoxygenated blood	O_C	?	?
+1190	6	oxygen	O_C	?	lung
+1190	7	oxygenated blood	M	?	left atrium
+1190	7	deoxygenated blood	O_C	?	?
+1190	7	oxygen	O_C	?	lung
+1190	8	oxygenated blood	O_C	?	left atrium
+1190	8	deoxygenated blood	O_C	?	left ventricle
+1190	8	oxygen	O_C	?	lung
+1190	9	oxygenated blood	O_C	?	left atrium
+1190	9	deoxygenated blood	O_C	?	?
+1190	9	oxygen	O_C	?	lung
+1190	10	oxygenated blood	O_C	?	left atrium
+1190	10	deoxygenated blood	M	?	heart
+1190	10	oxygen	O_C	?	lung
+1240	0	Air	-	-	?
+1240	0	Heat	-	-	?
+1240	0	Refrigerent Liquid	-	-	?
+1240	0	Refrigerent Gas	-	-	?
+1240	0	Liquid	-	-	?
+1240	1	Air	M	?	coil
+1240	1	Heat	O_C	?	?
+1240	1	Refrigerent Liquid	O_C	?	?
+1240	1	Refrigerent Gas	O_C	?	?
+1240	1	Liquid	O_C	?	?
+1240	2	Air	M	?	coil
+1240	2	Heat	M	?	coil
+1240	2	Refrigerent Liquid	O_C	?	?
+1240	2	Refrigerent Gas	O_C	?	?
+1240	2	Liquid	O_C	?	?
+1240	3	Air	O_C	?	coil
+1240	3	Heat	O_C	?	coil
+1240	3	Refrigerent Liquid	O_C	?	?
+1240	3	Refrigerent Gas	O_C	?	?
+1240	3	Liquid	O_C	?	?
+1240	4	Air	O_C	?	coil
+1240	4	Heat	O_C	?	coil
+1240	4	Refrigerent Liquid	O_C	?	?
+1240	4	Refrigerent Gas	O_C	?	?
+1240	4	Liquid	O_C	?	condenser
+1240	5	Air	O_C	?	coil
+1240	5	Heat	O_C	?	coil
+1240	5	Refrigerent Liquid	O_C	?	?
+1240	5	Refrigerent Gas	O_C	?	?
+1240	5	Liquid	O_C	?	condenser
+1240	6	Air	O_C	?	?
+1240	6	Heat	O_C	?	?
+1240	6	Refrigerent Liquid	O_C	?	?
+1240	6	Refrigerent Gas	O_C	?	?
+1240	6	Liquid	C	?	condenser
+1240	7	Air	O_C	?	?
+1240	7	Heat	M	?	?
+1240	7	Refrigerent Liquid	O_C	?	?
+1240	7	Refrigerent Gas	O_C	?	?
+1240	7	Liquid	O_C	?	?
+1240	8	Air	O_C	?	?
+1240	8	Heat	O_C	?	?
+1240	8	Refrigerent Liquid	O_C	?	?
+1240	8	Refrigerent Gas	O_C	?	?
+1240	8	Liquid	M	?	evaporator
+725	0	plant; animal	-	-	?
+725	0	soft tissues	-	-	?
+725	0	sediment	-	-	?
+725	0	rock	-	-	?
+725	0	bones	-	-	?
+725	0	minerals	-	-	?
+725	0	stone replica; fossil	-	-	?
+725	1	plant; animal	M	?	watery environment
+725	1	soft tissues	O_C	?	most fossil
+725	1	sediment	O_C	?	most fossil
+725	1	rock	O_C	?	?
+725	1	bones	O_C	?	most fossil
+725	1	minerals	O_C	?	?
+725	1	stone replica; fossil	O_C	?	watery environment
+725	2	plant; animal	O_C	?	watery environment
+725	2	soft tissues	M	?	watery environment
+725	2	sediment	C	?	?
+725	2	rock	O_C	?	?
+725	2	bones	C	?	?
+725	2	minerals	O_C	?	?
+725	2	stone replica; fossil	O_C	?	?
+725	3	plant; animal	O_C	?	watery environment
+725	3	soft tissues	D	?	top
+725	3	sediment	M	?	top
+725	3	rock	C	?	?
+725	3	bones	M	?	?
+725	3	minerals	O_C	?	top
+725	3	stone replica; fossil	O_C	?	?
+725	4	plant; animal	O_C	?	watery environment
+725	4	soft tissues	O_C	?	?
+725	4	sediment	D	?	rock
+725	4	rock	O_C	?	?
+725	4	bones	O_C	?	?
+725	4	minerals	C	?	organic material cell
+725	4	stone replica; fossil	O_C	?	?
+725	5	plant; animal	O_C	?	watery environment
+725	5	soft tissues	O_C	?	?
+725	5	sediment	D	?	rock
+725	5	rock	O_C	?	?
+725	5	bones	D	?	?
+725	5	minerals	O_C	?	organism
+725	5	stone replica; fossil	O_C	?	?
+725	6	plant; animal	O_C	?	watery environment
+725	6	soft tissues	O_C	?	?
+725	6	sediment	O_C	?	organism
+725	6	rock	O_C	?	?
+725	6	bones	O_C	?	?
+725	6	minerals	D	?	organism
+725	6	stone replica; fossil	C	?	?
+726	0	animal	-	-	?
+726	0	animal's skeleton	-	-	?
+726	0	mud; sand	-	-	animal
+726	0	rock	-	-	?
+726	0	hole	-	-	animal
+726	1	animal	O_C	?	?
+726	1	animal's skeleton	O_C	?	?
+726	1	mud; sand	O_C	?	animal
+726	1	rock	O_C	?	?
+726	1	hole	O_C	?	animal
+726	2	animal	O_C	?	?
+726	2	animal's skeleton	O_C	?	animal
+726	2	mud; sand	O_C	?	ocean
+726	2	rock	O_C	?	?
+726	2	hole	O_C	?	animal
+726	3	animal	O_C	?	?
+726	3	animal's skeleton	O_C	?	animal
+726	3	mud; sand	O_C	?	ocean
+726	3	rock	O_C	?	?
+726	3	hole	O_C	?	skeleton
+726	4	animal	M	?	ocean
+726	4	animal's skeleton	O_C	?	ocean
+726	4	mud; sand	O_C	?	ocean
+726	4	rock	O_C	?	?
+726	4	hole	O_C	?	skeleton
+726	5	animal	M	?	?
+726	5	animal's skeleton	O_C	?	ocean
+726	5	mud; sand	O_C	?	ocean
+726	5	rock	O_C	?	?
+726	5	hole	O_C	?	mud
+726	6	animal	O_C	?	?
+726	6	animal's skeleton	O_C	?	ocean
+726	6	mud; sand	O_C	?	skeleton
+726	6	rock	O_C	?	?
+726	6	hole	O_C	?	skeleton
+726	7	animal	O_C	?	?
+726	7	animal's skeleton	O_C	?	ocean
+726	7	mud; sand	O_C	?	skeleton
+726	7	rock	O_C	?	ocean
+726	7	hole	O_C	?	skeleton
+726	8	animal	O_C	?	?
+726	8	animal's skeleton	O_C	?	ocean
+726	8	mud; sand	D	?	skeleton
+726	8	rock	C	?	ocean
+726	8	hole	O_C	?	rock
+726	9	animal	O_C	?	?
+726	9	animal's skeleton	O_C	?	ocean
+726	9	mud; sand	O_C	?	skeleton
+726	9	rock	O_C	?	ocean
+726	9	hole	O_C	?	rock
+726	10	animal	O_C	?	?
+726	10	animal's skeleton	O_C	?	ocean
+726	10	mud; sand	O_C	?	skeleton
+726	10	rock	O_C	?	ocean
+726	10	hole	C	?	rock
+727	0	animal	-	-	?
+727	0	soft tissues	-	-	animal
+727	0	bones	-	-	animal
+727	0	mud; silt	-	-	animal
+727	0	rock	-	-	?
+727	0	minerals	-	-	animal
+727	0	fossil	-	-	?
+727	1	animal	D	?	?
+727	1	soft tissues	O_C	?	animal
+727	1	bones	O_C	?	animal
+727	1	mud; silt	O_C	?	animal
+727	1	rock	O_C	?	?
+727	1	minerals	O_C	?	?
+727	1	fossil	O_C	?	?
+727	2	animal	O_C	?	watery environment
+727	2	soft tissues	O_C	?	watery environment
+727	2	bones	O_C	?	watery environment
+727	2	mud; silt	O_C	?	watery environment
+727	2	rock	O_C	?	watery environment
+727	2	minerals	O_C	?	watery environment
+727	2	fossil	O_C	?	?
+727	3	animal	O_C	?	watery environment
+727	3	soft tissues	D	?	watery environment
+727	3	bones	O_C	?	?
+727	3	mud; silt	O_C	?	?
+727	3	rock	O_C	?	watery environment
+727	3	minerals	O_C	?	watery environment
+727	3	fossil	O_C	?	?
+727	4	animal	O_C	?	watery environment
+727	4	soft tissues	O_C	?	watery environment
+727	4	bones	C	?	watery environment
+727	4	mud; silt	O_C	?	?
+727	4	rock	O_C	?	watery environment
+727	4	minerals	O_C	?	bone
+727	4	fossil	O_C	?	?
+727	5	animal	O_C	?	?
+727	5	soft tissues	O_C	?	watery environment
+727	5	bones	O_C	?	watery environment
+727	5	mud; silt	O_C	?	bone
+727	5	rock	O_C	?	watery environment
+727	5	minerals	O_C	?	bone
+727	5	fossil	O_C	?	?
+727	6	animal	O_C	?	?
+727	6	soft tissues	O_C	?	?
+727	6	bones	O_C	?	rock
+727	6	mud; silt	D	?	rock
+727	6	rock	C	?	watery environment
+727	6	minerals	O_C	?	watery environment
+727	6	fossil	O_C	?	?
+727	7	animal	O_C	?	?
+727	7	soft tissues	O_C	?	?
+727	7	bones	O_C	?	?
+727	7	mud; silt	O_C	?	bone
+727	7	rock	O_C	?	watery environment
+727	7	minerals	O_C	?	watery environment
+727	7	fossil	O_C	?	?
+727	8	animal	O_C	?	?
+727	8	soft tissues	O_C	?	?
+727	8	bones	O_C	?	?
+727	8	mud; silt	O_C	?	?
+727	8	rock	O_C	?	watery environment
+727	8	minerals	M	?	?
+727	8	fossil	O_C	?	?
+727	9	animal	O_C	?	?
+727	9	soft tissues	O_C	?	?
+727	9	bones	O_C	?	?
+727	9	mud; silt	O_C	?	?
+727	9	rock	O_C	?	watery environment
+727	9	minerals	M	?	?
+727	9	fossil	O_C	?	?
+727	10	animal	O_C	?	?
+727	10	soft tissues	O_C	?	?
+727	10	bones	O_C	?	?
+727	10	mud; silt	O_C	?	?
+727	10	rock	O_C	?	watery environment
+727	10	minerals	O_C	?	fossil
+727	10	fossil	C	?	?
+791	0	DC electricity	-	-	?
+791	0	AC electricity	-	-	?
+791	1	DC electricity	O_C	?	solar cell
+791	1	AC electricity	O_C	?	?
+791	2	DC electricity	O_C	?	solar cell
+791	2	AC electricity	O_C	?	?
+791	3	DC electricity	C	?	photovoltaic cell
+791	3	AC electricity	O_C	?	photovoltaic cell
+791	4	DC electricity	O_C	?	?
+791	4	AC electricity	C	?	inverter
+791	5	DC electricity	O_C	?	?
+791	5	AC electricity	O_C	?	inverter
+791	6	DC electricity	O_C	?	?
+791	6	AC electricity	O_C	?	?
+896	0	oxygen-depleted blood ; blood	-	-	?
+896	0	oxygenated blood ; blood	-	-	?
+896	1	oxygen-depleted blood ; blood	M	?	heart
+896	1	oxygenated blood ; blood	O_C	?	?
+896	2	oxygen-depleted blood ; blood	M	?	atrium
+896	2	oxygenated blood ; blood	O_C	?	?
+896	3	oxygen-depleted blood ; blood	M	?	right ventricle
+896	3	oxygenated blood ; blood	O_C	?	right ventricle
+896	4	oxygen-depleted blood ; blood	O_C	?	right ventricle
+896	4	oxygenated blood ; blood	O_C	?	?
+896	5	oxygen-depleted blood ; blood	O_C	?	?
+896	5	oxygenated blood ; blood	O_C	?	?
+896	6	oxygen-depleted blood ; blood	M	?	lung
+896	6	oxygenated blood ; blood	O_C	?	heart
+896	7	oxygen-depleted blood ; blood	O_C	?	lung
+896	7	oxygenated blood ; blood	O_C	?	?
+896	8	oxygen-depleted blood ; blood	O_C	?	lung
+896	8	oxygenated blood ; blood	M	?	left atrium
+896	9	oxygen-depleted blood ; blood	M	?	body
+896	9	oxygenated blood ; blood	O_C	?	left atrium
+903	0	visible light; light	-	-	?
+903	0	chemical energy	-	-	?
+903	0	image	-	-	?
+903	1	visible light; light	C	?	lens
+903	1	chemical energy	O_C	?	?
+903	1	image	O_C	?	?
+903	2	visible light; light	M	?	retina
+903	2	chemical energy	O_C	?	retina
+903	2	image	O_C	?	retina
+903	3	visible light; light	D	?	photoreceptor
+903	3	chemical energy	O_C	?	retina
+903	3	image	O_C	?	?
+903	4	visible light; light	O_C	?	?
+903	4	chemical energy	C	?	retina
+903	4	image	O_C	?	?
+903	5	visible light; light	O_C	?	?
+903	5	chemical energy	O_C	?	retina
+903	5	image	C	?	brain
+904	0	light	-	-	?
+904	0	small image	-	-	?
+904	0	retina's rods and cones	-	-	cones
+904	0	electrical pulses	-	-	?
+904	1	light	M	?	cornea and lens
+904	1	small image	C	?	cornea and lens
+904	1	retina's rods and cones	O_C	?	cones
+904	1	electrical pulses	O_C	?	?
+904	2	light	M	?	retina
+904	2	small image	M	?	retina
+904	2	retina's rods and cones	O_C	?	cones
+904	2	electrical pulses	O_C	?	?
+904	3	light	D	?	retina
+904	3	small image	M	?	?
+904	3	retina's rods and cones	O_C	?	retina
+904	3	electrical pulses	C	?	retina
+904	4	light	O_C	?	retina
+904	4	small image	M	?	?
+904	4	retina's rods and cones	O_C	?	retina
+904	4	electrical pulses	M	?	optic canal
+904	5	light	O_C	?	retina
+904	5	small image	O_C	?	?
+904	5	retina's rods and cones	O_C	?	cones
+904	5	electrical pulses	O_C	?	nerve
+927	0	rain	-	-	?
+927	0	rain water; water	-	-	?
+927	0	land	-	-	?
+927	0	plants	-	-	ground
+927	0	trees	-	-	?
+927	1	rain	O_C	?	ground
+927	1	rain water; water	O_C	?	ground
+927	1	land	O_C	?	ground
+927	1	plants	O_C	?	ground
+927	1	trees	O_C	?	?
+927	2	rain	D	?	ground
+927	2	rain water; water	O_C	?	ground
+927	2	land	O_C	?	ground
+927	2	plants	O_C	?	ground
+927	2	trees	O_C	?	ground
+927	3	rain	O_C	?	ground
+927	3	rain water; water	O_C	?	ground
+927	3	land	O_C	?	ground
+927	3	plants	O_C	?	ground
+927	3	trees	O_C	?	ground
+927	4	rain	O_C	?	ground
+927	4	rain water; water	M	?	soil
+927	4	land	O_C	?	ground
+927	4	plants	O_C	?	ground
+927	4	trees	O_C	?	ground
+927	5	rain	O_C	?	?
+927	5	rain water; water	M	?	soil
+927	5	land	D	?	ground
+927	5	plants	D	?	ground
+927	5	trees	D	?	ground
+927	6	rain	O_C	?	?
+927	6	rain water; water	O_C	?	soil
+927	6	land	O_C	?	ground
+927	6	plants	O_C	?	soil
+927	6	trees	O_C	?	soil
+932	0	water	-	-	rock
+932	0	rocks	-	-	?
+932	0	chemicals	-	-	water
+932	0	oxygen	-	-	rock
+932	1	water	M	?	rock
+932	1	rocks	O_C	?	?
+932	1	chemicals	O_C	?	water
+932	1	oxygen	O_C	?	rock
+932	2	water	O_C	?	rock
+932	2	rocks	O_C	?	?
+932	2	chemicals	O_C	?	water
+932	2	oxygen	O_C	?	air
+932	3	water	O_C	?	rock
+932	3	rocks	O_C	?	?
+932	3	chemicals	O_C	?	rock
+932	3	oxygen	O_C	?	air
+932	4	water	O_C	?	rock
+932	4	rocks	O_C	?	?
+932	4	chemicals	O_C	?	rock
+932	4	oxygen	O_C	?	air
+932	5	water	O_C	?	rock
+932	5	rocks	O_C	?	?
+932	5	chemicals	O_C	?	rock
+932	5	oxygen	O_C	?	air
+932	6	water	O_C	?	rock
+932	6	rocks	D	?	?
+932	6	chemicals	O_C	?	rock
+932	6	oxygen	O_C	?	air
+933	0	water	-	-	?
+933	0	carbon dioxide	-	-	?
+933	0	mineral based material	-	-	?
+933	0	rock	-	-	?
+933	1	water	M	?	carbon dioxide
+933	1	carbon dioxide	C	?	?
+933	1	mineral based material	O_C	?	?
+933	1	rock	O_C	?	?
+933	2	water	M	?	?
+933	2	carbon dioxide	O_C	?	?
+933	2	mineral based material	O_C	?	?
+933	2	rock	O_C	?	?
+933	3	water	M	?	mineral
+933	3	carbon dioxide	O_C	?	?
+933	3	mineral based material	C	?	?
+933	3	rock	O_C	?	?
+933	4	water	O_C	?	mineral
+933	4	carbon dioxide	O_C	?	?
+933	4	mineral based material	O_C	?	?
+933	4	rock	O_C	?	mineral
+933	5	water	O_C	?	mineral
+933	5	carbon dioxide	O_C	?	?
+933	5	mineral based material	O_C	?	?
+933	5	rock	O_C	?	?
