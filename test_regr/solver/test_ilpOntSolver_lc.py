@@ -4,7 +4,7 @@ import pytest
 @pytest.fixture()
 def emr_input(request):
     import numpy as np
-    from regr.graph import Graph, Concept, andL, nandL, notL, ifL, existsL
+    from domiknows.graph import Graph, Concept, andL, nandL, notL, ifL, existsL
 
     with Graph('global') as graph:
         with Graph('linguistic') as ling_graph:
@@ -151,8 +151,8 @@ def emr_input(request):
 @pytest.mark.skip(reason="define model building datanode")
 @pytest.mark.gurobi
 def test_main_emr_owl(emr_input):
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.ilpOntSolver import ilpOntSolver
+    from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from domiknows.solver.ilpOntSolver import ilpOntSolver
 
     app_graph, test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 

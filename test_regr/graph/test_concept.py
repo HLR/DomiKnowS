@@ -2,7 +2,7 @@ import pytest
 
 @pytest.fixture()
 def graph(request):
-    from regr.graph import Graph, Concept, Relation
+    from domiknows.graph import Graph, Concept, Relation
 
 
     Graph.clear()
@@ -90,7 +90,7 @@ def graph(request):
 
 @pytest.fixture()
 def sentence_data(graph):
-    from regr.graph import DataNode
+    from domiknows.graph import DataNode
 
     sentence = graph['linguistic/sentence']
     phrase = graph['linguistic/phrase']
@@ -109,7 +109,7 @@ def phrase_data(sentence_data):
 
 @pytest.fixture()
 def model_trial(graph, sentence_data):
-    from regr.graph import Trial, DataNode
+    from domiknows.graph import Trial, DataNode
 
     people = graph['application/people']
     organization = graph['application/organization']
@@ -210,9 +210,9 @@ def test_getOntologyGraph(graph):
     assert people.getOntologyGraph() == application
 
 
-from regr.graph import Concept, Relation, Property
-from regr.graph.relation import Contains, HasA, IsA
-from regr.sensor import Sensor
+from domiknows.graph import Concept, Relation, Property
+from domiknows.graph.relation import Contains, HasA, IsA
+from domiknows.sensor import Sensor
 
 
 class TestConcept(object):
@@ -267,12 +267,12 @@ def multi_classes():
 
 @pytest.fixture()
 def enum_concept(multi_classes):
-    from regr.graph.concept import EnumConcept
+    from domiknows.graph.concept import EnumConcept
     return EnumConcept(name='enum', values=multi_classes)
 
 
 def test_enum_concept(multi_classes, enum_concept):
-    from regr.graph.concept import EnumConcept
+    from domiknows.graph.concept import EnumConcept
     concept = EnumConcept()
     
     for index, value in enumerate(multi_classes):
@@ -281,7 +281,7 @@ def test_enum_concept(multi_classes, enum_concept):
 
 
 def test_sub_enum_concept():
-    from regr.graph.concept import Concept, EnumConcept
+    from domiknows.graph.concept import Concept, EnumConcept
 
     parent = Concept('parent')
     child = parent('child', ConceptClass=EnumConcept, values=['child1', 'child2', 'child3'])

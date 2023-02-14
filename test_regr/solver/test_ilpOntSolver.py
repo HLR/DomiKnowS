@@ -75,9 +75,9 @@ def emr_input(request):
 @pytest.mark.skip(reason="define model building datanode")
 @pytest.mark.gurobi
 def test_main_emr_owl(emr_input):
-    from regr.solver.ilpOntSolverFactory import ilpOntSolverFactory
-    from regr.solver.ilpOntSolver import ilpOntSolver
-    from regr.graph import Graph
+    from domiknows.solver.ilpOntSolverFactory import ilpOntSolverFactory
+    from domiknows.solver.ilpOntSolver import ilpOntSolver
+    from domiknows.graph import Graph
 
     test_phrase, test_graphResultsForPhraseToken, test_graphResultsForPhraseRelation = emr_input
 

@@ -1,0 +1,8 @@
+[submodule "Docs"]
+	path = Docs
+	url = https://github.com/HLR/DomiKnowS
+	branch = Doc
+[submodule "Example"]
+	path = Example
+	url = https://github.com/HLR/DomiKnowS
+	branch = Examples

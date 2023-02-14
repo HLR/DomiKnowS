@@ -1,4 +1,4 @@
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 import re
 import pytest
 

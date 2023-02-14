@@ -1,4 +1,4 @@
-from regr.graph import Trial, Concept
+from domiknows.graph import Trial, Concept
 import pytest
 
 
