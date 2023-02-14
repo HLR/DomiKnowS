@@ -34,7 +34,8 @@ setup(
        'graphviz',
        'pymongo[tls]',
        'dnspython',
-       'scikit-learn'
+       'scikit-learn',
+       'tqdm'
     ],
     
     license='MIT',
