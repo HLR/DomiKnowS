@@ -4,7 +4,7 @@ import math
 @pytest.fixture(name='case')
 def test_case():
     import torch
-    from regr.utils import Namespace
+    from domiknows.utils import Namespace
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     word_emb = torch.randn(4, 2048, device=device)
@@ -118,7 +118,7 @@ def test_case():
 
 
 def model_declaration(config, case):
-    from regr.program.program import LearningBasedProgram
+    from domiknows.program.program import LearningBasedProgram
 
     from .graph import graph, sentence, word, char, phrase, pair
     from .graph import people, organization, location, other, o
@@ -128,7 +128,7 @@ def model_declaration(config, case):
 
     graph.detach()
 
-    from regr.utils import setDnSkeletonMode
+    from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     
     lcConcepts = {}
@@ -136,7 +136,7 @@ def model_declaration(config, case):
         for _, lc in g.logicalConstrains.items():
             if lc.headLC:  
                 lcConcepts[lc.name] = lc.getLcConcepts()
-    assert lcConcepts == {'LC0': {'organization', 'people'}, 'LC2': {'people', 'organization', 'work_for'}, 'LC4': {'word', 'other', 'O', 'location', 'organization', 'people'}}
+    assert lcConcepts == {'LC0': {'organization', 'people'}, 'LC3': {'people', 'organization', 'work_for'}, 'LC5': {'word', 'other', 'O', 'location', 'organization', 'people'}}
     
     sentence['raw'] = TestSensor(expected_outputs=case.sentence.raw)
 

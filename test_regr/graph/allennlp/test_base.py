@@ -2,7 +2,7 @@ import pytest
 
 @pytest.fixture()
 def graph(request):
-    from regr.graph import Graph, Concept, Relation
+    from domiknows.graph import Graph, Concept, Relation
 
 
     Graph.clear()
@@ -91,8 +91,8 @@ def graph(request):
 
 @pytest.fixture()
 def allennlp_graph(graph):
-    from regr.graph.allennlp.base import AllenNlpGraph
-    from regr.sensor import Sensor, Learner
+    from domiknows.graph.allennlp.base import AllenNlpGraph
+    from domiknows.sensor import Sensor, Learner
 
 
     sentence = graph['linguistic/sentence']

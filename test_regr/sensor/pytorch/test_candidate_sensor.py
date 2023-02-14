@@ -3,7 +3,7 @@ import pytest
 
 @pytest.fixture()
 def case():
-    from regr.utils import Namespace
+    from domiknows.utils import Namespace
     import random
 
     edge_value = [
@@ -31,8 +31,8 @@ def case():
 
 @pytest.fixture()
 def graph(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Graph, Concept, Relation, Property
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Graph, Concept, Relation, Property
 
     from .sensors import TestSensor, TestEdgeSensor
 
@@ -67,8 +67,8 @@ def graph(case):
 
 @pytest.fixture()
 def sensor(case, graph):
-    from regr.graph import DataNode
-    from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+    from domiknows.graph import DataNode
+    from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
     concept = graph['sub/concept']
     edge = graph['sub/edge']
@@ -102,8 +102,8 @@ def sensor(case, graph):
 
 @pytest.fixture()
 def context(case, graph):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Property, DataNodeBuilder
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Property, DataNodeBuilder
 
     context = {
         "graph": graph, 'READER': 1,

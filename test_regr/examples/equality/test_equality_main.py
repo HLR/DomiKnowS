@@ -10,10 +10,10 @@ sys.path.append('../../..')
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import TorchSensor, ReaderSensor, ConstantSensor
-    from regr.sensor.pytorch.relation_sensors import CandidateSensor
-    from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import model_helper, PoiModel
+    from domiknows.sensor.pytorch.sensors import TorchSensor, ReaderSensor, ConstantSensor
+    from domiknows.sensor.pytorch.relation_sensors import CandidateSensor
+    from domiknows.program import LearningBasedProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel
 
     from graph import graph, word, word1, sentence, word_equal_word1, sentence_con_word #, sentence_con_word1
     from sensors import Tokenizer, TokenizerSpan

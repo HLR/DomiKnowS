@@ -1,4 +1,4 @@
-from regr.graph import Graph, Concept, Relation, andL, orL, ifL, existsL
+from domiknows.graph import Graph, Concept, Relation, andL, orL, ifL, existsL
 import re
 
 class TestGraph(object):

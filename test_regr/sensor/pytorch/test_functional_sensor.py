@@ -3,7 +3,7 @@ import pytest
 
 @pytest.fixture()
 def case():
-    from regr.utils import Namespace
+    from domiknows.utils import Namespace
     import random
 
     case = {
@@ -17,8 +17,8 @@ def case():
 
 @pytest.fixture()
 def concept(case):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Concept
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Concept
 
     # knowledge
     Concept.clear()
@@ -33,7 +33,7 @@ def concept(case):
 
 @pytest.fixture()
 def sensor(case, concept):
-    from regr.sensor.pytorch import FunctionalSensor
+    from domiknows.sensor.pytorch import FunctionalSensor
     def forward(reader1, reader2, constant):
         assert reader1 == case.reader1
         assert reader2 == case.reader2
@@ -46,8 +46,8 @@ def sensor(case, concept):
 
 @pytest.fixture()
 def context(case, concept):
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.graph import Property
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.graph import Property
 
     context = {
         'reader1_keyword': case.reader1,
