@@ -94,11 +94,11 @@ For a complete pipeline of programming with DomiKnowS, please referer to the [pi
 
 Class reference:
 
-- `regr.graph.Graph`
-- `regr.graph.Concept`
-- `regr.graph.Property`
-- `regr.graph.Relation`
-- `regr.graph.LogicalConstrain`
+- `domiknows.graph.Graph`
+- `domiknows.graph.Concept`
+- `domiknows.graph.Property`
+- `domiknows.graph.Relation`
+- `domiknows.graph.LogicalConstrain`
 
 In knowledge declaration, the user defines a collection of `Concept`s and the way they are related to each other (`Relation`), representing the domain knowledge.
 We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, `LogicalConstrain`.
@@ -107,8 +107,8 @@ We provide a graph language based on python for knowledge declaration with the n
 
 Class reference:
 
-- `regr.sensor.Sensor`
-- `regr.sensor.Learner`
+- `domiknows.sensor.Sensor`
+- `domiknows.sensor.Learner`
 
 In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
 `Sensors` are procedures that access external resources and other sensors. For example, reading from raw data, feature engineering, and preprocessing procedures.
@@ -118,7 +118,7 @@ In the model declaration, the user defines how external resources (raw data), ex
 
 Class reference:
 
-- `regr.program.Program`
+- `domiknows.program.Program`
 
 The graph, attached with sensors and learners, can be turned into a learning-based program. The program can learn parameters from data, doing tests, or simply making predictions.
 
@@ -126,7 +126,7 @@ The graph, attached with sensors and learners, can be turned into a learning-bas
 
 Class reference:
 
-- `regr.graph.DataNode`
+- `domiknows.graph.DataNode`
 
 The program uses and returns a data structure known as the data node. They are an instance of the conceptual graph and are created using sensor inputs and learner predictions.
 
@@ -134,7 +134,7 @@ The program uses and returns a data structure known as the data node. They are a
 
 Class reference:
 
-- `regr.graph.DataNode`
+- `domiknows.graph.DataNode`
 
 One of the advantages of the framework is to do global inference over local predictions (made by learners or read by sensors).
 The user can invoke inference from `DataNode` by `DataNode.inferILPResults()` and augment the attributes with the best combination of local predictions (configuration) that satisfies all the explicit constraints, as well as those implied by the relations.

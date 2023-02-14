@@ -3,10 +3,10 @@
 
 Class reference:
 
-- `regr.data.reader.RegrReader`
-- `regr.sensor.Sensor`
-- `regr.sensor.Learner`
-- `regr.program.Program`
+- `domiknows.data.reader.RegrReader`
+- `domiknows.sensor.Sensor`
+- `domiknows.sensor.Learner`
+- `domiknows.program.Program`
 
 In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
 We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaration to create a *"full program"* as `Program`.

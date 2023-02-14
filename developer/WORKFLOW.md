@@ -11,7 +11,7 @@
     - [IML](#IML)
 ## Class Overview
 
-- package `regr.program`:
+- package `domiknows.program`:
 - `SolverPOIProgram`:
 
 ## Workflows

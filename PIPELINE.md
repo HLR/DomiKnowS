@@ -13,12 +13,12 @@ The following are the user's steps to using our framework.
 
 Class reference:
 
-- `regr.graph.Graph`
-- `regr.graph.Concept`
-- `regr.graph.Property`
-- `regr.graph.Relation`
-- `regr.graph.LogicalConstrain`
-- `regr.graph.Datanode`
+- `domiknows.graph.Graph`
+- `domiknows.graph.Concept`
+- `domiknows.graph.Property`
+- `domiknows.graph.Relation`
+- `domiknows.graph.LogicalConstrain`
+- `domiknows.graph.Datanode`
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge for a task.
 We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.
@@ -94,10 +94,10 @@ See [here](developer/KNOWLEDGE.md) for more details about declaring graph and co
 
 Class reference:
 
-- `regr.data.reader.RegrReader`
-- `regr.sensor.Sensor`
-- `regr.sensor.Learner`
-- `regr.program.Program`
+- `domiknows.data.reader.RegrReader`
+- `domiknows.sensor.Sensor`
+- `domiknows.sensor.Learner`
+- `domiknows.program.Program`
 
 In the model declaration, the user defines how external resources (raw data), external procedures (preprocessing), and trainable deep learning modules are associated with the concepts and properties in the graph.
 We use `Reader`s, `Sensor`s, and `Learner`s accordingly for the model declaration to create a *"full program"* as `Program`.
@@ -175,7 +175,7 @@ Now that the `graph`, the `Property`s of `Concept`s are assigned with different 
 program = LearningBasedProgram(graph, model_helper(primal_dual_model,poi=[question[is_less], question[is_more], question[no_effect],\
                                     symmetric, transitive],loss=MacroAverageTracker(NBCrossEntropyLoss()), metric=PRF1Tracker()))
 ```
-the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch. one can find explanations about different `loss` function [here](../regr/program/loss.py), and explanations about different `metrics` [here](../regr/program/metric.py).
+the inputs to the `LearningBasedProgram` are first the conceptual graph that we defined earlier. next, the type of model that can be a simple poimodel, a model with IML loss, or a primal_dual model. [Here](./apis/program) is a list of different programs available for the uses. these models are different in how they use constraints to produce a loss. the simple poi model simply ignores these constraints. these constraints can later be used during inference and do not necessarily need to be used here. next to our model, we define poi that stands for "Properties of Interest". we add the final (leaf node) properties that we want the program to calculate here that in this case are the properties `is_more`, `is_less`, and `no_effect` of the question, and the symmetric and transitive concepts. the next inputs are the type of our loss function and the metric that we want to calculate for each epoch. one can find explanations about different `loss` function [here](../domiknows/program/loss.py), and explanations about different `metrics` [here](../domiknows/program/metric.py).
 
 ## 3. Training and Testing
 

@@ -1,25 +1,25 @@
-# `regr.program`
+# `domiknows.program`
 
 <!-- TOC depthto:3 withlinks:true -->
 
 - [1. Base Program](#1-base-program)
-    - [1.1. `regr.program.LearningBasedProgram`](#11-regrprogramlearningbasedprogram)
+    - [1.1. `domiknows.program.LearningBasedProgram`](#11-regrprogramlearningbasedprogram)
 - [2. `Model`](#2-model)
-    - [2.1. `regr.program.model.pytorch.TorchModel`](#21-regrprogrammodelpytorchtorchmodel)
-    - [2.2. `regr.program.model.pytorch.PoiModel`](#22-regrprogrammodelpytorchpoimodel)
-    - [2.3. `regr.program.model.pytorch.SolverModel`](#23-regrprogrammodelpytorchsolvermodel)
-    - [2.4. `regr.program.model.pytorch.IMLModel`](#24-regrprogrammodelpytorchimlmodel)
-    - [2.5. `regr.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss` (*experimental*)](#25-regrprogrammodelpytorchpoimodeltoworkwithlearnerwithloss-experimental)
+    - [2.1. `domiknows.program.model.pytorch.TorchModel`](#21-regrprogrammodelpytorchtorchmodel)
+    - [2.2. `domiknows.program.model.pytorch.PoiModel`](#22-regrprogrammodelpytorchpoimodel)
+    - [2.3. `domiknows.program.model.pytorch.SolverModel`](#23-regrprogrammodelpytorchsolvermodel)
+    - [2.4. `domiknows.program.model.pytorch.IMLModel`](#24-regrprogrammodelpytorchimlmodel)
+    - [2.5. `domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss` (*experimental*)](#25-regrprogrammodelpytorchpoimodeltoworkwithlearnerwithloss-experimental)
 - [3. Implemented Programs](#3-implemented-programs)
-    - [3.1. `regr.program.POIProgram`](#31-regrprogrampoiprogram)
-    - [3.2. `regr.program.IMLProgram`](#32-regrprogramimlprogram)
-    - [3.3. `regr.program.POILossProgram`](#33-regrprogrampoilossprogram)
+    - [3.1. `domiknows.program.POIProgram`](#31-regrprogrampoiprogram)
+    - [3.2. `domiknows.program.IMLProgram`](#32-regrprogramimlprogram)
+    - [3.3. `domiknows.program.POILossProgram`](#33-regrprogrampoilossprogram)
 
 <!-- /TOC -->
 
 ## 1. Base Program
 
-### 1.1. `regr.program.LearningBasedProgram`
+### 1.1. `domiknows.program.LearningBasedProgram`
 
 `LearningBasedProgram` is a model transfered form a graph (with sensors and learners) and machine learning pipelines.
 
@@ -56,7 +56,7 @@
 
 `Model`s are the core part of the program that carry out the calculation based on the knowledge declaration and model declaration. They are `torch.nn.Module` and they are directly connected to `torch`.
 
-### 2.1. `regr.program.model.pytorch.TorchModel`
+### 2.1. `domiknows.program.model.pytorch.TorchModel`
 
 Inheriting from `torch.nn.Module`. This is an abstract class.
 
@@ -80,28 +80,28 @@ Inheriting attributes from `torch.nn.Module`.
 
 ##### 2.1.2.6. `populate(self)`
 
-### 2.2. `regr.program.model.pytorch.PoiModel`
+### 2.2. `domiknows.program.model.pytorch.PoiModel`
 
-Inheriting from `regr.program.model.pytorch.TorchModel`. 
+Inheriting from `domiknows.program.model.pytorch.TorchModel`. 
 
 #### 2.2.1. `PoiModel` Attributes
 
 #### 2.2.2. `PoiModel` Methods
 
-### 2.3. `regr.program.model.pytorch.SolverModel`
+### 2.3. `domiknows.program.model.pytorch.SolverModel`
 
 #### 2.3.1. `SolverModel` Attributes
 
 #### 2.3.2. `SolverModel` Methods
 
-### 2.4. `regr.program.model.pytorch.IMLModel`
+### 2.4. `domiknows.program.model.pytorch.IMLModel`
 
 #### 2.4.1. `IMLModel` Attributes
 
 #### 2.4.2. `IMLModel` Methods
 
 
-### 2.5. `regr.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss` (*experimental*)
+### 2.5. `domiknows.program.model.pytorch.PoiModelToWorkWithLearnerWithLoss` (*experimental*)
 
 #### 2.5.1. `PoiModelToWorkWithLearnerWithLoss` Attributes
 
@@ -109,8 +109,8 @@ Inheriting from `regr.program.model.pytorch.TorchModel`.
 
 ## 3. Implemented Programs
 
-### 3.1. `regr.program.POIProgram`
+### 3.1. `domiknows.program.POIProgram`
 
-### 3.2. `regr.program.IMLProgram`
+### 3.2. `domiknows.program.IMLProgram`
 
-### 3.3. `regr.program.POILossProgram`
+### 3.3. `domiknows.program.POILossProgram`

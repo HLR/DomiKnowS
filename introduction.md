@@ -11,13 +11,13 @@ The graph declaration is the entry point for every task in DomiKnows. Here you d
 To define a concept we should use the following format.
 
 ```python3
-from regr.graph import Concept
+from domiknows.graph import Concept
 concept_var = Concept(name="concept_name")
 ```
 To define a set of concepts in a graph, you can use the following syntax:
 
 ```python3
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 with Graph('global') as graph:
 	concept1 = Concept(name="concept1")
 	....
@@ -104,9 +104,9 @@ Respectively the second instance is reach by following the edge `rel_pair_phrase
 Following is a full example of how to define a graph for solving Conll entity-mention and relation extraction task.
 
 ```python3
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, andL, atMostL
-from regr.graph.relation import disjoint
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import ifL, andL, atMostL
+from domiknows.graph.relation import disjoint
 
 
 Graph.clear()

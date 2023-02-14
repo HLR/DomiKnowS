@@ -1,8 +1,8 @@
-# `regr.graph`
+# `domiknows.graph`
 
 ## Conceptual Graph
 
-### `regr.graph.Graph`
+### `domiknows.graph.Graph`
 
 Inheriting from `BaseGraphTree` and has a local namespace.
 `Graph` is a named container for `Graph`, `Concept` and `Relation`.
@@ -80,16 +80,16 @@ Return a `dict` structure that represent the current graph, including its subgra
 - Return Value:
   - A `dict` structure that represent the current graph, including its subgraph and concepts
 
-### `regr.graph.Concept`
+### `domiknows.graph.Concept`
 
-### `regr.graph.Relation`
+### `domiknows.graph.Relation`
 
-### `regr.graph.Property`
+### `domiknows.graph.Property`
 
-### `regr.graph.LogicalConstrain`
+### `domiknows.graph.LogicalConstrain`
 
 ## Data Graph
 
-### `regr.graph.DataNode`
+### `domiknows.graph.DataNode`
 
-### `regr.graph.DataNodeBuilder`
+### `domiknows.graph.DataNodeBuilder`

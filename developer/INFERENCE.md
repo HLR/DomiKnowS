@@ -11,7 +11,7 @@
 
 ## Class Overview
 
-- package `regr.solver`:
+- package `domiknows.solver`:
 - `ilpOntSolver`,
 - `ilpOntSolverFactory`,
 - `ilpConfig`,
@@ -22,7 +22,7 @@
 - `gurobiILPBooleanMethods`,
 
 
-- package `regr.graph`:
+- package `domiknows.graph`:
 - `dataNode`:
 
 ## ILP Solver
@@ -53,7 +53,7 @@ If this collection is empty then the methods will use all concepts and relations
 
 - `minimizeObjective` by default objective is maximized however if this variable is set to True then the ILP model will minimize the objective.
 
-The solver [implementation using Gurobi](/regr/solver/gurobiILPOntSolver.py) is called with classification probabilities obtained from learned model. 
+The solver [implementation using Gurobi](/domiknows/solver/gurobiILPOntSolver.py) is called with classification probabilities obtained from learned model. 
 
 The method retrieves the probabilities from Data Graph nodes attributes. The key use to retrieve it has a pattern:
 
@@ -74,7 +74,7 @@ The value of this attribute can be 0 or 1.
 
 The method retrieves the constrains from the knowledge graph associated with the Data Graph.
 The solver translates constrains defined in the graph to the equivalent logical expressions.
-The `regr.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported logical operations are:
+The `domiknows.solver.ilpBooleanMethods.ilpBooleanProcessor` encodes basic logical expressions into the ILP equations. Supported logical operations are:
 
 - "NOT": `notVar()`,
 - "AND": `and2Var`, `andVar()`,

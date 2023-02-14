@@ -23,7 +23,7 @@
 
 ## Class Overview
 
-- package `regr.sensor`:
+- package `domiknows.sensor`:
 - "Reader":
 - `Sensor`:
 - `Learner`:

@@ -24,7 +24,7 @@ We provide a graph language based on Python for knowledge declaration with notat
 
 ### Graph classes
 
-- Package `regr.graph`: the set of class for above-mentioned notations as well as some base classes.
+- Package `domiknows.graph`: the set of class for above-mentioned notations as well as some base classes.
 - Class `Graph`: a basic container for other components. It can contain sub-graphs for flexible modeling.
 - Class `Concept`: a collection of `Property`s that can be related with each other by `Relation`s. It is a none leaf node in the `Graph`.
 - Class `Property`: a key attached to a `Concept` that can be associated with certain value assigned by a sensor or a learner. It is a leaf node in the `Graph`.
@@ -32,7 +32,7 @@ We provide a graph language based on Python for knowledge declaration with notat
 
 ### Constraints classes
 
-- Package `regr.graph.logicalConstrain`: a set of functions with logical symantics, that one can express logical constraints in first order logic.
+- Package `domiknows.graph.logicalConstrain`: a set of functions with logical symantics, that one can express logical constraints in first order logic.
 - Function `*L()`: functions based on logical notations. Linear constraints can be generated based on the locigal constraints. Some of these functions are `ifL()`, `notL()`, `andL()`, `orL()`, `nandL()`, `existL()`, `equalL()`, etc.
 
 ## Graph

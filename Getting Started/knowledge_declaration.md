@@ -2,12 +2,12 @@
 
 Class reference:
 
-- `regr.graph.Graph`
-- `regr.graph.Concept`
-- `regr.graph.Property`
-- `regr.graph.Relation`
-- `regr.graph.LogicalConstrain`
-- `regr.graph.Datanode`
+- `domiknows.graph.Graph`
+- `domiknows.graph.Concept`
+- `domiknows.graph.Property`
+- `domiknows.graph.Relation`
+- `domiknows.graph.LogicalConstrain`
+- `domiknows.graph.Datanode`
 
 In knowledge declaration, the user defines a collection of concepts and the way they are related to each other, representing the domain knowledge for a task.
 We provide a graph language based on python for knowledge declaration with the notation of `Graph`, `Concept`, `Property`, `Relation`, and `LogicalConstrain`.

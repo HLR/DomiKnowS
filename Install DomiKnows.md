@@ -15,14 +15,14 @@ Following is an example of a simple classifier:
 ```python
 import sys, torch
 from transformers import AdamW
-from regr.graph import Graph, Concept, Relation
-from regr.program import SolverPOIProgram
-from regr.program.loss import NBCrossEntropyLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.program import SolverPOIProgram
+from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 
-sys.path.append("Domiknows/regr")
+sys.path.append("Domiknows/domiknows")
 sys.path.append("../..")
 
 Graph.clear()
