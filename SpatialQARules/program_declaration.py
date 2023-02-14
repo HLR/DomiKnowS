@@ -1,9 +1,9 @@
 import torch
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner, LSTMLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner, LSTMLearner
 from models import *
 from utils import *
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from sklearn import preprocessing
 from transformers import RobertaModel
 import numpy as np
@@ -77,11 +77,11 @@ def program_declaration(cur_device, *, pmd=False, beta=0.5, sampling=False, samp
 
         poi_list.extend([symmetric, reverse, transitive, transitive_topo])
 
-    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
-    from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+    from domiknows.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
+    from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
+    from domiknows.program import LearningBasedProgram, SolverPOIProgram
+    from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     infer_list = ['local/argmax']  # ['ILP', 'local/argmax']
     if pmd:
@@ -258,11 +258,11 @@ def program_declaration_spartun_fr(device, *, pmd=False, beta=0.5, sampling=Fals
     poi_list = [question, left, right, above, below, behind, front, near, far,
                 disconnected, touch, overlap, coveredby, inside, cover, contain, inverse]
 
-    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
-    from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+    from domiknows.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
+    from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
+    from domiknows.program import LearningBasedProgram, SolverPOIProgram
+    from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     infer_list = ['ILP', 'local/argmax']  # ['ILP', 'local/argmax']
     if pmd:
@@ -404,11 +404,11 @@ def program_declaration_StepGame(device, *, pmd=False, beta=0.5, sampling=False,
     poi_list = [question, left, right, above, below, lower_left, lower_right, upper_left, upper_right,
                 overlap]
 
-    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
-    from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+    from domiknows.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker, ValueTracker
+    from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss, BCEFocalLoss
+    from domiknows.program import LearningBasedProgram, SolverPOIProgram
+    from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     infer_list = ['local/argmax']  # ['ILP', 'local/argmax']
     if pmd:

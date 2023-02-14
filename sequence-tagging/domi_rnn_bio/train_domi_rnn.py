@@ -19,20 +19,20 @@ import torch
 from torch import nn
 import numpy as np
 
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor, JointReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor, JointReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 import graph
 
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss
 
 from model_domi import RNNTagger
 from data_reader_no_torchtext import load_examples, word_mapping, char_mapping, tag_mapping, lower_case
 
-from regr.program.lossprogram import PrimalDualProgram
-from regr.program.lossprogram import SampleLossProgram
-from regr.program.model.pytorch import SolverModel
+from domiknows.program.lossprogram import PrimalDualProgram
+from domiknows.program.lossprogram import SampleLossProgram
+from domiknows.program.model.pytorch import SolverModel
 
 import time
 
@@ -219,7 +219,7 @@ if args.sampleilp:
     program.load("saved_models/final_domi_sampleloss+ilp_epoch_"+str(n_epochs)+'.pt')
 
 
-from regr.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode
 productionMode = False
 # if productionMode:
 #     setProductionLogMode(no_UseTimeLog=False)

@@ -1,4 +1,4 @@
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 import torch
 
 

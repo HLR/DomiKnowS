@@ -1,5 +1,5 @@
 import torch
-from regr.sensor.pytorch.learners import TorchLearner
+from domiknows.sensor.pytorch.learners import TorchLearner
 from typing import Any
 
 

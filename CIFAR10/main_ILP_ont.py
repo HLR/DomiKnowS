@@ -3,17 +3,17 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program import SolverPOIProgram, POIProgram, IMLProgram
-from regr.program.model.pytorch import PoiModel, IMLModel
-from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program import SolverPOIProgram, POIProgram, IMLProgram
+from domiknows.program.model.pytorch import PoiModel, IMLModel
+from domiknows.program.model.primaldual import PrimalDualModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from torch.utils.data import random_split
 
 # https://zhenye-na.github.io/2018/09/28/pytorch-cnn-cifar10.html
@@ -84,8 +84,8 @@ class LinearNetwork(torch.nn.Module):
 from graph_ont import graph_ont, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship,animal, vehicle
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
     
     graph_ont.detach()
 

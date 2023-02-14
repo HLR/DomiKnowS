@@ -5,16 +5,16 @@ import sys
 sys.path.append("../")
 sys.path.append("../../")
 from graph import graph
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsLoss
-from regr.program.model.pytorch import SolverModel, IMLModel
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import JointSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsLoss
+from domiknows.program.model.pytorch import SolverModel, IMLModel
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import JointSensor
 import torch
 from torch import nn
 from torch.nn import Linear, Dropout, ReLU

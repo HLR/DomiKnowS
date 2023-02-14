@@ -5,20 +5,20 @@ import torch
 from torch import nn
 from tqdm import tqdm
 import torch.optim as optim
-import regr
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss
+import domiknows
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import BCEWithLogitsIMLoss, NBCrossEntropyLoss, NBCrossEntropyIMLoss
 from graph import graph
-from regr.program.model.pytorch import SolverModel, IMLModel
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.program.model.pytorch import SolverModel, IMLModel
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from torchvision.models.resnet import resnet50
 from graph import image_group_contains
 
 output_size = 45
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
 
 
 def set_parameter_requires_grad(model, feature_extracting):

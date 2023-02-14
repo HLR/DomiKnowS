@@ -7,15 +7,15 @@ sys.path.append('.')
 sys.path.append('../..')
 
 from typing import Any, Dict
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel
 import torch
 from torch import nn
 
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 class ProparaReader(RegrReader):
     def parse_file(self):
         with open(self.file, 'r') as f:
@@ -87,8 +87,8 @@ class ProparaReader(RegrReader):
                 values.append("NAN")
         return values
     
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, eqL
 
 Graph.clear()
 Concept.clear()
@@ -157,8 +157,8 @@ with Graph('global') as graph:
 
     
 
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 
 class EdgeReaderSensor(EdgeSensor, ReaderSensor):
     def __init__(self, *pres, relation, mode="forward", keyword=None, **kwargs):
@@ -179,10 +179,10 @@ class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
     pass
 
 
-from regr.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, JointSensor
-from regr.sensor.pytorch.learners import TorchLearner, ModuleLearner
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.learners import TorchLearner, ModuleLearner
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel
 import torch
 from torch import nn
 

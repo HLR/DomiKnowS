@@ -3,7 +3,7 @@ import re
 import glob
 import xml.etree.ElementTree as ET
 
-from regr.graph import Concept
+from domiknows.graph import Concept
 
 from .annotation import APFObject, Entity, Timex2, Value, Trigger, Relation, Event
 

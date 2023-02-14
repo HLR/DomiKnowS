@@ -1,5 +1,5 @@
 import os
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 
 class EmailSpamReader(RegrReader):
     def parse_file(self, ):

@@ -9,7 +9,7 @@ from program_declaration import program_declaration
 import torch
 import argparse
 import numpy as np
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 
 
 def main(args):

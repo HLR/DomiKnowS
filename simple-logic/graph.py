@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../..")
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, notL, andL, V
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import orL, notL, andL, V
 
 Graph.clear()
 Concept.clear()

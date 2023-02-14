@@ -4,10 +4,10 @@ import torch
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import model_helper, PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateReaderSensor
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import model_helper, PoiModel
 
 from graph import graph, world, city, world_contains_city, neighbor, city1, city2, firestationCity
 from sensors import DummyCityLearner

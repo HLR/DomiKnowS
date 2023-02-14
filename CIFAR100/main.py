@@ -3,20 +3,20 @@ import sys
 
 sys.path.append('.')
 sys.path.append('../..')
-from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-from regr.program.model.pytorch import SolverModel
+from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+from domiknows.program.model.pytorch import SolverModel
 
 
 import torch
 from torchvision.models import resnet18, resnet50, resnet101, resnet152
 
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from reader import create_readers
 import torch.nn as nn
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 
 
 # Enable skeleton DataNode
@@ -32,11 +32,11 @@ class ImageNetwork(torch.nn.Module):
         return x
     
 def main():
-    from regr.utils import setProductionLogMode
+    from domiknows.utils import setProductionLogMode
     productionMode = True
     if productionMode:
         setProductionLogMode(no_UseTimeLog=True)
-    from regr.utils import setDnSkeletonMode
+    from domiknows.utils import setDnSkeletonMode
     setDnSkeletonMode(True)
     import logging
     logging.basicConfig(level=logging.INFO)

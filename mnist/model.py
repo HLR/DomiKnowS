@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel, IMLModel
-from regr.program.loss import NBCrossEntropyLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel, IMLModel
+from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
 
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 
 
 class Model(PoiModel):

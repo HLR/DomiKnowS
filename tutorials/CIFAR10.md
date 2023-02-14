@@ -72,17 +72,17 @@ In above python code, we have a simple CNN consisting of two convolutional layer
 Now we start to connect the reader output data with our formatted domain knowledge defined in the graph.
 
 ```python
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import LearningBasedProgram
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import LearningBasedProgram
 from torch import nn
 from graph import graph
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.program.model.pytorch import SolverModel
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 
 def model_declaration():
     graph.detach()

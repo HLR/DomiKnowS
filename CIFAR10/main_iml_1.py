@@ -1,8 +1,8 @@
 import sys
 import torch
-from regr.program.model.pytorch import PoiModel, IMLModel
-from regr.program.model.primaldual import PrimalDualModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.model.pytorch import PoiModel, IMLModel
+from domiknows.program.model.primaldual import PrimalDualModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from PIL import Image
@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -55,9 +55,9 @@ class ImageModel(IMLModel):
 from graph import graph, image, truck, dog, airplane, automobile, bird, cat, deer, frog, horse, ship
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.program import LearningBasedProgram
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.program import LearningBasedProgram
     from torch import nn
     graph.detach()
     image = graph['image']

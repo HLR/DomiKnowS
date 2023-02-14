@@ -8,7 +8,7 @@ import os
 import h5py
 from tqdm.autonotebook import tqdm
 
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 
 import config
 

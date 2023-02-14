@@ -3,22 +3,22 @@ import sys
 sys.path.append('.')
 sys.path.append('../..')
 
-from regr.program.lossprogram import SampleLossProgram
+from domiknows.program.lossprogram import SampleLossProgram
 import torch,argparse
 from transformers import AdamW
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from reader import read_data
-from regr.graph import Graph, Concept, Relation, ifL, andL, notL, existsL
-#from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.lossprogram import PrimalDualProgram
-from regr.sensor.pytorch import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
+from domiknows.graph import Graph, Concept, Relation, ifL, andL, notL, existsL
+#from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram
+from domiknows.sensor.pytorch import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
 from utils import make_questions, label_reader, RobertaTokenizer, BBRobert,SimpleTokenizer
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.program.model.pytorch import SolverModel, IMLModel
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.program.model.pytorch import SolverModel, IMLModel
 
 parser = argparse.ArgumentParser(description='Run beleifebank Main Learning Code')
 parser.add_argument('--namesave', dest='namesave', default="modelname", help='model name to save', type=str)

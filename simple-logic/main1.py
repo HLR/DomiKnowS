@@ -1,10 +1,10 @@
 def model_declaration():
     import torch
-    from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.graph import Property
+    from domiknows.program import LearningBasedProgram
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.graph import Property
 
     from graph import graph, world_contains_x
     from model import MyModel, MyIMLModel, Net

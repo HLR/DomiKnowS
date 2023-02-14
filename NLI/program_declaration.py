@@ -1,9 +1,9 @@
 import torch
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from model import RobertClassification, NLI_Robert, RobertaTokenizerMulti
 from utils import check_symmetric, check_transitive
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 
 def program_declaration(cur_device, *,
@@ -66,11 +66,11 @@ def program_declaration(cur_device, *,
             forward=check_transitive, device=cur_device)
         poi_list.append(transitive)
 
-    from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-    from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+    from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+    from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+    from domiknows.program import LearningBasedProgram, SolverPOIProgram
+    from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     if primaldual:
         print("Using Primal Dual Program")

@@ -1,5 +1,5 @@
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, notL, andL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import orL, notL, andL
 
 Graph.clear()
 Concept.clear()

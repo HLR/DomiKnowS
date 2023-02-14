@@ -1,7 +1,7 @@
 from itertools import combinations, product
-from regr.graph.concept import EnumConcept
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL
+from domiknows.graph.concept import EnumConcept
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL
 
 Graph.clear()
 Concept.clear()

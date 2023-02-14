@@ -55,10 +55,10 @@ our datasource is a list of objects, which each object is as follows.
 	 "Optimistic": False
 }
 ```
-The base class of our framework for the reader is `RegrReader` which is located in `regr/data/reader.py`.
+The base class of our framework for the reader is `RegrReader` which is located in `domiknows/data/reader.py`.
 In order to define keywords for the output of the reader per example, we have to define functions in the pattern of `get$keyword$val(self, item)`.
 ```python
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 
 class SentimentReader(RegrReader):
 	def getSentenceval(self, item):

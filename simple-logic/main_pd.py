@@ -3,15 +3,15 @@ sys.path.append("../..")
 
 def model_declaration():
     import torch
-    from regr.program import LearningBasedProgram, IMLProgram
-    from regr.program.primaldualprogram import PrimalDualProgram
-    from regr.program.model.pytorch import SolverModel
-    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.graph import Property
-    from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyLoss
-    from regr.program.metric import MacroAverageTracker, ValueTracker
+    from domiknows.program import LearningBasedProgram, IMLProgram
+    from domiknows.program.primaldualprogram import PrimalDualProgram
+    from domiknows.program.model.pytorch import SolverModel
+    from domiknows.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.graph import Property
+    from domiknows.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss, NBCrossEntropyLoss
+    from domiknows.program.metric import MacroAverageTracker, ValueTracker
 
     from graph import graph, world_contains_x
     from model import MyModel, MyIMLModel, Net, prediction_softmax

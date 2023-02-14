@@ -1,9 +1,9 @@
 def model_declaration():
     import torch
-    from regr.program import LearningBasedProgram
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.graph import Property
+    from domiknows.program import LearningBasedProgram
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.graph import Property
 
     from graph_no_world import graph
     from model import MyModel, MyIMLModel, Net

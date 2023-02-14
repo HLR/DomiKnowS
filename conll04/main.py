@@ -5,13 +5,13 @@ sys.path.append('.')
 sys.path.append('../..')
 
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
 

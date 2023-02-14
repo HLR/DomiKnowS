@@ -12,17 +12,17 @@ import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report
 from operator import itemgetter
-from regr.program import IMLProgram, SolverPOIProgram
-from regr.program.callbackprogram import hook
-from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.model.pytorch import SolverModel
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
-from regr import setProductionLogMode
-from regr.program.model.base import Mode
+from domiknows.program import IMLProgram, SolverPOIProgram
+from domiknows.program.callbackprogram import hook
+from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
+from domiknows import setProductionLogMode
+from domiknows.program.model.base import Mode
 import os
 from itertools import chain
-from regr.utils import detuple
+from domiknows.utils import detuple
 import torch.nn.functional as F
 
 from model import build_program, NBSoftCrossEntropyIMLoss, NBSoftCrossEntropyLoss
@@ -31,7 +31,7 @@ import config
 from gbi import get_lambda, reg_loss
 
 # Enable skeleton DataNode
-from regr.utils import setDnSkeletonMode
+from domiknows.utils import setDnSkeletonMode
 setDnSkeletonMode(True)
 
 setProductionLogMode()

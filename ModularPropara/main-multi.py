@@ -6,16 +6,16 @@ sys.path.append("../Popara")
 import torch
 from torch import nn
 from reader import ProparaReader
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, JointReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.model.pytorch import SolverModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.utils import setProductionLogMode
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor, JointReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from domiknows.utils import setProductionLogMode
 
 
 def model_declaration():
@@ -57,10 +57,10 @@ def model_declaration():
     )
 
 
-    from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-    from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+    from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+    from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
     class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
         pass

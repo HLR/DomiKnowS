@@ -2,17 +2,17 @@ import sys
 
 sys.path.append('.')
 sys.path.append('../..')
-from regr.program.lossprogram import SampleLossProgram
-from regr.program.model.pytorch import SolverModel
-from regr.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import SampleLossProgram
+from domiknows.program.model.pytorch import SolverModel
+from domiknows.program.primaldualprogram import PrimalDualProgram
 
-from regr.program import SolverPOIProgram, IMLProgram
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram, IMLProgram
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 from reader import create_readers
 import torch.nn as nn
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
 from graph import graph, image_group_contains,image,image_group,Zero,One,Two,Three,Four,Five,Six,Seven,Eight,Nine
 import torchvision.datasets as datasets
 import torch,argparse,torchvision
@@ -37,7 +37,7 @@ parser.add_argument('--batch', dest='batch_size', default=30, help='batch size f
 parser.add_argument('--beta', dest='beta', default=0.01, help='primal dual or IML multiplier',type=float)
 args = parser.parse_args()
 
-from regr.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode
 
 productionMode = False
 if productionMode:

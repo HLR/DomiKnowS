@@ -7,10 +7,10 @@ import os
 
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.program import LearningBasedProgram
+    from domiknows.program.model.pytorch import PoiModel
     import torch
     from torch import nn
 
@@ -35,9 +35,9 @@ def model_declaration():
     email[Spam] = ReaderSensor(keyword='Spam', label=True)
     email[Regular] = ReaderSensor(keyword='Regular', label=True)
 
-    from regr.program import POIProgram, IMLProgram, SolverPOIProgram
-    from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-    from regr.program.loss import NBCrossEntropyLoss
+    from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
+    from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+    from domiknows.program.loss import NBCrossEntropyLoss
 
     program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 

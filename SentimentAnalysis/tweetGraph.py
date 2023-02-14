@@ -3,14 +3,14 @@ sys.path.append("../..")
 
 import torch
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph import ifL, notL, andL, orL
-from regr.program import LearningBasedProgram, POIProgram
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.program.model.pytorch import PoiModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph import ifL, notL, andL, orL
+from domiknows.program import LearningBasedProgram, POIProgram
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.program.model.pytorch import PoiModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.loss import NBCrossEntropyLoss
 
 from sensors.tweetSensor import SentenceRepSensor
 from tweet_reader import SentimentReader
@@ -65,10 +65,10 @@ twit[NegativeLabel] = ModuleLearner('emb', module = Net())
 ReaderObjectsIterator = SentimentReader("twitter_data/train5k.csv", "csv")
 
 #The program takes the graph and learning approach as input
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram
-from regr.program.model.pytorch import PoiModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
+from domiknows.program.model.pytorch import PoiModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss
 
 program = SolverPOIProgram(graph, inferTypes=['ILP', 'local/argmax'], loss=MacroAverageTracker(NBCrossEntropyLoss()), metric={'ILP':PRF1Tracker(DatanodeCMMetric()),'argmax':PRF1Tracker(DatanodeCMMetric('local/argmax'))})
 

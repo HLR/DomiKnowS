@@ -1,12 +1,12 @@
 import sys
 sys.path.append('../../../')
 
-from regr.graph import Graph, Concept
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.graph.concept import EnumConcept
+from domiknows.graph import Graph, Concept
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.graph.concept import EnumConcept
 import json
 import config
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 
 Graph.clear()
 Concept.clear()

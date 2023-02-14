@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 import argparse
 import numpy as np
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 from program_declaration import program_declaration_spartun_fr, program_declaration_StepGame
 from reader import DomiKnowS_reader
 import tqdm

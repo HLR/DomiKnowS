@@ -88,7 +88,7 @@ def find_is_a(graph, base_concept):
 
 
 def find_event_arg(events_graph, event_type, role_arg_type=None, arg_type=None):
-    from regr.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
+    from domiknows.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
 
     for _, constraint in events_graph.logicalConstrains.items():
         if not isinstance(constraint, ifL):

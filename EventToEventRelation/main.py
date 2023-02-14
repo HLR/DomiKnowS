@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 import argparse
 import numpy as np
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 from program_declaration import program_declaration
 from doc_reader import load_dataset
 

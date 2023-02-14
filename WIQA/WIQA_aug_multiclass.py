@@ -1,23 +1,23 @@
 import torch
 from transformers import AdamW
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
-from regr.graph import Graph, Concept, Relation
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from domiknows.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
+from domiknows.graph import Graph, Concept, Relation
 from WIQA_reader import make_reader
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
-from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
+from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer, test_inference_results, join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead, RobertaClassificationHeadMultiClass
 import argparse
 from WIQA_utils import guess_pair, guess_triple
-from regr.graph import Graph, Concept, Relation, EnumConcept
+from domiknows.graph import Graph, Concept, Relation, EnumConcept
 
 parser = argparse.ArgumentParser(description='Run Wiqa Main Learning Code')
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on', type=int)

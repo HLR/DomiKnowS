@@ -1,7 +1,7 @@
 from transformers import RobertaModel
 import torch
 from torch import nn
-from regr.program.model.primaldual import PrimalDualModel
+from domiknows.program.model.primaldual import PrimalDualModel
 
 class WIQA_Robert(nn.Module):
 

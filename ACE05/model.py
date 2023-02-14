@@ -1,15 +1,15 @@
 import torch
 
-from regr.program import POIProgram
-from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.model.pytorch import PoiModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
-from regr.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, cache, TorchCache, JointSensor
-from regr.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.program import POIProgram
+from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.model.pytorch import PoiModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, FunctionalReaderSensor, cache, TorchCache, JointSensor
+from domiknows.sensor.pytorch.tokenizers.transformers import TokenizerEdgeSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 
 from sensors.readerSensor import MultiLevelReaderSensor, SpanLabelSensor, CustomMultiLevelReaderSensor, LabelConstantSensor
 from models import Tokenizer, BERT, SpanClassifier, span_to_pair_emb, find_is_a, find_event_arg, token_to_span_label, makeSpanPairs, makeSpanAnchorPairs

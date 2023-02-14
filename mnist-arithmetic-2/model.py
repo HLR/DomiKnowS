@@ -1,14 +1,14 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram, LearningBasedProgram
-from regr.program.model.ilpu import ILPUModel
-from regr.program.model.iml import IMLModel
-from regr.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram, LearningBasedProgram
+from domiknows.program.model.ilpu import ILPUModel
+from domiknows.program.model.iml import IMLModel
+from domiknows.program.metric import ValueTracker, MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, BCEWithLogitsIMLoss
 
 from graph import *
 

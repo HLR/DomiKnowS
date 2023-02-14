@@ -6,17 +6,17 @@ import torch
 sys.path.append(".")
 sys.path.append("../..")
 
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel
 import torch
 from torch import nn
 from typing import Dict, Any
 
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 
 
 class EdgeReaderSensor(EdgeSensor, ReaderSensor):
@@ -41,16 +41,16 @@ class JoinEdgeReaderSensor(JoinReaderSensor, EdgeSensor):
     pass
 
 
-from regr.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, JointSensor
-from regr.sensor.pytorch.learners import TorchLearner, ModuleLearner
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor, FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.learners import TorchLearner, ModuleLearner
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel
 import torch
 from torch import nn
 import functools
 import operator
 
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program.loss import NBCrossEntropyLoss
 
 from reader_train import ProparaReader
 
@@ -440,9 +440,9 @@ def model_declaration():
             self.batchify = batchify
 
         def fetch_value(self, pre, selector=None, concept=None):
-            from regr.graph.relation import Transformed, Relation
-            from regr.sensor.sensor import Sensor
-            from regr.graph.property import Property
+            from domiknows.graph.relation import Transformed, Relation
+            from domiknows.sensor.sensor import Sensor
+            from domiknows.graph.property import Property
 
             concept = concept or self.concept
             if isinstance(pre, str):
@@ -577,9 +577,9 @@ def model_declaration():
             self.ignore = ignore
 
         def fetch_value(self, pre, selector=None, concept=None):
-            from regr.graph.relation import Transformed, Relation
-            from regr.sensor.sensor import Sensor
-            from regr.graph.property import Property
+            from domiknows.graph.relation import Transformed, Relation
+            from domiknows.sensor.sensor import Sensor
+            from domiknows.graph.property import Property
 
             concept = concept or self.concept
             if isinstance(pre, str):

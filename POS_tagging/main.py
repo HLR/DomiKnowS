@@ -1,11 +1,11 @@
 import torch
 from torch.optim import SGD
-from regr.program import SolverPOIProgram
-from regr.graph import Graph, Concept, EnumConcept, Relation
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program.loss import NBCrossEntropyLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program import SolverPOIProgram
+from domiknows.graph import Graph, Concept, EnumConcept, Relation
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from models import POSLSTM, HeadLayer
 import logging
 from argparse import Namespace

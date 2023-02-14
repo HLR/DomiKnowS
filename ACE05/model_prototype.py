@@ -1,9 +1,9 @@
 import torch
 import numpy as np
 
-from regr.program import POIProgram
-from regr.sensor.pytorch.sensors import FunctionalSensor
-from regr.sensor.pytorch.relation_sensors import CandidateSensor
+from domiknows.program import POIProgram
+from domiknows.sensor.pytorch.sensors import FunctionalSensor
+from domiknows.sensor.pytorch.relation_sensors import CandidateSensor
 from test_regr.sensor.pytorch.sensors import TestSensor, TestLearner, TestEdgeSensor
 
 from models import cartesian_concat, find_event_arg

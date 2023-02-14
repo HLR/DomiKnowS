@@ -9,21 +9,21 @@ os.environ['TRANSFORMERS_CACHE'] = '/localscratch2/zhengchen/domi_new_for_wiqa/D
 
 import torch
 from transformers import AdamW
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric, DatanodeCMMetric
 import logging
 from transformers import get_linear_schedule_with_warmup
-# from regr.program.primaldualprogram import PrimalDualProgram
-from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
-from regr.graph import Graph, Concept, Relation
-from regr.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
+# from domiknows.program.primaldualprogram import PrimalDualProgram
+from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from domiknows.graph.logicalConstrain import nandL, ifL, V, orL, andL, existsL, notL, atLeastL, atMostL, eqL, xorL, exactL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.program import LearningBasedProgram, IMLProgram, SolverPOIProgram
 from WIQA_reader import make_reader
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.program import LearningBasedProgram, IMLProgram
-from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.program import LearningBasedProgram, IMLProgram
+from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 from WIQA_utils import RobertaTokenizer,test_inference_results,join_model
 from WIQA_models import WIQA_Robert, RobertaClassificationHead
 import argparse

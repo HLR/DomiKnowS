@@ -1,16 +1,16 @@
 from functools import partial
 
 from owlready2.annotation import label
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
 import torch
 import torch.nn as nn
 
-from regr.program import LearningBasedProgram
-from regr.program.model.ilpu import ILPUModel
-from regr.program.loss import NBCrossEntropyLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
-from regr.sensor.pytorch.sensors import ConstantSensor, FunctionalReaderSensor, FunctionalSensor, ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.ilpu import ILPUModel
+from domiknows.program.loss import NBCrossEntropyLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, MultiClassCMWithLogitsMetric
+from domiknows.sensor.pytorch.sensors import ConstantSensor, FunctionalReaderSensor, FunctionalSensor, ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 
 from graph_u import graph, T1, image, digit, addition, summation, operand1, operand2, tci
 from graph_u import digitRange, summationVal

@@ -1,9 +1,9 @@
 import torch
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner, LSTMLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner, LSTMLearner
 from models import *
 from utils import *
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
 from sklearn import preprocessing
 from transformers import RobertaModel
 import numpy as np
@@ -154,11 +154,11 @@ def program_declaration(cur_device, *, PMD=False, beta=0.5, sampleloss=False, sa
                                                      module=out_model,
                                                      device=cur_device)
 
-    from regr.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
-    from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
-    from regr.program import LearningBasedProgram, SolverPOIProgram
-    from regr.program.lossprogram import SampleLossProgram, PrimalDualProgram
-    from regr.program.model.pytorch import model_helper, PoiModel, SolverModel
+    from domiknows.program.metric import PRF1Tracker, PRF1Tracker, DatanodeCMMetric, MacroAverageTracker
+    from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsIMLoss
+    from domiknows.program import LearningBasedProgram, SolverPOIProgram
+    from domiknows.program.lossprogram import SampleLossProgram, PrimalDualProgram
+    from domiknows.program.model.pytorch import model_helper, PoiModel, SolverModel
 
     # Define the same weight as original paper
     HierPC = 1802.0

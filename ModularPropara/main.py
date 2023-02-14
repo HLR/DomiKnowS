@@ -3,10 +3,10 @@ sys.path.append(".")
 sys.path.append("../..")
 sys.path.append("../Popara")
 
-from regr.sensor.pytorch.sensors import ReaderSensor, JointSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program import LearningBasedProgram
-from regr.program.model.pytorch import PoiModel
+from domiknows.sensor.pytorch.sensors import ReaderSensor, JointSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.program import LearningBasedProgram
+from domiknows.program.model.pytorch import PoiModel
 from torch import nn
 from reader import ProparaReader
 

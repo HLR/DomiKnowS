@@ -8,11 +8,11 @@ sys.path.append('../..')
 def model_declaration():
     import torch
 
-    from regr.sensor.pytorch.sensors import ReaderSensor
-    from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateSensor
-    from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from domiknows.sensor.pytorch.sensors import ReaderSensor
+    from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor, CompositionCandidateSensor
+    from domiknows.program import LearningBasedProgram
+    from domiknows.program.model.pytorch import PoiModel
 
     from graph2 import graph2, world, city, world_contains_city, cityLink, city1, city2, firestationCity
     from sensors import DummyCityLearner

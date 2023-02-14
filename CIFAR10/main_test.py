@@ -1,9 +1,9 @@
 import sys
 import torch
 from data.reader import EmailSpamReader
-from regr.program.model.pytorch import PoiModel, IMLModel
-# from regr.program.metric import MacroAverageTracker, ValueTracker
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, ValueTracker
+from domiknows.program.model.pytorch import PoiModel, IMLModel
+# from domiknows.program.metric import MacroAverageTracker, ValueTracker
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, ValueTracker
 
 from torchvision import datasets, transforms
 from PIL import Image
@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import os,pickle
 import numpy as np
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program.loss import NBCrossEntropyLoss
 
 sys.path.append('.')
 sys.path.append('../..')
@@ -57,11 +57,11 @@ class ImageModel(PoiModel):
 from graph import graph, airplane, dog, truck
 
 def model_declaration():
-    from regr.sensor.pytorch.sensors import ReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    # from regr.sensor.pytorch.relation_sensors import CandidateReaderSensor
-    from regr.program import LearningBasedProgram
-    from regr.program.model.pytorch import PoiModel
+    from domiknows.sensor.pytorch.sensors import ReaderSensor, ForwardEdgeSensor, ConstantSensor, ConcatSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    # from domiknows.sensor.pytorch.relation_sensors import CandidateReaderSensor
+    from domiknows.program import LearningBasedProgram
+    from domiknows.program.model.pytorch import PoiModel
     import torch
     from torch import nn
     graph.detach()

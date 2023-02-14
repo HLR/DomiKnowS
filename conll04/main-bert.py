@@ -6,17 +6,17 @@ sys.path.append('../..')
 
 import numpy as np
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
-from regr.program.callbackprogram import ProgramStorageCallback
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram, SolverPOIDictLossProgram
+from domiknows.program.callbackprogram import ProgramStorageCallback
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss, NBCrossEntropyDictLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ModuleSensor, ReaderSensor, JointReaderSensor, FunctionalReaderSensor, cache, TorchCache
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor, CompositionCandidateReaderSensor, EdgeSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 from conll.data.data import SingletonDataLoader
-from regr.utils import setProductionLogMode, setDnSkeletonMode
+from domiknows.utils import setProductionLogMode, setDnSkeletonMode
 
 
 import spacy

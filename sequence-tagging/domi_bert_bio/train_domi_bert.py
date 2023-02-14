@@ -10,13 +10,13 @@ import torch
 from torch import nn
 import numpy as np
 
-from regr.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor, JointReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConcatSensor, FunctionalSensor, JointSensor, JointReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
 import graph
 
-from regr.program import POIProgram, IMLProgram, SolverPOIProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program import POIProgram, IMLProgram, SolverPOIProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss
 
 from model_domi import BIO_Model
 

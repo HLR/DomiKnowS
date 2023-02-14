@@ -1,8 +1,8 @@
 import sys
 
 sys.path.append('/home/admiraldarius/DomiKnowS/')
-sys.path.append('/home/admiraldarius/DomiKnowS/regr')
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/regr')
+sys.path.append('/home/admiraldarius/DomiKnowS/domiknows')
+sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/domiknows')
 sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS')
 
 import torch
@@ -14,7 +14,7 @@ from graph import graph, daisy, dandelion, rose, sunflower, tulip, cat, dog, mon
 import logging, random
 import torch
 
-from regr.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cuda', dest='cuda_number', default=0, help='cuda number to train the models on',type=int)

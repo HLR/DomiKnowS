@@ -1,13 +1,13 @@
 import sys
 
-from regr.graph.relation import disjoint
+from domiknows.graph.relation import disjoint
 
 sys.path.append("../..")
 sys.path.append(".")
 
 from itertools import combinations
-from regr.graph import Graph, Concept, Relation, EnumConcept
-from regr.graph.logicalConstrain import nandL, orL, notL, ifL, exactL
+from domiknows.graph import Graph, Concept, Relation, EnumConcept
+from domiknows.graph.logicalConstrain import nandL, orL, notL, ifL, exactL
 
 Graph.clear()
 Concept.clear()

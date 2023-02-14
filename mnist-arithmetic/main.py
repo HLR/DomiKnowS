@@ -6,7 +6,7 @@ import config
 from model import model_declaration
 from data import get_readers
 
-from regr.utils import setProductionLogMode
+from domiknows.utils import setProductionLogMode
 
 def validate(program, reader):
     from graph import digit, summation

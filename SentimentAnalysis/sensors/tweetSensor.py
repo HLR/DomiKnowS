@@ -3,7 +3,7 @@ from typing import Any
 import spacy
 import torch
 
-from regr.sensor.pytorch.sensors import FunctionalSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor
 
 class SentenceRepSensor(FunctionalSensor):
     def __init__(self, *pres, edges=None, label=False):

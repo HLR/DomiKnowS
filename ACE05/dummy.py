@@ -1,4 +1,4 @@
-from regr.graph import Concept
+from domiknows.graph import Concept
 
 
 class DummyObject:

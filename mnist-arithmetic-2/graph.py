@@ -1,7 +1,7 @@
-from regr.graph.concept import EnumConcept
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL, exactL, fixedL, eqL
-from regr.graph.relation import disjoint
+from domiknows.graph.concept import EnumConcept
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import ifL, nandL, orL, notL, andL, atMostL, exactL, fixedL, eqL
+from domiknows.graph.relation import disjoint
 import config
 from itertools import product
 

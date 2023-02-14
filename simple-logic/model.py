@@ -1,8 +1,8 @@
 import torch
 
-from regr.program.model.pytorch import PoiModel, IMLModel
-from regr.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
-from regr.program.metric import MacroAverageTracker, ValueTracker
+from domiknows.program.model.pytorch import PoiModel, IMLModel
+from domiknows.program.loss import BCEWithLogitsLoss, BCEWithLogitsIMLoss
+from domiknows.program.metric import MacroAverageTracker, ValueTracker
 
 def prediction_softmax(pr, gt, data_item = None, prop = None):
     return torch.softmax(pr.data, dim=-1)

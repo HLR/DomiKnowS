@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.sensors import TorchSensor
+from domiknows.sensor.pytorch.sensors import TorchSensor
 import spacy
 from typing import Any
 import torch

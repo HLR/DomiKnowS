@@ -1,8 +1,8 @@
 import sys
 
 sys.path.append('/home/admiraldarius/DomiKnowS/')
-sys.path.append('/home/admiraldarius/DomiKnowS/regr')
-sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/regr')
+sys.path.append('/home/admiraldarius/DomiKnowS/domiknows')
+sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS/domiknows')
 sys.path.append('/home/hlr/storage/egr/research-hlr/nafarali/new_meta/DomiKnowS')
 
 import torch

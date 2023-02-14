@@ -2,8 +2,8 @@ from pprint import pprint
 from itertools import chain
 from tqdm import tqdm
 
-from regr.graph import Concept
-from regr.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
+from domiknows.graph import Concept
+from domiknows.graph.logicalConstrain import LogicalConstrain, ifL, orL, andL
 
 from ace05.reader import Reader, DictReader
 from ace05.reader import ParagraphReader as Reader, DictParagraphReader as DictReader

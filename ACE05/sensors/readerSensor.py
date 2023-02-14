@@ -1,7 +1,7 @@
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
+from domiknows.sensor.pytorch.sensors import TorchSensor, FunctionalSensor, ReaderSensor, TorchEdgeSensor, TriggerPrefilledSensor
 from typing import Any
-from regr.sensor.pytorch.query_sensor import DataNodeSensor
-from regr.graph import Concept
+from domiknows.sensor.pytorch.query_sensor import DataNodeSensor
+from domiknows.graph import Concept
 import torch
 
 class MultiLevelReaderSensor(ReaderSensor):

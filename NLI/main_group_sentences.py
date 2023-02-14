@@ -12,7 +12,7 @@ import argparse
 import numpy as np
 import random
 from tqdm import tqdm
-from regr.graph import Graph, Concept, Relation
+from domiknows.graph import Graph, Concept, Relation
 
 
 def eval(program, testing_set, cur_device, args, filename=""):

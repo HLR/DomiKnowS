@@ -13,11 +13,11 @@ import torch
 import argparse
 from sklearn.metrics import accuracy_score, f1_score
 
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram, IMLProgram, POIProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
 
 from TypenetGraph import app_graph
 

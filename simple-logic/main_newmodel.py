@@ -1,12 +1,12 @@
 def model_declaration():
     import torch
-    from regr.program import POILossProgram
-    from regr.program.model.pytorch import PoiModelToWorkWithLearnerWithLoss
-    from regr.program.loss import BCEWithLogitsLoss
-    from regr.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
-    from regr.sensor.pytorch.relation_sensors import EdgeSensor
-    from regr.sensor.pytorch.learners import ModuleLearner
-    from regr.graph import Property
+    from domiknows.program import POILossProgram
+    from domiknows.program.model.pytorch import PoiModelToWorkWithLearnerWithLoss
+    from domiknows.program.loss import BCEWithLogitsLoss
+    from domiknows.sensor.pytorch.sensors import ConstantSensor, ReaderSensor
+    from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+    from domiknows.sensor.pytorch.learners import ModuleLearner
+    from domiknows.graph import Property
 
     from graph import graph, world_contains_x
     from model import Net

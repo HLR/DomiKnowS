@@ -1,6 +1,6 @@
 from transformers import RobertaModel, RobertaTokenizerFast
 from torch import nn
-from regr.sensor.pytorch.sensors import TorchSensor, FunctionalSensor
+from domiknows.sensor.pytorch.sensors import TorchSensor, FunctionalSensor
 import spacy
 from typing import Any
 import torch

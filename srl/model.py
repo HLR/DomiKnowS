@@ -16,14 +16,14 @@ sys.path.append('../../')
 
 from torch import nn
 import torch.nn.functional as F
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program import SolverPOIProgram, SolverPOIDictLossProgram
-from regr.program.lossprogram import PrimalDualProgram, SampleLossProgram
-from regr.program.model.pytorch import SolverModel, SolverModelDictLoss
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyDictLoss
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor, ConstantSensor, JointSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.program import SolverPOIProgram, SolverPOIDictLossProgram
+from domiknows.program.lossprogram import PrimalDualProgram, SampleLossProgram
+from domiknows.program.model.pytorch import SolverModel, SolverModelDictLoss
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyDictLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
 from functools import partial
 from tqdm import tqdm
 from sklearn.metrics import classification_report
@@ -32,7 +32,7 @@ from graph import *
 from data import train_dataset, valid_dataset, train_mini_dataset
 from net import SimpleLSTM
 
-from regr import setProductionLogMode
+from domiknows import setProductionLogMode
 
 setProductionLogMode(no_UseTimeLog=True)
 

@@ -6,20 +6,20 @@ sys.path.append('.')
 sys.path.append('../..')
 from typing import Any
 from tweet_reader import SentimentReader
-from regr.sensor.pytorch.sensors import TorchSensor
-from regr.sensor.pytorch.query_sensor import DataNodeSensor
+from domiknows.sensor.pytorch.sensors import TorchSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeSensor
 import torch
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph import ifL, notL, andL, orL
-from regr.program import LearningBasedProgram, POIProgram
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.sensor.sensor import Sensor
-from regr.program.model.pytorch import PoiModel
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph import ifL, notL, andL, orL
+from domiknows.program import LearningBasedProgram, POIProgram
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, ConstantSensor, FunctionalSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.sensor.sensor import Sensor
+from domiknows.program.model.pytorch import PoiModel
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.loss import NBCrossEntropyLoss
 import spacy
 
 Graph.clear()
@@ -37,7 +37,7 @@ with Graph('example') as graph:
     # ifL(PositiveLabel, notL(NegativeLabel))
     orL(andL(NegativeLabel, notL(PositiveLabel)), andL(PositiveLabel, notL(NegativeLabel)))
     
-from regr.graph import DataNodeBuilder
+from domiknows.graph import DataNodeBuilder
 data_item = DataNodeBuilder({"graph": graph})
 twit['index'] = ConstantSensor(data="This is a dummy senetence but do not ignore dummy senetences!")
 for sensor in twit['index'].find(Sensor):

@@ -1,13 +1,13 @@
 import sys
 sys.path.append('../../')
 
-from regr.graph import Graph, Concept
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.graph.concept import EnumConcept
+from domiknows.graph import Graph, Concept
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.graph.concept import EnumConcept
 import json
 import config
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import nandL, ifL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import nandL, ifL
 from itertools import combinations
 from owlready2 import onto_path, get_ontology
 

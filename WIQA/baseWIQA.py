@@ -3,16 +3,16 @@ import wget
 import os
 import torch
 import numpy as np
-from regr.program import POIProgram
+from domiknows.program import POIProgram
 import subprocess
 import sys
 import shutil
 from torch import nn
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, MetricTracker, CMWithLogitsMetric
+from domiknows.program.loss import NBCrossEntropyLoss
 
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, \
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, \
     FunctionalReaderSensor
 
 print('Downloading dataset')

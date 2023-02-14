@@ -17,14 +17,14 @@ logging.basicConfig(level=logging.INFO)
 
 
 
-from regr.data.reader import RegrReader
-from regr.program.lossprogram import SampleLossProgram
-from regr.program.model.pytorch import SolverModel
+from domiknows.data.reader import RegrReader
+from domiknows.program.lossprogram import SampleLossProgram
+from domiknows.program.model.pytorch import SolverModel
 
 import torch
 
 
-from regr.data.reader import RegrReader
+from domiknows.data.reader import RegrReader
 import torch
 
 
@@ -68,9 +68,9 @@ class SudokuReader(RegrReader):
 trainreader = SudokuReader("randn", type="raw")
 
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL
-from regr.graph import EnumConcept
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.logicalConstrain import orL, andL, existsL, notL, atLeastL, atMostL, ifL, nandL, V, exactL, fixedL, eqL
+from domiknows.graph import EnumConcept
 
 
 Graph.clear()
@@ -198,10 +198,10 @@ class SudokuCNN(nn.Module):
     
     
     
-from regr.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.relation_sensors import CompositionCandidateSensor
-from regr.sensor.pytorch.query_sensor import DataNodeReaderSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, JointSensor, ReaderSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.relation_sensors import CompositionCandidateSensor
+from domiknows.sensor.pytorch.query_sensor import DataNodeReaderSensor
 
 class JointFunctionalReaderSensor(JointSensor, FunctionalReaderSensor):
     pass
@@ -295,10 +295,10 @@ same_table[same_table_arg1.reversed, same_table_arg2.reversed] = CompositionCand
 ### What kind of model should we use for learning the entries? Because it should be aware of all other decision to make the correct decision, otherwise it is impossible for the model to learn good weights.
 
 
-from regr.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
-from regr.program.callbackprogram import ProgramStorageCallback
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
+from domiknows.program import POIProgram, SolverPOIProgram, IMLProgram, CallbackProgram
+from domiknows.program.callbackprogram import ProgramStorageCallback
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss, NBCrossEntropyIMLoss
 
 program = SolverPOIProgram(
         graph, poi=(sudoku, empty_entry, ), inferTypes=['local/argmax'],

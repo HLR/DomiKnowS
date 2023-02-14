@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../../../")
 
-from regr.sensor.pytorch.sensors import FunctionalSensor
+from domiknows.sensor.pytorch.sensors import FunctionalSensor
 from torchtext.vocab import GloVe
 from torchtext.data.utils import get_tokenizer
 from torch.nn.utils.rnn import pad_sequence

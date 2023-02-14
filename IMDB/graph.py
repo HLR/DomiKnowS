@@ -4,13 +4,13 @@ sys.path.append("../../")
 import logging
 logging.basicConfig(level=logging.INFO)
 
-from regr.graph import Graph, Concept, Relation
-from regr.graph.relation import disjoint
-from regr.sensor.pytorch.sensors import ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.relation import disjoint
+from domiknows.sensor.pytorch.sensors import ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric
+from domiknows.program.loss import NBCrossEntropyLoss
 from torch import nn
 import torch
 import glob

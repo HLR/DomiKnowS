@@ -1,6 +1,6 @@
-from regr.graph import Graph, Concept, Relation
-from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL, exactL, ifL, orL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.concept import EnumConcept
+from domiknows.graph.logicalConstrain import nandL, exactL, ifL, orL
 from itertools import combinations
 
 Graph.clear()

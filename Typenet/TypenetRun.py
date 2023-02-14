@@ -13,11 +13,11 @@ import torch
 import argparse
 from sklearn.metrics import accuracy_score, f1_score
 
-from regr.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
-from regr.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
-from regr.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
+from domiknows.sensor.pytorch.sensors import FunctionalSensor, ReaderSensor
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.program import SolverPOIProgram, IMLProgram, POIProgram, CallbackProgram
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker, DatanodeCMMetric, ValueTracker
+from domiknows.program.loss import NBCrossEntropyLoss, BCEWithLogitsLoss, BCEWithLogitsIMLoss
 
 import TypenetGraph
 from TypenetGraph import app_graph
@@ -71,7 +71,7 @@ mention = app_graph['mention']
 mention_group = app_graph['mention_group']
 
 # Enable skeleton DataNode
-from regr.utils import setDnSkeletonMode
+from domiknows.utils import setDnSkeletonMode
 setDnSkeletonMode(True)
 
 # text data sensors

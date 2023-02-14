@@ -1,6 +1,6 @@
-from regr.graph import Graph, Concept, Relation, Property
-# from regr.graph.relation import disjoint
-from regr.graph.logicalConstrain import ifL, nandL, orL, andL
+from domiknows.graph import Graph, Concept, Relation, Property
+# from domiknows.graph.relation import disjoint
+from domiknows.graph.logicalConstrain import ifL, nandL, orL, andL
 
 
 Graph.clear()

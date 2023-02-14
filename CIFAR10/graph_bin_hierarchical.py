@@ -1,8 +1,8 @@
-from regr.graph import Graph, Concept, Relation
-from regr.graph.concept import EnumConcept
-from regr.graph.logicalConstrain import nandL
+from domiknows.graph import Graph, Concept, Relation
+from domiknows.graph.concept import EnumConcept
+from domiknows.graph.logicalConstrain import nandL
 from itertools import combinations
-from regr.graph.relation import disjoint
+from domiknows.graph.relation import disjoint
 
 Graph.clear()
 Concept.clear()

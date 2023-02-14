@@ -7,14 +7,14 @@ import logging
 
 import torch
 
-from regr.graph import Graph, Concept, Relation, DataNodeBuilder
-from regr.graph import ifL, andL, nandL
-from regr.program import POIProgram
-from regr.sensor.pytorch.learners import ModuleLearner
-from regr.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
-from regr.sensor.pytorch.relation_sensors import EdgeSensor
-from regr.program.metric import MacroAverageTracker, PRF1Tracker
-from regr.program.loss import NBCrossEntropyLoss
+from domiknows.graph import Graph, Concept, Relation, DataNodeBuilder
+from domiknows.graph import ifL, andL, nandL
+from domiknows.program import POIProgram
+from domiknows.sensor.pytorch.learners import ModuleLearner
+from domiknows.sensor.pytorch.sensors import ReaderSensor, TorchEdgeSensor, JointSensor, FunctionalSensor, FunctionalReaderSensor
+from domiknows.sensor.pytorch.relation_sensors import EdgeSensor
+from domiknows.program.metric import MacroAverageTracker, PRF1Tracker
+from domiknows.program.loss import NBCrossEntropyLoss
 
 from models import tokenize, WordEmbedding, Classifier, make_pair, concat, pair_label
 

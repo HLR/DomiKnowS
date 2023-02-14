@@ -1,4 +1,4 @@
-from regr.sensor.pytorch.learners import TorchLearner
+from domiknows.sensor.pytorch.learners import TorchLearner
 import torch
 
 #  --- City
