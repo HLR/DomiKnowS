@@ -185,7 +185,7 @@ program = SolverPOIProgram(graph,
                            metric={})
 
 # load model.pth
-model_path = '/Users/alexanderwan/Documents/alex_fork/DomiKnowS/mnist-arithmetic-2/checkpoints/primaldual_500.pth'
+model_path = 'checkpoints/primaldual_500.pth'
 
 state_dict = torch.load(model_path)
 
