@@ -125,7 +125,9 @@ def get_readers(num_train):
 
     # need to sample twice as many train ids because we're sampling s.t. the sum distribution is uniform
     # so some digits may appear disproportionately often
-    train_ids = random.sample(range(0, 50000), num_train * 4)
+    # sample pool needs to consist of a minimum of 500 examples as there needs to be enough
+    # digits for each combination sampled
+    train_ids = random.sample(range(0, 50000), max(num_train * 4, 500))
     valid_ids = random.sample(range(50000, 60000), config.num_valid * 2)
     test_ids = random.sample(range(10000), config.num_test * 2)
 
